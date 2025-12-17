@@ -299,12 +299,12 @@ std::string
 RocProfVis::View::get_application_config_path(bool create_dirs)
 {
 #ifdef _WIN32
-    constexpr char*       app_config_dir_name = "AMD\\ROCm-Optiq";
+    const char*           app_config_dir_name = "AMD\\ROCm-Optiq";
     const char*           local_appdata       = std::getenv("LOCALAPPDATA");
     std::filesystem::path config_dir =
         local_appdata ? local_appdata : std::filesystem::current_path();
 #else
-    constexpr char*       app_config_dir_name = "rocm-optiq";
+    const char*           app_config_dir_name = "rocm-optiq";
     const char*           xdg_config          = std::getenv("XDG_CONFIG_HOME");
     std::filesystem::path config_dir =
         xdg_config ? xdg_config

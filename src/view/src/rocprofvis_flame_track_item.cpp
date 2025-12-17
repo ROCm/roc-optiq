@@ -67,6 +67,28 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
     };
+
+      // Check if thread is main thread.
+    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+
+    if(track_info != nullptr)
+    {
+        if(track_info->topology.type == track_info_t::Topology::InstrumentedThread)
+        {
+            const thread_info_t* thread_info =
+                m_data_provider.GetInstrumentedThreadInfo(track_info->topology.id);
+            if(thread_info->tid == track_info->topology.process_id)
+            {
+                m_show_pill_label = true;
+                m_pill_label      = "MAIN";
+            }
+        }
+    }
+    else
+    {
+        spdlog::error("TrackItem: Invalid track id {}", m_id);
+    }
+
     // Subscribe to timeline selection changed event
     m_timeline_event_selection_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),

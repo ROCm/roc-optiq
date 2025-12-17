@@ -14,7 +14,7 @@ namespace RocProfVis
 namespace View
 {
 
-float            TrackItem::s_metadata_width = 400.0f;
+float TrackItem::s_metadata_width = 400.0f;
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
                      double time_offset_ns, double& min_x, double& max_x, double scale_x)
@@ -41,8 +41,9 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
 , m_group_id_counter(0)
-, m_chunk_duration_ns(TimeConstants::ns_per_s *
-                      30)  // Default chunk duration
+, m_pill_label("")
+, m_show_pill_label(false)
+, m_chunk_duration_ns(TimeConstants::ns_per_s * 30)  // Default chunk duration
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
     if(m_track_project_settings.Valid())
@@ -157,7 +158,7 @@ TrackItem::Render(float width)
 
     if(ImGui::IsItemVisible())
     {
-        m_is_in_view_vertical = true; 
+        m_is_in_view_vertical = true;
     }
     else
     {
@@ -171,7 +172,7 @@ TrackItem::GetReorderGripWidth()
     return m_reorder_grip_width;
 }
 
-void 
+void
 TrackItem::UpdateMaxMetaAreaSize(float new_size)
 {
     m_meta_area_scale_width = std::max(CalculateNewMetaAreaSize(), new_size);
@@ -225,7 +226,7 @@ TrackItem::RenderMetaArea()
         ImVec2 container_pos  = ImGui::GetWindowPos() + ImVec2(m_reorder_grip_width, 0);
         ImVec2 container_size = ImGui::GetWindowSize();
 
-          if(m_request_state != TrackDataRequestState::kIdle)
+        if(m_request_state != TrackDataRequestState::kIdle)
         {
             ImGuiStyle& style = ImGui::GetStyle();
 
@@ -246,12 +247,12 @@ TrackItem::RenderMetaArea()
                                        anim_speed);
         }
 
-
         // Reordering grip decoration
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - ImGui::CalcTextSize(ICON_GRID).x) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+
         ImGui::TextUnformatted(ICON_GRID);
 
         float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
@@ -278,17 +279,16 @@ TrackItem::RenderMetaArea()
         ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
                                (menu_button_width + 2 * m_metadata_padding.x));
 
-            ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
+        ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
 
         ImGui::PushFont(large_font);
 
         ImGui::TextUnformatted(m_name.c_str());
 
-        ImGui::PopFont();   
+        ImGui::PopFont();
 
         ImGui::PopTextWrapPos();
 
-      
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
                                    m_metadata_padding.y));
@@ -316,6 +316,9 @@ TrackItem::RenderMetaArea()
         ImGui::PopStyleVar(2);
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
+
+        // Render MAIN pillbox for main thread tracks
+        RenderPillLabel(content_size);
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();
@@ -328,6 +331,36 @@ TrackItem::RenderMetaArea()
     {
         m_meta_area_clicked = false;
     }
+}
+void
+TrackItem::RenderPillLabel(ImVec2 container_size)
+{
+    if(m_show_pill_label == false)
+    {
+        return;
+    }
+    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall));
+
+    const char* main_label = "MAIN";
+    ImVec2      text_size  = ImGui::CalcTextSize(main_label);
+    float       padding_x  = 8.0f;
+    float       padding_y  = 2.0f;
+    ImVec2      pillbox_size(text_size.x + 2 * padding_x, text_size.y + 2 * padding_y);
+
+    ImVec2 pillbox_pos(m_reorder_grip_width, container_size.y - pillbox_size.y - 2.0f);
+
+    ImDrawList* draw_list     = ImGui::GetWindowDrawList();
+    ImU32       pillbox_color = m_settings.GetColor(Colors::kBorderGray);
+
+    draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
+                             ImGui::GetWindowPos() + pillbox_pos + pillbox_size,
+                             pillbox_color, pillbox_size.y * 0.5f);
+
+    ImVec2 text_pos = pillbox_pos + ImVec2(padding_x, padding_y);
+    ImGui::SetCursorPos(text_pos);
+    ImGui::TextUnformatted(main_label);
+
+    ImGui::PopFont();
 }
 
 void
@@ -385,10 +418,10 @@ TrackItem::RequestData(double min, double max, float width)
         float  percentage  = static_cast<float>(chunk_range / range);
         float  chunk_width = width * percentage;
 
-        TrackRequestParams request_params(static_cast<uint32_t>(m_id), chunk_start, chunk_end,
-                                          static_cast<uint32_t>(chunk_width),
-                                          m_group_id_counter, 
-                                          static_cast<uint16_t>(i), chunk_count);
+        TrackRequestParams request_params(static_cast<uint32_t>(m_id), chunk_start,
+                                          chunk_end, static_cast<uint32_t>(chunk_width),
+                                          m_group_id_counter, static_cast<uint16_t>(i),
+                                          chunk_count);
 
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",

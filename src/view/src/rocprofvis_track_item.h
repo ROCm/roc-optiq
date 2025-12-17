@@ -54,7 +54,7 @@ public:
     const std::string& GetName();
     virtual void       UpdateMovement(float zoom, double time_offset_ns, double& min_x,
                                       double& max_x, double scale_x, float m_scroll_position);
-
+    void               RenderPillLabel(ImVec2 container_size);
     bool IsInViewVertical();
     void SetInViewVertical(bool in_view);
 
@@ -128,6 +128,8 @@ protected:
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;
     static float                                     s_metadata_width;
+    bool                                             m_show_pill_label;
+    std::string                                      m_pill_label;
 
 private:
     TrackProjectSettings m_track_project_settings;

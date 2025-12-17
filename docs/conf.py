@@ -18,7 +18,7 @@ html_theme_options = {
     "header_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/",
     "nav_secondary_items": {
         "GitHub": "https://github.com/ROCm/roc-optiq",
-        "Community": "https://github.com/ROCm/ROCm/discussions",
+        "Community": "https://github.com/ROCm/roc-optiq/discussions",
         "Blogs": "https://rocm.blogs.amd.com/",
         "ROCm Developer Hub": "https://www.amd.com/en/developer/resources/rocm-hub.html",
         "Instinct™ Docs": "https://instinct.docs.amd.com/",

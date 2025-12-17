@@ -3,6 +3,7 @@
 
 #pragma once
 #include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_split_containers.h"
 
 namespace RocProfVis
 {

@@ -87,7 +87,6 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
     else
     {
         spdlog::error("TrackItem: Invalid track id {}", m_id);
-        return;
     }
 
     // Subscribe to timeline selection changed event

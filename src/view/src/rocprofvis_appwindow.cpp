@@ -780,11 +780,17 @@ AppWindow::RenderAboutDialog()
         return ss.str();
     }();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+
+    // Set window size
+    ImGui::SetNextWindowSize(ImVec2(580, 0));
 
     if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize))
+                              ImGuiWindowFlags_AlwaysAutoResize |
+                                  ImGuiWindowFlags_NoMove))
     {
         ImFont* large_font =
             SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
@@ -835,8 +841,9 @@ AppWindow::RenderAboutDialog()
 
         ImGui::EndPopup();
     }
-    ImGui::PopStyleVar(2);
-}
+    popup_style.PopStyles();
+
+ }
 
 #ifdef USE_NATIVE_FILE_DIALOG
 void

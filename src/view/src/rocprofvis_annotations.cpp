@@ -6,6 +6,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_stickynote.h"
+#include "widgets/rocprofvis_widget.h"
 #include <algorithm>
 #include <cstring>
 #include <vector>
@@ -193,22 +194,17 @@ AnnotationsManager::ShowStickyNoteEditPopup()
     if(!m_show_sticky_edit_popup) return;
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            popup_bg     = settings.GetColor(Colors::kFillerColor);
-    ImU32            border_color = settings.GetColor(Colors::kBorderColor);
     ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
     ImU32            button_color = settings.GetColor(Colors::kHighlightChart);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+    
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
     ImGui::OpenPopup("Edit Annotation");
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
-    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
     ImGui::SetNextWindowSize(ImVec2(390, 420),
                              ImGuiCond_Once);  // Initial size, user can resize
@@ -294,11 +290,8 @@ AnnotationsManager::ShowStickyNoteEditPopup()
 
         ImGui::EndPopup();
     }
-    ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar(2);
-
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(1);  // Pop text color
+    // PopUpStyle destructor will automatically pop remaining styles
 }
 
 void
@@ -325,22 +318,17 @@ AnnotationsManager::ShowStickyNotePopup()
     }
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            popup_bg     = settings.GetColor(Colors::kFillerColor);
-    ImU32            border_color = settings.GetColor(Colors::kBorderColor);
     ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
     ImU32            button_color = settings.GetColor(Colors::kHighlightChart);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+    
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
     ImGui::OpenPopup("Annotation");
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
-    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
     ImGui::SetNextWindowSize(ImVec2(390, 420),
                              ImGuiCond_Once);  // Initial size, user can resize
@@ -401,11 +389,8 @@ AnnotationsManager::ShowStickyNotePopup()
 
         ImGui::EndPopup();
     }
-    ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar(2);
-
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(1);  // Pop text color
+    // PopUpStyle destructor will automatically pop remaining styles
 }
 
 void

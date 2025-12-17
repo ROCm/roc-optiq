@@ -24,27 +24,29 @@ jobs:
       uses: actions/checkout@v5
       with:
         fetch-depth: 0
+        submodules: true
 
     - name: Install Dependencies
       run: |
-          sudo apt install -y \
-            cmake build-essential \
-            libwayland-bin \
-            libwayland-dev libxkbcommon-dev wayland-protocols \
-            pkg-config \
-            libdbus-1-dev
-          echo "✅ Dependencies Installed!"
+        sudo apt update \
+        sudo apt install -y \
+        cmake build-essential \
+        libwayland-bin \
+        libwayland-dev libxkbcommon-dev wayland-protocols \
+        pkg-config \
+        libdbus-1-dev
+        echo "✅ Dependencies Installed!"
 
     - name: Install Vulkan SDK
       run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install -y vulkan-sdk xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
-          echo "✅ Vulkan SDK Installed!"
+        wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+        sudo apt update
+        sudo apt install -y vulkan-sdk xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+        echo "✅ Vulkan SDK Installed!"
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@v4
       with:
         languages: cpp
         config-file: .github/codeql/codeql-config.yml
@@ -56,6 +58,6 @@ jobs:
         cmake --build build/codeql --preset "Linux Release Build" --parallel $(nproc)
 
     - name: Run CodeQL analysis
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@v4
       with:
         category: "security-and-quality"

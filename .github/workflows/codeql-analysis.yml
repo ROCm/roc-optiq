@@ -13,7 +13,7 @@ on:
 jobs:
   analyze:
     name: Analyze (CodeQL)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-noble
     permissions:
       actions: read
       security-events: write
@@ -27,20 +27,21 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        sudo apt update
-        sudo apt install -y \
-          cmake build-essential \
-          libwayland-bin \
-          libwayland-dev libxkbcommon-dev wayland-protocols \
-          pkg-config \
-          libdbus-1-dev
+          sudo apt install -y \
+            cmake build-essential \
+            libwayland-bin \
+            libwayland-dev libxkbcommon-dev wayland-protocols \
+            pkg-config \
+            libdbus-1-dev
+          echo "✅ Dependencies Installed!"
 
     - name: Install Vulkan SDK
       run: |
-        wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list http://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
-        sudo apt update
-        sudo apt install -y vulkan-sdk xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
+          sudo apt update
+          sudo apt install -y vulkan-sdk xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+          echo "✅ Vulkan SDK Installed!"
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2

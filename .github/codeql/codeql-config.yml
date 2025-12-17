@@ -1,0 +1,9 @@
+# CodeQL configuration
+# Exclude third-party and build outputs to reduce noise and improve performance
+excludes:
+  - thirdparty/**
+  - build/**
+  - Installer/**
+
+queries:
+  - security-and-quality

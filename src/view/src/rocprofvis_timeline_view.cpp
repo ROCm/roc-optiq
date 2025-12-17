@@ -1441,7 +1441,7 @@ TimelineView::RenderTraceView()
 
     // Scale used in all graphs computed here
 
-    m_tpt->SetGraphSizeX(subcomponent_size_main.x - m_sidebar_size,
+    m_tpt->SetGraphSize(subcomponent_size_main.x - m_sidebar_size,
                          subcomponent_size_main.y);
 
     m_stop_user_interaction |= !ImGui::IsWindowHovered(

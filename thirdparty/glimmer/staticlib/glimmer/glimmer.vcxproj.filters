@@ -1,0 +1,321 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\imgui">
+      <UniqueIdentifier>{ee1abf3c-9971-4234-b37e-7bca1ce336e7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\imgui">
+      <UniqueIdentifier>{c1cb90f3-2cac-4edc-b11b-3b11e8fa41a3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\image">
+      <UniqueIdentifier>{408041f2-2c1d-465f-88ec-11f8be3fc5cd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\svg">
+      <UniqueIdentifier>{8044312a-ca58-4fa1-9afb-3e8a24f912c2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\layout">
+      <UniqueIdentifier>{0c160a30-8b70-476f-8b6a-e8a5cf065731}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\layout\yoga">
+      <UniqueIdentifier>{1496b173-1fb3-4f3f-b168-e302aa21445e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\implot">
+      <UniqueIdentifier>{6dbe898e-31fb-4e6e-84c8-f94ae7613bc2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\implot">
+      <UniqueIdentifier>{c8e86438-bb08-4e87-88ad-eee79d3ee325}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\glfw">
+      <UniqueIdentifier>{943de1f7-4814-432d-a565-77d8fd79e4be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\yoga">
+      <UniqueIdentifier>{e6546d0e-ca3a-432e-ac39-9aad8a357415}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\richtext">
+      <UniqueIdentifier>{fde12e09-776f-4553-afdd-b32f5254873a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\richtext">
+      <UniqueIdentifier>{e0f5343a-d6ce-4988-9e44-92750b71c633}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\iconfonts">
+      <UniqueIdentifier>{40827885-006f-4bde-88c9-0e8fa91907d0}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\context.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\draw.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\glimmer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\im_font_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\layout.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\platform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\style.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\types.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\widgets.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\misc\freetype\imgui_freetype.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\imgui.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\imconfig.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\imgui_internal.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\imstb_rectpack.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\imstb_textedit.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\imstb_truetype.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\stb_image\stb_image.h">
+      <Filter>Header Files\image</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\lunasvg\lunasvg.h">
+      <Filter>Header Files\svg</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\clay\clay.h">
+      <Filter>Header Files\layout</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\yoga\YGConfig.h">
+      <Filter>Header Files\layout\yoga</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\yoga\YGEnums.h">
+      <Filter>Header Files\layout\yoga</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\yoga\YGMacros.h">
+      <Filter>Header Files\layout\yoga</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\yoga\YGNode.h">
+      <Filter>Header Files\layout\yoga</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\yoga\YGNodeLayout.h">
+      <Filter>Header Files\layout\yoga</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\yoga\YGNodeStyle.h">
+      <Filter>Header Files\layout\yoga</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\yoga\YGPixelGrid.h">
+      <Filter>Header Files\layout\yoga</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\yoga\YGValue.h">
+      <Filter>Header Files\layout\yoga</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\yoga\Yoga.h">
+      <Filter>Header Files\layout\yoga</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\implot\implot.h">
+      <Filter>Header Files\implot</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\implot\implot_internal.h">
+      <Filter>Header Files\implot</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\imgui_impl_glfw.h">
+      <Filter>Header Files\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\imgui_impl_opengl3.h">
+      <Filter>Header Files\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imgui\imgui_impl_opengl3_loader.h">
+      <Filter>Header Files\glfw</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imrichtext\imrichtext.h">
+      <Filter>Header Files\richtext</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imrichtext\imrichtextimpl.h">
+      <Filter>Header Files\richtext</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\imrichtext\imrichtextutils.h">
+      <Filter>Header Files\richtext</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\randrew.layout\layout.h">
+      <Filter>Header Files\layout</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsCodicons.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsFontaudio.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsFontAwesome4.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsFontAwesome5.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsFontAwesome6.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsFontAwesome7.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsForkAwesome.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsLucide.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsMaterialDesign.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsMaterialDesignIcons.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\libs\inc\iconfonts\IconsMaterialSymbols.h">
+      <Filter>Header Files\iconfonts</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\context.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\draw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\im_font_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\layout.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\renderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\style.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\widgets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\src\imgui.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\src\imgui_draw.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\imgui\misc\freetype\imgui_freetype.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\src\imgui_widgets.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\src\imgui_tables.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\implot\implot.cpp">
+      <Filter>Source Files\implot</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\implot\implot_items.cpp">
+      <Filter>Source Files\implot</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\YGConfig.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\YGEnums.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\YGNode.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\YGNodeLayout.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\YGNodeStyle.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\YGPixelGrid.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\YGValue.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\algorithm\AbsoluteLayout.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\algorithm\Baseline.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\algorithm\Cache.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\algorithm\CalculateLayout.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\algorithm\FlexLine.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\algorithm\PixelGrid.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\config\Config.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\debug\AssertFatal.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\debug\Log.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\event\event.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\node\LayoutResults.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\inc\yoga\node\Node.cpp">
+      <Filter>Source Files\yoga</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\platform.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\src\imrichtextimpl.cpp">
+      <Filter>Source Files\richtext</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\src\imrichtext.cpp">
+      <Filter>Source Files\richtext</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\libs\src\imrichtextutils.cpp">
+      <Filter>Source Files\richtext</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

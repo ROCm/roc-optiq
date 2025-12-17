@@ -13,7 +13,6 @@ class TimePixelTransform
 public:
     TimePixelTransform();
     ~TimePixelTransform();
-
     void   ComputePixelMapping();
     double GetMinX() const;
     double GetMaxX() const;
@@ -29,16 +28,15 @@ public:
     void   SetMinMaxX(double min_x, double max_x);
     void   SetViewTimeOffsetNs(double value);
     void   SetZoom(float value);
-    void   SetGraphSizeX(float x_value, float y_value);
+    void   SetGraphSize(float x_value, float y_value);
     void   Reset();
     bool   ValidateAndFixState();
-    float  TimeToPixel(
-         double time_ns);  // Must return float because that is what ImGui uses
-    float RawTimeToPixel(
-        double time_ns);  // Must return float because that is what ImGui uses
+    float  TimeToPixel(double time_ns);
+    float  RawTimeToPixel(double time_ns);
     double PixelToTime(float x_position);
     double NormalizeTime(double time_ns);
     ImVec2 GetGraphSize() const;
+
 private:
     double m_min_x_ns;             // This value is the min value globally across data.
     double m_max_x_ns;             // This value is the max value globally across data.
@@ -54,7 +52,6 @@ private:
     double m_pixels_per_ns;  // This value is how many pixels represent 1 ns in the
                              // current view.
     bool m_has_changed;  // This value indicates if the mapping needs to be recomputed.
-    ImVec2 m_graph_size;
 };
 }  // namespace View
 }  // namespace RocProfVis

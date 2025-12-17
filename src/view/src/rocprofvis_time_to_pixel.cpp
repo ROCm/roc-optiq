@@ -32,22 +32,14 @@ TimePixelTransform::~TimePixelTransform() {}
 float
 TimePixelTransform::TimeToPixel(double time_ns)
 {
-    /*
-    The following function uses UI time (normalized to 0).
-
-    Return: Pixel position in the graph area corresponding to the input time_ns.
-    */
+    // The following function uses UI time(normalized to 0)
     return (time_ns - m_view_time_offset_ns) * m_pixels_per_ns;
 }
 
 float
 TimePixelTransform::RawTimeToPixel(double time_ns)
 {
-    /*
-    The following function uses UI time (normalized to 0)
-
-    Return: Pixel position in the graph area corresponding to the input time_ns.
-    */
+    // The following function uses raw time (not normalized)
     double ui_time_ns = time_ns - m_min_x_ns;
     return TimeToPixel(ui_time_ns);
 }
@@ -55,25 +47,14 @@ TimePixelTransform::RawTimeToPixel(double time_ns)
 double
 TimePixelTransform::PixelToTime(float x_position)
 {
-    /*
-    This function gets raw time (in ns) from a pixel position in the graph area. It is not
-    accurate to the data and is in screen ns.
-
-    IMPORTANT: x_position must account for any offsets such as sidebar width.
-
-    Return : Time in ns corresponding to the input x_position in pixels.
-    */
+    // This function returns time(in ns) from a pixel position in the graph area.It is not
+    // accurate to the data and is in screen ns.
     return (m_view_time_offset_ns + ((x_position / m_graph_size_x) * m_v_width_ns));
 }
 
 bool
 TimePixelTransform::ValidateAndFixState()
 {
-    /*
-    Validates all state variables and fixes any inconsistencies.
-    Returns true if state is valid, false if state cannot be fixed.
-    */
-
     // Validate min/max relationship
     if(m_max_x_ns <= m_min_x_ns)
     {
@@ -135,12 +116,6 @@ TimePixelTransform::ValidateAndFixState()
 void
 TimePixelTransform::ComputePixelMapping()
 {
-    /*
-    This function is used to compute the critical variables needed for the UI to operate.
-    It is ultimately attempting to calculate m_pixels_per_ns to enable time to pixel
-    conversion.
-    */
-
     // Check if the user has actually changed anything if not nothing to compute.
     if(m_has_changed)
     {
@@ -260,9 +235,7 @@ TimePixelTransform::GetPixelsPerNs() const
 double
 TimePixelTransform::NormalizeTime(double time_ns)
 {
-    /*
-    This function normalizes input time_ns to UI time (relative to min_x).
-    */
+    // Normalizes input time_ns to UI time(relative to min_x).
     return time_ns - m_min_x_ns;
 }
 
@@ -316,7 +289,7 @@ TimePixelTransform::SetZoom(float zoom)
 }
 
 void
-TimePixelTransform::SetGraphSizeX(float graph_size_x, float graph_size_y)
+TimePixelTransform::SetGraphSize(float graph_size_x, float graph_size_y)
 {
     if(graph_size_x <= 0.0f || graph_size_y <= 0.0f)
     {

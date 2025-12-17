@@ -1,0 +1,36 @@
+# Prerequisites
+*.d
+*.log
+*.tlog
+*.recipe
+*.ipdb
+*.ilk
+*.iobj
+*.idb
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+*.pdb
+*.ini
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Fortran module files
+*.mod
+*.smod
+
+# Executables
+*.exe
+*.out
+*.app
+/GlimmerTest/.vs
+/GlimmerTest/.vs/GlimmerTest
+/GlimmerTest/GlimmerTest/x64/Debug/GlimmerTest.tlog
+/GlimmerTest/GlimmerTest/x64/Debug
+/GlimmerTest/x64/Debug
+

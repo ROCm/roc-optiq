@@ -1,25 +1,36 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#ifdef _WIN32
+#    define NOMINMAX
+#    include <conio.h>
+#    include <windows.h>
+#endif
+#include "glfw_util.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_imgui_backend.h"
-#include "glfw_util.h"
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
+#include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
+#include <CLI/CLI.hpp>
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
+
+const char* APP_NAME = "ROCm(TM) Optiq Beta";
 
 // globals shared with callbacks
-static std::vector<std::string> g_dropped_file_paths;
-static bool g_file_was_dropped = false;
+static std::vector<std::string>         g_dropped_file_paths;
+static bool                             g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
+static std::string g_user_file_path_cli;
 
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
@@ -27,7 +38,7 @@ static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
 {
-    (void) window; // Unused parameter
+    (void) window;  // Unused parameter
     g_dropped_file_paths.clear();
     for(int i = 0; i < count; i++)
     {
@@ -48,18 +59,23 @@ content_scale_callback(GLFWwindow* window, float xscale, float yscale)
 static void
 close_callback(GLFWwindow* window)
 {
-    g_render_options = rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit;
+    g_render_options =
+        rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit;
     glfwSetWindowShouldClose(window, GLFW_FALSE);
 }
 
 static void
 app_notification_callback(GLFWwindow* window, int notification)
 {
-    if(notification == static_cast<int>(rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App))
+    if(notification ==
+       static_cast<int>(
+           rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App))
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
-    else if(notification == static_cast<int>(rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen))
+    else if(notification ==
+            static_cast<int>(rocprofvis_view_notification_t::
+                                 kRocProfVisViewNotification_Toggle_Fullscreen))
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
@@ -81,21 +97,91 @@ static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     // Unused parameters
-    (void)scancode;
-    (void)mods;
+    (void) scancode;
+    (void) mods;
 
     // Toggle fullscreen with F11
-    if (key == GLFW_KEY_F11 && action == GLFW_PRESS)
+    if(key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
 }
 
+static void
+print_version()
+{
+    std::cout << APP_NAME << " version: " << ROCPROFVIS_VERSION_MAJOR << "."
+              << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
+              << ROCPROFVIS_VERSION_BUILD << std::endl;
+}
+
+static void
+parse_command_line_args(int argc, char** argv)
+{
+#ifdef _WIN32
+    // Attach to parent console if present. If already attached, ERROR_ACCESS_DENIED is
+    // expected, so still wire stdout/stderr to the console handles.
+    if(AttachConsole(ATTACH_PARENT_PROCESS) || GetLastError() == ERROR_ACCESS_DENIED)
+    {
+        FILE* pCout;
+        freopen_s(&pCout, "CONOUT$", "w", stdout);
+        freopen_s(&pCout, "CONOUT$", "w", stderr);
+    }
+#endif
+    CLI::App app(APP_NAME + std::string(": A visualizer for the ROCm Profiler Tools"));
+
+    // Version option
+    bool version_flag = false;
+    app.add_flag("-v,--version", version_flag, "Print version information");
+
+    // File option
+    app.add_option("-f,--file", g_user_file_path_cli, "Path to the file to open")
+        ->type_name("PATH");
+
+    int  exit_code = 0;
+    bool do_exit   = false;
+    try
+    {
+        app.parse(argc, argv);
+    } catch(const CLI::ParseError& e)
+    {
+        // app.exit() handles printing the error message
+        exit_code = app.exit(e);
+
+        // Help option --help is handled by throwing exception so check
+        // error code before logging as an error
+        if(exit_code != static_cast<int>(CLI::ExitCodes::Success))
+        {
+            spdlog::error("Failed to parse command line arguments.");
+        }
+        do_exit = true;
+    }
+
+    // Handle version
+    if(!do_exit && version_flag)
+    {
+        print_version();
+        // exit if version was the only argument
+        if(argc == 2)
+        {
+            do_exit = true;
+        }
+    }
+
+    if(do_exit)
+    {
+        std::cout.flush();
+        std::cerr.flush();
+        fflush(stdout);
+        fflush(stderr);
+        exit(exit_code);
+    }
+}
+
 int
-main(int, char**)
+main(int argc, char** argv)
 {
     int resultCode = 0;
-
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
@@ -107,6 +193,8 @@ main(int, char**)
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
 
+    parse_command_line_args(argc, argv);
+
     glfwSetErrorCallback(glfw_error_callback);
     if(glfwInit())
     {
@@ -116,7 +204,7 @@ main(int, char**)
 #endif
         GLFWwindow* window = glfwCreateWindow(RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
                                               RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
-                                              "ROCm(TM) Optiq Beta", nullptr, nullptr);
+                                              APP_NAME, nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
         // Initialize fullscreen state with actual window position and size
@@ -158,6 +246,12 @@ main(int, char**)
                 });
 
                 backend.m_config(&backend, window);
+
+                if(!g_user_file_path_cli.empty())
+                {
+                    // If the user inputted a filepath open it here.
+                    rocprofvis_view_open_files({ g_user_file_path_cli });
+                }
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 

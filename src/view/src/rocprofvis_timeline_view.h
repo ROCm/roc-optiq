@@ -10,15 +10,17 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_time_to_pixel.h"
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
-
+ 
 namespace RocProfVis
 {
 namespace View
@@ -26,7 +28,7 @@ namespace View
 
 class TimelineSelection;
 class TimelineView;
-
+ 
 typedef struct ViewCoords
 {
     double y;
@@ -60,16 +62,15 @@ public:
     TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
                  std::shared_ptr<AnnotationsManager> annotations);
     ~TimelineView();
-    virtual void                     Render() override;
-    void                             Update() override;
-    void                             MakeGraphView();
-    void                             ResetView();
-    void                             DestroyGraphs();
+    virtual void                                     Render() override;
+    void                                             Update() override;
+    void                                             MakeGraphView();
+    void                                             ResetView();
+    void                                             DestroyGraphs();
     std::shared_ptr<std::vector<rocprofvis_graph_t>> GetGraphs();
-    void                             RenderInteractiveUI();
-    void                             ScrollToTrack(const uint64_t& track_id);
-    void                             SetViewTimePosition(double time_pos_ns, bool center);
-    void                             SetViewableRangeNS(double start_ns, double end_ns);
+    void                                             RenderInteractiveUI();
+    void ScrollToTrack(const uint64_t& track_id);
+    void SetViewableRangeNS(double start_ns, double end_ns);
     void MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
     void RenderGraphPoints();
     void RenderHistogram();
@@ -97,24 +98,16 @@ private:
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
 
-    EventManager::SubscriptionToken     m_new_track_token;
-    EventManager::SubscriptionToken     m_font_changed_token;
-    EventManager::SubscriptionToken     m_set_view_range_token;
-    int                                 m_dragged_sticky_id;
-    const std::vector<double>*          m_histogram;    
-    float                               m_ruler_height;
-    float                               m_ruler_padding;
-    double                              m_v_min_x;
-    double                              m_v_max_x;
-    double                              m_min_x;
-    double                              m_max_x;
+    EventManager::SubscriptionToken m_new_track_token;
+    EventManager::SubscriptionToken m_font_changed_token;
+    EventManager::SubscriptionToken m_set_view_range_token;
+    int                             m_dragged_sticky_id;
+    const std::vector<double>*      m_histogram;
+    float                           m_ruler_height;
+    float                           m_ruler_padding;
     double                              m_min_y;
     double                              m_max_y;
-    float                               m_zoom;
     float                               m_sidebar_size;
-    double                              m_view_time_offset_ns;
-    double                              m_v_width;
-    double                              m_pixels_per_ns;
     float                               m_scroll_position_y;
     float                               m_content_max_y_scroll;
     bool                                m_can_drag_to_pan;
@@ -123,13 +116,11 @@ private:
     bool                                m_resize_activity;
     double                              m_last_data_req_v_width;
     float                               m_unload_track_distance;
-    double                              m_range_x;
     DataProvider&                       m_data_provider;
     std::pair<double, double>           m_highlighted_region;
     SettingsManager&                    m_settings;
     double                              m_last_data_req_view_time_offset_ns;
     float                               m_artificial_scrollbar_height;
-    ImVec2                              m_graph_size;
     double                              m_grid_interval_ns;
     int                                 m_grid_interval_count;
     bool                                m_recalculate_grid_interval;
@@ -146,7 +137,7 @@ private:
     bool                                m_histogram_pseudo_focus;
     float                               m_max_meta_area_size;
     std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
-
+    std::shared_ptr<TimePixelTransform>               m_tpt;
     struct
     {
         bool     handled;

@@ -53,9 +53,9 @@ jobs:
 
     - name: Build with CMake
       run: |
-        mkdir -p build/codeql
-        cmake -B build/codeql --preset "linux-release"
-        cmake --build build/codeql --preset "Linux Release Build" --parallel $(nproc)
+        mkdir -p build/linux-release
+        cmake -B build/linux-release --preset "linux-release"
+        cmake --build build/linux-release --preset "Linux Release Build" --parallel $(nproc)
 
     - name: Run CodeQL analysis
       uses: github/codeql-action/analyze@v4

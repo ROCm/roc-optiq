@@ -46,9 +46,10 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
 
 FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
-                               uint64_t id, std::string name, float level_min,
-                               float level_max, std::shared_ptr<TimePixelTransform> tpt)
-: TrackItem(dp, id, name, tpt)
+                               uint64_t id, std::string name, float zoom,
+                               double time_offset_ns, double min_x, double max_x,
+                               double scale_x, float level_min, float level_max)
+: TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
 , m_event_color_mode(EventColorMode::kByEventName)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
@@ -63,11 +64,6 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_is_expanded(false)
 , m_compact_mode(false)
 {
-    if(!m_tpt)
-    {
-        spdlog::error("FlameTrackItem: m_tpt shared_ptr is null, cannot construct");
-        return;
-    }
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
     };
@@ -186,11 +182,10 @@ FlameTrackItem::ExtractPointsFromData()
     {
         const rocprofvis_trace_event_t& event = events_data[i];
         m_chart_items[i].event                = event;
-        m_chart_items[i].selected = m_timeline_selection->EventSelected(event.m_id);
+        m_chart_items[i].selected  = m_timeline_selection->EventSelected(event.m_id);
         if(m_chart_items[i].event.m_child_count > 1)
         {
-            m_chart_items[i].name_hash =
-                std::hash<std::string>{}(event.m_top_combined_name);
+            m_chart_items[i].name_hash = std::hash<std::string>{}(event.m_top_combined_name);
         }
         else
         {
@@ -252,15 +247,14 @@ FlameTrackItem::ParseChildInfo(const std::string& combined_name, ChildEventInfo&
             try
             {
                 // Extract count, duration and name (format: "<count>|<duration>|<name>")
-                size_t count          = std::stoul(combined_name.substr(0, pos1));
+                size_t count = std::stoul(combined_name.substr(0, pos1));
                 size_t duration_start = pos1 + s_child_info_separator.size();
-                size_t duration       = std::stoull(
-                    combined_name.substr(duration_start, pos2 - duration_start));
-                std::string name =
-                    combined_name.substr(pos2 + s_child_info_separator.size());
+                size_t duration = std::stoull(combined_name.substr(duration_start, pos2 - duration_start));
+                std::string name = combined_name.substr(pos2 + s_child_info_separator.size());
                 out_info = { name, std::hash<std::string>{}(name), count, duration };
                 return true;
-            } catch(const std::exception&)
+            }
+            catch(const std::exception&)
             {
                 spdlog::warn("Failed to parse child event info from string: {}",
                              combined_name);
@@ -503,7 +497,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         ImGui::PopFont();
 
         std::string label = nanosecond_to_formatted_str(
-            chart_item.event.m_start_ts - m_tpt->GetMinX(), time_format, true);
+            chart_item.event.m_start_ts - m_min_x, time_format, true);
         ImGui::Text("Start: %s", label.c_str());
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
@@ -530,7 +524,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         ImGui::PopTextWrapPos();
         ImGui::Separator();
         std::string label = nanosecond_to_formatted_str(
-            chart_item.event.m_start_ts - m_tpt->GetMinX(), time_format, true);
+            chart_item.event.m_start_ts - m_min_x, time_format, true);
         ImGui::Text("Start: %s", label.c_str());
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
@@ -570,11 +564,11 @@ FlameTrackItem::RenderChart(float graph_width)
         ImVec2 container_pos = ImGui::GetWindowPos();
 
         double normalized_start =
-            container_pos.x + m_tpt->RawTimeToPixel(item.event.m_start_ts);
+            container_pos.x +
+            (item.event.m_start_ts - (m_min_x + m_time_offset_ns)) * m_scale_x;
 
-        double normalized_duration =
-            std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
-        double normalized_end = normalized_start + normalized_duration;
+        double normalized_duration = std::max(item.event.m_duration * m_scale_x, 1.0);
+        double normalized_end      = normalized_start + normalized_duration;
 
         ImVec2 start_position;
 
@@ -612,10 +606,10 @@ FlameTrackItem::RenderChart(float graph_width)
     {
         ImVec2 container_pos = ImGui::GetWindowPos();
         double normalized_start =
-            container_pos.x + m_tpt->RawTimeToPixel(item.event.m_start_ts);
+            container_pos.x +
+            (item.event.m_start_ts - (m_min_x + m_time_offset_ns)) * m_scale_x;
 
-        double normalized_duration =
-            std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
+        double normalized_duration = std::max(item.event.m_duration * m_scale_x, 1.0);
 
         ImVec2 start_position;
         float  rounding = 2.0f;
@@ -679,8 +673,8 @@ FlameTrackItem::RenderMetaAreaOptions()
                 RecalculateTrackHeight();
             }
         }
-        if(m_track_height > std::max(m_max_level * m_level_height + m_level_height,
-                                     m_track_default_height))
+        if (m_track_height > std::max(m_max_level * m_level_height + m_level_height,
+            m_track_default_height))
         {
             RecalculateTrackHeight();
         }
@@ -711,15 +705,15 @@ bool
 FlameTrackProjectSettings::Valid() const
 {
     if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
-                           .isNumber())
+                      [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
+                      .isNumber())
     {
         return false;
     }
 
     if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
-                           .isBool())
+                      [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
+                      .isBool())
     {
         return false;
     }
@@ -743,7 +737,7 @@ FlameTrackProjectSettings::ColorEvents() const
     return color_mode;
 }
 
-bool
+bool 
 FlameTrackProjectSettings::CompactMode() const
 {
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]

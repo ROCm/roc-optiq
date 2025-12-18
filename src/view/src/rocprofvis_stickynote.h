@@ -3,16 +3,12 @@
 
 #pragma once
 #include "imgui.h"
-#include "rocprofvis_time_to_pixel.h"
-#include <memory>
 #include <string>
 
 namespace RocProfVis
 {
 namespace View
 {
-
-class TimePixelTransform;
 
 class StickyNote
 {
@@ -21,13 +17,13 @@ public:
                const std::string& text, const std::string& title,
                const std::string& project_id, double v_min, double v_max);
 
-    void Render(ImDrawList* draw_list, const ImVec2& window_position,
-                std::shared_ptr<TimePixelTransform> conversion_manager);
-    bool HandleResize(const ImVec2&       window_position,
-                      std::shared_ptr<TimePixelTransform> conversion_manager);
+    void Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
+                double pixels_per_ns);
+    bool HandleResize(const ImVec2& window_position, double v_min_x, double v_max_x,
+                      double pixels_per_ns);
 
     // Drag interaction
-    bool HandleDrag(const ImVec2& window_position, std::shared_ptr<TimePixelTransform> conversion_manager,
+    bool HandleDrag(const ImVec2& window_position, double v_min_x, double v_max_x, double pixels_per_ns,
                     int& dragged_id);
     void SetTitle(std::string title);
     void SetText(std::string title);

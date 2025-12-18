@@ -9,8 +9,6 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include <algorithm>
-#include <spdlog/spdlog.h>
-#include <spdlog/spdlog.h>
 
 namespace RocProfVis
 {
@@ -101,13 +99,9 @@ StickyNote::SetTitle(std::string title)
     m_title = title;
 }
 void
-StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::shared_ptr<TimePixelTransform> tpt)
+StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
+                   double pixels_per_ns)
 {
-    if(!tpt)
-    {
-        spdlog::error("StickyNote::Render: conversion_manager shared_ptr is null, cannot render");
-        return;
-    }
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kFillerColor);
     ImU32            border_color = settings.GetColor(Colors::kBorderColor);
@@ -118,7 +112,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::sh
     const float header_height = 32.0f;
     const float edit_btn_size = 30.0f;
 
-    float  x           = tpt->TimeToPixel(m_time_ns);
+    float  x           = static_cast<float>((m_time_ns - v_min_x) * pixels_per_ns);
     float  y           = m_y_offset;
     ImVec2 sticky_pos  = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_size = m_size;
@@ -190,17 +184,12 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::sh
 }
 
 bool
-StickyNote::HandleDrag(const ImVec2&                               window_position,
-                       std::shared_ptr<TimePixelTransform> conversion_manager, int& dragged_id)
+StickyNote::HandleDrag(const ImVec2& window_position, double v_min_x, double v_max_x,
+                       double pixels_per_ns, int& dragged_id)
 {
-    if(!conversion_manager)
-    {
-        spdlog::error("StickyNote::HandleDrag: conversion_manager shared_ptr is null");
-        return false;
-    }
     if(m_resizing) return false;
 
-    float  x          = conversion_manager->TimeToPixel(m_time_ns);
+    float  x          = static_cast<float>((m_time_ns - v_min_x) * pixels_per_ns);
     float  y          = m_y_offset;
     ImVec2 sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);
@@ -237,10 +226,10 @@ StickyNote::HandleDrag(const ImVec2&                               window_positi
         new_x =
             std::clamp(new_x, 0.0f, window_size.x - m_size.x);  // Limit to window width
 
-        m_time_ns  = conversion_manager->PixelToTime(new_x);
+        m_time_ns  = v_min_x + (new_x / pixels_per_ns);
         m_y_offset = new_y;
-        m_v_max_x  = conversion_manager->GetVMaxX();
-        m_v_min_x  = conversion_manager->GetVMinX();
+        m_v_max_x  = v_max_x;
+        m_v_min_x  = v_min_x;
 
         return true;
     }
@@ -256,18 +245,13 @@ StickyNote::HandleDrag(const ImVec2&                               window_positi
 }
 
 bool
-StickyNote::HandleResize(const ImVec2&       window_position,
-                         std::shared_ptr<TimePixelTransform> conversion_manager)
+StickyNote::HandleResize(const ImVec2& window_position, double v_min_x, double v_max_x,
+                         double pixels_per_ns)
 {
-    if(!conversion_manager)
-    {
-        spdlog::error("StickyNote::HandleResize: conversion_manager shared_ptr is null");
-        return false;
-    }
     // Only allow resize if not dragging
     if(m_dragging) return false;
 
-    float  x          = conversion_manager->TimeToPixel(m_time_ns);
+    float  x          = static_cast<float>((m_time_ns - v_min_x) * pixels_per_ns);
     float  y          = m_y_offset;
     ImVec2 sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);
@@ -299,8 +283,8 @@ StickyNote::HandleResize(const ImVec2&       window_position,
         float new_height = mouse_pos.y - sticky_pos.y - m_resize_offset.y;
         m_size.x         = std::max(new_width, 60.0f);
         m_size.y         = std::max(new_height, 40.0f);
-        m_v_max_x        = conversion_manager->GetVMaxX();
-        m_v_min_x        = conversion_manager->GetVMinX();
+        m_v_max_x        = v_max_x;
+        m_v_min_x        = v_min_x;
         return true;
     }
 

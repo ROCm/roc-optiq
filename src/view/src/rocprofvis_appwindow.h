@@ -7,7 +7,8 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_split_containers.h"
+#include "widgets/rocprofvis_tab_container.h"
 
 #ifdef USE_NATIVE_FILE_DIALOG
 #include <atomic>
@@ -66,6 +67,9 @@ public:
     void OpenFile(std::string file_path);
 
     void ShowCloseConfirm();
+    
+    void SetFullscreenState(bool is_fullscreen);
+    bool GetFullscreenState() const;
 
 private:
     AppWindow();
@@ -137,6 +141,8 @@ private:
 
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
+    bool                             m_is_fullscreen;
+    bool                             m_restore_fullscreen_later;
 };
 
 }  // namespace View

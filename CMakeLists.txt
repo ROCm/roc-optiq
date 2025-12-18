@@ -1,4 +1,5 @@
-# Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
 
 set(TARGET_NAME roc-optiq)
 
@@ -83,7 +84,10 @@ set(VIEW_FILES
     src/view/src/rocprofvis_event_search.cpp
     src/view/src/rocprofvis_summary_view.cpp
     src/view/src/rocprofvis_time_to_pixel.cpp
-    src/view/src/widgets/rocprofvis_widget.cpp	
+    src/view/src/widgets/rocprofvis_widget.cpp
+    src/view/src/widgets/rocprofvis_split_containers.cpp
+    src/view/src/widgets/rocprofvis_tab_container.cpp
+    src/view/src/widgets/rocprofvis_editable_textfield.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
@@ -124,6 +128,7 @@ endif(WIN32)
 add_executable(${TARGET_NAME} 
     src/app/src/rocprofvis_imgui_vulkan.cpp 
     src/app/src/main.cpp
+    src/app/src/glfw_util.cpp
     ${VIEW_FILES})
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
@@ -134,6 +139,7 @@ if(WIN32)
 endif(WIN32)
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
@@ -293,4 +299,3 @@ if(WIN32)
         COMMENT "Copying dependent DLLs to executable directory"
     )
 endif()
-

@@ -10,6 +10,7 @@
 #include "widgets/rocprofvis_widget.h"
 #include "rocprofvis_time_to_pixel.h"
 #include <memory>
+#include "widgets/rocprofvis_editable_textfield.h"
 #include <string>
 #include <vector>
 

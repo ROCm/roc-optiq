@@ -1,10 +1,11 @@
-// Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_split_containers.h"
 
 struct ImPlotStyle;
 

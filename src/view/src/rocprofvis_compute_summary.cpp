@@ -3,6 +3,8 @@
 
 #include "rocprofvis_compute_summary.h"
 #include "widgets/rocprofvis_compute_widget.h"
+#include "widgets/rocprofvis_tab_container.h"
+#include "widgets/rocprofvis_split_containers.h"
 
 namespace RocProfVis
 {

@@ -73,6 +73,10 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                 m_data_provider.GetTrackInfo(origin.track_id);
             if(!origin_track_info) continue;
             const rocprofvis_graph_t& origin_track = (*graphs)[origin_track_info->index];
+            if(!origin_track.display)
+            {
+                continue;
+            }
             if(origin_track.chart->IsCompactMode())
             {
                 level_height = settings.GetEventLevelCompactHeight();

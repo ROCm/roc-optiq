@@ -16,6 +16,7 @@ typedef enum rocprofvis_view_render_options_t
 typedef enum rocprofvis_view_notification_t
 {
     kRocProfVisViewNotification_Exit_App = 1,
+    kRocProfVisViewNotification_Toggle_Fullscreen = 2,
 } rocprofvis_view_notification_t;
 
 bool
@@ -32,6 +33,9 @@ rocprofvis_view_set_dpi(float dpi);
 
 void
 rocprofvis_view_open_files(const std::vector<std::string>& file_paths);
+
+void
+rocprofvis_view_set_fullscreen_state(bool is_fullscreen);
 
 std::string
 rocprofvis_get_application_config_path();

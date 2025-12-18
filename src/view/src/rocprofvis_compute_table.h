@@ -4,7 +4,7 @@
 #pragma once
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_event_manager.h"
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
 {

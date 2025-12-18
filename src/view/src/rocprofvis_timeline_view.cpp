@@ -138,17 +138,24 @@ void
 TimelineView::RenderInteractiveUI()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                    ImGuiWindowFlags_NoScrollWithMouse |
+                                    ImGuiWindowFlags_NoScrollbar |
                                     ImGuiWindowFlags_NoInputs;
 
-    ImGui::SetNextWindowSize(
-        ImVec2(m_tpt->GetGraphSizeX(),
-               m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height),
-        ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    ImGui::BeginChild("UI Interactive Overlay", m_tpt->GetGraphSize(), false,
-                      window_flags);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
+
+    float overlay_height = m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
+    float overlay_width  = m_tpt->GetGraphSizeX();
+
+    // Adjust width if vertical scrollbar is needed 
+    if(m_track_height_sum > overlay_height)
+    {
+        overlay_width -= ImGui::GetStyle().ScrollbarSize;
+    }
+
+    ImGui::BeginChild("UI Interactive Overlay", 
+                      ImVec2(overlay_width, overlay_height), 
+                      false, window_flags);
 
     ImGui::SetScrollY(static_cast<float>(m_scroll_position_y));
     ImGui::BeginChild("UI Interactive Content",

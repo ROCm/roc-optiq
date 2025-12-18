@@ -38,8 +38,9 @@ ECHO Build.cmd: Copying files to standard folder structure
 copy /y "%DEVROOT%\build\x64-release\Release\%VISUALIZER_FILE_NAME%.exe" "%DEVROOT%\ReleaseCommon\64Bit\All\"
 copy /y "%DEVROOT%\build\x64-release\Release\glfw3.dll" "%DEVROOT%\ReleaseCommon\64Bit\All\"
 copy /y "%DEVROOT%\README.md" "%DEVROOT%\ReleaseCommon\64Bit\All\"
-md "%DEVROOT%\ReleaseCommon\64Bit\All\doc"
-copy /y "%DEVROOT%\doc\ui_sections.png" "%DEVROOT%\ReleaseCommon\64Bit\All\doc\"
+md "%DEVROOT%\ReleaseCommon\64Bit\All\docs"
+md "%DEVROOT%\ReleaseCommon\64Bit\All\docs\images"
+copy /y "%DEVROOT%\docs\images\ui_sections.png" "%DEVROOT%\ReleaseCommon\64Bit\All\docs\images\ui_sections.png"
 if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
 
 GOTO END

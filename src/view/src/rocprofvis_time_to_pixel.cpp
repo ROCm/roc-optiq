@@ -27,6 +27,7 @@ TimePixelTransform::TimePixelTransform()
 , m_pixels_per_ns(0.0)
 , m_has_changed(false)
 {}
+
 TimePixelTransform::~TimePixelTransform() {}
 
 float
@@ -55,7 +56,6 @@ TimePixelTransform::PixelToTime(float x_position)
 bool
 TimePixelTransform::ValidateAndFixState()
 {
-    // Validate min/max relationship
     if(m_max_x_ns <= m_min_x_ns)
     {
         return false;
@@ -63,16 +63,26 @@ TimePixelTransform::ValidateAndFixState()
 
     m_range_x_ns = m_max_x_ns - m_min_x_ns;
 
+    // Capture zoom value before any clamping (needed for cursor position calculation)
+    float zoom_before_any_clamp = m_zoom;
+    double current_v_width_before_clamp = 0.0;
+    if(m_range_x_ns > 0.0 && m_zoom > 0.0f)
+    {
+        current_v_width_before_clamp = m_range_x_ns / m_zoom;
+    }
+
     // Validate zoom
     m_zoom = std::max(m_zoom, MAX_ZOOM_OUT_EXTENT);
     m_zoom = std::max(m_zoom, MIN_ZOOM_DIVISOR);
 
     // Validate maximum zoom - ensure pixels_per_ns stays below 1.0 (same as scroll wheel
+    float zoom_before_clamp = m_zoom;
     if(m_range_x_ns > 0.0 && m_graph_size_x > 0.0f)
     {
         double max_zoom_from_pixels = m_range_x_ns / m_graph_size_x;
         m_zoom = std::min(m_zoom, static_cast<float>(max_zoom_from_pixels));
     }
+
 
     // Validate graph sizes
     if(m_graph_size_x <= 0.0f)
@@ -88,11 +98,13 @@ TimePixelTransform::ValidateAndFixState()
     if(m_range_x_ns > 0.0 && m_zoom > 0.0f)
     {
         double computed_v_width = m_range_x_ns / m_zoom;
+        bool   width_was_clamped = false;
 
         // Ensure minimum view width
         if(computed_v_width < MIN_VIEW_WIDTH)
         {
             computed_v_width = MIN_VIEW_WIDTH;
+            width_was_clamped = true;
             // Adjust zoom to accommodate minimum width
             if(m_range_x_ns > 0.0)
             {
@@ -100,7 +112,7 @@ TimePixelTransform::ValidateAndFixState()
             }
         }
 
-        // Clamp view offset to valid range
+        // Clamp view offset to valid range (after center-preserving adjustment)
         double max_offset     = std::max(0.0, m_range_x_ns - computed_v_width);
         m_view_time_offset_ns = std::clamp(m_view_time_offset_ns, 0.0, max_offset);
     }
@@ -169,6 +181,7 @@ TimePixelTransform::Reset()
     m_range_x_ns          = 0.0f;
     m_graph_size_x        = 0.0f;
     m_pixels_per_ns       = 0.0f;
+
 }
 ImVec2
 TimePixelTransform::GetGraphSize() const
@@ -276,6 +289,7 @@ TimePixelTransform::SetViewTimeOffsetNs(double view_time_offset_ns)
 void
 TimePixelTransform::SetZoom(float zoom)
 {
+
     // Validate: zoom must be at least MIN_ZOOM and greater than MIN_ZOOM_DIVISOR
     // to prevent division by zero in calculations
     float validated_zoom = std::max(zoom, MAX_ZOOM_OUT_EXTENT);
@@ -287,6 +301,64 @@ TimePixelTransform::SetZoom(float zoom)
         m_has_changed = true;
     }
 }
+
+void
+TimePixelTransform::ZoomAtPixel(float pixel_x, float zoom_delta)
+{
+    // Clamp pixel position to valid range
+    pixel_x = std::max(0.0f, std::min(pixel_x, m_graph_size_x));
+    
+    // Calculate the time under the cursor before zoom
+    double cursor_screen_percentage = pixel_x / m_graph_size_x;
+    double time_under_cursor = m_view_time_offset_ns + cursor_screen_percentage * m_v_width_ns;
+    
+    // Calculate new zoom
+    float new_zoom = m_zoom * (1.0f + zoom_delta);
+    
+    // Check if already at max/min zoom to prevent jitter
+    double max_zoom = 0.0;
+    if(m_range_x_ns > 0.0 && m_graph_size_x > 0.0f)
+    {
+        max_zoom = m_range_x_ns / m_graph_size_x;
+    }
+    
+    // Don't zoom if already at limit (stops jitter)
+    if(zoom_delta > 0.0f && max_zoom > 0.0 && m_zoom >= max_zoom)
+    {
+        return;  
+    }
+    if(zoom_delta < 0.0f && m_zoom <= MAX_ZOOM_OUT_EXTENT)
+    {
+        return;  
+    }
+    
+    // Validate zoom bounds
+    float validated_zoom = std::max(new_zoom, MAX_ZOOM_OUT_EXTENT);
+    validated_zoom       = std::max(validated_zoom, MIN_ZOOM_DIVISOR);
+    if(m_range_x_ns > 0.0 && m_graph_size_x > 0.0f)
+    {
+        double max_zoom_from_pixels = m_range_x_ns / m_graph_size_x;
+        validated_zoom = std::min(validated_zoom, static_cast<float>(max_zoom_from_pixels));
+    }
+    
+    // Only proceed if zoom actually changed (stops jitter)
+    if(validated_zoom == m_zoom)
+    {
+        return; 
+    }
+    
+    // Calculate new view width
+    double new_v_width = m_range_x_ns / validated_zoom;
+    
+    // Adjust offset to preserve the time under cursor
+    double cursor_screen_percentage_new = (time_under_cursor - m_view_time_offset_ns) / m_v_width_ns;
+    m_view_time_offset_ns = time_under_cursor - cursor_screen_percentage_new * new_v_width;
+    
+    // Set zoom  
+    m_zoom               = validated_zoom;
+    m_has_changed        = true;
+}
+
 
 void
 TimePixelTransform::SetGraphSize(float graph_size_x, float graph_size_y)

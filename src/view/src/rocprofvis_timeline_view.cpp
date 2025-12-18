@@ -1601,7 +1601,7 @@ TimelineView::HandleTopSurfaceTouch()
                      io.MouseDown[ImGuiMouseButton_Right] ||
                      io.MouseDown[ImGuiMouseButton_Middle];
 
-    float offset_ns = m_tpt->GetViewTimeOffsetNs();
+    double offset_ns = m_tpt->GetViewTimeOffsetNs();
 
     // Sidebar: scroll wheel pans vertically
     if(is_mouse_in_sidebar)
@@ -1638,8 +1638,8 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel_h = io.MouseWheelH;
         if(scroll_wheel_h != 0.0f)
         {
-            float move_amount =
-                static_cast<float>(scroll_wheel_h * m_tpt->GetVWidth() * zoom_speed);
+            // Keep calculation in double precision to avoid chunking when fully zoomed in
+            double move_amount = scroll_wheel_h * m_tpt->GetVWidth() * zoom_speed;
             offset_ns -= move_amount;
         }
 
@@ -1647,36 +1647,19 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel = io.MouseWheel;
         if(scroll_wheel != 0.0f)
         {
-            // 1. Get mouse position relative to graph area
+            // Get mouse position relative to graph area
             ImVec2 mouse_pos        = ImGui::GetMousePos();
             ImVec2 graph_pos        = graph_area_min;
             float  mouse_x_in_graph = mouse_pos.x - graph_pos.x;
 
-            // 2. Calculate the world coordinate under the cursor before zoom
-            float  cursor_screen_percentage = mouse_x_in_graph / m_tpt->GetGraphSizeX();
-            double x_under_cursor           = m_tpt->GetViewTimeOffsetNs() +
-                                    cursor_screen_percentage * m_tpt->GetVWidth();
-
-            // 3. Apply zoom
-
-            float new_zoom = m_tpt->GetZoom();
-            if(scroll_wheel > 0)
-            {
-                new_zoom *= 1.0f + zoom_speed;
-            }
-            else
-            {
-                new_zoom *= 1.0f - zoom_speed;
-            }
-
-            // 4. Calculate new view width
-            double new_v_width = m_tpt->GetRangeX() / new_zoom;
-
-            // 5. Adjust m_movement so the world_x_under_cursor stays under the cursor
-            offset_ns = x_under_cursor - cursor_screen_percentage * new_v_width;
-
-            // 6. Update zoom and view width
-            m_tpt->SetZoom(new_zoom);
+            // Calculate zoom delta
+            float zoom_delta = scroll_wheel > 0 ? zoom_speed : -zoom_speed;
+            
+            // Zoom at cursor position (handles everything internally)
+            m_tpt->ZoomAtPixel(mouse_x_in_graph, zoom_delta);
+            
+            // Update offset from the transform
+            offset_ns = m_tpt->GetViewTimeOffsetNs();
         }
     }
     else if(mouse_any)
@@ -1713,25 +1696,32 @@ TimelineView::HandleTopSurfaceTouch()
                              m_tpt->GetVWidth());
         }
 
-        float new_zoom = 0.0f;
-        // W/S for zoom in/out
+        // W/S for zoom in/out at cursor position
         if(ImGui::IsKeyPressed(ImGuiKey_W))
         {
-            // Zoom in
-            new_zoom = m_tpt->GetZoom() * (1.0f + zoom_speed * pan_speed);
+            // Get mouse position relative to graph area
+            ImVec2 mouse_pos        = ImGui::GetMousePos();
+            ImVec2 graph_pos        = graph_area_min;
+            float  mouse_x_in_graph = mouse_pos.x - graph_pos.x;
+            
+            // Zoom in at cursor position (handles everything internally)
+            m_tpt->ZoomAtPixel(mouse_x_in_graph, zoom_speed * pan_speed);
+            
+            // Update offset from the transform
+            offset_ns = m_tpt->GetViewTimeOffsetNs();
         }
         if(ImGui::IsKeyPressed(ImGuiKey_S))
         {
-            // Zoom out
-            new_zoom = m_tpt->GetZoom() * (1.0f - zoom_speed * pan_speed);
-        }
-        if(new_zoom > 0.0f)
-        {
-            // Center zoom at current view center
-            double center_ns   = m_tpt->GetViewTimeOffsetNs() + m_tpt->GetVWidth() * 0.5;
-            double new_v_width = m_tpt->GetRangeX() / new_zoom;
-            offset_ns          = center_ns - new_v_width * 0.5;
-            m_tpt->SetZoom(new_zoom);
+            // Get mouse position relative to graph area
+            ImVec2 mouse_pos        = ImGui::GetMousePos();
+            ImVec2 graph_pos        = graph_area_min;
+            float  mouse_x_in_graph = mouse_pos.x - graph_pos.x;
+            
+            // Zoom out at cursor position (handles everything internally)
+            m_tpt->ZoomAtPixel(mouse_x_in_graph, -zoom_speed * pan_speed);
+            
+            // Update offset from the transform
+            offset_ns = m_tpt->GetViewTimeOffsetNs();
         }
 
         // Up/Down arrows for vertical scroll
@@ -1765,8 +1755,8 @@ TimelineView::HandleTopSurfaceTouch()
         float  drag       = io.MouseDelta.x;
         double view_width = (m_tpt->GetRangeX()) / m_tpt->GetZoom();
 
-        float user_requested_move =
-            static_cast<float>((drag / m_tpt->GetGraphSizeX()) * view_width);
+        // Keep calculation in double precision to avoid chunking when fully zoomed in
+        double user_requested_move = (drag / m_tpt->GetGraphSizeX()) * view_width;
 
         offset_ns -= user_requested_move;
     }

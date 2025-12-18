@@ -29,6 +29,7 @@ public:
     void   SetViewTimeOffsetNs(double value);
     void   SetZoom(float value);
     void   SetGraphSize(float x_value, float y_value);
+    void   ZoomAtPixel(float pixel_x, float zoom_delta);
     void   Reset();
     bool   ValidateAndFixState();
     float  TimeToPixel(double time_ns);
@@ -52,6 +53,6 @@ private:
     double m_pixels_per_ns;  // This value is how many pixels represent 1 ns in the
                              // current view.
     bool m_has_changed;  // This value indicates if the mapping needs to be recomputed.
-};
+ };
 }  // namespace View
 }  // namespace RocProfVis

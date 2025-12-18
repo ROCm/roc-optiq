@@ -28,7 +28,7 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        sudo apt update \
+        sudo apt update
         sudo apt install -y \
         cmake build-essential \
         libwayland-bin \

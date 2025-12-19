@@ -108,11 +108,11 @@ FontManager::Init()
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
         "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+        // RedHat 8, Oracle 8
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
         // RedHat 9 / 10, Oracle 9 / 10
         "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
         "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf"
-        // RedHat 8, Oracle 8
-        "/usr/share/fonts/dejavu/DejaVuSans.ttf"
     };
 #endif
 

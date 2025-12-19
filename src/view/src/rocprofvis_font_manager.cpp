@@ -103,10 +103,16 @@ FontManager::Init()
     const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
 #else
     const char* font_paths[] = {
+        // Ubuntu / Debian
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"
+        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+        // RedHat 9 / 10, Oracle 9 / 10
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+        "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf"
+        // RedHat 8, Oracle 8
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf"
     };
 #endif
 
@@ -133,8 +139,15 @@ FontManager::Init()
     {
         ImFont* font = nullptr;
         if(font_path)
+        {
             font = io.Fonts->AddFontFromFileTTF(font_path, FONT_AVAILABLE_SIZES[sz]);
-        if(!font) font = io.Fonts->AddFontDefault();
+        }
+        else
+        {
+            ImFontConfig fallback_config;
+            fallback_config.SizePixels = FONT_AVAILABLE_SIZES[sz];
+            font                       = io.Fonts->AddFontDefault(&fallback_config);
+        }
         m_all_fonts[sz] = font;
     }
 

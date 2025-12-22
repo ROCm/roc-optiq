@@ -40,7 +40,7 @@ init_fullscreen_state(GLFWwindow* window, FullscreenState& state)
         state.windowed_ypos = DEFAULT_WINDOWED_YPOS;
         state.windowed_width = DEFAULT_WINDOWED_WIDTH;
         state.windowed_height = DEFAULT_WINDOWED_HEIGHT;
-        spdlog::info("Window initialized in fullscreen mode, setting defaults for windowed mode");
+        spdlog::debug("Window initialized in fullscreen mode, setting defaults for windowed mode");
     }
 }
 

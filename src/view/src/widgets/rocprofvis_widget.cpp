@@ -18,7 +18,7 @@ namespace RocProfVis
 namespace View
 {
 
-RocWidget::~RocWidget() { spdlog::info("RocWidget object destroyed"); }
+RocWidget::~RocWidget() { spdlog::debug("RocWidget object destroyed"); }
 
 void
 RocWidget::Render()

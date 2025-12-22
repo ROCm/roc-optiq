@@ -610,7 +610,7 @@ InfiniteScrollTable::IndexColumns()
 void
 InfiniteScrollTable::RowSelected(const ImGuiMouseButton mouse_button)
 {
-    spdlog::info(mouse_button == ImGuiMouseButton_Left ? "Row {} clicked"
+    spdlog::debug(mouse_button == ImGuiMouseButton_Left ? "Row {} clicked"
                                                        : "Row {} right-clicked",
                  m_selected_row);
 }
@@ -728,7 +728,7 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
                 ViewRangeNS view_range = calculate_adaptive_view_range(
                     static_cast<double>(time_range.first),
                     static_cast<double>(time_range.second - time_range.first));
-                spdlog::info("Navigating to track ID: {} from row: {}", target_track_id,
+                spdlog::debug("Navigating to track ID: {} from row: {}", target_track_id,
                              m_selected_row);
                 EventManager::GetInstance()->AddEvent(
                     std::make_shared<ScrollToTrackEvent>(

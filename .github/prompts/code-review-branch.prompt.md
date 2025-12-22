@@ -1,27 +1,29 @@
 ---
-mode: 'agent'
-tools: ['changes', 'codebase', 'runCommands']
+tools: ['changes', 'search/codebase', 'runCommands']
 description: 'Perform a code review'
+argument-hint: 'base-branch'
 ---
-Your goal is to performed a code review on the changed files in the project.  The changes refer to the differences between the current branch and its merge base with the `main` branch. 
-The current branch is the one you are reviewing, and the merge base is the point where this branch diverged from `main`.
 
-As part of the review perform the following tasks:  
-- List the files that have been changed.
-- Show the differences (changes) in the files.
-- If you execute any `git` commands make sure they are done in non-interactive mode, use the `--no-pager` flag.
-- Use the command `git --no-pager diff main...HEAD` to get the code differences between this branch and the branch point.
-- Perform the code review, only comment on the changes.
+Act as a Senior Software Engineer. Your goal is to perform a code review on the changes between the current branch and a base branch.
 
-For the code review focus on:  
-- Potential bugs  
-- Security vulnerabilities  
-- Performance issues  
-- Adherence to best practices  
-- Readability and maintainability  
-- Unnecessary complexity  
-  
-Provide concise, actionable feedback. If there are no significant issues state "No major issues found." 
-Do not modify any code! 
-Structure your feedback clearly.
-If you need to refer to specific lines in the code, use the format `file:line_number` (e.g., `src/main.py:42`).
+If the user provides a branch name argument, use it as the base branch. If no branch name is provided, use `main` as the default base branch.
+
+**Instructions:**
+1.  **Determine Base Branch:** Use the user-provided argument as the base branch. If none is provided, default to `main`.
+2.  **Identify Changes:** Run `git --no-pager diff <BASE_BRANCH>...HEAD` (using the 3-dot syntax) to get the differences from the merge base.
+3.  **Analyze Code:** Review the diffs based on the criteria below.
+
+**Review Criteria:**
+-   **Functionality:** Potential bugs, logic errors, and edge cases.
+-   **Security:** Vulnerabilities, input validation issues, and secrets handling.
+-   **Performance:** Inefficient loops, memory leaks, or expensive operations.
+-   **Quality:** Readability, maintainability, naming conventions, and best practices.
+-   **Cleanliness:** Unnecessary complexity, leftover debug code, or commented-out blocks.
+
+**Output Guidelines:**
+-   **Summary:** Briefly describe the scope of the changes.
+-   **Findings:** Group comments by file. Use the format `File: <filename> (Line <number>)`.
+-   **Severity:** Tag issues as [Critical], [Major], or [Minor].
+-   **Actionable Feedback:** Provide clear suggestions on how to fix identified issues. If the code looks good, confirm with "No major issues found."
+
+**Note:** Do not modify the code. Focus solely on providing high-quality feedback.

@@ -178,7 +178,7 @@ if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
     target_link_options(${TARGET_NAME} PRIVATE --coverage)
 endif()
 
-#CPACK Packaging Enabling
+# CPACK Packaging Enabling
 set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
 if( NOT DEFINED BUILD_ID )
   if( DEFINED ENV{BUILD_ID} )
@@ -189,9 +189,9 @@ if( NOT DEFINED BUILD_ID )
   endif()
 endif()
 
-#Package Maintainer Name and Email
-set(PKG_MAINTAINER_NM  "ROCm Optiq Support")
-set(PKG_MAINTAINER_EMAIL  "rocm-optiq@amd.com")
+# Package Maintainer Name and Email
+set(PKG_MAINTAINER_NM "ROCm Optiq Support")
+set(PKG_MAINTAINER_EMAIL "rocm-optiq@amd.com")
 
 set(RUNTIME_COMP_TYPE "RV_RUNTIME")
 set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")
@@ -200,31 +200,35 @@ set(EXTENDED_PACKAGE_DESCRIPTION
 
 include(GNUInstallDirs)
 
-
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
-set(CPACK_GENERATOR "TGZ;DEB;RPM" CACHE STRING "package types to be produced")
 
-#Default Value is 0, this value will be used
-#When ROCM LibPatch Version when not explicitly set
+set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
+# Detect Linux distro for additional package types
+if(UNIX AND NOT APPLE)
+  # Add DEB for Debian based distros
+  if(EXISTS "/etc/debian_version")
+    list(APPEND CPACK_GENERATOR "DEB")
+  # Make RPM the default for RedHat based distros  
+  elseif(EXISTS "/etc/redhat-release" OR EXISTS "/etc/oracle-release" OR EXISTS "/etc/system-release")
+    list(APPEND CPACK_GENERATOR "RPM")
+  endif()
+endif()
+
+# Default Value is 0, this value will be used
+# When ROCM LibPatch Version when not explicitly set
 set(ROCM_VERSION_FOR_PACKAGE "0")
 if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
   set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
 endif()
-if (NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
-  if (DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
-     set(CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
-  else()
-     set(CPACK_DEBIAN_PACKAGE_RELEASE "local.${BUILD_ID}")
-  endif()
-endif()
 
-## Packaging directives
+
+# Packaging directives
 set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
 set(CPACK_PACKAGE_VERSION
-	"${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${ROCM_VERSION_FOR_PACKAGE}")
+	"${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${PROJECT_VERSION_BUILD}")
 set(CPACK_PACKAGE_CONTACT "${PKG_MAINTAINER_NM} <${PKG_MAINTAINER_EMAIL}>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PKG_DESCRIPTION}")
 
@@ -243,10 +247,14 @@ install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
         DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT ${RUNTIME_COMP_TYPE} )
 
-## Debian package specific variables
+# Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+# Set package version to 1 
+if(NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
+  set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
+endif()
 message(STATUS "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}")
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(DEB_VULKAN_DEPENDS_STRING "libvulkan1")
@@ -257,39 +265,42 @@ set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/roc-optiq")
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
-## RPM package specific variables
+# RPM package specific variables
 set(CMAKE_SKIP_RPATH TRUE)
-set ( CPACK_RPM_COMPONENT_INSTALL ON )
-set ( CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}" )
-if( NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
-  if(DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE})
-    set(CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE})
-  else()
-    set(CPACK_RPM_PACKAGE_RELEASE "local.${BUILD_ID}")
-  endif()
+set(CPACK_RPM_COMPONENT_INSTALL ON)
+set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+
+# Set package version to 1 
+if(NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
+  set(CPACK_RPM_PACKAGE_RELEASE "1")
 endif()
 
-## 'dist' breaks manual builds on debian systems due to empty Provides
+# 'dist' breaks manual builds on debian systems due to empty Provides
 execute_process( COMMAND rpm --eval %{?dist}
                  RESULT_VARIABLE PROC_RESULT
                  OUTPUT_VARIABLE EVAL_RESULT
-                 OUTPUT_STRIP_TRAILING_WHITESPACE )
-if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
-  string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
+                 OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "")
+  string(APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}")
 endif()
 message(STATUS "Using CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
-set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
+set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
 
-# TODO - To Review RPM Runtime package Dependencies for Vulkan, Others
-set ( RPM_VULKAN_DEPENDS_STRING "vulkan" )
-set ( RPM_GLFW_DEPENDS_STRING "glfw" )
-set ( RPM_DEPENDS_STRING "${RPM_VULKAN_DEPENDS_STRING} ${RPM_GLFW_DEPENDS_STRING}" )
-set ( CPACK_RPM_PACKAGE_REQUIRES ${RPM_DEPENDS_STRING} )
-set ( CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}" )
+# Use automatic shared libraries dependency detection
+set(CPACK_RPM_PACKAGE_AUTOREQPROV "yes")
+set(CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
-## Include packaging
+if("DEB" IN_LIST CPACK_GENERATOR)
+  message(STATUS "Expected DEB Filename: ${CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE}_<ARCH>.deb")
+endif()
+if("RPM" IN_LIST CPACK_GENERATOR)
+  message(STATUS "Expected RPM Filename: ${CPACK_RPM_RV_RUNTIME_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}.<ARCH>.rpm")
+endif()
+
+# Include packaging
 include(CPack)
 
+# Copy runtime files to target folder
 if(WIN32)
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD

@@ -48,7 +48,7 @@ rocprofvis_result_t ComputeTrace::Load(char const* const directory)
                 }
             }
         }
-        spdlog::info("ComputeTrace::Load - {}/{} Tables", m_tables.size(), COMPUTE_TABLE_DEFINITIONS.size());
+        spdlog::debug("ComputeTrace::Load - {}/{} Tables", m_tables.size(), COMPUTE_TABLE_DEFINITIONS.size());
         for (const ComputeTablePlotDefinition& definition : COMPUTE_PLOT_DEFINITIONS)
         {
             ComputePlot* plot = new ComputePlot(m_plots.size(), definition.m_title, definition.x_axis_label, definition.y_axis_label, definition.m_type);
@@ -79,7 +79,7 @@ rocprofvis_result_t ComputeTrace::Load(char const* const directory)
                 m_plots[definition.m_type] = plot;
             }
         }
-        spdlog::info("ComputeTrace::Load - {}/{} Plots", m_plots.size(), COMPUTE_PLOT_DEFINITIONS.size());
+        spdlog::debug("ComputeTrace::Load - {}/{} Plots", m_plots.size(), COMPUTE_PLOT_DEFINITIONS.size());
         if (m_tables.count(kRPVControllerComputeTableTypeRooflineBenchmarks) > 0 && m_tables.count(kRPVControllerComputeTableTypeRooflineCounters) > 0)
         {
             for (auto& it : ROOFLINE_DEFINITION.m_plots)
@@ -93,7 +93,7 @@ rocprofvis_result_t ComputeTrace::Load(char const* const directory)
                 }
             }
         }
-        spdlog::info("ComputeTrace::Load - {}/{} Rooflines", m_plots.size() - COMPUTE_PLOT_DEFINITIONS.size(), ROOFLINE_DEFINITION.m_plots.size());
+        spdlog::debug("ComputeTrace::Load - {}/{} Rooflines", m_plots.size() - COMPUTE_PLOT_DEFINITIONS.size(), ROOFLINE_DEFINITION.m_plots.size());
     }
     return result;
 }

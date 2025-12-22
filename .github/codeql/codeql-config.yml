@@ -1,0 +1,10 @@
+# CodeQL configuration
+# Exclude third-party and build outputs to reduce noise and improve performance
+paths-ignore:
+  - thirdparty/**
+  - build/**
+  - Installer/**
+  - docs/**
+
+queries:
+  - uses: security-and-quality

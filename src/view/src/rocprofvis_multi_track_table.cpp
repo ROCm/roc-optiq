@@ -61,7 +61,7 @@ MultiTrackTable::HandleTrackSelectionChanged()
     std::vector<uint64_t> filtered_tracks;
     for(uint64_t track_id : tracks)
     {
-        const track_info_t* track_info = m_data_provider.GetTrackInfo(track_id);
+        const TrackInfo* track_info = m_data_provider.GetTrackInfo(track_id);
         if(track_info)
         {
             if((track_info->track_type == kRPVControllerTrackTypeSamples &&

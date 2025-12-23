@@ -69,7 +69,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
         {
             // True view: origin + multiple targets
             const event_flow_data_t& origin = flows[0];
-            const track_info_t*      origin_track_info =
+            const TrackInfo*      origin_track_info =
                 m_data_provider.GetTrackInfo(origin.track_id);
             if(!origin_track_info) continue;
             const rocprofvis_graph_t& origin_track = (*graphs)[origin_track_info->index];
@@ -95,7 +95,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
             for(size_t i = 1; i < flows.size(); ++i)
             {
                 const event_flow_data_t& target = flows[i];
-                const track_info_t*      target_track_info =
+                const TrackInfo*      target_track_info =
                     m_data_provider.GetTrackInfo(target.track_id);
                 if(!target_track_info) continue;
                 const rocprofvis_graph_t& target_track =
@@ -167,9 +167,9 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                 const event_flow_data_t& from = flows[i];
                 const event_flow_data_t& to   = flows[i + 1];
 
-                const track_info_t* from_track_info =
+                const TrackInfo* from_track_info =
                     m_data_provider.GetTrackInfo(from.track_id);
-                const track_info_t* to_track_info =
+                const TrackInfo* to_track_info =
                     m_data_provider.GetTrackInfo(to.track_id);
                 if(!from_track_info || !to_track_info) continue;
 

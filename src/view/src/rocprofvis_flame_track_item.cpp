@@ -73,11 +73,11 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
     };
 
       // Check if thread is main thread.
-    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+    const TrackInfo* track_info = m_data_provider.GetTrackInfo(m_id);
 
     if(track_info != nullptr)
     {
-        if(track_info->topology.type == track_info_t::Topology::InstrumentedThread)
+        if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread)
         {
             const thread_info_t* thread_info =
                 m_data_provider.GetInstrumentedThreadInfo(track_info->topology.id);

@@ -486,7 +486,7 @@ TrackTopology::UpdateGraphs()
     if(m_graphs_dirty && m_data_provider.GetState() == ProviderState::kReady)
     {
         m_topology.uncategorized_graph_indices.clear();
-        for(const track_info_t* track : m_data_provider.GetTrackInfoList())
+        for(const TrackInfo* track : m_data_provider.GetTrackInfoList())
         {
             if(track)
             {
@@ -496,7 +496,7 @@ TrackTopology::UpdateGraphs()
                 const uint64_t& index      = track->index;
                 switch(track->topology.type)
                 {
-                    case track_info_t::Topology::Queue:
+                    case TrackInfo::Topology::Queue:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -504,7 +504,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case track_info_t::Topology::Stream:
+                    case TrackInfo::Topology::Stream:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -512,7 +512,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case track_info_t::Topology::InstrumentedThread:
+                    case TrackInfo::Topology::InstrumentedThread:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -520,7 +520,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case track_info_t::Topology::SampledThread:
+                    case TrackInfo::Topology::SampledThread:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -528,7 +528,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case track_info_t::Topology::Counter:
+                    case TrackInfo::Topology::Counter:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]

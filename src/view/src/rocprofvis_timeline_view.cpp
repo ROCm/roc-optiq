@@ -384,7 +384,7 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             return;
         }
 
-        const track_info_t* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
+        const TrackInfo* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
         if(!metadata)
         {
             spdlog::error(
@@ -431,7 +431,7 @@ TimelineView::Update()
                 m_graphs_reordered.resize(m_data_provider.GetTrackCount());
                 for(rocprofvis_graph_t& graph : *m_graphs)
                 {
-                    const track_info_t* metadata =
+                    const TrackInfo* metadata =
                         m_data_provider.GetTrackInfo(graph.chart->GetID());
                     ROCPROFVIS_ASSERT(metadata);
                     m_graphs_reordered[metadata->index] = std::move(graph);
@@ -1146,18 +1146,18 @@ TimelineView::MakeGraphView()
     int      scale_x    = 1;
     m_graphs->resize(num_graphs);
 
-    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
+    std::vector<const TrackInfo*> track_list    = m_data_provider.GetTrackInfoList();
     bool                             project_valid = m_project_settings.Valid();
 
     for(int i = 0; i < track_list.size(); i++)
     {
-        const track_info_t* track_info = track_list[i];
+        const TrackInfo* track_info = track_list[i];
         bool                display    = true;
 
         if(project_valid)
         {
             uint64_t            track_id_at_index = m_project_settings.TrackID(i);
-            const track_info_t* track_at_index_info =
+            const TrackInfo* track_at_index_info =
                 m_data_provider.GetTrackInfo(track_id_at_index);
             if(track_at_index_info && track_at_index_info->index != i)
             {
@@ -1795,11 +1795,11 @@ void
 TimelineView::CalculateMaxMetaAreaSize()
 {
     m_max_meta_area_size                        = 0.0f;
-    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
+    std::vector<const TrackInfo*> track_list = m_data_provider.GetTrackInfoList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
-        const track_info_t* track_info = track_list[i];
+        const TrackInfo* track_info = track_list[i];
         auto                graph      = (*m_graphs)[track_info->index];
         if(track_info->track_type == kRPVControllerTrackTypeSamples)
         {
@@ -1812,11 +1812,11 @@ TimelineView::CalculateMaxMetaAreaSize()
 void
 TimelineView::UpdateAllMaxMetaAreaSizes()
 {
-    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
+    std::vector<const TrackInfo*> track_list = m_data_provider.GetTrackInfoList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
-        const track_info_t* track_info = track_list[i];
+        const TrackInfo* track_info = track_list[i];
         auto                graph      = (*m_graphs)[track_info->index];
         if(track_info->track_type == kRPVControllerTrackTypeSamples)
         {

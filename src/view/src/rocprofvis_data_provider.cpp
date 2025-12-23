@@ -113,7 +113,7 @@ DataProvider::FreeRequests()
 {
     for (auto item : m_requests)
     {
-        data_req_info_t& req = item.second;
+        RequestInfo& req = item.second;
         if (req.request_future)
         {
             spdlog::warn("FreeRequests: cancelling request {} of type {}",
@@ -130,7 +130,7 @@ DataProvider::FreeRequests()
     }
     for(auto item : m_requests)
     {
-        data_req_info_t& req = item.second;
+        RequestInfo& req = item.second;
 
         if(req.request_future)
         {
@@ -365,7 +365,7 @@ DataProvider::SetTableDataReadyCallback(
 
 void
 DataProvider::SetTrackDataReadyCallback(
-    const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>&
+    const std::function<void(uint64_t, const std::string&, const RequestInfo&)>&
         callback)
 {
     m_track_data_ready_callback = callback;
@@ -474,7 +474,7 @@ DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
     if(m_state == ProviderState::kReady)
     {
         ROCPROFVIS_ASSERT(index < m_num_graphs);
-        const track_info_t* metadata = GetTrackInfo(track_id);
+        const TrackInfo* metadata = GetTrackInfo(track_id);
         ROCPROFVIS_ASSERT(metadata);
         result = rocprofvis_controller_set_object(m_trace_timeline,
                                                   kRPVControllerTimelineGraphIndexed,
@@ -534,13 +534,13 @@ DataProvider::FetchTrace(const std::string& file_path)
 
             if(result == kRocProfVisResultSuccess)
             {
-                data_req_info_t request_info;
+                RequestInfo request_info;
                 request_info.request_array      = nullptr;
                 request_info.request_future     = future;
                 request_info.request_obj_handle = nullptr;
                 request_info.request_args       = nullptr;
                 request_info.request_id         = FETCH_TRACE_REQUEST_ID;
-                request_info.loading_state      = ProviderState::kLoading;
+                request_info.loading_state      = RequestState::kLoading;
                 request_info.request_type       = RequestType::kFetchTrace;
 
                 m_requests.emplace(request_info.request_id, request_info);
@@ -575,7 +575,7 @@ DataProvider::Update()
 }
 
 void
-DataProvider::ProcessLoadTrace(data_req_info_t& req)
+DataProvider::ProcessLoadTrace(RequestInfo& req)
 {
     rocprofvis_result_t result = kRocProfVisResultSuccess;
 
@@ -966,7 +966,7 @@ DataProvider::HandleLoadTrackMetaData()
 
         if(result == kRocProfVisResultSuccess)
         {
-            track_info_t track_info;
+            TrackInfo track_info;
 
             track_info.graph_handle = graph;
 
@@ -1043,7 +1043,7 @@ DataProvider::HandleLoadTrackMetaData()
                 result = rocprofvis_controller_get_object(
                     queue, kRPVControllerQueueProcessor, 0, &processor);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                track_info.topology.type = track_info_t::Topology::Queue;
+                track_info.topology.type = TrackInfo::Topology::Queue;
             }
             else if(stream)
             {
@@ -1059,7 +1059,7 @@ DataProvider::HandleLoadTrackMetaData()
                 result = rocprofvis_controller_get_object(
                     stream, kRPVControllerStreamProcessor, 0, &processor);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                track_info.topology.type = track_info_t::Topology::Stream;
+                track_info.topology.type = TrackInfo::Topology::Stream;
             }
             else if(thread)
             {
@@ -1079,8 +1079,8 @@ DataProvider::HandleLoadTrackMetaData()
                                   type != kRPVControllerThreadTypeUndefined);
                 track_info.topology.type =
                     type == kRPVControllerThreadTypeInstrumented
-                        ? track_info_t::Topology::InstrumentedThread
-                        : track_info_t::Topology::SampledThread;
+                        ? TrackInfo::Topology::InstrumentedThread
+                        : TrackInfo::Topology::SampledThread;
             }
             else if(counter)
             {
@@ -1095,11 +1095,11 @@ DataProvider::HandleLoadTrackMetaData()
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 result = rocprofvis_controller_get_object(
                     queue, kRPVControllerCounterProcessor, 0, &processor);
-                track_info.topology.type = track_info_t::Topology::Counter;
+                track_info.topology.type = TrackInfo::Topology::Counter;
             }
             else
             {
-                track_info.topology.type = track_info_t::Topology::Unknown;
+                track_info.topology.type = TrackInfo::Topology::Unknown;
                 spdlog::warn("No thread/queue/counter binding found for track {}",
                              track_info.id);
             }
@@ -1169,13 +1169,13 @@ DataProvider::SaveTrimmedTrace(const std::string& path, double start_ns, double 
     if(result == kRocProfVisResultSuccess && trim_future)
     {
         spdlog::debug("Trimmed trace save request submitted successfully");
-        data_req_info_t request_info;
+        RequestInfo request_info;
         request_info.request_array      = nullptr;
         request_info.request_future     = trim_future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
         request_info.request_id         = SAVE_TRIMMED_TRACE_REQUEST_ID;
-        request_info.loading_state      = ProviderState::kLoading;
+        request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kSaveTrimmedTrace;
         m_requests.emplace(request_info.request_id, request_info);
         return true;
@@ -1205,7 +1205,7 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
     uint64_t request_id =
         MakeTrackDataRequestId(track_id, chunk_index, group_id, RequestType::kFetchTrack);
 
-    const track_info_t* metadata = GetTrackInfo(track_id);
+    const TrackInfo* metadata = GetTrackInfo(track_id);
     if(metadata)
     {
         auto it = m_requests.find(request_id);
@@ -1229,13 +1229,13 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
 
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-                data_req_info_t request_info;
+                RequestInfo request_info;
                 request_info.request_array      = track_array;
                 request_info.request_future     = track_future;
                 request_info.request_obj_handle = track_handle;
                 request_info.request_args       = nullptr;
                 request_info.request_id         = request_id;
-                request_info.loading_state      = ProviderState::kLoading;
+                request_info.loading_state      = RequestState::kLoading;
                 request_info.request_type       = RequestType::kFetchTrack;
 
                 auto params = std::make_shared<TrackRequestParams>(
@@ -1320,13 +1320,13 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
 
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-                data_req_info_t request_info;
+                RequestInfo request_info;
                 request_info.request_array      = graph_array;
                 request_info.request_future     = graph_future;
                 request_info.request_obj_handle = graph_obj;
                 request_info.request_args       = nullptr;
                 request_info.request_id         = request_id;
-                request_info.loading_state      = ProviderState::kLoading;
+                request_info.loading_state      = RequestState::kLoading;
                 request_info.request_type       = RequestType::kFetchGraph;
 
                 auto params = std::make_shared<TrackRequestParams>(request_params);
@@ -1463,7 +1463,7 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
     }
 
     uint64_t            track_id = table_params.m_track_ids[0];
-    const track_info_t* metadata = GetTrackInfo(track_id);
+    const TrackInfo* metadata = GetTrackInfo(track_id);
 
     if(metadata)
     {
@@ -1556,13 +1556,13 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             // create the request info
-            data_req_info_t request_info;
+            RequestInfo request_info;
             request_info.request_array      = array;
             request_info.request_future     = future;
             request_info.request_obj_handle = nullptr;
             request_info.request_args       = args;
             request_info.request_id         = request_id;
-            request_info.loading_state      = ProviderState::kLoading;
+            request_info.loading_state      = RequestState::kLoading;
             request_info.request_type =
                 (table_params.m_table_type == kRPVControllerTableTypeEvents)
                     ? RequestType::kFetchTrackEventTable
@@ -1710,7 +1710,7 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
                     ROCPROFVIS_ASSERT(table_handle);
                     for(const auto& track_id : table_params.m_track_ids)
                     {
-                        const track_info_t* metadata = GetTrackInfo(track_id);
+                        const TrackInfo* metadata = GetTrackInfo(track_id);
                         // skip track if id is invalid
                         if(!metadata)
                         {
@@ -1881,13 +1881,13 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         // create the request info
-        data_req_info_t request_info;
+        RequestInfo request_info;
         request_info.request_array      = array;
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = args;
         request_info.request_id         = request_id;
-        request_info.loading_state      = ProviderState::kLoading;
+        request_info.loading_state      = RequestState::kLoading;
 
         if(export_to_file)
         {
@@ -2004,8 +2004,8 @@ DataProvider::FetchSummary()
             m_trace_controller, summary_handle, args, future, metrics);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         m_requests.emplace(SUMMARY_REQUEST_ID,
-                           data_req_info_t{ SUMMARY_REQUEST_ID, future, nullptr, metrics,
-                                            args, ProviderState::kLoading,
+                           RequestInfo{ SUMMARY_REQUEST_ID, future, nullptr, metrics,
+                                            args, RequestState::kLoading,
                                             RequestType::kFetchSummary });
         spdlog::debug("Fetching summary data");
         return true;
@@ -2038,7 +2038,7 @@ DataProvider::GetRawTrackData(uint64_t track_id)
     return nullptr;
 }
 
-const track_info_t*
+const TrackInfo*
 DataProvider::GetTrackInfo(uint64_t track_id)
 {
     if(m_track_metadata.count(track_id) > 0)
@@ -2048,10 +2048,10 @@ DataProvider::GetTrackInfo(uint64_t track_id)
     return nullptr;
 }
 
-std::vector<const track_info_t*>
+std::vector<const TrackInfo*>
 RocProfVis::View::DataProvider::GetTrackInfoList()
 {
-    std::vector<const track_info_t*> list(m_track_metadata.size(), nullptr);
+    std::vector<const TrackInfo*> list(m_track_metadata.size(), nullptr);
     for(auto& it : m_track_metadata)
     {
         list[it.second.index] = &it.second;
@@ -2098,7 +2098,7 @@ DataProvider::CancelRequest(uint64_t request_id)
     if(it != m_requests.end())
     {
         spdlog::debug("Cancelling request id: {}", request_id);
-        data_req_info_t&    request_info = it->second;
+        RequestInfo&    request_info = it->second;
         rocprofvis_result_t result =
             rocprofvis_controller_future_cancel(request_info.request_future);
         if(result == kRocProfVisResultSuccess)
@@ -2153,7 +2153,7 @@ DataProvider::FreeAllEvents()
 void
 DataProvider::DumpMetaData()
 {
-    for(const track_info_t* track_info : GetTrackInfoList())
+    for(const TrackInfo* track_info : GetTrackInfoList())
     {
         spdlog::debug("Track index {}, id {}, name {}, min ts {}, max ts {}, type {}, "
                       "num entries {}, min value {}, max value {}",
@@ -2301,7 +2301,7 @@ DataProvider::HandleRequests()
     {
         for(auto it = m_requests.begin(); it != m_requests.end();)
         {
-            data_req_info_t&    req = it->second;
+            RequestInfo&    req = it->second;
             rocprofvis_result_t result =
                 rocprofvis_controller_future_wait(req.request_future, 0);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
@@ -2310,7 +2310,7 @@ DataProvider::HandleRequests()
             // the response is ready
             if(result == kRocProfVisResultSuccess)
             {
-                req.loading_state = ProviderState::kReady;
+                req.loading_state = RequestState::kReady;
                 req.response_code = kRocProfVisResultSuccess;
                 result            = rocprofvis_controller_get_uint64(req.request_future,
                                                                      kRPVControllerFutureResult, 0,
@@ -2347,7 +2347,7 @@ DataProvider::HandleRequests()
     }
 }
 void
-DataProvider::ProcessEventCallStackRequest(data_req_info_t& req)
+DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
 {
     if(!req.request_array)
     {
@@ -2406,7 +2406,7 @@ DataProvider::ProcessEventCallStackRequest(data_req_info_t& req)
 }
 
 void
-DataProvider::ProcessEventExtendedRequest(data_req_info_t& req)
+DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
 {
     if(!req.request_array)
     {
@@ -2521,7 +2521,7 @@ DataProvider::ProcessEventExtendedRequest(data_req_info_t& req)
     req.request_array = nullptr;
 }
 void
-DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
+DataProvider::ProcessEventFlowDetailsRequest(RequestInfo& req)
 {
     if(!req.request_array)
     {
@@ -2644,7 +2644,7 @@ DataProvider::ProcessEventFlowDetailsRequest(data_req_info_t& req)
 }
 
 void
-DataProvider::ProcessRequest(data_req_info_t& req)
+DataProvider::ProcessRequest(RequestInfo& req)
 {
     switch(req.request_type)
     {
@@ -2711,7 +2711,7 @@ DataProvider::ProcessRequest(data_req_info_t& req)
 }
 
 void
-DataProvider::ProcessSaveTrimmedTraceRequest(data_req_info_t& req)
+DataProvider::ProcessSaveTrimmedTraceRequest(RequestInfo& req)
 {
     spdlog::debug("Save trimmed trace request complete with result: {}",
                   req.response_code);
@@ -2724,7 +2724,7 @@ DataProvider::ProcessSaveTrimmedTraceRequest(data_req_info_t& req)
 }
 
 void
-DataProvider::ProcessSummaryRequest(data_req_info_t& req)
+DataProvider::ProcessSummaryRequest(RequestInfo& req)
 {
     if(req.request_args)
     {
@@ -2902,7 +2902,7 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
 }
 
 void
-DataProvider::ProcessTableRequest(data_req_info_t& req)
+DataProvider::ProcessTableRequest(RequestInfo& req)
 {
     // free arguments
     if(req.request_args)
@@ -3153,7 +3153,7 @@ DataProvider::ProcessTableRequest(data_req_info_t& req)
 }
 
 void
-DataProvider::ProcessTableExportRequest(data_req_info_t& req)
+DataProvider::ProcessTableExportRequest(RequestInfo& req)
 {
     if(req.request_args)
     {
@@ -3171,7 +3171,7 @@ DataProvider::ProcessTableExportRequest(data_req_info_t& req)
 }
 
 void
-DataProvider::ProcessTrackRequest(data_req_info_t& req)
+DataProvider::ProcessTrackRequest(RequestInfo& req)
 {
     spdlog::debug("Processing track data {}", req.request_id);
 
@@ -3183,7 +3183,7 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
     }
 
     // use the track type to determine what type of data is present in the graph array
-    const track_info_t* metadata = GetTrackInfo(track_params->m_track_id);
+    const TrackInfo* metadata = GetTrackInfo(track_params->m_track_id);
     ROCPROFVIS_ASSERT(metadata);
     switch(metadata->track_type)
     {
@@ -3220,7 +3220,7 @@ DataProvider::ProcessTrackRequest(data_req_info_t& req)
 }
 
 void
-DataProvider::ProcessGraphRequest(data_req_info_t& req)
+DataProvider::ProcessGraphRequest(RequestInfo& req)
 {
     spdlog::debug("Processing graph data {}", req.request_id);
 
@@ -3264,7 +3264,7 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
     }
 
     // use the track type to determine what type of data is present in the graph array
-    const track_info_t* metadata = GetTrackInfo(track_params->m_track_id);
+    const TrackInfo* metadata = GetTrackInfo(track_params->m_track_id);
     ROCPROFVIS_ASSERT(metadata);
 
     switch(metadata->track_type)
@@ -3301,7 +3301,7 @@ DataProvider::ProcessGraphRequest(data_req_info_t& req)
 
 void
 DataProvider::CreateRawSampleData(const TrackRequestParams& params,
-                                  const data_req_info_t&    req)
+                                  const RequestInfo&    req)
 {
     rocprofvis_controller_array_t*               track_data   = req.request_array;
     const std::chrono::steady_clock::time_point& request_time = req.request_time;
@@ -3411,7 +3411,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
 
 void
 DataProvider::CreateRawEventData(const TrackRequestParams& params,
-                                 const data_req_info_t&    req)
+                                 const RequestInfo&    req)
 {
     rocprofvis_controller_array_t*               track_data   = req.request_array;
     const std::chrono::steady_clock::time_point& request_time = req.request_time;
@@ -3599,13 +3599,13 @@ DataProvider::FetchEventExtData(uint64_t event_id)
 
     if(result == kRocProfVisResultSuccess)
     {
-        data_req_info_t request_info;
+        RequestInfo request_info;
         request_info.request_array      = outArray;
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
         request_info.request_id         = EVENT_EXTENDED_DATA_REQUEST_ID;
-        request_info.loading_state      = ProviderState::kLoading;
+        request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kFetchEventExtendedData;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
 
@@ -3643,13 +3643,13 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
 
     if(result == kRocProfVisResultSuccess)
     {
-        data_req_info_t request_info;
+        RequestInfo request_info;
         request_info.request_array      = outArray;
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
         request_info.request_id         = EVENT_FLOW_DATA_REQUEST_ID;
-        request_info.loading_state      = ProviderState::kLoading;
+        request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kFetchEventFlowDetails;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
 
@@ -3687,13 +3687,13 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
 
     if(result == kRocProfVisResultSuccess)
     {
-        data_req_info_t request_info;
+        RequestInfo request_info;
         request_info.request_array      = outArray;
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
         request_info.request_id         = EVENT_CALL_STACK_DATA_REQUEST_ID;
-        request_info.loading_state      = ProviderState::kLoading;
+        request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kFetchEventCallStack;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
 

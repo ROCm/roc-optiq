@@ -8,6 +8,8 @@
 #include "rocprofvis_interface_types.h"
 #include "rocprofvis_raw_track_data.h"
 
+#include "rocprofvis_requests.h"
+
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -29,22 +31,7 @@ enum class ProviderState
     kError
 };
 
-enum class RequestType
-{
-    kFetchTrack,
-    kFetchGraph,
-    kFetchTrackEventTable,
-    kFetchTrackSampleTable,
-    kFetchEventSearchTable,
-    kFetchSummaryKernelInstanceTable,
-    kFetchEventExtendedData,
-    kFetchEventFlowDetails,
-    kFetchEventCallStack,
-    kFetchSummary,
-    kSaveTrimmedTrace,
-    kTableExport,
-    kFetchTrace
-};
+
 
 enum class TableType
 {
@@ -55,7 +42,7 @@ enum class TableType
     __kTableTypeCount
 };
 
-typedef struct track_info_t
+struct TrackInfo
 {
     uint64_t                           index;  // index of the track in the controller
     uint64_t                           id;     // id of the track in the controller
@@ -83,7 +70,7 @@ typedef struct track_info_t
         } type;
         uint64_t id;  // ID of queue/stream/thread/counter
     } topology;
-} track_info_t;
+};
 
 typedef struct event_ext_data_t
 {
@@ -124,6 +111,8 @@ typedef struct event_info_t
     std::vector<event_flow_data_t> flow_info;
     std::vector<call_stack_data_t> call_stack_info;
 } event_info_t;
+
+// Topology related info structs
 
 typedef struct node_info_t
 {
@@ -222,122 +211,6 @@ typedef struct summary_info_t
         std::vector<AggregateMetrics>                         sub_metrics;
     };
 } summary_info_t;
-
-class RequestParamsBase
-{
-public:
-    virtual ~RequestParamsBase() = default;
-};
-
-// Track request parameters
-class TrackRequestParams : public RequestParamsBase
-{
-public:
-    uint32_t m_track_id;          // id of track that is being requested
-    double   m_start_ts;          // start time stamp of data being requested
-    double   m_end_ts;            // end time stamp of data being requested
-    uint32_t m_horz_pixel_range;  // horizontal pixel range for the request
-    uint8_t  m_data_group_id;     // group id for the request, used for grouping requests
-    uint16_t m_chunk_index;       // index of the chunk being requested
-    size_t   m_chunk_count;       // total number of chunks for the track
-
-    TrackRequestParams(const TrackRequestParams& other)            = default;
-    TrackRequestParams& operator=(const TrackRequestParams& other) = default;
-
-    TrackRequestParams(uint32_t track_id, double start_ts, double end_ts,
-                       uint32_t horz_pixel_range, uint8_t group_id, uint16_t chunk_index,
-                       size_t chunk_count)
-    : m_track_id(track_id)
-    , m_start_ts(start_ts)
-    , m_end_ts(end_ts)
-    , m_horz_pixel_range(horz_pixel_range)
-    , m_data_group_id(group_id)
-    , m_chunk_index(chunk_index)
-    , m_chunk_count(chunk_count)
-    {}
-};
-
-// Table request parameters
-class TableRequestParams : public RequestParamsBase
-{
-public:
-    rocprofvis_controller_table_type_t m_table_type;  // type of the table
-    std::vector<uint64_t>              m_track_ids;   // ids of the tracks in the table
-    std::vector<rocprofvis_dm_event_operation_t> m_op_types;  // op types in the table
-    double   m_start_ts;           // starting time stamp of the data in the table
-    double   m_end_ts;             // ending time stamp of the data in the table
-    uint64_t m_start_row;          // starting row of the data in the table
-    uint64_t m_req_row_count;      // number of rows requested
-    uint64_t m_sort_column_index;  // index of the column to sort by
-    rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
-    std::string                        m_where;       // SQL where clause
-    std::string                        m_filter;      // CMD filter
-    std::vector<std::string>
-                m_string_table_filters;  // strings to use for string table filtering.
-    std::string m_group;
-    std::string m_group_columns;
-    std::string m_export_to_file_path;
-    bool        m_summary;
-
-    TableRequestParams(const TableRequestParams& table_params)            = default;
-    TableRequestParams& operator=(const TableRequestParams& table_params) = default;
-
-    TableRequestParams(
-        rocprofvis_controller_table_type_t                  table_type,
-        const std::vector<uint64_t>&                        track_ids,
-        const std::vector<rocprofvis_dm_event_operation_t>& op_types, double start_ts,
-        double end_ts, const char* where, char const* filter, char const* group,
-        char const* group_cols, const std::vector<std::string> string_table_filters = {},
-        uint64_t start_row = -1, uint64_t req_row_count = -1,
-        uint64_t                           sort_column_index = 0,
-        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string export_to_file_path = "", bool summary = false)
-    : m_table_type(table_type)
-    , m_track_ids(track_ids)
-    , m_op_types(op_types)
-    , m_start_ts(start_ts)
-    , m_end_ts(end_ts)
-    , m_start_row(start_row)
-    , m_req_row_count(req_row_count)
-    , m_sort_column_index(sort_column_index)
-    , m_sort_order(sort_order)
-    , m_where(where)
-    , m_filter(filter)
-    , m_group(group)
-    , m_group_columns(group_cols)
-    , m_string_table_filters(string_table_filters)
-    , m_export_to_file_path(export_to_file_path)
-    , m_summary(summary)
-    {}
-};
-
-// Event request parameters
-class EventRequestParams : public RequestParamsBase
-{
-public:
-    uint64_t m_event_id;
-
-    EventRequestParams(const EventRequestParams& table_params)            = default;
-    EventRequestParams& operator=(const EventRequestParams& table_params) = default;
-
-    EventRequestParams(uint64_t event_id)
-    : m_event_id(event_id)
-    {}
-};
-
-typedef struct data_req_info_t
-{
-    uint64_t                              request_id;      // unique id of the request
-    rocprofvis_controller_future_t*       request_future;  // future for the request
-    rocprofvis_controller_array_t*        request_array;  // array of data for the request
-    rocprofvis_handle_t*                  request_obj_handle;  // object for the request
-    rocprofvis_controller_arguments_t*    request_args;   // arguments for the request
-    ProviderState                         loading_state;  // state of the request
-    RequestType                           request_type;   // type of request
-    std::shared_ptr<RequestParamsBase>    custom_params;  // custom request parameters
-    std::chrono::steady_clock::time_point request_time;  // time when the request was made
-    uint64_t                              response_code;  // response code for the request
-} data_req_info_t;
 
 typedef struct formatted_column_data_t
 {
@@ -598,8 +471,8 @@ public:
      */
     const RawTrackData* GetRawTrackData(uint64_t track_id);
 
-    const track_info_t*              GetTrackInfo(uint64_t track_id);
-    std::vector<const track_info_t*> GetTrackInfoList();
+    const TrackInfo*              GetTrackInfo(uint64_t track_id);
+    std::vector<const TrackInfo*> GetTrackInfoList();
     uint64_t                         GetTrackCount();
 
     std::vector<const node_info_t*> GetNodeInfoList() const;
@@ -632,7 +505,7 @@ public:
     void SetTableDataReadyCallback(
         const std::function<void(const std::string&, uint64_t)>& callback);
     void SetTrackDataReadyCallback(
-        const std::function<void(uint64_t, const std::string&, const data_req_info_t&)>&
+        const std::function<void(uint64_t, const std::string&, const RequestInfo&)>&
             callback);
     void SetSummaryDataReadyCallback(const std::function<void()>& callback);
     void SetTraceLoadedCallback(
@@ -657,24 +530,24 @@ private:
     void HandleLoadTrackMetaData();
     void HandleRequests();
 
-    void ProcessRequest(data_req_info_t& req);
-    void ProcessLoadTrace(data_req_info_t& req);
-    void ProcessEventExtendedRequest(data_req_info_t& req);
-    void ProcessEventFlowDetailsRequest(data_req_info_t& req);
-    void ProcessEventCallStackRequest(data_req_info_t& req);
-    void ProcessGraphRequest(data_req_info_t& req);
-    void ProcessTrackRequest(data_req_info_t& req);
-    void ProcessTableRequest(data_req_info_t& req);
-    void ProcessTableExportRequest(data_req_info_t& req);
-    void ProcessSaveTrimmedTraceRequest(data_req_info_t& req);
-    void ProcessSummaryRequest(data_req_info_t& req);
+    void ProcessRequest(RequestInfo& req);
+    void ProcessLoadTrace(RequestInfo& req);
+    void ProcessEventExtendedRequest(RequestInfo& req);
+    void ProcessEventFlowDetailsRequest(RequestInfo& req);
+    void ProcessEventCallStackRequest(RequestInfo& req);
+    void ProcessGraphRequest(RequestInfo& req);
+    void ProcessTrackRequest(RequestInfo& req);
+    void ProcessTableRequest(RequestInfo& req);
+    void ProcessTableExportRequest(RequestInfo& req);
+    void ProcessSaveTrimmedTraceRequest(RequestInfo& req);
+    void ProcessSummaryRequest(RequestInfo& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
 
-    void CreateRawEventData(const TrackRequestParams& params, const data_req_info_t& req);
+    void CreateRawEventData(const TrackRequestParams& params, const RequestInfo& req);
     void CreateRawSampleData(const TrackRequestParams& params,
-                             const data_req_info_t&    req);
+                             const RequestInfo&    req);
     void CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                            std::vector<size_t>& sub_metrics_idx);
 
@@ -695,7 +568,7 @@ private:
     double      m_max_ts;           // timeline end point
     std::string m_trace_file_path;  // path to the trace file
 
-    std::unordered_map<uint64_t, track_info_t>  m_track_metadata;
+    std::unordered_map<uint64_t, TrackInfo>  m_track_metadata;
     std::unordered_map<uint64_t, RawTrackData*> m_raw_trackdata;
     std::unordered_map<uint64_t, event_info_t>  m_event_data;
 
@@ -713,7 +586,7 @@ private:
 
     summary_info_t::AggregateMetrics m_summary_info;
 
-    std::unordered_map<int64_t, data_req_info_t> m_requests;
+    std::unordered_map<int64_t, RequestInfo> m_requests;
 
     // Global Histogram Vector
     std::vector<double> m_histogram;
@@ -725,7 +598,7 @@ private:
     // Called when table data has changed
     std::function<void(const std::string&, uint64_t)> m_table_data_ready_callback;
     // Called when new track data is ready
-    std::function<void(uint64_t, const std::string&, const data_req_info_t&)>
+    std::function<void(uint64_t, const std::string&, const RequestInfo&)>
         m_track_data_ready_callback;
     // Called when a new trace is loaded
     std::function<void(const std::string&, uint64_t)> m_trace_data_ready_callback;

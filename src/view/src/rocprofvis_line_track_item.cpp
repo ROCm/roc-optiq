@@ -57,7 +57,7 @@ LineTrackItem::~LineTrackItem() {}
 void
 LineTrackItem::UpdateMetadata()
 {
-    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+    const TrackInfo* track_info = m_data_provider.GetTrackInfo(m_id);
     if(track_info)
     {
         const counter_info_t* counter =

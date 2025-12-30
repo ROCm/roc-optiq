@@ -55,6 +55,8 @@ add_subdirectory(src/controller)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 
+find_package(Vulkan REQUIRED)
+
 # View related src files
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp 
@@ -137,12 +139,21 @@ if(WIN32)
         )
 endif(WIN32)
 
-add_executable(${TARGET_NAME} 
-    src/app/src/rocprofvis_imgui_vulkan.cpp 
-    src/app/src/main.cpp
-    src/app/src/glfw_util.cpp
-    src/app/src/rocprofvis_cli_parser.cpp
-    ${VIEW_FILES})
+if(APPLE)
+    add_executable(${TARGET_NAME} MACOSX_BUNDLE
+        src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/main.cpp
+        src/app/src/glfw_util.cpp
+        src/app/src/rocprofvis_cli_parser.cpp
+        ${VIEW_FILES})
+else()
+    add_executable(${TARGET_NAME}
+        src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/main.cpp
+        src/app/src/glfw_util.cpp
+        src/app/src/rocprofvis_cli_parser.cpp
+        ${VIEW_FILES})
+endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
 
@@ -150,6 +161,26 @@ if(WIN32)
     set_target_properties(${TARGET_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
     set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "/ENTRY:mainCRTStartup")
 endif(WIN32)
+
+if(APPLE)
+    set(MACOSX_BUNDLE_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/Info.plist.in")
+    configure_file("${MACOSX_BUNDLE_PLIST}" "${CMAKE_CURRENT_BINARY_DIR}/Info.plist" @ONLY)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.amd.roc-optiq"
+        MACOSX_BUNDLE_BUNDLE_NAME "ROCm Optiq"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING
+            "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION_BUILD}"
+    )
+    set_source_files_properties(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.icns"
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    target_sources(${TARGET_NAME} PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.icns"
+    )
+endif()
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/resources)
@@ -171,11 +202,10 @@ target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
-# Ensure build tree binaries can locate GLFW on macOS.
 if(APPLE)
     set_target_properties(${TARGET_NAME} PROPERTIES
-        BUILD_RPATH "@executable_path/thirdparty/glfw/src"
-        INSTALL_RPATH "@executable_path/thirdparty/glfw/src"
+        BUILD_RPATH "@executable_path/../Frameworks"
+        INSTALL_RPATH "@executable_path/../Frameworks"
     )
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
@@ -183,6 +213,21 @@ if(APPLE)
             "$<TARGET_FILE_NAME:glfw>"
             "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"
         COMMENT "Creating GLFW soname symlink for macOS runtime lookup"
+    )
+    add_custom_command(
+        TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:glfw>"
+            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "$<TARGET_FILE_NAME:glfw>"
+            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${Vulkan_LIBRARIES}"
+            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMENT "Staging GLFW and Vulkan dylibs into the app bundle"
     )
 endif()
 
@@ -198,7 +243,6 @@ if(NOT USE_NATIVE_FILE_DIALOG)
 endif()
 
 # === Vulkan ===
-find_package(Vulkan REQUIRED)
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")
 
 # Csv parser enables coverage in debug builds so we need to enable it too

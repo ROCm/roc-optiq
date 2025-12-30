@@ -2555,13 +2555,14 @@ Trace::AsyncFetch(rocprofvis_property_t property, Future& future, Array& array,
                 }
                 case kRPVControllerBucketDataValueIndexed:
                 {
-                    size_t buckets_num = 0;
+                    uint64_t buckets_num = 0;
                     result = GetUInt64(kRPVControllerGetHistogramBucketsNumber, 0, &buckets_num);
                     if (result == kRocProfVisResultSuccess)
                     {
                         result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, buckets_num);
                     }
-                    result = m_tracks[index]->GetBucketValues(buckets_num, array);
+                    const size_t buckets_num_size = static_cast<size_t>(buckets_num);
+                    result = m_tracks[index]->GetBucketValues(buckets_num_size, array);
                     break;
                 }
                 default:

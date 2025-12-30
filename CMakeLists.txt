@@ -180,6 +180,18 @@ if(APPLE)
     target_sources(${TARGET_NAME} PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.icns"
     )
+
+    set_source_files_properties(
+        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/Roboto-Medium.ttf"
+        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/Karla-Regular.ttf"
+        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/DroidSans.ttf"
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/fonts"
+    )
+    target_sources(${TARGET_NAME} PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/Roboto-Medium.ttf"
+        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/Karla-Regular.ttf"
+        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/DroidSans.ttf"
+    )
 endif()
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)

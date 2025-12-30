@@ -25,6 +25,11 @@ option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
+if(APPLE AND USE_NATIVE_FILE_DIALOG)
+    set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
+        "Use the OS native file dialog instead of ImGui file dialog" FORCE)
+    message(WARNING "Disabling native file dialog on macOS; it must run on the main thread.")
+endif()
 
 if(JSON_TRACE_SUPPORT) 
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DJSON_TRACE_SUPPORT")
@@ -166,6 +171,21 @@ target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
+# Ensure build tree binaries can locate GLFW on macOS.
+if(APPLE)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        BUILD_RPATH "@executable_path/thirdparty/glfw/src"
+        INSTALL_RPATH "@executable_path/thirdparty/glfw/src"
+    )
+    add_custom_command(
+        TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "$<TARGET_FILE_NAME:glfw>"
+            "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"
+        COMMENT "Creating GLFW soname symlink for macOS runtime lookup"
+    )
+endif()
+
 # === NativeFileDialog Extended ===
 if(USE_NATIVE_FILE_DIALOG)
   set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
@@ -283,6 +303,21 @@ set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
 if(NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
   set(CPACK_RPM_PACKAGE_RELEASE "1")
 endif()
+
+if(NOT APPLE)
+    set(CMAKE_SKIP_RPATH TRUE)
+endif()
+set ( CPACK_RPM_COMPONENT_INSTALL ON )
+set ( CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}" )
+if( NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
+  if(DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE})
+    set(CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE})
+  else()
+    set(CPACK_RPM_PACKAGE_RELEASE "local.${BUILD_ID}")
+  endif()
+endif()
+
+## RPM package specific variables
 
 # 'dist' breaks manual builds on debian systems due to empty Provides
 execute_process( COMMAND rpm --eval %{?dist}

@@ -1143,7 +1143,6 @@ TimelineView::MakeGraphView()
 
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = m_data_provider.GetTrackCount();
-    int      scale_x    = 1;
     m_graphs->resize(num_graphs);
 
     std::vector<const TrackInfo*> track_list    = m_data_provider.GetTrackInfoList();
@@ -1228,7 +1227,7 @@ TimelineView::RenderHistogram()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    int splitter_size = 5;
+    float splitter_size = 5.0f;
 
     // Vertical splitter
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
@@ -1253,7 +1252,6 @@ TimelineView::RenderHistogram()
     ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
     float       ruler_width     = m_tpt->GetGraphSizeX();
     float       tick_top        = ruler_pos.y + 2.0f;
-    float       tick_bottom     = ruler_pos.y + 7.0f;
     ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
     float       label_font_size = font->FontSize;
 
@@ -1293,8 +1291,8 @@ TimelineView::RenderHistogram()
 
     for(int i = 0; i < num_ticks; i++)
     {
-        double      tick_ns    = grid_line_start_ns + (i * interval_ns);
-        float       tick_x     = window_pos.x + m_tpt->TimeToPixel(tick_ns);
+        double      tick_ns = grid_line_start_ns + (i * interval_ns);
+        float       tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
         std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
         label_size             = ImGui::CalcTextSize(tick_label.c_str());
 

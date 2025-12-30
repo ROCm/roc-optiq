@@ -8,6 +8,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -27,6 +28,75 @@ constexpr std::array FONT_AVAILABLE_SIZES = { 7.0f,  8.0f,  9.0f,  10.0f, 11.0f,
 FontManager::FontManager() {}
 
 FontManager::~FontManager() {}
+
+namespace
+{
+std::filesystem::path
+find_bundled_font(const std::filesystem::path& rel_path)
+{
+    std::error_code       ec;
+    std::filesystem::path base = std::filesystem::current_path(ec);
+    if(ec) return {};
+
+    for(int depth = 0; depth < 6; ++depth)
+    {
+        std::filesystem::path candidate = base / rel_path;
+        if(std::filesystem::exists(candidate, ec))
+        {
+            return candidate;
+        }
+        if(!base.has_parent_path())
+        {
+            break;
+        }
+        base = base.parent_path();
+    }
+
+    return {};
+}
+
+std::filesystem::path
+find_font_path()
+{
+    const std::filesystem::path bundled_paths[] = {
+        "thirdparty/imgui/misc/fonts/Roboto-Medium.ttf",
+        "thirdparty/imgui/misc/fonts/Karla-Regular.ttf",
+        "thirdparty/imgui/misc/fonts/DroidSans.ttf"
+    };
+
+    for(const auto& rel_path : bundled_paths)
+    {
+        std::filesystem::path candidate = find_bundled_font(rel_path);
+        if(!candidate.empty())
+        {
+            return candidate;
+        }
+    }
+
+#ifdef _WIN32
+    const char* system_paths[] = { "C:\\Windows\\Fonts\\segoeui.ttf",
+                                   "C:\\Windows\\Fonts\\arial.ttf" };
+#else
+    const char* system_paths[] = {
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"
+    };
+#endif
+
+    std::error_code ec;
+    for(const char* path : system_paths)
+    {
+        if(std::filesystem::exists(path, ec))
+        {
+            return std::filesystem::path(path);
+        }
+    }
+
+    return {};
+}
+}  // namespace
 
 ImFont*
 FontManager::GetIconFontByIndex(int idx)
@@ -133,6 +203,11 @@ FontManager::Init()
 
     ImFontConfig config;
     config.FontDataOwnedByAtlas = false;
+
+    ImFontConfig font_config;
+    font_config.PixelSnapH = false;
+    font_config.OversampleH = 2;
+    font_config.OversampleV = 2;
 
     // Load all font sizes once
     for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)

@@ -11,8 +11,12 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <cstring>
 #include <string>
 #include <vector>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 namespace RocProfVis
 {
@@ -31,6 +35,31 @@ FontManager::~FontManager() {}
 
 namespace
 {
+std::filesystem::path
+get_bundle_resources_path()
+{
+#ifdef __APPLE__
+    uint32_t size = 0;
+    if(_NSGetExecutablePath(nullptr, &size) != -1 || size == 0) return {};
+
+    std::string buffer(size, '\0');
+    if(_NSGetExecutablePath(buffer.data(), &size) != 0) return {};
+    buffer.resize(std::strlen(buffer.c_str()));
+
+    std::error_code ec;
+    std::filesystem::path exec_path = std::filesystem::weakly_canonical(buffer, ec);
+    if(ec) exec_path = std::filesystem::path(buffer);
+
+    std::filesystem::path resources_dir =
+        (exec_path.parent_path() / "../Resources").lexically_normal();
+    if(std::filesystem::exists(resources_dir, ec))
+    {
+        return resources_dir;
+    }
+#endif
+    return {};
+}
+
 std::filesystem::path
 find_bundled_font(const std::filesystem::path& rel_path)
 {
@@ -63,6 +92,21 @@ find_font_path()
         "thirdparty/imgui/misc/fonts/Karla-Regular.ttf",
         "thirdparty/imgui/misc/fonts/DroidSans.ttf"
     };
+
+#ifdef __APPLE__
+    std::filesystem::path resources_dir = get_bundle_resources_path();
+    if(!resources_dir.empty())
+    {
+        for(const auto& rel_path : bundled_paths)
+        {
+            std::filesystem::path candidate = resources_dir / "fonts" / rel_path.filename();
+            if(std::filesystem::exists(candidate))
+            {
+                return candidate;
+            }
+        }
+    }
+#endif
 
     for(const auto& rel_path : bundled_paths)
     {

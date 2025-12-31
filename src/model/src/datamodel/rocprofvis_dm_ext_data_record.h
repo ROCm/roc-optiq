@@ -56,5 +56,52 @@ class ExtDataRecord
         
 };
 
+// ArgumentRecord is a data storage class for argument data parameters
+class ArgumentRecord 
+{
+public:
+    // ExtDataRecord class constructor
+    // @param category - extended data category string
+    // @param name - extended data name string
+    // @param data - extended data string
+    ArgumentRecord(rocprofvis_event_data_category_enum_t category_enum, rocprofvis_dm_charptr_t data) { AddArgumentParam(category_enum,data); };
+    void AddArgumentParam(rocprofvis_event_data_category_enum_t category_enum, rocprofvis_dm_charptr_t data) {
+        switch (category_enum) {
+        case kRocProfVisEventArgumentDataPosition:
+            m_position = std::atol(data);
+            break;
+        case kRocProfVisEventArgumentDataType:
+            m_type = data;
+            break;
+        case kRocProfVisEventArgumentDataName:
+            m_name = data;
+            break;
+        case kRocProfVisEventArgumentDataValue:
+            m_data = data;
+            break;
+        }
+    }
+
+    // Returns pointer to argument name string 
+    rocprofvis_dm_charptr_t        Name() {return m_name.c_str();}
+    // Returns pointer to argument value string 
+    rocprofvis_dm_charptr_t        Data() {return m_data.c_str();}
+    // Returns pointer to argument type string
+    rocprofvis_dm_charptr_t        Type() { return m_type.c_str(); }
+    // Returns argument position 
+    uint32_t        Position() { return m_position; }
+
+private:
+    // argument name
+    rocprofvis_dm_string_t              m_name;
+    // argument value
+    rocprofvis_dm_string_t              m_data;
+    // argument type
+    rocprofvis_dm_string_t              m_type;
+    // argument position
+    uint32_t                            m_position;
+
+};
+
 }  // namespace DataModel
 }  // namespace RocProfVis

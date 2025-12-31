@@ -126,6 +126,14 @@ typedef struct rocprofvis_db_sqlite_essential_data_query_format
     std::vector<std::string>   where;
 } rocprofvis_db_sqlite_essential_data_query_format;
 
+typedef struct rocprofvis_db_sqlite_argument_data_query_format
+{
+    static constexpr const int NUM_PARAMS = 5;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+    std::vector<std::string>   where;
+} rocprofvis_db_sqlite_argument_data_query_format;
+
 enum class MultiNode : bool { No = false, Yes = true };
 
 class Builder
@@ -211,6 +219,11 @@ class Builder
 
         static constexpr const char* SQL_AS_STATEMENT = " as ";
         static constexpr const char* SQL_ON_STATEMENT = " ON ";
+
+        static constexpr const char* ARG_POS_PUBLIC_NAME = "position";
+        static constexpr const char* ARG_TYPE_PUBLIC_NAME = "type";
+        static constexpr const char* ARG_NAME_PUBLIC_NAME = "name";
+        static constexpr const char* ARG_VALUE_PUBLIC_NAME = "value";
 
         static constexpr const int  LAST_SINGLE_NODE_LEVEL_CALCULATION_VERSION  = 3;
         static constexpr const int  FIRST_MULTINODE_NODE_LEVEL_CALCULATION_VERSION  = 4;
@@ -357,6 +370,7 @@ class Builder
         static std::string Select(rocprofvis_db_sqlite_rocpd_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_dataflow_query_format params);
         static std::string Select(rocprofvis_db_sqlite_essential_data_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_argument_data_query_format params);
         static std::string SelectAll(std::string query);
         static std::string QParam(std::string name, std::string public_name);
         static std::string Blank();

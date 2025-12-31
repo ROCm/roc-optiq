@@ -70,6 +70,11 @@ public:
     std::string GetRocprofEssentialInfoQueryForMemoryAllocEvent(uint64_t event_id);
     std::string GetRocprofEssentialInfoQueryForMemoryCopyEvent(uint64_t event_id);
 
+    std::string GetRocprofArgumentsInfoQueryForRegionEvent(uint64_t event_id);
+    std::string GetRocprofArgumentsInfoQueryForKernelDispatchEvent(uint64_t event_id);
+    std::string GetRocprofArgumentsInfoQueryForMemoryAllocEvent(uint64_t event_id);
+    std::string GetRocprofArgumentsInfoQueryForMemoryCopyEvent(uint64_t event_id);
+
 private:
 
     std::vector<uint32_t>  ConvertVersionStringToInt(const char* version);

@@ -163,7 +163,7 @@ typedef struct {
     rocprofvis_dm_charptr_t category;               // extended data category
     rocprofvis_dm_charptr_t name;                   // extended data name
     rocprofvis_dm_charptr_t data;                   // extended data value
-    rocprofvis_db_data_type_t type;                 // data type
+    uint64_t type;                                  // data type
     rocprofvis_event_data_category_enum_t category_enum;          // category enumeration
     rocprofvis_dm_node_id_t db_instance;
 }rocprofvis_db_ext_data_t;

@@ -4,6 +4,8 @@
 #include "rocprofvis_timeline_model.h"
 #include "spdlog/spdlog.h"
 
+#include <algorithm>
+
 namespace RocProfVis
 {
 namespace View

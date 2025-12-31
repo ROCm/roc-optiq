@@ -4,6 +4,9 @@
 #include "rocprofvis_tables_model.h"
 #include "rocprofvis_requests.h"
 
+#include <sstream>
+#include "spdlog/spdlog.h"
+
 namespace RocProfVis
 {
 namespace View
@@ -109,6 +112,54 @@ TablesModel::ClearAllTables()
     for(size_t i = 0; i < static_cast<size_t>(TableType::__kTableTypeCount); ++i)
     {
         ClearTable(static_cast<TableType>(i));
+    }
+}
+
+void
+TablesModel::DumpTable(TableType type)
+{
+    DumpTable(GetTableHeader(type), GetTableData(type));
+}
+
+void
+TablesModel::DumpTable(const std::vector<std::string>&              header,
+                        const std::vector<std::vector<std::string>>& data)
+{
+    std::ostringstream str_collector;
+    for(const auto& col_header : header)
+    {
+        str_collector << col_header;
+        str_collector << " ";
+    }
+    spdlog::debug("{}", str_collector.str());
+    str_collector.str("");
+    str_collector.clear();
+
+    // print the event table data
+    int skip_count = 0;
+    for(const auto& row : data)
+    {
+        int col_count = 0;
+        for(const auto& column : row)
+        {
+            str_collector << column;
+            str_collector << " ";
+            col_count++;
+        }
+        if(col_count == 0)
+        {
+            skip_count++;
+            continue;
+        }
+        if(skip_count > 0)
+        {
+            spdlog::debug("Skipped {} empty rows", skip_count);
+            skip_count = 0;
+        }
+
+        spdlog::debug("{}", str_collector.str());
+        str_collector.str("");
+        str_collector.clear();
     }
 }
 

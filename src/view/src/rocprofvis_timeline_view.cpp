@@ -1213,7 +1213,7 @@ TimelineView::MakeGraphView()
         }
     }
     UpdateAllMaxMetaAreaSizes();
-    m_histogram       = &m_data_provider.GetHistogram();
+    m_histogram       = &tlm.GetHistogram();
     m_meta_map_made   = true;
     m_resize_activity = true;
 }

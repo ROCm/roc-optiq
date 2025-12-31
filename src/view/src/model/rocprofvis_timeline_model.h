@@ -79,6 +79,10 @@ public:
     }
     void SetMiniMap(std::map<uint64_t, std::tuple<std::vector<double>, bool>>&& mini_map);
 
+    // Histogram updates
+    void UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add);
+    void NormalilzeHistogram();
+
     // Metadata modification
     std::unordered_map<uint64_t, TrackInfo>& GetMutableTrackMetadata()
     {

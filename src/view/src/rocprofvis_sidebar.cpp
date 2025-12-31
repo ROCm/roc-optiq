@@ -133,11 +133,11 @@ SideBar::RenderTrackItem(const uint64_t& index)
         state_changed         = true;
         if(!graph.display)
         {
-            m_data_provider.UpdateHistogram({ graph.chart->GetID() }, false);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram({ graph.chart->GetID() }, false);
         }
         else
         {
-            m_data_provider.UpdateHistogram({ graph.chart->GetID() }, true);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram({ graph.chart->GetID() }, true);
         }
 
     }
@@ -258,7 +258,7 @@ SideBar::HideAllSubItems(const std::vector<IterableModel>& container)
         }
         if(!ids_to_remove.empty())
         {
-            m_data_provider.UpdateHistogram(ids_to_remove, false);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_remove, false);
         }
     }
 }
@@ -281,7 +281,7 @@ SideBar::HideAllUncategorizedItems(const std::vector<uint64_t>& indices)
         }
         if(!ids_to_remove.empty())
         {
-            m_data_provider.UpdateHistogram(ids_to_remove, false);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_remove, false);
         }
     }
 }
@@ -304,7 +304,7 @@ SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
         }
         if(!ids_to_add.empty())
         {
-            m_data_provider.UpdateHistogram(ids_to_add, true);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_add, true);
         }
     }
 }
@@ -327,7 +327,7 @@ SideBar::UnhideAllSubItems(const std::vector<IterableModel>& container)
         }
         if(!ids_to_add.empty())
         {
-            m_data_provider.UpdateHistogram(ids_to_add, true);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_add, true);
         }
     }
 }

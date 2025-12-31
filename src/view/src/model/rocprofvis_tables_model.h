@@ -56,6 +56,10 @@ public:
     void ClearTable(TableType type);
     void ClearAllTables();
 
+    void DumpTable(TableType type);
+    void DumpTable(const std::vector<std::string>&              header,
+                   const std::vector<std::vector<std::string>>& data);
+
 private:
     std::vector<TableInfo> m_tables;
 };

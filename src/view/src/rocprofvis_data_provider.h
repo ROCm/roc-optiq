@@ -187,25 +187,6 @@ public:
      */
     bool CancelRequest(uint64_t request_id);
 
-    void DumpTable(TableType type);
-
-    void DumpTable(const std::vector<std::string>&              header,
-                   const std::vector<std::vector<std::string>>& data);
-    /*
-    Gets a histogram of all tracks in the controller.
-    */
-    const std::vector<double>& GetHistogram();
-
-    /*
-    Updates histogram as tracks are hidden or shown by user.
-    */
-    void UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add);
-
-    /*
-     Gets a Minimap of all tracks individually in the controller.
-     */
-    const std::map<uint64_t, std::tuple<std::vector<double>, bool>>& GetMiniMap();
-
     /*
      * Performs all data processing.  Call this from the "game loop".
      */

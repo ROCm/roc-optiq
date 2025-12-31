@@ -130,6 +130,69 @@ TimelineModel::SetMiniMap(
     m_mini_map = std::move(mini_map);
 }
 
+void
+TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add)
+{
+    /*
+    This function updates histogram and mini_map based on the interest_id list (which
+    is a list of track IDs to add or remove from the histogram).
+    */
+
+    // Update visibility flags in mini_map
+    for(const auto& id : interest_id)
+    {
+        auto it = m_mini_map.find(id);
+        if(it != m_mini_map.end())
+        {
+            const std::vector<double>& mini_data   = std::get<0>(it->second);
+            bool                       is_included = std::get<1>(it->second);
+            if(add && !is_included)
+            {
+                it->second = std::make_tuple(mini_data, true);
+            }
+            else if(!add && is_included)
+            {
+                it->second = std::make_tuple(mini_data, false);
+            }
+        }
+    }
+
+    // Recompute histogram from all visible tracks
+    if(!m_histogram.empty())
+    {
+        std::fill(m_histogram.begin(), m_histogram.end(), 0.0);
+        for(const auto& kv : m_mini_map)
+        {
+            const std::vector<double>& mini_data   = std::get<0>(kv.second);
+            bool                       is_included = std::get<1>(kv.second);
+            if(is_included)
+            {
+                for(size_t i = 0; i < mini_data.size() && i < m_histogram.size(); ++i)
+                {
+                    m_histogram[i] += mini_data[i];
+                }
+            }
+        }
+
+        // Normalize histogram to [0, 1]
+        NormalilzeHistogram();
+    }
+}
+
+void
+TimelineModel::NormalilzeHistogram()
+{
+    // Normalize histogram to [0, 1]
+    double max_value = *std::max_element(m_histogram.begin(), m_histogram.end());
+    if(max_value > 0.0)
+    {
+        for(auto& val : m_histogram)
+        {
+            val /= max_value;
+        }
+    }
+}
+
 // Clear all
 void
 TimelineModel::Clear()

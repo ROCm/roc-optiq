@@ -12,7 +12,6 @@
 #include <cfloat>
 #include <future>
 #include <iostream>
-#include <sstream>
 
 namespace RocProfVis
 {
@@ -197,81 +196,6 @@ DataProvider::SetTraceLoadedCallback(
     m_trace_data_ready_callback = callback;
 }
 
-const std::vector<double>&
-DataProvider::GetHistogram()
-{
-    return m_model.GetTimeline().GetHistogram();
-}
-
-const std::map<uint64_t, std::tuple<std::vector<double>, bool>>&
-DataProvider::GetMiniMap()
-{
-    return m_model.GetTimeline().GetMiniMap();
-}
-
-void
-DataProvider::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add)
-{
-    /*
-    This function updates histogram and mini_map based on the interest_id list (which
-    is a list of track IDs to add or remove from the histogram).
-    */
-
-    // Get references to model data
-    std::map<uint64_t, std::tuple<std::vector<double>, bool>>& mini_map =
-        const_cast<std::map<uint64_t, std::tuple<std::vector<double>, bool>>&>(
-            m_model.GetTimeline().GetMiniMap());
-    std::vector<double>& histogram =
-        const_cast<std::vector<double>&>(m_model.GetTimeline().GetHistogram());
-
-    // Update visibility flags in mini_map
-    for(const auto& id : interest_id)
-    {
-        auto it = mini_map.find(id);
-        if(it != mini_map.end())
-        {
-            const std::vector<double>& mini_data   = std::get<0>(it->second);
-            bool                       is_included = std::get<1>(it->second);
-            if(add && !is_included)
-            {
-                it->second = std::make_tuple(mini_data, true);
-            }
-            else if(!add && is_included)
-            {
-                it->second = std::make_tuple(mini_data, false);
-            }
-        }
-    }
-
-    // Recompute histogram from all visible tracks
-    if(!histogram.empty())
-    {
-        std::fill(histogram.begin(), histogram.end(), 0.0);
-        for(const auto& kv : mini_map)
-        {
-            const std::vector<double>& mini_data   = std::get<0>(kv.second);
-            bool                       is_included = std::get<1>(kv.second);
-            if(is_included)
-            {
-                for(size_t i = 0; i < mini_data.size() && i < histogram.size(); ++i)
-                {
-                    histogram[i] += mini_data[i];
-                }
-            }
-        }
-
-        // Normalize histogram to [0, 1]
-        double max_value = *std::max_element(histogram.begin(), histogram.end());
-        if(max_value > 0.0)
-        {
-            for(auto& val : histogram)
-            {
-                val /= max_value;
-            }
-        }
-    }
-}
-
 void
 DataProvider::SetSaveTraceCallback(const std::function<void(bool)>& callback)
 {
@@ -425,9 +349,10 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
         m_trace_controller, kRPVControllerGetHistogramBucketsNumber, 0, &num_buckets);
 
     // Resize histogram in model
-    m_model.GetTimeline().ResizeHistogram(num_buckets);
-    std::vector<double>& histogram =
-        const_cast<std::vector<double>&>(m_model.GetTimeline().GetHistogram());
+    TimelineModel& tlm = m_model.GetTimeline();
+    tlm.ResizeHistogram(num_buckets);
+    // Get reference to histogram in model for writing access
+    std::vector<double>& histogram = tlm.GetHistogram();
 
     std::map<uint64_t, std::tuple<std::vector<double>, bool>> histogram_minimap;
 
@@ -437,7 +362,7 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
         result              = rocprofvis_controller_get_uint64(
             m_trace_timeline, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        m_model.GetTimeline().SetTrackCount(num_graphs);
+        tlm.SetTrackCount(num_graphs);
 
         histogram.assign(num_buckets, 0.0);
 
@@ -461,17 +386,10 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
 
             histogram_minimap[graphs] = std::make_tuple(histogram_track, true);
         }
-        m_model.GetTimeline().SetMiniMap(std::move(histogram_minimap));
+        tlm.SetMiniMap(std::move(histogram_minimap));
 
         // Normalize histogram to [0, 1]
-        double max_value = *std::max_element(histogram.begin(), histogram.end());
-        if(max_value > 0.0)
-        {
-            for(auto& val : histogram)
-            {
-                val /= max_value;
-            }
-        }
+        tlm.NormalilzeHistogram();
 
         double min_ts = 0;
         result   = rocprofvis_controller_get_double(
@@ -483,7 +401,7 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
             m_trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        m_model.GetTimeline().SetTimeRange(min_ts, max_ts);
+        tlm.SetTimeRange(min_ts, max_ts);
         spdlog::debug("Timeline parameters: tracks {} min ts {} max ts {}", num_graphs,
                       min_ts, max_ts);
 
@@ -1883,55 +1801,6 @@ DataProvider::CancelRequest(uint64_t request_id)
         spdlog::debug("Cannot cancel request, invalid id: {}", request_id);
     }
     return false;
-}
-
-void
-DataProvider::DumpTable(TableType type)
-{
-    DumpTable(m_model.GetTables().GetTableHeader(type),
-              m_model.GetTables().GetTableData(type));
-}
-
-void
-DataProvider::DumpTable(const std::vector<std::string>&              header,
-                        const std::vector<std::vector<std::string>>& data)
-{
-    std::ostringstream str_collector;
-    for(const auto& col_header : header)
-    {
-        str_collector << col_header;
-        str_collector << " ";
-    }
-    spdlog::debug("{}", str_collector.str());
-    str_collector.str("");
-    str_collector.clear();
-
-    // print the event table data
-    int skip_count = 0;
-    for(const auto& row : data)
-    {
-        int col_count = 0;
-        for(const auto& column : row)
-        {
-            str_collector << column;
-            str_collector << " ";
-            col_count++;
-        }
-        if(col_count == 0)
-        {
-            skip_count++;
-            continue;
-        }
-        if(skip_count > 0)
-        {
-            spdlog::debug("Skipped {} empty rows", skip_count);
-            skip_count = 0;
-        }
-
-        spdlog::debug("{}", str_collector.str());
-        str_collector.str("");
-        str_collector.clear();
-    }
 }
 
 void

@@ -1101,10 +1101,11 @@ RenderProviderTest(DataProvider& provider)
                      ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
     uint64_t row_count = std::atoi(row_count_buffer);
 
+    TimelineModel& timeline = provider.DataModel().GetTimeline();
     if(ImGui::Button("Fetch Single Track Event Table"))
     {
-        provider.FetchSingleTrackEventTable(index, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", "", "", start_row,
+        provider.FetchSingleTrackEventTable(index, timeline.GetStartTime(),
+                                            timeline.GetEndTime(), "", "", "", start_row,
                                             row_count);
     }
     if(ImGui::Button("Fetch Multi Track Event Table"))
@@ -1115,8 +1116,8 @@ RenderProviderTest(DataProvider& provider)
         {
             vect.push_back(i);
         }
-        provider.FetchMultiTrackEventTable(vect, provider.GetStartTime(),
-                                           provider.GetEndTime(), "", "", "", start_row,
+        provider.FetchMultiTrackEventTable(vect, timeline.GetStartTime(),
+                                           timeline.GetEndTime(), "", "", "", start_row,
                                            row_count);
     }
     if(ImGui::Button("Print Event Table"))
@@ -1126,8 +1127,8 @@ RenderProviderTest(DataProvider& provider)
 
     if(ImGui::Button("Fetch Single Track Sample Table"))
     {
-        provider.FetchSingleTrackSampleTable(index, provider.GetStartTime(),
-                                             provider.GetEndTime(), "", start_row,
+        provider.FetchSingleTrackSampleTable(index, timeline.GetStartTime(),
+                                             timeline.GetEndTime(), "", start_row,
                                              row_count);
     }
     if(ImGui::Button("Fetch Multi Track Sample Table"))
@@ -1138,8 +1139,8 @@ RenderProviderTest(DataProvider& provider)
         {
             vect.push_back(i);
         }
-        provider.FetchMultiTrackSampleTable(vect, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", start_row,
+        provider.FetchMultiTrackSampleTable(vect, timeline.GetStartTime(),
+                                            timeline.GetEndTime(), "", start_row,
                                             row_count);
     }
     if(ImGui::Button("Print Sample Table"))
@@ -1151,26 +1152,26 @@ RenderProviderTest(DataProvider& provider)
 
     if(ImGui::Button("Fetch Track"))
     {
-        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
+        provider.FetchTrack(index, timeline.GetStartTime(), timeline.GetEndTime(), 1000,
                             group_id_counter++);
     }
 
     if(ImGui::Button("Fetch Whole Track"))
     {
-        provider.FetchWholeTrack(index, provider.GetStartTime(), provider.GetEndTime(),
+        provider.FetchWholeTrack(index, timeline.GetStartTime(), timeline.GetEndTime(),
                                  1000, group_id_counter++);
     }
     if(ImGui::Button("Delete Track"))
     {
-        provider.FreeTrack(index);
+        timeline.FreeTrackData(index);
     }
     if(ImGui::Button("Print Track"))
     {
-        provider.DumpTrack(index);
+        timeline.DumpTrack(index);
     }
     if(ImGui::Button("Print Track List"))
     {
-        provider.DumpMetaData();
+        timeline.DumpMetaData();
     }
 
     ImGui::End();

@@ -92,7 +92,7 @@ EventsView::Render()
 }
 
 void
-EventsView::RenderBasicData(const event_info_t* event_data)
+EventsView::RenderBasicData(const EventInfo* event_data)
 {
     ImVec4 headerColor =
         ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
@@ -113,7 +113,7 @@ EventsView::RenderBasicData(const event_info_t* event_data)
     CopyableTextUnformatted(info.m_name.c_str(), "Name", DATA_COPIED_NOTIFICATION, false,
                             true);
 
-    double      trace_start_time = m_data_provider.GetStartTime();
+    double      trace_start_time = m_data_provider.DataModel().GetTimeline().GetStartTime();
     const auto& time_format      = m_settings.GetUserSettings().unit_settings.time_format;
 
     ImGui::TextUnformatted("Start Time");
@@ -141,7 +141,7 @@ EventsView::RenderBasicData(const event_info_t* event_data)
 }
 
 void
-EventsView::RenderEventExtData(const event_info_t* event_data)
+EventsView::RenderEventExtData(const EventInfo* event_data)
 {
     ImVec4 headerColor =
         ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
@@ -182,7 +182,7 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
                     {
                         case kRocProfVisEventEssentialDataStart:
                         case kRocProfVisEventEssentialDataEnd:
-                            offset_ns = m_data_provider.GetStartTime();
+                            offset_ns = m_data_provider.DataModel().GetTimeline().GetStartTime();
                         case kRocProfVisEventEssentialDataDuration:
                         {
                             CopyableTextUnformatted(nanosecond_str_to_formatted_str(
@@ -210,7 +210,7 @@ EventsView::RenderEventExtData(const event_info_t* event_data)
 }
 
 void
-EventsView::RenderEventFlowInfo(const event_info_t* event_data)
+EventsView::RenderEventFlowInfo(const EventInfo* event_data)
 {
     ImVec4 headerColor =
         ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
@@ -237,7 +237,8 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
                 ImGui::TableSetupColumn("Direction");
                 ImGui::TableHeadersRow();
 
-                double      trace_start_time = m_data_provider.GetStartTime();
+                double trace_start_time =
+                    m_data_provider.DataModel().GetTimeline().GetStartTime();
                 const auto& time_format =
                     m_settings.GetUserSettings().unit_settings.time_format;
 
@@ -291,7 +292,7 @@ EventsView::RenderEventFlowInfo(const event_info_t* event_data)
 }
 
 void
-EventsView::RenderCallStackData(const event_info_t* event_data)
+EventsView::RenderCallStackData(const EventInfo* event_data)
 {
     ImVec4 headerColor =
         ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
@@ -377,7 +378,7 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
 {
     if(selected)
     {
-        const event_info_t* event_data = m_data_provider.GetEventInfo(event_id);
+        const EventInfo* event_data = m_data_provider.DataModel().GetEvents().GetEvent(event_id);
         if(event_data)
         {
             auto       default_style = m_settings.GetDefaultStyle();

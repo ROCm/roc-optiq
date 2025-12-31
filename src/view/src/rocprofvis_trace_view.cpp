@@ -110,11 +110,11 @@ TraceView::TraceView()
             }
             else if(event->IsBatch())
             {
-                m_data_provider.FreeAllEvents();
+                m_data_provider.DataModel().GetEvents().ClearEvents();
             }
             else
             {
-                m_data_provider.FreeEvent(event->GetEventID());
+                m_data_provider.DataModel().GetEvents().RemoveEvent(event->GetEventID());
             }
         }
     };
@@ -578,8 +578,9 @@ TraceView::RenderToolbar()
     {
         if(m_timeline_view)
         {
-            m_timeline_view->MoveToPosition(m_data_provider.GetStartTime(),
-                                            m_data_provider.GetEndTime(), 0.0, false);
+            const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
+            m_timeline_view->MoveToPosition(timeline.GetStartTime(),
+                                            timeline.GetEndTime(), 0.0, false);
         }
     }
     if(ImGui::IsItemHovered())
@@ -992,7 +993,8 @@ SystemTraceProjectSettings::Bookmarks()
     for(jt::Json& bookmark :
         m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK].getArray())
     {
-        bookmarks[bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].getNumber()] = ViewCoords{
+        bookmarks[static_cast<int>(
+            bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].getNumber())] = ViewCoords{
             static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y].getNumber()),
             static_cast<float>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z].getNumber()),
             static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X].getNumber()),

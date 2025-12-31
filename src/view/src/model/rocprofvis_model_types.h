@@ -5,7 +5,6 @@
 
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
-#include "rocprofvis_interface_types.h"
 
 #include <memory>
 #include <optional>
@@ -16,18 +15,16 @@ namespace RocProfVis
 {
 namespace View
 {
-namespace Model
-{
 
 // Forward declarations
-struct TrackRequestParams;
+class TableRequestParams;
 
 // Track Information
 struct TrackInfo
 {
-    uint64_t                           index;        // index of the track in the controller
-    uint64_t                           id;           // id of the track in the controller
-    std::string                        name;         // name of the track
+    uint64_t                           index;  // index of the track in the controller
+    uint64_t                           id;     // id of the track in the controller
+    std::string                        name;   // name of the track
     rocprofvis_controller_track_type_t track_type;   // the type of track
     double                             min_ts;       // starting time stamp of track
     double                             max_ts;       // ending time stamp of track
@@ -35,7 +32,7 @@ struct TrackInfo
     double min_value;  // minimum value in the track (for samples) or level (for events)
     double max_value;  // maximum value in the track (for samples) or level (for events)
     rocprofvis_handle_t* graph_handle;  // handle to the graph object owned by the track
-    
+
     struct Topology
     {
         uint64_t node_id;     // ID of track's parent node
@@ -98,11 +95,11 @@ struct TraceEvent
 
 struct EventInfo
 {
-    uint64_t                     track_id;  // ID of owning track.
-    TraceEvent                   basic_info;
-    std::vector<EventExtData>    ext_info;
-    std::vector<EventFlowData>   flow_info;
-    std::vector<CallStackData>   call_stack_info;
+    uint64_t                   track_id;  // ID of owning track.
+    TraceEvent                 basic_info;
+    std::vector<EventExtData>  ext_info;
+    std::vector<EventFlowData> flow_info;
+    std::vector<CallStackData> call_stack_info;
 };
 
 // Topology Information
@@ -127,16 +124,17 @@ struct DeviceInfo
 
 struct ProcessInfo
 {
-    uint64_t              id;
-    double                start_time;
-    double                end_time;
-    std::string           command;
-    std::string           environment;
-    std::vector<uint64_t> instrumented_thread_ids;  // IDs of this process' instrumented threads
-    std::vector<uint64_t> sampled_thread_ids;       // IDs of this process' sampled threads
-    std::vector<uint64_t> queue_ids;                // IDs of this process' queues
-    std::vector<uint64_t> stream_ids;               // IDs of this process' streams
-    std::vector<uint64_t> counter_ids;              // IDs of this process' counters
+    uint64_t    id;
+    double      start_time;
+    double      end_time;
+    std::string command;
+    std::string environment;
+    std::vector<uint64_t>
+        instrumented_thread_ids;  // IDs of this process' instrumented threads
+    std::vector<uint64_t> sampled_thread_ids;  // IDs of this process' sampled threads
+    std::vector<uint64_t> queue_ids;           // IDs of this process' queues
+    std::vector<uint64_t> stream_ids;          // IDs of this process' streams
+    std::vector<uint64_t> counter_ids;         // IDs of this process' counters
 };
 
 struct IterableInfo
@@ -182,7 +180,7 @@ struct SummaryInfo
         double      exec_time_max;
         float       exec_time_pct;
     };
-    
+
     struct GPUMetrics
     {
         std::optional<float>       gfx_utilization;
@@ -190,10 +188,10 @@ struct SummaryInfo
         std::vector<KernelMetrics> top_kernels;
         double                     kernel_exec_time_total;
     };
-    
+
     struct CPUMetrics
     {};
-    
+
     struct AggregateMetrics
     {
         rocprofvis_controller_summary_aggregation_level_t     type;
@@ -216,13 +214,12 @@ struct FormattedColumnInfo
 
 struct TableInfo
 {
-    std::shared_ptr<TrackRequestParams>   table_params;
+    std::shared_ptr<TableRequestParams>   table_params;
     std::vector<std::string>              table_header;
     std::vector<std::vector<std::string>> table_data;
     std::vector<FormattedColumnInfo>      formatted_column_data;
     uint64_t                              total_row_count;
 };
 
-}  // namespace Model
 }  // namespace View
 }  // namespace RocProfVis

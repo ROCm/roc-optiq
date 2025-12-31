@@ -83,7 +83,7 @@ SideBar::Render()
                 }
                 if(header_open)
                 {
-                    for(const int& index : topology.uncategorized_graph_indices)
+                    for(const uint64_t& index : topology.uncategorized_graph_indices)
                     {
                         if(RenderTrackItem(index))
                         {
@@ -108,7 +108,7 @@ SideBar::Update()
 {}
 
 bool
-SideBar::RenderTrackItem(const int& index)
+SideBar::RenderTrackItem(const uint64_t& index)
 {
     bool state_changed = false;
 
@@ -118,7 +118,7 @@ SideBar::RenderTrackItem(const int& index)
     }
     rocprofvis_graph_t& graph = (*m_graphs)[index];
 
-    ImGui::PushID(graph.chart->GetID());
+    ImGui::PushID(static_cast<int>(graph.chart->GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
                           m_settings.GetColor(Colors::kTransparent));
@@ -401,7 +401,7 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
                 ImGui::SameLine();
             }
 
-            ImGui::PushID(node.info->id);
+            ImGui::PushID(static_cast<int>(node.info->id));
             if(ImGui::TreeNodeEx(node.info->host_name.c_str(),
                                  CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
             {
@@ -487,7 +487,7 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
             EyeButtonState instrumented_thread_button_state = parent_eye_button_state;
             EyeButtonState sampled_thread_button_state      = parent_eye_button_state;
             EyeButtonState counter_button_state             = parent_eye_button_state;
-            ImGui::PushID(process.info->id);
+            ImGui::PushID(static_cast<int>(process.info->id));
 
             EyeButtonState current_eye_button_state = parent_eye_button_state;
             if(show_eye_button)

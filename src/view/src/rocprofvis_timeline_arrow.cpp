@@ -59,18 +59,19 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
     float            thickness    = LINE_THICKNESS;
     float            head_size    = ARROW_HEAD_SIZE;
     float            level_height = settings.GetEventLevelHeight();
-    for(const event_info_t* event : m_selected_event_data)
+    TimelineModel&   tlm          = m_data_provider.DataModel().GetTimeline();
+
+    for(const EventInfo* event : m_selected_event_data)
     {
         if(!event || event->flow_info.size() < 2) continue;
 
-        const std::vector<event_flow_data_t>& flows = event->flow_info;
+        const std::vector<EventFlowData>& flows = event->flow_info;
 
         if(m_render_style == RenderStyle::kFan)
         {
             // True view: origin + multiple targets
-            const event_flow_data_t& origin = flows[0];
-            const TrackInfo*      origin_track_info =
-                m_data_provider.GetTrackInfo(origin.track_id);
+            const EventFlowData& origin = flows[0];
+            const TrackInfo*      origin_track_info = tlm.GetTrack(origin.track_id);
             if(!origin_track_info) continue;
             const rocprofvis_graph_t& origin_track = (*graphs)[origin_track_info->index];
             if(!origin_track.display)
@@ -94,9 +95,8 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
 
             for(size_t i = 1; i < flows.size(); ++i)
             {
-                const event_flow_data_t& target = flows[i];
-                const TrackInfo*      target_track_info =
-                    m_data_provider.GetTrackInfo(target.track_id);
+                const EventFlowData& target = flows[i];
+                const TrackInfo*     target_track_info = tlm.GetTrack(target.track_id);
                 if(!target_track_info) continue;
                 const rocprofvis_graph_t& target_track =
                     (*graphs)[target_track_info->index];
@@ -164,13 +164,11 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
             // Legacy view: consecutive pairs
             for(size_t i = 0; i + 1 < flows.size(); ++i)
             {
-                const event_flow_data_t& from = flows[i];
-                const event_flow_data_t& to   = flows[i + 1];
+                const EventFlowData& from = flows[i];
+                const EventFlowData& to   = flows[i + 1];
 
-                const TrackInfo* from_track_info =
-                    m_data_provider.GetTrackInfo(from.track_id);
-                const TrackInfo* to_track_info =
-                    m_data_provider.GetTrackInfo(to.track_id);
+                const TrackInfo* from_track_info = tlm.GetTrack(from.track_id);
+                const TrackInfo* to_track_info   = tlm.GetTrack(to.track_id);
                 if(!from_track_info || !to_track_info) continue;
 
                 const rocprofvis_graph_t& from_track = (*graphs)[from_track_info->index];
@@ -292,7 +290,7 @@ TimelineArrow::HandleEventSelectionChanged(std::shared_ptr<RocEvent> e)
         for(int i = 0; i < selected_event_ids.size(); i++)
         {
             m_selected_event_data[i] =
-                m_data_provider.GetEventInfo(selected_event_ids[i]);
+                m_data_provider.DataModel().GetEvents().GetEvent(selected_event_ids[i]);
         }
     }
 }

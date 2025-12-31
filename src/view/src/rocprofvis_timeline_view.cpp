@@ -384,7 +384,8 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             return;
         }
 
-        const TrackInfo* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
+        const TrackInfo* metadata =
+            m_data_provider.DataModel().GetTimeline().GetTrack(tde->GetTrackID());
         if(!metadata)
         {
             spdlog::error(
@@ -428,11 +429,12 @@ TimelineView::Update()
                                              m_reorder_request.new_index))
             {
                 std::vector<rocprofvis_graph_t> m_graphs_reordered;
-                m_graphs_reordered.resize(m_data_provider.GetTrackCount());
+                TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
+                m_graphs_reordered.resize(tlm.GetTrackCount());
                 for(rocprofvis_graph_t& graph : *m_graphs)
                 {
                     const TrackInfo* metadata =
-                        m_data_provider.GetTrackInfo(graph.chart->GetID());
+                        tlm.GetTrack(graph.chart->GetID());
                     ROCPROFVIS_ASSERT(metadata);
                     m_graphs_reordered[metadata->index] = std::move(graph);
                 }
@@ -1137,16 +1139,17 @@ TimelineView::MakeGraphView()
     DestroyGraphs();
     ResetView();
 
-    m_tpt->SetMinMaxX(m_data_provider.GetStartTime(), m_data_provider.GetEndTime());
+    const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
+    m_tpt->SetMinMaxX(tlm.GetStartTime(), tlm.GetEndTime());
 
     m_last_data_req_v_width = m_tpt->GetVWidth();
 
     /*This section makes the charts both line and flamechart are constructed here*/
-    uint64_t num_graphs = m_data_provider.GetTrackCount();
+    uint64_t num_graphs = tlm.GetTrackCount();
     m_graphs->resize(num_graphs);
 
-    std::vector<const TrackInfo*> track_list    = m_data_provider.GetTrackInfoList();
-    bool                             project_valid = m_project_settings.Valid();
+    std::vector<const TrackInfo*> track_list    = tlm.GetTrackList();
+    bool                          project_valid = m_project_settings.Valid();
 
     for(int i = 0; i < track_list.size(); i++)
     {
@@ -1155,9 +1158,8 @@ TimelineView::MakeGraphView()
 
         if(project_valid)
         {
-            uint64_t            track_id_at_index = m_project_settings.TrackID(i);
-            const TrackInfo* track_at_index_info =
-                m_data_provider.GetTrackInfo(track_id_at_index);
+            uint64_t         track_id_at_index   = m_project_settings.TrackID(i);
+            const TrackInfo* track_at_index_info = tlm.GetTrack(track_id_at_index);
             if(track_at_index_info && track_at_index_info->index != i)
             {
                 ROCPROFVIS_ASSERT(m_data_provider.SetGraphIndex(track_id_at_index, i));
@@ -1793,7 +1795,8 @@ void
 TimelineView::CalculateMaxMetaAreaSize()
 {
     m_max_meta_area_size                        = 0.0f;
-    std::vector<const TrackInfo*> track_list = m_data_provider.GetTrackInfoList();
+    std::vector<const TrackInfo*> track_list =
+        m_data_provider.DataModel().GetTimeline().GetTrackList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
@@ -1810,7 +1813,8 @@ TimelineView::CalculateMaxMetaAreaSize()
 void
 TimelineView::UpdateAllMaxMetaAreaSizes()
 {
-    std::vector<const TrackInfo*> track_list = m_data_provider.GetTrackInfoList();
+    std::vector<const TrackInfo*> track_list =
+        m_data_provider.DataModel().GetTimeline().GetTrackList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {

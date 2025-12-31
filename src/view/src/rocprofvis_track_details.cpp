@@ -141,7 +141,8 @@ TrackDetails::Update()
         std::list<DetailItem> uncategorized_tracks;
         for(DetailItem& item : m_track_details)
         {
-            const TrackInfo* metadata = m_data_provider.GetTrackInfo(item.track_id);
+            const TrackInfo* metadata =
+                m_data_provider.DataModel().GetTimeline().GetTrack(item.track_id);
             if(metadata && metadata->topology.type != TrackInfo::Topology::Unknown)
             {
                 item.track_name = &metadata->name;

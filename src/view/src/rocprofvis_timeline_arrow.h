@@ -56,10 +56,10 @@ private:
     DataProvider&                      m_data_provider;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     EventManager::SubscriptionToken    m_selection_changed_token;
-    std::vector<const event_info_t*>   m_selected_event_data;
+    std::vector<const EventInfo*>      m_selected_event_data;
     FlowDisplayMode                    m_flow_display_mode = FlowDisplayMode::kShowAll;
-    std::unordered_map<uint64_t, std::vector<event_flow_data_t>*> m_arrow_dictionary;
-    RenderStyle                                                   m_render_style;
+    std::unordered_map<uint64_t, std::vector<EventFlowData>*> m_arrow_dictionary;
+    RenderStyle                                               m_render_style;
 };
 
 }  // namespace View

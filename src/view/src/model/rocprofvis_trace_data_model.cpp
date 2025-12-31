@@ -7,22 +7,19 @@ namespace RocProfVis
 {
 namespace View
 {
-namespace Model
-{
 
-TraceDataModel::TraceDataModel()
-{
-}
+TraceDataModel::TraceDataModel() {}
 
-void TraceDataModel::Clear()
+void
+TraceDataModel::Clear()
 {
     m_topology.Clear();
     m_timeline.Clear();
     m_tables.ClearAllTables();
     m_summary.Clear();
+    m_events.ClearEvents();
     m_trace_file_path.clear();
 }
 
-}  // namespace Model
 }  // namespace View
 }  // namespace RocProfVis

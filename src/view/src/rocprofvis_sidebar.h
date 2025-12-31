@@ -36,7 +36,7 @@ private:
         kAllHidden,
         kMixed
     };
-    bool RenderTrackItem(const int& index);
+    bool RenderTrackItem(const uint64_t& index);
 
     bool IsAllSubItemsHidden(const std::vector<IterableModel>& container);
     void HideAllSubItems(const std::vector<IterableModel>& container);

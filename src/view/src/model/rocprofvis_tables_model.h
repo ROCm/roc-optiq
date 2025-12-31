@@ -11,8 +11,6 @@ namespace RocProfVis
 {
 namespace View
 {
-namespace Model
-{
 
 // Table types enum (moved from DataProvider)
 enum class TableType
@@ -26,7 +24,7 @@ enum class TableType
 
 /**
  * @brief Manages tabular data views.
- * 
+ *
  * This model holds table data generated from queries (events, samples, search results).
  * Tables are typically on-demand views that can be regenerated.
  */
@@ -38,23 +36,23 @@ public:
 
     // Table access
     const TableInfo& GetTable(TableType type) const;
-    TableInfo& GetTable(TableType type);
-    
-    const std::vector<std::string>& GetTableHeader(TableType type) const;
+    TableInfo&       GetTable(TableType type);
+
+    const std::vector<std::string>&              GetTableHeader(TableType type) const;
     const std::vector<std::vector<std::string>>& GetTableData(TableType type) const;
     const std::vector<FormattedColumnInfo>& GetFormattedTableData(TableType type) const;
-    std::vector<FormattedColumnInfo>& GetMutableFormattedTableData(TableType type);
-    
-    std::shared_ptr<TrackRequestParams> GetTableParams(TableType type) const;
-    uint64_t GetTableTotalRowCount(TableType type) const;
+    std::vector<FormattedColumnInfo>&       GetMutableFormattedTableData(TableType type);
+
+    std::shared_ptr<TableRequestParams> GetTableParams(TableType type) const;
+    uint64_t                            GetTableTotalRowCount(TableType type) const;
 
     // Table modification
     void SetTableHeader(TableType type, std::vector<std::string>&& header);
     void SetTableData(TableType type, std::vector<std::vector<std::string>>&& data);
-    void SetTableParams(TableType type, std::shared_ptr<TrackRequestParams> params);
+    void SetTableParams(TableType type, std::shared_ptr<TableRequestParams> params);
     void SetTableTotalRowCount(TableType type, uint64_t count);
     void SetFormattedColumnData(TableType type, std::vector<FormattedColumnInfo>&& data);
-    
+
     void ClearTable(TableType type);
     void ClearAllTables();
 
@@ -62,6 +60,5 @@ private:
     std::vector<TableInfo> m_tables;
 };
 
-}  // namespace Model
 }  // namespace View
 }  // namespace RocProfVis

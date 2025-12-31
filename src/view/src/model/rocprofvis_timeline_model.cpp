@@ -2,45 +2,43 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_timeline_model.h"
+#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
 namespace View
 {
-namespace Model
-{
 
 TimelineModel::TimelineModel()
-    : m_num_tracks(0)
-    , m_min_ts(0.0)
-    , m_max_ts(0.0)
-{
-}
+: m_num_tracks(0)
+, m_min_ts(0.0)
+, m_max_ts(0.0)
+{}
 
-TimelineModel::~TimelineModel()
-{
-    FreeAllRawTrackData();
-}
+TimelineModel::~TimelineModel() { FreeAllTrackData(); }
 
-void TimelineModel::SetTimeRange(double min_ts, double max_ts)
+void
+TimelineModel::SetTimeRange(double min_ts, double max_ts)
 {
     m_min_ts = min_ts;
     m_max_ts = max_ts;
 }
 
 // Track metadata access
-const TrackInfo* TimelineModel::GetTrack(uint64_t track_id) const
+const TrackInfo*
+TimelineModel::GetTrack(uint64_t track_id) const
 {
     auto it = m_track_metadata.find(track_id);
     return (it != m_track_metadata.end()) ? &it->second : nullptr;
 }
 
-std::vector<const TrackInfo*> TimelineModel::GetTrackList() const
+std::vector<const TrackInfo*>
+TimelineModel::GetTrackList() const
 {
     std::vector<const TrackInfo*> result(m_track_metadata.size(), nullptr);
-    for (const auto& pair : m_track_metadata)
+    for(const auto& pair : m_track_metadata)
     {
-        if (pair.second.index < result.size())
+        if(pair.second.index < result.size())
         {
             result[pair.second.index] = &pair.second;
         }
@@ -48,99 +46,198 @@ std::vector<const TrackInfo*> TimelineModel::GetTrackList() const
     return result;
 }
 
-void TimelineModel::AddTrack(uint64_t track_id, TrackInfo&& track)
+void
+TimelineModel::AddTrackMetaData(uint64_t track_id, TrackInfo&& track)
 {
     m_track_metadata[track_id] = std::move(track);
 }
 
-void TimelineModel::ClearTracks()
+void
+TimelineModel::ClearTrackMetaData()
 {
     m_track_metadata.clear();
 }
 
 // Raw track data access
-const RawTrackData* TimelineModel::GetRawTrackData(uint64_t track_id) const
+const RawTrackData*
+TimelineModel::GetTrackData(uint64_t track_id) const
 {
     auto it = m_raw_track_data.find(track_id);
     return (it != m_raw_track_data.end()) ? it->second : nullptr;
 }
 
-void TimelineModel::SetRawTrackData(uint64_t track_id, RawTrackData* data)
+void
+TimelineModel::SetTrackData(uint64_t track_id, RawTrackData* data)
 {
     m_raw_track_data[track_id] = data;
 }
 
-void TimelineModel::FreeRawTrackData(uint64_t track_id)
+bool
+TimelineModel::FreeTrackData(uint64_t track_id, bool force /* = false */)
 {
     auto it = m_raw_track_data.find(track_id);
-    if (it != m_raw_track_data.end())
+    if(it != m_raw_track_data.end())
     {
-        delete it->second;
-        m_raw_track_data.erase(it);
+        const RawTrackData* track = it->second;
+        if(track)
+        {
+            if(!track->AllDataReady() && !force)
+            {
+                spdlog::debug(
+                    "Cannot delete track data, not all data is ready for id: {}",
+                    track_id);
+                return false;
+            }
+
+            delete it->second;
+            m_raw_track_data.erase(it);
+            return true;
+        }
     }
+
+    spdlog::debug("Cannot delete track data, invalid id: {}", track_id);
+    return false;
 }
 
-void TimelineModel::FreeAllRawTrackData()
+void
+TimelineModel::FreeAllTrackData()
 {
-    for (auto& pair : m_raw_track_data)
+    for(auto& pair : m_raw_track_data)
     {
         delete pair.second;
     }
     m_raw_track_data.clear();
 }
 
-// Event data access
-const EventInfo* TimelineModel::GetEvent(uint64_t event_id) const
-{
-    auto it = m_event_data.find(event_id);
-    return (it != m_event_data.end()) ? &it->second : nullptr;
-}
-
-void TimelineModel::AddEvent(uint64_t event_id, EventInfo&& event)
-{
-    m_event_data[event_id] = std::move(event);
-}
-
-void TimelineModel::RemoveEvent(uint64_t event_id)
-{
-    m_event_data.erase(event_id);
-}
-
-void TimelineModel::ClearEvents()
-{
-    m_event_data.clear();
-}
-
 // Histogram access
-void TimelineModel::SetHistogram(std::vector<double>&& histogram)
+void
+TimelineModel::SetHistogram(std::vector<double>&& histogram)
 {
     m_histogram = std::move(histogram);
 }
 
-void TimelineModel::ResizeHistogram(size_t size)
+void
+TimelineModel::ResizeHistogram(size_t size)
 {
     m_histogram.resize(size, 0.0);
 }
 
 // Mini-map access
-void TimelineModel::SetMiniMap(std::map<uint64_t, std::tuple<std::vector<double>, bool>>&& mini_map)
+void
+TimelineModel::SetMiniMap(
+    std::map<uint64_t, std::tuple<std::vector<double>, bool>>&& mini_map)
 {
     m_mini_map = std::move(mini_map);
 }
 
 // Clear all
-void TimelineModel::Clear()
+void
+TimelineModel::Clear()
 {
     m_num_tracks = 0;
-    m_min_ts = 0.0;
-    m_max_ts = 0.0;
-    ClearTracks();
-    FreeAllRawTrackData();
-    ClearEvents();
+    m_min_ts     = 0.0;
+    m_max_ts     = 0.0;
+    ClearTrackMetaData();
+    FreeAllTrackData();
     m_histogram.clear();
     m_mini_map.clear();
 }
 
-}  // namespace Model
+bool
+TimelineModel::DumpTrack(uint64_t track_id) const
+{
+    auto it = m_raw_track_data.find(track_id);
+    if(it != m_raw_track_data.end())
+    {
+        if(it->second)
+        {
+            bool result = false;
+            switch(it->second->GetType())
+            {
+                case kRPVControllerTrackTypeSamples:
+                {
+                    RawTrackSampleData* track =
+                        dynamic_cast<RawTrackSampleData*>(it->second);
+                    if(track)
+                    {
+                        const std::vector<rocprofvis_trace_counter_t>& buffer =
+                            track->GetData();
+                        int64_t i = 0;
+                        for(const auto item : buffer)
+                        {
+                            spdlog::debug("{}, start_ts {}, value {}", i, item.m_start_ts,
+                                          item.m_value);
+                            ++i;
+                        }
+                        result = true;
+                    }
+                    else
+                    {
+                        spdlog::debug("Cannot dump track data, Type Error");
+                    }
+                    break;
+                }
+                case kRPVControllerTrackTypeEvents:
+                {
+                    RawTrackEventData* track =
+                        dynamic_cast<RawTrackEventData*>(it->second);
+                    if(track)
+                    {
+                        const std::vector<rocprofvis_trace_event_t>& buffer =
+                            track->GetData();
+                        int64_t i = 0;
+                        for(const auto item : buffer)
+                        {
+                            spdlog::debug(
+                                "{}, name: {}, start_ts {}, duration {}, end_ts {}", i,
+                                item.m_name, item.m_start_ts, item.m_duration,
+                                item.m_duration + item.m_start_ts);
+                            ++i;
+                        }
+                        result = true;
+                    }
+                    else
+                    {
+                        spdlog::debug("Cannot dump track data, Type Error");
+                    }
+                    break;
+                }
+                default:
+                {
+                    spdlog::debug("Cannot dump track data, unknown type");
+                    break;
+                }
+            }
+            return result;
+        }
+        else
+        {
+            spdlog::debug("No track data with id: {}", track_id);
+        }
+    }
+    else
+    {
+        spdlog::debug("Cannot show track data, invalid id: {}", track_id);
+    }
+
+    return false;
+}
+
+void
+TimelineModel::DumpMetaData() const
+{
+    for(const TrackInfo* track_info : GetTrackList())
+    {
+        spdlog::debug("Track index {}, id {}, name {}, min ts {}, max ts {}, type {}, "
+                      "num entries {}, min value {}, max value {}",
+                      track_info->index, track_info->id, track_info->name,
+                      track_info->min_ts, track_info->max_ts,
+                      track_info->track_type == kRPVControllerTrackTypeSamples ? "Samples"
+                                                                               : "Events",
+                      track_info->num_entries, track_info->min_value,
+                      track_info->max_value);
+    }
+}
+
 }  // namespace View
 }  // namespace RocProfVis

@@ -12,8 +12,7 @@ namespace RocProfVis
 {
 namespace View
 {
-namespace Model
-{
+
 
 /**
  * @brief Manages static system topology information.
@@ -21,11 +20,11 @@ namespace Model
  * This model holds hardware and process hierarchy data that is typically
  * loaded once at trace initialization and rarely changes.
  */
-class TopologyModel
+class TopologyDataModel
 {
 public:
-    TopologyModel() = default;
-    ~TopologyModel() = default;
+    TopologyDataModel() = default;
+    ~TopologyDataModel() = default;
 
     // Node access
     const NodeInfo* GetNode(uint64_t node_id) const;
@@ -82,6 +81,5 @@ private:
     std::unordered_map<uint64_t, CounterInfo> m_counters;
 };
 
-}  // namespace Model
 }  // namespace View
 }  // namespace RocProfVis

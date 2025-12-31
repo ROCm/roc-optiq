@@ -75,15 +75,17 @@ TrackTopology::UpdateTopology()
 {
     if(m_topology_dirty && m_data_provider.GetState() == ProviderState::kReady)
     {
+        const auto& topology_data = m_data_provider.DataModel().GetTopology();
+
         m_topology.nodes.clear();
         m_topology.node_lut.clear();
-        std::vector<const node_info_t*> node_infos = m_data_provider.GetNodeInfoList();
+        std::vector<const NodeInfo*> node_infos = topology_data.GetNodeList();
         m_topology.nodes.resize(node_infos.size());
         std::vector<std::vector<rocprofvis_graph_t*>> graph_categories(node_infos.size());
         m_topology.node_header = "Nodes (" + std::to_string(node_infos.size()) + ")";
         for(int i = 0; i < node_infos.size(); i++)
         {
-            const node_info_t* node_info = node_infos[i];
+            const NodeInfo* node_info = node_infos[i];
             if(node_info)
             {
                 m_topology.node_lut[node_info->id] = &m_topology.nodes[i];
@@ -98,8 +100,8 @@ TrackTopology::UpdateTopology()
                 };
                 for(const uint64_t& device_id : node_info->device_ids)
                 {
-                    const device_info_t* device_info =
-                        m_data_provider.GetDeviceInfo(device_id);
+                    const DeviceInfo* device_info =
+                        topology_data.GetDevice(device_id);
                     if(device_info)
                     {
                         m_topology.nodes[i].info_table.cells.emplace_back(std::vector{
@@ -117,8 +119,8 @@ TrackTopology::UpdateTopology()
                 {
                     m_topology.nodes[i].process_lut[process_ids[j]] =
                         &m_topology.nodes[i].processes[j];
-                    const process_info_t* process_info =
-                        m_data_provider.GetProcessInfo(process_ids[j]);
+                    const ProcessInfo* process_info =
+                        topology_data.GetProcess(process_ids[j]);
                     if(process_info)
                     {
                         m_topology.nodes[i].processes[j].info       = process_info;
@@ -152,12 +154,12 @@ TrackTopology::UpdateTopology()
                         {
                             m_topology.nodes[i].processes[j].queue_lut[queue_ids[k]] =
                                 &m_topology.nodes[i].processes[j].queues[k];
-                            const queue_info_t* queue_info =
-                                m_data_provider.GetQueueInfo(queue_ids[k]);
+                            const QueueInfo* queue_info =
+                                topology_data.GetQueue(queue_ids[k]);
                             if(queue_info)
                             {
-                                const device_info_t* device_info =
-                                    m_data_provider.GetDeviceInfo(queue_info->device_id);
+                                const DeviceInfo* device_info =
+                                    topology_data.GetDevice(queue_info->device_id);
                                 m_topology.nodes[i].processes[j].queues[k].info =
                                     queue_info;
                                 if(device_info)
@@ -187,12 +189,12 @@ TrackTopology::UpdateTopology()
                         {
                             m_topology.nodes[i].processes[j].stream_lut[stream_ids[k]] =
                                 &m_topology.nodes[i].processes[j].streams[k];
-                            const stream_info_t* stream_info =
-                                m_data_provider.GetStreamInfo(stream_ids[k]);
+                            const StreamInfo* stream_info =
+                                topology_data.GetStream(stream_ids[k]);
                             if(stream_info)
                             {
-                                const device_info_t* device_info =
-                                    m_data_provider.GetDeviceInfo(stream_info->device_id);
+                                const DeviceInfo* device_info =
+                                    topology_data.GetDevice(stream_info->device_id);
                                 m_topology.nodes[i].processes[j].streams[k].info =
                                     stream_info;
                                 if(device_info)
@@ -227,8 +229,8 @@ TrackTopology::UpdateTopology()
                                 .processes[j]
                                 .instrumented_thread_lut[instrumented_thread_ids[k]] =
                                 &m_topology.nodes[i].processes[j].instrumented_threads[k];
-                            const thread_info_t* thread_info =
-                                m_data_provider.GetInstrumentedThreadInfo(instrumented_thread_ids[k]);
+                            const ThreadInfo* thread_info =
+                                topology_data.GetInstrumentedThread(instrumented_thread_ids[k]);
                             if(thread_info)
                             {
                                 m_topology.nodes[i]
@@ -272,8 +274,8 @@ TrackTopology::UpdateTopology()
                                 .processes[j]
                                 .sampled_thread_lut[sampled_thread_ids[k]] =
                                 &m_topology.nodes[i].processes[j].sampled_threads[k];
-                            const thread_info_t* thread_info =
-                                m_data_provider.GetSampledThreadInfo(sampled_thread_ids[k]);
+                            const ThreadInfo* thread_info =
+                                topology_data.GetSampledThread(sampled_thread_ids[k]);
                             if(thread_info)
                             {
                                 m_topology.nodes[i].processes[j].sampled_threads[k].info =
@@ -311,12 +313,12 @@ TrackTopology::UpdateTopology()
                         {
                             m_topology.nodes[i].processes[j].counter_lut[counter_ids[k]] =
                                 &m_topology.nodes[i].processes[j].counters[k];
-                            const counter_info_t* counter_info =
-                                m_data_provider.GetCounterInfo(counter_ids[k]);
+                            const CounterInfo* counter_info =
+                                topology_data.GetCounter(counter_ids[k]);
                             if(counter_info)
                             {
-                                const device_info_t* device_info =
-                                    m_data_provider.GetDeviceInfo(
+                                const DeviceInfo* device_info =
+                                    topology_data.GetDevice(
                                         counter_info->device_id);
                                 m_topology.nodes[i].processes[j].counters[k].info =
                                     counter_info;
@@ -486,7 +488,8 @@ TrackTopology::UpdateGraphs()
     if(m_graphs_dirty && m_data_provider.GetState() == ProviderState::kReady)
     {
         m_topology.uncategorized_graph_indices.clear();
-        for(const TrackInfo* track : m_data_provider.GetTrackInfoList())
+        const auto& track_list = m_data_provider.DataModel().GetTimeline().GetTrackList();
+        for(const TrackInfo* track : track_list)
         {
             if(track)
             {

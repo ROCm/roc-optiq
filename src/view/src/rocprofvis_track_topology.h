@@ -28,7 +28,7 @@ struct InfoTable
 
 struct IterableModel
 {
-    const iterable_info_t* info;
+    const IterableInfo*    info;
     InfoTable              info_table;
     uint64_t               graph_index;
     mutable bool           all_subitems_hidden = false;
@@ -36,7 +36,7 @@ struct IterableModel
 
 struct ProcessModel
 {
-    const process_info_t*                        info;
+    const ProcessInfo*                           info;
     InfoTable                                    info_table;
     std::string                                  header;
     std::string                                  queue_header;
@@ -59,7 +59,7 @@ struct ProcessModel
 };
 struct NodeModel
 {
-    const node_info_t*                          info;
+    const NodeInfo*                             info;
     InfoTable                                   info_table;
     std::string                                 process_header;
     std::vector<ProcessModel>                   processes;

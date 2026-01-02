@@ -262,7 +262,7 @@ LineTrackItem::ExtractPointsFromData()
         spdlog::debug("No data for track {}", m_id);
         return false;
     }
-    const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
+    const std::vector<rocprofvis_trace_counter_t>& track_data = sample_track->GetData();
 
     m_data = track_data;
 

@@ -81,7 +81,7 @@ public:
 
     // Histogram updates
     void UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add);
-    void NormalilzeHistogram();
+    void NormalizeHistogram();
 
     // Metadata modification
     std::unordered_map<uint64_t, TrackInfo>& GetMutableTrackMetadata()

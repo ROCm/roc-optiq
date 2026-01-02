@@ -177,12 +177,12 @@ TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool ad
         }
 
         // Normalize histogram to [0, 1]
-        NormalilzeHistogram();
+        NormalizeHistogram();
     }
 }
 
 void
-TimelineModel::NormalilzeHistogram()
+TimelineModel::NormalizeHistogram()
 {
     // Normalize histogram to [0, 1]
     double max_value = *std::max_element(m_histogram.begin(), m_histogram.end());

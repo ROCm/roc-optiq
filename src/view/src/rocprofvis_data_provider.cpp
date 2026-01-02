@@ -389,7 +389,7 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
         tlm.SetMiniMap(std::move(histogram_minimap));
 
         // Normalize histogram to [0, 1]
-        tlm.NormalilzeHistogram();
+        tlm.NormalizeHistogram();
 
         double min_ts = 0;
         result   = rocprofvis_controller_get_double(

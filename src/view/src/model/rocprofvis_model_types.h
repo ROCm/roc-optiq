@@ -20,14 +20,16 @@ namespace View
 class TableRequestParams;
 class TrackItem;
 
+enum class GraphType
+{
+    TYPE_LINECHART,
+    TYPE_FLAMECHART
+};
+
 // Track Graph Information
 struct TrackGraph
 {
-    enum
-    {
-        TYPE_LINECHART,
-        TYPE_FLAMECHART
-    } GraphType;
+    GraphType  graph_type;
     bool       display;
     bool       display_changed;
     TrackItem* chart;

@@ -1175,7 +1175,7 @@ TimelineView::MakeGraphView()
             continue;
         }
 
-        TrackGraph graph = { TrackGraph::TYPE_FLAMECHART, display, false,
+        TrackGraph graph = { GraphType::TYPE_FLAMECHART, display, false,
                                      nullptr, false };
         switch(track_info->track_type)
         {
@@ -1186,7 +1186,7 @@ TimelineView::MakeGraphView()
                     m_data_provider, m_timeline_selection, track_info->id,
                     track_info->name, static_cast<float>(track_info->min_value),
                     static_cast<float>(track_info->max_value), m_tpt);
-                graph.GraphType = TrackGraph::TYPE_FLAMECHART;
+                graph.graph_type = GraphType::TYPE_FLAMECHART;
                 break;
             }
             case kRPVControllerTrackTypeSamples:
@@ -1196,7 +1196,7 @@ TimelineView::MakeGraphView()
                     new LineTrackItem(m_data_provider, track_info->id, track_info->name,
                                       m_max_meta_area_size, m_tpt);
                 UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
-                graph.GraphType = TrackGraph::TYPE_LINECHART;
+                graph.graph_type = GraphType::TYPE_LINECHART;
                 break;
             }
             default:

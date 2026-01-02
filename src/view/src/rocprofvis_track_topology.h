@@ -5,7 +5,6 @@
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_view_structs.h"
 #include <vector>
 
 namespace RocProfVis

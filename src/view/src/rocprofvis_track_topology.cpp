@@ -81,7 +81,7 @@ TrackTopology::UpdateTopology()
         m_topology.node_lut.clear();
         std::vector<const NodeInfo*> node_infos = topology_data.GetNodeList();
         m_topology.nodes.resize(node_infos.size());
-        std::vector<std::vector<rocprofvis_graph_t*>> graph_categories(node_infos.size());
+        std::vector<std::vector<TrackGraph*>> graph_categories(node_infos.size());
         m_topology.node_header = "Nodes (" + std::to_string(node_infos.size()) + ")";
         for(int i = 0; i < node_infos.size(); i++)
         {

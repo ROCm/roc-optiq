@@ -20,7 +20,7 @@ constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
 
 SideBar::SideBar(std::shared_ptr<TrackTopology>                   topology,
                  std::shared_ptr<TimelineSelection>               timeline_selection,
-                 std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
+                 std::shared_ptr<std::vector<TrackGraph>> graphs,
                  DataProvider&                                    dp)
 : m_settings(SettingsManager::GetInstance())
 , m_track_topology(topology)
@@ -116,7 +116,7 @@ SideBar::RenderTrackItem(const uint64_t& index)
     {
         return state_changed;
     }
-    rocprofvis_graph_t& graph = (*m_graphs)[index];
+    TrackGraph& graph = (*m_graphs)[index];
 
     ImGui::PushID(static_cast<int>(graph.chart->GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
@@ -230,7 +230,7 @@ SideBar::IsAllSubItemsHidden(const std::vector<IterableModel>& container)
     {
         for(const IterableModel& elem : container)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
+            TrackGraph& graph = (*m_graphs)[elem.graph_index];
             if(graph.display)
             {
                 all_hidden = false;
@@ -249,7 +249,7 @@ SideBar::HideAllSubItems(const std::vector<IterableModel>& container)
         std::vector<uint64_t> ids_to_remove;
         for(const IterableModel& elem : container)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
+            TrackGraph& graph = (*m_graphs)[elem.graph_index];
             if(graph.display == true)
             {
                 graph.display         = false;
@@ -272,7 +272,7 @@ SideBar::HideAllUncategorizedItems(const std::vector<uint64_t>& indices)
         std::vector<uint64_t> ids_to_remove;
         for(const uint64_t& index : indices)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[index];
+            TrackGraph& graph = (*m_graphs)[index];
             if(graph.display == true)
             {
                 graph.display         = false;
@@ -295,7 +295,7 @@ SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
         std::vector<uint64_t> ids_to_add;
         for(const uint64_t& index : indices)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[index];
+            TrackGraph& graph = (*m_graphs)[index];
             if(graph.display == false)
             {
                 graph.display         = true;
@@ -318,7 +318,7 @@ SideBar::UnhideAllSubItems(const std::vector<IterableModel>& container)
         std::vector<uint64_t> ids_to_add;
         for(const IterableModel& elem : container)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
+            TrackGraph& graph = (*m_graphs)[elem.graph_index];
             if(graph.display == false)
             {
                 graph.display         = true;

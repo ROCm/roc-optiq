@@ -18,6 +18,22 @@ namespace View
 
 // Forward declarations
 class TableRequestParams;
+class TrackItem;
+
+// Track Graph Information
+struct TrackGraph
+{
+    enum
+    {
+        TYPE_LINECHART,
+        TYPE_FLAMECHART
+    } GraphType;
+    bool       display;
+    bool       display_changed;
+    TrackItem* chart;
+    bool       selected;
+
+};
 
 // Track Information
 struct TrackInfo

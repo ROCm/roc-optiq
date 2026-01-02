@@ -128,7 +128,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
     m_navigation_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
 
-    m_graphs = std::make_shared<std::vector<rocprofvis_graph_t>>();
+    m_graphs = std::make_shared<std::vector<TrackGraph>>();
 
     // force initial calculation of flame track label width
     FlameTrackItem::CalculateMaxEventLabelWidth();
@@ -428,10 +428,10 @@ TimelineView::Update()
             if(m_data_provider.SetGraphIndex(m_reorder_request.track_id,
                                              m_reorder_request.new_index))
             {
-                std::vector<rocprofvis_graph_t> m_graphs_reordered;
+                std::vector<TrackGraph> m_graphs_reordered;
                 TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
                 m_graphs_reordered.resize(tlm.GetTrackCount());
-                for(rocprofvis_graph_t& graph : *m_graphs)
+                for(TrackGraph& graph : *m_graphs)
                 {
                     const TrackInfo* metadata =
                         tlm.GetTrack(graph.chart->GetID());
@@ -671,7 +671,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::PopStyleColor();
 }
 
-std::shared_ptr<std::vector<rocprofvis_graph_t>>
+std::shared_ptr<std::vector<TrackGraph>>
 TimelineView::GetGraphs()
 {
     return m_graphs;
@@ -877,7 +877,7 @@ TimelineView::RenderGraphView()
 
     for(int i = 0; i < m_graphs->size(); i++)
     {
-        rocprofvis_graph_t& track_item = (*m_graphs)[i];
+        TrackGraph& track_item = (*m_graphs)[i];
 
         m_resize_activity |= track_item.display_changed;
 
@@ -1116,7 +1116,7 @@ TimelineView::DestroyGraphs()
 {
     if(m_graphs)
     {
-        for(rocprofvis_graph_t& graph : *m_graphs)
+        for(TrackGraph& graph : *m_graphs)
         {
             delete graph.chart;
         }
@@ -1175,7 +1175,7 @@ TimelineView::MakeGraphView()
             continue;
         }
 
-        rocprofvis_graph_t graph = { rocprofvis_graph_t::TYPE_FLAMECHART, display, false,
+        TrackGraph graph = { TrackGraph::TYPE_FLAMECHART, display, false,
                                      nullptr, false };
         switch(track_info->track_type)
         {
@@ -1186,7 +1186,7 @@ TimelineView::MakeGraphView()
                     m_data_provider, m_timeline_selection, track_info->id,
                     track_info->name, static_cast<float>(track_info->min_value),
                     static_cast<float>(track_info->max_value), m_tpt);
-                graph.graph_type = rocprofvis_graph_t::TYPE_FLAMECHART;
+                graph.GraphType = TrackGraph::TYPE_FLAMECHART;
                 break;
             }
             case kRPVControllerTrackTypeSamples:
@@ -1196,7 +1196,7 @@ TimelineView::MakeGraphView()
                     new LineTrackItem(m_data_provider, track_info->id, track_info->name,
                                       m_max_meta_area_size, m_tpt);
                 UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
-                graph.graph_type = rocprofvis_graph_t::TYPE_LINECHART;
+                graph.GraphType = TrackGraph::TYPE_LINECHART;
                 break;
             }
             default:
@@ -1840,7 +1840,7 @@ TimelineViewProjectSettings::~TimelineViewProjectSettings() {}
 void
 TimelineViewProjectSettings::ToJson()
 {
-    const std::vector<rocprofvis_graph_t>& graphs = *m_timeline_view.GetGraphs();
+    const std::vector<TrackGraph>& graphs = *m_timeline_view.GetGraphs();
     for(int i = 0; i < graphs.size(); i++)
     {
         uint64_t id = graphs[i].chart->GetID();

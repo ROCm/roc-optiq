@@ -3,7 +3,6 @@
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_track_item.h"
-#include "rocprofvis_view_structs.h"
 #include "spdlog/spdlog.h"
 
 namespace RocProfVis
@@ -20,7 +19,7 @@ TimelineSelection::TimelineSelection(DataProvider& dp)
 TimelineSelection::~TimelineSelection() {}
 
 void
-TimelineSelection::SelectTrack(rocprofvis_graph_t& graph)
+TimelineSelection::SelectTrack(TrackGraph& graph)
 {
     if(!graph.selected && graph.chart && !graph.chart->IsSelected() &&
        m_selected_track_ids.count(graph.chart->GetID()) == 0)
@@ -33,7 +32,7 @@ TimelineSelection::SelectTrack(rocprofvis_graph_t& graph)
 }
 
 void
-TimelineSelection::UnselectTrack(rocprofvis_graph_t& graph)
+TimelineSelection::UnselectTrack(TrackGraph& graph)
 {
     if(graph.selected && graph.chart && graph.chart->IsSelected() &&
        m_selected_track_ids.count(graph.chart->GetID()) > 0)
@@ -46,7 +45,7 @@ TimelineSelection::UnselectTrack(rocprofvis_graph_t& graph)
 }
 
 void
-TimelineSelection::UnselectAllTracks(std::vector<rocprofvis_graph_t>& graphs)
+TimelineSelection::UnselectAllTracks(std::vector<TrackGraph>& graphs)
 {
     for(auto& graph : graphs)
     {
@@ -61,7 +60,7 @@ TimelineSelection::UnselectAllTracks(std::vector<rocprofvis_graph_t>& graphs)
 }
 
 void
-TimelineSelection::ToggleSelectTrack(rocprofvis_graph_t& graph)
+TimelineSelection::ToggleSelectTrack(TrackGraph& graph)
 {
     if(graph.selected)
     {

@@ -6,7 +6,6 @@
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
-#include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
 #include "rocprofvis_time_to_pixel.h"
 #include <memory>
@@ -21,6 +20,12 @@ namespace View
 
 class LineTrackItem;
 class TimePixelTransform;
+
+struct HighlightYRange
+{
+    float max_limit;
+    float min_limit;
+};
 
 class LineTrackProjectSettings : public ProjectSetting
 {

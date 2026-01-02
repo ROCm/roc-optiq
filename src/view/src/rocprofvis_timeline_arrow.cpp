@@ -44,7 +44,7 @@ TimelineArrow::SetRenderStyle(RenderStyle style)
 void
 TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                       const std::unordered_map<uint64_t, float>& track_position_y,
-                      const std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
+                      const std::shared_ptr<std::vector<TrackGraph>> graphs,
                       std::shared_ptr<TimePixelTransform>                    tpt) const
 {
     if(m_flow_display_mode == FlowDisplayMode::kHide) return;
@@ -73,7 +73,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
             const EventFlowData& origin = flows[0];
             const TrackInfo*      origin_track_info = tlm.GetTrack(origin.track_id);
             if(!origin_track_info) continue;
-            const rocprofvis_graph_t& origin_track = (*graphs)[origin_track_info->index];
+            const TrackGraph& origin_track = (*graphs)[origin_track_info->index];
             if(!origin_track.display)
             {
                 continue;
@@ -98,7 +98,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                 const EventFlowData& target = flows[i];
                 const TrackInfo*     target_track_info = tlm.GetTrack(target.track_id);
                 if(!target_track_info) continue;
-                const rocprofvis_graph_t& target_track =
+                const TrackGraph& target_track =
                     (*graphs)[target_track_info->index];
                 if(!target_track.display) continue;
 
@@ -171,8 +171,8 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                 const TrackInfo* to_track_info   = tlm.GetTrack(to.track_id);
                 if(!from_track_info || !to_track_info) continue;
 
-                const rocprofvis_graph_t& from_track = (*graphs)[from_track_info->index];
-                const rocprofvis_graph_t& to_track   = (*graphs)[to_track_info->index];
+                const TrackGraph& from_track = (*graphs)[from_track_info->index];
+                const TrackGraph& to_track   = (*graphs)[to_track_info->index];
 
                 if(!from_track.display || !to_track.display) continue;
 

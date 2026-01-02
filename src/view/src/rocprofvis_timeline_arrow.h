@@ -6,9 +6,9 @@
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_view_structs.h"
-#include <memory>
 #include "rocprofvis_time_to_pixel.h"
+
+#include <memory>
 
 namespace RocProfVis
 {
@@ -47,7 +47,7 @@ public:
     // mapping
     void Render(ImDrawList* draw_list, const ImVec2 window,
                 const std::unordered_map<uint64_t, float>&             track_position_y,
-                const std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
+                const std::shared_ptr<std::vector<TrackGraph>> graphs,
                 std::shared_ptr<TimePixelTransform>                    tpt) const;
 
 private:

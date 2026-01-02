@@ -1294,6 +1294,8 @@ TimelineView::RenderHistogram()
     for(int i = 0; i < num_ticks; i++)
     {
         double      tick_ns = grid_line_start_ns + (i * interval_ns);
+        // calculate x pos avoiding tpt related functions because histogram does not
+        // use zoom/pan logic
         float       tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
         std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
         label_size             = ImGui::CalcTextSize(tick_label.c_str());

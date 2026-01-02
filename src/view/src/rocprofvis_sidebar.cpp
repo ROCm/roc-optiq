@@ -133,13 +133,14 @@ SideBar::RenderTrackItem(const uint64_t& index)
         state_changed         = true;
         if(!graph.display)
         {
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram({ graph.chart->GetID() }, false);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
+                { graph.chart->GetID() }, false);
         }
         else
         {
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram({ graph.chart->GetID() }, true);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
+                { graph.chart->GetID() }, true);
         }
-
     }
 
     ImGui::PopFont();

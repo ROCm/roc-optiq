@@ -155,7 +155,7 @@ InfiniteScrollTable::Render()
     bool show_loading_indicator = false;
 
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), true);
-    auto table_model = m_data_provider.DataModel().GetTables();
+    const auto& table_model = m_data_provider.DataModel().GetTables();
 
     const std::vector<std::vector<std::string>>& table_data =
         table_model.GetTableData(m_table_type);

@@ -182,10 +182,11 @@ FlameTrackItem::ExtractPointsFromData()
     {
         const rocprofvis_trace_event_t& event = events_data[i];
         m_chart_items[i].event                = event;
-        m_chart_items[i].selected  = m_timeline_selection->EventSelected(event.m_id);
+        m_chart_items[i].selected = m_timeline_selection->EventSelected(event.m_id);
         if(m_chart_items[i].event.m_child_count > 1)
         {
-            m_chart_items[i].name_hash = std::hash<std::string>{}(event.m_top_combined_name);
+            m_chart_items[i].name_hash =
+                std::hash<std::string>{}(event.m_top_combined_name);
         }
         else
         {
@@ -247,14 +248,15 @@ FlameTrackItem::ParseChildInfo(const std::string& combined_name, ChildEventInfo&
             try
             {
                 // Extract count, duration and name (format: "<count>|<duration>|<name>")
-                size_t count = std::stoul(combined_name.substr(0, pos1));
+                size_t count          = std::stoul(combined_name.substr(0, pos1));
                 size_t duration_start = pos1 + s_child_info_separator.size();
-                size_t duration = std::stoull(combined_name.substr(duration_start, pos2 - duration_start));
-                std::string name = combined_name.substr(pos2 + s_child_info_separator.size());
+                size_t duration       = std::stoull(
+                    combined_name.substr(duration_start, pos2 - duration_start));
+                std::string name =
+                    combined_name.substr(pos2 + s_child_info_separator.size());
                 out_info = { name, std::hash<std::string>{}(name), count, duration };
                 return true;
-            }
-            catch(const std::exception&)
+            } catch(const std::exception&)
             {
                 spdlog::warn("Failed to parse child event info from string: {}",
                              combined_name);
@@ -320,8 +322,22 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         }
         else
         {
-            draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                               chart_item.event.m_name.c_str());
+            if(rectMin.x < draw_list->GetClipRectMin().x &&
+               rectMax.x > draw_list->GetClipRectMin().x)
+            {
+                // If the rectangle is partially outside the viewport then start rendering
+                // the text at the viewport edge to maintain readability.
+                textPos = ImVec2(draw_list->GetClipRectMin().x + m_text_padding.x,
+                                 rectMin.y + m_text_padding.y);
+                draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
+                                   chart_item.event.m_name.c_str());
+            }
+            else
+            {
+                // The rectangle is fully inside the viewport, render text normally.
+                draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
+                                   chart_item.event.m_name.c_str());
+            }
         }
         draw_list->PopClipRect();
     }
@@ -673,8 +689,8 @@ FlameTrackItem::RenderMetaAreaOptions()
                 RecalculateTrackHeight();
             }
         }
-        if (m_track_height > std::max(m_max_level * m_level_height + m_level_height,
-            m_track_default_height))
+        if(m_track_height > std::max(m_max_level * m_level_height + m_level_height,
+                                     m_track_default_height))
         {
             RecalculateTrackHeight();
         }
@@ -705,15 +721,15 @@ bool
 FlameTrackProjectSettings::Valid() const
 {
     if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                      [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
-                      .isNumber())
+                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
+                           .isNumber())
     {
         return false;
     }
 
     if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                      [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
-                      .isBool())
+                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
+                           .isBool())
     {
         return false;
     }
@@ -737,7 +753,7 @@ FlameTrackProjectSettings::ColorEvents() const
     return color_mode;
 }
 
-bool 
+bool
 FlameTrackProjectSettings::CompactMode() const
 {
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]

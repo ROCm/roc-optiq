@@ -1,6 +1,5 @@
 ---
-mode: 'agent'
-tools: ['changes', 'codebase', 'runCommands']
+tools: ['changes', 'search/codebase', 'runCommands']
 description: 'Write release notes'
 ---
 Your goal is to write release notes based on the changes between the current head and a given tag.

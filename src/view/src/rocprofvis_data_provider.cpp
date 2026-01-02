@@ -3317,7 +3317,9 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     }
     else
     {
-        spdlog::warn("Sample track data request failed with code {}", req.response_code);
+        // TODO: review the controller return codes to see if anycase should be escalated
+        // to a warning
+        spdlog::debug("Sample track data request failed with code {}", req.response_code);
         count = 0;
     }
 
@@ -3427,7 +3429,9 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params,
     }
     else
     {
-        spdlog::warn("Event track data request failed with code {}", req.response_code);
+        // TODO: review the controller return codes to see if anycase should be escalated
+        // to a warning
+        spdlog::debug("Event track data request failed with code {}", req.response_code);
         count = 0;
     }
 

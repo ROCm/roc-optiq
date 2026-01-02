@@ -614,7 +614,7 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
                                                 }
                                             }
 
-                                            spdlog::info("{} {} {}", category.c_str(),
+                                            spdlog::debug("{} {} {}", category.c_str(),
                                                          name.c_str(), value.c_str());
                                         }
 

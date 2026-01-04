@@ -18,23 +18,20 @@ rocprofvis_dm_size_t  ExtData::GetMemoryFootprint(){
 rocprofvis_dm_result_t  ExtData::AddRecord( rocprofvis_db_ext_data_t & data){
     
     try{
-        if (ArgsCategory == data.category)
-        {
-            int index = data.type;
-            if (index == m_argument_records.size())
-            {
-                m_argument_records.push_back(ArgumentRecord(data.category_enum, data.data));
-            }
-            else
-            {
-                m_argument_records[index].AddArgumentParam(data.category_enum, data.data);
-            }
-        }
-        else
-        {
-            m_extdata_records.push_back(ExtDataRecord(data.category, data.name, data.data, 
-                (rocprofvis_db_data_type_t)data.type, data.category_enum, data.db_instance));
-        }
+        m_extdata_records.push_back(ExtDataRecord(data.category, data.name, data.data, 
+            (rocprofvis_db_data_type_t)data.type, data.category_enum, data.db_instance));
+    }
+    catch(std::exception ex)
+    {
+        return kRocProfVisDmResultAllocFailure;
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t  ExtData::AddRecord( rocprofvis_db_argument_data_t & data){
+
+    try{
+        m_argument_records.push_back(ArgumentRecord(data.name, data.value, data.type, data.position));
     }
     catch(std::exception ex)
     {
@@ -100,7 +97,7 @@ rocprofvis_dm_result_t ExtData::GetArgumentNameAt(const rocprofvis_dm_property_i
 
 rocprofvis_dm_result_t ExtData::GetArgumentValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & value){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < GetNumberOfArguments(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
-    value = m_argument_records[index].Data();
+    value = m_argument_records[index].Value();
     return kRocProfVisDmResultSuccess;
 }
 

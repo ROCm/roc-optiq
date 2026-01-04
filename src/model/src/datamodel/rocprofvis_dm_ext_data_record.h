@@ -64,28 +64,15 @@ public:
     // @param category - extended data category string
     // @param name - extended data name string
     // @param data - extended data string
-    ArgumentRecord(rocprofvis_event_data_category_enum_t category_enum, rocprofvis_dm_charptr_t data) { AddArgumentParam(category_enum,data); };
-    void AddArgumentParam(rocprofvis_event_data_category_enum_t category_enum, rocprofvis_dm_charptr_t data) {
-        switch (category_enum) {
-        case kRocProfVisEventArgumentDataPosition:
-            m_position = std::atol(data);
-            break;
-        case kRocProfVisEventArgumentDataType:
-            m_type = data;
-            break;
-        case kRocProfVisEventArgumentDataName:
-            m_name = data;
-            break;
-        case kRocProfVisEventArgumentDataValue:
-            m_data = data;
-            break;
-        }
-    }
+    ArgumentRecord(rocprofvis_dm_charptr_t name, rocprofvis_dm_charptr_t value, rocprofvis_dm_charptr_t type, uint32_t position)
+        : m_name(name), m_value(value), m_type(type), m_position(position)
+    {
+    };
 
     // Returns pointer to argument name string 
     rocprofvis_dm_charptr_t        Name() {return m_name.c_str();}
     // Returns pointer to argument value string 
-    rocprofvis_dm_charptr_t        Data() {return m_data.c_str();}
+    rocprofvis_dm_charptr_t        Value() {return m_value.c_str();}
     // Returns pointer to argument type string
     rocprofvis_dm_charptr_t        Type() { return m_type.c_str(); }
     // Returns argument position 
@@ -95,7 +82,7 @@ private:
     // argument name
     rocprofvis_dm_string_t              m_name;
     // argument value
-    rocprofvis_dm_string_t              m_data;
+    rocprofvis_dm_string_t              m_value;
     // argument type
     rocprofvis_dm_string_t              m_type;
     // argument position

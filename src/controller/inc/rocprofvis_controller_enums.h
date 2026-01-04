@@ -1034,7 +1034,7 @@ typedef enum rocprofvis_event_data_category_enum_t
     // Event stream track level
     kRocProfVisEventEssentialDataStreamLevel,
 
-    // Event argument position
+    // Event argument data
     kRocProfVisEventArgumentData,
     // Event argument position
     kRocProfVisEventArgumentDataPosition,

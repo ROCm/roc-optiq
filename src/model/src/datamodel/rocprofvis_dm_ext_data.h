@@ -48,6 +48,10 @@ class ExtData : public DmBase {
         // @param data - reference to a structure with the record data
         // @return status of operation
         rocprofvis_dm_result_t          AddRecord( rocprofvis_db_ext_data_t & data);
+        // Method to add argument data record
+        // @param data - reference to a structure with the record data
+        // @return status of operation
+        rocprofvis_dm_result_t          AddRecord( rocprofvis_db_argument_data_t & data);
         // Method to get number of extended data records
         // @return number of records
         rocprofvis_dm_size_t            GetNumberOfArguments() { return m_argument_records.size(); }

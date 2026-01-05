@@ -1036,14 +1036,6 @@ typedef enum rocprofvis_event_data_category_enum_t
 
     // Event argument data
     kRocProfVisEventArgumentData,
-    // Event argument position
-    kRocProfVisEventArgumentDataPosition,
-    // Event argument type
-    kRocProfVisEventArgumentDataType,
-    // Event argument name
-    kRocProfVisEventArgumentDataName,
-    // Event argument value
-    kRocProfVisEventArgumentDataValue,
 
 } rocprofvis_event_data_category_enum_t;
 

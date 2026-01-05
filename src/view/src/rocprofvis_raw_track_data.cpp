@@ -69,7 +69,7 @@ RawTrackData::AllDataReady() const
 }
 
 // Explicit template instantiation
-template class RocProfVis::View::TemplatedRawTrackData<rocprofvis_trace_counter_t>;
+template class RocProfVis::View::TemplatedRawTrackData<TraceCounter>;
 template class RocProfVis::View::TemplatedRawTrackData<rocprofvis_trace_event_t>;
 
 template <typename T>

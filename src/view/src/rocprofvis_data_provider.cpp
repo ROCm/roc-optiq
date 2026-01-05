@@ -2887,7 +2887,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
                                    params.m_data_group_id, params.m_chunk_count);
     }
 
-    std::vector<rocprofvis_trace_counter_t> buffer;
+    std::vector<TraceCounter> buffer;
     buffer.reserve(count);
 
     std::unordered_set              timepoint_set = raw_sample_data->GetWritableIdSet();
@@ -2911,9 +2911,9 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
             continue;  // skip duplicate samples
         }
 
-        // Construct rocprofvis_trace_counter_t item in-place
+        // Construct TraceCounter item in-place
         buffer.emplace_back();
-        rocprofvis_trace_counter_t& trace_counter = buffer.back();
+        TraceCounter& trace_counter = buffer.back();
 
         double value = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,

@@ -128,7 +128,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
     m_navigation_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
 
-    m_graphs = std::make_shared<std::vector<rocprofvis_graph_t>>();
+    m_graphs = std::make_shared<std::vector<TrackGraph>>();
 
     // force initial calculation of flame track label width
     FlameTrackItem::CalculateMaxEventLabelWidth();
@@ -384,7 +384,8 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             return;
         }
 
-        const track_info_t* metadata = m_data_provider.GetTrackInfo(tde->GetTrackID());
+        const TrackInfo* metadata =
+            m_data_provider.DataModel().GetTimeline().GetTrack(tde->GetTrackID());
         if(!metadata)
         {
             spdlog::error(
@@ -427,12 +428,13 @@ TimelineView::Update()
             if(m_data_provider.SetGraphIndex(m_reorder_request.track_id,
                                              m_reorder_request.new_index))
             {
-                std::vector<rocprofvis_graph_t> m_graphs_reordered;
-                m_graphs_reordered.resize(m_data_provider.GetTrackCount());
-                for(rocprofvis_graph_t& graph : *m_graphs)
+                std::vector<TrackGraph> m_graphs_reordered;
+                TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
+                m_graphs_reordered.resize(tlm.GetTrackCount());
+                for(TrackGraph& graph : *m_graphs)
                 {
-                    const track_info_t* metadata =
-                        m_data_provider.GetTrackInfo(graph.chart->GetID());
+                    const TrackInfo* metadata =
+                        tlm.GetTrack(graph.chart->GetID());
                     ROCPROFVIS_ASSERT(metadata);
                     m_graphs_reordered[metadata->index] = std::move(graph);
                 }
@@ -669,7 +671,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::PopStyleColor();
 }
 
-std::shared_ptr<std::vector<rocprofvis_graph_t>>
+std::shared_ptr<std::vector<TrackGraph>>
 TimelineView::GetGraphs()
 {
     return m_graphs;
@@ -875,7 +877,7 @@ TimelineView::RenderGraphView()
 
     for(int i = 0; i < m_graphs->size(); i++)
     {
-        rocprofvis_graph_t& track_item = (*m_graphs)[i];
+        TrackGraph& track_item = (*m_graphs)[i];
 
         m_resize_activity |= track_item.display_changed;
 
@@ -1114,7 +1116,7 @@ TimelineView::DestroyGraphs()
 {
     if(m_graphs)
     {
-        for(rocprofvis_graph_t& graph : *m_graphs)
+        for(TrackGraph& graph : *m_graphs)
         {
             delete graph.chart;
         }
@@ -1137,28 +1139,27 @@ TimelineView::MakeGraphView()
     DestroyGraphs();
     ResetView();
 
-    m_tpt->SetMinMaxX(m_data_provider.GetStartTime(), m_data_provider.GetEndTime());
+    const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
+    m_tpt->SetMinMaxX(tlm.GetStartTime(), tlm.GetEndTime());
 
     m_last_data_req_v_width = m_tpt->GetVWidth();
 
     /*This section makes the charts both line and flamechart are constructed here*/
-    uint64_t num_graphs = m_data_provider.GetTrackCount();
-    int      scale_x    = 1;
+    uint64_t num_graphs = tlm.GetTrackCount();
     m_graphs->resize(num_graphs);
 
-    std::vector<const track_info_t*> track_list    = m_data_provider.GetTrackInfoList();
-    bool                             project_valid = m_project_settings.Valid();
+    std::vector<const TrackInfo*> track_list    = tlm.GetTrackList();
+    bool                          project_valid = m_project_settings.Valid();
 
     for(int i = 0; i < track_list.size(); i++)
     {
-        const track_info_t* track_info = track_list[i];
+        const TrackInfo* track_info = track_list[i];
         bool                display    = true;
 
         if(project_valid)
         {
-            uint64_t            track_id_at_index = m_project_settings.TrackID(i);
-            const track_info_t* track_at_index_info =
-                m_data_provider.GetTrackInfo(track_id_at_index);
+            uint64_t         track_id_at_index   = m_project_settings.TrackID(i);
+            const TrackInfo* track_at_index_info = tlm.GetTrack(track_id_at_index);
             if(track_at_index_info && track_at_index_info->index != i)
             {
                 ROCPROFVIS_ASSERT(m_data_provider.SetGraphIndex(track_id_at_index, i));
@@ -1174,7 +1175,7 @@ TimelineView::MakeGraphView()
             continue;
         }
 
-        rocprofvis_graph_t graph = { rocprofvis_graph_t::TYPE_FLAMECHART, display, false,
+        TrackGraph graph = { GraphType::TYPE_FLAMECHART, display, false,
                                      nullptr, false };
         switch(track_info->track_type)
         {
@@ -1185,7 +1186,7 @@ TimelineView::MakeGraphView()
                     m_data_provider, m_timeline_selection, track_info->id,
                     track_info->name, static_cast<float>(track_info->min_value),
                     static_cast<float>(track_info->max_value), m_tpt);
-                graph.graph_type = rocprofvis_graph_t::TYPE_FLAMECHART;
+                graph.graph_type = GraphType::TYPE_FLAMECHART;
                 break;
             }
             case kRPVControllerTrackTypeSamples:
@@ -1195,7 +1196,7 @@ TimelineView::MakeGraphView()
                     new LineTrackItem(m_data_provider, track_info->id, track_info->name,
                                       m_max_meta_area_size, m_tpt);
                 UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
-                graph.graph_type = rocprofvis_graph_t::TYPE_LINECHART;
+                graph.graph_type = GraphType::TYPE_LINECHART;
                 break;
             }
             default:
@@ -1212,7 +1213,7 @@ TimelineView::MakeGraphView()
         }
     }
     UpdateAllMaxMetaAreaSizes();
-    m_histogram       = &m_data_provider.GetHistogram();
+    m_histogram       = &tlm.GetHistogram();
     m_meta_map_made   = true;
     m_resize_activity = true;
 }
@@ -1228,7 +1229,7 @@ TimelineView::RenderHistogram()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    int splitter_size = 5;
+    float splitter_size = 5.0f;
 
     // Vertical splitter
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
@@ -1253,7 +1254,6 @@ TimelineView::RenderHistogram()
     ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
     float       ruler_width     = m_tpt->GetGraphSizeX();
     float       tick_top        = ruler_pos.y + 2.0f;
-    float       tick_bottom     = ruler_pos.y + 7.0f;
     ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
     float       label_font_size = font->FontSize;
 
@@ -1293,8 +1293,10 @@ TimelineView::RenderHistogram()
 
     for(int i = 0; i < num_ticks; i++)
     {
-        double      tick_ns    = grid_line_start_ns + (i * interval_ns);
-        float       tick_x     = window_pos.x + m_tpt->TimeToPixel(tick_ns);
+        double      tick_ns = grid_line_start_ns + (i * interval_ns);
+        // calculate x pos avoiding tpt related functions because histogram does not
+        // use zoom/pan logic
+        float       tick_x  = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
         std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
         label_size             = ImGui::CalcTextSize(tick_label.c_str());
 
@@ -1795,11 +1797,12 @@ void
 TimelineView::CalculateMaxMetaAreaSize()
 {
     m_max_meta_area_size                        = 0.0f;
-    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
+    std::vector<const TrackInfo*> track_list =
+        m_data_provider.DataModel().GetTimeline().GetTrackList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
-        const track_info_t* track_info = track_list[i];
+        const TrackInfo* track_info = track_list[i];
         auto                graph      = (*m_graphs)[track_info->index];
         if(track_info->track_type == kRPVControllerTrackTypeSamples)
         {
@@ -1812,11 +1815,12 @@ TimelineView::CalculateMaxMetaAreaSize()
 void
 TimelineView::UpdateAllMaxMetaAreaSizes()
 {
-    std::vector<const track_info_t*> track_list = m_data_provider.GetTrackInfoList();
+    std::vector<const TrackInfo*> track_list =
+        m_data_provider.DataModel().GetTimeline().GetTrackList();
 
     for(size_t i = 0; i < track_list.size(); i++)
     {
-        const track_info_t* track_info = track_list[i];
+        const TrackInfo* track_info = track_list[i];
         auto                graph      = (*m_graphs)[track_info->index];
         if(track_info->track_type == kRPVControllerTrackTypeSamples)
         {
@@ -1836,7 +1840,7 @@ TimelineViewProjectSettings::~TimelineViewProjectSettings() {}
 void
 TimelineViewProjectSettings::ToJson()
 {
-    const std::vector<rocprofvis_graph_t>& graphs = *m_timeline_view.GetGraphs();
+    const std::vector<TrackGraph>& graphs = *m_timeline_view.GetGraphs();
     for(int i = 0; i < graphs.size(); i++)
     {
         uint64_t id = graphs[i].chart->GetID();

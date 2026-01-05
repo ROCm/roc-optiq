@@ -4,7 +4,6 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_project.h"
-#include "rocprofvis_view_structs.h"
 #include <deque>
 #include <unordered_map>
 #include "rocprofvis_time_to_pixel.h"

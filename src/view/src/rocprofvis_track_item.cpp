@@ -210,8 +210,6 @@ TrackItem::RenderMetaArea()
 
         if(m_request_state != TrackDataRequestState::kIdle)
         {
-            ImGuiStyle& style = ImGui::GetStyle();
-
             float  dot_radius  = 10.0f;
             int    num_dots    = 3;
             float  dot_spacing = 5.0f;
@@ -491,13 +489,13 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 bool
 TrackItem::HasData()
 {
-    return m_data_provider.GetRawTrackData(m_id) != nullptr;
+    return m_data_provider.DataModel().GetTimeline().GetTrackData(m_id) != nullptr;
 }
 
 bool
 TrackItem::ReleaseData()
 {
-    bool result = m_data_provider.FreeTrack(m_id, true);
+    bool result = m_data_provider.DataModel().GetTimeline().FreeTrackData(m_id, true);
     if(!result)
     {
         spdlog::warn("Failed to release data for track {}", m_id);

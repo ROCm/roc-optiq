@@ -13,7 +13,6 @@
 #include "rocprofvis_time_to_pixel.h"
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_track_item.h"
-#include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
 #include <map>
 #include <memory>
@@ -67,7 +66,7 @@ public:
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();
-    std::shared_ptr<std::vector<rocprofvis_graph_t>> GetGraphs();
+    std::shared_ptr<std::vector<TrackGraph>> GetGraphs();
     void                                             RenderInteractiveUI();
     void ScrollToTrack(const uint64_t& track_id);
     void SetViewableRangeNS(double start_ns, double end_ns);
@@ -136,7 +135,7 @@ private:
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
     float                               m_max_meta_area_size;
-    std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
+    std::shared_ptr<std::vector<TrackGraph>> m_graphs;
     std::shared_ptr<TimePixelTransform>               m_tpt;
     struct
     {

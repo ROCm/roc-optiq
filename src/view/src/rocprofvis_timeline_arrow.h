@@ -6,9 +6,9 @@
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_view_structs.h"
-#include <memory>
 #include "rocprofvis_time_to_pixel.h"
+
+#include <memory>
 
 namespace RocProfVis
 {
@@ -47,7 +47,7 @@ public:
     // mapping
     void Render(ImDrawList* draw_list, const ImVec2 window,
                 const std::unordered_map<uint64_t, float>&             track_position_y,
-                const std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
+                const std::shared_ptr<std::vector<TrackGraph>> graphs,
                 std::shared_ptr<TimePixelTransform>                    tpt) const;
 
 private:
@@ -56,10 +56,10 @@ private:
     DataProvider&                      m_data_provider;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     EventManager::SubscriptionToken    m_selection_changed_token;
-    std::vector<const event_info_t*>   m_selected_event_data;
+    std::vector<const EventInfo*>      m_selected_event_data;
     FlowDisplayMode                    m_flow_display_mode = FlowDisplayMode::kShowAll;
-    std::unordered_map<uint64_t, std::vector<event_flow_data_t>*> m_arrow_dictionary;
-    RenderStyle                                                   m_render_style;
+    std::unordered_map<uint64_t, std::vector<EventFlowData>*> m_arrow_dictionary;
+    RenderStyle                                               m_render_style;
 };
 
 }  // namespace View

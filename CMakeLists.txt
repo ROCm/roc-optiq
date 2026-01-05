@@ -72,6 +72,12 @@ set(VIEW_FILES
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp
     src/view/src/rocprofvis_data_provider.cpp
+    src/view/src/model/rocprofvis_topology_model.cpp
+    src/view/src/model/rocprofvis_timeline_model.cpp
+    src/view/src/model/rocprofvis_tables_model.cpp
+    src/view/src/model/rocprofvis_summary_model.cpp
+    src/view/src/model/rocprofvis_event_model.cpp
+    src/view/src/model/rocprofvis_trace_data_model.cpp
     src/view/src/rocprofvis_raw_track_data.cpp
     src/view/src/rocprofvis_events.cpp
     src/view/src/rocprofvis_event_manager.cpp
@@ -143,6 +149,7 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/re
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)

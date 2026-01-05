@@ -73,14 +73,14 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
     };
 
       // Check if thread is main thread.
-    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+    const TrackInfo* track_info = m_data_provider.DataModel().GetTimeline().GetTrack(m_id);
 
     if(track_info != nullptr)
     {
-        if(track_info->topology.type == track_info_t::Topology::InstrumentedThread)
+        if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread)
         {
-            const thread_info_t* thread_info =
-                m_data_provider.GetInstrumentedThreadInfo(track_info->topology.id);
+            const ThreadInfo* thread_info =
+                m_data_provider.DataModel().GetTopology().GetInstrumentedThread(track_info->topology.id);
             if(thread_info->tid == track_info->topology.process_id)
             {
                 m_show_pill_label = true;
@@ -169,7 +169,7 @@ FlameTrackItem::ReleaseData()
 bool
 FlameTrackItem::ExtractPointsFromData()
 {
-    const RawTrackData* rtd = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackData* rtd = m_data_provider.DataModel().GetTimeline().GetTrackData(m_id);
 
     // If no raw track data is found, this means the track was unloaded before the
     // response was processed

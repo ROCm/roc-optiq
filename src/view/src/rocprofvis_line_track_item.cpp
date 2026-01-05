@@ -57,11 +57,11 @@ LineTrackItem::~LineTrackItem() {}
 void
 LineTrackItem::UpdateMetadata()
 {
-    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+    const TrackInfo* track_info = m_data_provider.DataModel().GetTimeline().GetTrack(m_id);
     if(track_info)
     {
-        const counter_info_t* counter =
-            m_data_provider.GetCounterInfo(track_info->topology.id);
+        const CounterInfo* counter =
+            m_data_provider.DataModel().GetTopology().GetCounter(track_info->topology.id);
         if(counter)
         {
             m_units = counter->units;
@@ -232,7 +232,7 @@ LineTrackItem::ReleaseData()
 bool
 LineTrackItem::ExtractPointsFromData()
 {
-    const RawTrackData* rtd = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackData* rtd = m_data_provider.DataModel().GetTimeline().GetTrackData(m_id);
 
     // If no raw track data is found, this means the track was unloaded before the
     // response was processed
@@ -262,8 +262,7 @@ LineTrackItem::ExtractPointsFromData()
         spdlog::debug("No data for track {}", m_id);
         return false;
     }
-    const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
-    uint64_t                                      count      = track_data.size();
+    const std::vector<rocprofvis_trace_counter_t>& track_data = sample_track->GetData();
 
     m_data = track_data;
 

@@ -348,8 +348,22 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         }
         else
         {
-            draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                               chart_item.event.m_name.c_str());
+            if(rectMin.x < draw_list->GetClipRectMin().x &&
+               rectMax.x > draw_list->GetClipRectMin().x)
+            {
+                // If the rectangle is partially outside the viewport then start rendering
+                // the text at the viewport edge to maintain readability.
+                textPos = ImVec2(draw_list->GetClipRectMin().x + m_text_padding.x,
+                                 rectMin.y + m_text_padding.y);
+                draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
+                                   chart_item.event.m_name.c_str());
+            }
+            else
+            {
+                // The rectangle is fully inside the viewport, render text normally.
+                draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
+                                   chart_item.event.m_name.c_str());
+            }
         }
         draw_list->PopClipRect();
     }

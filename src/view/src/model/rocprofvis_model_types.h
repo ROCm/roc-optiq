@@ -111,6 +111,21 @@ struct TraceEvent
     std::string m_top_combined_name;
 };
 
+// Event id structure (mirrors rocprofvis_dm_event_id_t in model)
+union TraceEventId
+{
+    struct
+    {
+        // Event ID from database
+        uint64_t db_event_id : 52;
+        // Node index
+        uint64_t event_node : 8;
+        // Event operation type
+        uint64_t event_op : 4;
+    } bitfield;
+    uint64_t id;
+};
+
 struct EventInfo
 {
     uint64_t                   track_id;  // ID of owning track.

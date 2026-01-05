@@ -78,7 +78,7 @@ private:
     
     struct ChartItem
     {
-        rocprofvis_trace_event_t    event;
+        TraceEvent    event;
         bool                        selected;
         size_t                      name_hash;
         std::vector<ChildEventInfo> child_info;

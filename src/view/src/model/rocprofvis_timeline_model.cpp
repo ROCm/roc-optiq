@@ -248,7 +248,7 @@ TimelineModel::DumpTrack(uint64_t track_id) const
                         dynamic_cast<RawTrackEventData*>(it->second);
                     if(track)
                     {
-                        const std::vector<rocprofvis_trace_event_t>& buffer =
+                        const std::vector<TraceEvent>& buffer =
                             track->GetData();
                         int64_t i = 0;
                         for(const auto item : buffer)

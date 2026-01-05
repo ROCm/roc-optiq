@@ -584,7 +584,7 @@ namespace DataModel
 
                         std::mutex mtx;
 
-                        auto task = [&](size_t start_row, size_t end_row) {
+                        auto task = [&](size_t start_row, size_t end_row, std::exception_ptr& eptr) {
                             std::unordered_map<std::string, FilterExpression::Value> row_map;
                             auto lfilter = filter;
                             for (size_t row_index = start_row; row_index < end_row; row_index++)
@@ -597,6 +597,8 @@ namespace DataModel
                                 catch (std::runtime_error err)
                                 {
                                     valid = false;
+                                    eptr = std::current_exception();
+                                    break;
                                 }
                                 if (valid)
                                 {
@@ -608,15 +610,19 @@ namespace DataModel
                             };
 
                         std::vector<std::thread> threads;
+                        std::exception_ptr eptr = nullptr;
                         size_t rows_per_task = thread_count == 0 ? 0 : m_merged_table.RowCount() / thread_count;
                         size_t leftover_rows_count = m_merged_table.RowCount() - (rows_per_task * thread_count);
                         for (int i = 0; i < thread_count; ++i)
-                            threads.emplace_back(task, rows_per_task * i, rows_per_task * (i + 1));
+                            threads.emplace_back(task, rows_per_task * i, rows_per_task * (i + 1), std::ref(eptr));
                         if (leftover_rows_count > 0)
-                            threads.emplace_back(task, rows_per_task * thread_count, leftover_rows_count);
+                            threads.emplace_back(task, rows_per_task * thread_count, leftover_rows_count, std::ref(eptr));
 
                         for (auto& t : threads)
                             t.join();
+                        if (eptr) {
+                                std::rethrow_exception(eptr);
+                            }
                     }
                     catch (std::runtime_error e)
                     {

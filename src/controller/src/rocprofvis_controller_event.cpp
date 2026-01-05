@@ -275,7 +275,7 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                             {
                                                 result = array.SetObject(kRPVControllerArrayEntryIndexed, entry_counter++, (rocprofvis_handle_t*) call_stack);
                                             }
-                                            else
+                                            if(result != kRocProfVisResultSuccess)
                                             {
                                                 delete call_stack;
                                             }

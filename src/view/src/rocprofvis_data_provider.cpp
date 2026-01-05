@@ -1901,18 +1901,21 @@ DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
                     continue;
                 }
 
-                event_info->call_stack_info[i].function =
-                    GetString(callstack_handle, kRPVControllerCallstackFunction, i);
-                event_info->call_stack_info[i].arguments =
-                    GetString(callstack_handle, kRPVControllerCallstackArguments, i);
-                event_info->call_stack_info[i].line =
-                    GetString(callstack_handle, kRPVControllerCallstackLine, i);
+                event_info->call_stack_info[i].file =
+                    GetString(callstack_handle, kRPVControllerCallstackFile, i);
+                event_info->call_stack_info[i].pc =
+                    GetString(callstack_handle, kRPVControllerCallstackPc, i);
+                event_info->call_stack_info[i].name =
+                    GetString(callstack_handle, kRPVControllerCallstackName, i);
+                event_info->call_stack_info[i].address =
+                    GetString(callstack_handle, kRPVControllerCallstackLineAddress, i);
 
                 spdlog::debug(
-                    "Call stack entry {}: function: {}, line: {}, arguments: {}", i,
-                    event_info->call_stack_info[i].function,
-                    event_info->call_stack_info[i].line,
-                    event_info->call_stack_info[i].arguments);
+                    "Call stack entry {}: file: {}, pc: {}, name: {}, address: {}", i,
+                    event_info->call_stack_info[i].file,
+                    event_info->call_stack_info[i].pc,
+                    event_info->call_stack_info[i].name,
+                    event_info->call_stack_info[i].address);
             }
         }
     }

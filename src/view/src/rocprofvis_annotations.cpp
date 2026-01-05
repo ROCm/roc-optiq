@@ -328,15 +328,12 @@ AnnotationsManager::ShowStickyNotePopup()
     
     ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
-    ImGui::OpenPopup("Annotation");
+    ImGui::OpenPopup("Add Annotation");
 
     ImGui::SetNextWindowSize(ImVec2(390, 420),
                              ImGuiCond_Once);  // Initial size, user can resize
-    if(ImGui::BeginPopupModal("Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
+    if(ImGui::BeginPopupModal("Add Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
     {
-        ImGui::Text("Add Annotation");
-        ImGui::Separator();
-        ImGui::Spacing();
 
         ImGui::Text("Title:");
         ImGui::SetNextItemWidth(-FLT_MIN);  // Make the input take the full width

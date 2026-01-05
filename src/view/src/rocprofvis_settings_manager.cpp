@@ -481,11 +481,11 @@ SettingsManager::InitStyling()
     style.TabRounding       = 6.0f;
     style.WindowRounding    = 8.0f;
     style.ScrollbarRounding = 8.0f;
-
     style.FramePadding  = ImVec2(10, 6);
     style.ItemSpacing   = ImVec2(10, 8);
     style.WindowPadding = ImVec2(4, 4);
-
+    style.ChildRounding = 6.0f;
+ 
     m_default_style = style;  // Store the our customized style
 
     std::vector<ImU32> colormap;

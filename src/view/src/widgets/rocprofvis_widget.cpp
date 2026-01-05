@@ -973,13 +973,19 @@ PopUpStyle::~PopUpStyle() { PopStyles(); }
 void
 PopUpStyle::PushPopupStyles()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 16));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 12));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
-
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        settings.GetDefaultStyle().ItemSpacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().WindowRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        settings.GetDefaultStyle().FramePadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,
+                        settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
     m_style_var_count = 6;
 }
 

@@ -547,7 +547,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
     }
     else
     {
-        rocprofvis_trace_event_t_id_t event_id{};
+        rocprofvis_trace_event_id_t event_id{};
         event_id.id = chart_item.event.m_id;
         ImGui::TextUnformatted("Name: ");
         ImGui::SameLine();

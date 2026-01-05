@@ -36,17 +36,20 @@ typedef struct rocprofvis_trace_counter_t
     double m_end_ts;
 } rocprofvis_trace_counter_t;
 
+// Event id structure (mirrors rocprofvis_dm_event_id_t in model)
 typedef union
 {
     struct
     {
         // Event ID from database
-        uint64_t db_event_id : 60;
+        uint64_t db_event_id : 52;
+        // Node index
+        uint64_t event_node : 8;
         // Event operation type
         uint64_t event_op : 4;
     } bitfield;
     uint64_t id;
-} rocprofvis_trace_event_t_id_t;
+} rocprofvis_trace_event_id_t;
 
 class RawTrackData
 {

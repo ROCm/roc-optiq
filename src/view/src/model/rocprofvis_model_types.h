@@ -91,13 +91,10 @@ struct EventFlowData
 
 struct CallStackData
 {
-    std::string function;      // Source code function name
-    std::string arguments;     // Source code function arguments
-    std::string file;          // Source code file path
-    std::string line;          // Source code line number
-    std::string isa_function;  // ISA/ASM function name
-    std::string isa_file;      // ISA/ASM file path
-    std::string isa_line;      // ISA/ASM line number
+    std::string file;
+    std::string pc;
+    std::string name;
+    std::string address;
 };
 
 struct TraceEvent

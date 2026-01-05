@@ -309,11 +309,12 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("CallStackTable", 3, TABLE_FLAGS))
+            if(ImGui::BeginTable("CallStackTable", 4, TABLE_FLAGS))
             {
-                ImGui::TableSetupColumn("Line");
-                ImGui::TableSetupColumn("Function");
-                ImGui::TableSetupColumn("Arguments");
+                ImGui::TableSetupColumn("Address");
+                ImGui::TableSetupColumn("Name");
+                ImGui::TableSetupColumn("File");
+                ImGui::TableSetupColumn("PC");
                 ImGui::TableHeadersRow();
 
                 ImGuiListClipper clipper;
@@ -322,22 +323,25 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
+                        ImGui::PushID(i);
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
                         CopyableTextUnformatted(
-                            event_data->call_stack_info[i].line.c_str(),
-                            "##line_" + std::to_string(i), COPY_DATA_NOTIFICATION, false,
-                            true);
+                            event_data->call_stack_info[i].address.c_str(), "",
+                            COPY_DATA_NOTIFICATION, false, true);
                         ImGui::TableSetColumnIndex(1);
                         CopyableTextUnformatted(
-                            event_data->call_stack_info[i].function.c_str(),
-                            "##function_" + std::to_string(i),
+                            event_data->call_stack_info[i].name.c_str(), "",
                             COPY_DATA_NOTIFICATION, false, true);
                         ImGui::TableSetColumnIndex(2);
                         CopyableTextUnformatted(
-                            event_data->call_stack_info[i].arguments.c_str(),
-                            "##arguments_" + std::to_string(i),
+                            event_data->call_stack_info[i].file.c_str(), "",
                             COPY_DATA_NOTIFICATION, false, true);
+                        ImGui::TableSetColumnIndex(3);
+                        CopyableTextUnformatted(
+                            event_data->call_stack_info[i].pc.c_str(), "",
+                            COPY_DATA_NOTIFICATION, false, true);
+                        ImGui::PopID();
                     }
                 }
                 ImGui::EndTable();

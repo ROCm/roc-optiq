@@ -619,39 +619,18 @@ typedef enum rocprofvis_controller_flow_control_properties_t : uint32_t
 */
 
 /*
- * Each entry resolves the ISA/ASM function/file/line and if possible the human readable
- * source version. The backend is the right place to resolve the ISA to Source mapping so
- * we can reuse any code that already does it.
+ * Properties for a callstack entry.
  */
 typedef enum rocprofvis_controller_callstack_properties_t : uint32_t
 {
     __kRPVControllerCallstackPropertiesFirst = 0x60000000,
-    // Human readable source code function
-    kRPVControllerCallstackFunction = __kRPVControllerCallstackPropertiesFirst,
-    // Human readable source code function arguments
-    kRPVControllerCallstackArguments,
-    // Human readable source code file
-    kRPVControllerCallstackFile,
-    // Human readable source code line
-    kRPVControllerCallstackLine,
-    // ISA/ASM code function
-    kRPVControllerCallstackISAFunction,
-    // ISA/ASM code file
-    kRPVControllerCallstackISAFile,
-    // ISA/ASM code line
-    kRPVControllerCallstackISALine,
+    kRPVControllerCallstackFile = __kRPVControllerCallstackPropertiesFirst,
+    kRPVControllerCallstackPc,
+    kRPVControllerCallstackName,
+    kRPVControllerCallstackLineName,
+    kRPVControllerCallstackLineAddress,
     __kRPVControllerCallstackPropertiesLast
 } rocprofvis_controller_callstack_properties_t;
-/* JSON: RPVCallstack
-{
-    function: String,
-    file: String,
-    line: Int,
-    isa_function: String,
-    isa_file: String,
-    isa_line: Int,
-}
-*/
 
 /*
  * Properties for each event in a track or graph

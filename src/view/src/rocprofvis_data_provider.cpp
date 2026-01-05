@@ -3087,7 +3087,6 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
             {
                 event_info.basic_info.m_id          = event.m_id;
                 event_info.basic_info.m_start_ts    = event.m_start_ts;
-                event_info.basic_info.m_child_count = event.m_child_count;
                 // only set values below if this is single event, not a combined event
                 if(event.m_child_count == 1)
                 {

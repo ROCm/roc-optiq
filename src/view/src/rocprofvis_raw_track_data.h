@@ -18,8 +18,16 @@ namespace RocProfVis
 namespace View
 {
 
-// Forward declaration of TraceEvent
-struct TraceEvent;
+struct TraceEvent
+{
+    uint64_t    m_id;
+    std::string m_name;
+    double      m_start_ts;
+    double      m_duration;
+    uint32_t    m_level;
+    uint32_t    m_child_count;
+    std::string m_top_combined_name;
+};
 
 struct TraceCounter
 {

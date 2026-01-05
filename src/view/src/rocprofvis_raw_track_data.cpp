@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_raw_track_data.h"
-#include "rocprofvis_model_types.h"
 
 using namespace RocProfVis::View;
 

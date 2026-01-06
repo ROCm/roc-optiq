@@ -145,7 +145,8 @@ TrackTopology::UpdateTopology()
                                 InfoTable::Cell{ process_info->environment, false } } }
                         };
                         m_topology.nodes[i].processes[j].header =
-                            "[" + std::to_string(process_info->id) + "]";
+                            process_info->command + 
+                            "(" + std::to_string(process_info->id) + ")";
                         const std::vector<uint64_t>& queue_ids = process_info->queue_ids;
                         m_topology.nodes[i].processes[j].queues.resize(queue_ids.size());
                         m_topology.nodes[i].processes[j].queue_header =

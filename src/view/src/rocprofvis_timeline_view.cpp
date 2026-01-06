@@ -436,9 +436,9 @@ TimelineView::Update()
                     const TrackInfo* metadata =
                         tlm.GetTrack(graph.chart->GetID());
                     ROCPROFVIS_ASSERT(metadata);
-                    m_graphs_reordered[metadata->index] = std::move(graph);
+                    graphs_reordered[metadata->index] = std::move(graph);
                 }
-                *m_graphs = std::move(m_graphs_reordered);
+                *m_graphs = std::move(graphs_reordered);
             }
         }
         // Rebuild the positioning map.

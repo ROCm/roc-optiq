@@ -110,6 +110,9 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeSummary = 24,
     // Summary metrics container object
     kRPVControllerObjectTypeSummaryMetrics = 25,
+
+    // Extended data object
+    kRPVControllerObjectTypeEventArgument = 26,
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -881,6 +884,10 @@ typedef enum rocprofvis_controller_extdata_properties_t : uint32_t
     kRPVControllerExtDataType,
     // Extended data category enumeration
     kRPVControllerExtDataCategoryEnum,
+    // Event argument position
+    kRPVControllerEventArgumentPosition,
+    // Event argument type
+    kRPVControllerEventArgumentType,
     __kRPVControllerExtDataPropertiesLast
 } rocprofvis_controller_extdata_properties_t;
 /* JSON: RPVCallstack
@@ -1005,6 +1012,9 @@ typedef enum rocprofvis_event_data_category_enum_t
     kRocProfVisEventEssentialDataLevel,
     // Event stream track level
     kRocProfVisEventEssentialDataStreamLevel,
+
+    // Event argument data
+    kRocProfVisEventArgumentData,
 
 } rocprofvis_event_data_category_enum_t;
 

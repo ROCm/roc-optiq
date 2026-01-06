@@ -350,6 +350,24 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
     return 0;
 }
 
+int ProfileDatabase::CallbackAddArgumentsInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void*  func = (void*)&CallbackAddArgumentsInfo;
+    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
+    ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
+    rocprofvis_db_argument_data_t record;
+    if (callback_params->future->Interrupted()) return SQLITE_ABORT;
+    record.position = db->Sqlite3ColumnInt(func, stmt, azColName,1);
+    record.type = (char*)db->Sqlite3ColumnText(func, stmt, azColName,2);
+    record.name = (char*)db->Sqlite3ColumnText(func, stmt, azColName,3);
+    record.value = (char*)db->Sqlite3ColumnText(func, stmt, azColName,4);
+    if (db->BindObject()->FuncAddArgDataRecord(callback_params->handle, record) != kRocProfVisDmResultSuccess) return 1;
+        
+    callback_params->future->CountThisRow();
+    return 0;
+}
+
 int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(argc == rocprofvis_db_sqlite_essential_data_query_format::NUM_PARAMS,

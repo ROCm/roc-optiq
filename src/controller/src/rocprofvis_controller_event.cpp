@@ -328,15 +328,20 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
                                    &dm_extdata) &&
                           dm_extdata != nullptr)
                         {
-                            uint64_t records_count = 0;
+                            uint64_t extd_records_count = 0;
+                            uint64_t arg_records_count = 0;
                             if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_uint64(
                                    dm_extdata, kRPVDMNumberOfExtDataRecordsUInt64, 0,
-                                   (uint64_t*) &records_count))
+                                   (uint64_t*) &extd_records_count) &&
+                                kRocProfVisDmResultSuccess ==
+                                    rocprofvis_dm_get_property_as_uint64(
+                                        dm_extdata, kRPVDMNumberOfArgumentRecordsUInt64, 0,
+                                        (uint64_t*) &arg_records_count))
                             {
                                 uint64_t entry_counter = 0;
-                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
-                                for(int index = 0; index < records_count; index++)
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, extd_records_count+arg_records_count);
+                                for(int index = 0; index < extd_records_count; index++)
                                 {
                                     char* category = nullptr;
                                     char* name     = nullptr;
@@ -382,7 +387,48 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
                                         }
                                     }
                                 }
+
+                                for(int index = 0; index < arg_records_count; index++)
+                                {
+                                    char* type = nullptr;
+                                    char* name     = nullptr;
+                                    char* value    = nullptr;
+                                    uint64_t position = 0;
+                                    if(kRocProfVisDmResultSuccess ==
+                                        rocprofvis_dm_get_property_as_charptr(
+                                            dm_extdata,
+                                            kRPVDMArgumentTypeCharPtrIndexed, index,
+                                            &type) &&
+                                        kRocProfVisDmResultSuccess ==
+                                        rocprofvis_dm_get_property_as_charptr(
+                                            dm_extdata,
+                                            kRPVDMArgumentNameCharPtrIndexed, index,
+                                            &name) &&
+                                        kRocProfVisDmResultSuccess ==
+                                        rocprofvis_dm_get_property_as_charptr(
+                                            dm_extdata,
+                                            kRPVDMArgumentValueCharPtrIndexed, index,
+                                            &value) &&
+                                        kRocProfVisDmResultSuccess ==
+                                        rocprofvis_dm_get_property_as_uint64(
+                                            dm_extdata,
+                                            kRPVDMArgumentPositionUint64Indexed, index,
+                                            &position))
+                                    {
+                                        ArgumentData* arg_data =
+                                            new ArgumentData("Argument", name, value,
+                                                kRPVDataTypeString, kRocProfVisEventArgumentData, position, type);
+                                        if(result == kRocProfVisResultSuccess)
+                                        {
+                                            result = array.SetObject(
+                                                kRPVControllerArrayEntryIndexed,
+                                                entry_counter++,
+                                                (rocprofvis_handle_t*) arg_data);
+                                        }
+                                    }
+                                }
                             }
+                           
                             result = kRocProfVisResultSuccess;
                         }
                         else

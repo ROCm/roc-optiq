@@ -56,5 +56,39 @@ class ExtDataRecord
         
 };
 
+// ArgumentRecord is a data storage class for argument data parameters
+class ArgumentRecord 
+{
+public:
+    // ExtDataRecord class constructor
+    // @param category - extended data category string
+    // @param name - extended data name string
+    // @param data - extended data string
+    ArgumentRecord(rocprofvis_dm_charptr_t name, rocprofvis_dm_charptr_t value, rocprofvis_dm_charptr_t type, uint32_t position)
+        : m_name(name), m_value(value), m_type(type), m_position(position)
+    {
+    };
+
+    // Returns pointer to argument name string 
+    rocprofvis_dm_charptr_t        Name() {return m_name.c_str();}
+    // Returns pointer to argument value string 
+    rocprofvis_dm_charptr_t        Value() {return m_value.c_str();}
+    // Returns pointer to argument type string
+    rocprofvis_dm_charptr_t        Type() { return m_type.c_str(); }
+    // Returns argument position 
+    uint32_t        Position() { return m_position; }
+
+private:
+    // argument name
+    rocprofvis_dm_string_t              m_name;
+    // argument value
+    rocprofvis_dm_string_t              m_value;
+    // argument type
+    rocprofvis_dm_string_t              m_type;
+    // argument position
+    uint32_t                            m_position;
+
+};
+
 }  // namespace DataModel
 }  // namespace RocProfVis

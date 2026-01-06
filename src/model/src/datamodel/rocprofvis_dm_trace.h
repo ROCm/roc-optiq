@@ -208,6 +208,11 @@ class Trace : public DmBase{
         // @param data - reference to a new record parameters structure
         // @return status of operation      
         static rocprofvis_dm_result_t                   AddExtDataRecord(const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t & data);
+        // Static method to add new record to argument data object. Used by database component via binding interface
+        // @param object - extended data object handle to add new record to.
+        // @param data - reference to a new record parameters structure
+        // @return status of operation      
+        static rocprofvis_dm_result_t                   AddArgDataRecord(const rocprofvis_dm_extdata_t object, rocprofvis_db_argument_data_t & data);
         // Static method to add new table. Used by database component via binding interface
         // @param object - trace object handle to add table object to.
         // @param query - pointer to table query string

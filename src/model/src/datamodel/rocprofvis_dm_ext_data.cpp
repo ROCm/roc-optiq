@@ -16,8 +16,22 @@ rocprofvis_dm_size_t  ExtData::GetMemoryFootprint(){
 }
 
 rocprofvis_dm_result_t  ExtData::AddRecord( rocprofvis_db_ext_data_t & data){
+    
     try{
-        m_extdata_records.push_back(ExtDataRecord(data.category, data.name, data.data, data.type, data.category_enum, data.db_instance));
+        m_extdata_records.push_back(ExtDataRecord(data.category, data.name, data.data, 
+            (rocprofvis_db_data_type_t)data.type, data.category_enum, data.db_instance));
+    }
+    catch(std::exception ex)
+    {
+        return kRocProfVisDmResultAllocFailure;
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t  ExtData::AddRecord( rocprofvis_db_argument_data_t & data){
+
+    try{
+        m_argument_records.push_back(ArgumentRecord(data.name, data.value, data.type, data.position));
     }
     catch(std::exception ex)
     {
@@ -40,7 +54,7 @@ rocprofvis_dm_result_t ExtData::GetRecordDataAt(const rocprofvis_dm_property_ind
     }
     else
     {
-        rocprofvis_dm_id_t id  = std::stoll(m_extdata_records[index].Data());
+        rocprofvis_dm_id_t id = std::stoll(m_extdata_records[index].Data());
         return m_ctx->BindingInfo()->FuncFindCachedTableValue(m_ctx->Database(), m_extdata_records[index].Category(), id, m_extdata_records[index].Name(), m_extdata_records[index].DbInstance(), &data);
     }
 }
@@ -62,6 +76,31 @@ rocprofvis_dm_result_t ExtData::GetRecordCategoryEnumAt(const rocprofvis_dm_prop
     category_enum = m_extdata_records[index].CategoryEnum();
     return kRocProfVisDmResultSuccess;
 }
+
+rocprofvis_dm_result_t ExtData::GetArgumentPositionAt(const rocprofvis_dm_property_index_t index, uint64_t & position){
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < GetNumberOfArguments(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    position = m_argument_records[index].Position();
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t ExtData::GetArgumentTypeAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & type){
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < GetNumberOfArguments(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    type = m_argument_records[index].Type();
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t ExtData::GetArgumentNameAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & name){
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < GetNumberOfArguments(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    name = m_argument_records[index].Name();
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t ExtData::GetArgumentValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & value){
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < GetNumberOfArguments(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    value = m_argument_records[index].Value();
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_result_t ExtData::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
@@ -69,10 +108,15 @@ rocprofvis_dm_result_t ExtData::GetPropertyAsUint64(rocprofvis_dm_property_t pro
         case kRPVDMNumberOfExtDataRecordsUInt64:
             *value = GetNumberOfRecords();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMNumberOfArgumentRecordsUInt64:
+            *value = GetNumberOfArguments();
+            return kRocProfVisDmResultSuccess;
         case kRPVDMExtDataTypeUint64Indexed:
             return GetRecordTypeAt(index, *value);
         case kRPVDMExtDataEnumUint64Indexed:
             return GetRecordCategoryEnumAt(index, *value);
+        case kRPVDMArgumentPositionUint64Indexed:
+            return GetArgumentPositionAt(index, *value);
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -90,6 +134,12 @@ rocprofvis_dm_result_t ExtData::GetPropertyAsUint64(rocprofvis_dm_property_t pro
             return GetRecordNameAt(index, *(rocprofvis_dm_charptr_t*)value);
         case kRPVDMExtDataValueCharPtrIndexed:
             return GetRecordDataAt(index, *(rocprofvis_dm_charptr_t*)value);
+        case kRPVDMArgumentTypeCharPtrIndexed:
+            return GetArgumentTypeAt(index, *(rocprofvis_dm_charptr_t*)value);
+        case kRPVDMArgumentNameCharPtrIndexed:
+            return GetArgumentNameAt(index, *(rocprofvis_dm_charptr_t*)value);
+        case kRPVDMArgumentValueCharPtrIndexed:
+            return GetArgumentValueAt(index, *(rocprofvis_dm_charptr_t*)value);
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -117,10 +167,14 @@ const char*  ExtData::GetPropertySymbol(rocprofvis_dm_property_t property) {
 
 bool ExtData::HasRecord(rocprofvis_db_ext_data_t & data)
 {
-    auto it = find_if(m_extdata_records.begin(), m_extdata_records.end(), [&](ExtDataRecord & ext){
-        return ext.Equal(data.category, data.name);
-    });
-    return it != m_extdata_records.end();
+    if (ArgsCategory != data.category)
+    { 
+        auto it = find_if(m_extdata_records.begin(), m_extdata_records.end(), [&](ExtDataRecord & ext){
+            return ext.Equal(data.category, data.name);
+        });
+        return it != m_extdata_records.end();
+    }
+    return false;
 }
 
 }  // namespace DataModel

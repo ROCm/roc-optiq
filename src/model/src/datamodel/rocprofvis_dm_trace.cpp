@@ -35,6 +35,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddStackFrame = AddStackFrame;
     m_binding_info.FuncAddExtData = AddExtData;
     m_binding_info.FuncAddExtDataRecord = AddExtDataRecord;
+    m_binding_info.FuncAddArgDataRecord = AddArgDataRecord;
     m_binding_info.FuncAddTable = AddTable;
     m_binding_info.FuncAddTableRow = AddTableRow;
     m_binding_info.FuncAddTableColumn = AddTableColumn;
@@ -436,6 +437,12 @@ rocprofvis_dm_result_t  Trace::AddExtDataRecord(const rocprofvis_dm_extdata_t ob
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t  Trace::AddArgDataRecord(const rocprofvis_dm_extdata_t object, rocprofvis_db_argument_data_t & data){
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_EXT_DATA_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ExtData* ext_data = (ExtData*) object;
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*ext_data->Mutex(), __func__, ext_data);
+    return ext_data->AddRecord(data);   
+}
 
 rocprofvis_dm_table_t Trace::AddInfoTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_node_id_t node,  rocprofvis_dm_charptr_t name, rocprofvis_dm_table_t handle){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);

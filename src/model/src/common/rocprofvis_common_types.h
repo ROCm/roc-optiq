@@ -168,6 +168,14 @@ typedef struct {
     rocprofvis_dm_node_id_t db_instance;
 }rocprofvis_db_ext_data_t;
 
+// rocprofvis_db_argument_data_t is used to pass argument data record from database to data model. Used by database query callbacks
+typedef struct {
+    rocprofvis_dm_charptr_t name;                   // argument name
+    rocprofvis_dm_charptr_t value;                  // argument value
+    rocprofvis_dm_charptr_t type;                   // argument type
+    uint32_t                position;               // argument position
+}rocprofvis_db_argument_data_t;
+
 /***********************Trace to Database binding info******************************/
 
 
@@ -182,6 +190,7 @@ typedef rocprofvis_dm_flowtrace_t (*rocprofvis_dm_add_flowtrace_func_t) (const r
 typedef rocprofvis_dm_stacktrace_t (*rocprofvis_dm_add_stacktrace_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id);
 typedef rocprofvis_dm_extdata_t (*rocprofvis_dm_add_extdata_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_extdata_record_func_t) (const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t& data);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_argdata_record_func_t) (const rocprofvis_dm_extdata_t object, rocprofvis_db_argument_data_t& data);
 typedef rocprofvis_dm_table_t (*rocprofvis_dm_add_table_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description);
 typedef rocprofvis_dm_table_row_t (*rocprofvis_dm_add_table_row_func_t) (const rocprofvis_dm_table_t object);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t column_name);
@@ -229,6 +238,7 @@ typedef struct
         rocprofvis_dm_add_stack_frame_func_t FuncAddStackFrame;         // Called by database query callback to add stack frame record to stack trace object
         rocprofvis_dm_add_extdata_func_t FuncAddExtData;                // Called by database query to add a extended data object to a list located in trace object
         rocprofvis_dm_add_extdata_record_func_t FuncAddExtDataRecord;   // Called by database query callback to add ext data record to ext data object
+        rocprofvis_dm_add_argdata_record_func_t FuncAddArgDataRecord;   // Called by database query callback to add argument data record to ext data object
         rocprofvis_dm_add_table_func_t FuncAddTable;                    // Called by database query to add a table object to a list located in trace object
         rocprofvis_dm_add_table_row_func_t FuncAddTableRow;             // Called by database query callback to add new row to a table object
         rocprofvis_dm_add_table_column_func_t FuncAddTableColumn;       // Called by database query callback to add new column name to a table object

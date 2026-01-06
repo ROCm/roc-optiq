@@ -327,7 +327,17 @@ typedef enum rocprofvis_dm_extdata_property_t {
     // Extended data type
     kRPVDMExtDataTypeUint64Indexed,
     // Extended data category enumeration
-    kRPVDMExtDataEnumUint64Indexed
+    kRPVDMExtDataEnumUint64Indexed,
+    // Number of argument records
+    kRPVDMNumberOfArgumentRecordsUInt64,
+    // Argument position
+    kRPVDMArgumentPositionUint64Indexed,
+    // Argument type
+    kRPVDMArgumentTypeCharPtrIndexed,
+    // Argument name
+    kRPVDMArgumentNameCharPtrIndexed,
+    // Argument value
+    kRPVDMArgumentValueCharPtrIndexed,
 } rocprofvis_dm_extdata_property_t;
 
 // Table object properties

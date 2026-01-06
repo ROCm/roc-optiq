@@ -1367,6 +1367,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
                 break;
             query = m_query_factory.GetRocprofEssentialInfoQueryForRegionEvent(event_id.bitfield.event_id, event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
+            future->ResetRowCount();
+            query = m_query_factory.GetRocprofArgumentsInfoQueryForRegionEvent(event_id.bitfield.event_id);
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddArgumentsInfo)) break;
 
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
@@ -1385,6 +1388,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
                 break;
             query = m_query_factory.GetRocprofEssentialInfoQueryForKernelDispatchEvent(event_id.bitfield.event_id);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
+            future->ResetRowCount();
+            query = m_query_factory.GetRocprofArgumentsInfoQueryForKernelDispatchEvent(event_id.bitfield.event_id);
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddArgumentsInfo)) break;
         } else   
         if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
         {
@@ -1402,6 +1408,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
                 break;
             query = m_query_factory.GetRocprofEssentialInfoQueryForMemoryAllocEvent(event_id.bitfield.event_id);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
+            future->ResetRowCount();
+            query = m_query_factory.GetRocprofArgumentsInfoQueryForMemoryAllocEvent(event_id.bitfield.event_id);
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddArgumentsInfo)) break;
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryCopy)
         {
@@ -1419,6 +1428,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
                 break;
             query = m_query_factory.GetRocprofEssentialInfoQueryForMemoryCopyEvent(event_id.bitfield.event_id);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
+            future->ResetRowCount();
+            query = m_query_factory.GetRocprofArgumentsInfoQueryForMemoryCopyEvent(event_id.bitfield.event_id);
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddArgumentsInfo)) break;
         } else
         {
             ShowProgress(0, "Extended data not available for specified operation type!", kRPVDbError, future );

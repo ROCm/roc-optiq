@@ -1935,5 +1935,62 @@ namespace DataModel
         }
     }
 
+    std::string QueryFactory::GetRocprofArgumentsInfoQueryForRegionEvent(uint64_t event_id) {
+
+        return Builder::Select(rocprofvis_db_sqlite_argument_data_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+            Builder::QParam("A.position", Builder::ARG_POS_PUBLIC_NAME),
+            Builder::QParam("A.type", Builder::ARG_TYPE_PUBLIC_NAME),
+            Builder::QParam("A.name", Builder::ARG_NAME_PUBLIC_NAME),
+            Builder::QParam("A.value", Builder::ARG_VALUE_PUBLIC_NAME)},
+            { Builder::From("rocpd_region", "R"),
+            Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id"),
+            Builder::InnerJoin("rocpd_arg", "A", "E.id = A.event_id")},
+            { Builder::Where("R.id", "==", std::to_string(event_id)) } }));
+    }
+
+    std::string QueryFactory::GetRocprofArgumentsInfoQueryForKernelDispatchEvent(uint64_t event_id) {
+
+        return Builder::Select(rocprofvis_db_sqlite_argument_data_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+            Builder::QParam("A.position", Builder::ARG_POS_PUBLIC_NAME),
+            Builder::QParam("A.type", Builder::ARG_TYPE_PUBLIC_NAME),
+            Builder::QParam("A.name", Builder::ARG_NAME_PUBLIC_NAME),
+            Builder::QParam("A.value", Builder::ARG_VALUE_PUBLIC_NAME)},
+            { Builder::From("rocpd_kernel_dispatch", "K"),
+            Builder::InnerJoin("rocpd_event", "E", "E.id = K.event_id"),
+            Builder::InnerJoin("rocpd_arg", "A", "E.id = A.event_id")},
+            { Builder::Where("K.id", "==", std::to_string(event_id)) } }));
+    }
+
+    std::string QueryFactory::GetRocprofArgumentsInfoQueryForMemoryAllocEvent(uint64_t event_id) {
+
+        return Builder::Select(rocprofvis_db_sqlite_argument_data_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+            Builder::QParam("A.position", Builder::ARG_POS_PUBLIC_NAME),
+            Builder::QParam("A.type", Builder::ARG_TYPE_PUBLIC_NAME),
+            Builder::QParam("A.name", Builder::ARG_NAME_PUBLIC_NAME),
+            Builder::QParam("A.value", Builder::ARG_VALUE_PUBLIC_NAME)},
+            { Builder::From("rocpd_memory_allocate", "M"),
+            Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
+            Builder::InnerJoin("rocpd_arg", "A", "E.id = A.event_id")},
+            { Builder::Where("M.id", "==", std::to_string(event_id)) } }));
+    }
+
+    std::string QueryFactory::GetRocprofArgumentsInfoQueryForMemoryCopyEvent(uint64_t event_id) {
+
+        return Builder::Select(rocprofvis_db_sqlite_argument_data_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+            Builder::QParam("A.position", Builder::ARG_POS_PUBLIC_NAME),
+            Builder::QParam("A.type", Builder::ARG_TYPE_PUBLIC_NAME),
+            Builder::QParam("A.name", Builder::ARG_NAME_PUBLIC_NAME),
+            Builder::QParam("A.value", Builder::ARG_VALUE_PUBLIC_NAME)},
+            { Builder::From("rocpd_memory_copy", "M"),
+            Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
+            Builder::InnerJoin("rocpd_arg", "A", "E.id = A.event_id")},
+            { Builder::Where("M.id", "==", std::to_string(event_id)) } }));
+    }
+
+
 }  // namespace DataModel
 }  // namespace RocProfVis

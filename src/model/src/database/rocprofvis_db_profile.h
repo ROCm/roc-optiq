@@ -236,6 +236,13 @@ class ProfileDatabase : public SqliteDatabase
     // @param azColName - pointer to column names 
     // @return SQLITE_OK if successful
         static int CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+    // sqlite3_exec callback to add arguments info into ExtData container.
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names 
+    // @return SQLITE_OK if successful
+        static int CallbackAddArgumentsInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
     // sqlite3_exec callback to calculate graph level for an event and store it into trace object map array
     // @param data - pointer to callback caller argument

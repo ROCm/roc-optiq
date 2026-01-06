@@ -29,11 +29,11 @@ rocprofvis_dm_result_t PmcTrackSlice::AddRecord(rocprofvis_db_record_data_t & da
     return kRocProfVisDmResultSuccess;
 }
 
-size_t PmcTrackSlice::GetMemoryFootprint(){
+rocprofvis_dm_size_t PmcTrackSlice::GetMemoryFootprint(){
     return sizeof(std::vector<PmcRecord>) + ((sizeof(PmcRecord)+sizeof(std::unique_ptr<PmcRecord>)) * m_samples.size());
 }
 
-size_t PmcTrackSlice::GetNumberOfRecords(){
+rocprofvis_dm_size_t PmcTrackSlice::GetNumberOfRecords(){
     return m_samples.size();
 }
 

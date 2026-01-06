@@ -12,6 +12,10 @@
 #include "spdlog/spdlog.h"
 #if defined(_MSC_VER)
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <mach/mach.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
 #elif defined(__GNUC__) || defined(__clang__)
 #include <sys/sysinfo.h>
 #endif
@@ -84,6 +88,28 @@ void MemoryManager::Init(size_t trace_size)
 
         s_physical_memory_avail = (mem_info.ullAvailPhys / 100) * kUseVailMemoryPercent;
 
+#elif defined(__APPLE__)
+        uint64_t avail_phys_mem = 0;
+        mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+        vm_statistics64_data_t vm_stats;
+        if(host_statistics64(mach_host_self(), HOST_VM_INFO64,
+                             reinterpret_cast<host_info64_t>(&vm_stats), &count) == KERN_SUCCESS)
+        {
+            const uint64_t page_size = static_cast<uint64_t>(getpagesize());
+            avail_phys_mem = (vm_stats.free_count + vm_stats.inactive_count) * page_size;
+        }
+
+        if(avail_phys_mem == 0)
+        {
+            uint64_t total_mem = 0;
+            size_t size = sizeof(total_mem);
+            if(sysctlbyname("hw.memsize", &total_mem, &size, nullptr, 0) == 0)
+            {
+                avail_phys_mem = total_mem;
+            }
+        }
+
+        s_physical_memory_avail = (avail_phys_mem / 100) * kUseVailMemoryPercent;
 #elif defined(__GNUC__) || defined(__clang__)
         struct sysinfo mem_info;
         sysinfo(&mem_info);

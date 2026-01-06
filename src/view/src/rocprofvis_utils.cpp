@@ -372,6 +372,10 @@ bool RocProfVis::View::open_url(const std::string& url)
     std::string command = "open " + url;
     int status = system(command.c_str());
     return status == 0;
+#elif defined(__APPLE__)
+    std::string command = "open " + url;
+    int status = system(command.c_str());
+    return status == 0;
 #else
     std::string command = "xdg-open " + url;
     int status = system(command.c_str());

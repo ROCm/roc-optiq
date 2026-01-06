@@ -379,3 +379,12 @@ bool RocProfVis::View::open_url(const std::string& url)
     return status == 0;
 #endif
 }
+
+std::string
+RocProfVis::View::get_executable_name(const std::string& fullPath)
+{
+    const auto pos = fullPath.find_last_of("/\\");
+    return (pos == std::string::npos)
+        ? fullPath
+        : fullPath.substr(pos + 1);
+}

@@ -661,11 +661,22 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerTrackName:
+        case kRPVControllerCategory:
         {
-            result = GetStdStringImpl(value, length, m_name);
+            result = GetStdStringImpl(value, length, m_category);
             break;
         }
+        case kRPVControllerMainName:
+        {
+            result = GetStdStringImpl(value, length, m_main_name);
+            break;
+        }
+        case kRPVControllerSubName:
+        {
+            result = GetStdStringImpl(value, length, m_sub_name);
+            break;
+        }
+
 
         case kRPVControllerTrackExtDataCategoryIndexed:
         {
@@ -973,9 +984,21 @@ rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
-            case kRPVControllerTrackName:
+            case kRPVControllerCategory:
             {
-                m_name = value;
+                m_category = value;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerMainName:
+            {
+                m_main_name = value;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerSubName:
+            {
+                m_sub_name = value;
                 result = kRocProfVisResultSuccess;
                 break;
             }

@@ -482,8 +482,12 @@ typedef enum rocprofvis_controller_track_properties_t : uint32_t
     kRPVControllerTrackNumberOfEntries,
     // Entries are actually loaded via an async call to prepare for RPC
     kRPVControllerTrackEntry,
-    // Name
-    kRPVControllerTrackName,
+    // Category of the track
+    kRPVControllerCategory,
+    //Track main process string (PID, GPUID, etc)
+    kRPVControllerMainName,
+    // Track sub process string (TID, QueueID, PMC name)
+    kRPVControllerSubName,
     // Description
     kRPVControllerTrackDescription,
     // Min value for sample tracks

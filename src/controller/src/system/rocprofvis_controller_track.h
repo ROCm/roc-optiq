@@ -62,6 +62,9 @@ private:
     double m_min_value;
     double m_max_value;
     std::string m_name;
+    std::string m_category;
+    std::string m_main_name;
+    std::string m_sub_name;
     rocprofvis_dm_track_t m_dm_handle;
     Thread* m_thread;
     Queue* m_queue;
@@ -69,7 +72,6 @@ private:
     Counter* m_counter;
     SystemTrace* m_ctx;
     std::condition_variable_any  m_cv;
-
 
 private:
     rocprofvis_result_t FetchFromDataModel(double start, double end, Future* future);

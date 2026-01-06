@@ -145,7 +145,8 @@ TrackTopology::UpdateTopology()
                                 InfoTable::Cell{ process_info->environment, false } } }
                         };
                         m_topology.nodes[i].processes[j].header =
-                            "[" + std::to_string(process_info->id) + "]";
+                            process_info->command + 
+                            " (" + std::to_string(process_info->id) + ")";
                         const std::vector<uint64_t>& queue_ids = process_info->queue_ids;
                         m_topology.nodes[i].processes[j].queues.resize(queue_ids.size());
                         m_topology.nodes[i].processes[j].queue_header =
@@ -266,7 +267,7 @@ TrackTopology::UpdateTopology()
                         m_topology.nodes[i].processes[j].sampled_threads.resize(
                             sampled_thread_ids.size());
                         m_topology.nodes[i].processes[j].sampled_thread_header =
-                            "Sample Threads (" +
+                            "Sampled Threads (" +
                             std::to_string(sampled_thread_ids.size()) + ")";
                         for(int k = 0; k < sampled_thread_ids.size(); k++)
                         {

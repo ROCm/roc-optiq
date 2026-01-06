@@ -676,7 +676,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(DbInstance* db_instance,
     std::string guid_str = GuidAt(db_instance->GuidIndex());
     ReplaceAllSubstrings(query_str, "%GUID%", guid_str);
     query = query_str.c_str();
-    int   rc = Sqlite3Exec(conn, query, params->callback, params);       
+    int rc = Sqlite3Exec(conn, query, params->callback, params);
     if(rc != SQLITE_OK)
     {
         if (rc == SQLITE_ABORT)

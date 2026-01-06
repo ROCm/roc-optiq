@@ -17,11 +17,10 @@ namespace View
 
 float TrackItem::s_metadata_width = 400.0f;
 
-TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name,
+TrackItem::TrackItem(DataProvider& dp, uint64_t id,
                      std::shared_ptr<TimePixelTransform> tpt)
 : m_data_provider(dp)
-, m_id(id)
-, m_name(name)
+, m_track_id(id)
 , m_track_height(75.0f)
 , m_track_default_height(75.0f)
 , m_track_content_height(0.0f)
@@ -37,16 +36,22 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name,
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
 , m_group_id_counter(0)
-, m_pill_label("")
-, m_show_pill_label(false)
 , m_chunk_duration_ns(TimeConstants::ns_per_s * 30)  // Default chunk duration
 , m_tpt(tpt)  
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
+, m_pill("", false, false)
 {
     if(m_track_project_settings.Valid())
     {
         m_track_height = m_track_project_settings.Height();
     }
+
+    const TrackInfo* track_info =
+        m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
+
+    m_name = CreateTrackName(track_info);
+    SetMetaAreaLabel(track_info);
+    SetDefaultPillLabel(track_info);
 }
 
 bool
@@ -72,7 +77,7 @@ TrackItem::GetName()
 uint64_t
 TrackItem::GetID()
 {
-    return m_id;
+    return m_track_id;
 }
 
 void
@@ -108,7 +113,7 @@ TrackItem::SetInViewVertical(bool in_view)
 void
 TrackItem::SetID(uint64_t id)
 {
-    m_id = id;
+    m_track_id = id;
 }
 
 
@@ -263,7 +268,7 @@ TrackItem::RenderMetaArea()
 
         ImGui::PushFont(large_font);
 
-        ImGui::TextUnformatted(m_name.c_str());
+        ImGui::TextUnformatted(m_meta_area_label.c_str());
 
         ImGui::PopFont();
 
@@ -298,7 +303,7 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaExpand();
 
         // Render MAIN pillbox for main thread tracks
-        RenderPillLabel(content_size);
+        m_pill.RenderPillLabel(content_size, m_settings, m_reorder_grip_width);
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();
@@ -312,36 +317,7 @@ TrackItem::RenderMetaArea()
         m_meta_area_clicked = false;
     }
 }
-void
-TrackItem::RenderPillLabel(ImVec2 container_size)
-{
-    if(m_show_pill_label == false)
-    {
-        return;
-    }
-    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall));
 
-    const char* main_label = "MAIN";
-    ImVec2      text_size  = ImGui::CalcTextSize(main_label);
-    float       padding_x  = 8.0f;
-    float       padding_y  = 2.0f;
-    ImVec2      pillbox_size(text_size.x + 2 * padding_x, text_size.y + 2 * padding_y);
-
-    ImVec2 pillbox_pos(m_reorder_grip_width, container_size.y - pillbox_size.y - 2.0f);
-
-    ImDrawList* draw_list     = ImGui::GetWindowDrawList();
-    ImU32       pillbox_color = m_settings.GetColor(Colors::kBorderGray);
-
-    draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
-                             ImGui::GetWindowPos() + pillbox_pos + pillbox_size,
-                             pillbox_color, pillbox_size.y * 0.5f);
-
-    ImVec2 text_pos = pillbox_pos + ImVec2(padding_x, padding_y);
-    ImGui::SetCursorPos(text_pos);
-    ImGui::TextUnformatted(main_label);
-
-    ImGui::PopFont();
-}
 
 void
 TrackItem::RenderResizeBar(const ImVec2& parent_size)
@@ -351,7 +327,7 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, m_resize_grip_thickness),
                       false);
 
-    ImGui::Selectable(("##MovePositionLine" + std::to_string(m_id)).c_str(), false,
+    ImGui::Selectable(("##MovePositionLine" + std::to_string(m_track_id)).c_str(), false,
                       ImGuiSelectableFlags_AllowDoubleClick,
                       ImVec2(0, m_resize_grip_thickness));
     if(ImGui::IsItemHovered())
@@ -398,20 +374,20 @@ TrackItem::RequestData(double min, double max, float width)
         float  percentage  = static_cast<float>(chunk_range / range);
         float  chunk_width = width * percentage;
 
-        TrackRequestParams request_params(static_cast<uint32_t>(m_id), chunk_start,
+        TrackRequestParams request_params(static_cast<uint32_t>(m_track_id), chunk_start,
                                           chunk_end, static_cast<uint32_t>(chunk_width),
                                           m_group_id_counter, static_cast<uint16_t>(i),
                                           chunk_count);
 
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
-                      m_id, chunk_start, chunk_end, chunk_range, chunk_width);
+                      m_track_id, chunk_start, chunk_end, chunk_range, chunk_width);
     }
 
     if(!m_request_queue.empty())
     {
         m_request_queue.clear();
-        spdlog::warn("Overwriting existing request queue for track {}", m_id);
+        spdlog::warn("Overwriting existing request queue for track {}", m_track_id);
     }
     m_request_queue = std::move(temp_request_queue);
 
@@ -422,12 +398,12 @@ TrackItem::RequestData(double min, double max, float width)
     else
     {
         spdlog::warn(
-            "Fetch request deferred for track {}, requests are already pending...", m_id);
+            "Fetch request deferred for track {}, requests are already pending...", m_track_id);
 
         for(const auto& [request_id, req] : m_pending_requests)
         {
             spdlog::debug("RequestData: Found pending request {} for track {}",
-                          request_id, m_id);
+                          request_id, m_track_id);
             m_data_provider.CancelRequest(request_id);
         }
     }
@@ -454,13 +430,13 @@ TrackItem::FetchHelper()
         std::pair<bool, uint64_t> result = m_data_provider.FetchTrack(req);
         if(!result.first)
         {
-            spdlog::error("Request for track {} failed", m_id);
+            spdlog::error("Request for track {} failed", m_track_id);
         }
         else
         {
             spdlog::debug(
                 "Fetching from {} to {} ( {} ) for track {} part of group {}",
-                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_id,
+                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_track_id,
                 req.m_data_group_id);
 
             m_request_state = TrackDataRequestState::kRequesting;
@@ -469,6 +445,154 @@ TrackItem::FetchHelper()
         }
         m_request_queue.pop_front();
     }
+}
+
+bool
+TrackItem::IsItMainThreadTrack(const TrackInfo* track_info)
+{
+    if(track_info != nullptr)
+    {
+        if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread)
+        {
+            const ThreadInfo* thread_info =
+                m_data_provider.DataModel().GetTopology().GetInstrumentedThread(
+                    track_info->topology.id);
+            if(thread_info->tid == track_info->topology.process_id)
+            {
+                return true;
+            }
+        }
+    }
+    else
+    {
+        spdlog::error("TrackItem: Invalid track id {}", m_track_id);
+    }
+    return false;
+}
+
+void
+TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
+{
+    switch (track_info->topology.type)
+    {
+        case TrackInfo::Topology::Queue:
+        {
+            m_pill.Show();
+            m_pill.SetLabel("QUEUE");
+            break;
+        }
+        case TrackInfo::Topology::Stream:
+        {
+            m_pill.Show();
+            m_pill.SetLabel("STREAM");
+            break;
+        }
+        case TrackInfo::Topology::InstrumentedThread:
+        {
+            const ThreadInfo* thread_info =
+                m_data_provider.DataModel().GetTopology().GetInstrumentedThread(
+                    track_info->topology.id);
+            if(thread_info->tid == track_info->topology.process_id)
+            {
+                m_pill.Show();
+                m_pill.Activate();
+                m_pill.SetLabel("MAIN");
+            }
+            else
+            {
+                m_pill.Show();
+                m_pill.SetLabel("THREAD");
+            }
+            break;
+        }
+        case TrackInfo::Topology::SampledThread:
+        {
+            m_pill.Show();
+            m_pill.SetLabel("SAMPLED THREAD");
+            break;
+        }
+        case TrackInfo::Topology::Counter:
+        {
+            m_pill.Show();
+            m_pill.SetLabel("COUNTER");
+            break;
+        }
+        default:
+        {
+            m_pill.Hide();
+            break;
+        }
+    }
+}
+
+void
+TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
+{
+    if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread)
+    {
+
+        std::string process_name_path = m_data_provider.DataModel()
+                                            .GetTopology()
+                                            .GetProcess(track_info->topology.process_id)
+                                            ->command;
+
+        std::string thread_id =
+            std::to_string(m_data_provider.DataModel()
+                               .GetTopology()
+                               .GetInstrumentedThread(track_info->topology.id)
+                               ->tid);
+        m_meta_area_label =
+            get_executable_name(process_name_path) + " (" + thread_id + ")";
+    }
+    else
+    {
+        m_meta_area_label = m_name;
+    }
+}
+
+std::string
+TrackItem::CreateTrackName(const TrackInfo* track_info)
+{
+    std::string track_name = "";
+    switch (track_info->topology.type)
+    {
+        case TrackInfo::Topology::Queue:
+        {
+            track_name += track_info->category + ":" + track_info->sub_name;
+            break;
+        }
+        case TrackInfo::Topology::InstrumentedThread:
+        {
+            track_name += track_info->sub_name;
+            break;
+        }
+        case TrackInfo::Topology::SampledThread:
+        {
+            track_name += "Sampled ";
+            std::string lower_case_sub_name = track_info->sub_name;
+            std::transform(
+                lower_case_sub_name.begin(), lower_case_sub_name.end(), lower_case_sub_name.begin(),
+                [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            track_name += lower_case_sub_name;
+            break;
+        }
+        case TrackInfo::Topology::Counter:
+        {
+
+            track_name += track_info->sub_name;
+            break;
+        }
+        default:
+        {
+            track_name += track_info->category
+            + ":" + track_info->main_name
+            + ":" + track_info->sub_name;
+            break;
+        }
+    }
+    return track_name;
 }
 
 bool
@@ -489,16 +613,16 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 bool
 TrackItem::HasData()
 {
-    return m_data_provider.DataModel().GetTimeline().GetTrackData(m_id) != nullptr;
+    return m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id) != nullptr;
 }
 
 bool
 TrackItem::ReleaseData()
 {
-    bool result = m_data_provider.DataModel().GetTimeline().FreeTrackData(m_id, true);
+    bool result = m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, true);
     if(!result)
     {
-        spdlog::warn("Failed to release data for track {}", m_id);
+        spdlog::warn("Failed to release data for track {}", m_track_id);
     }
 
     // Clear pending requests
@@ -512,7 +636,7 @@ TrackItem::ReleaseData()
         else
         {
             spdlog::warn("Failed to cancel pending request {} for track {}", request_id,
-                         m_id);
+                         m_track_id);
             ++it;
         }
     }
@@ -558,6 +682,82 @@ TrackProjectSettings::Height() const
                        [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT]
                            .getNumber());
 }
+
+Pill::Pill(std::string label, bool shown, bool active)
+: m_pill_label(label)
+, m_show_pill_label(shown)
+, m_active(active)
+{}
+
+void
+Pill::SetLabel(std::string label)
+{
+    m_pill_label = label;
+}
+
+void
+Pill::Activate()
+{
+    m_active = true;
+}
+
+void
+Pill::Deactivate()
+{
+    m_active = false;
+}
+
+void
+Pill::Show()
+{
+    m_show_pill_label = true;
+}
+
+void
+Pill::Hide()
+{
+    m_show_pill_label = false;
+}
+
+void
+Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
+                      float reorder_grip_width)
+{
+    if(m_show_pill_label == false)
+    {
+        return;
+    }
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kSmall));
+
+    ImVec2 text_size = ImGui::CalcTextSize(m_pill_label.c_str());
+    float  padding_x = 8.0f;
+    float  padding_y = 2.0f;
+    ImVec2 pillbox_size(text_size.x + 2 * padding_x, text_size.y + 2 * padding_y);
+
+    ImVec2 pillbox_pos(reorder_grip_width, container_size.y - pillbox_size.y - 2.0f);
+
+    if (m_active)
+    {
+        ImDrawList* draw_list     = ImGui::GetWindowDrawList();
+        ImU32       pillbox_color = settings.GetColor(Colors::kBorderGray);
+        draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
+                                 ImGui::GetWindowPos() + pillbox_pos + pillbox_size,
+                                 pillbox_color, pillbox_size.y * 0.5f);
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
+    }
+    else
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+    }
+
+    ImVec2 text_pos = pillbox_pos + ImVec2(padding_x, padding_y);
+    ImGui::SetCursorPos(text_pos);
+    ImGui::TextUnformatted(m_pill_label.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::PopFont();
+}
+
 
 }  // namespace View
 }  // namespace RocProfVis

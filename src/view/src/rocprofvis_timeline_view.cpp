@@ -428,17 +428,17 @@ TimelineView::Update()
             if(m_data_provider.SetGraphIndex(m_reorder_request.track_id,
                                              m_reorder_request.new_index))
             {
-                std::vector<TrackGraph> m_graphs_reordered;
+                std::vector<TrackGraph> graphs_reordered;
                 TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
-                m_graphs_reordered.resize(tlm.GetTrackCount());
+                graphs_reordered.resize(tlm.GetTrackCount());
                 for(TrackGraph& graph : *m_graphs)
                 {
                     const TrackInfo* metadata =
                         tlm.GetTrack(graph.chart->GetID());
                     ROCPROFVIS_ASSERT(metadata);
-                    m_graphs_reordered[metadata->index] = std::move(graph);
+                    graphs_reordered[metadata->index] = std::move(graph);
                 }
-                *m_graphs = std::move(m_graphs_reordered);
+                *m_graphs = std::move(graphs_reordered);
             }
         }
         // Rebuild the positioning map.
@@ -1185,9 +1185,7 @@ TimelineView::MakeGraphView()
             {
                 // Create FlameChart
                 graph.chart = new FlameTrackItem(
-                    m_data_provider, m_timeline_selection, track_info->id,
-                    track_info->name, static_cast<float>(track_info->min_value),
-                    static_cast<float>(track_info->max_value), m_tpt);
+                    m_data_provider, m_timeline_selection, track_info->id, m_tpt);
                 graph.graph_type = GraphType::TYPE_FLAMECHART;
                 break;
             }
@@ -1195,7 +1193,7 @@ TimelineView::MakeGraphView()
             {
                 // Linechart
                 graph.chart =
-                    new LineTrackItem(m_data_provider, track_info->id, track_info->name,
+                    new LineTrackItem(m_data_provider, track_info->id, 
                                       m_max_meta_area_size, m_tpt);
                 UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
                 graph.graph_type = GraphType::TYPE_LINECHART;

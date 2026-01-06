@@ -39,10 +39,27 @@ private:
     TrackItem& m_track_item;
 };
 
+class Pill
+{
+public:
+    Pill(std::string label, bool shown, bool active);
+    void SetLabel(std::string label);
+    void Activate();
+    void Deactivate();
+    void Show();
+    void Hide();
+    void RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
+                         float reorder_grip_width);
+private:
+    bool        m_show_pill_label;
+    bool        m_active;
+    std::string m_pill_label;
+};
+
 class TrackItem
 {
 public:
-    TrackItem(DataProvider& dp, uint64_t id, std::string name,
+    TrackItem(DataProvider& dp, uint64_t id,
               std::shared_ptr<TimePixelTransform> tpt);
     virtual ~TrackItem() {}
     void               SetID(uint64_t id);
@@ -51,7 +68,6 @@ public:
     virtual void       Render(float width);
     virtual void       Update();
     const std::string& GetName();
-    void               RenderPillLabel(ImVec2 container_size);
     bool IsInViewVertical();
     void SetInViewVertical(bool in_view);
 
@@ -93,8 +109,12 @@ protected:
     virtual bool ExtractPointsFromData() = 0;
 
     void FetchHelper();
+    bool IsItMainThreadTrack(const TrackInfo* track_info);
+    void SetDefaultPillLabel(const TrackInfo* track_info);
+    void SetMetaAreaLabel(const TrackInfo* track_info);
+    std::string CreateTrackName(const TrackInfo* track_info);
 
-    uint64_t              m_id;
+    uint64_t              m_track_id;
     float                 m_track_height;
     float                 m_track_content_height;
     float                 m_track_default_height; //TODO: It should be a constant, we don't need store it for each track
@@ -119,8 +139,8 @@ protected:
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;
     static float                                     s_metadata_width;
-    bool                                             m_show_pill_label;
-    std::string                                      m_pill_label;
+    std::string                                      m_meta_area_label;
+    Pill                                             m_pill;
 
 private:
     TrackProjectSettings m_track_project_settings;

@@ -187,6 +187,7 @@ if(APPLE)
         BUILD_RPATH "@executable_path/../Frameworks"
         INSTALL_RPATH "@executable_path/../Frameworks"
     )
+    # Using standard shell commands to avoid issues with some cmake wrappers
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ln -sf "$<TARGET_FILE_NAME:glfw>" "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"

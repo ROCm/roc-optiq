@@ -189,24 +189,15 @@ if(APPLE)
     )
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            "$<TARGET_FILE_NAME:glfw>"
-            "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"
+        COMMAND ln -sf "$<TARGET_FILE_NAME:glfw>" "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"
         COMMENT "Creating GLFW soname symlink for macOS runtime lookup"
     )
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:glfw>"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            "$<TARGET_FILE_NAME:glfw>"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${Vulkan_LIBRARIES}"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND mkdir -p "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND cp -f "$<TARGET_FILE:glfw>" "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND ln -sf "$<TARGET_FILE_NAME:glfw>" "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
+        COMMAND cp -f "${Vulkan_LIBRARIES}" "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
         COMMENT "Staging GLFW and Vulkan dylibs into the app bundle"
     )
 endif()

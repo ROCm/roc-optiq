@@ -33,7 +33,7 @@ CLIParser::Parse(int argc, char** argv)
     };
 
     std::map<std::string, CmdArgResult> results;
-
+    int                                 options_count = 0;
     for(int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
@@ -42,6 +42,7 @@ CLIParser::Parse(int argc, char** argv)
         {
             if(arg == opt.short_flag || arg == opt.long_flag)
             {
+                options_count++;
                 results[opt.name].found = true;
 
                 if(opt.take_arg && (i + 1 < argc))
@@ -69,7 +70,15 @@ CLIParser::Parse(int argc, char** argv)
         if(pair.first == "version")
         {
             PrintVersion();
-            exit(0);
+            if(options_count > 1)
+            {
+                // You have more than just version so keep GUI open.
+                continue;
+            }
+            else
+            {
+                exit(0);
+            }
         }
     }
 }
@@ -100,6 +109,10 @@ CLIParser::PrintVersion()
               << ROCPROFVIS_VERSION_BUILD << std::endl;
 
     std::cout.flush();
+#ifdef _WIN32
+    // Done to stop SPD Log from spamming console after version print.
+    FreeConsole();
+#endif
 }
 
 bool

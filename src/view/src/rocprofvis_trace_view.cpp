@@ -30,7 +30,6 @@ TraceView::TraceView()
 , m_horizontal_split_container(nullptr)
 , m_view_created(false)
 , m_open_loading_popup(false)
-, m_is_tab_active(false)
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
@@ -59,8 +58,6 @@ TraceView::TraceView()
             {
                 // Check if this tab is now active
                 std::string trace_path = m_data_provider.GetTraceFilePath();
-                m_is_tab_active = (!trace_path.empty() && ets->GetTabId() == trace_path);
-
                 m_data_provider.SetSelectedState(ets->GetTabId());
             }
         }
@@ -284,16 +281,6 @@ TraceView::OpenFile(const std::string& file_path)
 void
 TraceView::Render()
 {
-    // Check if this tab is currently active
-    Project* current_project = AppWindow::GetInstance()->GetCurrentProject();
-    if(current_project && current_project->GetID() == m_data_provider.GetTraceFilePath())
-    {
-        m_is_tab_active = true;
-    }
-    else if(!m_data_provider.GetTraceFilePath().empty())
-    {
-        m_is_tab_active = false;
-    }
 
     if(m_horizontal_split_container &&
        m_data_provider.GetState() == ProviderState::kReady)
@@ -310,7 +297,7 @@ TraceView::Render()
     }
 
     // Render loading overlay if loading and tab is active
-    if(m_data_provider.GetState() == ProviderState::kLoading && m_is_tab_active)
+    if(m_data_provider.GetState() == ProviderState::kLoading)
     {
         ImVec2 content_region = ImGui::GetContentRegionAvail();
         ImVec2 window_pos     = ImGui::GetWindowPos();

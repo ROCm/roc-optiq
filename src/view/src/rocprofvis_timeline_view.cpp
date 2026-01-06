@@ -655,8 +655,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             {
                 m_highlighted_region.second = m_tpt->PixelToTime(cursor_screen_position);
                 m_timeline_selection->SelectTimeRange(
-                    std::min(m_highlighted_region.first, m_highlighted_region.second),
-                    std::max(m_highlighted_region.first, m_highlighted_region.second));
+                    m_tpt->DenormalizeTime(std::min(m_highlighted_region.first,
+                                                    m_highlighted_region.second)),
+                    m_tpt->DenormalizeTime(std::max(m_highlighted_region.first,
+                                                    m_highlighted_region.second)));
             }
             else
             {

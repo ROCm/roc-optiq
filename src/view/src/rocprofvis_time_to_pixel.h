@@ -36,6 +36,7 @@ public:
     float  RawTimeToPixel(double time_ns);
     double PixelToTime(float x_position);
     double NormalizeTime(double time_ns);
+    double DenormalizeTime(double time_ns);
     ImVec2 GetGraphSize() const;
 
 private:

@@ -245,7 +245,7 @@ TimePixelTransform::NormalizeTime(double time_ns)
 double
 TimePixelTransform::DenormalizeTime(double time_ns)
 {
-    return time_ns + m_min_x_ns;;
+    return time_ns + m_min_x_ns;
 }
 
 void

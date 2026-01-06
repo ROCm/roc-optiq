@@ -187,19 +187,32 @@ if(APPLE)
         BUILD_RPATH "@executable_path/../Frameworks"
         INSTALL_RPATH "@executable_path/../Frameworks"
     )
-    # Using standard shell commands to avoid issues with some cmake wrappers
+
+    # Use CMake commands for cross-platform compatibility and better error handling
+    # Create symlink in build dir (optional, but requested by original code)
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ln -sf "$<TARGET_FILE_NAME:glfw>" "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "$<TARGET_FILE_NAME:glfw>"
+            "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"
         COMMENT "Creating GLFW soname symlink for macOS runtime lookup"
+        VERBATIM
     )
+
+    # Prepare command to copy Vulkan libraries only if they are defined
+    set(COPY_VULKAN_CMD "")
+    if(Vulkan_LIBRARIES)
+        set(COPY_VULKAN_CMD COMMAND ${CMAKE_COMMAND} -E copy_if_different ${Vulkan_LIBRARIES} "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks")
+    endif()
+
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND mkdir -p "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMAND cp -f "$<TARGET_FILE:glfw>" "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMAND ln -sf "$<TARGET_FILE_NAME:glfw>" "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
-        COMMAND cp -f "${Vulkan_LIBRARIES}" "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:glfw>" "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E create_symlink "$<TARGET_FILE_NAME:glfw>" "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
+        ${COPY_VULKAN_CMD}
         COMMENT "Staging GLFW and Vulkan dylibs into the app bundle"
+        VERBATIM
     )
 endif()
 
@@ -304,7 +317,6 @@ set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
 ## RPM package specific variables
-set(CMAKE_SKIP_RPATH TRUE)
 if(NOT APPLE)
     set(CMAKE_SKIP_RPATH TRUE)
 endif()

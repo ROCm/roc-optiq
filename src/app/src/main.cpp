@@ -14,6 +14,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include "rocprofvis_cli_parser.h"
 
 // globals shared with callbacks
 static std::vector<std::string> g_dropped_file_paths;
@@ -92,8 +93,13 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 }
 
 int
-main(int, char**)
+main(int argc, char** argv)
 {
+
+
+    RocProfVis::View::CLIParser cli_parser;
+    cli_parser.Parse(argc, argv);
+
     int resultCode = 0;
 
     std::string config_path = rocprofvis_get_application_config_path();
@@ -158,6 +164,13 @@ main(int, char**)
                 });
 
                 backend.m_config(&backend, window);
+
+                
+                if(cli_parser.IsFileProvided())
+                {
+                    // If the user inputted a filepath open it here.
+                    rocprofvis_view_open_files({ cli_parser.GetProvidedFilePath() });
+                }
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 

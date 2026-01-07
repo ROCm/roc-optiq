@@ -15,10 +15,10 @@ namespace View
 // Define the Option structure
 struct CmdOption
 {
-    std::string name;       
-    std::string short_flag;  
-    std::string long_flag;   
-    bool        take_arg;   
+    std::string short_flag;
+    std::string long_flag;
+    std::string description;
+    bool        take_arg;
 };
 
 // Define the Result structure
@@ -34,15 +34,24 @@ public:
     CLIParser();
     ~CLIParser();
 
-    void        Parse(int argc, char** argv);
-    bool        IsFileProvided() const;
-    std::string GetProvidedFilePath() const;
+    void SetAppDescription(const std::string& name, const std::string& desc);
+    void AddOption(const std::string& short_flag, const std::string& long_flag, const std::string& desc, bool take_arg);
+    
+    void Parse(int argc, char** argv);
+    
+    bool WasOptionFound(const std::string& option) const;
+    std::string GetOptionValue(const std::string& option) const;
+    size_t      GetOptionCount() const;
+    
+    std::string GetHelp() const;
+
+    static void AttachToConsole();
 
 private:
-    bool        m_is_file_provided;
-    std::string m_provided_file_path;
-    void        AttachToConsole();  // New helper method
-    void        PrintVersion();     // New helper method
+    std::string                         m_app_name;
+    std::string                         m_app_desc;
+    std::vector<CmdOption>              m_options;
+    std::map<std::string, CmdArgResult> m_results;
 };
 
 }  // namespace View

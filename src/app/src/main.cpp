@@ -1,24 +1,25 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#include "glfw_util.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_imgui_backend.h"
-#include "glfw_util.h"
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
+#include "rocprofvis_cli_parser.h"
+#include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#include "rocprofvis_cli_parser.h"
 
 // globals shared with callbacks
-static std::vector<std::string> g_dropped_file_paths;
-static bool g_file_was_dropped = false;
+static std::vector<std::string>         g_dropped_file_paths;
+static bool                             g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
 
@@ -28,7 +29,7 @@ static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
 {
-    (void) window; // Unused parameter
+    (void) window;  // Unused parameter
     g_dropped_file_paths.clear();
     for(int i = 0; i < count; i++)
     {
@@ -49,18 +50,23 @@ content_scale_callback(GLFWwindow* window, float xscale, float yscale)
 static void
 close_callback(GLFWwindow* window)
 {
-    g_render_options = rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit;
+    g_render_options =
+        rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit;
     glfwSetWindowShouldClose(window, GLFW_FALSE);
 }
 
 static void
 app_notification_callback(GLFWwindow* window, int notification)
 {
-    if(notification == static_cast<int>(rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App))
+    if(notification ==
+       static_cast<int>(
+           rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App))
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
-    else if(notification == static_cast<int>(rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen))
+    else if(notification ==
+            static_cast<int>(rocprofvis_view_notification_t::
+                                 kRocProfVisViewNotification_Toggle_Fullscreen))
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
@@ -82,11 +88,11 @@ static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     // Unused parameters
-    (void)scancode;
-    (void)mods;
+    (void) scancode;
+    (void) mods;
 
     // Toggle fullscreen with F11
-    if (key == GLFW_KEY_F11 && action == GLFW_PRESS)
+    if(key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
@@ -95,10 +101,33 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 int
 main(int argc, char** argv)
 {
-
-
     RocProfVis::View::CLIParser cli_parser;
+    cli_parser.SetAppDescription("ROCm(TM) Optiq Beta",
+                                 "A visualizer for profiling ROCm Data");
+    cli_parser.AddOption("v", "version", "Print application version", false);
+    cli_parser.AddOption("f", "file", "Open file", true);
+    cli_parser.AddOption("h", "help", "Help the user with commands", false);
     cli_parser.Parse(argc, argv);
+
+    if(cli_parser.WasOptionFound("version"))
+    {
+        RocProfVis::View::CLIParser::AttachToConsole();
+        std::cout << "ROCm(TM) Optiq Beta version: " << ROCPROFVIS_VERSION_MAJOR << "."
+                  << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
+                  << ROCPROFVIS_VERSION_BUILD << std::endl;
+
+        if(cli_parser.GetOptionCount() == 1)
+        {
+            exit(0);
+        }
+    }
+
+    if(cli_parser.WasOptionFound("help"))
+    {
+        RocProfVis::View::CLIParser::AttachToConsole();
+        std::cout << cli_parser.GetHelp() << std::endl;
+        exit(0);
+    }
 
     int resultCode = 0;
 
@@ -165,11 +194,10 @@ main(int argc, char** argv)
 
                 backend.m_config(&backend, window);
 
-                
-                if(cli_parser.IsFileProvided())
+                if(cli_parser.WasOptionFound("file"))
                 {
                     // If the user inputted a filepath open it here.
-                    rocprofvis_view_open_files({ cli_parser.GetProvidedFilePath() });
+                    rocprofvis_view_open_files({ cli_parser.GetOptionValue("file") });
                 }
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);

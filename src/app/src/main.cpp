@@ -17,6 +17,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+const char* APP_NAME = "ROCm(TM) Optiq Beta";
+
 // globals shared with callbacks
 static std::vector<std::string>         g_dropped_file_paths;
 static bool                             g_file_was_dropped = false;
@@ -98,37 +100,58 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
     }
 }
 
-int
-main(int argc, char** argv)
+static void
+print_version()
 {
-    RocProfVis::View::CLIParser cli_parser;
-    cli_parser.SetAppDescription("ROCm(TM) Optiq Beta",
-                                 "A visualizer for profiling ROCm Data");
+    std::cout << APP_NAME << " version: " << ROCPROFVIS_VERSION_MAJOR << "."
+              << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
+              << ROCPROFVIS_VERSION_BUILD << std::endl;
+}
+
+static void
+parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_parser)
+{
+    cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
     cli_parser.AddOption("v", "version", "Print application version", false);
     cli_parser.AddOption("f", "file", "Open file", true);
     cli_parser.AddOption("h", "help", "Help the user with commands", false);
     cli_parser.Parse(argc, argv);
 
-    if(cli_parser.WasOptionFound("version"))
-    {
-        RocProfVis::View::CLIParser::AttachToConsole();
-        std::cout << "ROCm(TM) Optiq Beta version: " << ROCPROFVIS_VERSION_MAJOR << "."
-                  << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
-                  << ROCPROFVIS_VERSION_BUILD << std::endl;
-
-        if(cli_parser.GetOptionCount() == 1)
-        {
-            exit(0);
-        }
-    }
+    bool do_exit = false;
 
     if(cli_parser.WasOptionFound("help"))
     {
         RocProfVis::View::CLIParser::AttachToConsole();
         std::cout << cli_parser.GetHelp() << std::endl;
-        exit(0);
+        do_exit = true;
     }
 
+    if(!do_exit && cli_parser.WasOptionFound("version"))
+    {
+        RocProfVis::View::CLIParser::AttachToConsole();
+        print_version();
+
+        if(cli_parser.GetOptionCount() == 1)
+        {
+            do_exit = true;
+        }
+    }
+
+    if(do_exit)
+    {
+        std::cout.flush();
+        std::cerr.flush();
+        fflush(stdout);
+        fflush(stderr);
+        exit(0);
+    }
+}
+
+int
+main(int argc, char** argv)
+{
+    RocProfVis::View::CLIParser cli_parser;
+    parse_command_line_args(argc, argv, cli_parser);
     int resultCode = 0;
 
     std::string config_path = rocprofvis_get_application_config_path();
@@ -151,7 +174,7 @@ main(int argc, char** argv)
 #endif
         GLFWwindow* window = glfwCreateWindow(RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
                                               RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
-                                              "ROCm(TM) Optiq Beta", nullptr, nullptr);
+                                              APP_NAME, nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
         // Initialize fullscreen state with actual window position and size
@@ -194,7 +217,8 @@ main(int argc, char** argv)
 
                 backend.m_config(&backend, window);
 
-                if(cli_parser.WasOptionFound("file"))
+                if(cli_parser.WasOptionFound("file") &&
+                   !cli_parser.GetOptionValue("file").empty())
                 {
                     // If the user inputted a filepath open it here.
                     rocprofvis_view_open_files({ cli_parser.GetOptionValue("file") });

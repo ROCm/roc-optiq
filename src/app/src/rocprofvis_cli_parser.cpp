@@ -60,7 +60,7 @@ CLIParser::Parse(int argc, char** argv)
                 if(opt.take_arg && (i + 1 < argc))
                 {
                     m_results[opt.long_flag].argument = argv[i + 1];
-                    i                                 = i + 1;
+                    i++;  // Skip the next argument as it's consumed
                 }
                 break;
             }
@@ -123,14 +123,13 @@ void
 CLIParser::AttachToConsole()
 {
 #ifdef _WIN32
-    // For windows attach to existing CLI window do not make a new window.
+    // Attach to parent console if present. If already attached, ERROR_ACCESS_DENIED is
+    // expected, so still wire stdout/stderr to the console handles.
     if(AttachConsole(ATTACH_PARENT_PROCESS) || GetLastError() == ERROR_ACCESS_DENIED)
     {
         FILE* pCout;
         freopen_s(&pCout, "CONOUT$", "w", stdout);
         freopen_s(&pCout, "CONOUT$", "w", stderr);
-
-        std::ios::sync_with_stdio(true);
     }
 #endif
 }

@@ -146,6 +146,10 @@ namespace DataModel
                     m_merged_table.ManageColumns(m_tables);
                 }
                 m_merged_table.CreateSortOrderArray();
+                if (m_merged_table.RowCount() == 0)
+                {
+                    result = kRocProfVisDmResultNotLoaded;
+                }
             }
 
 
@@ -690,7 +694,7 @@ namespace DataModel
                             for (int i = 0; i < thread_count; ++i)
                                 threads.emplace_back(task, i, rows_per_task * i, rows_per_task * (i + 1));
                             if (leftover_rows_count > 0)
-                                threads.emplace_back(task, thread_count, rows_per_task * thread_count, leftover_rows_count);
+                                threads.emplace_back(task, thread_count, rows_per_task * thread_count, m_merged_table.RowCount());
                         }
 
                         for (auto& t : threads)

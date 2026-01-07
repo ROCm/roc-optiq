@@ -146,6 +146,10 @@ namespace DataModel
                     m_merged_table.ManageColumns(m_tables);
                 }
                 m_merged_table.CreateSortOrderArray();
+                if (m_merged_table.RowCount() == 0)
+                {
+                    result = kRocProfVisDmResultNotLoaded;
+                }
             }
 
 
@@ -655,7 +659,8 @@ namespace DataModel
                 m_last_group_str = Trim(it->parameter);
                 if (!m_last_group_str.empty())
                 {
-                    int use_threads = m_merged_table.RowCount() / 10000;
+                    static int max_events_per_thread = 10000;
+                    int use_threads = (m_merged_table.RowCount()+max_events_per_thread) / max_events_per_thread;
                     size_t thread_count = std::thread::hardware_concurrency() - 1;
                     if (use_threads < thread_count)
                         thread_count = use_threads;
@@ -663,35 +668,20 @@ namespace DataModel
                     std::vector<std::thread> threads;
                     size_t rows_per_task = thread_count == 0 ? 0 : m_merged_table.RowCount() / thread_count;
                     size_t leftover_rows_count = m_merged_table.RowCount() - (rows_per_task * thread_count);
+
                     if (m_merged_table.SetupAggregation(m_last_group_str, thread_count + 1))
                     {
-
-                        if (filtered)
-                        {
-                            auto task = [&](size_t thread_index, size_t start_row, size_t end_row) {
-                                for (size_t row_index = start_row; row_index < end_row; row_index++)
-                                {
-                                    if (m_filter_lookup.count(row_index))
-                                        m_merged_table.AggregateRow(m_db, row_index, thread_index);
-                                }
-                                };
-                            for (int i = 0; i < thread_count; ++i)
-                                threads.emplace_back(task, i, rows_per_task * i, rows_per_task * (i + 1));
-                            threads.emplace_back(task, thread_count, rows_per_task * thread_count, leftover_rows_count);
-                        }
-                        else
-                        {
-                            auto task = [&](size_t thread_index, size_t start_row, size_t end_row) {
-                                for (size_t row_index = start_row; row_index < end_row; row_index++)
-                                {
+                        auto task = [&](size_t thread_index, size_t start_row, size_t end_row) {
+                            for (size_t row_index = start_row; row_index < end_row; row_index++)
+                            {
+                                if (!filtered || m_filter_lookup.count(row_index))
                                     m_merged_table.AggregateRow(m_db, row_index, thread_index);
-                                }
-                                };
-                            for (int i = 0; i < thread_count; ++i)
-                                threads.emplace_back(task, i, rows_per_task * i, rows_per_task * (i + 1));
-                            if (leftover_rows_count > 0)
-                                threads.emplace_back(task, thread_count, rows_per_task * thread_count, leftover_rows_count);
-                        }
+                            }
+                            };
+
+                        for (int i = 0; i < thread_count-1; ++i)
+                            threads.emplace_back(task, i, rows_per_task * i, rows_per_task * (i + 1));
+                        threads.emplace_back(task, thread_count, rows_per_task * (thread_count-1), m_merged_table.RowCount());
 
                         for (auto& t : threads)
                             t.join();

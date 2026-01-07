@@ -99,7 +99,7 @@ private:
     void   RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
                                const ImVec2& content_size, double scale_y);
 
-    std::vector<rocprofvis_trace_counter_t> m_data;
+    std::vector<TraceCounter> m_data;
     HighlightYRange                         m_highlight_y_limits;
 
     VerticalLimits           m_min_y;

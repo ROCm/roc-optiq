@@ -2890,7 +2890,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
                                    params.m_data_group_id, params.m_chunk_count);
     }
 
-    std::vector<rocprofvis_trace_counter_t> buffer;
+    std::vector<TraceCounter> buffer;
     buffer.reserve(count);
 
     std::unordered_set              timepoint_set = raw_sample_data->GetWritableIdSet();
@@ -2914,9 +2914,9 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
             continue;  // skip duplicate samples
         }
 
-        // Construct rocprofvis_trace_counter_t item in-place
+        // Construct TraceCounter item in-place
         buffer.emplace_back();
-        rocprofvis_trace_counter_t& trace_counter = buffer.back();
+        TraceCounter& trace_counter = buffer.back();
 
         double value = 0;
         result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
@@ -3001,7 +3001,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
                                   params.m_data_group_id, params.m_chunk_count);
     }
 
-    std::vector<rocprofvis_trace_event_t> buffer;
+    std::vector<TraceEvent> buffer;
     buffer.reserve(count);
 
     std::unordered_set event_set = raw_event_data->GetWritableIdSet();
@@ -3026,9 +3026,9 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
             continue;  // skip duplicate events
         }
 
-        // Construct rocprofvis_trace_event_t item in-place
+        // Construct TraceEvent item in-place
         buffer.emplace_back();
-        rocprofvis_trace_event_t& trace_event = buffer.back();
+        TraceEvent& trace_event = buffer.back();
         trace_event.m_id                      = id;
 
         double start_ts = 0;
@@ -3084,13 +3084,12 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
         dynamic_cast<const RawTrackEventData*>(m_model.GetTimeline().GetTrackData(track_id));
     if(event_track)
     {
-        for(const rocprofvis_trace_event_t& event : event_track->GetData())
+        for(const TraceEvent& event : event_track->GetData())
         {
             if(event.m_id == event_id)
             {
                 event_info.basic_info.m_id          = event.m_id;
                 event_info.basic_info.m_start_ts    = event.m_start_ts;
-                event_info.basic_info.m_child_count = event.m_child_count;
                 // only set values below if this is single event, not a combined event
                 if(event.m_child_count == 1)
                 {

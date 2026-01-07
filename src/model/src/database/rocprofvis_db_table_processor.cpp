@@ -659,7 +659,8 @@ namespace DataModel
                 m_last_group_str = Trim(it->parameter);
                 if (!m_last_group_str.empty())
                 {
-                    int use_threads = m_merged_table.RowCount() / 10000;
+                    static int max_events_per_thread = 10000;
+                    int use_threads = (m_merged_table.RowCount()+max_events_per_thread) / max_events_per_thread;
                     size_t thread_count = std::thread::hardware_concurrency() - 1;
                     if (use_threads < thread_count)
                         thread_count = use_threads;

@@ -1782,6 +1782,12 @@ TimelineView::GetViewCoords() const
              m_tpt->GetVMaxX() };
 }
 
+float
+TimelineView::GetTotalTrackHeight() const
+{
+    return m_track_height_sum;
+}
+
 TimelineArrow&
 TimelineView::GetArrowLayer()
 {

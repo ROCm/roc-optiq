@@ -104,6 +104,14 @@ enum class Colors
     kLineChartColorAlt,
     kTrackColorWarningBand,
 
+    kMinimapBin1,
+    kMinimapBin2,
+    kMinimapBin3,
+    kMinimapBin4,
+    kMinimapBin5,
+    kMinimapBin6,
+    kMinimapBin7,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -169,6 +177,7 @@ public:
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
+
 
 private:
     SettingsManager();

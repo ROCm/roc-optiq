@@ -19,6 +19,7 @@ namespace RocProfVis
 namespace View
 {
 
+
 constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(52, 54, 58, 255),     // kMetaDataColor
     IM_COL32(44, 46, 50, 255),     // kMetaDataColorSelected
@@ -68,6 +69,14 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(220, 180, 40, 255),   // kStickyNoteYellow
     IM_COL32(230, 240, 255, 140),  // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
+    IM_COL32(60, 80, 120, 255),    // Colors::kMinimapBin1
+    IM_COL32(60, 0, 80, 255),      // Colors::kMinimapBin2
+    IM_COL32(100, 0, 120, 255),    // Colors::kMinimapBin3
+    IM_COL32(140, 20, 40, 255),    // Colors::kMinimapBin4
+    IM_COL32(200, 50, 0, 255),     // Colors::kMinimapBin5
+    IM_COL32(240, 120, 0, 255),    // Colors::kMinimapBin6
+    IM_COL32(255, 240, 180, 255),  // Colors::kMinimapBin7
+
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
@@ -119,6 +128,13 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
     IM_COL32(20, 30, 50, 140),     // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
+    IM_COL32(180, 200, 220, 255),  // Colors::kMinimapBin1
+    IM_COL32(150, 100, 180, 255),  // Colors::kMinimapBin2
+    IM_COL32(180, 60, 140, 255),   // Colors::kMinimapBin3
+    IM_COL32(220, 80, 80, 255),    // Colors::kMinimapBin4
+    IM_COL32(240, 120, 40, 255),   // Colors::kMinimapBin5
+    IM_COL32(255, 160, 60, 255),   // Colors::kMinimapBin6
+    IM_COL32(255, 200, 120, 255),  // Colors::kMinimapBin7
 
 
     // This must follow the ordering of Colors enum.
@@ -141,6 +157,8 @@ SettingsManager::GetInstance()
     static SettingsManager instance;
     return instance;
 }
+
+ 
 
 void
 SettingsManager::ApplyColorStyling()

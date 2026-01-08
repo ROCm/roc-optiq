@@ -1,0 +1,364 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
+#include "rocprofvis_minimap.h"
+#include "icons/rocprovfis_icon_defines.h"
+#include "imgui.h"
+#include "rocprofvis_data_provider.h"
+#include "rocprofvis_event_manager.h"
+#include "rocprofvis_events.h"
+#include "rocprofvis_font_manager.h"
+#include "rocprofvis_timeline_view.h"
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
+namespace RocProfVis
+{
+namespace View
+{
+
+Minimap::Minimap(DataProvider& dp, TimelineView* tv)
+: m_data_width(0)
+, m_data_height(0)
+, m_data_valid(false)
+, m_raw_min_value(0.0)
+, m_raw_max_value(0.0)
+, m_data_provider(dp)
+, m_timeline_view(tv)
+{}
+void
+Minimap::UpdateData()
+{
+    const auto& map    = m_data_provider.DataModel().GetTimeline().GetMiniMap();
+    auto        tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
+    if(map.empty() || tracks.empty()) return;
+
+    size_t width = std::get<0>(map.begin()->second).size();
+
+    if(width == 0) return;
+
+    size_t height = tracks.size();
+
+    // Make copy needed to modify and render data without ruining source.
+    std::vector<std::vector<double>> data(height, std::vector<double>(width, 0.0));
+
+    for(size_t i = 0; i < tracks.size(); ++i)
+    {
+        const auto* t  = tracks[i];
+        auto        it = map.find(t->id);
+        if(it != map.end() && std::get<1>(it->second))
+        {
+            const auto& vec = std::get<0>(it->second);
+            // Copy data to the corresponding row
+            std::copy(vec.begin(), vec.end(), data[i].begin());
+        }
+    }
+
+    SetData(data);
+}
+void
+Minimap::SetData(const std::vector<std::vector<double>>& data)
+{
+    if(data.empty() || data.front().empty())
+    {
+        m_data_valid = false;
+        return;
+    }
+
+    const size_t height = data.size();
+    const size_t width  = data.front().size();
+    for(const auto& row : data)
+    {
+        if(row.size() != width)
+        {
+            m_data_valid = false;
+            return;
+        }
+    }
+
+    BinData(data);
+    NormalizeRawData();
+    m_data_valid = true;
+}
+
+void
+Minimap::BinData(const std::vector<std::vector<double>>& input)
+{
+    if(input.empty() || input.front().empty())
+    {
+        m_data_valid = false;
+        return;
+    }
+
+    const size_t h = input.size();
+    const size_t w = input.front().size();
+    for(const auto& row : input)
+    {
+        if(row.size() != w)
+        {
+            m_data_valid = false;
+            return;
+        }
+    }
+
+    m_data_width  = std::min(w, MINIMAP_SIZE);
+    m_data_height = std::min(h, MINIMAP_SIZE);
+    m_downsampled_data.assign(m_data_height, std::vector<double>(m_data_width, 0.0));
+
+    double sx = (double) w / m_data_width;
+    double sy = (double) h / m_data_height;
+
+    for(size_t y = 0; y < m_data_height; ++y)
+    {
+        for(size_t x = 0; x < m_data_width; ++x)
+        {
+            double sum   = 0.0;
+            int    count = 0;
+            size_t sy0 = (size_t) (y * sy), sy1 = std::min((size_t) ((y + 1) * sy), h);
+            size_t sx0 = (size_t) (x * sx), sx1 = std::min((size_t) ((x + 1) * sx), w);
+
+            for(size_t iy = sy0; iy < sy1; ++iy)
+                for(size_t ix = sx0; ix < sx1; ++ix)
+                {
+                    sum += input[iy][ix];
+                    count++;
+                }
+            if(count > 0) m_downsampled_data[y][x] = sum / count;
+        }
+    }
+}
+
+void
+Minimap::NormalizeRawData()
+{
+    if(m_downsampled_data.empty() || m_downsampled_data.front().empty()) return;
+
+    m_raw_min_value = std::numeric_limits<double>::max();
+    m_raw_max_value = std::numeric_limits<double>::lowest();
+    for(const auto& row : m_downsampled_data)
+        for(double v : row)
+            if(v != 0)
+            {
+                m_raw_min_value = std::min(m_raw_min_value, v);
+                m_raw_max_value = std::max(m_raw_max_value, v);
+            }
+
+    double range = m_raw_max_value - m_raw_min_value;
+    for(auto& row : m_downsampled_data)
+        for(double& v : row)
+        {
+            if(v != 0)
+            {
+                // Bin into 1-7
+                int bin = 7;
+                if(range > 0)
+                {
+                    double t = (v - m_raw_min_value) / range;
+                    bin      = 1 + static_cast<int>(t * 6.999);
+                }
+                v = static_cast<double>(bin);
+            }
+        }
+}
+
+ImU32
+Minimap::GetColor(double v) const
+{
+    int              bin = static_cast<int>(v);
+    SettingsManager& sm  = SettingsManager::GetInstance();
+
+    const std::vector<ImU32> minimap_bins = {
+        sm.GetColor(Colors::kMinimapBin1), sm.GetColor(Colors::kMinimapBin2),
+        sm.GetColor(Colors::kMinimapBin3), sm.GetColor(Colors::kMinimapBin4),
+        sm.GetColor(Colors::kMinimapBin5), sm.GetColor(Colors::kMinimapBin6),
+        sm.GetColor(Colors::kMinimapBin7)
+    };
+
+    bin = std::clamp(bin, 1, 7);
+    return minimap_bins[bin - 1];
+}
+
+void
+Minimap::Render()
+{
+    SettingsManager& sm = SettingsManager::GetInstance();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, sm.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+
+    float  pad      = 8.0f;
+    float  legend_w = 60.0f;
+    float  title_h  = ImGui::GetTextLineHeightWithSpacing() + pad * 2;
+    ImVec2 avail    = ImGui::GetContentRegionAvail();
+
+    if(ImGui::BeginChild("Minimap", avail, true))
+    {
+        ImDrawList* draw_list       = ImGui::GetWindowDrawList();
+        ImVec2      window_position = ImGui::GetWindowPos();
+
+        ImGui::SetCursorPos(ImVec2(pad, pad));
+
+        ImVec2 map_pos(window_position.x + pad, window_position.y + title_h);
+        ImVec2 map_size(avail.x - legend_w - pad * 3, avail.y - title_h - pad * 2);
+
+        RenderMinimapData(draw_list, map_pos, map_size);
+
+        RenderViewport(draw_list, map_pos, map_size);
+        HandleNavigation(map_pos, map_size);
+
+        ImGui::SetCursorPos(ImVec2(avail.x - legend_w - pad, title_h));
+        RenderLegend(legend_w, avail.y - title_h - pad * 2);
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+}
+
+void
+Minimap::RenderMinimapData(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
+{
+    float bw = map_size.x / m_data_width, bh = map_size.y / m_data_height;
+    for(size_t y = 0; y < m_data_height; ++y)
+        for(size_t x = 0; x < m_data_width; ++x)
+            if(double v = m_downsampled_data[y][x])
+                dl->AddRectFilled(
+                    ImVec2(map_pos.x + x * bw, map_pos.y + y * bh),
+                    ImVec2(map_pos.x + x * bw + bw, map_pos.y + y * bh + bh),
+                    GetColor(v));
+}
+
+void
+Minimap::RenderViewport(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
+{
+    SettingsManager& settings    = SettingsManager::GetInstance();
+    ViewCoords       view_coords = m_timeline_view->GetViewCoords();
+    double start_time = m_data_provider.DataModel().GetTimeline().GetStartTime();
+    double duration = m_data_provider.DataModel().GetTimeline().GetEndTime() - start_time;
+
+    float start_ratio = (view_coords.v_min_x - start_time) / duration;
+    float end_ratio   = (view_coords.v_max_x - start_time) / duration;
+    float x_start     = map_pos.x + std::clamp(start_ratio, 0.0f, 1.0f) * map_size.x;
+    float x_end       = map_pos.x + std::clamp(end_ratio, 0.0f, 1.0f) * map_size.x;
+
+    // Get Icon info
+    ImFont*     icon_font = settings.GetFontManager().GetIconFont(FontType::kDefault);
+    const char* icon      = ICON_FLAG;
+    ImVec2 icon_size = icon_font->CalcTextSizeA(icon_font->FontSize, FLT_MAX, 0.0f, icon);
+
+    float total_h = m_timeline_view->GetTotalTrackHeight();
+    float view_h  = m_timeline_view->GetGraphSize().y;
+
+    // Calculate visual center Y
+    float y_center_ratio = 0.5f;
+    if(total_h > 0)
+    {
+        y_center_ratio = (view_coords.y + view_h * 0.5f) / total_h;
+    }
+    float y_pos = map_pos.y + std::clamp(y_center_ratio, 0.0f, 1.0f) * map_size.y;
+
+    // Rectangle dimensions (height is same as icon)
+    float rect_h     = icon_size.y;
+    float y_rect_top = y_pos - rect_h * 0.5f;
+    float y_rect_bot = y_pos + rect_h * 0.5f;
+
+    ImU32  border_col  = settings.GetColor(Colors::kTextMain);
+    ImVec4 fill_col_v4 = ImGui::ColorConvertU32ToFloat4(border_col);
+    fill_col_v4.w      = 0.1f;  // Make border color as light as possible
+    ImU32 fill_col     = ImGui::ColorConvertFloat4ToU32(fill_col_v4);
+
+    // Draw filled rectangle
+    dl->AddRectFilled(ImVec2(x_start, y_rect_top), ImVec2(x_end, y_rect_bot), fill_col);
+
+    // Position icon centered in Y, left-aligned to center in X
+    ImVec2 icon_pos = ImVec2((x_start + x_end) * 0.5f, y_pos - icon_size.y * 0.5f);
+
+    dl->AddText(icon_font, icon_font->FontSize, icon_pos,
+                settings.GetColor(Colors::kTextMain), icon);
+}
+
+void
+Minimap::HandleNavigation(ImVec2 map_pos, ImVec2 map_size)
+{
+    ViewCoords view_coords = m_timeline_view->GetViewCoords();
+    double     start_time  = m_data_provider.DataModel().GetTimeline().GetStartTime();
+    double end_time = m_data_provider.DataModel().GetTimeline().GetEndTime() - start_time;
+
+    ImGui::SetCursorScreenPos(map_pos);
+    ImGui::InvisibleButton("Hit", map_size);
+
+    if(ImGui::IsItemClicked())
+    {
+        ImVec2 m = ImGui::GetMousePos();
+
+        // Calculate time at mouse click
+        float  mouse_ratio_x = std::clamp((m.x - map_pos.x) / map_size.x, 0.0f, 1.0f);
+        double time_at_mouse = start_time + mouse_ratio_x * end_time;
+
+        // Calculate Y position at mouse click
+        float total_h = m_timeline_view->GetTotalTrackHeight();
+        if(total_h == 0) total_h = m_timeline_view->GetGraphSize().y;
+
+        float  mouse_ratio_y = std::clamp((m.y - map_pos.y) / map_size.y, 0.0f, 1.0f);
+        double y_at_mouse    = mouse_ratio_y * total_h;
+
+        // Get current view width (zoom level)
+        double current_width = view_coords.v_max_x - view_coords.v_min_x;
+
+        // Center the view on the clicked time/position
+        double new_start = time_at_mouse - current_width * 0.5;
+        double new_end   = time_at_mouse + current_width * 0.5;
+
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<NavigationEvent>(new_start, new_end, y_at_mouse,
+                                              true));  // Center = true
+    }
+}
+
+void
+Minimap::RenderLegend(float w, float h)
+{
+    if(h <= 0 || w <= 0) return;
+    SettingsManager& sm  = SettingsManager::GetInstance();
+    ImDrawList*      dl  = ImGui::GetWindowDrawList();
+    ImVec2           pos = ImGui::GetCursorScreenPos();
+
+    float bar_w       = 15.0f;
+    float text_height = ImGui::CalcTextSize("1.0").y;
+    float gap         = 4.0f;
+    float bar_h       = h - (text_height * 2) - (gap * 2);
+    float bar_x       = pos.x + (w - bar_w) * 0.5f;
+    float bar_y       = pos.y + text_height + gap;
+
+    float bin_h = bar_h / 7.0f;
+    // bool  dark  = sm.GetUserSettings().display_settings.use_dark_mode;
+    const std::vector<ImU32> minimap_bins = {
+        sm.GetColor(Colors::kMinimapBin1), sm.GetColor(Colors::kMinimapBin2),
+        sm.GetColor(Colors::kMinimapBin3), sm.GetColor(Colors::kMinimapBin4),
+        sm.GetColor(Colors::kMinimapBin5), sm.GetColor(Colors::kMinimapBin6),
+        sm.GetColor(Colors::kMinimapBin7)
+    };
+
+    for(int i = 0; i < 7; ++i)
+    {
+        // 0 is bottom (low value), 6 is top (high value)
+        float y0  = bar_y + bar_h - (i * bin_h);
+        float y1  = y0 - bin_h;
+        ImU32 col = minimap_bins[i];
+        dl->AddRectFilled(ImVec2(bar_x, y1), ImVec2(bar_x + bar_w, y0), col);
+    }
+    dl->AddRect(ImVec2(bar_x, bar_y), ImVec2(bar_x + bar_w, bar_y + bar_h),
+                sm.GetColor(Colors::kBorderColor));
+
+    ImFont* font = sm.GetFontManager().GetFont(FontType::kSmall);
+    dl->AddText(font, font->FontSize,
+                ImVec2(bar_x + (bar_w - ImGui::CalcTextSize("Max").x) * 0.5f, pos.y),
+                sm.GetColor(Colors::kTextMain), "Max");
+    dl->AddText(font, font->FontSize,
+                ImVec2(bar_x + (bar_w - ImGui::CalcTextSize("Min").x) * 0.5f,
+                       bar_y + bar_h + gap),
+                sm.GetColor(Colors::kTextMain), "Min");
+}
+
+}  // namespace View
+}  // namespace RocProfVis

@@ -188,7 +188,7 @@ PopUpStyle::PushPopupStyles()
                         settings.GetDefaultStyle().FrameRounding);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         settings.GetDefaultStyle().ChildRounding);
-    m_style_var_count = 6;
+    m_style_var_count += 6;
 }
 
 void

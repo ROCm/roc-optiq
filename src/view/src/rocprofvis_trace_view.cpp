@@ -56,8 +56,6 @@ TraceView::TraceView()
             // Only handle the event if the tab source is the main tab source.
             if(ets->GetSourceId() == AppWindow::GetInstance()->GetMainTabSourceName())
             {
-                // Check if this tab is now active
-                std::string trace_path = m_data_provider.GetTraceFilePath();
                 m_data_provider.SetSelectedState(ets->GetTabId());
             }
         }

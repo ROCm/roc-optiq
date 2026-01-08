@@ -20,15 +20,6 @@ bool Database::IsNumber(const std::string& s) {
     return iss >> std::noskipws >> d && iss.eof();
 }
 
-rocprofvis_db_type_t Database::Autodetect(
-                                                    rocprofvis_db_filename_t filename){
-    rocprofvis_db_type_t db_type = ProfileDatabase::Detect(filename);
-    if (db_type!=rocprofvis_db_type_t::kAutodetect)
-            return db_type;
-    return rocprofvis_db_type_t::kAutodetect;
-}
-
-
 rocprofvis_dm_result_t Database::AddTrackProperties(
                                                     rocprofvis_dm_track_params_t& props) {
     try {
@@ -53,6 +44,12 @@ rocprofvis_dm_result_t Database::BindTrace(
                                                     rocprofvis_dm_db_bind_struct * binding_info){
     m_binding_info = binding_info;
     m_binding_info->FuncFindCachedTableValue = FindCachedTableValue;
+    m_binding_info->FuncGetInfoTableNumColumns = GetInfoTableNumColumns;
+    m_binding_info->FuncGetInfoTableNumRows = GetInfoTableNumRows;
+    m_binding_info->FuncGetInfoTableColumnName = GetInfoTableColumnName;
+    m_binding_info->FuncGetInfoTableRowHandle = GetInfoTableRowHandle;
+    m_binding_info->FuncGetInfoTableRowCellValue = GetInfoTableRowCellValue;
+    m_binding_info->FuncGetInfoTableRowNumCells = GetInfoTableRowNumCells;
     return kRocProfVisDmResultSuccess;
 }
 
@@ -316,16 +313,20 @@ const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t cat
     return "";
 }
 
-rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(Database * db, const char* table_name, uint64_t instance_id ){
+rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(Database * db, uint32_t db_instance_id, const char* table_name, uint64_t process_id ){
     rocprofvis_dm_track_params_t* track_properties = db->TrackPropertiesLast();
-    auto m = references[table_name][instance_id];
-    std::string str_id = std::to_string(instance_id);
-    for(std::map<std::string,std::string>::iterator it = m.begin(); it != m.end(); ++it) {
+    TableCache& table = tables[table_name];
+    uint32_t num_columns = table.NumColumns();
+    std::string str_id = std::to_string(process_id);
+    
+    for (int i = 0; i < num_columns; i++)
+    { 
         rocprofvis_db_ext_data_t record;
-        record.name = it->first.c_str();
+        record.name = table.GetColumn(i);
         record.data     = str_id.c_str();
         record.category = table_name;
         record.type  = kRPVDataTypeString;
+        record.db_instance = db_instance_id;
         rocprofvis_dm_result_t result = db->BindObject()->FuncAddExtDataRecord(track_properties->extdata, record);
         if (result != kRocProfVisDmResultSuccess) return result;
     }
@@ -338,38 +339,65 @@ rocprofvis_dm_result_t   Database::FindCachedTableValue(
                                                         rocprofvis_dm_charptr_t table, 
                                                         const rocprofvis_dm_id_t id, 
                                                         rocprofvis_dm_charptr_t column,
+                                                        rocprofvis_dm_node_id_t node,
                                                         rocprofvis_dm_charptr_t* value){
     Database* db = (Database*) object;
-    *value = db->CachedTables()->GetTableCell(table, id, column); 
+    ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    *value = db->CachedTables(node)->GetTableCell(table, id, column); 
     return kRocProfVisDmResultSuccess;
+}
+
+
+rocprofvis_dm_table_t Database::GetInfoTableHandle(const rocprofvis_dm_database_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t table_name){
+    Database* db = (Database*) object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, nullptr);
+    return db->CachedTables(node)->GetTableHandle(table_name);
+}
+size_t Database::GetInfoTableNumColumns(rocprofvis_dm_table_t object){
+    TableCache* table = (TableCache*)object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, 0);
+    return table->NumColumns();
+}
+size_t Database::GetInfoTableNumRows(rocprofvis_dm_table_t object){
+    TableCache* table = (TableCache*)object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, 0);
+    return table->NumRows();
+}
+const char* Database::GetInfoTableColumnName(rocprofvis_dm_table_t object, size_t column_index){
+    TableCache* table = (TableCache*)object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, 0);
+    return table->GetColumn(column_index);
+}
+rocprofvis_dm_table_row_t Database::GetInfoTableRowHandle(rocprofvis_dm_table_t object, size_t row_index){
+    TableCache* table = (TableCache*)object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, 0);
+    return table->GetRow(row_index);
+}
+const char* Database::GetInfoTableRowCellValue(rocprofvis_dm_table_row_t object, size_t column_index){
+    TableCache::Row * row = (TableCache::Row*)object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 0);
+    return row->values[column_index].c_str();
+}
+
+const size_t Database::GetInfoTableRowNumCells(rocprofvis_dm_table_row_t object){
+    TableCache::Row * row = (TableCache::Row*)object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 0);
+    return row->values.size();
 }
 
 rocprofvis_dm_size_t DatabaseCache::GetMemoryFootprint()
 {
     size_t size = 0;
-    for (std::map<std::string, table_map_t>::iterator it = references.begin(); it != references.end(); ++it) {
-        size+=sizeof(std::string);
-        size+=sizeof(table_map_t);
-        size+=3 * sizeof(void*);
-        size+=it->first.length();
-        for (std::map<uint64_t, table_dict_t>::iterator it1 = it->second.begin(); it1 != it->second.end(); ++it1) {
-            size += sizeof(uint64_t);
-            size += sizeof(table_dict_t);
-            size += 3 * sizeof(void*);
-            for (std::map<std::string, std::string>::iterator it2 = it1->second.begin(); it2 != it1->second.end(); ++it2) {
-                size += sizeof(std::string) * 2;
-                size += 3 * sizeof(void*);
-                size += it2->first.length();
-                size += it2->second.length();
-            }
-        }
-    }
     return size;
 }
 
 rocprofvis_dm_size_t Database::GetMemoryFootprint()
 {
-    rocprofvis_dm_size_t size = m_cached_tables.GetMemoryFootprint();
+    rocprofvis_dm_size_t size = 0;
+    for (auto guid : m_db_instances)
+    {
+        size+= m_cached_tables[guid.first.GuidIndex()].GetMemoryFootprint();
+    }
     size+=NumTracks()*(sizeof(rocprofvis_dm_track_params_t)+sizeof(std::unique_ptr<rocprofvis_dm_track_params_t>));
     size+=strlen(Path());
     return size;
@@ -377,12 +405,12 @@ rocprofvis_dm_size_t Database::GetMemoryFootprint()
 
 
 rocprofvis_dm_track_params_it
-Database::FindTrack(rocprofvis_dm_process_identifiers_t& process)
+Database::FindTrack(rocprofvis_dm_process_identifiers_t& process, DbInstance* db_instance)
 {
         return std::find_if(
             TrackPropertiesBegin(), TrackPropertiesEnd(),
-            [process](std::unique_ptr<rocprofvis_dm_track_params_t>& params) {
-                if(params.get()->process.category == process.category)
+            [process, db_instance](std::unique_ptr<rocprofvis_dm_track_params_t>& params) {
+                if(db_instance == params.get()->db_instance && params.get()->process.category == process.category)
                 {
                     for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++)
                     {
@@ -451,10 +479,6 @@ Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it,
     newprops.query[slice_query_category].push_back(newqueries[slice_source_query_category]);
     newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
     newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]); 
-    newprops.max_ts = 0;
-    newprops.min_ts = UINT64_MAX;
-    newprops.max_value = 0;
-    newprops.min_value = DBL_MAX;
 }
 
 }  // namespace DataModel

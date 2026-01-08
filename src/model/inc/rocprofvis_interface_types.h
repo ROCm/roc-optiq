@@ -45,6 +45,7 @@ typedef     uint64_t                      rocprofvis_dm_size_t;                 
 typedef     uint8_t                       rocprofvis_dm_event_level_t;                  // event level, for stacking events
 typedef     uint16_t                      rocprofvis_dm_num_string_table_filters_t;     // number of string table filters for table query
 typedef     const char**                  rocprofvis_dm_string_table_filters_t;         // string table filters for table query
+typedef     rocprofvis_dm_handle_t        rocprofvis_db_instance_t;                     // Instance handle
 
 
 /*******************************Enumerations******************************/
@@ -117,7 +118,8 @@ typedef enum rocprofvis_dm_event_operation_t {
     // Memory copy event
     kRocProfVisDmOperationLaunchSample = 5,
     // Number of operations
-    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1
+    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1,
+    kRocProfVisDmMultipleOperations,
 } rocprofvis_dm_event_operation_t;
 
 // Database type
@@ -127,7 +129,9 @@ typedef enum rocprofvis_db_type_t {
     // old schema Rocpd database
 	kRocpdSqlite = 1,
     // new schema Rocprof database
-	kRocprofSqlite = 2
+	kRocprofSqlite = 2,
+    // new schema Rocprof multinode database
+    kRocprofMultinodeSqlite = 3
 } rocprofvis_db_type_t;
 
 // Database query status, reported by database query progress callback
@@ -180,7 +184,20 @@ typedef enum  rocprofvis_dm_trace_property_t {
     // Number of buckets
     kRPVDMHistogramNumBuckets,
     // Size of histogram bucket
-    kRPVDMHistogramBucketSize
+    kRPVDMHistogramBucketSize,
+    // Number of nodes
+    kRPVDMNumberOfNodesUint64,
+    // Info table handlers
+    kRPVDNodeInfoTableHandleIndexed,
+    kRPVDAgentInfoTableHandleIndexed,
+    kRPVDQueueInfoTableHandleIndexed,
+    kRPVDProcessInfoTableHandleIndexed,
+    kRPVDThreadInfoTableHandleIndexed,
+    kRPVDStreamInfoTableHandleIndexed,
+    kRPVDPmcInfoTableHandleIndexed,
+    kRPVDAgentQueueMappingInfoTableHandleIndexed,
+    kRPVDAgentStreamMappingInfoTableHandleIndexed,
+    kRPVDStreamQueueMappingInfoTableHandleIndexed
 } rocprofvis_dm_trace_property_t;
 
 // Track properties
@@ -231,6 +248,8 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackMaximumValueDouble,
     // Histogram bucket value
     kRPVDMTrackHistogramEventDensityUInt64Indexed,
+    // Track Instance ID (Guid index)
+    kRPVDMTrackInstanceIdUInt64,
 } rocprofvis_dm_track_property_t;
 
 // Slice properties
@@ -308,7 +327,17 @@ typedef enum rocprofvis_dm_extdata_property_t {
     // Extended data type
     kRPVDMExtDataTypeUint64Indexed,
     // Extended data category enumeration
-    kRPVDMExtDataEnumUint64Indexed
+    kRPVDMExtDataEnumUint64Indexed,
+    // Number of argument records
+    kRPVDMNumberOfArgumentRecordsUInt64,
+    // Argument position
+    kRPVDMArgumentPositionUint64Indexed,
+    // Argument type
+    kRPVDMArgumentTypeCharPtrIndexed,
+    // Argument name
+    kRPVDMArgumentNameCharPtrIndexed,
+    // Argument value
+    kRPVDMArgumentValueCharPtrIndexed,
 } rocprofvis_dm_extdata_property_t;
 
 // Table object properties
@@ -361,7 +390,9 @@ typedef enum rocprofvis_dm_sort_order_t {
 typedef union { 
     struct {
         // Event ID from database
-        uint64_t    event_id:60;
+        uint64_t    event_id:52;
+        // Node index
+        uint64_t    event_node:8;
         // Event operation type
         uint64_t    event_op:4;
     } bitfield;

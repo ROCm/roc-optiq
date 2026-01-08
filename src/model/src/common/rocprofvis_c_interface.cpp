@@ -33,9 +33,11 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
                                         rocprofvis_db_filename_t filename, 
                                         rocprofvis_db_type_t db_type){
     PROFILE;
+    std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
-        db_type = RocProfVis::DataModel::Database::Autodetect(filename);
+        db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
     } 
+
     if (db_type == rocprofvis_db_type_t::kRocpdSqlite)
     {
         try {
@@ -53,25 +55,42 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
                 RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
         }
     } else
-        if (db_type == rocprofvis_db_type_t::kRocprofSqlite)
-        {
-            try {
-                RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::RocprofDatabase(filename);
-                if (kRocProfVisDmResultSuccess == db->Open()) {
-                    return db;
-                }
-                else {
-                    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database!",
-                                                        nullptr);
-                }
+    if (db_type == rocprofvis_db_type_t::kRocprofSqlite)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::RocprofDatabase(filename);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
             }
-            catch (std::exception ex)
-            {
-                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
-                    RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+            else {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database!",
+                                                    nullptr);
             }
         }
-        else
+        catch (std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    } else
+    if (db_type == rocprofvis_db_type_t::kRocprofMultinodeSqlite)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::RocprofDatabase(filename, multinode_files);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            }
+            else {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database!",
+                                                    nullptr);
+            }
+        }
+        catch (std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    } else
     {
         spdlog::debug("Database type not supported!");
         return nullptr;

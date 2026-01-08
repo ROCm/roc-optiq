@@ -42,35 +42,38 @@ TimelineArrow::SetRenderStyle(RenderStyle style)
 }
 
 void
-TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
-                      const double pixels_per_ns, const ImVec2 window,
+TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                       const std::unordered_map<uint64_t, float>& track_position_y,
-                      const std::shared_ptr<std::vector<rocprofvis_graph_t>>     graphs) const
+                      const std::shared_ptr<std::vector<TrackGraph>> graphs,
+                      std::shared_ptr<TimePixelTransform>                    tpt) const
 {
-    if(m_flow_display_mode == FlowDisplayMode::kHide)
+    if(m_flow_display_mode == FlowDisplayMode::kHide) return;
+    if(!tpt)
+    {
+        spdlog::error("TimelineArrow::Render: tpt shared_ptr is null, cannot render");
         return;
+    }
 
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            color        = settings.GetColor(Colors::kArrowColor);
     float            thickness    = LINE_THICKNESS;
     float            head_size    = ARROW_HEAD_SIZE;
     float            level_height = settings.GetEventLevelHeight();
-    for(const event_info_t* event : m_selected_event_data)
-    {
-        if(!event || event->flow_info.size() < 2)
-            continue;
+    TimelineModel&   tlm          = m_data_provider.DataModel().GetTimeline();
 
-        const std::vector<event_flow_data_t>& flows = event->flow_info;
+    for(const EventInfo* event : m_selected_event_data)
+    {
+        if(!event || event->flow_info.size() < 2) continue;
+
+        const std::vector<EventFlowData>& flows = event->flow_info;
 
         if(m_render_style == RenderStyle::kFan)
         {
             // True view: origin + multiple targets
-            const event_flow_data_t& origin = flows[0];
-            const track_info_t*      origin_track_info =
-                m_data_provider.GetTrackInfo(origin.track_id);
-            if(!origin_track_info)
-                continue;
-            const rocprofvis_graph_t& origin_track = (*graphs)[origin_track_info->index];
+            const EventFlowData& origin = flows[0];
+            const TrackInfo*      origin_track_info = tlm.GetTrack(origin.track_id);
+            if(!origin_track_info) continue;
+            const TrackGraph& origin_track = (*graphs)[origin_track_info->index];
             if(!origin_track.display)
             {
                 continue;
@@ -84,7 +87,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                 level_height = settings.GetEventLevelHeight();
             }
 
-            float origin_x = (origin.end_timestamp - v_min_x) * pixels_per_ns;
+            float origin_x = tpt->RawTimeToPixel(origin.end_timestamp);
             float origin_y = track_position_y.at(origin.track_id) +
                              std::min(level_height * origin.level + level_height / 2,
                                       origin_track.chart->GetTrackHeight());
@@ -92,14 +95,12 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
 
             for(size_t i = 1; i < flows.size(); ++i)
             {
-                const event_flow_data_t& target = flows[i];
-                const track_info_t*      target_track_info =
-                    m_data_provider.GetTrackInfo(target.track_id);
-                if(!target_track_info)
-                    continue;
-                const rocprofvis_graph_t& target_track = (*graphs)[target_track_info->index];
-                if(!target_track.display)
-                    continue;
+                const EventFlowData& target = flows[i];
+                const TrackInfo*     target_track_info = tlm.GetTrack(target.track_id);
+                if(!target_track_info) continue;
+                const TrackGraph& target_track =
+                    (*graphs)[target_track_info->index];
+                if(!target_track.display) continue;
 
                 if(target_track.chart->IsCompactMode())
                 {
@@ -110,14 +111,13 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                     level_height = settings.GetEventLevelHeight();
                 }
 
-                float target_x = (target.start_timestamp - v_min_x) * pixels_per_ns;
+                float target_x = tpt->RawTimeToPixel(target.start_timestamp);
                 float target_y = track_position_y.at(target.track_id) +
                                  std::min(level_height * target.level + level_height / 2,
                                           target_track.chart->GetTrackHeight());
                 ImVec2 p_target = ImVec2(window.x + target_x, window.y + target_y);
 
-                if(p_origin.x == p_target.x && p_origin.y == p_target.y)
-                    continue;
+                if(p_origin.x == p_target.x && p_origin.y == p_target.y) continue;
 
                 float  curve_offset = 0.25f * (p_target.x - p_origin.x);
                 ImVec2 p_ctrl1      = ImVec2(p_origin.x + curve_offset, p_origin.y);
@@ -164,21 +164,17 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
             // Legacy view: consecutive pairs
             for(size_t i = 0; i + 1 < flows.size(); ++i)
             {
-                const event_flow_data_t& from = flows[i];
-                const event_flow_data_t& to   = flows[i + 1];
+                const EventFlowData& from = flows[i];
+                const EventFlowData& to   = flows[i + 1];
 
-                const track_info_t* from_track_info =
-                    m_data_provider.GetTrackInfo(from.track_id);
-                const track_info_t* to_track_info =
-                    m_data_provider.GetTrackInfo(to.track_id);
-                if(!from_track_info || !to_track_info)
-                    continue;
+                const TrackInfo* from_track_info = tlm.GetTrack(from.track_id);
+                const TrackInfo* to_track_info   = tlm.GetTrack(to.track_id);
+                if(!from_track_info || !to_track_info) continue;
 
-                const rocprofvis_graph_t& from_track = (*graphs)[from_track_info->index];
-                const rocprofvis_graph_t& to_track   = (*graphs)[to_track_info->index];
+                const TrackGraph& from_track = (*graphs)[from_track_info->index];
+                const TrackGraph& to_track   = (*graphs)[to_track_info->index];
 
-                if(!from_track.display || !to_track.display)
-                    continue;
+                if(!from_track.display || !to_track.display) continue;
 
                 if(from_track.chart->IsCompactMode())
                 {
@@ -189,7 +185,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                     level_height = settings.GetEventLevelHeight();
                 }
 
-                float from_x = (from.end_timestamp - v_min_x) * pixels_per_ns;
+                float from_x = tpt->RawTimeToPixel(from.end_timestamp);
                 float from_y = track_position_y.at(from.track_id) +
                                std::min(level_height * from.level + level_height / 2,
                                         from_track.chart->GetTrackHeight());
@@ -204,14 +200,13 @@ TimelineArrow::Render(ImDrawList* draw_list, const double v_min_x,
                     level_height = settings.GetEventLevelHeight();
                 }
 
-                float to_x = (to.start_timestamp - v_min_x) * pixels_per_ns;
+                float to_x = tpt->RawTimeToPixel(to.start_timestamp);
                 float to_y = track_position_y.at(to.track_id) +
                              std::min(level_height * to.level + level_height / 2,
                                       to_track.chart->GetTrackHeight());
                 ImVec2 p_to = ImVec2(window.x + to_x, window.y + to_y);
 
-                if(p_from.x == p_to.x && p_from.y == p_to.y)
-                    continue;
+                if(p_from.x == p_to.x && p_from.y == p_to.y) continue;
 
                 float  curve_offset = 0.25f * (p_to.x - p_from.x);
                 ImVec2 p_ctrl1      = ImVec2(p_from.x + curve_offset, p_from.y);
@@ -295,7 +290,7 @@ TimelineArrow::HandleEventSelectionChanged(std::shared_ptr<RocEvent> e)
         for(int i = 0; i < selected_event_ids.size(); i++)
         {
             m_selected_event_data[i] =
-                m_data_provider.GetEventInfo(selected_event_ids[i]);
+                m_data_provider.DataModel().GetEvents().GetEvent(selected_event_ids[i]);
         }
     }
 }

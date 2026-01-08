@@ -7,6 +7,7 @@
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 namespace RocProfVis
 {
@@ -45,6 +46,7 @@ MultiTrackTable::HandleTrackSelectionChanged()
     double                end_ns;
     m_timeline_selection->GetSelectedTracks(tracks);
 
+    const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
     // If no valid time range is provided, use the full trace range
     if(m_timeline_selection->HasValidTimeRangeSelection())
     {
@@ -52,15 +54,15 @@ MultiTrackTable::HandleTrackSelectionChanged()
     }
     else
     {
-        start_ns = m_data_provider.GetStartTime();
-        end_ns   = m_data_provider.GetEndTime();
+        start_ns = tlm.GetStartTime();
+        end_ns   = tlm.GetEndTime();
     }
 
     // loop trough tracks and filter out ones that don't match the table type
     std::vector<uint64_t> filtered_tracks;
     for(uint64_t track_id : tracks)
     {
-        const track_info_t* track_info = m_data_provider.GetTrackInfo(track_id);
+        const TrackInfo* track_info = tlm.GetTrack(track_id);
         if(track_info)
         {
             if((track_info->track_type == kRPVControllerTrackTypeSamples &&
@@ -84,7 +86,7 @@ MultiTrackTable::HandleTrackSelectionChanged()
     // if no tracks match the table type, clear the table
     if(filtered_tracks.empty())
     {
-        m_data_provider.ClearTable(m_table_type);
+        m_data_provider.DataModel().GetTables().ClearTable(m_table_type);
         fetch_result = true;
     }
     else
@@ -120,13 +122,13 @@ MultiTrackTable::HandleTrackSelectionChanged()
 void
 MultiTrackTable::Render()
 {
-    auto table_params = m_data_provider.GetTableParams(m_table_type);
+    auto table_params = m_data_provider.DataModel().GetTables().GetTableParams(m_table_type);
     if(table_params)
     {
         ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks",
                     table_params->m_start_row,
                     table_params->m_start_row + table_params->m_req_row_count,
-                    m_data_provider.GetTableTotalRowCount(m_table_type),
+                    m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type),
                     table_params->m_track_ids.size());
     }
 
@@ -238,7 +240,7 @@ MultiTrackTable::Update()
     if(m_data_changed)
     {
         const std::vector<std::string>& column_names =
-            m_data_provider.GetTableHeader(m_table_type);
+            m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
 
         if(m_table_type == TableType::kEventTable)
         {
@@ -291,12 +293,12 @@ MultiTrackTable::Update()
 void
 MultiTrackTable::FormatData() const
 {
-    std::vector<formatted_column_info_t>& formatted_column_data =
-        m_data_provider.GetMutableFormattedTableData(m_table_type);
+    std::vector<FormattedColumnInfo>& formatted_column_data =
+        m_data_provider.DataModel().GetTables().GetMutableFormattedTableData(m_table_type);
 
     // clear previous formatting info
     formatted_column_data.clear();
-    formatted_column_data.resize(m_data_provider.GetTableHeader(m_table_type).size());
+    formatted_column_data.resize(m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type).size());
     InfiniteScrollTable::FormatTimeColumns();
 }
 
@@ -304,7 +306,7 @@ void
 MultiTrackTable::IndexColumns()
 {
     const std::vector<std::string>& column_names =
-        m_data_provider.GetTableHeader(m_table_type);
+        m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
     // remember column index positions
     m_important_column_idxs =
         std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
@@ -406,6 +408,29 @@ MultiTrackTable::RenderContextMenu()
                                     DataProvider::TABLE_EXPORT_REQUEST_ID)))
         {
             ExportToFile();
+        }
+        else if(ImGui::MenuItem("Copy Cell Data", nullptr, false))
+        {
+            const std::vector<std::vector<std::string>>& table_data =
+                m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
+            if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
+            {
+                spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
+            }
+            else if(m_selected_column < 0 ||
+                    m_selected_column >= (int) table_data[m_selected_row].size())
+            {
+                spdlog::warn("Selected column index out of bounds: {}",
+                             m_selected_column);
+            }
+            else
+            {
+                std::string cell_text = table_data[m_selected_row][m_selected_column];
+                ImGui::SetClipboardText(cell_text.c_str());
+                NotificationManager::GetInstance().Show("Cell data was copied",
+                                                        NotificationLevel::Info);
+            }
+
         }
         // TODO handle event selection
         // else if(ImGui::MenuItem("Select event", nullptr, false))

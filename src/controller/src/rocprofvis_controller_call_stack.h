@@ -15,7 +15,7 @@ namespace Controller
 class CallStack : public Handle
 {
 public:
-    CallStack(const char* symbol, const char* args, const char* line);
+    CallStack(const char* file, const char* pc, const char* name, const char* line_name, const char* line_address);
 
     virtual ~CallStack();
 
@@ -28,9 +28,11 @@ public:
                                   char* value, uint32_t* length) override;
 
 private:
-    Data m_symbol;
-    Data m_args;
-    Data m_line;
+    Data m_file;
+    Data m_pc;
+    Data m_name;
+    Data m_line_name;
+    Data m_line_address;
 };
 
 }

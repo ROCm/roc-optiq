@@ -11,12 +11,14 @@ namespace Controller
 
 typedef Reference<rocprofvis_controller_callstack_t, CallStack, kRPVControllerObjectTypeCallstack> CallStackRef;
 
-CallStack::CallStack(const char* symbol, const char* args, const char* line)
-: Handle(__kRPVControllerCallstackPropertiesFirst,
+CallStack::CallStack(const char* file, const char* pc, const char* name, const char* line_name, const char* line_address)
+: m_file(file)
+, m_pc(pc)
+, m_name(name)
+, m_line_name(line_name)
+, m_line_address(line_address)
+, Handle(__kRPVControllerCallstackPropertiesFirst,
          __kRPVControllerCallstackPropertiesLast)
-, m_symbol(symbol)
-, m_args(args)
-, m_line(line)
 {}
 
 CallStack::~CallStack() {}
@@ -38,33 +40,43 @@ rocprofvis_result_t CallStack::GetUInt64(rocprofvis_property_t property, uint64_
             case kRPVControllerCommonMemoryUsageInclusive:
             case kRPVControllerCommonMemoryUsageExclusive:
             {
-                uint64_t sym_size = 0;
-                uint64_t args_size = 0;
-                uint64_t line_size = 0;
+                uint64_t file_size = 0;
+                uint64_t pc_size = 0;
+                uint64_t name_size = 0;
+                uint64_t line_name_size = 0;
+                uint64_t line_address_size = 0;
                 
                 *value = sizeof(CallStack);
                 result = kRocProfVisResultSuccess;
 
                 if (result == kRocProfVisResultSuccess)
                 {
-                    result = m_symbol.GetUInt64(&sym_size);
+                    result = m_file.GetUInt64(&file_size);
                 }
                 
                 if (result == kRocProfVisResultSuccess)
                 {
-                    result = m_args.GetUInt64(&args_size);
+                    result = m_pc.GetUInt64(&pc_size);
                 }
                 
                 if (result == kRocProfVisResultSuccess)
                 {
-                    result = m_line.GetUInt64(&line_size);
+                    result = m_name.GetUInt64(&name_size);
                 }
 
                 if (result == kRocProfVisResultSuccess)
                 {
-                    *value += sym_size;
-                    *value += args_size;
-                    *value += line_size;
+                    result = m_line_name.GetUInt64(&line_name_size);
+                }
+
+                if (result == kRocProfVisResultSuccess)
+                {
+                    result = m_line_address.GetUInt64(&line_address_size);
+                }
+
+                if (result == kRocProfVisResultSuccess)
+                {
+                    *value += file_size + pc_size + name_size + line_name_size + line_address_size;
                 }
                 break;
             }
@@ -85,15 +97,31 @@ rocprofvis_result_t CallStack::GetString(rocprofvis_property_t property, uint64_
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerCallstackFunction:
-            result = m_symbol.GetString(value, length);
+        case kRPVControllerCallstackFile:
+        {
+            result = m_file.GetString(value, length);
             break;
-        case kRPVControllerCallstackArguments:
-            result = m_args.GetString(value, length);
+        }
+        case kRPVControllerCallstackPc:
+        {       
+            result = m_pc.GetString(value, length);
             break;
-        case kRPVControllerCallstackLine:
-            result = m_line.GetString(value, length);
+        }
+        case kRPVControllerCallstackName:
+        {       
+            result = m_name.GetString(value, length);
             break;
+        }
+        case kRPVControllerCallstackLineName:
+        {
+            result = m_line_name.GetString(value, length);
+            break; 
+        }
+        case kRPVControllerCallstackLineAddress:
+        {
+            result = m_line_address.GetString(value, length);
+            break; 
+        }
         default:
         {
             result = UnhandledProperty(property);

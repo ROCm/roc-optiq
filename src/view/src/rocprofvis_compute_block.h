@@ -3,7 +3,7 @@
 
 #pragma once
 #include <list>
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_split_containers.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_controller_enums.h"
 

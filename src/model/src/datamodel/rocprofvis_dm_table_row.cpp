@@ -3,6 +3,7 @@
 
 #include "rocprofvis_dm_table_row.h"
 #include "rocprofvis_dm_table.h"
+#include "rocprofvis_dm_trace.h"
 
 namespace RocProfVis
 {
@@ -61,6 +62,30 @@ rocprofvis_dm_result_t TableRow::GetPropertyAsUint64(rocprofvis_dm_property_t pr
     }
 }
 
+
+ rocprofvis_dm_result_t InfoTableRow::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+     switch(property)
+     {
+     case kRPVDMNumberOfTableRowCellsUInt64:
+         *value = m_ctx->GetCtx()->BindingInfo()->FuncGetInfoTableRowNumCells(m_handle);
+         return kRocProfVisDmResultSuccess;
+     default:
+         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
+     }
+ }
+
+ rocprofvis_dm_result_t InfoTableRow::GetPropertyAsCharPtr(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, char** value){
+     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+     switch(property)
+     {
+     case kRPVDMExtTableRowCellValueCharPtrIndexed:
+         *value = (char*)m_ctx->GetCtx()->BindingInfo()->FuncGetInfoTableRowCellValue(m_handle, index);
+         return kRocProfVisDmResultSuccess;
+     default:
+         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
+     }
+ }
 
 #ifdef TEST
 const char* TableRow::GetPropertySymbol(rocprofvis_dm_property_t property) {

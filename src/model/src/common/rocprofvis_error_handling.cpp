@@ -27,10 +27,12 @@ const char* ERROR_VIRTUAL_METHOD_CALL = "Error! Trying to call virtual method!";
 const char* ERROR_INVALID_PROPERTY_GETTER = "Error! Incorrect property getter!";
 const char* ERROR_REFERENCE_POINTER_CANNOT_BE_NULL = "Error! Reference pointer cannot be NULL!";
 const char* ERROR_UNSUPPORTED_PROPERTY = "Error! Unsupported property!";
+const char* ERROR_UNSUPPORTED_FEATURE = "Error! Unsupported feature!";
 const char* ERROR_TABLE_CANNOT_BE_NULL = "Error! Table reference cannot be NULL!";
 const char* ERROR_TABLE_ROW_CANNOT_BE_NULL = "Error! Table row reference cannot be NULL!";
 const char* ERROR_EXT_DATA_CANNOT_BE_NULL = "Error! Extended data reference cannot be NULL!";
 const char* ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL = "Error! SQL query parameters reference cannot be NULL!";
+const char* ERROR_NODE_KEY_CANNOT_BE_NULL = "Error! Node key reference cannot be NULL!";
 
 }  // namespace DataModel
 }  // namespace RocProfVis

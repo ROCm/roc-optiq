@@ -67,10 +67,8 @@ add_library(${TARGET_NAME} ${rocprofvis_controller_source_files})
 
 file(GLOB COMMON_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
-if(JSON_TRACE_SUPPORT) 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
-endif(JSON_TRACE_SUPPORT)
 
 target_link_libraries(${TARGET_NAME} PUBLIC roc-optiq-core)
 target_link_libraries(${TARGET_NAME} PUBLIC datamodel)

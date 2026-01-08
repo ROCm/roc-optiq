@@ -11,12 +11,12 @@ namespace RocProfVis
 namespace DataModel
 {
 
-class SqliteDatabase;
+class ProfileDatabase;
 
 class QueryFactory
 {
 public:
-    QueryFactory(SqliteDatabase* db);
+    QueryFactory(ProfileDatabase* db);
 
     void SetVersion(const char* version);
 
@@ -70,6 +70,11 @@ public:
     std::string GetRocprofEssentialInfoQueryForMemoryAllocEvent(uint64_t event_id);
     std::string GetRocprofEssentialInfoQueryForMemoryCopyEvent(uint64_t event_id);
 
+    std::string GetRocprofArgumentsInfoQueryForRegionEvent(uint64_t event_id);
+    std::string GetRocprofArgumentsInfoQueryForKernelDispatchEvent(uint64_t event_id);
+    std::string GetRocprofArgumentsInfoQueryForMemoryAllocEvent(uint64_t event_id);
+    std::string GetRocprofArgumentsInfoQueryForMemoryCopyEvent(uint64_t event_id);
+
 private:
 
     std::vector<uint32_t>  ConvertVersionStringToInt(const char* version);
@@ -87,7 +92,7 @@ private:
         return m_db_version.size() > 2 ? m_db_version[2] : 0;
     }
 
-    SqliteDatabase* m_db;
+    ProfileDatabase* m_db;
     std::vector<uint32_t> m_db_version;
 };
 

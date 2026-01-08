@@ -50,6 +50,7 @@ class Trace : public DmBase{
 
         rocprofvis_dm_size_t                            NumberOfHistogramBuckets() {return m_parameters.histogram_bucket_count;}
         rocprofvis_dm_size_t                            HistogramBucketsSize() {return m_parameters.histogram_bucket_size;}
+        rocprofvis_dm_size_t                            NumberOfDbInstances() {return m_parameters.num_db_instances;}
 
         // Method to bind database object
         // @param db - pointer to database
@@ -89,13 +90,6 @@ class Trace : public DmBase{
         // Method to get pointer to a string at specified index. Used for event records category and symbol
         // @return pointer to a string 
         rocprofvis_dm_charptr_t                         GetStringAt(rocprofvis_dm_index_t index);
-
-        // Method to get the string ids of strings inside string table that contain all of the passed in substrings
-        // @param num - number of substrings strings to search for
-        // @param substrings - array of substrings to search for
-        // @param indices - output array of string table indices 
-        // @return status of operation 
-        rocprofvis_dm_result_t                          GetStringIndicesWithSubstring(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices);
 
         // Method to read Trace object property as uint64
         // @param property - property enumeration rocprofvis_dm_trace_property_t
@@ -142,9 +136,21 @@ class Trace : public DmBase{
         // @param extinfo - reference to table handle
         // @return status of operation  
         rocprofvis_dm_result_t                          GetTableHandle(rocprofvis_dm_table_id_t id, rocprofvis_dm_table_t & table);
+        // Method to get queried table handle at specified index  
+        // @param name - info table name
+        // @param index - node index
+        // @param table - reference to info table handle
+        // @return status of operation 
+        rocprofvis_dm_result_t                          GetInfoTableHandle(const char* name, rocprofvis_dm_index_t index, rocprofvis_dm_table_t& table);
         // Method to get amount of memory used by Trace object, includes memory footprint of all other data model objects
         // @return used memory size        
         rocprofvis_dm_size_t                            GetMemoryFootprint();
+        // Method to get the string ids of strings inside string table that contain all of the passed in substrings
+        // @param num - number of substrings strings to search for
+        // @param substrings - array of substrings to search for
+        // @param indices - output array of string table indices 
+        // @return status of operation 
+        rocprofvis_dm_result_t                          GetStringIndicesWithSubstring(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices);
         // Static method to add track object. Used by database component via binding interface
         // @param object - trace object handle to add new track to
         // @param params - pointer to track parameters structure (shared with database component) 
@@ -167,6 +173,11 @@ class Trace : public DmBase{
         // @param string_value - pointer to string
         // @return status of operation
         static rocprofvis_dm_index_t                    AddString(const rocprofvis_dm_trace_t object,  const char* stringValue);
+        // Static method to  get string from string array by index
+        // @param object - trace object handle to add new string to
+        // @param index - index to string
+        // @return status of operation
+        static const char*                              GetString(const rocprofvis_dm_trace_t object, uint32_t index);
         // Static method to add event flow trace. Used by database component via binding interface
         // @param object - trace object handle to add flowtrace object to.
         // @param event_id - 60-bit event id and 4-bit operation type
@@ -197,12 +208,24 @@ class Trace : public DmBase{
         // @param data - reference to a new record parameters structure
         // @return status of operation      
         static rocprofvis_dm_result_t                   AddExtDataRecord(const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t & data);
+        // Static method to add new record to argument data object. Used by database component via binding interface
+        // @param object - extended data object handle to add new record to.
+        // @param data - reference to a new record parameters structure
+        // @return status of operation      
+        static rocprofvis_dm_result_t                   AddArgDataRecord(const rocprofvis_dm_extdata_t object, rocprofvis_db_argument_data_t & data);
         // Static method to add new table. Used by database component via binding interface
         // @param object - trace object handle to add table object to.
         // @param query - pointer to table query string
         // @param description - pointer to table description string
         // @return status of operation           
         static rocprofvis_dm_table_t                    AddTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description);
+        // Static method to add new table. Used by database component via binding interface
+        // @param object - trace object handle to add table object to.
+        // @param node - node index
+        // @param name - name of the table
+        // @param handle - handle to the table
+        // @return status of operation  
+        static rocprofvis_dm_table_t                    AddInfoTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t name, rocprofvis_dm_table_t handle);
         // Static method to add new empty row to table object. Used by database component via binding interface
         // @param object - table object handle to add new row to.
         // @return status of operation  
@@ -230,6 +253,12 @@ class Trace : public DmBase{
         static rocprofvis_dm_result_t                   CompleteSlice(const rocprofvis_dm_slice_t object);
         static rocprofvis_dm_result_t                   RemoveSlice(const rocprofvis_dm_trace_t trace, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_slice_t object);
 
+        void                                            BuildStringsOrderArray();
+        static void                                     MetadataLoaded(const rocprofvis_dm_trace_t object);
+        static const size_t                             GetStringOrder(const rocprofvis_dm_trace_t object, uint32_t index);
+        static rocprofvis_dm_result_t                   GetStringIndices(const rocprofvis_dm_trace_t object, rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices);
+
+
         // trace parameters structure
         rocprofvis_dm_trace_params_t                    m_parameters;
         // binding info structure
@@ -246,8 +275,12 @@ class Trace : public DmBase{
         std::vector<std::shared_ptr<ExtData>>           m_ext_data;
         // vector array of Table objects
         std::vector<std::shared_ptr<Table>>             m_tables;
+        // vector array of Table objects
+        std::vector<std::unique_ptr<InfoTable>>         m_info_tables;
         // vector array of strings
         std::vector<std::string>                        m_strings;
+        // vector array of sorted lookup indeces to string array
+        std::vector<uint32_t>                           m_sorted_strings_lookup_array;
         // map of every event level in graph
         event_level_map_t                               m_event_level_map;
         // object mutex, for shared access

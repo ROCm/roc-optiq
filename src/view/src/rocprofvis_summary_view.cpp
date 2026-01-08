@@ -160,7 +160,7 @@ HWUtilization::Render()
                           m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                           m_settings.GetColor(Colors::kTransparent));
-    const summary_info_t::AggregateMetrics& metrics = m_data_provider.GetSummaryInfo();
+    const SummaryInfo::AggregateMetrics& metrics = m_data_provider.DataModel().GetSummary().GetSummaryData();
     ImGui::TextUnformatted("Hardware Utilization");
     ImGui::Separator();
     ImGui::TextUnformatted("GPU");
@@ -171,13 +171,13 @@ HWUtilization::Render()
         if(metrics.gpu.gfx_utilization &&
            ImGui::TreeNodeEx("Node##gfx", ImGuiTreeNodeFlags_Framed))
         {
-            for(const summary_info_t::AggregateMetrics& node : metrics.sub_metrics)
+            for(const SummaryInfo::AggregateMetrics& node : metrics.sub_metrics)
             {
                 AlignedBar(node, node.gpu.gfx_utilization);
                 if(node.gpu.gfx_utilization &&
                    ImGui::TreeNodeEx("Device##gfx", ImGuiTreeNodeFlags_Framed))
                 {
-                    for(const summary_info_t::AggregateMetrics& device : node.sub_metrics)
+                    for(const SummaryInfo::AggregateMetrics& device : node.sub_metrics)
                     {
                         if(device.device_type == kRPVControllerProcessorTypeGPU)
                         {
@@ -213,7 +213,7 @@ HWUtilization::Render()
         if(metrics.gpu.mem_utilization &&
            ImGui::TreeNodeEx("Node##mem", ImGuiTreeNodeFlags_Framed))
         {
-            for(const summary_info_t::AggregateMetrics& node : metrics.sub_metrics)
+            for(const SummaryInfo::AggregateMetrics& node : metrics.sub_metrics)
             {
                 AlignedBar(node, 0.0f,
                            node.gpu.mem_utilization
@@ -222,7 +222,7 @@ HWUtilization::Render()
                 if(node.gpu.mem_utilization &&
                    ImGui::TreeNodeEx("Device##mem", ImGuiTreeNodeFlags_Framed))
                 {
-                    for(const summary_info_t::AggregateMetrics& device : node.sub_metrics)
+                    for(const SummaryInfo::AggregateMetrics& device : node.sub_metrics)
                     {
                         if(device.device_type == kRPVControllerProcessorTypeGPU)
                         {
@@ -286,7 +286,7 @@ HWUtilization::MemoryString(float mb)
 }
 
 void
-HWUtilization::AlignedBar(const summary_info_t::AggregateMetrics& info,
+HWUtilization::AlignedBar(const SummaryInfo::AggregateMetrics& info,
                           const std::optional<float>& value, const char* overlay)
 {
     if(info.type == kRPVControllerSummaryAggregationLevelNode)
@@ -376,8 +376,8 @@ TopKernels::Update()
         if(m_data_dirty)
         {
             m_node_combo = NodeFilterComboModel{ { nullptr }, { "-" }, 0 };
-            for(const summary_info_t::AggregateMetrics& node :
-                m_data_provider.GetSummaryInfo().sub_metrics)
+            for(const SummaryInfo::AggregateMetrics& node :
+                m_data_provider.DataModel().GetSummary().GetSummaryData().sub_metrics)
             {
                 if(node.type == kRPVControllerSummaryAggregationLevelNode && node.id &&
                    node.name)
@@ -412,7 +412,7 @@ TopKernels::Update()
                         0,
                         m_node_combo.info[m_node_combo.selected_idx]
                     };
-                    for(const summary_info_t::AggregateMetrics& device :
+                    for(const SummaryInfo::AggregateMetrics& device :
                         m_gpu_combo.parent_info->sub_metrics)
                     {
                         if(device.type ==
@@ -455,11 +455,11 @@ TopKernels::Update()
             {
                 m_gpu_combo =
                     GPUFilterComboModel{ { nullptr }, { "-" }, { "-" }, 0, nullptr };
-                m_kernels = &m_data_provider.GetSummaryInfo().gpu.top_kernels;
+                m_kernels = &m_data_provider.DataModel().GetSummary().GetSummaryData().gpu.top_kernels;
             }
             if(m_kernels && !m_kernels->empty())
             {
-                for(const summary_info_t::KernelMetrics& kernel : (*m_kernels))
+                for(const SummaryInfo::KernelMetrics& kernel : (*m_kernels))
                 {
                     m_kernel_pie.labels.push_back(kernel.name.c_str());
                     m_kernel_pie.exec_time_pct.push_back(kernel.exec_time_pct);
@@ -582,7 +582,6 @@ TopKernels::Render()
             m_display_mode = Table;
         }
         ImGui::EndGroup();
-        const float mode_cluster_width = ImGui::GetItemRectSize().x;
         // Filter combos...
         ImGui::SetCursorPos(ImVec2(region.x - ImGui::CalcTextSize("Node:GPU:").x -
                                        region.x / 2.0f - 4.0f * plot_style.PlotPadding.x,
@@ -659,6 +658,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
             m_kernel_pie.labels.data(), m_kernel_pie.exec_time_pct.data(),
             m_kernel_pie.exec_time_pct.size(), 0.0, 0.0, PIE_CHART_RADIUS,
             [](double value, char* buff, int size, void* user_data) -> int {
+                (void) user_data;
                 if(value * 100.0 > 10.0)
                 {
                     snprintf(buff, size, "%.1f%%", value * 100.0);
@@ -678,6 +678,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
                 &m_kernel_pie.exec_time_pct[m_hovered_idx.value()], 1, 0.0, 0.0,
                 PIE_CHART_RADIUS,
                 [](double value, char* buff, int size, void* user_data) -> int {
+                    (void) user_data;
                     if(value)
                     {
                         snprintf(buff, size, "%.1f%%", value * 100.0);
@@ -1081,7 +1082,7 @@ KernelInstanceTable::Render()
         InfiniteScrollTable::Render();
         ImGui::AlignTextToFramePadding();
         ImGui::Text("Showing %llu dispatch(es)",
-                    m_data_provider.GetTableTotalRowCount(m_table_type));
+                    m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type));
     }
     else
     {
@@ -1114,7 +1115,7 @@ void
 KernelInstanceTable::Clear()
 {
     m_data_provider.CancelRequest(GetRequestID());
-    m_data_provider.ClearTable(m_table_type);
+    m_data_provider.DataModel().GetTables().ClearTable(m_table_type);
     m_fetched = false;
 }
 
@@ -1127,10 +1128,10 @@ KernelInstanceTable::MinHeight() const
 void
 KernelInstanceTable::FormatData() const
 {
-    std::vector<formatted_column_info_t>& formatted_column_data =
-        m_data_provider.GetMutableFormattedTableData(m_table_type);
+    std::vector<FormattedColumnInfo>& formatted_column_data =
+        m_data_provider.DataModel().GetTables().GetMutableFormattedTableData(m_table_type);
     formatted_column_data.clear();
-    formatted_column_data.resize(m_data_provider.GetTableHeader(m_table_type).size());
+    formatted_column_data.resize(m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type).size());
     InfiniteScrollTable::FormatTimeColumns();
 }
 
@@ -1138,11 +1139,12 @@ void
 KernelInstanceTable::Fetch()
 {
     m_data_provider.CancelRequest(GetRequestID());
-    m_fetch_deferred = !m_data_provider.FetchTable(TableRequestParams(
-        m_req_table_type, {}, { kRocProfVisDmOperationDispatch },
-        m_data_provider.GetStartTime(), m_data_provider.GetEndTime(), m_where.c_str(), "",
-        "", "", { m_kernel_name }, 0, m_fetch_chunk_size));
-    m_fetched        = true;
+    const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
+    m_fetch_deferred         = !m_data_provider.FetchTable(
+        TableRequestParams(m_req_table_type, {}, { kRocProfVisDmOperationDispatch },
+                                   tlm.GetStartTime(), tlm.GetEndTime(), m_where.c_str(), "", "",
+                                   "", { m_kernel_name }, 0, m_fetch_chunk_size));
+    m_fetched = true;
 }
 
 }  // namespace View

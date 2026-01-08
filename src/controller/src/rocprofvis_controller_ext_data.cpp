@@ -49,6 +49,9 @@ rocprofvis_result_t ExtData::GetUInt64(rocprofvis_property_t property, uint64_t 
     {
         switch(property)
         {
+            case kRPVControllerEventArgumentPosition:
+                *value = 0;
+                break;
             case kRPVControllerCommonMemoryUsageInclusive:
             case kRPVControllerCommonMemoryUsageExclusive:
             {
@@ -152,6 +155,12 @@ rocprofvis_result_t ExtData::GetString(rocprofvis_property_t property, uint64_t 
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
+        case kRPVControllerEventArgumentType:
+        {
+            Data data = Data("");
+            result = data.GetString(value, length);
+            break;
+        }
         case kRPVControllerExtDataCategory:
             result = m_category.GetString(value, length);
             break;
@@ -194,6 +203,55 @@ rocprofvis_result_t ExtData::GetString(rocprofvis_property_t property, uint64_t 
             result = UnhandledProperty(property);
             break;
         }
+    }
+    return result;
+}
+
+
+ArgumentData::ArgumentData(const char* category, const char* name, const char* value,
+    rocprofvis_db_data_type_t type, uint64_t category_enum, size_t position, const char* arg_type) 
+    :ExtData(category,name,value, type, category_enum)
+    ,m_position(position)
+    ,m_arg_type(arg_type) { }
+
+ArgumentData::~ArgumentData() {}
+
+rocprofvis_controller_object_type_t ArgumentData::GetType(void) 
+{
+    return kRPVControllerObjectTypeEventArgument;
+}
+
+rocprofvis_result_t ArgumentData::GetUInt64(rocprofvis_property_t property, uint64_t index,
+    uint64_t* value) {
+    (void) index;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if (value)
+    {
+        switch (property)
+        {
+        case kRPVControllerEventArgumentPosition:
+            result = m_position.GetUInt64(value);
+            break;
+        default:
+            result = ExtData::GetUInt64(property, index, value);
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t ArgumentData::GetString(rocprofvis_property_t property, uint64_t index,
+    char* value, uint32_t* length) {
+    (void) index;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch (property)
+    {
+    case kRPVControllerEventArgumentType:
+        result = m_arg_type.GetString(value, length);
+        break;
+    default:
+        result = ExtData::GetString(property, index, value, length);
+        break;
     }
     return result;
 }

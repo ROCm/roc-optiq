@@ -10,6 +10,11 @@
 #include <vector>
 #include "rocprofvis_c_interface.h"
 
+namespace jt
+{
+class Json;
+}
+
 namespace RocProfVis
 {
 namespace Controller
@@ -59,6 +64,9 @@ public:
     static rocprofvis_result_t FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array, rocprofvis_dm_trace_t dm_trace_handle);
     static rocprofvis_result_t FetchDataModelStackTraceProperty(uint64_t event_id, Array& array, rocprofvis_dm_trace_t dm_trace_handle);
     static rocprofvis_result_t FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocprofvis_dm_trace_t dm_trace_handle);
+
+private:
+    static std::string FromJson(const char* key, jt::Json& json);
 };
 
 }

@@ -9,6 +9,7 @@
 #include "rocprofvis_controller_flow_control.h"
 #include "rocprofvis_controller_call_stack.h"
 #include "rocprofvis_controller_string_table.h"
+#include "json.h"
 #include <cstring>
 
 namespace RocProfVis
@@ -225,7 +226,6 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
-                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     char* symbol = nullptr;
@@ -247,14 +247,38 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                                kRPVDMFrameCodeLineCharPtrIndexed, index,
                                                &codeline))
                                     {
-                                        CallStack* call_stack =
-                                            new CallStack(symbol, args, codeline);
-                                        if(result == kRocProfVisResultSuccess)
+                                        std::string file;
+                                        std::string pc;
+                                        std::string name;
+                                        std::string line_name;
+                                        std::string line_address;
+
+                                        std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(symbol);
+                                        if(parsed.first == jt::Json::Status::success)
                                         {
-                                            result = array.SetObject(
-                                                kRPVControllerArrayEntryIndexed,
-                                                entry_counter++,
-                                                (rocprofvis_handle_t*) call_stack);
+                                            file = FromJson("file", parsed.second);
+                                            pc = FromJson("pc", parsed.second);
+                                            name = FromJson("name", parsed.second);
+                                        }
+                                        parsed = jt::Json::parse(codeline);
+                                        if(parsed.first == jt::Json::Status::success)
+                                        {
+                                            line_name = FromJson("name", parsed.second);
+                                            line_address = FromJson("line_address", parsed.second);
+                                        }
+                                        
+                                        if(!file.empty() || !pc.empty() || !name.empty() || !line_name.empty() || !line_address.empty())
+                                        {
+                                            CallStack* call_stack = new CallStack(file.c_str(), pc.c_str(), name.c_str(), line_name.c_str(), line_address.c_str());
+                                            result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, entry_counter + 1);
+                                            if(result == kRocProfVisResultSuccess)
+                                            {
+                                                result = array.SetObject(kRPVControllerArrayEntryIndexed, entry_counter++, (rocprofvis_handle_t*) call_stack);
+                                            }
+                                            if(result != kRocProfVisResultSuccess)
+                                            {
+                                                delete call_stack;
+                                            }
                                         }
                                     }
                                 }
@@ -304,15 +328,20 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
                                    &dm_extdata) &&
                           dm_extdata != nullptr)
                         {
-                            uint64_t records_count = 0;
+                            uint64_t extd_records_count = 0;
+                            uint64_t arg_records_count = 0;
                             if(kRocProfVisDmResultSuccess ==
                                rocprofvis_dm_get_property_as_uint64(
                                    dm_extdata, kRPVDMNumberOfExtDataRecordsUInt64, 0,
-                                   (uint64_t*) &records_count))
+                                   (uint64_t*) &extd_records_count) &&
+                                kRocProfVisDmResultSuccess ==
+                                    rocprofvis_dm_get_property_as_uint64(
+                                        dm_extdata, kRPVDMNumberOfArgumentRecordsUInt64, 0,
+                                        (uint64_t*) &arg_records_count))
                             {
                                 uint64_t entry_counter = 0;
-                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, records_count);
-                                for(int index = 0; index < records_count; index++)
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, extd_records_count+arg_records_count);
+                                for(int index = 0; index < extd_records_count; index++)
                                 {
                                     char* category = nullptr;
                                     char* name     = nullptr;
@@ -358,7 +387,48 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
                                         }
                                     }
                                 }
+
+                                for(int index = 0; index < arg_records_count; index++)
+                                {
+                                    char* type = nullptr;
+                                    char* name     = nullptr;
+                                    char* value    = nullptr;
+                                    uint64_t position = 0;
+                                    if(kRocProfVisDmResultSuccess ==
+                                        rocprofvis_dm_get_property_as_charptr(
+                                            dm_extdata,
+                                            kRPVDMArgumentTypeCharPtrIndexed, index,
+                                            &type) &&
+                                        kRocProfVisDmResultSuccess ==
+                                        rocprofvis_dm_get_property_as_charptr(
+                                            dm_extdata,
+                                            kRPVDMArgumentNameCharPtrIndexed, index,
+                                            &name) &&
+                                        kRocProfVisDmResultSuccess ==
+                                        rocprofvis_dm_get_property_as_charptr(
+                                            dm_extdata,
+                                            kRPVDMArgumentValueCharPtrIndexed, index,
+                                            &value) &&
+                                        kRocProfVisDmResultSuccess ==
+                                        rocprofvis_dm_get_property_as_uint64(
+                                            dm_extdata,
+                                            kRPVDMArgumentPositionUint64Indexed, index,
+                                            &position))
+                                    {
+                                        ArgumentData* arg_data =
+                                            new ArgumentData("Argument", name, value,
+                                                kRPVDataTypeString, kRocProfVisEventArgumentData, position, type);
+                                        if(result == kRocProfVisResultSuccess)
+                                        {
+                                            result = array.SetObject(
+                                                kRPVControllerArrayEntryIndexed,
+                                                entry_counter++,
+                                                (rocprofvis_handle_t*) arg_data);
+                                        }
+                                    }
+                                }
                             }
+                           
                             result = kRocProfVisResultSuccess;
                         }
                         else
@@ -488,6 +558,7 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+
 rocprofvis_result_t Event::GetDouble(rocprofvis_property_t property, uint64_t index, double* value) 
 {
     (void) index;
@@ -616,6 +687,7 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+
 rocprofvis_result_t Event::SetDouble(rocprofvis_property_t property, uint64_t index, double value) 
 {
     (void) index;
@@ -642,6 +714,7 @@ rocprofvis_result_t Event::SetDouble(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+
 rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t index, char const* value) 
 {
     (void) index;
@@ -670,6 +743,21 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
         }
     }
     return result;
+}
+
+std::string 
+Event::FromJson(const char* key, jt::Json& json)
+{
+    std::string value;
+    if(json[key].isString())
+    {
+        value = json[key].toString();
+        if(value.length() > 1 && value.front() == '\"' && value.back() == '\"')
+        {
+            value = value.substr(1, value.length() - 2);
+        }
+    }
+    return value;
 }
 
 }

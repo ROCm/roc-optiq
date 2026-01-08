@@ -11,20 +11,48 @@ namespace RocProfVis
 namespace DataModel
 {
 
+typedef struct rocprofvis_db_string_id_hash_t
+{
+    size_t operator()(const rocprofvis_db_string_id_t& s) const noexcept
+    {
+        size_t h1 = std::hash<uint32_t>{}(s.m_string_id);
+        size_t h2 = std::hash<uint32_t>{}(s.m_guid_id);
+        size_t h3 = std::hash<rocprofvis_db_string_type_t>{}(s.m_string_type);
+
+        size_t seed = h1;
+        seed ^= h2 + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+        seed ^= h3 + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
+        return seed;
+    }
+} rocprofvis_db_string_id_hash_t;
+
 class RocprofDatabase : public ProfileDatabase
 {
     // map array for fast track ID search
     typedef std::map<uint64_t, uint32_t> sub_process_map_t;
     typedef std::map<uint64_t, sub_process_map_t> process_map_t;
     typedef std::map<uint64_t, process_map_t> op_map_t;
-    typedef std::map<uint32_t, op_map_t> track_find_map_t;
+    //typedef std::map<uint64_t, process_map_t> op_map_t;
+    typedef std::map<uint32_t, process_map_t> track_find_map_t;
+    // type of map array for string indexes remapping
+    typedef std::unordered_map<rocprofvis_db_string_id_t, rocprofvis_dm_index_t, rocprofvis_db_string_id_hash_t> string_index_map_t;
+    typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_db_string_id_t>> string_id_map_t;
+    typedef std::unordered_map<std::string, uint32_t> string_map_t;
 
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
         ProfileDatabase(path),
         m_query_factory(this)
     {
+        CreateDbNode(path);
     };
+    RocprofDatabase(rocprofvis_db_filename_t path, std::vector<std::string> & multinode_files) :
+        ProfileDatabase(path),
+        m_query_factory(this)
+    {
+        CreateDbNodes(multinode_files);
+    };
+
     // class destructor, not really required, unless declared as virtual
     ~RocprofDatabase()override{};
     // worker method to read trace metadata
@@ -68,9 +96,10 @@ public:
     rocprofvis_dm_string_t GetEventOperationQuery(
                                         const rocprofvis_dm_event_operation_t operation) override;
 
-    
     rocprofvis_dm_result_t StringIndexToId(
-                                        rocprofvis_dm_index_t index, rocprofvis_dm_id_t& id) override;
+                                        rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) override;
+
+    rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) override;
 
     rocprofvis_dm_result_t BuildTableSummaryClause(
                                         bool sample_query,
@@ -78,13 +107,6 @@ public:
                                         rocprofvis_dm_string_t& group_by) override;
 
 private:
-    // sqlite3_exec callback to process track information query and add track object to Trace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallBackAddTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
     // sqlite3_exec callback to process string list query and add string object to Trace container
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
@@ -146,6 +168,8 @@ private:
                                                         rocprofvis_dm_op_t operation,
                                                         rocprofvis_dm_track_id_t& track_id) override;
 
+    int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
+
     protected:
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override {
         return &s_rocprof_categorized_data;
@@ -170,11 +194,18 @@ private:
 
     private:
         rocprofvis_dm_result_t CreateIndexes();
+        rocprofvis_dm_result_t LoadInformationTables(Future* future);
         
     private:
         track_find_map_t find_track_map;
         QueryFactory m_query_factory;
         std::string db_version;
+        // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
+        string_index_map_t m_string_index_map; // id to index
+        string_id_map_t m_string_id_map; // index to id
+        string_map_t m_string_map; //temporary map to reuse string
+        std::mutex m_lock;
+
 
         inline static const rocprofvis_event_data_category_map_t
             s_rocprof_categorized_data = {

@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
+#include "rocprofvis_core_assert.h"
 #include "rocprofvis_imgui_backend.h"
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
@@ -112,9 +113,12 @@ static void
 parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_parser)
 {
     cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
-    cli_parser.AddOption("v", "version", "Print application version", false);
-    cli_parser.AddOption("f", "file", "Open file", true);
-    cli_parser.AddOption("h", "help", "Help the user with commands", false);
+    bool result = true;
+    result &= cli_parser.AddOption("v", "version", "Print application version", false);
+    result &= cli_parser.AddOption("f", "file", "Open file", true);
+    result &= cli_parser.AddOption("h", "help", "Help the user with commands", false);
+    ROCPROFVIS_ASSERT(result);
+
     cli_parser.Parse(argc, argv);
 
     bool do_exit = false;

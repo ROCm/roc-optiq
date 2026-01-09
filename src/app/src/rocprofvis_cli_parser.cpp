@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_cli_parser.h"
+#include "spdlog/spdlog.h"
+
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -15,6 +17,8 @@ namespace RocProfVis
 {
 namespace View
 {
+
+const size_t MIN_LONG_FLAG_SIZE = 3;
 
 CLIParser::CLIParser()
 : m_app_name("")
@@ -30,13 +34,35 @@ CLIParser::SetAppDescription(const std::string& name, const std::string& desc)
     m_app_desc = desc;
 }
 
-void
+bool
 CLIParser::AddOption(const std::string& short_flag,
                      const std::string& long_flag,
                      const std::string& desc,
                      bool               take_arg)
 {
-    m_options.push_back({ short_flag, long_flag, desc, take_arg });
+    if(short_flag.empty() || long_flag.empty())
+    {
+        spdlog::warn("CLIParser::AddOption: Flags cannot be empty");
+        return false;
+    }
+
+    // Check for duplicate long flag
+    if(m_options.find(long_flag) != m_options.end())
+    {
+        spdlog::warn("CLIParser::AddOption: long flag already exists. {}", long_flag);
+        return false;
+    }
+    
+    // Check for duplicate short flag
+    if(m_short_to_long.find(short_flag) != m_short_to_long.end())
+    {
+        spdlog::warn("CLIParser::AddOption: short flag already exists. {}", short_flag);
+        return false;
+    }
+    
+    m_options[long_flag] = { short_flag, long_flag, desc, take_arg };
+    m_short_to_long[short_flag] = long_flag;
+    return true;
 }
 
 void
@@ -47,22 +73,36 @@ CLIParser::Parse(int argc, char** argv)
     for(int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
+        std::map<std::string, CmdOption>::const_iterator opt_it = m_options.end();
 
-        for(const auto& opt : m_options)
+        // Check for long flag (--flag)
+        if(arg.size() >= MIN_LONG_FLAG_SIZE && arg[0] == '-' && arg[1] == '-')
         {
-            std::string short_opt = "-" + opt.short_flag;
-            std::string long_opt  = "--" + opt.long_flag;
-
-            if(arg == short_opt || arg == long_opt)
+            std::string long_flag = arg.substr(2);
+            opt_it = m_options.find(long_flag);
+        }
+        // Check for short flag (-f)
+        else if(arg.size() > 1 && arg[0] == '-')
+        {
+            std::string short_flag = arg.substr(1);
+            auto short_it = m_short_to_long.find(short_flag);
+            if(short_it != m_short_to_long.end())
             {
-                m_results[opt.long_flag].found = true;
+                opt_it = m_options.find(short_it->second);
+            }
+        }
 
-                if(opt.take_arg && (i + 1 < argc))
-                {
-                    m_results[opt.long_flag].argument = argv[i + 1];
-                    i++;  // Skip the next argument as it's consumed
-                }
-                break;
+        if(opt_it != m_options.end())
+        {
+            const std::string& long_flag = opt_it->first;
+            const CmdOption& opt = opt_it->second;
+            
+            m_results[long_flag].found = true;
+
+            if(opt.take_arg && (i + 1 < argc))
+            {
+                m_results[long_flag].argument = argv[i + 1];
+                i++;  // Skip the next argument as it's consumed
             }
         }
     }
@@ -104,13 +144,13 @@ CLIParser::GetHelp() const
     std::stringstream ss;
     ss << m_app_name << ": " << m_app_desc << "\n";
     ss << "Usage: " << m_app_name << " ";
-    for(const auto& opt : m_options)
+    for(const auto& [_, opt] : m_options)
     {
         ss << "[-" << opt.short_flag << (opt.take_arg ? " <arg>] " : "] ");
     }
     ss << "\n\nOptions:\n";
 
-    for(const auto& opt : m_options)
+    for(const auto& [_, opt] : m_options)
     {
         ss << "  -" << opt.short_flag << ", --" << std::left << std::setw(20) << opt.long_flag
            << opt.description << "\n";

@@ -110,7 +110,8 @@ print_version()
 }
 
 static void
-parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_parser)
+parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_parser,
+                        bool& exit_app)
 {
     cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
     bool result = true;
@@ -121,42 +122,48 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
 
     cli_parser.Parse(argc, argv);
 
-    bool do_exit = false;
-
     if(cli_parser.WasOptionFound("help"))
     {
         RocProfVis::View::CLIParser::AttachToConsole();
         std::cout << cli_parser.GetHelp() << std::endl;
-        do_exit = true;
+        exit_app = true;
     }
 
-    if(!do_exit && cli_parser.WasOptionFound("version"))
+    if(!exit_app && cli_parser.WasOptionFound("version"))
     {
         RocProfVis::View::CLIParser::AttachToConsole();
         print_version();
 
         if(cli_parser.GetOptionCount() == 1)
         {
-            do_exit = true;
+            exit_app = true;
         }
     }
 
-    if(do_exit)
+    if(exit_app)
     {
         std::cout.flush();
         std::cerr.flush();
         fflush(stdout);
         fflush(stderr);
-        exit(0);
     }
+    // Always detach from console if attached
+    // (don't want to spam log to console output on windows)
+    RocProfVis::View::CLIParser::DetachFromConsole();    
 }
 
 int
 main(int argc, char** argv)
 {
+    int app_result_code = 0;
+
     RocProfVis::View::CLIParser cli_parser;
-    parse_command_line_args(argc, argv, cli_parser);
-    int resultCode = 0;
+    bool                        exit_app = false;
+    parse_command_line_args(argc, argv, cli_parser, exit_app);
+    if(exit_app)
+    {
+        return app_result_code;
+    }
 
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
@@ -296,7 +303,7 @@ main(int argc, char** argv)
         else
         {
             spdlog::error("GLFW: Failed to initialize window & graphics API backend");
-            resultCode = 1;
+            app_result_code = 1;
         }
 
         glfwTerminate();
@@ -304,8 +311,8 @@ main(int argc, char** argv)
     else
     {
         spdlog::error("GLFW: Failed to initialize GLFW library");
-        resultCode = 1;
+        app_result_code = 1;
     }
 
-    return resultCode;
+    return app_result_code;
 }

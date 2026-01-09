@@ -45,6 +45,7 @@ public:
     std::string GetHelp() const;
 
     static void AttachToConsole();
+    static void DetachFromConsole();
 
 private:
     std::string                         m_app_name;

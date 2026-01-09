@@ -174,5 +174,13 @@ CLIParser::AttachToConsole()
 #endif
 }
 
+void
+CLIParser::DetachFromConsole()
+{
+#ifdef _WIN32
+    FreeConsole();
+#endif
+}
+
 }  // namespace View
 }  // namespace RocProfVis

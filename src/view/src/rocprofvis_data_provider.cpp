@@ -1952,7 +1952,6 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
         if(event_info)
         {
             event_info->ext_info.clear();
-            event_info->ext_info.resize(prop_count);
 
             for(uint64_t j = 0; j < prop_count; j++)
             {
@@ -1971,21 +1970,21 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                 result = rocprofvis_controller_get_uint64(ext_data_handle,
                                                           kRPVControllerExtDataType, 0,
                                                           (uint64_t*) &data_type);
-
                 result = rocprofvis_controller_get_uint64(
                     ext_data_handle, kRPVControllerExtDataCategoryEnum, 0,
                     (uint64_t*) &data_enum);
 
-                event_info->ext_info[j].category =
-                GetString(ext_data_handle, kRPVControllerExtDataCategory, 0);
-
-                // skip name and value for argument data, they are handled separately
+                // skip this item if it is argument data, it will be handled below
                 if(data_enum != kRocProfVisEventArgumentData)
                 {
-                    event_info->ext_info[j].name =
+                    EventExtData& ext_data = event_info->ext_info.emplace_back();
+                    ext_data.category =
+                        GetString(ext_data_handle, kRPVControllerExtDataCategory, 0);
+                    ext_data.name =
                         GetString(ext_data_handle, kRPVControllerExtDataName, 0);
-                    event_info->ext_info[j].value =
+                    ext_data.value =
                         GetString(ext_data_handle, kRPVControllerExtDataValue, 0);
+                    ext_data.category_enum = data_enum;
                 }
 
                 // For debugging purposes, append data type and enum to value to see what
@@ -1997,13 +1996,11 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                 //                                     std::to_string(data_enum) + ")";
                 // }
 
-                event_info->ext_info[j].category_enum = data_enum;
-
                 // populate basic info section
                 switch(data_enum)
                 {
                     case kRocProfVisEventEssentialDataName:
-                        event_info->basic_info.name = event_info->ext_info[j].value;
+                        event_info->basic_info.name = event_info->ext_info.back().value;
                         break;
                     case kRocProfVisEventEssentialDataStart:
                     {

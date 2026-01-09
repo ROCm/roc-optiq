@@ -6,8 +6,8 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_data.h"
-#include "rocprofvis_controller_plot_series.h"
 #include "rocprofvis_c_interface.h"
+#include "compute/rocprofvis_controller_plot_series.h"
 #include <vector>
 #include <map>
 #include <string>

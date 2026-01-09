@@ -6,21 +6,23 @@
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_array.h"
-#include "rocprofvis_controller_event.h"
-#include "rocprofvis_controller_sample.h"
-#include "rocprofvis_controller_sample_lod.h"
-#include "rocprofvis_controller_track.h"
-#include "rocprofvis_controller_timeline.h"
-#include "rocprofvis_controller_trace_system.h"
 #include "rocprofvis_controller_future.h"
-#include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_table.h"
-#include "rocprofvis_controller_plot.h"
-#include "rocprofvis_controller_json_trace.h"
-#include "rocprofvis_controller_summary.h"
-#include "rocprofvis_controller_summary_metrics.h"
 #include "rocprofvis_core_assert.h"
+#include "system/rocprofvis_controller_event.h"
+#include "system/rocprofvis_controller_sample.h"
+#include "system/rocprofvis_controller_sample_lod.h"
+#include "system/rocprofvis_controller_track.h"
+#include "system/rocprofvis_controller_timeline.h"
+#include "system/rocprofvis_controller_trace_system.h"
+#include "system/rocprofvis_controller_graph.h"
+#include "system/rocprofvis_controller_json_trace.h"
+#include "system/rocprofvis_controller_summary.h"
+#include "system/rocprofvis_controller_summary_metrics.h"
+#ifdef COMPUTE_UI_SUPPORT
+#include "compute/rocprofvis_controller_plot.h"
+#endif
 
 #include <cstring>
 
@@ -358,7 +360,7 @@ rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::SystemTraceRef trace(controller);
     RocProfVis::Controller::PlotRef plot_ref(plot);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);

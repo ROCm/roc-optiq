@@ -25,8 +25,8 @@
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
 #ifdef COMPUTE_UI_SUPPORT
-#include "rocprofvis_controller_trace_compute.h"
-#include "rocprofvis_controller_plot.h"
+#include "compute/rocprofvis_controller_trace_compute.h"
+#include "compute/rocprofvis_controller_plot.h"
 #include <filesystem>
 #endif
 

@@ -20,14 +20,14 @@ class Array;
 class Thread;
 class Queue;
 class Stream;
-class Trace;
+class SystemTrace;
 class Counter;
 class Future;
 
 class Track : public Handle
 {
 public:
-    Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, Trace* ctx);
+    Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, SystemTrace* ctx);
 
     virtual ~Track();
 
@@ -67,7 +67,7 @@ private:
     Queue* m_queue;
     Stream* m_stream;
     Counter* m_counter;
-    Trace* m_ctx;
+    SystemTrace* m_ctx;
     std::condition_variable_any  m_cv;
 
 

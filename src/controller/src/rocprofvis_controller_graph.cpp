@@ -8,7 +8,7 @@
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_sample_lod.h"
 #include "rocprofvis_controller_track.h"
-#include "rocprofvis_controller_trace.h"
+#include "rocprofvis_controller_trace_system.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
@@ -565,7 +565,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                         double fetch_end   = min_ts + ((range.second + 1) * segment_duration);
                         FetchTrackSegmentArgs args;
                         args.m_index       = 0;
-                    	args.m_lru_params.m_ctx      = (Trace*)m_track->GetContext();
+                    	args.m_lru_params.m_ctx      = (SystemTrace*)m_track->GetContext();
                     	args.m_lru_params.m_lod      = 0;
                         m_ctx->GetMemoryManager()->EnterArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
 
@@ -601,7 +601,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                             
                         }
                         m_cv.notify_all();
-                        ((Trace*)m_track->GetContext())->GetMemoryManager()->CancelArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
+                        ((SystemTrace*)m_track->GetContext())->GetMemoryManager()->CancelArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
                     }
                 }
                 else
@@ -633,7 +633,7 @@ Graph::Graph(Handle* ctx, rocprofvis_controller_graph_type_t type, uint64_t id)
 , m_id(id)
 , m_track(nullptr)
 , m_type(type)
-, m_ctx((Trace*)ctx)
+, m_ctx((SystemTrace*)ctx)
 {
 }
 

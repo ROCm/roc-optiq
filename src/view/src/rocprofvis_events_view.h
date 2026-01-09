@@ -41,10 +41,12 @@ private:
         }
     };
 
-    void RenderBasicData(const EventInfo* event_data);
-    void RenderEventExtData(const EventInfo* event_data);
-    void RenderEventFlowInfo(const EventInfo* event_data);
-    void RenderCallStackData(const EventInfo* event_data);
+    bool RenderBasicData(const EventInfo* event_data);
+    bool RenderEventExtData(const EventInfo* event_data);
+    bool RenderEventFlowInfo(const EventInfo* event_data);
+    bool RenderCallStackData(const EventInfo* event_data);
+    bool RenderArgumentData(const EventInfo* event_data);
+
     bool XButton();
 
     DataProvider&                            m_data_provider;

@@ -6,7 +6,7 @@
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample_lod.h"
 #include "rocprofvis_core_assert.h"
-#include "rocprofvis_controller_trace.h"
+#include "rocprofvis_controller_trace_system.h"
 #include "rocprofvis_controller_future.h"
 
 #include <algorithm>
@@ -32,7 +32,7 @@ Segment::Segment(rocprofvis_controller_track_type_t type, SegmentTimeline* ctx)
 Segment::~Segment()
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    Trace* trace = (Trace*) m_ctx->GetContext()->GetContext();
+    SystemTrace* trace = (SystemTrace*) m_ctx->GetContext()->GetContext();
     if(trace->GetMemoryManager() && !trace->GetMemoryManager()->IsShuttingDown())
     {
         for(auto& level : m_entries)

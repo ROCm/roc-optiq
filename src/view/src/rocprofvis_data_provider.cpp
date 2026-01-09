@@ -2053,7 +2053,7 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                             &tmp_val);
                         if(result != kRocProfVisResultSuccess)
                         {
-                            spdlog::warn("Failed to get argument position for event {}, "
+                            spdlog::debug("Failed to get argument position for event {}, "
                                          "argument index {}",
                                          event_params->m_event_id, j);
                         }
@@ -2062,7 +2062,7 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                         result = GetString(ext_data_handle, kRPVControllerExtDataName, 0, arg.name);
                         if(result != kRocProfVisResultSuccess)
                         {
-                            spdlog::warn("Failed to get argument name for event {}, "
+                            spdlog::debug("Failed to get argument name for event {}, "
                                          "argument index {}",
                                          event_params->m_event_id, j);
                         }
@@ -2070,7 +2070,7 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                         result = GetString(ext_data_handle, kRPVControllerExtDataValue, 0, arg.value);
                         if(result != kRocProfVisResultSuccess)
                         {
-                            spdlog::warn("Failed to get argument value for event {}, "
+                            spdlog::debug("Failed to get argument value for event {}, "
                                          "argument index {}",
                                          event_params->m_event_id, j);
                         }
@@ -2078,7 +2078,7 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                         result = GetString(ext_data_handle, kRPVControllerEventArgumentType, 0, arg.data_type);
                         if(result != kRocProfVisResultSuccess)
                         {
-                            spdlog::warn("Failed to get argument data type for event {}, "
+                            spdlog::debug("Failed to get argument data type for event {}, "
                                          "argument index {}",
                                          event_params->m_event_id, j);
                         }

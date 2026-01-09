@@ -135,6 +135,7 @@ add_executable(${TARGET_NAME}
     src/app/src/rocprofvis_imgui_vulkan.cpp 
     src/app/src/main.cpp
     src/app/src/glfw_util.cpp
+    src/app/src/rocprofvis_cli_parser.cpp
     ${VIEW_FILES})
 
 add_dependencies(${TARGET_NAME} generate_icon_header)

@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
+#include "rocprofvis_core_assert.h"
 #include "rocprofvis_imgui_backend.h"
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
@@ -109,50 +110,60 @@ print_version()
 }
 
 static void
-parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_parser)
+parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_parser,
+                        bool& exit_app)
 {
     cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
-    cli_parser.AddOption("v", "version", "Print application version", false);
-    cli_parser.AddOption("f", "file", "Open file", true);
-    cli_parser.AddOption("h", "help", "Help the user with commands", false);
-    cli_parser.Parse(argc, argv);
+    bool result = true;
+    result &= cli_parser.AddOption("v", "version", "Print application version", false);
+    result &= cli_parser.AddOption("f", "file", "Open file", true);
+    result &= cli_parser.AddOption("h", "help", "Help the user with commands", false);
+    ROCPROFVIS_ASSERT(result);
 
-    bool do_exit = false;
+    cli_parser.Parse(argc, argv);
 
     if(cli_parser.WasOptionFound("help"))
     {
         RocProfVis::View::CLIParser::AttachToConsole();
         std::cout << cli_parser.GetHelp() << std::endl;
-        do_exit = true;
+        exit_app = true;
     }
 
-    if(!do_exit && cli_parser.WasOptionFound("version"))
+    if(!exit_app && cli_parser.WasOptionFound("version"))
     {
         RocProfVis::View::CLIParser::AttachToConsole();
         print_version();
 
         if(cli_parser.GetOptionCount() == 1)
         {
-            do_exit = true;
+            exit_app = true;
         }
     }
 
-    if(do_exit)
+    if(exit_app)
     {
         std::cout.flush();
         std::cerr.flush();
         fflush(stdout);
         fflush(stderr);
-        exit(0);
     }
+    // Always detach from console if attached
+    // (don't want to spam log to console output on windows)
+    RocProfVis::View::CLIParser::DetachFromConsole();    
 }
 
 int
 main(int argc, char** argv)
 {
+    int app_result_code = 0;
+
     RocProfVis::View::CLIParser cli_parser;
-    parse_command_line_args(argc, argv, cli_parser);
-    int resultCode = 0;
+    bool                        exit_app = false;
+    parse_command_line_args(argc, argv, cli_parser, exit_app);
+    if(exit_app)
+    {
+        return app_result_code;
+    }
 
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
@@ -292,7 +303,7 @@ main(int argc, char** argv)
         else
         {
             spdlog::error("GLFW: Failed to initialize window & graphics API backend");
-            resultCode = 1;
+            app_result_code = 1;
         }
 
         glfwTerminate();
@@ -300,8 +311,8 @@ main(int argc, char** argv)
     else
     {
         spdlog::error("GLFW: Failed to initialize GLFW library");
-        resultCode = 1;
+        app_result_code = 1;
     }
 
-    return resultCode;
+    return app_result_code;
 }

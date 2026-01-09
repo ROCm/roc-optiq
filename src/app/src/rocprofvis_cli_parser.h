@@ -5,7 +5,6 @@
 
 #include <map>
 #include <string>
-#include <vector>
 
 namespace RocProfVis
 {
@@ -35,7 +34,7 @@ public:
     ~CLIParser();
 
     void SetAppDescription(const std::string& name, const std::string& desc);
-    void AddOption(const std::string& short_flag, const std::string& long_flag, const std::string& desc, bool take_arg);
+    bool AddOption(const std::string& short_flag, const std::string& long_flag, const std::string& desc, bool take_arg);
     
     void Parse(int argc, char** argv);
     
@@ -46,11 +45,13 @@ public:
     std::string GetHelp() const;
 
     static void AttachToConsole();
+    static void DetachFromConsole();
 
 private:
     std::string                         m_app_name;
     std::string                         m_app_desc;
-    std::vector<CmdOption>              m_options;
+    std::map<std::string, CmdOption>    m_options;
+    std::map<std::string, std::string>  m_short_to_long;
     std::map<std::string, CmdArgResult> m_results;
 };
 

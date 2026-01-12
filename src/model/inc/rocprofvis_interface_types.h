@@ -46,7 +46,7 @@ typedef     uint8_t                       rocprofvis_dm_event_level_t;          
 typedef     uint16_t                      rocprofvis_dm_num_string_table_filters_t;     // number of string table filters for table query
 typedef     const char**                  rocprofvis_dm_string_table_filters_t;         // string table filters for table query
 typedef     rocprofvis_dm_handle_t        rocprofvis_db_instance_t;                     // Instance handle
-
+typedef     uint32_t                      rocprofvis_db_table_column_enum_t;            // database query column enumeration cast type
 
 /*******************************Enumerations******************************/
 
@@ -131,7 +131,9 @@ typedef enum rocprofvis_db_type_t {
     // new schema Rocprof database
 	kRocprofSqlite = 2,
     // new schema Rocprof multinode database
-    kRocprofMultinodeSqlite = 3
+    kRocprofMultinodeSqlite = 3,
+    // compute database
+    kComputeSqlite = 4
 } rocprofvis_db_type_t;
 
 // Database query status, reported by database query progress callback
@@ -355,7 +357,9 @@ typedef enum rocprofvis_dm_table_property_t {
     // Column name by specified index
     kRPVDMExtTableColumnNameCharPtrIndexed,
     // Row handle by specified index
-    kRPVDMExtTableRowHandleIndexed
+    kRPVDMExtTableRowHandleIndexed,
+    // Column enum constant by specified index
+    kRPVDMExtTableColumnEnumUInt64Indexed
 } rocprofvis_dm_table_property_t;
 
 // Table row object properties
@@ -409,3 +413,84 @@ typedef void ( *rocprofvis_db_progress_callback_t)(
                 rocprofvis_db_status_message_t,
                 void*
 );
+
+/*******************************Compute******************************/
+
+// Compute database query result items enumeration
+typedef enum rocprofvis_db_compute_column_enum_t
+{
+    kRPVComputeColumnWorkloadId,
+    kRPVComputeColumnWorkloadName,
+    kRPVComputeColumnWorkloadSubName,
+    kRPVComputeColumnWorkloadSysInfo,
+    kRPVComputeColumnWorkloadProfileConfig,
+
+    kRPVComputeColumnWorkloadRooflineBenchBlob,
+    kRPVComputeColumnWorkloadRooflineBenchHBMBw,
+    kRPVComputeColumnWorkloadRooflineBenchL2Bw,
+    kRPVComputeColumnWorkloadRooflineBenchL1Bw,
+    kRPVComputeColumnWorkloadRooflineBenchLDSBw,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF8Flops,
+    kRPVComputeColumnWorkloadRooflineBenchFP16Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF16Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMABF16Flops,
+    kRPVComputeColumnWorkloadRooflineBenchFP32Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF32Flops,
+    kRPVComputeColumnWorkloadRooflineBenchFP64Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF64Flops,
+    kRPVComputeColumnWorkloadRooflineBenchI8Ops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAI8Ops,
+    kRPVComputeColumnWorkloadRooflineBenchI32Ops,
+    kRPVComputeColumnWorkloadRooflineBenchI64Ops,
+
+    kRPVComputeColumnKernelUUID,
+    kRPVComputeColumnKernelName,
+    kRPVComputeColumnKernelsCount,
+    kRPVComputeColumnKernelDurationsSum,
+    kRPVComputeColumnKernelDurationsAvg,
+    kRPVComputeColumnKernelDurationsMedian,
+    kRPVComputeColumnKernelDurationsMin,
+    kRPVComputeColumnKernelDurationsMax,
+
+    kRPVComputeColumnRooflineTotalFlops,
+    kRPVComputeColumnRooflineL1CacheData,
+    kRPVComputeColumnRooflineL2CacheData,
+    kRPVComputeColumnRooflineHBMCacheData,
+
+    kRPVComputeColumnMetricId,
+    kRPVComputeColumnTableId,
+    kRPVComputeColumnSubTableId,
+    kRPVComputeColumnMetricTableName,
+    kRPVComputeColumnMetricSubTableName,
+} rocprofvis_db_compute_column_enum_t;
+
+// Compute database query use case enumerations
+typedef enum rocprofvis_db_compute_use_case_enum_t
+{
+    kRPVComputeFetchListOfWorkloads,
+    kRPVComputeFetchWorkloadRooflineCeiling,
+    kRPVComputeFetchWorkloadTopKernels,
+    kRPVComputeFetchWorkloadKernelsList,
+    kRPVComputeFetchKernelRooflineIntensities,
+    kRPVComputeFetchKernelMetricCategoriesList,
+    kRPVComputeFetchMetricCategoryTablesList,
+} rocprofvis_db_compute_use_case_enum_t;
+
+// Compute database query parameter enumeration
+typedef enum rocprofvis_db_compute_param_enum_t
+{
+    kRPVComputeParamWorkloadId,
+    kRPVComputeParamKernelId,
+    kRPVComputeParamMetricId
+} rocprofvis_db_compute_param_enum_t;
+
+// Compute database query input parameter structure
+typedef struct rocprofvis_db_compute_param_t
+{
+    rocprofvis_db_compute_param_enum_t param_type;
+    const char* param_str;
+} rocprofvis_db_compute_param_t;
+
+typedef rocprofvis_db_compute_param_t* rocprofvis_db_compute_params_t;
+typedef uint32_t rocprofvis_db_num_of_params_t;
+

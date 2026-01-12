@@ -112,6 +112,8 @@ class ProfileDatabase : public SqliteDatabase
             rocprofvis_dm_charptr_t file_path,
             Future* future) override;
 
+        virtual rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) = 0;
+
     private:
 
     // sqlite3_exec callback to add any record (Event or PMC) to time slice container. Used in all-selected-tracks time slice query
@@ -127,6 +129,21 @@ class ProfileDatabase : public SqliteDatabase
         void BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props);
 
         bool IsEmptyRange(uint64_t start, uint64_t end);
+
+        // Searches for strings containing the passed in list of filter strings and builds a WHERE IN clause for the table query.
+        // @param num_string_table_filters - number of filter strings
+        // @param string_table_filters - array of filter strings
+        // @param filter - output string containing WHERE clause
+        // @return status of operation
+        virtual rocprofvis_dm_result_t BuildTableStringIdFilter(
+            rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+            rocprofvis_dm_string_table_filters_t string_table_filters,
+            table_string_id_filter_map_t& filter) = 0;
+
+        virtual rocprofvis_dm_result_t BuildTableSummaryClause(
+            bool sample_query,
+            rocprofvis_dm_string_t& select,
+            rocprofvis_dm_string_t& group_by) = 0;
 
     protected:
 
@@ -199,6 +216,19 @@ class ProfileDatabase : public SqliteDatabase
                             std::vector<Future*>& futures,
                             rocprofvis_dm_handle_t handle,
                             RpvSqliteExecuteQueryCallback callback);
+
+        rocprofvis_dm_result_t BuildComputeQuery(
+            rocprofvis_db_compute_use_case_enum_t use_case, rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
+            rocprofvis_dm_string_t& query) override {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not build compute query", kRocProfVisDmResultNotSupported);
+        }
+
+        rocprofvis_dm_result_t  ExecuteComputeQuery(
+                            rocprofvis_db_compute_use_case_enum_t use_case,
+                            rocprofvis_dm_charptr_t query,
+                            Future* future) override {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not support compute query", kRocProfVisDmResultNotSupported);
+        }
 
     protected:
     // sqlite3_exec callback to process track information query and add track object to Trace container
@@ -293,6 +323,22 @@ class ProfileDatabase : public SqliteDatabase
     rocprofvis_dm_result_t BuildHistogram(Future* future, uint32_t desired_bins);
 
     virtual int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) = 0;
+
+    // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
+    // @param node_id - node id
+    // @param process_id - process id 
+    // @param sub_process_name - metric name
+    // @param operation - operation of event that requesting track id
+    // @return status of operation
+    virtual rocprofvis_dm_result_t          FindTrackId(
+        uint64_t node,
+        uint32_t process,
+        const char* subprocess,
+        rocprofvis_dm_op_t operation,
+        rocprofvis_dm_track_id_t& track_id)=0;
+
+    virtual rocprofvis_dm_string_t GetEventOperationQuery(
+        const rocprofvis_dm_event_operation_t operation) = 0;
 
     protected:
     // offset of kernel symbols in string table

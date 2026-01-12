@@ -1398,6 +1398,11 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename, 
         sqlite3_close(db);
         return rocprofvis_db_type_t::kRocpdSqlite;
     }
+
+    if (DetectTable(db, "compute_metadata", false) == SQLITE_OK) {
+        sqlite3_close(db);
+        return rocprofvis_db_type_t::kComputeSqlite;
+    }
     
     sqlite3_close(db);
     return rocprofvis_db_type_t::kAutodetect;

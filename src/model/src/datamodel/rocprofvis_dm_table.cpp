@@ -37,6 +37,17 @@ rocprofvis_dm_result_t Table::AddColumn(rocprofvis_dm_charptr_t column_name){
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t Table::AddColumnEnum(rocprofvis_db_table_column_enum_t column_enum){
+    try{
+        m_column_enums.push_back(column_enum);
+    }
+    catch(std::exception ex)
+    {
+        return kRocProfVisDmResultAllocFailure;
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_table_row_t Table::AddRow(){
     try{
         m_rows.push_back(std::make_shared<TableRow>(this));
@@ -54,6 +65,11 @@ rocprofvis_dm_result_t Table::GetColumnNameAt(const rocprofvis_dm_property_index
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t Table::GetColumnEnumAt(const rocprofvis_dm_property_index_t index, rocprofvis_db_table_column_enum_t& column_enum) {
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_columns.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    column_enum = m_column_enums[index];
+    return kRocProfVisDmResultSuccess;
+}
 
 rocprofvis_dm_result_t   Table::GetRowHandleAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_handle_t & row){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_rows.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
@@ -75,6 +91,8 @@ rocprofvis_dm_result_t Table::GetPropertyAsUint64(rocprofvis_dm_property_t prope
         case kRPVDMNumberOfTableRowsUInt64:
             *value = GetNumberOfRows();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMExtTableColumnEnumUInt64Indexed:
+            return GetColumnEnumAt(index, *(rocprofvis_db_table_column_enum_t*)value);
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }

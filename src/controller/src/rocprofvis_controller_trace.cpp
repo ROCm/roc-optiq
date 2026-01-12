@@ -400,6 +400,75 @@ void Trace::ProgressCallback(rocprofvis_db_filename_t db_filename,
     }
 }
 
+/*DebugComputeTable function is for debugging purposes only. Feel free to refactor it or remove it */
+rocprofvis_result_t Trace::DebugComputeTable(rocprofvis_dm_table_id_t table_id, std::string query, std::string description)
+{
+    rocprofvis_result_t result = kRocProfVisResultNotLoaded;
+    uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(
+        m_dm_handle, kRPVDMNumberOfTablesUInt64, 0);
+    if (num_tables > 0)
+    {
+        rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(
+            m_dm_handle, kRPVDMTableHandleByID, table_id);
+        if (nullptr != table)
+        {
+            uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(
+                table, kRPVDMNumberOfTableColumnsUInt64, 0);
+            uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(
+                table, kRPVDMNumberOfTableRowsUInt64, 0);
+
+            std::string column_names;
+            std::string column_enums;
+
+            for (uint32_t i = 0; i < num_columns; i++)
+            {
+                char const* column_name =
+                    rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableColumnNameCharPtrIndexed, i);
+                column_names += column_name;
+                column_names += ", ";
+                uint64_t column_enum = 
+                    rocprofvis_dm_get_property_as_uint64(table, kRPVDMExtTableColumnEnumUInt64Indexed, i);  
+                column_enums += std::to_string(column_enum);
+                column_enums += ", ";
+            }
+
+            spdlog::info("SQL Query : {}",query);
+            spdlog::info("Description : {}", description);
+            spdlog::info("Column names : {}", column_names);
+            spdlog::info("Column enumerations : {}", column_enums);
+
+            for (uint32_t i = 0; i < num_rows; i++)
+            {
+                std::string data_cells;
+                rocprofvis_dm_table_row_t table_row =
+                    rocprofvis_dm_get_property_as_handle(
+                        table, kRPVDMExtTableRowHandleIndexed, i);
+                if (table_row != nullptr)
+                {
+                    uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(
+                        table_row, kRPVDMNumberOfTableRowCellsUInt64, 0);
+                    ROCPROFVIS_ASSERT(num_cells == num_columns);
+                    for (uint32_t j = 0; j < num_cells; j++)
+                    {
+                        char const* value =
+                            rocprofvis_dm_get_property_as_charptr(
+                                table_row,
+                                kRPVDMExtTableRowCellValueCharPtrIndexed, j);
+                        ROCPROFVIS_ASSERT(value);
+                        data_cells += value;
+                        data_cells += ",";
+                    }
+                    spdlog::info("Data row {} : {}", i, data_cells);
+                }
+            }
+
+            rocprofvis_dm_delete_table_at(m_dm_handle, table_id);
+            result = kRocProfVisResultSuccess;
+        }
+    }
+    return result;
+}
+/*DebugComputeTable function is for debugging purposes only. Feel free to refactor it or remove it */
 
 rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
@@ -410,6 +479,155 @@ rocprofvis_result_t Trace::LoadRocpd(char const* const filename) {
         m_dm_handle = rocprofvis_dm_create_trace();
         if(nullptr != m_dm_handle)
         {
+/*The code below is for compute support debugging purposes only. Feel free to refactor it or remove it */
+            if (rocprofvis_db_identify_type(filename) == kComputeSqlite)
+            {
+                rocprofvis_dm_database_t db =
+                    rocprofvis_db_open_database(filename, kComputeSqlite);
+                if (nullptr != db && kRocProfVisDmResultSuccess ==
+                    rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
+                {
+                    rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Trace::ProgressCallback, this);
+                    if (nullptr != object2wait)
+                    {
+                        if (kRocProfVisDmResultSuccess ==
+                            rocprofvis_db_read_metadata_async(db, object2wait))
+                        {
+                            if (kRocProfVisDmResultSuccess ==
+                                rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                            {
+                                char* fetch_query = nullptr;
+                                rocprofvis_dm_result_t dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchListOfWorkloads, 0, nullptr, &fetch_query);
+                                if (dm_result == kRocProfVisDmResultSuccess)
+                                {
+                                    rocprofvis_dm_table_id_t table_id = 0;
+                                    dm_result = rocprofvis_db_execute_compute_query_async(
+                                        db, kRPVComputeFetchListOfWorkloads, fetch_query, object2wait, &table_id);
+
+                                    if (dm_result == kRocProfVisDmResultSuccess)
+                                    {
+                                        if (kRocProfVisDmResultSuccess ==
+                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                                        {
+                                            DebugComputeTable(table_id, fetch_query, "Fetch list of workloads");
+                                        }
+                                    }
+                                }
+                                std::vector<rocprofvis_db_compute_param_t> params = { {kRPVComputeParamWorkloadId,"1"} };
+                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchWorkloadRooflineCeiling, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
+                                if (dm_result == kRocProfVisDmResultSuccess)
+                                {
+                                    rocprofvis_dm_table_id_t table_id = 0;
+                                    dm_result = rocprofvis_db_execute_compute_query_async(
+                                        db, kRPVComputeFetchWorkloadRooflineCeiling, fetch_query, object2wait, &table_id);
+
+                                    if (dm_result == kRocProfVisDmResultSuccess)
+                                    {
+                                        if (kRocProfVisDmResultSuccess ==
+                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                                        {
+                                            DebugComputeTable(table_id, fetch_query, "Get workload roofline ceiling");
+                                        }
+                                    }
+                                }
+
+                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchWorkloadTopKernels, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
+                                if (dm_result == kRocProfVisDmResultSuccess)
+                                {
+                                    rocprofvis_dm_table_id_t table_id = 0;
+                                    dm_result = rocprofvis_db_execute_compute_query_async(
+                                        db, kRPVComputeFetchWorkloadTopKernels, fetch_query, object2wait, &table_id);
+
+                                    if (dm_result == kRocProfVisDmResultSuccess)
+                                    {
+                                        if (kRocProfVisDmResultSuccess ==
+                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                                        {
+                                            DebugComputeTable(table_id, fetch_query, "Get workload top kernels");
+                                        }
+                                    }
+                                }
+
+                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchWorkloadKernelsList, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
+                                if (dm_result == kRocProfVisDmResultSuccess)
+                                {
+                                    rocprofvis_dm_table_id_t table_id = 0;
+                                    dm_result = rocprofvis_db_execute_compute_query_async(
+                                        db, kRPVComputeFetchWorkloadKernelsList, fetch_query, object2wait, &table_id);
+
+                                    if (dm_result == kRocProfVisDmResultSuccess)
+                                    {
+                                        if (kRocProfVisDmResultSuccess ==
+                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                                        {
+                                            DebugComputeTable(table_id, fetch_query, "Get workload kernels list");
+                                        }
+                                    }
+                                }
+
+                                params = { {kRPVComputeParamKernelId,"1"} };
+                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchKernelRooflineIntensities, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
+                                if (dm_result == kRocProfVisDmResultSuccess)
+                                {
+                                    rocprofvis_dm_table_id_t table_id = 0;
+                                    dm_result = rocprofvis_db_execute_compute_query_async(
+                                        db, kRPVComputeFetchKernelRooflineIntensities, fetch_query, object2wait, &table_id);
+
+                                    if (dm_result == kRocProfVisDmResultSuccess)
+                                    {
+                                        if (kRocProfVisDmResultSuccess ==
+                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                                        {
+                                            DebugComputeTable(table_id, fetch_query, "Get kernel roofline intensities");
+                                        }
+                                    }
+                                }
+
+
+                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchKernelMetricCategoriesList, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
+                                if (dm_result == kRocProfVisDmResultSuccess)
+                                {
+                                    rocprofvis_dm_table_id_t table_id = 0;
+                                    dm_result = rocprofvis_db_execute_compute_query_async(
+                                        db, kRPVComputeFetchKernelMetricCategoriesList, fetch_query, object2wait, &table_id);
+
+                                    if (dm_result == kRocProfVisDmResultSuccess)
+                                    {
+                                        if (kRocProfVisDmResultSuccess ==
+                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                                        {
+                                            DebugComputeTable(table_id, fetch_query, "Get kernel metric categories list");
+                                        }
+                                    }
+                                }
+
+                                params = { {kRPVComputeParamKernelId,"1"}, {kRPVComputeParamMetricId,"3"} };
+                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchMetricCategoryTablesList, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
+                                if (dm_result == kRocProfVisDmResultSuccess)
+                                {
+                                    rocprofvis_dm_table_id_t table_id = 0;
+                                    dm_result = rocprofvis_db_execute_compute_query_async(
+                                        db, kRPVComputeFetchKernelMetricCategoriesList, fetch_query, object2wait, &table_id);
+
+                                    if (dm_result == kRocProfVisDmResultSuccess)
+                                    {
+                                        if (kRocProfVisDmResultSuccess ==
+                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                                        {
+                                            DebugComputeTable(table_id, fetch_query, "Get metric category tables list");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        rocprofvis_db_future_free(object2wait);
+                    }
+                }
+                ROCPROFVIS_ASSERT(false);
+                return kRocProfVisResultNotLoaded;
+            }
+/*The code above is for compute support debugging purposes only. Feel free to refactor it or remove it */
+
             rocprofvis_dm_database_t db =
                 rocprofvis_db_open_database(filename, kAutodetect);
             if(nullptr != db && kRocProfVisDmResultSuccess ==

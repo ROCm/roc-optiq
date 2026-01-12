@@ -811,8 +811,7 @@ InfiniteScrollTable::FormatIDColumns() const
                 tid.id         = std::stoull(raw_value);
                 uint64_t db_id = tid.bitfield.db_event_id;
 
-                formatted_column_data[i].formatted_row_value[row_idx] =
-                    "ID: " + std::to_string(db_id);
+                formatted_column_data[i].formatted_row_value[row_idx] = std::to_string(db_id);
             } catch(const std::exception& e)
             {
                 spdlog::warn("Failed to format id value '{}': {}", raw_value, e.what());

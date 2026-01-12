@@ -788,6 +788,41 @@ InfiniteScrollTable::FormatTimeColumns() const
 }
 
 void
+InfiniteScrollTable::FormatIDColumns() const
+{
+    const std::vector<std::vector<std::string>>& table_data =
+        m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
+    std::vector<FormattedColumnInfo>& formatted_column_data =
+        m_data_provider.DataModel().GetTables().GetMutableFormattedTableData(m_table_type);
+
+    if(m_important_column_idxs[kId] != INVALID_UINT64_INDEX &&
+       m_important_column_idxs[kId] < formatted_column_data.size())
+    {
+        size_t i = m_important_column_idxs[kId];
+        formatted_column_data[i].needs_formatting = true;
+        formatted_column_data[i].formatted_row_value.resize(table_data.size());
+
+        for(size_t row_idx = 0; row_idx < table_data.size(); row_idx++)
+        {
+            const std::string& raw_value = table_data[row_idx][i];
+            try
+            {
+                TraceEventId tid;
+                tid.id         = std::stoull(raw_value);
+                uint64_t db_id = tid.bitfield.db_event_id;
+
+                formatted_column_data[i].formatted_row_value[row_idx] =
+                    "ID: " + std::to_string(db_id);
+            } catch(const std::exception& e)
+            {
+                spdlog::warn("Failed to format id value '{}': {}", raw_value, e.what());
+                formatted_column_data[i].formatted_row_value[row_idx] = raw_value;
+            }
+        }
+    }
+}
+
+void
 InfiniteScrollTable::ExportToFile() const
 {
     std::vector<FileFilter> file_filters;

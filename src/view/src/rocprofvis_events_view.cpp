@@ -103,11 +103,6 @@ EventsView::RenderBasicData(const EventInfo* event_data)
 
     const auto& info = event_data->basic_info;
 
-    ImGui::TextUnformatted("ID");
-    ImGui::SameLine(160);
-    CopyableTextUnformatted(std::to_string(info.m_id).c_str(), "ID",
-                            DATA_COPIED_NOTIFICATION, false, true);
-
     ImGui::TextUnformatted("Name");
     ImGui::SameLine(160);
     CopyableTextUnformatted(info.m_name.c_str(), "Name", DATA_COPIED_NOTIFICATION, false,
@@ -412,10 +407,15 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             container->SetMinRightWidth(10.0f);
             container->SetSplit(0.5f);
 
-            m_event_items.emplace_front(
-                EventItem{ m_event_item_id++, event_data->basic_info.m_id,
-                           "Event ID: " + std::to_string(event_data->basic_info.m_id),
-                           std::move(container), event_data, 0.0f });
+            // Get DB from event ID
+            TraceEventId tid;
+            tid.id         = event_data->basic_info.m_id;
+            uint64_t db_id = tid.bitfield.db_event_id;
+
+            m_event_items.emplace_front(EventItem{
+                m_event_item_id++, event_data->basic_info.m_id,
+                "ID: " + std::to_string(db_id), std::move(container), event_data, 0.0f });
+            
         }
     }
     else if(event_id == TimelineSelection::INVALID_SELECTION_ID)

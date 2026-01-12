@@ -300,6 +300,7 @@ MultiTrackTable::FormatData() const
     formatted_column_data.clear();
     formatted_column_data.resize(m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type).size());
     InfiniteScrollTable::FormatTimeColumns();
+    InfiniteScrollTable::FormatIDColumns();
 }
 
 void

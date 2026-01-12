@@ -571,8 +571,8 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
         ImGui::Text("Duration: %s", label.c_str());
-        ImGui::Text("Id: %llu", chart_item.event.m_id);
-        ImGui::Text("DB Id: %llu", event_id.bitfield.db_event_id);
+        ImGui::Text("UUID: %llu", chart_item.event.m_id);
+        ImGui::Text("ID: %llu", event_id.bitfield.db_event_id);
     }
 
     m_tooltip_size = ImGui::GetWindowSize();  // save size for positioning

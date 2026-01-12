@@ -68,6 +68,7 @@ protected:
     std::pair<uint64_t, uint64_t> SelectedRowToTimeRange() const;
     void                          SelectedRowToClipboard() const;
     void                          FormatTimeColumns() const;
+    void                          FormatIDColumns() const;
     void                          SelectedRowNavigateEvent(size_t track_id_column_index,
                                                            size_t stream_id_column_index) const;
     void                          ExportToFile() const;

@@ -105,13 +105,10 @@ EventsView::RenderBasicData(const EventInfo* event_data)
 
     ImGui::TextUnformatted("ID");
 
-    TraceEventId tid;
-    tid            = event_data->basic_info.id;
-    uint64_t db_id = tid.bitfield.event_id;
-
+    const uint64_t& db_id = event_data->basic_info.id.bitfield.event_id;
     ImGui::SameLine(160);
-    CopyableTextUnformatted(std::to_string(db_id).c_str(), "ID",
-                            DATA_COPIED_NOTIFICATION, false, true);
+    CopyableTextUnformatted(std::to_string(db_id).c_str(), "ID", DATA_COPIED_NOTIFICATION,
+                            false, true);
 
     ImGui::TextUnformatted("Name");
     ImGui::SameLine(160);
@@ -267,10 +264,8 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
 
-                        TraceEventId tid;
-                        tid            = event_data->flow_info[i].id;
-                        uint64_t db_id = tid.bitfield.event_id;
-
+                        const uint64_t& db_id =
+                            event_data->flow_info[i].id.bitfield.event_id;
 
                         CopyableTextUnformatted(std::to_string(db_id).c_str(),
                             "##id_" + std::to_string(i), COPY_DATA_NOTIFICATION, false,
@@ -507,13 +502,12 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             container->SetSplit(0.5f);
 
             // Get DB from event ID
-            TraceEventId tid;
-            tid            = event_data->basic_info.id;
-            uint64_t db_id = tid.bitfield.event_id;
+            const uint64_t& db_id = event_data->basic_info.id.bitfield.event_id;
 
-            m_event_items.emplace_front(EventItem{
-                m_event_item_id++, event_data->basic_info.id.uuid, std::to_string(db_id),
-                std::move(container), event_data, 0.0f });
+            m_event_items.emplace_front(
+                EventItem{ m_event_item_id++, event_data->basic_info.id.uuid,
+                           "Event ID: " + std::to_string(db_id), std::move(container),
+                           event_data, 0.0f });
         }
     }
     else if(event_id == TimelineSelection::INVALID_SELECTION_ID)

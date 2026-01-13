@@ -662,7 +662,6 @@ FlameTrackItem::RenderChart(float graph_width)
         ImVec2 cursor_position = ImGui::GetCursorScreenPos();
         ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
-
         ImVec2 rectMin = ImVec2(start_position.x - HIGHLIGHT_THICKNESS_HALF,
                                 start_position.y + cursor_position.y +
                                     HIGHLIGHT_THICKNESS_HALF - ANTI_ALIASING_WORKAROUND);

@@ -698,8 +698,6 @@ FlameTrackItem::RenderMetaAreaOptions()
     ImGui::SameLine();
     if(ImGui::RadioButton("No Color", mode == EventColorMode::kNone))
         mode = EventColorMode::kNone;
- 
-
     m_event_color_mode = mode;
 
     if(ImGui::Checkbox("Compact Mode", &m_compact_mode))

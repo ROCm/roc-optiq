@@ -283,7 +283,7 @@ TraceView::OpenFile(const std::string& file_path)
     return result;
 }
 
-void
+void 
 TraceView::Render()
 {
     if(m_horizontal_split_container &&
@@ -295,8 +295,10 @@ TraceView::Render()
 
     if(m_show_minimap_popup && m_minimap)
     {
-        ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
-        if(ImGui::Begin("Minimap", &m_show_minimap_popup))
+        float dpi = SettingsManager::GetInstance().GetDPI();
+        ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
+        if(ImGui::Begin("Minimap", &m_show_minimap_popup,
+                        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
         {
             m_minimap->Render();
         }

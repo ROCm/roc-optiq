@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_minimap.h"
-#include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
@@ -204,6 +203,13 @@ Minimap::Render()
 
         RenderMinimapData(draw_list, map_pos, map_size);
 
+           // Draw border around minimap
+        ImU32 border_color     = sm.GetColor(Colors::kBorderColor);
+        float border_thickness = 1.5f;
+        draw_list->AddRect(map_pos,
+                           ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
+                           border_color, 0.0f, 0, border_thickness);
+
         RenderViewport(draw_list, map_pos, map_size);
         HandleNavigation(map_pos, map_size);
 
@@ -229,7 +235,7 @@ Minimap::RenderMinimapData(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
 }
 
 void
-Minimap::RenderViewport(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
+Minimap::RenderViewport(ImDrawList* drawlist, ImVec2 map_pos, ImVec2 map_size)
 {
     SettingsManager& settings    = SettingsManager::GetInstance();
     ViewCoords       view_coords = m_timeline_view->GetViewCoords();
@@ -241,40 +247,64 @@ Minimap::RenderViewport(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
     float x_start     = map_pos.x + std::clamp(start_ratio, 0.0f, 1.0f) * map_size.x;
     float x_end       = map_pos.x + std::clamp(end_ratio, 0.0f, 1.0f) * map_size.x;
 
-    // Get Icon info
-    ImFont*     icon_font = settings.GetFontManager().GetIconFont(FontType::kDefault);
-    const char* icon      = ICON_FLAG;
-    ImVec2 icon_size = icon_font->CalcTextSizeA(icon_font->FontSize, FLT_MAX, 0.0f, icon);
-
     float total_h = m_timeline_view->GetTotalTrackHeight();
     float view_h  = m_timeline_view->GetGraphSize().y;
 
-    // Calculate visual center Y
-    float y_center_ratio = 0.5f;
+    float y_start_ratio = 0.0f;
+    float y_end_ratio   = 1.0f;
+
     if(total_h > 0)
     {
-        y_center_ratio = (view_coords.y + view_h * 0.5f) / total_h;
+        y_start_ratio = view_coords.y / total_h;
+        y_end_ratio   = (view_coords.y + view_h) / total_h;
     }
-    float y_pos = map_pos.y + std::clamp(y_center_ratio, 0.0f, 1.0f) * map_size.y;
 
-    // Rectangle dimensions (height is same as icon)
-    float rect_h     = icon_size.y;
-    float y_rect_top = y_pos - rect_h * 0.5f;
-    float y_rect_bot = y_pos + rect_h * 0.5f;
+    float y_start = map_pos.y + std::clamp(y_start_ratio, 0.0f, 1.0f) * map_size.y;
+    float y_end   = map_pos.y + std::clamp(y_end_ratio, 0.0f, 1.0f) * map_size.y;
 
-    ImU32  border_col  = settings.GetColor(Colors::kTextMain);
-    ImVec4 fill_col_v4 = ImGui::ColorConvertU32ToFloat4(border_col);
-    fill_col_v4.w      = 0.1f;  // Make border color as light as possible
-    ImU32 fill_col     = ImGui::ColorConvertFloat4ToU32(fill_col_v4);
+    ImU32 border_col       = settings.GetColor(Colors::kTextMain);
+    float border_thickness = 1.0f;
+    float corner_len       = 10.0f;
 
-    // Draw filled rectangle
-    dl->AddRectFilled(ImVec2(x_start, y_rect_top), ImVec2(x_end, y_rect_bot), fill_col);
+    // Ensure corners don't overlap if viewport is tiny
+    float w = x_end - x_start;
+    float h = y_end - y_start;
+    if(corner_len * 2 > w) corner_len = w * 0.5f;
+    if(corner_len * 2 > h) corner_len = h * 0.5f;
 
-    // Position icon centered in Y, left-aligned to center in X
-    ImVec2 icon_pos = ImVec2((x_start + x_end) * 0.5f, y_pos - icon_size.y * 0.5f);
+    // Top-Left
+    drawlist->AddLine(ImVec2(x_start, y_start), ImVec2(x_start + corner_len, y_start),
+                      border_col, border_thickness);
+    drawlist->AddLine(ImVec2(x_start, y_start), ImVec2(x_start, y_start + corner_len),
+                      border_col, border_thickness);
 
-    dl->AddText(icon_font, icon_font->FontSize, icon_pos,
-                settings.GetColor(Colors::kTextMain), icon);
+    // Top-Right
+    drawlist->AddLine(ImVec2(x_end, y_start), ImVec2(x_end - corner_len, y_start),
+                      border_col, border_thickness);
+    drawlist->AddLine(ImVec2(x_end, y_start), ImVec2(x_end, y_start + corner_len),
+                      border_col, border_thickness);
+
+    // Bottom-Left
+    drawlist->AddLine(ImVec2(x_start, y_end), ImVec2(x_start + corner_len, y_end),
+                      border_col, border_thickness);
+    drawlist->AddLine(ImVec2(x_start, y_end), ImVec2(x_start, y_end - corner_len),
+                      border_col, border_thickness);
+
+    // Bottom-Right
+    drawlist->AddLine(ImVec2(x_end, y_end), ImVec2(x_end - corner_len, y_end),
+                      border_col, border_thickness);
+    drawlist->AddLine(ImVec2(x_end, y_end), ImVec2(x_end, y_end - corner_len),
+                      border_col, border_thickness);
+
+    // Center Crosshair
+    float cx           = (x_start + x_end) * 0.5f;
+    float cy           = (y_start + y_end) * 0.5f;
+    float crosshair_sz = 6.0f;  // Size of the cross
+
+    drawlist->AddLine(ImVec2(cx - crosshair_sz, cy), ImVec2(cx + crosshair_sz, cy),
+                      border_col, 1.0f);
+    drawlist->AddLine(ImVec2(cx, cy - crosshair_sz), ImVec2(cx, cy + crosshair_sz),
+                      border_col, 1.0f);
 }
 
 void

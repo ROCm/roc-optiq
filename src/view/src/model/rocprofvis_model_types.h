@@ -84,13 +84,13 @@ union TraceEventId
     struct
     {
         // Event ID from database
-        uint64_t db_event_id : 52;
+        uint64_t event_id : 52;
         // Node index
         uint64_t event_node : 8;
         // Event operation type
         uint64_t event_op : 4;
     } bitfield;
-    uint64_t id;
+    uint64_t uuid;
 };
 
 struct EventFlowData

@@ -82,7 +82,7 @@ EventsView::Render()
                 if(deselect_event)
                 {
                     m_timeline_selection->UnselectTrackEvent(item.info->track_id,
-                                                             item.info->basic_info.m_id.id);
+                                                             item.info->basic_info.m_id.uuid);
                 }
                 ImGui::PopID();
             }
@@ -107,7 +107,7 @@ EventsView::RenderBasicData(const EventInfo* event_data)
 
     TraceEventId tid;
     tid            = event_data->basic_info.m_id;
-    uint64_t db_id = tid.bitfield.db_event_id;
+    uint64_t db_id = tid.bitfield.event_id;
 
     ImGui::SameLine(160);
     CopyableTextUnformatted(std::to_string(db_id).c_str(), "ID",
@@ -257,7 +257,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
 
                         TraceEventId tid;
                         tid            = event_data->flow_info[i].id;
-                        uint64_t db_id = tid.bitfield.db_event_id;
+                        uint64_t db_id = tid.bitfield.event_id;
 
 
                         CopyableTextUnformatted(std::to_string(db_id).c_str(),
@@ -422,10 +422,10 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             // Get DB from event ID
             TraceEventId tid;
             tid            = event_data->basic_info.m_id;
-            uint64_t db_id = tid.bitfield.db_event_id;
+            uint64_t db_id = tid.bitfield.event_id;
 
             m_event_items.emplace_front(EventItem{
-                m_event_item_id++, event_data->basic_info.m_id.id, std::to_string(db_id),
+                m_event_item_id++, event_data->basic_info.m_id.uuid, std::to_string(db_id),
                 std::move(container), event_data, 0.0f });
         }
     }

@@ -202,11 +202,11 @@ FlameTrackItem::ExtractPointsFromData()
     }
 
     // Update selection state cache.
-    const std::vector<rocprofvis_trace_event_t>& events_data = event_track->GetData();
+    const std::vector<TraceEvent>& events_data = event_track->GetData();
     m_chart_items.resize(events_data.size());
     for(int i = 0; i < events_data.size(); i++)
     {
-        const rocprofvis_trace_event_t& event = events_data[i];
+        const TraceEvent& event = events_data[i];
         m_chart_items[i].event                = event;
         m_chart_items[i].selected = m_timeline_selection->EventSelected(event.m_id);
         if(m_chart_items[i].event.m_child_count > 1)
@@ -547,7 +547,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
     }
     else
     {
-        rocprofvis_trace_event_t_id_t event_id{};
+        TraceEventId event_id{};
         event_id.id = chart_item.event.m_id;
         ImGui::TextUnformatted("Name: ");
         ImGui::SameLine();

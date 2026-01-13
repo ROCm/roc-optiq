@@ -97,21 +97,43 @@ struct CallStackData
     std::string address;
 };
 
-struct TraceEvent
+struct BasicEventData
 {
-    uint64_t    m_id;
-    std::string m_name;
-    double      m_start_ts;
-    double      m_duration;
-    uint32_t    m_level;
-    uint32_t    m_child_count;
-    std::string m_top_combined_name;
+    uint64_t    id;
+    std::string name;
+    double      start_ts;
+    double      duration;
+    uint32_t    level;
+};
+
+struct EventArg
+{
+    uint16_t    position;
+    std::string name;
+    std::string value;
+    std::string data_type;
+};
+
+// Event id structure (mirrors rocprofvis_dm_event_id_t in model)
+union TraceEventId
+{
+    struct
+    {
+        // Event ID from database
+        uint64_t db_event_id : 52;
+        // Node index
+        uint64_t event_node : 8;
+        // Event operation type
+        uint64_t event_op : 4;
+    } bitfield;
+    uint64_t id;
 };
 
 struct EventInfo
 {
     uint64_t                   track_id;  // ID of owning track.
-    TraceEvent                 basic_info;
+    BasicEventData             basic_info;
+    std::vector<EventArg>      args;
     std::vector<EventExtData>  ext_info;
     std::vector<EventFlowData> flow_info;
     std::vector<CallStackData> call_stack_info;

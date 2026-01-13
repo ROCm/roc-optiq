@@ -57,7 +57,7 @@ typedef enum rocprofvis_common_property_t : uint32_t
 typedef enum rocprofvis_controller_object_type_t
 {
     // Controller object
-    kRPVControllerObjectTypeController = 0,
+    kRPVControllerObjectTypeControllerSystem = 0,
     // Timeline object
     kRPVControllerObjectTypeTimeline = 1,
     // Track object

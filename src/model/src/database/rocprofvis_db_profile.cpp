@@ -482,6 +482,12 @@ ProfileDatabase::FindTrackIDs(
         {
             streamTrackId = it->get()->track_id;
         }
+        if (service_data.op == kRocProfVisDmOperationMemoryAllocate && trackId == -1)
+        {
+            //memory free cannot be found on any track except stream track, because it's not executed on any agent/queue
+            //thus assigning trackId to streamTrackId for further processing
+            trackId = streamTrackId;
+        }
     }
     else if(service_data.category == kRocProfVisDmPmcTrack)
     {

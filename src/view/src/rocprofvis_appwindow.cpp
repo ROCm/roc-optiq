@@ -655,12 +655,11 @@ AppWindow::HandleOpenFile()
 
     FileFilter all_filter;
     all_filter.m_name = "All Supported";
-    all_filter.m_extensions = { "db", "rpd", "rpv" };
+    all_filter.m_extensions = { "db", "rpd", "yaml", "rpv" };
 
     FileFilter trace_filter;
     trace_filter.m_name = "Traces";
-    trace_filter.m_extensions = { "db", "rpd" };
-
+    trace_filter.m_extensions = { "db", "rpd", "yaml" };
 #ifdef JSON_TRACE_SUPPORT
     all_filter.m_extensions.push_back("json");
     trace_filter.m_extensions.push_back("json");

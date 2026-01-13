@@ -76,6 +76,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(200, 50, 0, 255),     // Colors::kMinimapBin5
     IM_COL32(240, 120, 0, 255),    // Colors::kMinimapBin6
     IM_COL32(255, 240, 180, 255),  // Colors::kMinimapBin7
+    IM_COL32(0, 0, 0, 180),        // Colors::kLoadingScreenColor
 
     // This must follow the ordering of Colors enum.
 };
@@ -135,6 +136,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(240, 120, 40, 255),   // Colors::kMinimapBin5
     IM_COL32(255, 160, 60, 255),   // Colors::kMinimapBin6
     IM_COL32(255, 200, 120, 255),  // Colors::kMinimapBin7
+    IM_COL32(0, 0, 0, 60),        //Colors::kLoadingScreenColor
 
 
     // This must follow the ordering of Colors enum.
@@ -496,11 +498,11 @@ SettingsManager::InitStyling()
     style.TabRounding       = 6.0f;
     style.WindowRounding    = 8.0f;
     style.ScrollbarRounding = 8.0f;
-
     style.FramePadding  = ImVec2(10, 6);
     style.ItemSpacing   = ImVec2(10, 8);
     style.WindowPadding = ImVec2(4, 4);
-
+    style.ChildRounding = 6.0f;
+ 
     m_default_style = style;  // Store the our customized style
 
     std::vector<ImU32> colormap;

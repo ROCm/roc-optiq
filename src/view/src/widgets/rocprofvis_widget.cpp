@@ -9,7 +9,7 @@
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-
+#include "rocprofvis_settings_manager.h"
 #include <iostream>
 #include <sstream>
 
@@ -165,5 +165,66 @@ CopyableTextUnformatted(const char* text, std::string_view unique_id,
     return clicked;
 }
 
-}  // namespace View
+PopUpStyle::PopUpStyle()
+: m_style_var_count(0)
+, m_color_count(0)
+{}
+
+PopUpStyle::~PopUpStyle() { PopStyles(); }
+
+void
+PopUpStyle::PushPopupStyles()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        settings.GetDefaultStyle().ItemSpacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().WindowRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        settings.GetDefaultStyle().FramePadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,
+                        settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
+    m_style_var_count += 6;
 }
+
+void
+PopUpStyle::CenterPopup()
+{
+    ImVec2 center_pos = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center_pos, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+}
+
+void
+PopUpStyle::PushTitlebarColors()
+{
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    ImU32            grey_color = settings.GetColor(Colors::kBorderGray);
+
+    ImGui::PushStyleColor(ImGuiCol_TitleBg, grey_color);
+    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, grey_color);
+    ImGui::PushStyleColor(ImGuiCol_TitleBgCollapsed, grey_color);
+
+    m_color_count += 3;
+}
+
+void
+PopUpStyle::PopStyles()
+{
+    if(m_style_var_count > 0)
+    {
+        ImGui::PopStyleVar(m_style_var_count);
+        m_style_var_count = 0;
+    }
+    if(m_color_count > 0)
+    {
+        ImGui::PopStyleColor(m_color_count);
+        m_color_count = 0;
+    }
+}
+
+}  // namespace View
+}  // namespace RocProfVis

@@ -9,6 +9,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_event_search.h"
+#include "rocprofvis_minimap.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_summary_view.h"
@@ -194,6 +195,10 @@ TraceView::Update()
     {
         m_summary_view->Update();
     }
+    if(m_minimap && m_show_minimap_popup)
+    {
+        m_minimap->UpdateData();
+    }
 }
 
 void
@@ -207,6 +212,7 @@ TraceView::CreateView()
                                                              m_timeline_selection, m_annotations);
     m_event_search          = std::make_shared<EventSearch>(m_data_provider);
     m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
+    m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
         [this]() { m_timeline_view->RenderHistogram(); });
 
@@ -252,6 +258,7 @@ TraceView::CreateView()
 void
 TraceView::DestroyView()
 {
+    m_minimap                    = nullptr;
     m_timeline_view              = nullptr;
     m_sidebar_item->m_item       = nullptr;
     m_horizontal_split_container = nullptr;
@@ -276,7 +283,7 @@ TraceView::OpenFile(const std::string& file_path)
     return result;
 }
 
-void
+void 
 TraceView::Render()
 {
 
@@ -285,6 +292,18 @@ TraceView::Render()
     {
         m_horizontal_split_container->Render();
         HandleHotKeys();
+    }
+
+    if(m_show_minimap_popup && m_minimap)
+    {
+        float dpi = SettingsManager::GetInstance().GetDPI();
+        ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
+        if(ImGui::Begin("Minimap", &m_show_minimap_popup,
+                        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
+        {
+            m_minimap->Render();
+        }
+        ImGui::End();
     }
 
     if(m_popup_info.show_popup)
@@ -583,6 +602,22 @@ TraceView::RenderToolbar()
     RenderSeparator();
     RenderBookmarkControls();
     RenderSeparator();
+    
+    ImFont* icon_font =
+        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+    ImGui::PushFont(icon_font);
+    if(ImGui::Button(ICON_COMPASS))
+    {
+        m_show_minimap_popup = !m_show_minimap_popup;
+    }
+    ImGui::PopFont();
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Show Minimap");
+    }
+    RenderSeparator();
+
     if(ImGui::Button("Reset View"))
     {
         if(m_timeline_view)

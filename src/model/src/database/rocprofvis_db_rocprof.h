@@ -199,7 +199,7 @@ private:
     private:
         track_find_map_t find_track_map;
         QueryFactory m_query_factory;
-        std::string db_version;
+        std::string m_db_version;
         // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
         string_index_map_t m_string_index_map; // id to index
         string_id_map_t m_string_id_map; // index to id

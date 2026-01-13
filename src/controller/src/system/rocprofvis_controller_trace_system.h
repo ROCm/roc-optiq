@@ -108,7 +108,10 @@ private:
     rocprofvis_result_t LoadJson(char const* const filename);
 #endif
     rocprofvis_result_t LoadRocpd(char const* const filename);
-    
+ 
+    /*DebugComputeTable function is for debugging purposes only. Feel free to refactor it or remove it */
+    rocprofvis_result_t DebugComputeTable(rocprofvis_dm_table_id_t table_id, std::string query, std::string description);
+
 };
 
 }  // namespace Controller

@@ -1,0 +1,418 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
+#include "rocprofvis_db_compute.h"
+#include "json.h"
+
+namespace RocProfVis
+{
+namespace DataModel
+{
+
+	static const std::unordered_map<rocprofvis_db_compute_use_case_enum_t, std::string> SupportedUseCases{
+		{kRPVComputeFetchListOfWorkloads, "Fetch list of workloads" },
+		{kRPVComputeFetchWorkloadRooflineCeiling,  "Fetch roofline ceilings of a workload" },
+		{kRPVComputeFetchWorkloadTopKernels, "Fetch top kernels by duration of a workload" },
+		{kRPVComputeFetchWorkloadKernelsList, "Fetch list of kernels in a workload" },
+		{kRPVComputeFetchKernelRooflineIntensities, "Fetch roofline intensities of a kernel" },
+		{kRPVComputeFetchKernelMetricCategoriesList, "Fetch list of metric categories in a kernel" },
+		{kRPVComputeFetchMetricCategoryTablesList, "Fetch list of tables in a category" },
+	};
+
+	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
+		{"workload_id", kRPVComputeColumnWorkloadId},
+		{"workload_name", kRPVComputeColumnWorkloadName},
+		{"workload_sub_name", kRPVComputeColumnWorkloadSubName},
+		{"sys_info_ext_data", kRPVComputeColumnWorkloadSysInfo},
+		{"profiling_config_extdata", kRPVComputeColumnWorkloadProfileConfig},
+		{"roofline_bench_extdata", kRPVComputeColumnWorkloadRooflineBenchBlob},
+		{"kernel_uuid", kRPVComputeColumnKernelUUID},
+		{"kernel_name", kRPVComputeColumnKernelName},
+		{"kernels_count", kRPVComputeColumnKernelsCount},
+		{"sum_durations", kRPVComputeColumnKernelDurationsSum},
+		{"avg_durations", kRPVComputeColumnKernelDurationsAvg},
+		{"median_durations", kRPVComputeColumnKernelDurationsMedian},
+		{"min_durations", kRPVComputeColumnKernelDurationsMin},
+		{"min_durations", kRPVComputeColumnKernelDurationsMax},
+		{"total_flops", kRPVComputeColumnRooflineTotalFlops},
+		{"l1_cache_data", kRPVComputeColumnRooflineL1CacheData},
+		{"l2_cache_data", kRPVComputeColumnRooflineL2CacheData},
+		{"hbm_cache_data", kRPVComputeColumnRooflineHBMCacheData},
+		{"table_id", kRPVComputeColumnTableId},
+		{"sub_table_id", kRPVComputeColumnSubTableId},
+		{"table_name", kRPVComputeColumnMetricTableName},
+		{"sub_table_name", kRPVComputeColumnMetricSubTableName},
+	};
+
+	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
+		{"HBMBw", kRPVComputeColumnWorkloadRooflineBenchHBMBw},
+		{"L2Bw", kRPVComputeColumnWorkloadRooflineBenchL2Bw},
+		{"L1Bw", kRPVComputeColumnWorkloadRooflineBenchL1Bw},
+		{"LDSBw", kRPVComputeColumnWorkloadRooflineBenchLDSBw},
+		{"MFMAF8Flops", kRPVComputeColumnWorkloadRooflineBenchMFMAF8Flops},
+		{"FP16Flops", kRPVComputeColumnWorkloadRooflineBenchFP16Flops},
+		{"MFMAF16Flops", kRPVComputeColumnWorkloadRooflineBenchMFMAF16Flops},
+		{"MFMABF16Flops", kRPVComputeColumnWorkloadRooflineBenchMFMABF16Flops},
+		{"FP32Flops", kRPVComputeColumnWorkloadRooflineBenchFP32Flops},
+		{"MFMAF32Flops", kRPVComputeColumnWorkloadRooflineBenchMFMAF32Flops},
+		{"FP64Flops", kRPVComputeColumnWorkloadRooflineBenchFP64Flops},
+		{"MFMAF64Flops", kRPVComputeColumnWorkloadRooflineBenchMFMAF64Flops},
+		{"I8Ops", kRPVComputeColumnWorkloadRooflineBenchI8Ops},
+		{"MFMAI8Ops", kRPVComputeColumnWorkloadRooflineBenchMFMAI8Ops},
+		{"I32Ops", kRPVComputeColumnWorkloadRooflineBenchI32Ops},
+		{"I64Ops", kRPVComputeColumnWorkloadRooflineBenchI64Ops},
+	};
+
+	std::string ComputeQueryFactory::GetComputeListOfWorkloads(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query = "SELECT ";
+		query += "workload_id, ";
+		query += "name as workload_name, "; 
+		query += "sub_name as workload_sub_name, ";
+		query += "sys_info_extdata, ";
+		query += "profiling_config_extdata "; 
+		query += "FROM ";
+		query += "compute_workload";
+		return query;
+	}
+	std::string ComputeQueryFactory::GetComputeWorkloadRooflineCeiling(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
+		{
+			query = "SELECT roofline_bench_extdata FROM compute_workload WHERE workload_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+	std::string ComputeQueryFactory::GetComputeWorkloadTopKernels(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
+		{
+			// This seems like complicated and messy query tome. Considering C++ aggregation.
+			query = "SELECT ";
+			query += "t.kernel_uuid, ";
+			query += "t.kernel_name, ";
+			query += "COUNT(*) as kernels_count, ";
+			query += "SUM(duration) as sum_durations, ";
+			query += "AVG(duration) as avg_durations, ";
+			query += "MIN(duration) as min_durations, ";
+			query += "MAX(duration) as max_durations, ";
+			query += "AVG(CASE WHEN rn IN ((cnt + 1) / 2, (cnt + 2) / 2) THEN duration END) AS median_durations ";
+			query += "FROM ";
+			query += "(SELECT D.kernel_uuid, kernel_name, (end_timestamp-start_timestamp) as duration, ";
+			query += "ROW_NUMBER() OVER( PARTITION BY D.kernel_uuid ORDER BY (end_timestamp-start_timestamp)) AS rn, ";
+			query += "COUNT(*) OVER(PARTITION BY D.kernel_uuid) AS cnt ";
+			query += "FROM compute_dispatch D INNER JOIN compute_kernel K ON D.kernel_uuid = K.kernel_uuid WHERE K.workload_id = ";
+			query += params[0].param_str;
+			query += ") T GROUP BY T.kernel_uuid ORDER BY T.duration DESC";
+		}
+		return query;
+		
+	}
+	std::string ComputeQueryFactory::GetComputeWorkloadKernelsList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
+		{
+			query = "SELECT ";
+			query += "kernel_uuid,  ";
+			query += "workload_id,  ";
+			query += "kernel_name  ";
+			query += "FROM  ";
+			query += "compute_kernel ";
+			query += "WHERE workload_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+	std::string ComputeQueryFactory::GetComputeKernelRooflineIntensities(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+		{
+			if (IsVersionGreaterOrEqual("1.1.1"))
+			{
+				query = "WITH AVG_D AS (SELECT AVG(end_timestamp - start_timestamp), kernel_uuid FROM compute_dispatch WHERE kernel_uuid = ";
+				query += params[0].param_str;
+				query += " GROUP BY kernel_uuid)";
+				query += " SELECT ";
+				query += " kernel_uuid, ";
+				query += " kernel_name, ";
+				query += " total_flops, ";
+				query += " l1_cache_data, ";
+				query += " l2_cache_data, ";
+				query += " hbm_cache_data ";
+				query += " FROM compute_roofline_data CRD ";
+				query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid";
+			}
+			else
+			{
+				query = "WITH AVG_D AS (SELECT AVG(end_timestamp - start_timestamp), kernel_uuid FROM compute_dispatch WHERE kernel_uuid = ";
+				query += params[0].param_str;
+				query += " GROUP BY kernel_uuid)";
+				query += " SELECT ";
+				query += " CK.kernel_name, ";
+				query += " total_flops, ";
+				query += " l1_cache_data, ";
+				query += " l2_cache_data, ";
+				query += " hbm_cache_data ";
+				query += " FROM compute_roofline_data CRD ";
+				query += " INNER JOIN compute_kernel CK ON CRD.kernel_name = CK.kernel_name INNER JOIN AVG_D ON CK.kernel_uuid = AVG_D.kernel_uuid";
+			}
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeKernelMetricCategoriesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+		{
+			query = "SELECT ";
+			query += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
+			query += "table_name ";
+			query += "FROM compute_metric ";
+			query += "WHERE kernel_uuid = ";
+			query += params[0].param_str;
+			query += " GROUP BY table_name";
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeMetricCategoryTablesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 2 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId && params[1].param_type == kRPVComputeParamMetricId)
+		{
+			query = "SELECT ";
+			query += "metric_id as sub_table_id, ";
+			query += "sub_table_name ";
+			query += "FROM compute_metric ";
+			query += "WHERE kernel_uuid = ";
+			query += params[0].param_str;
+			query += " AND metric_id LIKE '";
+			query += params[1].param_str;
+			query += ".%' GROUP BY table_name";
+		}
+		return query;
+	}
+
+	rocprofvis_dm_result_t  ComputeDatabase::ExecuteQuery(
+		rocprofvis_dm_charptr_t query,
+		rocprofvis_dm_charptr_t description,
+		Future* future){
+
+		ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+		while (true)
+		{
+			ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+			ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
+			rocprofvis_dm_table_t table = BindObject()->FuncAddTable(BindObject()->trace_object, query, description);
+			TemporaryDbInstance tmp_db_instance(0);
+			ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
+			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, query, table, &CallbackRunQuery)) break;
+			ShowProgress(100, "Query successfully executed!",kRPVDbSuccess, future);
+			return future->SetPromise(kRocProfVisDmResultSuccess);
+		}
+		ShowProgress(0, "Query could not be executed!", kRPVDbError, future );
+		return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed); 
+	}
+
+	rocprofvis_dm_result_t  ComputeDatabase::ReadTraceMetadata(Future* future)
+	{
+		ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+		DbInstances().push_back({SingleNodeDbInstance(), ""});
+		TemporaryDbInstance tmp_db_instance(0);
+		while (true)
+		{			
+			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, "SELECT * FROM compute_metadata;", &CallbackParseMetadata)) break;
+			m_query_factory.SetVersion(m_db_version.c_str());
+			TraceProperties()->metadata_loaded=true;
+			ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
+			return future->SetPromise(kRocProfVisDmResultSuccess);
+
+		}
+		ShowProgress(0, "Trace metadata not loaded!", kRPVDbError, future );
+		return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
+	}
+
+	rocprofvis_dm_result_t
+		ComputeDatabase::BuildComputeQuery(
+			rocprofvis_db_compute_use_case_enum_t use_case, rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
+			rocprofvis_dm_string_t& query) {
+		switch (use_case)
+		{
+			case kRPVComputeFetchListOfWorkloads:
+				query = m_query_factory.GetComputeListOfWorkloads(num, params);
+				break;
+			case kRPVComputeFetchWorkloadRooflineCeiling:
+				query = m_query_factory.GetComputeWorkloadRooflineCeiling(num, params);
+				break;
+			case kRPVComputeFetchWorkloadTopKernels:
+				query = m_query_factory.GetComputeWorkloadTopKernels(num, params);
+				break;
+			case kRPVComputeFetchWorkloadKernelsList:
+				query = m_query_factory.GetComputeWorkloadKernelsList(num, params);
+				break;
+			case kRPVComputeFetchKernelRooflineIntensities:
+				query = m_query_factory.GetComputeKernelRooflineIntensities(num, params);
+				break;
+			case kRPVComputeFetchKernelMetricCategoriesList:
+				query = m_query_factory.GetComputeKernelMetricCategoriesList(num, params);
+				break;
+			case kRPVComputeFetchMetricCategoryTablesList:
+				query = m_query_factory.GetComputeMetricCategoryTablesList(num, params);
+				break;
+			default:
+				return kRocProfVisDmResultInvalidParameter;
+		}
+		if (query.empty())
+		{
+			return kRocProfVisDmResultInvalidParameter;
+		}
+		else
+		{
+			return kRocProfVisDmResultSuccess;
+		}
+	}
+
+	rocprofvis_dm_result_t  ComputeDatabase::ExecuteComputeQuery(
+		rocprofvis_db_compute_use_case_enum_t use_case,
+		rocprofvis_dm_charptr_t query,
+		Future* future){
+
+		ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+		while (true)
+		{
+			ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+			ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
+			auto it = SupportedUseCases.find(use_case);
+			if (it == SupportedUseCases.end())
+				break;
+			rocprofvis_dm_table_t table = BindObject()->FuncAddTable(BindObject()->trace_object, query, it->second.c_str());
+			TemporaryDbInstance tmp_db_instance(0);
+			ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
+			RpvSqliteExecuteQueryCallback callback = nullptr;
+			switch (use_case)
+			{
+				case kRPVComputeFetchListOfWorkloads:
+				case kRPVComputeFetchWorkloadTopKernels:
+				case kRPVComputeFetchWorkloadKernelsList:
+				case kRPVComputeFetchKernelRooflineIntensities:
+				case kRPVComputeFetchKernelMetricCategoriesList:
+				case kRPVComputeFetchMetricCategoryTablesList:
+					callback = CallbackGetComputeGeneric;
+					break;
+				case kRPVComputeFetchWorkloadRooflineCeiling:
+					callback = CallbackGetComputeRooflineCeiling;
+					break;
+				default:
+					break;
+			}
+			if (callback == nullptr)
+				break;
+			future->ResetRowCount();
+			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, query, table, callback)) 
+				break;
+			ShowProgress(100, "Query successfully executed!",kRPVDbSuccess, future);
+			return future->SetPromise(kRocProfVisDmResultSuccess);
+		}
+		ShowProgress(0, "Query could not be executed!", kRPVDbError, future );
+		return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed); 
+	}
+
+	int ComputeDatabase::CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt,
+		char** azColName) {
+		ROCPROFVIS_ASSERT_MSG_RETURN(argc==4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		void* func = (void*)&CallbackParseMetadata;
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		db->m_db_version = "0.0.0";
+		for (int i = 0; i < argc; i++)
+		{
+			if (strcmp(azColName[i], "schema_version") == 0)
+			{
+				db->m_db_version = db->Sqlite3ColumnText(func, stmt, azColName, i);
+				break;
+			}
+		}
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+	int ComputeDatabase::CallbackGetComputeGeneric(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		void* func = (void*)&CallbackGetComputeGeneric;
+		if (callback_params->future->Interrupted()) return 1;
+		rocprofvis_dm_table_row_t row =
+			db->BindObject()->FuncAddTableRow(callback_params->handle);
+		ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
+
+		if(0 == callback_params->future->GetProcessedRowsCount())
+		{
+			for (int i=0; i < argc; i++)
+			{
+				auto it = ColumnNameToEnum.find(azColName[i]);
+				if (it != ColumnNameToEnum.end())
+				{
+					if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumn(callback_params->handle, azColName[i])) return 1;
+					if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumnEnum(callback_params->handle,it->second)) return 1;
+				}
+			}
+		}
+		for (int i=0; i < argc; i++)
+		{
+			auto it = ColumnNameToEnum.find(azColName[i]);
+			if (it != ColumnNameToEnum.end())
+			{
+				std::string column_text = db->Sqlite3ColumnText(func, stmt, azColName, i);
+				if (strcmp(azColName[i], "sub_table_id") == 0)
+				{
+					auto first = column_text.find('.');
+					auto second = column_text.find('.', first + 1);
+					column_text = column_text.substr(first + 1, second - first - 1);
+				}
+				if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, column_text.c_str())) return 1;
+			}
+		}
+
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+	int ComputeDatabase::CallbackGetComputeRooflineCeiling(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		void* func = (void*)&CallbackGetComputeRooflineCeiling;
+		if (callback_params->future->Interrupted()) return 1;
+		rocprofvis_dm_table_row_t row =
+			db->BindObject()->FuncAddTableRow(callback_params->handle);
+		ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
+
+		std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(db->Sqlite3ColumnText(func, stmt, azColName, 0));
+		if (parsed.first == jt::Json::Status::success)
+		{
+			if(0 == callback_params->future->GetProcessedRowsCount())
+			{
+				for (auto& [name, enumeration] : RooflineBenchParamToEnum) {
+					if (parsed.second.contains(name))
+					{
+						if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumn(callback_params->handle, name.c_str())) return 1;
+						if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumnEnum(callback_params->handle,enumeration)) return 1;
+					}
+				}
+			}
+			for (auto& [name, enumeration] : RooflineBenchParamToEnum) {
+				if (parsed.second.contains(name))
+				{
+					if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, parsed.second[name].toString().c_str())) return 1;
+				}
+			}
+		}
+
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+}  // namespace DataModel
+}  // namespace RocProfVis

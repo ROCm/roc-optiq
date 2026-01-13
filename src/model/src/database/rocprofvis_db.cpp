@@ -237,6 +237,31 @@ rocprofvis_dm_result_t  Database::ExecuteQueryAsync(
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t  Database::ExecuteComputeQueryAsync(
+    rocprofvis_db_compute_use_case_enum_t use_case,
+    rocprofvis_dm_charptr_t query,
+    rocprofvis_db_future_t object, 
+    rocprofvis_dm_table_id_t* id)
+{
+    Future* future = (Future*) object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    *id = std::hash<std::string>{}(query);
+    rocprofvis_dm_result_t   result = BindObject()->FuncCheckTableExists(BindObject()->trace_object, *id);
+    if(result != kRocProfVisDmResultNotLoaded)
+    {
+        return future->SetPromise(result);
+    }
+    try {
+        future->SetWorker(std::move(std::thread(ExecuteComputeQueryStatic, this, use_case, query, future)));
+    }
+    catch (std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_result_t  Database::ReadTraceMetadataStatic(
                                                     Database* db, 
                                                     Future* object){
@@ -278,6 +303,14 @@ rocprofvis_dm_result_t   Database::ExecuteQueryStatic(
                                                     rocprofvis_dm_charptr_t description,
                                                     Future* object){
     return db->ExecuteQuery(query,description,object);
+}
+
+rocprofvis_dm_result_t   Database::ExecuteComputeQueryStatic(
+    Database* db,
+    rocprofvis_db_compute_use_case_enum_t use_case,
+    rocprofvis_dm_charptr_t query,
+    Future* object){
+    return db->ExecuteComputeQuery(use_case, query,object);
 }
 
 const char* Database::ProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
@@ -479,6 +512,56 @@ Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it,
     newprops.query[slice_query_category].push_back(newqueries[slice_source_query_category]);
     newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
     newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]); 
+}
+
+void DatabaseVersion::SetVersion(const char* version) {
+    m_db_version = ConvertVersionStringToInt(version);
+}
+
+std::vector<uint32_t>
+DatabaseVersion::ConvertVersionStringToInt(const char* version)
+{
+    std::vector<uint32_t> version_array;
+    std::stringstream ss(version);
+    std::string       token;
+    while(std::getline(ss, token, '.'))
+    {
+        version_array.push_back(std::stoi(token));
+    }
+    return version_array;
+}
+
+bool DatabaseVersion::IsVersionEqual(const char* version)
+{
+    std::vector<uint32_t> db_version = ConvertVersionStringToInt(version);
+
+    for (int i = 0; i < db_version.size(); i++)
+    {
+        uint32_t token = (m_db_version.size() > i) ? m_db_version[i] : 0;
+        if(db_version[i] != token)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool DatabaseVersion::IsVersionGreaterOrEqual(const char* version) 
+{
+    std::vector<uint32_t> db_version = ConvertVersionStringToInt(version);
+
+    for(int i = 0; i < db_version.size(); i++)
+    {
+        uint32_t token = (m_db_version.size() > i) ? m_db_version[i] : 0;
+        if(token > db_version[i])
+        {
+            return true;
+        } else if (token < db_version[i])
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 }  // namespace DataModel

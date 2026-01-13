@@ -13,15 +13,10 @@ namespace DataModel
 
 class ProfileDatabase;
 
-class QueryFactory
+class QueryFactory : public DatabaseVersion
 {
 public:
     QueryFactory(ProfileDatabase* db);
-
-    void SetVersion(const char* version);
-
-    bool IsVersionEqual(const char*);
-    bool IsVersionGreaterOrEqual(const char*);
 
     std::string GetRocprofRegionTrackQuery(bool is_sample_track);
     std::string GetRocprofRegionLevelQuery(bool is_sample_track);
@@ -77,23 +72,7 @@ public:
 
 private:
 
-    std::vector<uint32_t>  ConvertVersionStringToInt(const char* version);
-
-    uint32_t GetMajorVersion()
-    {
-        return m_db_version.size() > 0 ? m_db_version[0] : 0;
-    }
-    uint32_t GetMinorVersion()
-    {
-        return m_db_version.size() > 1 ? m_db_version[1] : 0;
-    }
-    uint32_t GetPatchVersion()
-    {
-        return m_db_version.size() > 2 ? m_db_version[2] : 0;
-    }
-
     ProfileDatabase* m_db;
-    std::vector<uint32_t> m_db_version;
 };
 
 

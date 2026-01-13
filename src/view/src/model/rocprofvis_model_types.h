@@ -114,17 +114,26 @@ struct CallStackData
 
 struct BasicEventData
 {
-    TraceEventId m_id;
-    std::string m_name;
-    double      m_start_ts;
-    double      m_duration;
-    uint32_t    m_level;
+    TraceEventId id;
+    std::string name;
+    double      start_ts;
+    double      duration;
+    uint32_t    level;
+};
+
+struct EventArg
+{
+    uint16_t    position;
+    std::string name;
+    std::string value;
+    std::string data_type;
 };
 
 struct EventInfo
 {
     uint64_t                   track_id;  // ID of owning track.
     BasicEventData             basic_info;
+    std::vector<EventArg>      args;
     std::vector<EventExtData>  ext_info;
     std::vector<EventFlowData> flow_info;
     std::vector<CallStackData> call_stack_info;

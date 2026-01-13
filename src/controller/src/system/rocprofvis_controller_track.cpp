@@ -11,7 +11,7 @@
 #include "rocprofvis_controller_counter.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
-#include "rocprofvis_controller_trace.h"
+#include "rocprofvis_controller_trace_system.h"
 #include "rocprofvis_controller_future.h"
 
 #include <algorithm>
@@ -30,7 +30,7 @@ typedef Reference<rocprofvis_controller_queue_t, Queue, kRPVControllerObjectType
 typedef Reference<rocprofvis_controller_stream_t, Stream, kRPVControllerObjectTypeStream> StreamRef;
 typedef Reference<rocprofvis_controller_counter_t, Counter, kRPVControllerObjectTypeCounter> CounterRef;
 
-Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, Trace * ctx)
+Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, SystemTrace * ctx)
 : Handle(__kRPVControllerTrackPropertiesFirst, __kRPVControllerTrackPropertiesLast)
 , m_id(id)
 , m_num_entries(0)
@@ -205,7 +205,7 @@ rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_
     FetchEventsArgs args;
     args.m_array = &array;
     args.m_index = &index;
-    args.lru_params.m_ctx   = (Trace*)GetContext();
+    args.lru_params.m_ctx   = (SystemTrace*)GetContext();
     args.lru_params.m_lod      = 0;
     array.SetContext(GetContext());
 

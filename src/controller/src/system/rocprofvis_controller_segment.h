@@ -23,7 +23,7 @@ namespace Controller
 class Array;
 class Event;
 class Sample;
-class Trace;
+class SystemTrace;
 class SegmentTimeline;
 class Future;
 
@@ -32,7 +32,7 @@ constexpr double kScalableSegmentDuration   = 10000.0;
 constexpr uint32_t kSegmentBitSetSize = 64;
 struct SegmentLRUParams
 {
-    Trace* m_ctx;
+    SystemTrace* m_ctx;
     SegmentTimeline* m_owner;
     uint32_t m_lod;
 };

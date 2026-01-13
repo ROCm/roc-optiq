@@ -87,6 +87,7 @@ public:
     ImVec2         GetGraphSize();
     void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords     GetViewCoords() const;
+    float          GetTotalTrackHeight() const;
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
 

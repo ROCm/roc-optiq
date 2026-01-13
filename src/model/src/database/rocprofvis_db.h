@@ -246,6 +246,31 @@ class DatabaseCache
 
 };
 
+class DatabaseVersion
+{
+public:
+
+    void SetVersion(const char* version);
+    bool IsVersionEqual(const char*);
+    bool IsVersionGreaterOrEqual(const char*);
+
+    uint32_t GetMajorVersion()
+    {
+        return m_db_version.size() > 0 ? m_db_version[0] : 0;
+    }
+    uint32_t GetMinorVersion()
+    {
+        return m_db_version.size() > 1 ? m_db_version[1] : 0;
+    }
+    uint32_t GetPatchVersion()
+    {
+        return m_db_version.size() > 2 ? m_db_version[2] : 0;
+    }
+private:
+    std::vector<uint32_t>  ConvertVersionStringToInt(const char* version);
+    std::vector<uint32_t> m_db_version;
+};
+
 class Database
 {
     public:
@@ -314,6 +339,28 @@ class Database
                                                                 rocprofvis_dm_charptr_t description,
                                                                 rocprofvis_db_future_t object,
                                                                 rocprofvis_dm_table_id_t* id);
+        // Asynchronously run compute table query and store results into Table object 
+        // @param query - database query 
+        // @param description - database description
+        // @param object - future object providing asynchronous execution mechanism 
+        // @param id new id is assigned to the table and returned using this reference pointer
+        // @return status of operation
+        rocprofvis_dm_result_t          ExecuteComputeQueryAsync(
+                                                                rocprofvis_db_compute_use_case_enum_t use_case,
+                                                                rocprofvis_dm_charptr_t query,
+                                                                rocprofvis_db_future_t object,
+                                                                rocprofvis_dm_table_id_t* id);
+       // method to build a query for compute use case 
+       // @param use_case - use case enumeration
+       // @param num - number of parameters
+       // @param params -parameters array 
+       // @param query - reference to query string   
+       // @return status of operation  
+       virtual rocprofvis_dm_result_t BuildComputeQuery(
+                                                               rocprofvis_db_compute_use_case_enum_t use_case, 
+                                                               rocprofvis_db_num_of_params_t num, 
+                                                               rocprofvis_db_compute_params_t params,
+                                                               rocprofvis_dm_string_t& query) = 0;
 
        virtual rocprofvis_dm_result_t BuildTableQuery(
                                                                 rocprofvis_dm_timestamp_t start, 
@@ -334,20 +381,6 @@ class Database
                                                                 bool summary,
                                                                 rocprofvis_dm_string_t& query) = 0;
 
-        // Searches for strings containing the passed in list of filter strings and builds a WHERE IN clause for the table query.
-        // @param num_string_table_filters - number of filter strings
-        // @param string_table_filters - array of filter strings
-        // @param filter - output string containing WHERE clause
-        // @return status of operation
-       virtual rocprofvis_dm_result_t BuildTableStringIdFilter(
-                                                                rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
-                                                                rocprofvis_dm_string_table_filters_t string_table_filters,
-                                                                table_string_id_filter_map_t& filter) = 0;
-
-       virtual rocprofvis_dm_result_t BuildTableSummaryClause(
-                                                                bool sample_query,
-                                                                rocprofvis_dm_string_t& select,
-                                                                rocprofvis_dm_string_t& group_by) = 0;
 
         // Asynchronously writes the results of a table query to .CSV
         // @param query - database query 
@@ -374,7 +407,6 @@ class Database
                                                     rocprofvis_dm_string_t new_db_path,
                                                     Future* object);
        virtual void InterruptQuery(void* connection) {};
-       virtual rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) = 0;
 
        // returns pointer to cached tables map array
        DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
@@ -438,6 +470,17 @@ class Database
                                                                 Database* db,
                                                                 rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t description,
+                                                                Future* object);
+        //static method to launch compute query. 
+        // @param db - pointer to database object
+        // @param query - database query 
+        // @param description - database description
+        // @param object - future object providing asynchronous execution mechanism 
+        // @return status of operation
+        static rocprofvis_dm_result_t   ExecuteComputeQueryStatic(
+                                                                Database* db,
+                                                                rocprofvis_db_compute_use_case_enum_t use_case,
+                                                                rocprofvis_dm_charptr_t query,
                                                                 Future* object);
         // static method to find a value in cached tables by specifying reserved table name, instance id and column name
         // @param object - database handler
@@ -506,7 +549,7 @@ class Database
         virtual rocprofvis_dm_result_t  ReadExtEventInfo(
                                                                 rocprofvis_dm_event_id_t event_id,
                                                                 Future* object) = 0;
-        // worker method to execute database query
+        // worker method to execute any database query
         // @param query - database query 
         // @param description - database description
         // @param object - future object providing asynchronous execution mechanism 
@@ -515,6 +558,15 @@ class Database
                                                                 rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t description,
                                                                 Future* object) = 0;
+        // worker method to execute compute database query
+        // @param query - database query 
+        // @param description - database description
+        // @param object - future object providing asynchronous execution mechanism 
+        // @return status of operation
+        virtual rocprofvis_dm_result_t  ExecuteComputeQuery(
+                                                                rocprofvis_db_compute_use_case_enum_t use_case,
+                                                                rocprofvis_dm_charptr_t query,
+                                                                Future* future) = 0;
         // method to build a query to read time slice of records for single track 
         // @param index - track index 
         // @param type - query type
@@ -631,21 +683,6 @@ class Database
         // @param s - string to check
         // @return True if number
         static bool IsNumber(const std::string& s);
-        // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
-        // @param node_id - node id
-        // @param process_id - process id 
-        // @param sub_process_name - metric name
-        // @param operation - operation of event that requesting track id
-        // @return status of operation
-        virtual rocprofvis_dm_result_t          FindTrackId(
-                                                                uint64_t node,
-                                                                uint32_t process,
-                                                                const char* subprocess,
-                                                                rocprofvis_dm_op_t operation,
-                                                                rocprofvis_dm_track_id_t& track_id)=0;
-
-        virtual rocprofvis_dm_string_t GetEventOperationQuery(
-                                                                const rocprofvis_dm_event_operation_t operation) = 0;
 
     public:
         // declare DatabaseCache as friend class, for having access to protected members

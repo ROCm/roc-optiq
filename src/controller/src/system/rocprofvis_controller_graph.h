@@ -14,7 +14,7 @@ namespace Controller
 
 class Array;
 class Track;
-class Trace;
+class SystemTrace;
 class Future;
 
 class Graph : public Handle
@@ -53,7 +53,7 @@ private:
     std::map<uint32_t, SegmentTimeline> m_lods;
     uint64_t m_id;
     Track* m_track;
-    Trace* m_ctx;
+    SystemTrace* m_ctx;
     rocprofvis_controller_graph_type_t m_type;
     std::condition_variable_any  m_cv;
 };

@@ -108,7 +108,7 @@ int RocprofDatabase::CallbackParseMetadata(void* data, int argc, sqlite3_stmt* s
     std::string tag = db->Sqlite3ColumnText(func, stmt, azColName, 1);
     if (tag == "schema_version")
     {
-        db->db_version = db->Sqlite3ColumnText(func, stmt, azColName, 2);
+        db->m_db_version = db->Sqlite3ColumnText(func, stmt, azColName, 2);
     }
     callback_params->future->CountThisRow();
     return 0;
@@ -447,7 +447,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             if ((result = kRocProfVisDmResultSuccess) != ExecuteSQLQuery(future, &guid_info.first, "SELECT * FROM rocpd_metadata_%GUID%;", &CallbackParseMetadata)) break;
             if (!version.empty())
             {
-                if (version != db_version)
+                if (version != m_db_version)
                 {
                     spdlog::debug("Cannot support different version database nodes!");
                     result = kRocProfVisDmResultNotSupported;
@@ -457,7 +457,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         }
         if (result != kRocProfVisDmResultSuccess)
             break;
-        m_query_factory.SetVersion(db_version.c_str());
+        m_query_factory.SetVersion(m_db_version.c_str());
 
         ShowProgress(5, "Indexing tables", kRPVDbBusy, future);
         CreateIndexes();

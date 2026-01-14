@@ -72,8 +72,8 @@ Project::Open(std::string& file_path)
     }
     else
     {
-        AppWindow::GetInstance()->ShowMessageDialog(
-                "Error", "File does not exist: " + file_path);
+        AppWindow::GetInstance()->ShowMessageDialog("Error",
+                                                    "File does not exist: " + file_path);
     }
     return result;
 }
@@ -171,23 +171,35 @@ Project::OpenTrace(std::string& file_path)
         bool                       trace_result = false;
         TraceType                  trace_type   = Undefined;
         std::shared_ptr<RocWidget> view         = nullptr;
-        std::string file_ext = std::filesystem::path(file_path).extension().string();
+        rocprofvis_controller_t*   controller =
+            rocprofvis_controller_alloc(file_path.c_str());
+        if(controller)
+        {
+            rocprofvis_controller_object_type_t type =
+                kRPVControllerObjectTypeControllerSystem;
+            rocprofvis_result_t result =
+                rocprofvis_controller_get_object_type(controller, &type);
+            if(result == kRocProfVisResultSuccess)
+            {
+                if(type == kRPVControllerObjectTypeControllerSystem)
+                {
+                    std::shared_ptr<TraceView> trace_view = std::make_shared<TraceView>();
+                    trace_result = trace_view->LoadTrace(controller, file_path);
+                    trace_type   = System;
+                    view         = trace_view;
+                }
 #ifdef COMPUTE_UI_SUPPORT
-        if(file_ext == ".csv")
-        {
-            std::shared_ptr<ComputeRoot> compute_view = std::make_shared<ComputeRoot>();
-            trace_result                              = compute_view->OpenTrace(file_path);
-            trace_type = Compute;
-            view       = compute_view;
-            NavigationManager::GetInstance()->RefreshNavigationTree();
-        }
-        else
+                else if(type == kRPVControllerObjectTypeControllerCompute)
+                {
+                    std::shared_ptr<ComputeRoot> compute_view =
+                        std::make_shared<ComputeRoot>();
+                    trace_result = compute_view->LoadTrace(controller);
+                    trace_type   = Compute;
+                    view         = compute_view;
+                    NavigationManager::GetInstance()->RefreshNavigationTree();
+                }
 #endif
-        {
-            std::shared_ptr<TraceView> trace_view = std::make_shared<TraceView>();
-            trace_result                          = trace_view->OpenFile(file_path);
-            trace_type                            = System;
-            view                                  = trace_view;
+            }
         }
         if(trace_result && view)
         {
@@ -199,6 +211,10 @@ Project::OpenTrace(std::string& file_path)
                          .filename()
                          .string();
             result = Success;
+        }
+        else
+        {
+            rocprofvis_controller_free(controller);
         }
     }
     return result;

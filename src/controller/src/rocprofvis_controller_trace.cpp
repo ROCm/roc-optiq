@@ -13,13 +13,14 @@ namespace Controller
 
 static IdGenerator<Trace> s_trace_id;
 
-Trace::Trace(uint32_t first_prop_index, uint32_t last_prop_index)
+Trace::Trace(uint32_t first_prop_index, uint32_t last_prop_index, char const* const filename)
 : Handle(first_prop_index, last_prop_index)
 , m_id(s_trace_id.GetNextId())
 , m_dm_handle(nullptr)
 , m_dm_progress_percent(0)
 {
-    
+    assert (filename && strlen(filename));
+    m_trace_file = filename;
 }
 
 Trace::~Trace()

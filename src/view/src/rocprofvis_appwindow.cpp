@@ -1053,11 +1053,20 @@ AppWindow::RenderDeveloperMenu()
 #    ifdef JSON_TRACE_SUPPORT
             trace_filter.m_extensions.push_back("json");
 #    endif
+            file_filters.push_back(trace_filter);
             ShowOpenFileDialog("Choose File", file_filters, "",
                                [this](std::string file_path) -> void {
-                                   this->m_test_data_provider.FetchTrace(file_path);
-                                   spdlog::info("Opening file: {}", file_path);
-                                   m_show_provider_test_widow = true;
+                                   rocprofvis_controller_t* controller = rocprofvis_controller_alloc(file_path.c_str());
+                                   if(controller)
+                                   {
+                                       this->m_test_data_provider.FetchTrace(controller, file_path);
+                                       spdlog::info("Opening file: {}", file_path);
+                                       m_show_provider_test_widow = true;
+                                   }
+                                   else
+                                   {
+                                       rocprofvis_controller_free(controller);
+                                   }
                                });
         }
         ImGui::EndMenu();

@@ -25,6 +25,7 @@ option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
+
 if(APPLE AND USE_NATIVE_FILE_DIALOG)
     set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
         "Use the OS native file dialog instead of ImGui file dialog" FORCE)
@@ -169,28 +170,21 @@ if(APPLE)
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.amd.roc-optiq"
         MACOSX_BUNDLE_BUNDLE_NAME "ROCm Optiq"
+        MACOSX_BUNDLE_ICON_FILE "roc-optiq.icns"
         MACOSX_BUNDLE_SHORT_VERSION_STRING
             "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION_BUILD}"
     )
+    
+    # Set icon file location in bundle
     set_source_files_properties(
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.icns"
         PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
     )
+    
+    # Add icon to target sources
     target_sources(${TARGET_NAME} PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.icns"
-    )
-
-    set_source_files_properties(
-        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/Roboto-Medium.ttf"
-        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/Karla-Regular.ttf"
-        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/DroidSans.ttf"
-        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/fonts"
-    )
-    target_sources(${TARGET_NAME} PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/Roboto-Medium.ttf"
-        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/Karla-Regular.ttf"
-        "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui/misc/fonts/DroidSans.ttf"
     )
 endif()
 
@@ -258,7 +252,7 @@ endif()
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")
 
 # Csv parser enables coverage in debug builds so we need to enable it too
-if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX) AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE)))
+if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang") AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE)))
     message(STATUS "Adding --coverage to linker flags for roc-optiq due to potential gcov symbols from dependencies.")
     target_link_options(${TARGET_NAME} PRIVATE --coverage)
 endif()
@@ -351,7 +345,9 @@ set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
 # RPM package specific variables
-set(CMAKE_SKIP_RPATH TRUE)
+if(NOT APPLE)
+    set(CMAKE_SKIP_RPATH TRUE)
+endif()
 set(CPACK_RPM_COMPONENT_INSTALL ON)
 set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
 
@@ -359,21 +355,6 @@ set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
 if(NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
   set(CPACK_RPM_PACKAGE_RELEASE "1")
 endif()
-
-if(NOT APPLE)
-    set(CMAKE_SKIP_RPATH TRUE)
-endif()
-set ( CPACK_RPM_COMPONENT_INSTALL ON )
-set ( CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}" )
-if( NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
-  if(DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE})
-    set(CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE})
-  else()
-    set(CPACK_RPM_PACKAGE_RELEASE "local.${BUILD_ID}")
-  endif()
-endif()
-
-## RPM package specific variables
 
 # 'dist' breaks manual builds on debian systems due to empty Provides
 execute_process( COMMAND rpm --eval %{?dist}

@@ -85,7 +85,7 @@ target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE Catch2::Catch2WithMain
 if(COMPUTE_UI_SUPPORT)
     target_link_libraries(${TARGET_NAME} PUBLIC csv)
     # Csv parser enables coverage in debug builds so we need to enable it too
-    if((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX) AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE))
+    if((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang") AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE))
         target_link_options(${PROJECT_NAME}-basic-tests PRIVATE --coverage)
     endif()
 endif()

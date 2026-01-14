@@ -11,12 +11,8 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
-#include <cstring>
 #include <string>
 #include <vector>
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
 
 namespace RocProfVis
 {
@@ -32,115 +28,6 @@ constexpr std::array FONT_AVAILABLE_SIZES = { 7.0f,  8.0f,  9.0f,  10.0f, 11.0f,
 FontManager::FontManager() {}
 
 FontManager::~FontManager() {}
-
-namespace
-{
-std::filesystem::path
-get_bundle_resources_path()
-{
-#ifdef __APPLE__
-    uint32_t size = 0;
-    if(_NSGetExecutablePath(nullptr, &size) != -1 || size == 0) return {};
-
-    std::string buffer(size, '\0');
-    if(_NSGetExecutablePath(buffer.data(), &size) != 0) return {};
-    buffer.resize(std::strlen(buffer.c_str()));
-
-    std::error_code ec;
-    std::filesystem::path exec_path = std::filesystem::weakly_canonical(buffer, ec);
-    if(ec) exec_path = std::filesystem::path(buffer);
-
-    std::filesystem::path resources_dir =
-        (exec_path.parent_path() / "../Resources").lexically_normal();
-    if(std::filesystem::exists(resources_dir, ec))
-    {
-        return resources_dir;
-    }
-#endif
-    return {};
-}
-
-std::filesystem::path
-find_bundled_font(const std::filesystem::path& rel_path)
-{
-    std::error_code       ec;
-    std::filesystem::path base = std::filesystem::current_path(ec);
-    if(ec) return {};
-
-    for(int depth = 0; depth < 6; ++depth)
-    {
-        std::filesystem::path candidate = base / rel_path;
-        if(std::filesystem::exists(candidate, ec))
-        {
-            return candidate;
-        }
-        if(!base.has_parent_path())
-        {
-            break;
-        }
-        base = base.parent_path();
-    }
-
-    return {};
-}
-
-std::filesystem::path
-find_font_path()
-{
-    const std::filesystem::path bundled_paths[] = {
-        "thirdparty/imgui/misc/fonts/Roboto-Medium.ttf",
-        "thirdparty/imgui/misc/fonts/Karla-Regular.ttf",
-        "thirdparty/imgui/misc/fonts/DroidSans.ttf"
-    };
-
-#ifdef __APPLE__
-    std::filesystem::path resources_dir = get_bundle_resources_path();
-    if(!resources_dir.empty())
-    {
-        for(const auto& rel_path : bundled_paths)
-        {
-            std::filesystem::path candidate = resources_dir / "fonts" / rel_path.filename();
-            if(std::filesystem::exists(candidate))
-            {
-                return candidate;
-            }
-        }
-    }
-#endif
-
-    for(const auto& rel_path : bundled_paths)
-    {
-        std::filesystem::path candidate = find_bundled_font(rel_path);
-        if(!candidate.empty())
-        {
-            return candidate;
-        }
-    }
-
-#ifdef _WIN32
-    const char* system_paths[] = { "C:\\Windows\\Fonts\\segoeui.ttf",
-                                   "C:\\Windows\\Fonts\\arial.ttf" };
-#else
-    const char* system_paths[] = {
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"
-    };
-#endif
-
-    std::error_code ec;
-    for(const char* path : system_paths)
-    {
-        if(std::filesystem::exists(path, ec))
-        {
-            return std::filesystem::path(path);
-        }
-    }
-
-    return {};
-}
-}  // namespace
 
 ImFont*
 FontManager::GetIconFontByIndex(int idx)
@@ -215,6 +102,19 @@ FontManager::Init()
 
 #ifdef _WIN32
     const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
+#elif __APPLE__
+    const char* font_paths[] = {
+        // macOS system fonts
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/HelveticaNeue.ttc",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Verdana.ttf",
+        "/Library/Fonts/Arial.ttf",
+        "/Library/Fonts/Microsoft/Arial.ttf",
+        // SF Pro (newer macOS)
+        "/System/Library/Fonts/SFNSDisplay.ttf",
+        "/System/Library/Fonts/SFNS.ttf"
+    };
 #else
     const char* font_paths[] = {
         // Ubuntu / Debian

@@ -569,6 +569,22 @@ LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
     double      result = 0.0;
     const char* first  = input.data();
     const char* last   = input.data() + input.size();
+    
+#if defined(__APPLE__)
+    // macOS doesn't support from_chars for floating point yet, use strtod as fallback
+    char* end_ptr = nullptr;
+    std::string null_terminated(input);
+    result = std::strtod(null_terminated.c_str(), &end_ptr);
+    if(end_ptr == null_terminated.c_str() + null_terminated.size() && std::isfinite(result))
+    {
+        return result;
+    }
+    else
+    {
+        m_text_field.RevertToDefault();
+        return m_default_value;
+    }
+#else
     auto [ptr, error_code] =
         std::from_chars(first, last, result, std::chars_format::general);
     if(error_code == std::errc{} && std::isfinite(result) && ptr == last)
@@ -580,6 +596,7 @@ LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
         m_text_field.RevertToDefault();
         return m_default_value;
     }
+#endif
 }
 
 }  // namespace View

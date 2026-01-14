@@ -156,8 +156,7 @@ rocprofvis_result_t SystemTrace::LoadJson(char const* const filename) {
                             Track* track = new Track(type, track_id++, nullptr, this);
                             {
                                 track->SetString(kRPVControllerTrackName, 0,
-                                                 thread.first.c_str(),
-                                                 thread.first.length());
+                                                 thread.first.c_str());
                                 switch(type)
                                 {
                                     case kRPVControllerTrackTypeEvents:
@@ -190,8 +189,7 @@ rocprofvis_result_t SystemTrace::LoadJson(char const* const filename) {
                                             {
                                                 result = new_event->SetString(
                                                     kRPVControllerEventName, 0,
-                                                    event.m_name.c_str(),
-                                                    event.m_name.length());
+                                                    event.m_name.c_str());
                                                 ROCPROFVIS_ASSERT(result ==
                                                        kRocProfVisResultSuccess);
 
@@ -2230,8 +2228,9 @@ rocprofvis_result_t SystemTrace::AsyncFetch(rocprofvis_property_t property, Futu
                 }
                 case kRPVControllerBucketDataValueIndexed:
                 {
-                    size_t buckets_num = 0;
-                    result = GetUInt64(kRPVControllerGetHistogramBucketsNumber, 0, &buckets_num);
+                    uint64_t buckets_num_tmp = 0;
+                    result = GetUInt64(kRPVControllerGetHistogramBucketsNumber, 0, &buckets_num_tmp);
+                    size_t buckets_num = static_cast<size_t>(buckets_num_tmp);
                     if (result == kRocProfVisResultSuccess)
                     {
                         result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, buckets_num);

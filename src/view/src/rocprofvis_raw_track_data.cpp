@@ -68,10 +68,6 @@ RawTrackData::AllDataReady() const
     return m_chunk_info.size() == m_expected_chunk_count;
 }
 
-// Explicit template instantiation
-template class RocProfVis::View::TemplatedRawTrackData<TraceCounter>;
-template class RocProfVis::View::TemplatedRawTrackData<TraceEvent>;
-
 template <typename T>
 TemplatedRawTrackData<T>::TemplatedRawTrackData(uint64_t track_id, double start_ts, double end_ts,
                                                  uint64_t data_group_id, size_t chunk_count)
@@ -134,3 +130,7 @@ bool TemplatedRawTrackData<T>::AddChunk(size_t chunk_index, const std::vector<T>
 
         return true;
     }
+
+// Explicit template instantiation (must be after all template member definitions)
+template class RocProfVis::View::TemplatedRawTrackData<TraceCounter>;
+template class RocProfVis::View::TemplatedRawTrackData<TraceEvent>;

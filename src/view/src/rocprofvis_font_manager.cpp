@@ -8,7 +8,6 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -147,11 +146,6 @@ FontManager::Init()
 
     ImFontConfig config;
     config.FontDataOwnedByAtlas = false;
-
-    ImFontConfig font_config;
-    font_config.PixelSnapH = false;
-    font_config.OversampleH = 2;
-    font_config.OversampleV = 2;
 
     // Load all font sizes once
     for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)

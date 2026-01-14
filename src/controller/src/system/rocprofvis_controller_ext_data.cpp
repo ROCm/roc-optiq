@@ -211,7 +211,7 @@ rocprofvis_result_t ExtData::GetString(rocprofvis_property_t property, uint64_t 
 ArgumentData::ArgumentData(const char* category, const char* name, const char* value,
     rocprofvis_db_data_type_t type, uint64_t category_enum, size_t position, const char* arg_type) 
     :ExtData(category,name,value, type, category_enum)
-    ,m_position(position)
+    ,m_position(static_cast<uint64_t>(position))
     ,m_arg_type(arg_type) { }
 
 ArgumentData::~ArgumentData() {}

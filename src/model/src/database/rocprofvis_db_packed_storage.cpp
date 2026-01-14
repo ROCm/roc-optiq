@@ -24,6 +24,14 @@
 #include <execution>
 #include <cfloat>
 
+// macOS libc++ doesn't support parallel execution policies yet
+// Use sequential execution as a fallback
+#if defined(__APPLE__) || !defined(__cpp_lib_execution)
+    #define ROCPROFVIS_SORT_EXEC_POLICY
+#else
+    #define ROCPROFVIS_SORT_EXEC_POLICY std::execution::par_unseq,
+#endif
+
 namespace RocProfVis
 {
 namespace DataModel
@@ -540,7 +548,7 @@ namespace DataModel
                     double value = size > 0 ? row->Get<double>(it->m_offset[op], size) : (ascending ? DBL_MAX : 0);
                     sort_values.push_back(value);
                 }
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                std::sort(ROCPROFVIS_SORT_EXEC_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
                         return ascending ? sort_values[so1] < sort_values[so2]
                             : sort_values[so2] < sort_values[so1];
@@ -572,7 +580,7 @@ namespace DataModel
                         sort_values.push_back(0);
                
                 }
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                std::sort(ROCPROFVIS_SORT_EXEC_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
                         return ascending ? sort_values[so1] < sort_values[so2]
                             : sort_values[so2] < sort_values[so1];
@@ -590,7 +598,7 @@ namespace DataModel
                     sort_values.push_back(value);
 
                 }
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                std::sort(ROCPROFVIS_SORT_EXEC_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
                         return ascending ? sort_values[so1] < sort_values[so2]
                             : sort_values[so2] < sort_values[so1];
@@ -615,7 +623,7 @@ namespace DataModel
             keys.push_back({ row.Get<uint64_t>(1), i });
         }
 
-        std::sort(std::execution::par_unseq, keys.begin(), keys.end(),
+        std::sort(ROCPROFVIS_SORT_EXEC_POLICY keys.begin(), keys.end(),
             [](const SortKey& a, const SortKey& b) {
                 return a.key < b.key;
             });

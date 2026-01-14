@@ -687,6 +687,7 @@ class Database
     public:
         // declare DatabaseCache as friend class, for having access to protected members
         friend class DatabaseCache;
+        friend class TableProcessor;
 };
 
 }  // namespace DataModel

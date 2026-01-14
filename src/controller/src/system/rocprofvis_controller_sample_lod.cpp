@@ -47,15 +47,15 @@ void SampleLOD::CalculateChildValues(void)
             }
         }
     }
-    uint64_t num_children = values.size();
+    size_t num_children = values.size();
     if(num_children & 0x1)
     {
         m_child_median = values[num_children / 2];
     }
     else
     {
-        uint64_t lower = std::max(num_children / 2, (uint64_t)1) - 1;
-        uint64_t upper = std::min(num_children / 2, values.size() - 1);
+        size_t lower = std::max(num_children / 2, static_cast<size_t>(1)) - 1;
+        size_t upper = std::min(num_children / 2, values.size() - 1);
 
         m_child_median = (values[lower] + values[upper]) / 2;
     }

@@ -101,6 +101,19 @@ FontManager::Init()
 
 #ifdef _WIN32
     const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
+#elif __APPLE__
+    const char* font_paths[] = {
+        // macOS system fonts
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/HelveticaNeue.ttc",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Verdana.ttf",
+        "/Library/Fonts/Arial.ttf",
+        "/Library/Fonts/Microsoft/Arial.ttf",
+        // SF Pro (newer macOS)
+        "/System/Library/Fonts/SFNSDisplay.ttf",
+        "/System/Library/Fonts/SFNS.ttf"
+    };
 #else
     const char* font_paths[] = {
         // Ubuntu / Debian

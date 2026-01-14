@@ -30,7 +30,7 @@ private:
     {
         int      id;
         uint64_t event_id;  // Info is deleted upon deselection so this must be cached
-                            // seperately.
+                            // separately.
         std::string                      header;
         std::unique_ptr<HSplitContainer> contents;
         const EventInfo*                 info;

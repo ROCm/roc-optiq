@@ -56,7 +56,7 @@ typedef enum rocprofvis_common_property_t : uint32_t
  */
 typedef enum rocprofvis_controller_object_type_t
 {
-    // Controller object
+    // System trace controller object
     kRPVControllerObjectTypeControllerSystem = 0,
     // Timeline object
     kRPVControllerObjectTypeTimeline = 1,
@@ -88,31 +88,30 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeProcessor = 14,
     // Extended data object
     kRPVControllerObjectTypeExtData = 15,
-#ifdef COMPUTE_UI_SUPPORT
-    // Compute trace object
-    kRPVControllerObjectTypeComputeTrace = 16,
-    // Plot object
-    kRPVControllerObjectTypePlot = 17,
-    // Plot series object
-    kRPVControllerObjectTypePlotSeries = 18,
-#endif
     // Process object
-    kRPVControllerObjectTypeProcess = 19,
+    kRPVControllerObjectTypeProcess = 16,
     // Thread object
-    kRPVControllerObjectTypeThread = 20,
+    kRPVControllerObjectTypeThread = 17,
     // Queue object
-    kRPVControllerObjectTypeQueue = 21,
+    kRPVControllerObjectTypeQueue = 18,
     // Stream object
-    kRPVControllerObjectTypeStream = 22,
+    kRPVControllerObjectTypeStream = 19,
     // Counter metadata object
-    kRPVControllerObjectTypeCounter = 23,
+    kRPVControllerObjectTypeCounter = 20,
     // Summary controller object
-    kRPVControllerObjectTypeSummary = 24,
+    kRPVControllerObjectTypeSummary = 21,
     // Summary metrics container object
-    kRPVControllerObjectTypeSummaryMetrics = 25,
-
+    kRPVControllerObjectTypeSummaryMetrics = 22,
     // Extended data object
-    kRPVControllerObjectTypeEventArgument = 26,
+    kRPVControllerObjectTypeEventArgument = 23,
+#ifdef COMPUTE_UI_SUPPORT
+    // Compute trace controller object
+    kRPVControllerObjectTypeControllerCompute = 24,
+    // Plot object
+    kRPVControllerObjectTypePlot = 25,
+    // Plot series object
+    kRPVControllerObjectTypePlotSeries = 26,
+#endif
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -131,63 +130,59 @@ typedef enum rocprofvis_controller_primitive_type_t
 } rocprofvis_controller_primitive_type_t;
 
 /*
- * Properties for the controller which manages a trace.
+ * Properties for the controller which manages a system trace.
  */
-typedef enum rocprofvis_controller_properties_t : uint32_t
+typedef enum rocprofvis_controller_system_properties_t : uint32_t
 {
-    __kRPVControllerPropertiesFirst = 0x00000000,
+    __kRPVControllerSystemPropertiesFirst = 0x00000000,
     // Id of the controller - one per trace
-    kRPVControllerId = __kRPVControllerPropertiesFirst,
+    kRPVControllerSystemId = __kRPVControllerSystemPropertiesFirst,
     // Global timeline view controller
-    kRPVControllerTimeline,
+    kRPVControllerSystemTimeline,
     // Global event table controller
-    kRPVControllerEventTable,
+    kRPVControllerSystemEventTable,
     // Number of initialized analysis views - these are driven by scripts
-    kRPVControllerNumAnalysisView,
+    kRPVControllerSystemNumAnalysisView,
     // Indexed analysis views
-    kRPVControllerAnalysisViewIndexed,
+    kRPVControllerSystemAnalysisViewIndexed,
     // Number of nodes within the trace
-    kRPVControllerNumNodes,
+    kRPVControllerSystemNumNodes,
     // Indexed nodes
-    kRPVControllerNodeIndexed,
+    kRPVControllerSystemNodeIndexed,
     // Number of tracks in the trace
-    kRPVControllerNumTracks,
+    kRPVControllerSystemNumTracks,
     // Indexed tracks
-    kRPVControllerTrackIndexed,
+    kRPVControllerSystemTrackIndexed,
     // Global sample table controller
-    kRPVControllerSampleTable,
-#ifdef COMPUTE_UI_SUPPORT
-    // Compute trace controller
-    kRPVControllerComputeTrace,
-#endif
+    kRPVControllerSystemSampleTable,
     // Indexed event in the trace
-    kRPVControllerEventIndexed,
+    kRPVControllerSystemEventIndexed,
     // Load Event Flow control properties
-    kRPVControllerEventDataFlowControlIndexed,
+    kRPVControllerSystemEventDataFlowControlIndexed,
     // Load Event Callstack properties
-    kRPVControllerEventDataCallStackIndexed,
+    kRPVControllerSystemEventDataCallStackIndexed,
     // Load Event Extended data properties
-    kRPVControllerEventDataExtDataIndexed,
+    kRPVControllerSystemEventDataExtDataIndexed,
     // Tracks by Id
-    kRPVControllerTrackById,
+    kRPVControllerSystemTrackById,
     // Notify controller when user select the trace
-    kRPVControllerNotifySelected,
+    kRPVControllerSystemNotifySelected,
     // Get last stored data-model message
-    kRPVControllerGetDmMessage,
+    kRPVControllerSystemGetDmMessage,
     // Get last stored data-model progress in percent
-    kRPVControllerGetDmProgress,
+    kRPVControllerSystemGetDmProgress,
     // Get histogram number of bucket
-    kRPVControllerGetHistogramBucketsNumber,
+    kRPVControllerSystemGetHistogramBucketsNumber,
     // Get histogram bucket size
-    kRPVControllerGetHistogramBucketSize,
+    kRPVControllerSystemGetHistogramBucketSize,
     // Get histogram bucket values
-    kRPVControllerBucketDataValueIndexed,
+    kRPVControllerSystemBucketDataValueIndexed,
     // Global event search table controller
-    kRPVControllerSearchResultsTable,
+    kRPVControllerSystemSearchResultsTable,
     // Global summary view controller
-    kRPVControllerSummary,
-    __kRPVControllerPropertiesLast
-} rocprofvis_controller_properties_t;
+    kRPVControllerSystemSummary,
+    __kRPVControllerSystemPropertiesLast
+} rocprofvis_controller_system_properties_t;
 /* JSON: RPVController
 {
     id: Int,
@@ -1019,6 +1014,16 @@ typedef enum rocprofvis_event_data_category_enum_t
 } rocprofvis_event_data_category_enum_t;
 
 #ifdef COMPUTE_UI_SUPPORT
+/*
+ * Properties for the controller which manages a compute trace.
+ */
+typedef enum rocprofvis_controller_compute_properties_t : uint32_t
+{
+    __kRPVControllerComputePropertiesFirst,
+    kRPVControllerComputeId = __kRPVControllerComputePropertiesFirst,
+    __kRPVControllerComputePropertiesLast
+} rocprofvis_controller_compute_properties_t;
+
 /*
  * Identifiers for each table in a compute trace.
  */

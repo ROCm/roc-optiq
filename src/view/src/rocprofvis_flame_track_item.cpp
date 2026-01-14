@@ -208,7 +208,7 @@ FlameTrackItem::ExtractPointsFromData()
     {
         const TraceEvent& event = events_data[i];
         m_chart_items[i].event                = event;
-        m_chart_items[i].selected = m_timeline_selection->EventSelected(event.m_id);
+        m_chart_items[i].selected = m_timeline_selection->EventSelected(event.m_id.uuid);
         if(m_chart_items[i].event.m_child_count > 1)
         {
             m_chart_items[i].name_hash =
@@ -251,7 +251,7 @@ FlameTrackItem::ExtractChildInfo(ChartItem& item)
                                         static_cast<uint64_t>(item.event.m_duration) });
             spdlog::warn("Failed to parse child info for event ID {}. "
                          "Falling back to full event name.",
-                         item.event.m_id);
+                         item.event.m_id.uuid);
         }
     }
     else
@@ -304,7 +304,7 @@ FlameTrackItem::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
         // Update selection state cache.
         for(ChartItem& item : m_chart_items)
         {
-            item.selected = m_timeline_selection->EventSelected(item.event.m_id);
+            item.selected = m_timeline_selection->EventSelected(item.event.m_id.uuid);
         }
     }
 }
@@ -386,8 +386,8 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 true;  // Ensure only one click is handled per render cycle
             chart_item.selected = !chart_item.selected;
             chart_item.selected
-                ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id)
-                : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id);
+                ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id.uuid)
+                : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id.uuid);
             // Always reset layer clicked after handling
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }
@@ -548,7 +548,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
     else
     {
         TraceEventId event_id{};
-        event_id.id = chart_item.event.m_id;
+        event_id = chart_item.event.m_id;
         ImGui::TextUnformatted("Name: ");
         ImGui::SameLine();
         if(m_event_color_mode != EventColorMode::kNone)
@@ -571,8 +571,8 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
         ImGui::Text("Duration: %s", label.c_str());
-        ImGui::Text("Id: %llu", chart_item.event.m_id);
-        ImGui::Text("DB Id: %llu", event_id.bitfield.db_event_id);
+        ImGui::Text("UUID: %llu", chart_item.event.m_id.uuid);
+        ImGui::Text("ID: %llu", event_id.bitfield.event_id);
     }
 
     m_tooltip_size = ImGui::GetWindowSize();  // save size for positioning
@@ -698,7 +698,6 @@ FlameTrackItem::RenderMetaAreaOptions()
     ImGui::SameLine();
     if(ImGui::RadioButton("No Color", mode == EventColorMode::kNone))
         mode = EventColorMode::kNone;
-
     m_event_color_mode = mode;
 
     if(ImGui::Checkbox("Compact Mode", &m_compact_mode))

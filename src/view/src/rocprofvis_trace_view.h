@@ -53,7 +53,7 @@ public:
     void Update() override;
     void Render() override;
 
-    bool OpenFile(const std::string& file_path);
+    bool LoadTrace(rocprofvis_controller_t* controller, const std::string& file_path);
 
     void CreateView();
     void DestroyView();

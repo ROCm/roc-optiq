@@ -267,10 +267,10 @@ TraceView::DestroyView()
 }
 
 bool
-TraceView::OpenFile(const std::string& file_path)
+TraceView::LoadTrace(rocprofvis_controller_t* controller, const std::string& file_path)
 {
     bool result = false;
-    result      = m_data_provider.FetchTrace(file_path);
+    result      = m_data_provider.FetchTrace(controller, file_path);
     if(result)
     {
         m_open_loading_popup = true;

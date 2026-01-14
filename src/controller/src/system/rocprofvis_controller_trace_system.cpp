@@ -50,17 +50,14 @@ typedef Reference<rocprofvis_controller_queue_t, Queue, kRPVControllerObjectType
 typedef Reference<rocprofvis_controller_stream_t, Stream, kRPVControllerObjectTypeStream> StreamRef;
 typedef Reference<rocprofvis_controller_node_t, Node, kRPVControllerObjectTypeNode> NodeRef;
 
-SystemTrace::SystemTrace()
-: Trace(__kRPVControllerPropertiesFirst, __kRPVControllerPropertiesLast)
+SystemTrace::SystemTrace(const std::string& filename)
+: Trace(__kRPVControllerSystemPropertiesFirst, __kRPVControllerSystemPropertiesLast, filename)
 , m_timeline(nullptr)
 , m_event_table(nullptr)
 , m_sample_table(nullptr)
 , m_search_table(nullptr)
 , m_summary(nullptr)
 , m_mem_mgmt(nullptr)
-#ifdef COMPUTE_UI_SUPPORT
-, m_compute_trace(nullptr)
-#endif
 {
     
 }
@@ -103,10 +100,6 @@ SystemTrace::~SystemTrace()
     {
         delete track;
     }
-#ifdef COMPUTE_UI_SUPPORT
-    if(m_compute_trace)
-        delete m_compute_trace;
-#endif
     for (auto* node : m_nodes)
     {
         delete node;
@@ -119,14 +112,14 @@ MemoryManager* SystemTrace::GetMemoryManager(){
 
 
 #ifdef JSON_TRACE_SUPPORT
-rocprofvis_result_t SystemTrace::LoadJson(char const* const filename) {
+rocprofvis_result_t SystemTrace::LoadJson() {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
     {
         m_timeline                 = new Timeline(0);
         rocprofvis_controller_json_trace_data_t trace_object;
         std::future<bool>                       future =
-            rocprofvis_controller_json_trace_async_load(filename, trace_object);
+            rocprofvis_controller_json_trace_async_load(m_trace_file, trace_object);
         if(future.valid())
         {
             future.wait();
@@ -371,77 +364,7 @@ rocprofvis_result_t SystemTrace::LoadJson(char const* const filename) {
 }
 #endif
 
-/*DebugComputeTable function is for debugging purposes only. Feel free to refactor it or remove it */
-rocprofvis_result_t SystemTrace::DebugComputeTable(rocprofvis_dm_table_id_t table_id, std::string query, std::string description)
-{
-    rocprofvis_result_t result = kRocProfVisResultNotLoaded;
-    uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(
-        m_dm_handle, kRPVDMNumberOfTablesUInt64, 0);
-    if (num_tables > 0)
-    {
-        rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(
-            m_dm_handle, kRPVDMTableHandleByID, table_id);
-        if (nullptr != table)
-        {
-            uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(
-                table, kRPVDMNumberOfTableColumnsUInt64, 0);
-            uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(
-                table, kRPVDMNumberOfTableRowsUInt64, 0);
-
-            std::string column_names;
-            std::string column_enums;
-
-            for (uint32_t i = 0; i < num_columns; i++)
-            {
-                char const* column_name =
-                    rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableColumnNameCharPtrIndexed, i);
-                column_names += column_name;
-                column_names += ", ";
-                uint64_t column_enum = 
-                    rocprofvis_dm_get_property_as_uint64(table, kRPVDMExtTableColumnEnumUInt64Indexed, i);  
-                column_enums += std::to_string(column_enum);
-                column_enums += ", ";
-            }
-
-            spdlog::info("SQL Query : {}",query);
-            spdlog::info("Description : {}", description);
-            spdlog::info("Column names : {}", column_names);
-            spdlog::info("Column enumerations : {}", column_enums);
-
-            for (uint32_t i = 0; i < num_rows; i++)
-            {
-                std::string data_cells;
-                rocprofvis_dm_table_row_t table_row =
-                    rocprofvis_dm_get_property_as_handle(
-                        table, kRPVDMExtTableRowHandleIndexed, i);
-                if (table_row != nullptr)
-                {
-                    uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(
-                        table_row, kRPVDMNumberOfTableRowCellsUInt64, 0);
-                    ROCPROFVIS_ASSERT(num_cells == num_columns);
-                    for (uint32_t j = 0; j < num_cells; j++)
-                    {
-                        char const* value =
-                            rocprofvis_dm_get_property_as_charptr(
-                                table_row,
-                                kRPVDMExtTableRowCellValueCharPtrIndexed, j);
-                        ROCPROFVIS_ASSERT(value);
-                        data_cells += value;
-                        data_cells += ",";
-                    }
-                    spdlog::info("Data row {} : {}", i, data_cells);
-                }
-            }
-
-            rocprofvis_dm_delete_table_at(m_dm_handle, table_id);
-            result = kRocProfVisResultSuccess;
-        }
-    }
-    return result;
-}
-/*DebugComputeTable function is for debugging purposes only. Feel free to refactor it or remove it */
-
-rocprofvis_result_t SystemTrace::LoadRocpd(char const* const filename) {
+rocprofvis_result_t SystemTrace::LoadRocpd() {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
     {
@@ -450,157 +373,8 @@ rocprofvis_result_t SystemTrace::LoadRocpd(char const* const filename) {
         m_dm_handle = rocprofvis_dm_create_trace();
         if(nullptr != m_dm_handle)
         {
-            /*The code below is for compute support debugging purposes only. Feel free to refactor it or remove it */
-            if (rocprofvis_db_identify_type(filename) == kComputeSqlite)
-            {
-                rocprofvis_dm_database_t db =
-                    rocprofvis_db_open_database(filename, kComputeSqlite);
-                if (nullptr != db && kRocProfVisDmResultSuccess ==
-                    rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
-                {
-                    rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Trace::ProgressCallback, this);
-                    if (nullptr != object2wait)
-                    {
-                        if (kRocProfVisDmResultSuccess ==
-                            rocprofvis_db_read_metadata_async(db, object2wait))
-                        {
-                            if (kRocProfVisDmResultSuccess ==
-                                rocprofvis_db_future_wait(object2wait, UINT64_MAX))
-                            {
-                                char* fetch_query = nullptr;
-                                rocprofvis_dm_result_t dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchListOfWorkloads, 0, nullptr, &fetch_query);
-                                if (dm_result == kRocProfVisDmResultSuccess)
-                                {
-                                    rocprofvis_dm_table_id_t table_id = 0;
-                                    dm_result = rocprofvis_db_execute_compute_query_async(
-                                        db, kRPVComputeFetchListOfWorkloads, fetch_query, object2wait, &table_id);
-
-                                    if (dm_result == kRocProfVisDmResultSuccess)
-                                    {
-                                        if (kRocProfVisDmResultSuccess ==
-                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
-                                        {
-                                            DebugComputeTable(table_id, fetch_query, "Fetch list of workloads");
-                                        }
-                                    }
-                                }
-                                std::vector<rocprofvis_db_compute_param_t> params = { {kRPVComputeParamWorkloadId,"1"} };
-                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchWorkloadRooflineCeiling, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
-                                if (dm_result == kRocProfVisDmResultSuccess)
-                                {
-                                    rocprofvis_dm_table_id_t table_id = 0;
-                                    dm_result = rocprofvis_db_execute_compute_query_async(
-                                        db, kRPVComputeFetchWorkloadRooflineCeiling, fetch_query, object2wait, &table_id);
-
-                                    if (dm_result == kRocProfVisDmResultSuccess)
-                                    {
-                                        if (kRocProfVisDmResultSuccess ==
-                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
-                                        {
-                                            DebugComputeTable(table_id, fetch_query, "Get workload roofline ceiling");
-                                        }
-                                    }
-                                }
-
-                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchWorkloadTopKernels, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
-                                if (dm_result == kRocProfVisDmResultSuccess)
-                                {
-                                    rocprofvis_dm_table_id_t table_id = 0;
-                                    dm_result = rocprofvis_db_execute_compute_query_async(
-                                        db, kRPVComputeFetchWorkloadTopKernels, fetch_query, object2wait, &table_id);
-
-                                    if (dm_result == kRocProfVisDmResultSuccess)
-                                    {
-                                        if (kRocProfVisDmResultSuccess ==
-                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
-                                        {
-                                            DebugComputeTable(table_id, fetch_query, "Get workload top kernels");
-                                        }
-                                    }
-                                }
-
-                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchWorkloadKernelsList, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
-                                if (dm_result == kRocProfVisDmResultSuccess)
-                                {
-                                    rocprofvis_dm_table_id_t table_id = 0;
-                                    dm_result = rocprofvis_db_execute_compute_query_async(
-                                        db, kRPVComputeFetchWorkloadKernelsList, fetch_query, object2wait, &table_id);
-
-                                    if (dm_result == kRocProfVisDmResultSuccess)
-                                    {
-                                        if (kRocProfVisDmResultSuccess ==
-                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
-                                        {
-                                            DebugComputeTable(table_id, fetch_query, "Get workload kernels list");
-                                        }
-                                    }
-                                }
-
-                                params = { {kRPVComputeParamKernelId,"1"} };
-                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchKernelRooflineIntensities, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
-                                if (dm_result == kRocProfVisDmResultSuccess)
-                                {
-                                    rocprofvis_dm_table_id_t table_id = 0;
-                                    dm_result = rocprofvis_db_execute_compute_query_async(
-                                        db, kRPVComputeFetchKernelRooflineIntensities, fetch_query, object2wait, &table_id);
-
-                                    if (dm_result == kRocProfVisDmResultSuccess)
-                                    {
-                                        if (kRocProfVisDmResultSuccess ==
-                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
-                                        {
-                                            DebugComputeTable(table_id, fetch_query, "Get kernel roofline intensities");
-                                        }
-                                    }
-                                }
-
-
-                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchKernelMetricCategoriesList, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
-                                if (dm_result == kRocProfVisDmResultSuccess)
-                                {
-                                    rocprofvis_dm_table_id_t table_id = 0;
-                                    dm_result = rocprofvis_db_execute_compute_query_async(
-                                        db, kRPVComputeFetchKernelMetricCategoriesList, fetch_query, object2wait, &table_id);
-
-                                    if (dm_result == kRocProfVisDmResultSuccess)
-                                    {
-                                        if (kRocProfVisDmResultSuccess ==
-                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
-                                        {
-                                            DebugComputeTable(table_id, fetch_query, "Get kernel metric categories list");
-                                        }
-                                    }
-                                }
-
-                                params = { {kRPVComputeParamKernelId,"1"}, {kRPVComputeParamMetricId,"3"} };
-                                dm_result = rocprofvis_db_build_compute_query(db, kRPVComputeFetchMetricCategoryTablesList, params.size(), (rocprofvis_db_compute_params_t)params.data(), &fetch_query);
-                                if (dm_result == kRocProfVisDmResultSuccess)
-                                {
-                                    rocprofvis_dm_table_id_t table_id = 0;
-                                    dm_result = rocprofvis_db_execute_compute_query_async(
-                                        db, kRPVComputeFetchKernelMetricCategoriesList, fetch_query, object2wait, &table_id);
-
-                                    if (dm_result == kRocProfVisDmResultSuccess)
-                                    {
-                                        if (kRocProfVisDmResultSuccess ==
-                                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
-                                        {
-                                            DebugComputeTable(table_id, fetch_query, "Get metric category tables list");
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        rocprofvis_db_future_free(object2wait);
-                    }
-                }
-                ROCPROFVIS_ASSERT(false);
-                return kRocProfVisResultNotLoaded;
-            }
-/*The code above is for compute support debugging purposes only. Feel free to refactor it or remove it */
-
             rocprofvis_dm_database_t db =
-                rocprofvis_db_open_database(filename, kAutodetect);
+                rocprofvis_db_open_database(m_trace_file.c_str(), kAutodetect);
             if(nullptr != db && kRocProfVisDmResultSuccess ==
                                     rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
             {
@@ -2053,37 +1827,25 @@ rocprofvis_result_t SystemTrace::LoadRocpd(char const* const filename) {
     return result;
 }
 
-rocprofvis_result_t SystemTrace::Load(char const* const filename, RocProfVis::Controller::Future& future)
-{
-    assert (filename && strlen(filename));
-        
+rocprofvis_result_t SystemTrace::Load(RocProfVis::Controller::Future& future)
+{    
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    std::string filepath = filename;
-    future.Set(JobSystem::Get().IssueJob([this, filepath](Future* future) -> rocprofvis_result_t
+    future.Set(JobSystem::Get().IssueJob([this](Future* future) -> rocprofvis_result_t
         {
             (void) future;
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-            if(filepath.find(".rpd", filepath.size() - 4) != std::string::npos || 
-                filepath.find(".db", filepath.size() - 3) != std::string::npos ||
-                filepath.find(".yaml", filepath.size() - 5) != std::string::npos)
+            if(m_trace_file.find(".rpd", m_trace_file.size() - 4) != std::string::npos || 
+                m_trace_file.find(".db", m_trace_file.size() - 3) != std::string::npos ||
+                m_trace_file.find(".yaml", m_trace_file.size() - 5) != std::string::npos)
             {
 
-                result = LoadRocpd(filepath.c_str());
+                result = LoadRocpd();
 
             }
-#ifdef COMPUTE_UI_SUPPORT
-            else if(filepath.find(".csv", filepath.size() - 4) != std::string::npos)
-            {
-                m_compute_trace = new ComputeTrace();
-                ROCPROFVIS_ASSERT(m_compute_trace);
-                std::string folder_path = std::filesystem::path(filepath).parent_path().string();
-                result = m_compute_trace->Load(folder_path.c_str());
-            }
-#endif
 #ifdef JSON_TRACE_SUPPORT
-            else if(filepath.find(".json", filepath.size() - 5) != std::string::npos)
+            else if(m_trace_file.find(".json", m_trace_file.size() - 5) != std::string::npos)
             {
-                result = LoadJson(filepath.c_str());
+                result = LoadJson();
             }
 #endif
             else
@@ -2199,38 +1961,37 @@ rocprofvis_result_t SystemTrace::AsyncFetch(rocprofvis_property_t property, Futu
 
             switch(property)
             {
-                case kRPVControllerEventIndexed:
+                case kRPVControllerSystemEventIndexed:
                 {
                     // Todo: implement this function 
                     // result = Event::FetchSingleEvent(event_id, array, m_dm_handle);
                     break;
                 }
-                case kRPVControllerEventDataExtDataIndexed:
+                case kRPVControllerSystemEventDataExtDataIndexed:
                 {
                     const uint64_t& event_id = index;
                     result = Event::FetchDataModelExtendedDataProperty(event_id, array,
                                                                        m_dm_handle);
                     break;
                 }
-                case kRPVControllerEventDataCallStackIndexed:
+                case kRPVControllerSystemEventDataCallStackIndexed:
                 {
                     const uint64_t& event_id = index;
                     result = Event::FetchDataModelStackTraceProperty(event_id, array,
                                                                      m_dm_handle);
                     break;
                 }
-                case kRPVControllerEventDataFlowControlIndexed:
+                case kRPVControllerSystemEventDataFlowControlIndexed:
                 {
                     const uint64_t& event_id = index;
                     result = Event::FetchDataModelFlowTraceProperty(event_id, array,
                                                                     m_dm_handle);
                     break;
                 }
-                case kRPVControllerBucketDataValueIndexed:
+                case kRPVControllerSystemBucketDataValueIndexed:
                 {
-                    uint64_t buckets_num_tmp = 0;
-                    result = GetUInt64(kRPVControllerGetHistogramBucketsNumber, 0, &buckets_num_tmp);
-                    size_t buckets_num = static_cast<size_t>(buckets_num_tmp);
+                    size_t buckets_num = 0;
+                    result = GetUInt64(kRPVControllerSystemGetHistogramBucketsNumber, 0, &buckets_num);
                     if (result == kRocProfVisResultSuccess)
                     {
                         result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, buckets_num);
@@ -2350,33 +2111,6 @@ rocprofvis_result_t SystemTrace::AsyncFetch(Summary& summary, Arguments& args, F
     return error;
 }
 
-
-#ifdef COMPUTE_UI_SUPPORT
-rocprofvis_result_t SystemTrace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
-{
-    rocprofvis_result_t error = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
-
-    future.Set(JobSystem::Get().IssueJob([&plot, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
-            (void) future;
-            rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            result = plot.Setup(dm_handle, args);
-            if (result == kRocProfVisResultSuccess)
-            {
-                result = plot.Fetch(dm_handle, 0, 0, array);
-            }
-            return result;
-        }, &future));
-
-    if(future.IsValid())
-    {
-        error = kRocProfVisResultSuccess;
-    }
-
-    return error;
-}
-#endif
-
 rocprofvis_controller_object_type_t SystemTrace::GetType(void) 
 {
     return kRPVControllerObjectTypeControllerSystem;
@@ -2423,46 +2157,46 @@ rocprofvis_result_t SystemTrace::GetUInt64(rocprofvis_property_t property, uint6
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerId:
+            case kRPVControllerSystemId:
             {
                 *value = m_id;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerNumAnalysisView:
+            case kRPVControllerSystemNumAnalysisView:
             {
                 ROCPROFVIS_UNIMPLEMENTED;
                 *value = 0;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerNumTracks:
+            case kRPVControllerSystemNumTracks:
             {
                 *value = m_tracks.size();
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerNumNodes:
+            case kRPVControllerSystemNumNodes:
             {
                 *value = m_nodes.size();
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerGetDmProgress:
+            case kRPVControllerSystemGetDmProgress:
             {
                 std::lock_guard lock(m_mutex);
                 *value = m_dm_progress_percent;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerGetHistogramBucketsNumber:
+            case kRPVControllerSystemGetHistogramBucketsNumber:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
                     m_dm_handle, kRPVDMHistogramNumBuckets, 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerGetHistogramBucketSize:
+            case kRPVControllerSystemGetHistogramBucketSize:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
                     m_dm_handle, kRPVDMHistogramBucketSize, 0);
@@ -2486,38 +2220,38 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
     {
         switch (property)
         {
-            case kRPVControllerTimeline:
+            case kRPVControllerSystemTimeline:
             {
                 *value = (rocprofvis_handle_t*)m_timeline;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerEventTable:
+            case kRPVControllerSystemEventTable:
             {
                 *value = (rocprofvis_handle_t*)m_event_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerSampleTable:
+            case kRPVControllerSystemSampleTable:
             {
                 *value = (rocprofvis_handle_t*)m_sample_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerSearchResultsTable:
+            case kRPVControllerSystemSearchResultsTable:
             {
                 *value = (rocprofvis_handle_t*)m_search_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerAnalysisViewIndexed:
+            case kRPVControllerSystemAnalysisViewIndexed:
             {
                 ROCPROFVIS_UNIMPLEMENTED;
                 *value = nullptr;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerTrackById:
+            case kRPVControllerSystemTrackById:
             {
                 result = kRocProfVisResultOutOfRange;
                 for (auto* track : m_tracks)
@@ -2532,7 +2266,7 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-            case kRPVControllerTrackIndexed:
+            case kRPVControllerSystemTrackIndexed:
             {
                 if(index < m_tracks.size())
                 {
@@ -2545,16 +2279,8 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-#ifdef COMPUTE_UI_SUPPORT
-            case kRPVControllerComputeTrace:
-            {
-                *value = (rocprofvis_handle_t*)m_compute_trace;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-#endif
-            case kRPVControllerNumNodes:
-            case kRPVControllerNodeIndexed:
+            case kRPVControllerSystemNumNodes:
+            case kRPVControllerSystemNodeIndexed:
             {
                 if(index < m_nodes.size())
                 {
@@ -2567,7 +2293,7 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-            case kRPVControllerSummary:
+            case kRPVControllerSystemSummary:
             {
                 *value = (rocprofvis_handle_t*)m_summary;
                 result = kRocProfVisResultSuccess;
@@ -2588,7 +2314,7 @@ rocprofvis_result_t SystemTrace::GetString(rocprofvis_property_t property, uint6
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerGetDmMessage:
+        case kRPVControllerSystemGetDmMessage:
         {
             std::lock_guard lock(m_mutex);
             result = m_dm_message.GetString(value, length);
@@ -2609,12 +2335,12 @@ rocprofvis_result_t SystemTrace::SetUInt64(rocprofvis_property_t property, uint6
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerId:
+        case kRPVControllerSystemId:
         {
             result = kRocProfVisResultReadOnlyError;
             break;
         }
-        case kRPVControllerNumTracks:
+        case kRPVControllerSystemNumTracks:
         {
             if (m_tracks.size() != value)
             {
@@ -2632,7 +2358,7 @@ rocprofvis_result_t SystemTrace::SetUInt64(rocprofvis_property_t property, uint6
             }
             break;
         }
-        case kRPVControllerNotifySelected:
+        case kRPVControllerSystemNotifySelected:
         {
             if(value > 0 && m_mem_mgmt != nullptr)
             {
@@ -2640,12 +2366,12 @@ rocprofvis_result_t SystemTrace::SetUInt64(rocprofvis_property_t property, uint6
             }
             break;
         }
-        case kRPVControllerNumAnalysisView:
+        case kRPVControllerSystemNumAnalysisView:
         {
             ROCPROFVIS_UNIMPLEMENTED;
             break;
         }
-        case kRPVControllerNumNodes:
+        case kRPVControllerSystemNumNodes:
         {
             if (m_nodes.size() != value)
             {
@@ -2679,7 +2405,7 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
     {
         switch(property)
         {
-            case kRPVControllerTimeline:
+            case kRPVControllerSystemTimeline:
             {
                 TimelineRef timeline(value);
                 if(timeline.IsValid())
@@ -2689,7 +2415,7 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-            case kRPVControllerEventTable:
+            case kRPVControllerSystemEventTable:
             {
                 SystemTableRef table(value);
                 if(table.IsValid())
@@ -2699,7 +2425,7 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-            case kRPVControllerSampleTable:
+            case kRPVControllerSystemSampleTable:
             {
                 SystemTableRef table(value);
                 if(table.IsValid())
@@ -2709,7 +2435,7 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-            case kRPVControllerSearchResultsTable:
+            case kRPVControllerSystemSearchResultsTable:
             {
                 SystemTableRef table(value);
                 if(table.IsValid())
@@ -2719,13 +2445,13 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-            case kRPVControllerAnalysisViewIndexed:
+            case kRPVControllerSystemAnalysisViewIndexed:
             {
                 ROCPROFVIS_UNIMPLEMENTED;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerTrackIndexed:
+            case kRPVControllerSystemTrackIndexed:
             {
                 TrackRef track(value);
                 if(track.IsValid())
@@ -2742,7 +2468,7 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 }
                 break;
             }
-            case kRPVControllerNodeIndexed:
+            case kRPVControllerSystemNodeIndexed:
             {
                 NodeRef node(value);
                 if(node.IsValid())

@@ -5,6 +5,7 @@
 
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
+#include "model/rocprofvis_model_types.h"
 
 #include <chrono>
 #include <map>
@@ -20,7 +21,7 @@ namespace View
 
 struct TraceEvent
 {
-    uint64_t    m_id;
+    TraceEventId m_id;
     std::string m_name;
     double      m_start_ts;
     double      m_duration;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_controller_types.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_tab_container.h"
 
@@ -17,7 +18,7 @@ class ComputeRoot : public RocWidget
 public:
     void Render() override;
     void Update() override;
-    bool OpenTrace(const std::string& path);
+    bool LoadTrace(rocprofvis_controller_t* controller);
     ComputeRoot();
     ~ComputeRoot();
 

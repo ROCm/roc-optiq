@@ -28,11 +28,12 @@ public:
 private:
     struct EventItem
     {
-        int                              id;
-        uint64_t                         event_id; // Info is deleted upon deselection so this must be cached seperately.
+        int      id;
+        uint64_t event_id;  // Info is deleted upon deselection so this must be cached
+                            // separately.
         std::string                      header;
         std::unique_ptr<HSplitContainer> contents;
-        const EventInfo*              info;
+        const EventInfo*                 info;
         float                            height;
 
         bool operator==(const EventItem& other) const

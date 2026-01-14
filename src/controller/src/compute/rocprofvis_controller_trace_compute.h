@@ -24,7 +24,7 @@ class ComputePlot;
 class ComputeTrace : public Trace
 {
 public:
-    ComputeTrace(char const* const filename);
+    ComputeTrace(const std::string& filename);
 
     virtual ~ComputeTrace();
 

@@ -15,7 +15,7 @@ namespace RocProfVis
 namespace Controller
 {
 
-ComputeTrace::ComputeTrace(char const* const filename)
+ComputeTrace::ComputeTrace(const std::string& filename)
 : Trace(__kRPVControllerComputePropertiesFirst, __kRPVControllerComputePropertiesLast, filename)
 {}
 

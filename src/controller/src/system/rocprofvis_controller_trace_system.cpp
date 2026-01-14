@@ -50,7 +50,7 @@ typedef Reference<rocprofvis_controller_queue_t, Queue, kRPVControllerObjectType
 typedef Reference<rocprofvis_controller_stream_t, Stream, kRPVControllerObjectTypeStream> StreamRef;
 typedef Reference<rocprofvis_controller_node_t, Node, kRPVControllerObjectTypeNode> NodeRef;
 
-SystemTrace::SystemTrace(char const* const filename)
+SystemTrace::SystemTrace(const std::string& filename)
 : Trace(__kRPVControllerSystemPropertiesFirst, __kRPVControllerSystemPropertiesLast, filename)
 , m_timeline(nullptr)
 , m_event_table(nullptr)

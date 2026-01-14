@@ -34,7 +34,7 @@ class SummaryMetrics;
 class SystemTrace : public Trace
 {
 public:
-    SystemTrace(char const* const filename);
+    SystemTrace(const std::string& filename);
 
     virtual ~SystemTrace();
 

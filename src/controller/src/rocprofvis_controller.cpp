@@ -87,7 +87,7 @@ rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object
 rocprofvis_result_t rocprofvis_controller_get_object_type(rocprofvis_handle_t* object, rocprofvis_controller_object_type_t* type)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(object)
+    if(object && type)
     {
         RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*) object;
         *type = handle->GetType();

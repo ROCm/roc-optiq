@@ -20,7 +20,7 @@ class Future;
 class Trace : public Handle
 {
 public:
-    Trace(uint32_t first_prop_index, uint32_t last_prop_index, char const* const filename);
+    Trace(uint32_t first_prop_index, uint32_t last_prop_index, const std::string& filename);
 
     virtual ~Trace();
 

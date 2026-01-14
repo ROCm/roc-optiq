@@ -6,8 +6,10 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
+#include <memory>
 #include <string>
 #include <vector>
+#include "rocprofvis_time_to_pixel.h"
 
 namespace RocProfVis
 {
@@ -16,6 +18,7 @@ namespace View
 
 class TimelineSelection;
 class FlameTrackItem;
+class TimePixelTransform;
 
 enum class EventColorMode
 {
@@ -47,8 +50,8 @@ class FlameTrackItem : public TrackItem
 public:
     FlameTrackItem(DataProvider&                      dp,
                    std::shared_ptr<TimelineSelection> timeline_selection, uint64_t chart_id,
-                   std::string name, float zoom, double movement, double min_x,
-                   double max_x, double scale_x, float level_min, float level_max);
+                   std::string name, float level_min,
+                   float level_max, std::shared_ptr<TimePixelTransform> m_time_to_pixel_manager);
     ~FlameTrackItem();
 
     bool ReleaseData() override;
@@ -75,7 +78,7 @@ private:
     
     struct ChartItem
     {
-        rocprofvis_trace_event_t    event;
+        TraceEvent    event;
         bool                        selected;
         size_t                      name_hash;
         std::vector<ChildEventInfo> child_info;
@@ -111,7 +114,6 @@ private:
 
     static float             s_max_event_label_width;
     static const std::string s_child_info_separator;
-
     bool        m_is_expanded;
     bool        m_compact_mode;
 };

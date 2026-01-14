@@ -14,7 +14,7 @@ namespace View
 class DataProvider;
 class SettingsManager;
 class TimelineSelection;
-struct event_info_t;
+struct EventInfo;
 
 class EventsView : public RocWidget
 {
@@ -32,7 +32,7 @@ private:
         uint64_t                         event_id; // Info is deleted upon deselection so this must be cached seperately.
         std::string                      header;
         std::unique_ptr<HSplitContainer> contents;
-        const event_info_t*              info;
+        const EventInfo*              info;
         float                            height;
 
         bool operator==(const EventItem& other) const
@@ -41,10 +41,12 @@ private:
         }
     };
 
-    void RenderBasicData(const event_info_t* event_data);
-    void RenderEventExtData(const event_info_t* event_data);
-    void RenderEventFlowInfo(const event_info_t* event_data);
-    void RenderCallStackData(const event_info_t* event_data);
+    bool RenderBasicData(const EventInfo* event_data);
+    bool RenderEventExtData(const EventInfo* event_data);
+    bool RenderEventFlowInfo(const EventInfo* event_data);
+    bool RenderCallStackData(const EventInfo* event_data);
+    bool RenderArgumentData(const EventInfo* event_data);
+
     bool XButton();
 
     DataProvider&                            m_data_provider;

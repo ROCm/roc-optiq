@@ -8,15 +8,10 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <filesystem>
-#include <cstring>
 #include <string>
 #include <vector>
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
 
 namespace RocProfVis
 {
@@ -32,115 +27,6 @@ constexpr std::array FONT_AVAILABLE_SIZES = { 7.0f,  8.0f,  9.0f,  10.0f, 11.0f,
 FontManager::FontManager() {}
 
 FontManager::~FontManager() {}
-
-namespace
-{
-std::filesystem::path
-get_bundle_resources_path()
-{
-#ifdef __APPLE__
-    uint32_t size = 0;
-    if(_NSGetExecutablePath(nullptr, &size) != -1 || size == 0) return {};
-
-    std::string buffer(size, '\0');
-    if(_NSGetExecutablePath(buffer.data(), &size) != 0) return {};
-    buffer.resize(std::strlen(buffer.c_str()));
-
-    std::error_code ec;
-    std::filesystem::path exec_path = std::filesystem::weakly_canonical(buffer, ec);
-    if(ec) exec_path = std::filesystem::path(buffer);
-
-    std::filesystem::path resources_dir =
-        (exec_path.parent_path() / "../Resources").lexically_normal();
-    if(std::filesystem::exists(resources_dir, ec))
-    {
-        return resources_dir;
-    }
-#endif
-    return {};
-}
-
-std::filesystem::path
-find_bundled_font(const std::filesystem::path& rel_path)
-{
-    std::error_code       ec;
-    std::filesystem::path base = std::filesystem::current_path(ec);
-    if(ec) return {};
-
-    for(int depth = 0; depth < 6; ++depth)
-    {
-        std::filesystem::path candidate = base / rel_path;
-        if(std::filesystem::exists(candidate, ec))
-        {
-            return candidate;
-        }
-        if(!base.has_parent_path())
-        {
-            break;
-        }
-        base = base.parent_path();
-    }
-
-    return {};
-}
-
-std::filesystem::path
-find_font_path()
-{
-    const std::filesystem::path bundled_paths[] = {
-        "thirdparty/imgui/misc/fonts/Roboto-Medium.ttf",
-        "thirdparty/imgui/misc/fonts/Karla-Regular.ttf",
-        "thirdparty/imgui/misc/fonts/DroidSans.ttf"
-    };
-
-#ifdef __APPLE__
-    std::filesystem::path resources_dir = get_bundle_resources_path();
-    if(!resources_dir.empty())
-    {
-        for(const auto& rel_path : bundled_paths)
-        {
-            std::filesystem::path candidate = resources_dir / "fonts" / rel_path.filename();
-            if(std::filesystem::exists(candidate))
-            {
-                return candidate;
-            }
-        }
-    }
-#endif
-
-    for(const auto& rel_path : bundled_paths)
-    {
-        std::filesystem::path candidate = find_bundled_font(rel_path);
-        if(!candidate.empty())
-        {
-            return candidate;
-        }
-    }
-
-#ifdef _WIN32
-    const char* system_paths[] = { "C:\\Windows\\Fonts\\segoeui.ttf",
-                                   "C:\\Windows\\Fonts\\arial.ttf" };
-#else
-    const char* system_paths[] = {
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"
-    };
-#endif
-
-    std::error_code ec;
-    for(const char* path : system_paths)
-    {
-        if(std::filesystem::exists(path, ec))
-        {
-            return std::filesystem::path(path);
-        }
-    }
-
-    return {};
-}
-}  // namespace
 
 ImFont*
 FontManager::GetIconFontByIndex(int idx)
@@ -162,9 +48,8 @@ FontManager::GetDPIScaledFontIndex()
     constexpr float DPI_EXPONENT =
         0.75f;  // Adjust as needed. Higher values increase size more rapidly.
 
-    float           scaled_size =
-        BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT); 
- 
+    float scaled_size =
+        BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT);
 
     // Find the index of the font size closest to scaled_size
     int best_index = 0;
@@ -185,7 +70,7 @@ FontManager::SetFontSize(int idx)
 
     if(num_types == 0 || m_all_fonts.empty()) return;
     if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return;
- 
+
     static const int offsets[] = { -1, 0, 1, 2 };
 
     m_fonts.resize(num_types);
@@ -212,7 +97,33 @@ FontManager::Init()
     m_fonts.clear();
 
     const int num_types = static_cast<int>(FontType::__kLastFont);
-    std::filesystem::path font_path = find_font_path();
+
+#ifdef _WIN32
+    const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
+#else
+    const char* font_paths[] = {
+        // Ubuntu / Debian
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+        // RedHat 8, Oracle 8
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        // RedHat 9 / 10, Oracle 9 / 10
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+        "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf"
+    };
+#endif
+
+    const char* font_path = nullptr;
+    for(const char* path : font_paths)
+    {
+        if(std::filesystem::exists(path))
+        {
+            font_path = path;
+            break;
+        }
+    }
 
     // Prepare storage
     m_all_fonts.resize(FONT_AVAILABLE_SIZES.size(), nullptr);
@@ -222,23 +133,20 @@ FontManager::Init()
     ImFontConfig config;
     config.FontDataOwnedByAtlas = false;
 
-    ImFontConfig font_config;
-    font_config.PixelSnapH = false;
-    font_config.OversampleH = 2;
-    font_config.OversampleV = 2;
-
     // Load all font sizes once
     for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)
     {
         ImFont* font = nullptr;
-        if(!font_path.empty())
+        if(font_path)
         {
-            font =
-                io.Fonts->AddFontFromFileTTF(font_path.string().c_str(),
-                                             FONT_AVAILABLE_SIZES[sz],
-                                             &font_config);
+            font = io.Fonts->AddFontFromFileTTF(font_path, FONT_AVAILABLE_SIZES[sz]);
         }
-        if(!font) font = io.Fonts->AddFontDefault();
+        else
+        {
+            ImFontConfig fallback_config;
+            fallback_config.SizePixels = FONT_AVAILABLE_SIZES[sz];
+            font                       = io.Fonts->AddFontDefault(&fallback_config);
+        }
         m_all_fonts[sz] = font;
     }
 

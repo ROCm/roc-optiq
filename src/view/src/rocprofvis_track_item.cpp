@@ -8,23 +8,19 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include <memory>
 
 namespace RocProfVis
 {
 namespace View
 {
 
-float            TrackItem::s_metadata_width = 400.0f;
+float TrackItem::s_metadata_width = 400.0f;
 
-TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
-                     double time_offset_ns, double& min_x, double& max_x, double scale_x)
+TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name,
+                     std::shared_ptr<TimePixelTransform> tpt)
 : m_data_provider(dp)
 , m_id(id)
-, m_zoom(zoom)
-, m_time_offset_ns(time_offset_ns)
-, m_min_x(min_x)
-, m_max_x(max_x)
-, m_scale_x(scale_x)
 , m_name(name)
 , m_track_height(75.0f)
 , m_track_default_height(75.0f)
@@ -41,8 +37,10 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
 , m_group_id_counter(0)
-, m_chunk_duration_ns(TimeConstants::ns_per_s *
-                      30)  // Default chunk duration
+, m_pill_label("")
+, m_show_pill_label(false)
+, m_chunk_duration_ns(TimeConstants::ns_per_s * 30)  // Default chunk duration
+, m_tpt(tpt)  
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
     if(m_track_project_settings.Valid())
@@ -58,6 +56,7 @@ TrackItem::TrackHeightChanged()
     m_track_height_changed = false;
     return height_changed;
 }
+
 float
 TrackItem::GetTrackHeight()
 {
@@ -112,11 +111,6 @@ TrackItem::SetID(uint64_t id)
     m_id = id;
 }
 
-std::tuple<double, double>
-TrackItem::GetMinMax()
-{
-    return std::make_tuple(m_min_x, m_max_x);
-}
 
 bool
 TrackItem::IsSelected() const
@@ -130,17 +124,6 @@ TrackItem::SetSelected(bool selected)
     m_selected = selected;
 }
 
-void
-TrackItem::UpdateMovement(float zoom, double time_offset_ns, double& min_x, double& max_x,
-                          double scale_x, float y_scroll_position)
-{
-    m_zoom           = zoom;
-    m_time_offset_ns = time_offset_ns;
-    m_scale_x        = scale_x;
-    m_min_x          = min_x;
-    m_max_x          = max_x;
-    (void) y_scroll_position;
-}
 
 void
 TrackItem::Render(float width)
@@ -157,7 +140,7 @@ TrackItem::Render(float width)
 
     if(ImGui::IsItemVisible())
     {
-        m_is_in_view_vertical = true; 
+        m_is_in_view_vertical = true;
     }
     else
     {
@@ -171,7 +154,7 @@ TrackItem::GetReorderGripWidth()
     return m_reorder_grip_width;
 }
 
-void 
+void
 TrackItem::UpdateMaxMetaAreaSize(float new_size)
 {
     m_meta_area_scale_width = std::max(CalculateNewMetaAreaSize(), new_size);
@@ -225,10 +208,8 @@ TrackItem::RenderMetaArea()
         ImVec2 container_pos  = ImGui::GetWindowPos() + ImVec2(m_reorder_grip_width, 0);
         ImVec2 container_size = ImGui::GetWindowSize();
 
-          if(m_request_state != TrackDataRequestState::kIdle)
+        if(m_request_state != TrackDataRequestState::kIdle)
         {
-            ImGuiStyle& style = ImGui::GetStyle();
-
             float  dot_radius  = 10.0f;
             int    num_dots    = 3;
             float  dot_spacing = 5.0f;
@@ -246,12 +227,12 @@ TrackItem::RenderMetaArea()
                                        anim_speed);
         }
 
-
         // Reordering grip decoration
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - ImGui::CalcTextSize(ICON_GRID).x) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+
         ImGui::TextUnformatted(ICON_GRID);
 
         float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
@@ -278,17 +259,16 @@ TrackItem::RenderMetaArea()
         ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
                                (menu_button_width + 2 * m_metadata_padding.x));
 
-            ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
+        ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
 
         ImGui::PushFont(large_font);
 
         ImGui::TextUnformatted(m_name.c_str());
 
-        ImGui::PopFont();   
+        ImGui::PopFont();
 
         ImGui::PopTextWrapPos();
 
-      
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
                                    m_metadata_padding.y));
@@ -316,6 +296,9 @@ TrackItem::RenderMetaArea()
         ImGui::PopStyleVar(2);
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
+
+        // Render MAIN pillbox for main thread tracks
+        RenderPillLabel(content_size);
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();
@@ -328,6 +311,36 @@ TrackItem::RenderMetaArea()
     {
         m_meta_area_clicked = false;
     }
+}
+void
+TrackItem::RenderPillLabel(ImVec2 container_size)
+{
+    if(m_show_pill_label == false)
+    {
+        return;
+    }
+    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall));
+
+    const char* main_label = "MAIN";
+    ImVec2      text_size  = ImGui::CalcTextSize(main_label);
+    float       padding_x  = 8.0f;
+    float       padding_y  = 2.0f;
+    ImVec2      pillbox_size(text_size.x + 2 * padding_x, text_size.y + 2 * padding_y);
+
+    ImVec2 pillbox_pos(m_reorder_grip_width, container_size.y - pillbox_size.y - 2.0f);
+
+    ImDrawList* draw_list     = ImGui::GetWindowDrawList();
+    ImU32       pillbox_color = m_settings.GetColor(Colors::kBorderGray);
+
+    draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
+                             ImGui::GetWindowPos() + pillbox_pos + pillbox_size,
+                             pillbox_color, pillbox_size.y * 0.5f);
+
+    ImVec2 text_pos = pillbox_pos + ImVec2(padding_x, padding_y);
+    ImGui::SetCursorPos(text_pos);
+    ImGui::TextUnformatted(main_label);
+
+    ImGui::PopFont();
 }
 
 void
@@ -385,10 +398,10 @@ TrackItem::RequestData(double min, double max, float width)
         float  percentage  = static_cast<float>(chunk_range / range);
         float  chunk_width = width * percentage;
 
-        TrackRequestParams request_params(static_cast<uint32_t>(m_id), chunk_start, chunk_end,
-                                          static_cast<uint32_t>(chunk_width),
-                                          m_group_id_counter, 
-                                          static_cast<uint16_t>(i), chunk_count);
+        TrackRequestParams request_params(static_cast<uint32_t>(m_id), chunk_start,
+                                          chunk_end, static_cast<uint32_t>(chunk_width),
+                                          m_group_id_counter, static_cast<uint16_t>(i),
+                                          chunk_count);
 
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
@@ -446,8 +459,8 @@ TrackItem::FetchHelper()
         else
         {
             spdlog::debug(
-                "Fetching from {} to {} ( {} ) at zoom {} for track {} part of group {}",
-                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_zoom, m_id,
+                "Fetching from {} to {} ( {} ) for track {} part of group {}",
+                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_id,
                 req.m_data_group_id);
 
             m_request_state = TrackDataRequestState::kRequesting;
@@ -476,13 +489,13 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 bool
 TrackItem::HasData()
 {
-    return m_data_provider.GetRawTrackData(m_id) != nullptr;
+    return m_data_provider.DataModel().GetTimeline().GetTrackData(m_id) != nullptr;
 }
 
 bool
 TrackItem::ReleaseData()
 {
-    bool result = m_data_provider.FreeTrack(m_id, true);
+    bool result = m_data_provider.DataModel().GetTimeline().FreeTrackData(m_id, true);
     if(!result)
     {
         spdlog::warn("Failed to release data for track {}", m_id);

@@ -132,5 +132,6 @@ bool TemplatedRawTrackData<T>::AddChunk(size_t chunk_index, const std::vector<T>
     }
 
 // Explicit template instantiation
-template class RocProfVis::View::TemplatedRawTrackData<rocprofvis_trace_counter_t>;
-template class RocProfVis::View::TemplatedRawTrackData<rocprofvis_trace_event_t>;
+template class RocProfVis::View::TemplatedRawTrackData<TraceCounter>;
+template class RocProfVis::View::TemplatedRawTrackData<TraceEvent>;
+

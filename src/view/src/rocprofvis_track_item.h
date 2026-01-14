@@ -4,10 +4,9 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_project.h"
-#include "rocprofvis_view_structs.h"
-
 #include <deque>
 #include <unordered_map>
+#include "rocprofvis_time_to_pixel.h"
 
 namespace RocProfVis
 {
@@ -16,6 +15,7 @@ namespace View
 
 class SettingsManager;
 class TrackItem;
+class TimePixelTransform;
 
 enum class TrackDataRequestState
 {
@@ -42,9 +42,8 @@ private:
 class TrackItem
 {
 public:
-    TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
-              double time_offset_ns, double& min_x, double& max_x, double scale_x);
-
+    TrackItem(DataProvider& dp, uint64_t id, std::string name,
+              std::shared_ptr<TimePixelTransform> tpt);
     virtual ~TrackItem() {}
     void               SetID(uint64_t id);
     uint64_t           GetID();
@@ -52,9 +51,7 @@ public:
     virtual void       Render(float width);
     virtual void       Update();
     const std::string& GetName();
-    virtual void       UpdateMovement(float zoom, double time_offset_ns, double& min_x,
-                                      double& max_x, double scale_x, float m_scroll_position);
-
+    void               RenderPillLabel(ImVec2 container_size);
     bool IsInViewVertical();
     void SetInViewVertical(bool in_view);
 
@@ -64,8 +61,7 @@ public:
     void  SetDistanceToView(float distance);
     float GetDistanceToView();
 
-    virtual std::tuple<double, double> GetMinMax();
-
+ 
     bool        TrackHeightChanged();
     static void SetSidebarSize(float sidebar_size);
 
@@ -98,11 +94,6 @@ protected:
 
     void FetchHelper();
 
-    float                 m_zoom;
-    double                m_time_offset_ns;
-    double                m_min_x;
-    double                m_max_x;
-    double                m_scale_x;
     uint64_t              m_id;
     float                 m_track_height;
     float                 m_track_content_height;
@@ -121,13 +112,15 @@ protected:
     float                 m_meta_area_scale_width;
     bool                  m_selected;
     float                 m_reorder_grip_width;
-
+    std::shared_ptr<TimePixelTransform> m_tpt;
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
     uint8_t  m_group_id_counter;   // Counter for grouping requests
 
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;
     static float                                     s_metadata_width;
+    bool                                             m_show_pill_label;
+    std::string                                      m_pill_label;
 
 private:
     TrackProjectSettings m_track_project_settings;

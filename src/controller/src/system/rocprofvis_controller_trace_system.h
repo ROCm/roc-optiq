@@ -1,0 +1,118 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
+#pragma once
+
+#include "rocprofvis_c_interface.h"
+#include "rocprofvis_controller.h"
+#include "rocprofvis_controller_handle.h"
+#include "rocprofvis_controller_job_system.h"
+#include "rocprofvis_controller_mem_mgmt.h"
+#include "rocprofvis_controller_data.h"
+#include "rocprofvis_controller_trace.h"
+#include <string>
+#include <vector>
+
+namespace RocProfVis
+{
+namespace Controller
+{
+
+class Arguments;
+class Array;
+class Future;
+class Track;
+class Graph;
+class Timeline;
+class Event;
+class Table;
+class Node;
+class SystemTable;
+class Summary;
+class SummaryMetrics;
+#ifdef COMPUTE_UI_SUPPORT
+class Plot;
+class ComputeTrace;
+#endif
+
+class SystemTrace : public Trace
+{
+public:
+    SystemTrace();
+
+    virtual ~SystemTrace();
+
+    virtual rocprofvis_result_t Init() override;
+
+    rocprofvis_result_t Load(char const* const filename, Future& future);
+
+    rocprofvis_result_t SaveTrimmedTrace(Future& future, double start, double end, char const* path);
+
+    rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
+                                   double start, double end);
+
+    rocprofvis_result_t AsyncFetch(Graph& graph, Future& future, Array& array,
+                                   double start, double end, uint32_t pixels);
+
+    rocprofvis_result_t AsyncFetch(Event& event, Future& future, Array& array,
+                                   rocprofvis_property_t property);
+
+    rocprofvis_result_t AsyncFetch(Table& table, Future& future, Array& array,
+                                   uint64_t index, uint64_t count);
+
+    rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future,
+                                   Array& array);
+
+    rocprofvis_result_t TableExportCSV(Table& table, Arguments& args, Future& future, 
+                                       const char* path);
+
+    rocprofvis_result_t AsyncFetch(Summary& summary, Arguments& args, Future& future,
+                                   SummaryMetrics& output);
+
+#ifdef COMPUTE_UI_SUPPORT
+    rocprofvis_result_t AsyncFetch(Plot& plot, Arguments& args, Future& future,
+                                   Array& array);
+#endif
+
+    rocprofvis_result_t AsyncFetch(rocprofvis_property_t property, Future& future,
+                                          Array& array, uint64_t index, uint64_t count);
+
+    rocprofvis_controller_object_type_t GetType(void) final;
+
+    // Handlers for getters.
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final;
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final;
+
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
+
+    MemoryManager* GetMemoryManager();
+
+private:
+    std::vector<Track*>   m_tracks;
+    std::vector<Node*>    m_nodes;
+    Timeline*             m_timeline;
+    SystemTable*          m_event_table;
+    SystemTable*          m_sample_table;
+    SystemTable*          m_search_table;
+    Summary*              m_summary;
+    MemoryManager*        m_mem_mgmt;
+
+#ifdef COMPUTE_UI_SUPPORT
+    ComputeTrace* m_compute_trace;
+#endif
+
+private:
+#ifdef JSON_TRACE_SUPPORT
+    rocprofvis_result_t LoadJson(char const* const filename);
+#endif
+    rocprofvis_result_t LoadRocpd(char const* const filename);
+ 
+    /*DebugComputeTable function is for debugging purposes only. Feel free to refactor it or remove it */
+    rocprofvis_result_t DebugComputeTable(rocprofvis_dm_table_id_t table_id, std::string query, std::string description);
+
+};
+
+}  // namespace Controller
+}  // namespace RocProfVis

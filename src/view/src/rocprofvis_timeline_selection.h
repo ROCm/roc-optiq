@@ -13,7 +13,7 @@ namespace View
 {
 
 class DataProvider;
-struct rocprofvis_graph_t;
+struct TrackGraph;
 
 class TimelineSelection
 {
@@ -21,10 +21,10 @@ public:
     TimelineSelection(DataProvider& dp);
     ~TimelineSelection();
 
-    void SelectTrack(rocprofvis_graph_t& graph);
-    void UnselectTrack(rocprofvis_graph_t& graph);
-    void ToggleSelectTrack(rocprofvis_graph_t& graph);
-    void UnselectAllTracks(std::vector<rocprofvis_graph_t>& graphs);
+    void SelectTrack(TrackGraph& graph);
+    void UnselectTrack(TrackGraph& graph);
+    void ToggleSelectTrack(TrackGraph& graph);
+    void UnselectAllTracks(std::vector<TrackGraph>& graphs);
     bool GetSelectedTracks(std::vector<uint64_t>& track_ids) const;
     bool HasSelectedTracks() const;
 

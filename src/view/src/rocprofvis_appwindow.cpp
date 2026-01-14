@@ -655,12 +655,11 @@ AppWindow::HandleOpenFile()
 
     FileFilter all_filter;
     all_filter.m_name = "All Supported";
-    all_filter.m_extensions = { "db", "rpd", "rpv" };
+    all_filter.m_extensions = { "db", "rpd", "yaml", "rpv" };
 
     FileFilter trace_filter;
     trace_filter.m_name = "Traces";
-    trace_filter.m_extensions = { "db", "rpd" };
-
+    trace_filter.m_extensions = { "db", "rpd", "yaml" };
 #ifdef JSON_TRACE_SUPPORT
     all_filter.m_extensions.push_back("json");
     trace_filter.m_extensions.push_back("json");
@@ -780,11 +779,17 @@ AppWindow::RenderAboutDialog()
         return ss.str();
     }();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+
+    // Set window size
+    ImGui::SetNextWindowSize(ImVec2(580, 0));
 
     if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize))
+                              ImGuiWindowFlags_AlwaysAutoResize |
+                                  ImGuiWindowFlags_NoMove))
     {
         ImFont* large_font =
             SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
@@ -835,8 +840,9 @@ AppWindow::RenderAboutDialog()
 
         ImGui::EndPopup();
     }
-    ImGui::PopStyleVar(2);
-}
+    popup_style.PopStyles();
+
+ }
 
 #ifdef USE_NATIVE_FILE_DIALOG
 void
@@ -1101,10 +1107,11 @@ RenderProviderTest(DataProvider& provider)
                      ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
     uint64_t row_count = std::atoi(row_count_buffer);
 
+    TimelineModel& timeline = provider.DataModel().GetTimeline();
     if(ImGui::Button("Fetch Single Track Event Table"))
     {
-        provider.FetchSingleTrackEventTable(index, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", "", "", start_row,
+        provider.FetchSingleTrackEventTable(index, timeline.GetStartTime(),
+                                            timeline.GetEndTime(), "", "", "", start_row,
                                             row_count);
     }
     if(ImGui::Button("Fetch Multi Track Event Table"))
@@ -1115,19 +1122,19 @@ RenderProviderTest(DataProvider& provider)
         {
             vect.push_back(i);
         }
-        provider.FetchMultiTrackEventTable(vect, provider.GetStartTime(),
-                                           provider.GetEndTime(), "", "", "", start_row,
+        provider.FetchMultiTrackEventTable(vect, timeline.GetStartTime(),
+                                           timeline.GetEndTime(), "", "", "", start_row,
                                            row_count);
     }
     if(ImGui::Button("Print Event Table"))
     {
-        provider.DumpTable(TableType::kEventTable);
+        provider.DataModel().GetTables().DumpTable(TableType::kEventTable);
     }
 
     if(ImGui::Button("Fetch Single Track Sample Table"))
     {
-        provider.FetchSingleTrackSampleTable(index, provider.GetStartTime(),
-                                             provider.GetEndTime(), "", start_row,
+        provider.FetchSingleTrackSampleTable(index, timeline.GetStartTime(),
+                                             timeline.GetEndTime(), "", start_row,
                                              row_count);
     }
     if(ImGui::Button("Fetch Multi Track Sample Table"))
@@ -1138,39 +1145,39 @@ RenderProviderTest(DataProvider& provider)
         {
             vect.push_back(i);
         }
-        provider.FetchMultiTrackSampleTable(vect, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", start_row,
+        provider.FetchMultiTrackSampleTable(vect, timeline.GetStartTime(),
+                                            timeline.GetEndTime(), "", start_row,
                                             row_count);
     }
     if(ImGui::Button("Print Sample Table"))
     {
-        provider.DumpTable(TableType::kSampleTable);
+        provider.DataModel().GetTables().DumpTable(TableType::kSampleTable);
     }
 
     ImGui::Separator();
 
     if(ImGui::Button("Fetch Track"))
     {
-        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
+        provider.FetchTrack(index, timeline.GetStartTime(), timeline.GetEndTime(), 1000,
                             group_id_counter++);
     }
 
     if(ImGui::Button("Fetch Whole Track"))
     {
-        provider.FetchWholeTrack(index, provider.GetStartTime(), provider.GetEndTime(),
+        provider.FetchWholeTrack(index, timeline.GetStartTime(), timeline.GetEndTime(),
                                  1000, group_id_counter++);
     }
     if(ImGui::Button("Delete Track"))
     {
-        provider.FreeTrack(index);
+        timeline.FreeTrackData(index);
     }
     if(ImGui::Button("Print Track"))
     {
-        provider.DumpTrack(index);
+        timeline.DumpTrack(index);
     }
     if(ImGui::Button("Print Track List"))
     {
-        provider.DumpMetaData();
+        timeline.DumpMetaData();
     }
 
     ImGui::End();

@@ -19,8 +19,8 @@ namespace View
 {
 
 constexpr uint64_t    FETCH_CHUNK_SIZE               = 1000;
-constexpr const char* START_TS_COLUMN_NAME           = "startTs";
-constexpr const char* END_TS_COLUMN_NAME             = "endTs";
+constexpr const char* START_TS_COLUMN_NAME           = "start";
+constexpr const char* END_TS_COLUMN_NAME             = "end";
 constexpr const char* DURATION_COLUMN_NAME           = "duration";
 constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
@@ -155,16 +155,17 @@ InfiniteScrollTable::Render()
     bool show_loading_indicator = false;
 
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), true);
+    const auto& table_model = m_data_provider.DataModel().GetTables();
 
     const std::vector<std::vector<std::string>>& table_data =
-        m_data_provider.GetTableData(m_table_type);
+        table_model.GetTableData(m_table_type);
     const std::vector<std::string>& column_names =
-        m_data_provider.GetTableHeader(m_table_type);
-    auto     table_params    = m_data_provider.GetTableParams(m_table_type);
-    uint64_t total_row_count = m_data_provider.GetTableTotalRowCount(m_table_type);
+        table_model.GetTableHeader(m_table_type);
+    auto     table_params    = table_model.GetTableParams(m_table_type);
+    uint64_t total_row_count = table_model.GetTableTotalRowCount(m_table_type);
 
-    const std::vector<formatted_column_info_t>& formatted_table_data =
-        m_data_provider.GetFormattedTableData(m_table_type);
+    const std::vector<FormattedColumnInfo>& formatted_table_data =
+        table_model.GetFormattedTableData(m_table_type);
 
     // Skip data fetch for this render cycle if total row count has changed
     // This is so we can recalulate the table size with the new total row count
@@ -533,7 +534,7 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
     rocprofvis_controller_sort_order_t sort_order,
                                         uint64_t sort_column_index, uint64_t frame_count)
 {
-    auto table_params = m_data_provider.GetTableParams(m_table_type);
+    auto table_params = m_data_provider.DataModel().GetTables().GetTableParams(m_table_type);
     if(table_params)
     {
         FilterOptions& filter =
@@ -589,7 +590,7 @@ InfiniteScrollTable::IndexColumns()
     m_time_column_indices = { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX,
                               INVALID_UINT64_INDEX };
     const std::vector<std::string>& column_names =
-        m_data_provider.GetTableHeader(m_table_type);
+        m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
     for(int i = 0; i < column_names.size(); i++)
     {
         if(column_names[i] == START_TS_COLUMN_NAME)
@@ -610,7 +611,7 @@ InfiniteScrollTable::IndexColumns()
 void
 InfiniteScrollTable::RowSelected(const ImGuiMouseButton mouse_button)
 {
-    spdlog::info(mouse_button == ImGuiMouseButton_Left ? "Row {} clicked"
+    spdlog::debug(mouse_button == ImGuiMouseButton_Left ? "Row {} clicked"
                                                        : "Row {} right-clicked",
                  m_selected_row);
 }
@@ -623,7 +624,7 @@ InfiniteScrollTable::SelectedRowToTrackID(size_t track_id_column_index,
     if(m_selected_row >= 0)
     {
         const std::vector<std::vector<std::string>>& table_data =
-            m_data_provider.GetTableData(m_table_type);
+            m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
         uint64_t track_id  = INVALID_UINT64_INDEX;
         uint64_t stream_id = INVALID_UINT64_INDEX;
 
@@ -658,7 +659,7 @@ InfiniteScrollTable::SelectedRowToTimeRange() const
     if(m_selected_row >= 0)
     {
         const std::vector<std::vector<std::string>>& table_data =
-            m_data_provider.GetTableData(m_table_type);
+            m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
         if(m_time_column_indices[kTimeStartNs] != INVALID_UINT64_INDEX &&
            m_time_column_indices[kTimeStartNs] < table_data[m_selected_row].size())
         {
@@ -680,7 +681,7 @@ void
 InfiniteScrollTable::SelectedRowToClipboard() const
 {
     const std::vector<std::vector<std::string>>& table_data =
-        m_data_provider.GetTableData(m_table_type);
+        m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
     if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
     {
         spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
@@ -708,7 +709,7 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
                                               size_t stream_id_column_index) const
 {
     const std::vector<std::vector<std::string>>& table_data =
-        m_data_provider.GetTableData(m_table_type);
+        m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
     if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
     {
         spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
@@ -728,7 +729,7 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
                 ViewRangeNS view_range = calculate_adaptive_view_range(
                     static_cast<double>(time_range.first),
                     static_cast<double>(time_range.second - time_range.first));
-                spdlog::info("Navigating to track ID: {} from row: {}", target_track_id,
+                spdlog::debug("Navigating to track ID: {} from row: {}", target_track_id,
                              m_selected_row);
                 EventManager::GetInstance()->AddEvent(
                     std::make_shared<ScrollToTrackEvent>(
@@ -750,11 +751,11 @@ void
 InfiniteScrollTable::FormatTimeColumns() const
 {
     const std::vector<std::vector<std::string>>& table_data =
-        m_data_provider.GetTableData(m_table_type);
-    std::vector<formatted_column_info_t>& formatted_column_data =
-        m_data_provider.GetMutableFormattedTableData(m_table_type);
+        m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
+    std::vector<FormattedColumnInfo>& formatted_column_data =
+        m_data_provider.DataModel().GetTables().GetMutableFormattedTableData(m_table_type);
     auto   time_format = m_settings.GetUserSettings().unit_settings.time_format;
-    double start_time  = m_data_provider.GetStartTime();
+    double start_time  = m_data_provider.DataModel().GetTimeline().GetStartTime();
     for(size_t i : m_time_column_indices)
     {
         if(i < formatted_column_data.size())
@@ -798,7 +799,7 @@ InfiniteScrollTable::ExportToFile() const
     AppWindow::GetInstance()->ShowSaveFileDialog(
         "Export Table", file_filters, "", [this](std::string file_path) -> void {
             std::shared_ptr<TableRequestParams> table_params =
-                m_data_provider.GetTableParams(m_table_type);
+                m_data_provider.DataModel().GetTables().GetTableParams(m_table_type);
             if(table_params &&
                m_data_provider.FetchTable(TableRequestParams(
                    m_req_table_type, table_params->m_track_ids, table_params->m_op_types,

@@ -26,6 +26,7 @@ class TraceView;
 class SettingsManager;
 class EventSearch;
 class SummaryView;
+class Minimap;
 
 class SystemTraceProjectSettings : public ProjectSetting
 {
@@ -86,6 +87,7 @@ private:
     std::shared_ptr<VFixedContainer>   m_timeline_container;
     std::shared_ptr<EventSearch>       m_event_search;
     std::shared_ptr<SummaryView>       m_summary_view;
+    std::shared_ptr<Minimap>           m_minimap;
 
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_analysis_item;
@@ -104,6 +106,7 @@ private:
     } popup_info_t;
 
     popup_info_t                        m_popup_info;
+    bool                                m_show_minimap_popup = false;
     std::unordered_map<int, ViewCoords> m_bookmarks;
 
     std::shared_ptr<AnnotationsManager> m_annotations;

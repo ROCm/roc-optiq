@@ -18,7 +18,7 @@ namespace RocProfVis
 namespace View
 {
 
-typedef struct rocprofvis_trace_event_t
+struct TraceEvent
 {
     uint64_t    m_id;
     std::string m_name;
@@ -27,26 +27,14 @@ typedef struct rocprofvis_trace_event_t
     uint32_t    m_level;
     uint32_t    m_child_count;
     std::string m_top_combined_name;
-} rocprofvis_trace_event_t;
+};
 
-typedef struct rocprofvis_trace_counter_t
+struct TraceCounter
 {
     double m_start_ts;
     double m_value;
     double m_end_ts;
-} rocprofvis_trace_counter_t;
-
-typedef union
-{
-    struct
-    {
-        // Event ID from database
-        uint64_t db_event_id : 60;
-        // Event operation type
-        uint64_t event_op : 4;
-    } bitfield;
-    uint64_t id;
-} rocprofvis_trace_event_t_id_t;
+};
 
 class RawTrackData
 {
@@ -85,14 +73,14 @@ template <typename T>
 struct data_traits;
 
 template <>
-struct data_traits<rocprofvis_trace_event_t>
+struct data_traits<TraceEvent>
 {
     using id_type = uint64_t;
     static constexpr rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeEvents;
 };
 
 template <>
-struct data_traits<rocprofvis_trace_counter_t>
+struct data_traits<TraceCounter>
 {
     using id_type = double;
     static constexpr rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeSamples;
@@ -120,8 +108,8 @@ private:
     std::unordered_set<id_type> m_ids;
 };
 
-using RawTrackSampleData = TemplatedRawTrackData<rocprofvis_trace_counter_t>;
-using RawTrackEventData = TemplatedRawTrackData<rocprofvis_trace_event_t>;
+using RawTrackSampleData = TemplatedRawTrackData<TraceCounter>;
+using RawTrackEventData = TemplatedRawTrackData<TraceEvent>;
 
 }  // namespace View
 }  // namespace RocProfVis

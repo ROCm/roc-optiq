@@ -30,21 +30,17 @@ class Node;
 class SystemTable;
 class Summary;
 class SummaryMetrics;
-#ifdef COMPUTE_UI_SUPPORT
-class Plot;
-class ComputeTrace;
-#endif
 
 class SystemTrace : public Trace
 {
 public:
-    SystemTrace();
+    SystemTrace(char const* const filename);
 
     virtual ~SystemTrace();
 
     virtual rocprofvis_result_t Init() override;
 
-    rocprofvis_result_t Load(char const* const filename, Future& future);
+    rocprofvis_result_t Load(Future& future);
 
     rocprofvis_result_t SaveTrimmedTrace(Future& future, double start, double end, char const* path);
 
@@ -68,11 +64,6 @@ public:
 
     rocprofvis_result_t AsyncFetch(Summary& summary, Arguments& args, Future& future,
                                    SummaryMetrics& output);
-
-#ifdef COMPUTE_UI_SUPPORT
-    rocprofvis_result_t AsyncFetch(Plot& plot, Arguments& args, Future& future,
-                                   Array& array);
-#endif
 
     rocprofvis_result_t AsyncFetch(rocprofvis_property_t property, Future& future,
                                           Array& array, uint64_t index, uint64_t count);
@@ -99,18 +90,11 @@ private:
     Summary*              m_summary;
     MemoryManager*        m_mem_mgmt;
 
-#ifdef COMPUTE_UI_SUPPORT
-    ComputeTrace* m_compute_trace;
-#endif
-
 private:
 #ifdef JSON_TRACE_SUPPORT
-    rocprofvis_result_t LoadJson(char const* const filename);
+    rocprofvis_result_t LoadJson();
 #endif
-    rocprofvis_result_t LoadRocpd(char const* const filename);
- 
-    /*DebugComputeTable function is for debugging purposes only. Feel free to refactor it or remove it */
-    rocprofvis_result_t DebugComputeTable(rocprofvis_dm_table_id_t table_id, std::string query, std::string description);
+    rocprofvis_result_t LoadRocpd();
 
 };
 

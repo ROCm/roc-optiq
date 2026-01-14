@@ -80,7 +80,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
     SECTION("Create Controller")
     {
         spdlog::info("Allocating Controller");
-        m_controller = rocprofvis_controller_alloc();
+        m_controller = rocprofvis_controller_alloc(g_input_file.c_str());
         REQUIRE(nullptr != m_controller);
     }
 
@@ -91,7 +91,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         REQUIRE(future != nullptr);
 
         spdlog::info("Load trace: {0}", g_input_file);
-        auto result = rocprofvis_controller_load_async(m_controller, g_input_file.c_str(), future);
+        auto result = rocprofvis_controller_load_async(m_controller, future);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         spdlog::info("Wait for load");
@@ -111,7 +111,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
     SECTION("Controller Load Whole Track Data")
     {
         uint64_t num_tracks = 0;
-        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerNumTracks, 0, &num_tracks);
+        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerSystemNumTracks, 0, &num_tracks);
         spdlog::info("Get num tracks: {0}", num_tracks);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(num_tracks > 0);
@@ -123,7 +123,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
             spdlog::info("Get track {0}", track_idx);
             rocprofvis_handle_t* track_handle = nullptr;
             result                            = rocprofvis_controller_get_object(
-                m_controller, kRPVControllerTrackIndexed, track_idx, &track_handle);
+                m_controller, kRPVControllerSystemTrackIndexed, track_idx, &track_handle);
             REQUIRE(result == kRocProfVisResultSuccess);
             REQUIRE(track_handle != nullptr);
 
@@ -347,13 +347,13 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
     SECTION("Controller Load Whole Graph Data")
     { 
         uint64_t num_tracks = 0;
-        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerNumTracks, 0, &num_tracks);
+        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerSystemNumTracks, 0, &num_tracks);
         spdlog::info("Get num tracks: {0}", num_tracks);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(num_tracks > 0);
 
         rocprofvis_handle_t* timeline_handle = nullptr;
-        result = rocprofvis_controller_get_object(m_controller, kRPVControllerTimeline, 0, &timeline_handle);
+        result = rocprofvis_controller_get_object(m_controller, kRPVControllerSystemTimeline, 0, &timeline_handle);
         spdlog::info("Get timeline: {0}", (void*)timeline_handle);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(timeline_handle);
@@ -420,14 +420,14 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
     SECTION("Controller Load Single Track Table Data")
     {
         rocprofvis_handle_t* table_handle = nullptr;
-        auto result = rocprofvis_controller_get_object(m_controller, kRPVControllerEventTable, 0, &table_handle);
+        auto result = rocprofvis_controller_get_object(m_controller, kRPVControllerSystemEventTable, 0, &table_handle);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(table_handle);
 
         spdlog::info("Get track 0");
         rocprofvis_handle_t* track_handle = nullptr;
         result                            = rocprofvis_controller_get_object(
-            m_controller, kRPVControllerTrackIndexed, 0, &track_handle);
+            m_controller, kRPVControllerSystemTrackIndexed, 0, &track_handle);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(track_handle != nullptr);
 
@@ -613,12 +613,12 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
     {
         rocprofvis_handle_t* table_handle = nullptr;
         auto                 result       = rocprofvis_controller_get_object(
-            m_controller, kRPVControllerSampleTable, 0, &table_handle);
+            m_controller, kRPVControllerSystemSampleTable, 0, &table_handle);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(table_handle);
 
         uint64_t num_tracks = 0;
-        result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerNumTracks, 0, &num_tracks);
+        result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerSystemNumTracks, 0, &num_tracks);
         spdlog::info("Get num tracks: {0}", num_tracks);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(num_tracks > 0);
@@ -640,7 +640,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
             spdlog::info("Get track {0}", i);
             rocprofvis_handle_t* track_handle = nullptr;
             result                            = rocprofvis_controller_get_object(
-                m_controller, kRPVControllerTrackIndexed, i, &track_handle);
+                m_controller, kRPVControllerSystemTrackIndexed, i, &track_handle);
             REQUIRE(result == kRocProfVisResultSuccess);
             REQUIRE(track_handle != nullptr);
 
@@ -835,7 +835,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
     SECTION("Controller Load Ranges Of Track Data")
     {
         uint64_t num_tracks = 0;
-        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerNumTracks, 0, &num_tracks);
+        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerSystemNumTracks, 0, &num_tracks);
         spdlog::info("Get num tracks: {0}", num_tracks);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(num_tracks > 0);
@@ -845,7 +845,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
             spdlog::info("Get track {0}", track_idx);
             rocprofvis_handle_t* track_handle = nullptr;
             auto                 result       = rocprofvis_controller_get_object(
-                m_controller, kRPVControllerTrackIndexed, track_idx, &track_handle);
+                m_controller, kRPVControllerSystemTrackIndexed, track_idx, &track_handle);
             REQUIRE(result == kRocProfVisResultSuccess);
             REQUIRE(track_handle != nullptr);
 
@@ -1158,7 +1158,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
     SECTION("Delete controller")
     {
         uint64_t num_tracks = 0;
-        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerNumTracks, 0, &num_tracks);
+        auto result = rocprofvis_controller_get_uint64(m_controller, kRPVControllerSystemNumTracks, 0, &num_tracks);
         spdlog::info("Get num tracks: {0}", num_tracks);
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(num_tracks > 0);

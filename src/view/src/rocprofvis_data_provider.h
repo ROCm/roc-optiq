@@ -94,12 +94,12 @@ public:
     void FreeRequests();
 
     /*
-     * Opens a trace file and loads the data into the controller.
+     * Loads the trace data into the controller.
      * Any previous data will be cleared.
-     * @param file_path: The path to the trace file to load.
+     * @param trace: The handle of the controller.
      *
      */
-    bool FetchTrace(const std::string& file_path);
+    bool FetchTrace(rocprofvis_controller_t* controller, const std::string& file_path);
 
     /*
      * Fetches a track from the controller. Stores the data in a raw track buffer.

@@ -59,9 +59,9 @@ void ComputeRoot::Update()
     }
 }
 
-bool ComputeRoot::OpenTrace(const std::string& path)
+bool ComputeRoot::LoadTrace(rocprofvis_controller_t* controller)
 {
-    m_trace_opened = (kRocProfVisResultSuccess == m_compute_data_provider->LoadTrace(path));
+    m_trace_opened = (kRocProfVisResultSuccess == m_compute_data_provider->LoadTrace(controller));
     return m_trace_opened;
 }
 

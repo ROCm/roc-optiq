@@ -9,6 +9,7 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_table.h"
+#include "rocprofvis_controller_trace.h"
 #include "rocprofvis_core_assert.h"
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_sample.h"
@@ -22,7 +23,9 @@
 #include "system/rocprofvis_controller_summary_metrics.h"
 #ifdef COMPUTE_UI_SUPPORT
 #include "compute/rocprofvis_controller_plot.h"
+#include "compute/rocprofvis_controller_trace_compute.h"
 #endif
+#include "rocprofvis_c_interface.h"
 
 #include <cstring>
 
@@ -43,6 +46,7 @@ typedef Reference<rocprofvis_controller_arguments_t, Arguments, kRPVControllerOb
 typedef Reference<rocprofvis_controller_table_t, Summary, kRPVControllerObjectTypeSummary> SummaryRef;
 typedef Reference<rocprofvis_controller_summary_metrics_t, SummaryMetrics, kRPVControllerObjectTypeSummaryMetrics> SummaryMetricsRef;
 #ifdef COMPUTE_UI_SUPPORT
+typedef Reference<rocprofvis_controller_t, ComputeTrace, kRPVControllerObjectTypeControllerCompute> ComputeTraceRef;
 typedef Reference<rocprofvis_controller_plot_t, Plot, kRPVControllerObjectTypePlot> PlotRef;
 #endif
 }
@@ -77,6 +81,17 @@ rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object
     {
         RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*)object;
         result = handle->GetObject(property, index, value);
+    }
+    return result;
+}
+rocprofvis_result_t rocprofvis_controller_get_object_type(rocprofvis_handle_t* object, rocprofvis_controller_object_type_t* type)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(object)
+    {
+        RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*) object;
+        *type = handle->GetType();
+        result = kRocProfVisResultSuccess;
     }
     return result;
 }
@@ -144,36 +159,86 @@ rocprofvis_result_t rocprofvis_controller_save_trimmed_trace(rocprofvis_handle_t
     }
     return result;
 }
-rocprofvis_controller_t* rocprofvis_controller_alloc()
+rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename)
 {
     rocprofvis_controller_t* controller = nullptr;
-    try
+    if(filename)
     {
-        RocProfVis::Controller::SystemTrace* trace = new RocProfVis::Controller::SystemTrace();
-        if(trace->Init() == kRocProfVisResultSuccess)
+        try
         {
-            controller = (rocprofvis_controller_t*) trace;
+            RocProfVis::Controller::Trace* trace = nullptr;
+            switch(rocprofvis_db_identify_type(filename))
+            {
+                case kRocpdSqlite:
+                case kRocprofSqlite:
+                case kRocprofMultinodeSqlite:
+                {
+                    trace = new RocProfVis::Controller::SystemTrace(filename);                 
+                    break;
+                }
+#ifdef COMPUTE_UI_SUPPORT
+                case kComputeSqlite:
+                {
+                    trace = new RocProfVis::Controller::ComputeTrace(filename);                  
+                    break;
+                }
+#endif
+                default:
+                {
+#ifdef JSON_TRACE_SUPPORT
+                    size_t len = strlen(filename);
+                    if (len > 5 && strcmp(filename + len - 5, ".json") == 0)
+                    {
+                        trace = new RocProfVis::Controller::SystemTrace(filename);  
+                    }
+#endif
+#ifdef COMPUTE_UI_SUPPORT
+                    size_t len = strlen(filename);
+                    if (len > 4 && strcmp(filename + len - 4, ".csv") == 0)
+                    {
+                        trace = new RocProfVis::Controller::ComputeTrace(filename); 
+                    }
+#endif
+                    break;
+                }
+            }
+            if(trace && trace->Init() == kRocProfVisResultSuccess)
+            {
+                controller = (rocprofvis_controller_t*) trace;
+            }
+            else
+            {
+                delete trace;
+            }
         }
-        else
+        catch(const std::exception& e)
         {
-            delete trace;
+            spdlog::error("Failed to allocate controller: {}", e.what());
         }
-    }
-    catch(const std::exception& e)
-    {
-        spdlog::error("Failed to allocate controller: {}", e.what());
-    }
+    }    
     return controller;
 }
-rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_future_t* future)
+rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, rocprofvis_controller_future_t* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
 
-    RocProfVis::Controller::SystemTraceRef trace(controller);
+    RocProfVis::Controller::SystemTraceRef system_trace(controller);
+#ifdef COMPUTE_UI_SUPPORT
+    RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
+#endif
     RocProfVis::Controller::FutureRef future_ref(future);
-    if(trace.IsValid() && future_ref.IsValid() && filename && strlen(filename))
+    if(future_ref.IsValid())
     {
-        result = trace->Load(filename, *future_ref);
+        if(system_trace.IsValid())
+        {
+            result = system_trace->Load(*future_ref);
+        }
+#ifdef COMPUTE_UI_SUPPORT
+        else if(compute_trace.IsValid())
+        {
+            result = compute_trace->Load(*future_ref);
+        }
+#endif
     }
 
     return result;
@@ -360,7 +425,7 @@ rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::SystemTraceRef trace(controller);
+    RocProfVis::Controller::ComputeTraceRef trace(controller);
     RocProfVis::Controller::PlotRef plot_ref(plot);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);

@@ -158,8 +158,6 @@ TabContainer::Render()
             ImGui::EndTabBar();
         }
 
-        m_confirmation_dialog->Render();
-
         // Check if the active tab has changed
         if(m_active_tab_index != new_selected_tab)
         {
@@ -172,6 +170,9 @@ TabContainer::Render()
 
         // Clear the set active tab index
         m_set_active_tab_index = s_invalid_index;
+
+        // must be called after active tab changes check as this may remove a tab
+        m_confirmation_dialog->Render();
 
         // Remove the tab if it was closed
         if(m_index_to_remove != s_invalid_index)

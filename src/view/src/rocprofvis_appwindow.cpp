@@ -660,10 +660,6 @@ AppWindow::HandleOpenFile()
     FileFilter trace_filter;
     trace_filter.m_name = "Traces";
     trace_filter.m_extensions = { "db", "rpd", "yaml" };
-#ifdef JSON_TRACE_SUPPORT
-    all_filter.m_extensions.push_back("json");
-    trace_filter.m_extensions.push_back("json");
-#endif 
 #ifdef COMPUTE_UI_SUPPORT
     all_filter.m_extensions.push_back("csv");
     trace_filter.m_extensions.push_back("csv");
@@ -1050,9 +1046,6 @@ AppWindow::RenderDeveloperMenu()
             FileFilter trace_filter;
             trace_filter.m_name       = "Traces";
             trace_filter.m_extensions = { "db", "rpd" };
-#    ifdef JSON_TRACE_SUPPORT
-            trace_filter.m_extensions.push_back("json");
-#    endif
             file_filters.push_back(trace_filter);
             ShowOpenFileDialog("Choose File", file_filters, "",
                                [this](std::string file_path) -> void {

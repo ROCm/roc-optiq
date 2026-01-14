@@ -91,9 +91,6 @@ private:
     MemoryManager*        m_mem_mgmt;
 
 private:
-#ifdef JSON_TRACE_SUPPORT
-    rocprofvis_result_t LoadJson();
-#endif
     rocprofvis_result_t LoadRocpd();
 
 };

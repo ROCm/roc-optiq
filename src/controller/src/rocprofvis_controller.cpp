@@ -18,7 +18,6 @@
 #include "system/rocprofvis_controller_timeline.h"
 #include "system/rocprofvis_controller_trace_system.h"
 #include "system/rocprofvis_controller_graph.h"
-#include "system/rocprofvis_controller_json_trace.h"
 #include "system/rocprofvis_controller_summary.h"
 #include "system/rocprofvis_controller_summary_metrics.h"
 #ifdef COMPUTE_UI_SUPPORT
@@ -182,26 +181,16 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename)
                     trace = new RocProfVis::Controller::ComputeTrace(filename);                  
                     break;
                 }
-#endif
                 default:
                 {
-#if defined(JSON_TRACE_SUPPORT) || defined (COMPUTE_UI_SUPPORT)
                     size_t len = strlen(filename);
-#endif
-#ifdef JSON_TRACE_SUPPORT
-                    if (len > 5 && strcmp(filename + len - 5, ".json") == 0)
-                    {
-                        trace = new RocProfVis::Controller::SystemTrace(filename);  
-                    }
-#endif
-#ifdef COMPUTE_UI_SUPPORT
                     if (len > 4 && strcmp(filename + len - 4, ".csv") == 0)
                     {
                         trace = new RocProfVis::Controller::ComputeTrace(filename); 
                     }
-#endif
                     break;
                 }
+#endif
             }
             if(trace && trace->Init() == kRocProfVisResultSuccess)
             {

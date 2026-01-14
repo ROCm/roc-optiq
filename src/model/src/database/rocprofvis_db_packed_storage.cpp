@@ -21,7 +21,12 @@
 #include "rocprofvis_db_packed_storage.h"
 #include "rocprofvis_db_profile.h"
 #include <numeric>
+#ifndef __APPLE__
 #include <execution>
+#define PARALLEL_SORT_POLICY std::execution::par_unseq,
+#else
+#define PARALLEL_SORT_POLICY
+#endif
 #include <cfloat>
 
 namespace RocProfVis
@@ -540,7 +545,7 @@ namespace DataModel
                     double value = size > 0 ? row->Get<double>(it->m_offset[op], size) : (ascending ? DBL_MAX : 0);
                     sort_values.push_back(value);
                 }
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                std::sort(PARALLEL_SORT_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
                         return ascending ? sort_values[so1] < sort_values[so2]
                             : sort_values[so2] < sort_values[so1];
@@ -572,7 +577,7 @@ namespace DataModel
                         sort_values.push_back(0);
                
                 }
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                std::sort(PARALLEL_SORT_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
                         return ascending ? sort_values[so1] < sort_values[so2]
                             : sort_values[so2] < sort_values[so1];
@@ -590,7 +595,7 @@ namespace DataModel
                     sort_values.push_back(value);
 
                 }
-                std::sort(std::execution::par_unseq, m_sort_order.begin(), m_sort_order.end(),
+                std::sort(PARALLEL_SORT_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
                         return ascending ? sort_values[so1] < sort_values[so2]
                             : sort_values[so2] < sort_values[so1];
@@ -615,7 +620,7 @@ namespace DataModel
             keys.push_back({ row.Get<uint64_t>(1), i });
         }
 
-        std::sort(std::execution::par_unseq, keys.begin(), keys.end(),
+        std::sort(PARALLEL_SORT_POLICY keys.begin(), keys.end(),
             [](const SortKey& a, const SortKey& b) {
                 return a.key < b.key;
             });

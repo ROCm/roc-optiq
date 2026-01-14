@@ -2230,7 +2230,7 @@ rocprofvis_result_t SystemTrace::AsyncFetch(rocprofvis_property_t property, Futu
                 }
                 case kRPVControllerBucketDataValueIndexed:
                 {
-                    size_t buckets_num = 0;
+                    uint64_t buckets_num = 0;
                     result = GetUInt64(kRPVControllerGetHistogramBucketsNumber, 0, &buckets_num);
                     if (result == kRocProfVisResultSuccess)
                     {

@@ -679,12 +679,13 @@ class Database
         // @return track sub-process name suffix  ('TID', 'Queue')  
         static const char*              SubProcessNameSuffixFor(
                                                                 rocprofvis_dm_track_category_t category);
+
+    public:
         // check if string is number
         // @param s - string to check
         // @return True if number
         static bool IsNumber(const std::string& s);
 
-    public:
         // declare DatabaseCache as friend class, for having access to protected members
         friend class DatabaseCache;
 };

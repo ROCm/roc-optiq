@@ -12,7 +12,11 @@
 #include "spdlog/spdlog.h"
 #if defined(_MSC_VER)
 #include <windows.h>
-#elif defined(__GNUC__) || defined(__clang__)
+#elif defined(__APPLE__)
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#include <mach/mach.h>
+#elif defined(__linux__)
 #include <sys/sysinfo.h>
 #endif
 #undef min
@@ -84,7 +88,20 @@ void MemoryManager::Init(size_t trace_size)
 
         s_physical_memory_avail = (mem_info.ullAvailPhys / 100) * kUseVailMemoryPercent;
 
-#elif defined(__GNUC__) || defined(__clang__)
+#elif defined(__APPLE__)
+        // Get available physical memory on macOS
+        mach_port_t host_port = mach_host_self();
+        vm_size_t page_size;
+        vm_statistics64_data_t vm_stats;
+        mach_msg_type_number_t count = sizeof(vm_stats) / sizeof(natural_t);
+        
+        host_page_size(host_port, &page_size);
+        host_statistics64(host_port, HOST_VM_INFO64, (host_info64_t)&vm_stats, &count);
+        
+        uint64_t avail_phys_mem = (uint64_t)(vm_stats.free_count + vm_stats.inactive_count) * (uint64_t)page_size;
+        s_physical_memory_avail = (avail_phys_mem / 100) * kUseVailMemoryPercent;
+
+#elif defined(__linux__)
         struct sysinfo mem_info;
         sysinfo(&mem_info);
 

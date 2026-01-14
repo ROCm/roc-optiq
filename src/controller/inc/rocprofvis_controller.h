@@ -17,16 +17,15 @@ extern "C"
 * @param filename File to open.
 * @returns A valid controller, initialized to load the trace or nullptr on error.
 */
-rocprofvis_controller_t* rocprofvis_controller_alloc(void);
+rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename);
 
 /*
 * Loads the file into the controller or returns an error.
 * @param controller The controller to load into.
-* @param filename The file to load.
 * @param future The object that tells you when the file has been loaded.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_future_t* future);
+rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, rocprofvis_controller_future_t* future);
 /* JSON: CreateController
 {
     file_path: String,
@@ -87,6 +86,14 @@ rocprofvis_result_t rocprofvis_controller_get_double(rocprofvis_handle_t* object
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value);
+
+/*
+* Gets the object type of the provided object or returns an error.
+* @param object The object to access.
+* @param type Output to write to.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_get_object_type(rocprofvis_handle_t* object, rocprofvis_controller_object_type_t* type);
 
 /*
 * Gets the property value from the provided object or returns an error.

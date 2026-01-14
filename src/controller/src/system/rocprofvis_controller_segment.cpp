@@ -155,8 +155,8 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
         for(auto& level : m_entries)
         {
             auto&                              entries = level.second;
-            rocprofvis_controller_properties_t property =
-                (rocprofvis_controller_properties_t) ((m_type ==
+            rocprofvis_controller_system_properties_t property =
+                (rocprofvis_controller_system_properties_t) ((m_type ==
                                                         kRPVControllerTrackTypeEvents)
                                                             ? kRPVControllerEventEndTimestamp
                                                             : kRPVControllerSampleEndTimestamp);

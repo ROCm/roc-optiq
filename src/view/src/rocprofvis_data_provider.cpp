@@ -2144,7 +2144,7 @@ DataProvider::ProcessEventFlowDetailsRequest(RequestInfo& req)
                     flow_control_handle, kRPVControllerFlowControltId, 0, &data);
                 if(result == kRocProfVisResultSuccess)
                 {
-                    event_info->flow_info[j].id = data;
+                    event_info->flow_info[j].id.uuid = data;
                 }
 
                 data   = 0;
@@ -3076,7 +3076,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
         // Construct TraceEvent item in-place
         buffer.emplace_back();
         TraceEvent& trace_event = buffer.back();
-        trace_event.m_id                      = id;
+        trace_event.m_id.uuid     = id;
 
         double start_ts = 0;
         result          = rocprofvis_controller_get_double(
@@ -3133,9 +3133,9 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
     {
         for(const TraceEvent& event : event_track->GetData())
         {
-            if(event.m_id == event_id)
+            if(event.m_id.uuid == event_id)
             {
-                event_info.basic_info.id          = event.m_id;
+                event_info.basic_info.id.uuid       = event.m_id.uuid;
                 event_info.basic_info.start_ts    = event.m_start_ts;
                 // only set values below if this is single event, not a combined event
                 if(event.m_child_count == 1)

@@ -78,9 +78,24 @@ struct EventExtData
     uint64_t    category_enum;
 };
 
+// Event id structure (mirrors rocprofvis_dm_event_id_t in model)
+union TraceEventId
+{
+    struct
+    {
+        // Event ID from database
+        uint64_t event_id : 52;
+        // Node index
+        uint64_t event_node : 8;
+        // Event operation type
+        uint64_t event_op : 4;
+    } bitfield;
+    uint64_t uuid;
+};
+
 struct EventFlowData
 {
-    uint64_t    id;
+    TraceEventId id;
     uint64_t    start_timestamp;
     uint64_t    end_timestamp;
     uint64_t    track_id;
@@ -99,7 +114,7 @@ struct CallStackData
 
 struct BasicEventData
 {
-    uint64_t    id;
+    TraceEventId id;
     std::string name;
     double      start_ts;
     double      duration;
@@ -112,21 +127,6 @@ struct EventArg
     std::string name;
     std::string value;
     std::string data_type;
-};
-
-// Event id structure (mirrors rocprofvis_dm_event_id_t in model)
-union TraceEventId
-{
-    struct
-    {
-        // Event ID from database
-        uint64_t db_event_id : 52;
-        // Node index
-        uint64_t event_node : 8;
-        // Event operation type
-        uint64_t event_op : 4;
-    } bitfield;
-    uint64_t id;
 };
 
 struct EventInfo

@@ -49,7 +49,7 @@ EventSearch::Update()
             m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
         for(size_t i = 0; i < column_names.size(); i++)
         {
-            if(i != m_important_column_idxs[kEventId] && i != m_important_column_idxs[kName] &&
+            if(i != m_important_column_idxs[kDbEventId] && i != m_important_column_idxs[kName] &&
                i != m_time_column_indices[kTimeStartNs] &&
                i != m_time_column_indices[kDurationNs])
             {
@@ -283,11 +283,11 @@ EventSearch::IndexColumns()
             }
             else if(col == ID_COLUMN_NAME)
             {
-                m_important_column_idxs[kId] = i;
+                m_important_column_idxs[kUUId] = i;
             }
             else if(col == EVENT_ID_COLUMN_NAME)
             {
-                m_important_column_idxs[kEventId] = i;
+                m_important_column_idxs[kDbEventId] = i;
             }
             else if(col == NAME_COLUMN_NAME)
             {

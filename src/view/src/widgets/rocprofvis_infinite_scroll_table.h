@@ -35,8 +35,8 @@ public:
     // Important columns in the table
     enum ImportantColumns
     {
-        kId,
-        kEventId,
+        kUUId,
+        kDbEventId,
         kName,
         kTrackId,
         kStreamId,

@@ -265,7 +265,7 @@ MultiTrackTable::Update()
                         continue;  // Skip empty or internal columns
                     }
                     // skip event id column too
-                    if(i == m_important_column_idxs[ImportantColumns::kEventId])
+                    if(i == m_important_column_idxs[ImportantColumns::kDbEventId])
                     {
                         continue;
                     }
@@ -326,11 +326,11 @@ MultiTrackTable::IndexColumns()
             }
             else if(col == ID_COLUMN_NAME)
             {
-                m_important_column_idxs[kId] = i;
+                m_important_column_idxs[kUUId] = i;
             }
             else if(col == EVENT_ID_COLUMN_NAME)
             {
-                m_important_column_idxs[kEventId] = i;
+                m_important_column_idxs[kDbEventId] = i;
             }
             else if(col == NAME_COLUMN_NAME)
             {
@@ -442,11 +442,11 @@ MultiTrackTable::RenderContextMenu()
         // {
         //     uint64_t event_id = INVALID_UINT64_INDEX;
 
-        //     if(m_important_columns[kId] != INVALID_COLUMN_INDEX &&
-        //        m_important_columns[kId] < table_data[m_selected_row].size())
+        //     if(m_important_columns[kUUId] != INVALID_COLUMN_INDEX &&
+        //        m_important_columns[kUUId] < table_data[m_selected_row].size())
         //     {
         //         event_id =
-        //             std::stoull(table_data[m_selected_row][m_important_columns[kId]]);
+        //             std::stoull(table_data[m_selected_row][m_important_columns[kUUId]]);
         //     }
         // }
 

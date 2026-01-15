@@ -220,7 +220,8 @@ TabContainer::RemoveTab(const std::string& id)
         
         if(m_active_tab_index == index)
         {
-            // If the active tab was closed, reset to invalid index
+            // If the active tab was closed, reset to invalid index 
+            // (Render loop will handle selecting a new active tab)
             m_active_tab_index = s_invalid_index;
         }
     }
@@ -241,6 +242,7 @@ TabContainer::RemoveTab(int index)
         if(m_active_tab_index == index)
         {
             // If the active tab was closed, reset to invalid index
+            // (Render loop will handle selecting a new active tab)
             m_active_tab_index = s_invalid_index;
         }
     }

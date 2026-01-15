@@ -171,14 +171,14 @@ int ProfileDatabase::CallBackLoadTrack(void *data, int argc, sqlite3_stmt* stmt,
 
 int ProfileDatabase::CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_stmt* stmt,
     char** azColName) {
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 3, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void *func = (void*)&CallbackMakeHistogramPerTrack;
     rocprofvis_db_sqlite_callback_parameters* callback_params =
         (rocprofvis_db_sqlite_callback_parameters*) data;
     ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
-    uint32_t index                             = db->Sqlite3ColumnInt(func, stmt, azColName, 3);
+    uint32_t index                             = db->Sqlite3ColumnInt(func, stmt, azColName, 2);
     uint32_t bucket_number = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
     uint32_t events_count = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
     db->TrackPropertiesAt(index)->histogram[bucket_number] = events_count;
@@ -723,6 +723,7 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
             futures.push_back((Future*)rocprofvis_db_future_alloc(nullptr));
             std::string async_query = prefix;
             async_query += std::to_string(i);
+            async_query += " AS track_id ";
 
             if (BuildTrackQuery(i, qtype, async_query, split_count, j) !=
                 kRocProfVisDmResultSuccess)
@@ -1695,10 +1696,66 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
     TraceProperties()->histogram_bucket_size = bucket_size;
     TraceProperties()->histogram_bucket_count = (trace_length + bucket_size) / bucket_size;
 
-    std::string histogram_query = "SELECT (startTs - " +
-        std::to_string(TraceProperties()->start_time) + ") / " +
-        std::to_string(bucket_size) + " AS bucket, COUNT(*) AS count, 1 as version, ";
+    std::string histogram_query_prefix = "WITH params AS ( SELECT ";
+    histogram_query_prefix += std::to_string(TraceProperties()->start_time);
+    histogram_query_prefix += " AS start_time, ";
+    histogram_query_prefix += std::to_string(bucket_size);
+    histogram_query_prefix += " AS bucket_size, ";
+    histogram_query_prefix += " 2 AS version ), ";
+    histogram_query_prefix += "events_src AS ( SELECT (id + op << 60) as event_id, startTs as start_ts, endTs as end_ts, ";
 
+    std::string histogram_query_suffix = "), ";
+    histogram_query_suffix += "event_bucket_ranges AS( "
+        "SELECT "
+        "e.track_id, "
+        "e.event_id, "
+        "e.start_ts, "
+        "e.end_ts, "
+        "(e.start_ts - p.start_time) / p.bucket_size   AS start_bucket, "
+        "(e.end_ts - 1 - p.start_time) / p.bucket_size AS end_bucket "
+        "FROM events_src e "
+        "JOIN params p"
+        "), ";
+    histogram_query_suffix += "expanded_buckets AS ("
+        "SELECT "
+        "track_id, "
+        "event_id, "
+        "start_ts, "
+        "end_ts, "
+        "start_bucket AS bucket_no, "
+        "end_bucket "
+        "FROM event_bucket_ranges "
+        "UNION ALL "
+        "SELECT "
+        "track_id, "
+        "event_id, "
+        "start_ts, "
+        "end_ts, "
+        "bucket_no + 1, "
+        "end_bucket "
+        "FROM expanded_buckets "
+        "WHERE bucket_no < end_bucket "
+        "),";
+    histogram_query_suffix += "bucket_events AS ("
+        "SELECT "
+        "eb.track_id, "
+        "eb.bucket_no,"
+        "eb.event_id,"
+        "MAX(eb.start_ts, p.start_time + eb.bucket_no * p.bucket_size ) AS overlap_start, "
+        "MIN(eb.end_ts, p.start_time + (eb.bucket_no + 1) * p.bucket_size ) AS overlap_end "
+        "FROM expanded_buckets eb "
+        "JOIN params p "
+        ") ";
+    histogram_query_suffix += "SELECT "
+        "bucket_no, "
+        "COUNT(DISTINCT event_id) AS event_count, "
+        "track_id "
+        "FROM bucket_events "
+        "WHERE overlap_end > overlap_start "
+        "GROUP BY bucket_no "
+        "ORDER BY bucket_no ";
+
+    std::string histogram_query = histogram_query_prefix+histogram_query_suffix;
     std::size_t hitogram_query_hash_value = std::hash<std::string>{}(histogram_query);
     std::string histogram_table_name = std::string("histogram_") + std::to_string(hitogram_query_hash_value);
 
@@ -1736,8 +1793,8 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
 
             result = ExecuteQueryForAllTracksAsync(
                 kRocProfVisDmTrySplitTrack | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
-                histogram_query.c_str(),
-                "GROUP BY bucket", &CallbackMakeHistogramPerTrack,
+                histogram_query_prefix.c_str(),
+                histogram_query_suffix.c_str(), &CallbackMakeHistogramPerTrack,
                 [](rocprofvis_dm_track_params_t* params) {},
                 guids_per_file);
 

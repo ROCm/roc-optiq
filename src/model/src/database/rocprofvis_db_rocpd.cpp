@@ -587,7 +587,7 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
             return Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format(
                 { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                 Builder::QParam("id", Builder::ID_PUBLIC_NAME),
-                Builder::QParam("id", Builder::DB_ID_PUBLIC_NAME), 
+                Builder::QParam("id", Builder::DB_ID_PUBLIC_NAME),
                 Builder::QParam("apiName_id", Builder::CATEGORY_REFERENCE_RPD),
                 Builder::QParam("args_id", Builder::EVENT_NAME_REFERENCE_RPD), 
                 Builder::QParam("start", Builder::START_SERVICE_NAME),
@@ -602,7 +602,7 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
             return Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format(
                 { { Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                 Builder::QParam("id", Builder::ID_PUBLIC_NAME),
-                Builder::QParam("id", Builder::DB_ID_PUBLIC_NAME),  
+                Builder::QParam("id", Builder::DB_ID_PUBLIC_NAME),
                 Builder::QParam("opType_id", Builder::CATEGORY_REFERENCE_RPD),
                 Builder::QParam("description_id", Builder::EVENT_NAME_REFERENCE_RPD), 
                 Builder::QParam("start", Builder::START_SERVICE_NAME),
@@ -618,7 +618,7 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
                 {this,
                 { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::QParam("id", Builder::ID_PUBLIC_NAME),
-                Builder::QParam("id", Builder::DB_ID_PUBLIC_NAME), 
+                Builder::QParam("id", Builder::DB_ID_PUBLIC_NAME),
                 Builder::QParam("monitorType", Builder::COUNTER_NAME_REFERENCE_RPD),
                 Builder::QParam("value", Builder::COUNTER_VALUE_SERVICE_NAME), 
                 Builder::QParam("start", Builder::START_SERVICE_NAME),

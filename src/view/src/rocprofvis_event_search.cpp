@@ -288,7 +288,7 @@ EventSearch::IndexColumns()
             else if(col == EVENT_ID_COLUMN_NAME)
             {
                 m_important_column_idxs[kEventId] = i;
-            }            
+            }
             else if(col == NAME_COLUMN_NAME)
             {
                 m_important_column_idxs[kName] = i;

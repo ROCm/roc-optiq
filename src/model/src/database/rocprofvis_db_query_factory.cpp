@@ -1042,7 +1042,7 @@ namespace DataModel
                 { m_db,
                 { Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                 Builder::QParam("M.id", Builder::ID_PUBLIC_NAME),
-                Builder::QParam("M.id", Builder::DB_ID_PUBLIC_NAME),                
+                Builder::QParam("M.id", Builder::DB_ID_PUBLIC_NAME),              
                 Builder::QParam("E.category_id",Builder::CATEGORY_REFERENCE),
                 Builder::QParam("M.type", Builder::M_TYPE_REFERENCE),
                 Builder::QParam("T.stream_id", Builder::STREAM_NAME_REFERENCE),

@@ -57,7 +57,7 @@ typedef struct rocprofvis_db_sqlite_slice_query_format
 
 typedef struct rocprofvis_db_sqlite_launch_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 13;
+    static constexpr const int NUM_PARAMS = 14;
     ProfileDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
@@ -65,7 +65,7 @@ typedef struct rocprofvis_db_sqlite_launch_table_query_format
 
 typedef struct rocprofvis_db_sqlite_dispatch_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 29;
+    static constexpr const int NUM_PARAMS = 30;
     ProfileDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
@@ -73,7 +73,7 @@ typedef struct rocprofvis_db_sqlite_dispatch_table_query_format
 
 typedef struct rocprofvis_db_sqlite_memory_alloc_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 22;
+    static constexpr const int NUM_PARAMS = 23;
     ProfileDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
@@ -81,7 +81,7 @@ typedef struct rocprofvis_db_sqlite_memory_alloc_table_query_format
 
 typedef struct rocprofvis_db_sqlite_memory_copy_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 26;
+    static constexpr const int NUM_PARAMS = 27;
     ProfileDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
@@ -89,14 +89,14 @@ typedef struct rocprofvis_db_sqlite_memory_copy_table_query_format
 
 typedef struct rocprofvis_db_sqlite_rocpd_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 9;
+    static constexpr const int NUM_PARAMS = 10;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_rocpd_table_query_format;
 
 typedef struct rocprofvis_db_sqlite_sample_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 7;
+    static constexpr const int NUM_PARAMS = 8;
     ProfileDatabase*           owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
@@ -104,7 +104,7 @@ typedef struct rocprofvis_db_sqlite_sample_table_query_format
 
 typedef struct rocprofvis_db_sqlite_rocpd_sample_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 8;
+    static constexpr const int NUM_PARAMS = 9;
     ProfileDatabase*           owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
@@ -164,7 +164,8 @@ class Builder
         static constexpr const char* END_SERVICE_NAME       = "endTs";
         static constexpr const char* START_PUBLIC_NAME     = "start";
         static constexpr const char* END_PUBLIC_NAME       = "end";
-        static constexpr const char* ID_PUBLIC_NAME = "id";
+        static constexpr const char* ID_PUBLIC_NAME = "__id";
+        static constexpr const char* DB_ID_PUBLIC_NAME = "id";
         static constexpr const char* DURATION_PUBLIC_NAME = "duration";
         static constexpr const char* SIZE_PUBLIC_NAME = "size";
         static constexpr const char* ADDRESS_PUBLIC_NAME = "address";
@@ -251,6 +252,7 @@ class Builder
         {
             SCHEMA_INDEX_NULL,
             SCHEMA_INDEX_OPERATION,
+            SCHEMA_INDEX_EVENT_DB_ID,
             SCHEMA_INDEX_EVENT_ID,
             SCHEMA_INDEX_CATEGORY,
             SCHEMA_INDEX_CATEGORY_RPD,
@@ -297,6 +299,7 @@ class Builder
 
         inline static std::unordered_map<std::string, ColumnData> table_view_schema = {
             {OPERATION_SERVICE_NAME, {OPERATION_SERVICE_NAME, ColumnType::Byte, SCHEMA_INDEX_OPERATION}},
+            {DB_ID_PUBLIC_NAME, {DB_ID_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_DB_ID}},
             {ID_PUBLIC_NAME, {ID_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_ID}},
             {CATEGORY_REFERENCE, {CATEGORY_PUBLIC_NAME, ColumnType::Word, SCHEMA_INDEX_CATEGORY}},
             {CATEGORY_REFERENCE_RPD, {CATEGORY_PUBLIC_NAME, ColumnType::Word, SCHEMA_INDEX_CATEGORY_RPD}},
@@ -339,7 +342,6 @@ class Builder
             {COUNTER_VALUE_SERVICE_NAME,{COUNTER_VALUE_PUBLIC_NAME, ColumnType::Double,SCHEMA_INDEX_COUNTER_VALUE}},
             {TRACK_ID_PUBLIC_NAME,{TRACK_ID_PUBLIC_NAME, TRACK_ID_TYPE,SCHEMA_INDEX_TRACK_ID}},
             {STREAM_TRACK_ID_PUBLIC_NAME,{STREAM_TRACK_ID_PUBLIC_NAME, TRACK_ID_TYPE,SCHEMA_INDEX_STREAM_TRACK_ID}},
-
         };
 
 

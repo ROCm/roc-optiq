@@ -902,6 +902,10 @@ namespace DataModel
                 value.bitfield.event_node = callback_params->db_instance->GuidIndex();
                 value.bitfield.event_op = op;
                 table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value.value);
+            } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_EVENT_ID)
+            {
+                uint64_t id = db->Sqlite3ColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
+                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, id);
             }
             else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD)
             {

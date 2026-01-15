@@ -9,7 +9,6 @@
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_id.h"
-#include "rocprofvis_controller_json_trace.h"
 #include "rocprofvis_core_assert.h"
 
 #include <cfloat>

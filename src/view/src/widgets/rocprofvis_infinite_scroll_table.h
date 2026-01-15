@@ -36,6 +36,7 @@ public:
     enum ImportantColumns
     {
         kId,
+        kEventId,
         kName,
         kTrackId,
         kStreamId,

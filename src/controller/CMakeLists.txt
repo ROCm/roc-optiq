@@ -47,12 +47,6 @@ list(APPEND rocprofvis_controller_source_files
     src/system/rocprofvis_controller_summary_metrics.cpp
 )
 
-if(JSON_TRACE_SUPPORT) 
-list(APPEND rocprofvis_controller_source_files
-    src/system/rocprofvis_controller_json_trace.cpp
-)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DJSON_TRACE_SUPPORT")
-endif(JSON_TRACE_SUPPORT)
 if(COMPUTE_UI_SUPPORT) 
 list(APPEND rocprofvis_controller_source_files
     src/compute/rocprofvis_controller_trace_compute.cpp

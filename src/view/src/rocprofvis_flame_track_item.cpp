@@ -10,6 +10,7 @@
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include <cmath>
 #include <limits>
 #include <sstream>
@@ -372,7 +373,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                               ImGuiHoveredFlags_NoPopupHierarchy))
     {
         // Select on click
-        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        if(IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
         {
             // Defer on click execution to next frame if no other layer takes focus
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kGraphLayer);
@@ -385,6 +386,15 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
             m_deferred_click_handled =
                 true;  // Ensure only one click is handled per render cycle
             chart_item.selected = !chart_item.selected;
+
+
+            //Control to multiselect
+            const ImGuiIO& io = ImGui::GetIO();
+            if(!io.KeyCtrl)
+            {
+                m_timeline_selection->UnselectAllEvents();
+            }
+
             chart_item.selected
                 ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id.uuid)
                 : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id.uuid);

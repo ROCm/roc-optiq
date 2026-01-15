@@ -308,7 +308,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                      Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                      { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                          Builder::QParam("start", Builder::START_SERVICE_NAME), 
-                         Builder::QParam("value"), 
+                         Builder::QParam("value", Builder::COUNTER_VALUE_SERVICE_NAME), 
                          Builder::QParam("start", Builder::END_SERVICE_NAME), 
                          Builder::SpaceSaver(0),
                          Builder::SpaceSaver(0), 

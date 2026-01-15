@@ -58,8 +58,10 @@ public:
     }
     // Returns pointer to category string
     rocprofvis_dm_charptr_t                             CategoryString();
-    // Return histogram bucket value per index
+    // Return histogram bucket value per index (for events - sum all durations (just in case, not used), for counters - average value)
     rocprofvis_dm_value_t                               GetHistogramBucketValueAt(size_t index);
+    // Return histogram bucket events density
+    uint64_t                                            GetHistogramBucketNumEventsAt(size_t index);
     // Method to get slice handle at provided index
     // @param index - index of slice 
     // @param slice - handle to slice

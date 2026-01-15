@@ -248,8 +248,10 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackMinimumValueDouble,
     // Track maximum level or value
     kRPVDMTrackMaximumValueDouble,
-    // Histogram bucket value
-    kRPVDMTrackHistogramEventDensityUInt64Indexed,
+    //EventDensity for event and counter tracks
+    kRPVDMTrackHistogramBucketEventDensityUInt64Indexed,
+    // Histogram bucket value. EventDensity for event tracks and average counter value for counter tracks
+    kRPVDMTrackHistogramBucketValueDoubleIndexed,
     // Track Instance ID (Guid index)
     kRPVDMTrackInstanceIdUInt64,
 } rocprofvis_dm_track_property_t;

@@ -510,6 +510,8 @@ typedef enum rocprofvis_controller_track_properties_t : uint32_t
     kRPVControllerTrackCounter,
     // The CPU stream that the track represents - can be NULL
     kRPVControllerTrackStream,
+    // Get histogram bucket density
+    kRPVControllerTrackHistogramBucketDensityIndexed,
     // Get histogram bucket value
     kRPVControllerTrackHistogramBucketValueIndexed,
     __kRPVControllerTrackPropertiesLast

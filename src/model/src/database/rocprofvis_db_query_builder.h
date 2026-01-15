@@ -164,7 +164,7 @@ class Builder
         static constexpr const char* END_SERVICE_NAME       = "endTs";
         static constexpr const char* START_PUBLIC_NAME     = "start";
         static constexpr const char* END_PUBLIC_NAME       = "end";
-        static constexpr const char* ID_PUBLIC_NAME = "__id";
+        static constexpr const char* ID_PUBLIC_NAME = "__uuid";
         static constexpr const char* DB_ID_PUBLIC_NAME = "id";
         static constexpr const char* DURATION_PUBLIC_NAME = "duration";
         static constexpr const char* SIZE_PUBLIC_NAME = "size";

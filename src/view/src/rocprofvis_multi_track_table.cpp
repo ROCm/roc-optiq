@@ -19,7 +19,7 @@ constexpr const char* NO_DATA_TEXT =
     "No data available for the selected tracks or filters.";
 constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
 constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
-constexpr const char* ID_COLUMN_NAME        = "__id";
+constexpr const char* ID_COLUMN_NAME        = "__uuid";
 constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 

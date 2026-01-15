@@ -17,7 +17,6 @@ TabContainer::TabContainer()
 , m_allow_tool_tips(true)
 , m_enable_send_close_event(false)
 , m_enable_send_change_event(false)
-, m_index_to_remove(s_invalid_index)
 , m_pending_to_remove(s_invalid_index)
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
       SettingsManager::GetInstance().GetUserSettings().dont_ask_before_tab_closing))
@@ -96,6 +95,7 @@ TabContainer::Render()
     int new_selected_tab = m_active_tab_index;
     if(!m_tabs.empty())
     {
+        int index_to_remove = s_invalid_index;
         if(ImGui::BeginTabBar("Tabs"))
         {
             for(size_t i = 0; i < m_tabs.size(); ++i)
@@ -147,7 +147,7 @@ TabContainer::Render()
                 {
                     if(SettingsManager::GetInstance().GetUserSettings().dont_ask_before_tab_closing)
                     {
-                        m_index_to_remove   = static_cast<int>(i);
+                        index_to_remove = static_cast<int>(i);
                     }
                     else
                     {
@@ -157,8 +157,6 @@ TabContainer::Render()
             }
             ImGui::EndTabBar();
         }
-
-        m_confirmation_dialog->Render();
 
         // Check if the active tab has changed
         if(m_active_tab_index != new_selected_tab)
@@ -173,10 +171,13 @@ TabContainer::Render()
         // Clear the set active tab index
         m_set_active_tab_index = s_invalid_index;
 
+        // must be called after active tab changes check as this may remove a tab
+        m_confirmation_dialog->Render();
+
         // Remove the tab if it was closed
-        if(m_index_to_remove != s_invalid_index)
+        if(index_to_remove != s_invalid_index)
         {
-            RemoveTab(m_index_to_remove);
+            RemoveTab(index_to_remove);
         }
 
         // Show confirm dialog if user option set
@@ -203,16 +204,31 @@ TabContainer::AddTab(TabItem&& tab)
 void
 TabContainer::RemoveTab(const std::string& id)
 {
-    auto it = std::remove_if(m_tabs.begin(), m_tabs.end(),
-                             [&id](const TabItem& tab) { return tab.m_id == id; });
+    auto it = std::find_if(m_tabs.begin(), m_tabs.end(),
+                           [&id](const TabItem& tab) { return tab.m_id == id; });
     if(it != m_tabs.end())
     {
+        int index = static_cast<int>(std::distance(m_tabs.begin(), it));
+
         if(m_enable_send_close_event)
         {
             // notify the event manager of the tab removal
             SendEvent(RocEvents::kTabClosed, it->m_id);
         }
-        m_tabs.erase(it, m_tabs.end());
+
+        m_tabs.erase(it);
+
+        if(m_active_tab_index == index)
+        {
+            // If the active tab was closed, reset to invalid index
+            // (Render loop will handle selecting a new active tab)
+            m_active_tab_index = s_invalid_index;
+        }
+        else if(m_active_tab_index > index)
+        {
+            // Adjust active tab index
+            m_active_tab_index--;
+        }
     }
 }
 
@@ -231,9 +247,14 @@ TabContainer::RemoveTab(int index)
         if(m_active_tab_index == index)
         {
             // If the active tab was closed, reset to invalid index
+            // (Render loop will handle selecting a new active tab)
             m_active_tab_index = s_invalid_index;
         }
-        m_index_to_remove = s_invalid_index;
+        else if(m_active_tab_index > index)
+        {
+            // Adjust active tab index
+            m_active_tab_index--;
+        }
     }
 }
 

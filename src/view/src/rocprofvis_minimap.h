@@ -40,6 +40,8 @@ private:
     size_t              m_data_width;
     size_t              m_data_height;
     bool                m_data_valid;
+    bool                m_show_events;
+    bool                m_show_counters;
     double              m_raw_min_value;
     double              m_raw_max_value;
 

@@ -21,6 +21,8 @@ Minimap::Minimap(DataProvider& dp, TimelineView* tv)
 : m_data_width(0)
 , m_data_height(0)
 , m_data_valid(false)
+, m_show_events(true)
+, m_show_counters(true)
 , m_raw_min_value(0.0)
 , m_raw_max_value(0.0)
 , m_data_provider(dp)
@@ -188,8 +190,11 @@ Minimap::NormalizeRawData()
 ImU32
 Minimap::GetColor(double v, int type) const
 {
-    int              bin = static_cast<int>(v);
     SettingsManager& sm  = SettingsManager::GetInstance();
+    if(type == 1 && !m_show_counters) return sm.GetColor(Colors::kMinimapBg);
+    if(type != 1 && !m_show_events) return sm.GetColor(Colors::kMinimapBg);
+
+    int              bin = static_cast<int>(v);
 
     const std::vector<ImU32> minimap_bins = {
         sm.GetColor(Colors::kMinimapBin1), sm.GetColor(Colors::kMinimapBin2),
@@ -223,7 +228,7 @@ Minimap::Render()
 
     float  pad      = 8.0f;
     float  legend_w = 120.0f;
-    float  title_h  = ImGui::GetTextLineHeightWithSpacing() + pad * 2;
+    float  top_padding  = 5.0f;
     ImVec2 avail    = ImGui::GetContentRegionAvail();
 
     if(ImGui::BeginChild("Minimap", avail, true))
@@ -233,8 +238,8 @@ Minimap::Render()
 
         ImGui::SetCursorPos(ImVec2(pad, pad));
 
-        ImVec2 map_pos(window_position.x + pad, window_position.y + title_h);
-        ImVec2 map_size(avail.x - legend_w - pad * 3, avail.y - title_h - pad * 2);
+        ImVec2 map_pos(window_position.x + pad, window_position.y + top_padding);
+        ImVec2 map_size(avail.x - legend_w - pad * 3, avail.y - top_padding - pad * 2);
 
         // Fill background of minimap area with white (light mode) or black (dark mode)
         draw_list->AddRectFilled(map_pos,
@@ -253,8 +258,8 @@ Minimap::Render()
         RenderViewport(draw_list, map_pos, map_size);
         HandleNavigation(map_pos, map_size);
 
-        ImGui::SetCursorPos(ImVec2(avail.x - legend_w - pad, title_h));
-        RenderLegend(legend_w, avail.y - title_h - pad * 2);
+        ImGui::SetCursorPos(ImVec2(avail.x - legend_w - pad, top_padding));
+        RenderLegend(legend_w, avail.y - top_padding - pad * 2);
     }
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
@@ -409,8 +414,9 @@ Minimap::RenderLegend(float w, float h)
 
     float bar_w       = 15.0f;
     float text_height = ImGui::CalcTextSize("1.0").y;
+    float checkbox_sz = ImGui::GetFrameHeight();
     float gap         = 4.0f;
-    float bar_h       = h - (text_height * 2) - (gap * 2);
+    float bar_h       = h - (text_height * 2) - (gap * 3) - checkbox_sz;
 
     float bar_x1 = pos.x + (w * 0.25f) - (bar_w * 0.5f);
     float bar_x2 = pos.x + (w * 0.75f) - (bar_w * 0.5f);
@@ -431,19 +437,31 @@ Minimap::RenderLegend(float w, float h)
         IM_COL32(110, 110, 110, 255), IM_COL32(80, 80, 80, 255)  // darkest
     };
 
+    auto DimColor = [](ImU32 col) -> ImU32 {
+        ImVec4 c = ImGui::ColorConvertU32ToFloat4(col);
+        c.w *= 0.2f;
+        return ImGui::ColorConvertFloat4ToU32(c);
+    };
+
     for(int i = 0; i < 7; ++i)
     {
         // 0 is bottom (low value), 6 is top (high value)
         float y0  = bar_y + bar_h - (i * bin_h);
         float y1  = y0 - bin_h;
         ImU32 col = minimap_bins[i];
+        if(!m_show_events) col = DimColor(col);
         dl->AddRectFilled(ImVec2(bar_x1, y1), ImVec2(bar_x1 + bar_w, y0), col);
-        dl->AddRectFilled(ImVec2(bar_x2, y1), ImVec2(bar_x2 + bar_w, y0), minimap_bins2[i]);
+
+        ImU32 col2 = minimap_bins2[i];
+        if(!m_show_counters) col2 = DimColor(col2);
+        dl->AddRectFilled(ImVec2(bar_x2, y1), ImVec2(bar_x2 + bar_w, y0), col2);
     }
+    
+    ImU32 border_col = sm.GetColor(Colors::kBorderColor);
     dl->AddRect(ImVec2(bar_x1, bar_y), ImVec2(bar_x1 + bar_w, bar_y + bar_h),
-                sm.GetColor(Colors::kBorderColor));
+                !m_show_events ? DimColor(border_col) : border_col);
     dl->AddRect(ImVec2(bar_x2, bar_y), ImVec2(bar_x2 + bar_w, bar_y + bar_h),
-                sm.GetColor(Colors::kBorderColor));
+                !m_show_counters ? DimColor(border_col) : border_col);
 
     ImFont* font = sm.GetFontManager().GetFont(FontType::kSmall);
     float   cx   = pos.x + w * 0.5f;
@@ -458,32 +476,51 @@ Minimap::RenderLegend(float w, float h)
     dl->AddText(font, font->FontSize, ImVec2(cx - sz_min.x * 0.5f, bar_y + bar_h + gap),
                 sm.GetColor(Colors::kTextMain), txt_min);
 
+    // Checkboxes
+    float chk_y = bar_y + bar_h + gap + text_height + gap;
+    ImGui::SetCursorScreenPos(ImVec2(bar_x1 - (checkbox_sz - bar_w) * 0.5f, chk_y));
+    ImGui::Checkbox("##events", &m_show_events);
+    if(ImGui::BeginItemTooltip())
+    {
+        ImGui::Text("Show/Hide Event Density");
+        ImGui::EndTooltip();
+    }
+    ImGui::SetCursorScreenPos(ImVec2(bar_x2 - (checkbox_sz - bar_w) * 0.5f, chk_y));
+    ImGui::Checkbox("##counters", &m_show_counters);
+    if(ImGui::BeginItemTooltip())
+    {
+        ImGui::Text("Show/Hide Counter Density");
+        ImGui::EndTooltip();
+    }
+
     // Helper to draw rotated text
-    auto DrawRotatedText = [&](const char* text, ImVec2 center) {
-        ImVec2 tsz = ImGui::CalcTextSize(text);
+    auto DrawRotatedText = [&](const char* text, ImVec2 center, bool disabled) {
+        ImU32 text_col = disabled ? DimColor(sm.GetColor(Colors::kTextMain))
+                                  : sm.GetColor(Colors::kTextMain);
+
+        ImVec2 tsz      = ImGui::CalcTextSize(text);
         ImVec2 draw_pos = ImVec2(center.x - tsz.x * 0.5f, center.y - tsz.y * 0.5f);
 
         int v_start = dl->VtxBuffer.Size;
-        dl->AddText(font, font->FontSize, draw_pos, sm.GetColor(Colors::kTextMain), text);
+        dl->AddText(font, font->FontSize, draw_pos, text_col, text);
         int v_end = dl->VtxBuffer.Size;
 
-        float c = 0.0f; // cos(-90)
-        float s = -1.0f; // sin(-90)
-
+        // Rotate 90° CCW: (x,y) -> (y, -x) relative to center
         for(int i = v_start; i < v_end; ++i)
         {
-             ImDrawVert& v = dl->VtxBuffer[i];
-             ImVec2 p = v.pos - center;
-             v.pos.x = center.x + p.x * c - p.y * s;
-             v.pos.y = center.y + p.x * s + p.y * c;
+            ImDrawVert& v  = dl->VtxBuffer[i];
+            float       dx = v.pos.x - center.x;
+            float       dy = v.pos.y - center.y;
+            v.pos.x        = center.x + dy;
+            v.pos.y        = center.y - dx;
         }
     };
 
     // Event Density (Left of bar 1)
-    DrawRotatedText("Event Density", ImVec2(bar_x1 - gap * 3.0f, bar_y + bar_h * 0.5f));
+    DrawRotatedText("Event Density", ImVec2(bar_x1 - gap * 3.0f, bar_y + bar_h * 0.5f), !m_show_events);
 
     // Counter Density (Left of bar 2)
-    DrawRotatedText("Counter Density", ImVec2(bar_x2 - gap * 3.0f, bar_y + bar_h * 0.5f));
+    DrawRotatedText("Counter Density", ImVec2(bar_x2 - gap * 3.0f, bar_y + bar_h * 0.5f), !m_show_counters);
 }
 
 }  // namespace View

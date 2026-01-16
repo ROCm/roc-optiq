@@ -25,6 +25,7 @@ Minimap::Minimap(DataProvider& dp, TimelineView* tv)
 , m_raw_max_value(0.0)
 , m_data_provider(dp)
 , m_timeline_view(tv)
+
 {}
 void
 Minimap::UpdateData()
@@ -143,26 +144,49 @@ Minimap::NormalizeRawData()
                 m_raw_max_value = std::max(m_raw_max_value, v);
             }
 
-    double range = m_raw_max_value - m_raw_min_value;
+    double range  = m_raw_max_value - m_raw_min_value;
+    int    count  = 0;
+    auto   tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
+
     for(auto& row : m_downsampled_data)
+    {
         for(double& v : row)
         {
-            if(v != 0)
+            if(tracks[count]->track_type == kRPVControllerTrackTypeEvents)
             {
-                // Bin into 1-7
-                int bin = 7;
-                if(range > 0)
+                if(v != 0)
                 {
-                    double t = (v - m_raw_min_value) / range;
-                    bin      = 1 + static_cast<int>(t * 6.999);
+                    // Bin into 1-7
+                    int bin = 7;
+                    if(range > 0)
+                    {
+                        double t = (v - m_raw_min_value) / range;
+                        bin      = 1 + static_cast<int>(t * 6.999);
+                    }
+                    v = static_cast<double>(bin);
                 }
-                v = static_cast<double>(bin);
+            }
+            else
+            {
+                if(v != 0)
+                {
+                    // Bin into 1-7
+                    int bin = 7;
+                    if(range > 0)
+                    {
+                        double t = (v) / tracks[count]->max_value;
+                        bin      = 1 + static_cast<int>(t * 6.999);
+                    }
+                    v = static_cast<double>(bin);
+                }
             }
         }
+        count++;
+    }
 }
 
 ImU32
-Minimap::GetColor(double v) const
+Minimap::GetColor(double v, int type) const
 {
     int              bin = static_cast<int>(v);
     SettingsManager& sm  = SettingsManager::GetInstance();
@@ -173,7 +197,18 @@ Minimap::GetColor(double v) const
         sm.GetColor(Colors::kMinimapBin5), sm.GetColor(Colors::kMinimapBin6),
         sm.GetColor(Colors::kMinimapBin7)
     };
+    const std::vector<ImU32> minimap_bins2 = {
+        IM_COL32(230, 230, 230, 255),  // lightest
+        IM_COL32(210, 210, 210, 255), IM_COL32(190, 190, 190, 255),
+        IM_COL32(170, 170, 170, 255), IM_COL32(140, 140, 140, 255),
+        IM_COL32(110, 110, 110, 255), IM_COL32(80, 80, 80, 255)  // darkest
+    };
 
+    if(type == 1)
+    {
+        bin = std::clamp(bin, 1, 7);
+        return minimap_bins2[bin - 1];
+    }
     bin = std::clamp(bin, 1, 7);
     return minimap_bins[bin - 1];
 }
@@ -187,7 +222,7 @@ Minimap::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
 
     float  pad      = 8.0f;
-    float  legend_w = 60.0f;
+    float  legend_w = 120.0f;
     float  title_h  = ImGui::GetTextLineHeightWithSpacing() + pad * 2;
     ImVec2 avail    = ImGui::GetContentRegionAvail();
 
@@ -201,9 +236,14 @@ Minimap::Render()
         ImVec2 map_pos(window_position.x + pad, window_position.y + title_h);
         ImVec2 map_size(avail.x - legend_w - pad * 3, avail.y - title_h - pad * 2);
 
+        // Fill background of minimap area with white (light mode) or black (dark mode)
+        draw_list->AddRectFilled(map_pos,
+                                 ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
+                                 sm.GetColor(Colors::kMinimapBg));
+
         RenderMinimapData(draw_list, map_pos, map_size);
 
-           // Draw border around minimap
+        // Draw border around minimap
         ImU32 border_color     = sm.GetColor(Colors::kBorderColor);
         float border_thickness = 1.5f;
         draw_list->AddRect(map_pos,
@@ -224,14 +264,28 @@ Minimap::Render()
 void
 Minimap::RenderMinimapData(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
 {
+    auto tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
+
     float bw = map_size.x / m_data_width, bh = map_size.y / m_data_height;
     for(size_t y = 0; y < m_data_height; ++y)
         for(size_t x = 0; x < m_data_width; ++x)
             if(double v = m_downsampled_data[y][x])
-                dl->AddRectFilled(
-                    ImVec2(map_pos.x + x * bw, map_pos.y + y * bh),
-                    ImVec2(map_pos.x + x * bw + bw, map_pos.y + y * bh + bh),
-                    GetColor(v));
+            {
+                if(tracks[y]->track_type == kRPVControllerTrackTypeSamples)
+                {
+                    dl->AddRectFilled(
+                        ImVec2(map_pos.x + x * bw, map_pos.y + y * bh),
+                        ImVec2(map_pos.x + x * bw + bw, map_pos.y + y * bh + bh),
+                        GetColor(v, 1));
+                }
+                else
+                {
+                    dl->AddRectFilled(
+                        ImVec2(map_pos.x + x * bw, map_pos.y + y * bh),
+                        ImVec2(map_pos.x + x * bw + bw, map_pos.y + y * bh + bh),
+                        GetColor(v, 0));
+                }
+            }
 }
 
 void
@@ -291,10 +345,10 @@ Minimap::RenderViewport(ImDrawList* drawlist, ImVec2 map_pos, ImVec2 map_size)
                       border_col, border_thickness);
 
     // Bottom-Right
-    drawlist->AddLine(ImVec2(x_end, y_end), ImVec2(x_end - corner_len, y_end),
-                      border_col, border_thickness);
-    drawlist->AddLine(ImVec2(x_end, y_end), ImVec2(x_end, y_end - corner_len),
-                      border_col, border_thickness);
+    drawlist->AddLine(ImVec2(x_end, y_end), ImVec2(x_end - corner_len, y_end), border_col,
+                      border_thickness);
+    drawlist->AddLine(ImVec2(x_end, y_end), ImVec2(x_end, y_end - corner_len), border_col,
+                      border_thickness);
 
     // Center Crosshair
     float cx           = (x_start + x_end) * 0.5f;
@@ -357,8 +411,10 @@ Minimap::RenderLegend(float w, float h)
     float text_height = ImGui::CalcTextSize("1.0").y;
     float gap         = 4.0f;
     float bar_h       = h - (text_height * 2) - (gap * 2);
-    float bar_x       = pos.x + (w - bar_w) * 0.5f;
-    float bar_y       = pos.y + text_height + gap;
+
+    float bar_x1 = pos.x + (w * 0.25f) - (bar_w * 0.5f);
+    float bar_x2 = pos.x + (w * 0.75f) - (bar_w * 0.5f);
+    float bar_y  = pos.y + text_height + gap;
 
     float bin_h = bar_h / 7.0f;
     // bool  dark  = sm.GetUserSettings().display_settings.use_dark_mode;
@@ -368,6 +424,12 @@ Minimap::RenderLegend(float w, float h)
         sm.GetColor(Colors::kMinimapBin5), sm.GetColor(Colors::kMinimapBin6),
         sm.GetColor(Colors::kMinimapBin7)
     };
+    const std::vector<ImU32> minimap_bins2 = {
+        IM_COL32(230, 230, 230, 255),  // lightest
+        IM_COL32(210, 210, 210, 255), IM_COL32(190, 190, 190, 255),
+        IM_COL32(170, 170, 170, 255), IM_COL32(140, 140, 140, 255),
+        IM_COL32(110, 110, 110, 255), IM_COL32(80, 80, 80, 255)  // darkest
+    };
 
     for(int i = 0; i < 7; ++i)
     {
@@ -375,19 +437,53 @@ Minimap::RenderLegend(float w, float h)
         float y0  = bar_y + bar_h - (i * bin_h);
         float y1  = y0 - bin_h;
         ImU32 col = minimap_bins[i];
-        dl->AddRectFilled(ImVec2(bar_x, y1), ImVec2(bar_x + bar_w, y0), col);
+        dl->AddRectFilled(ImVec2(bar_x1, y1), ImVec2(bar_x1 + bar_w, y0), col);
+        dl->AddRectFilled(ImVec2(bar_x2, y1), ImVec2(bar_x2 + bar_w, y0), minimap_bins2[i]);
     }
-    dl->AddRect(ImVec2(bar_x, bar_y), ImVec2(bar_x + bar_w, bar_y + bar_h),
+    dl->AddRect(ImVec2(bar_x1, bar_y), ImVec2(bar_x1 + bar_w, bar_y + bar_h),
+                sm.GetColor(Colors::kBorderColor));
+    dl->AddRect(ImVec2(bar_x2, bar_y), ImVec2(bar_x2 + bar_w, bar_y + bar_h),
                 sm.GetColor(Colors::kBorderColor));
 
     ImFont* font = sm.GetFontManager().GetFont(FontType::kSmall);
-    dl->AddText(font, font->FontSize,
-                ImVec2(bar_x + (bar_w - ImGui::CalcTextSize("Max").x) * 0.5f, pos.y),
-                sm.GetColor(Colors::kTextMain), "Max");
-    dl->AddText(font, font->FontSize,
-                ImVec2(bar_x + (bar_w - ImGui::CalcTextSize("Min").x) * 0.5f,
-                       bar_y + bar_h + gap),
-                sm.GetColor(Colors::kTextMain), "Min");
+    float   cx   = pos.x + w * 0.5f;
+
+    const char* txt_max = "Max";
+    ImVec2      sz_max  = ImGui::CalcTextSize(txt_max);
+    dl->AddText(font, font->FontSize, ImVec2(cx - sz_max.x * 0.5f, pos.y),
+                sm.GetColor(Colors::kTextMain), txt_max);
+
+    const char* txt_min = "Min";
+    ImVec2      sz_min  = ImGui::CalcTextSize(txt_min);
+    dl->AddText(font, font->FontSize, ImVec2(cx - sz_min.x * 0.5f, bar_y + bar_h + gap),
+                sm.GetColor(Colors::kTextMain), txt_min);
+
+    // Helper to draw rotated text
+    auto DrawRotatedText = [&](const char* text, ImVec2 center) {
+        ImVec2 tsz = ImGui::CalcTextSize(text);
+        ImVec2 draw_pos = ImVec2(center.x - tsz.x * 0.5f, center.y - tsz.y * 0.5f);
+
+        int v_start = dl->VtxBuffer.Size;
+        dl->AddText(font, font->FontSize, draw_pos, sm.GetColor(Colors::kTextMain), text);
+        int v_end = dl->VtxBuffer.Size;
+
+        float c = 0.0f; // cos(-90)
+        float s = -1.0f; // sin(-90)
+
+        for(int i = v_start; i < v_end; ++i)
+        {
+             ImDrawVert& v = dl->VtxBuffer[i];
+             ImVec2 p = v.pos - center;
+             v.pos.x = center.x + p.x * c - p.y * s;
+             v.pos.y = center.y + p.x * s + p.y * c;
+        }
+    };
+
+    // Event Density (Left of bar 1)
+    DrawRotatedText("Event Density", ImVec2(bar_x1 - gap * 3.0f, bar_y + bar_h * 0.5f));
+
+    // Counter Density (Left of bar 2)
+    DrawRotatedText("Counter Density", ImVec2(bar_x2 - gap * 3.0f, bar_y + bar_h * 0.5f));
 }
 
 }  // namespace View

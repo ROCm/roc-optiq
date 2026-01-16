@@ -30,7 +30,7 @@ private:
 
     void  BinData(const std::vector<std::vector<double>>& input_data);
     void  NormalizeRawData();
-    ImU32 GetColor(double normalized_value) const;
+    ImU32 GetColor(double normalized_value, int type) const;
     void  RenderLegend(float width, float height);
     void  RenderMinimapData(ImDrawList* dl, ImVec2 pos, ImVec2 size);
     void  RenderViewport(ImDrawList* dl, ImVec2 pos, ImVec2 size);

@@ -112,6 +112,7 @@ enum class Colors
     kMinimapBin6,
     kMinimapBin7,
 
+    kMinimapBg,
     kLoadingScreenColor,
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor

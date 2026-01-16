@@ -296,6 +296,10 @@ TraceView::Render()
 
     if(m_show_minimap_popup && m_minimap)
     {
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+
         float dpi = SettingsManager::GetInstance().GetDPI();
         ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
         if(ImGui::Begin("Minimap", &m_show_minimap_popup,
@@ -304,6 +308,7 @@ TraceView::Render()
             m_minimap->Render();
         }
         ImGui::End();
+        popup_style.PopStyles();
     }
 
     if(m_popup_info.show_popup)

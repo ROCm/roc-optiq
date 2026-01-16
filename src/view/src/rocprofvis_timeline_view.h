@@ -144,6 +144,10 @@ private:
         uint64_t track_id;
         int      new_index;
     } m_reorder_request;
+
+    bool m_dragging_selection_start;
+    bool m_dragging_selection_end;
+
     TimelineViewProjectSettings m_project_settings;
 };
 

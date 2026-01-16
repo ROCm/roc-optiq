@@ -68,9 +68,12 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_histogram(nullptr)
 , m_pseudo_focus(false)
 , m_histogram_pseudo_focus(false)
-, m_max_meta_area_size(0.0f)
-, m_tpt(std::make_shared<TimePixelTransform>())
+    , m_max_meta_area_size(0.0f)
+    , m_tpt(std::make_shared<TimePixelTransform>())
+    , m_dragging_selection_start(false)
+    , m_dragging_selection_end(false)
 {
+    // Subscribe to events
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
     };
@@ -254,6 +257,16 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                                                m_tpt->GetVMaxX(), m_tpt->GetGraphSize());
             ImGui::CloseCurrentPopup();
         }
+        if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
+           m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+        {
+            if(ImGui::MenuItem("Remove Selection"))
+            {
+                m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
+                m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
+            }
+        }
+
         ImGui::EndPopup();
     }
     ImGui::PopStyleVar(2);
@@ -575,10 +588,43 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // Render range selction box
     ImVec2 cursor_position = screen_pos;
 
+    ImVec2 mouse_pos     = ImGui::GetMousePos();
+    bool   mouse_clicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    bool   mouse_down    = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    const float kGripWidth    = 10.0f;
+
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
         float normalized_start_box_highlighted =
             window_position.x + m_tpt->TimeToPixel(m_highlighted_region.first);
+        
+        float line_y_start = cursor_position.y;
+        float line_y_end   = cursor_position.y + container_size.y - m_ruler_height;
+
+        // Check hover for start line
+        if(!m_dragging_selection_end)  // Don't hover start if dragging end
+        {
+            bool hovered =
+                (mouse_pos.x >= normalized_start_box_highlighted - kGripWidth / 2 &&
+                 mouse_pos.x <= normalized_start_box_highlighted + kGripWidth / 2 &&
+                 mouse_pos.y >= line_y_start && mouse_pos.y <= line_y_end);
+
+            if(hovered)
+            {
+                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                
+                std::string label = nanosecond_to_formatted_str(
+                    m_highlighted_region.first, m_settings.GetUserSettings().unit_settings.time_format,
+                    true);
+                ImGui::SetTooltip("%s", label.c_str());
+
+                if(mouse_clicked)
+                {
+                    m_dragging_selection_start = true;
+                    m_stop_user_interaction    = true;
+                }
+            }
+        }
 
         draw_list->AddLine(ImVec2(normalized_start_box_highlighted, cursor_position.y),
                            ImVec2(normalized_start_box_highlighted,
@@ -589,12 +635,65 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     {
         float normalized_start_box_highlighted_end =
             window_position.x + m_tpt->TimeToPixel(m_highlighted_region.second);
+
+        float line_y_start = cursor_position.y;
+        float line_y_end   = cursor_position.y + container_size.y - m_ruler_height;
+
+        // Check hover for end line
+        if(!m_dragging_selection_start)
+        {
+            bool hovered = (mouse_pos.x >= normalized_start_box_highlighted_end - kGripWidth / 2 &&
+                            mouse_pos.x <= normalized_start_box_highlighted_end + kGripWidth / 2 &&
+                            mouse_pos.y >= line_y_start && mouse_pos.y <= line_y_end);
+
+            if(hovered)
+            {
+                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+
+                std::string label = nanosecond_to_formatted_str(
+                    m_highlighted_region.second, m_settings.GetUserSettings().unit_settings.time_format,
+                    true);
+                ImGui::SetTooltip("%s", label.c_str());
+
+                if(mouse_clicked)
+                {
+                    m_dragging_selection_end = true;
+                    m_stop_user_interaction  = true;
+                }
+            }
+        }
+
         draw_list->AddLine(
             ImVec2(normalized_start_box_highlighted_end, cursor_position.y),
             ImVec2(normalized_start_box_highlighted_end,
                    cursor_position.y + container_size.y - m_ruler_height),
             m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
     }
+
+    // Process Dragging
+    if(!mouse_down)
+    {
+        m_dragging_selection_start = false;
+        m_dragging_selection_end   = false;
+    }
+    else
+    {
+        if(m_dragging_selection_start)
+        {
+            m_stop_user_interaction = true;
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+            float cursor_screen_position = mouse_pos.x - window_position.x;
+            m_highlighted_region.first   = m_tpt->PixelToTime(cursor_screen_position);
+        }
+        if(m_dragging_selection_end)
+        {
+            m_stop_user_interaction = true;
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+            float cursor_screen_position = mouse_pos.x - window_position.x;
+            m_highlighted_region.second  = m_tpt->PixelToTime(cursor_screen_position);
+        }
+    }
+
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
        m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
     {
@@ -643,30 +742,33 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             ImVec2(mouse_position.x, screen_pos.y + container_size.y - m_ruler_padding),
             m_settings.GetColor(Colors::kGridColor), 2.0f);
 
-        // Code below is for detecting range selection by double clicking
-        if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-        {
-            if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME)
-            {
-                m_highlighted_region.first = m_tpt->PixelToTime(cursor_screen_position);
-            }
-            else if(m_highlighted_region.second ==
-                    TimelineSelection::INVALID_SELECTION_TIME)
-            {
-                m_highlighted_region.second = m_tpt->PixelToTime(cursor_screen_position);
-                m_timeline_selection->SelectTimeRange(
-                    m_tpt->DenormalizeTime(std::min(m_highlighted_region.first,
-                                                    m_highlighted_region.second)),
-                    m_tpt->DenormalizeTime(std::max(m_highlighted_region.first,
-                                                    m_highlighted_region.second)));
-            }
-            else
-            {
-                m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
-                m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
-                m_timeline_selection->ClearTimeRange();
-            }
-        }
+
+ 
+
+        //// Code below is for detecting range selection by double clicking
+        //if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+        //{
+        //    if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME)
+        //    {
+        //        m_highlighted_region.first = m_tpt->PixelToTime(cursor_screen_position);
+        //    }
+        //    else if(m_highlighted_region.second ==
+        //            TimelineSelection::INVALID_SELECTION_TIME)
+        //    {
+        //        m_highlighted_region.second = m_tpt->PixelToTime(cursor_screen_position);
+        //        m_timeline_selection->SelectTimeRange(
+        //            m_tpt->DenormalizeTime(std::min(m_highlighted_region.first,
+        //                                            m_highlighted_region.second)),
+        //            m_tpt->DenormalizeTime(std::max(m_highlighted_region.first,
+        //                                            m_highlighted_region.second)));
+        //    }
+        //    else
+        //    {
+        //        m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
+        //        m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
+        //        m_timeline_selection->ClearTimeRange();
+        //    }
+        //}
     }
 
     ImGui::EndChild();
@@ -1642,7 +1744,29 @@ TimelineView::HandleTopSurfaceTouch()
 
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            m_can_drag_to_pan = true;
+            if (io.KeyCtrl) {
+
+                m_highlighted_region.first    = TimelineSelection::INVALID_SELECTION_TIME;
+                m_highlighted_region.second   = TimelineSelection::INVALID_SELECTION_TIME;
+                ImVec2 mouse_pos = ImGui::GetMousePos();
+                float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
+                m_highlighted_region.first = m_tpt->PixelToTime(cursor_screen_position);
+ 
+       
+
+            }
+            else {
+                m_can_drag_to_pan = true;
+            }
+             
+        }
+        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        {
+            if(io.KeyCtrl) {
+                ImVec2 mouse_pos = ImGui::GetMousePos();
+                float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
+                m_highlighted_region.second = m_tpt->PixelToTime(cursor_screen_position);
+            }
         }
 
         // Enables horizontal scrolling using mouse.
@@ -1753,7 +1877,15 @@ TimelineView::HandleTopSurfaceTouch()
     // Stop panning if mouse released
     if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
-        m_can_drag_to_pan = false;
+        if(io.KeyCtrl) {
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
+            m_highlighted_region.second = m_tpt->PixelToTime(cursor_screen_position);
+        }
+        else {
+            m_can_drag_to_pan = false;
+        }
+      
     }
 
     // Handle Panning (but only if in graph area)

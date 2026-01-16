@@ -174,7 +174,19 @@ rocprofvis_dm_value_t Track::GetHistogramBucketValueAt(size_t index)
     }
     else
     {
-        return it->second;
+        return it->second.second;
+    }
+}
+
+uint64_t  Track::GetHistogramBucketNumEventsAt(size_t index) {
+    auto it = m_track_params->histogram.find(index);
+    if (it == m_track_params->histogram.end())
+    {
+        return 0;
+    }
+    else
+    {
+        return it->second.first;
     }
 }
 
@@ -213,8 +225,8 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
         case kRPVDMTrackMaximumTimestampUInt64:
             *value = MaxTimestamp();
             return kRocProfVisDmResultSuccess;
-        case kRPVDMTrackHistogramEventDensityUInt64Indexed:
-            *value = GetHistogramBucketValueAt(index);
+        case kRPVDMTrackHistogramBucketEventDensityUInt64Indexed:
+            *value = GetHistogramBucketNumEventsAt(index);
             return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
@@ -264,6 +276,9 @@ Track::GetPropertyAsDouble(rocprofvis_dm_property_t       property,
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackMaximumValueDouble:
             *value = MaxValue();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackHistogramBucketValueDoubleIndexed:
+            *value = GetHistogramBucketValueAt(index);
             return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER,

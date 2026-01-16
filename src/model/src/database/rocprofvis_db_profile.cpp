@@ -171,17 +171,18 @@ int ProfileDatabase::CallBackLoadTrack(void *data, int argc, sqlite3_stmt* stmt,
 
 int ProfileDatabase::CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_stmt* stmt,
     char** azColName) {
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 3, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void *func = (void*)&CallbackMakeHistogramPerTrack;
     rocprofvis_db_sqlite_callback_parameters* callback_params =
         (rocprofvis_db_sqlite_callback_parameters*) data;
     ProfileDatabase* db = (ProfileDatabase*) callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
-    uint32_t index                             = db->Sqlite3ColumnInt(func, stmt, azColName, 2);
+    uint32_t index                             = db->Sqlite3ColumnInt(func, stmt, azColName, 3);
     uint32_t bucket_number = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
-    uint32_t events_count = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
-    db->TrackPropertiesAt(index)->histogram[bucket_number] = events_count;
+    uint32_t event_count = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
+    double bucket_value = db->Sqlite3ColumnDouble(func, stmt, azColName, 2);
+    db->TrackPropertiesAt(index)->histogram[bucket_number] = std::make_pair(event_count, bucket_value);
     callback_params->future->CountThisRow();
     return 0;
 }
@@ -680,8 +681,12 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
             { return guid_info.first.GuidIndex() == db_instance->GuidIndex(); }) == run_for_db_instances.end())
         {
             continue;
+        }       
+        if(TrackPropertiesAt(i)->process.category != kRocProfVisDmPmcTrack && (flags & kRocProfVisDmIncludePmcTracksOnly))
+        {
+            continue;
         }
-        if(TrackPropertiesAt(i)->process.category == kRocProfVisDmPmcTrack && (flags & kRocProfVisDmIncludePmcTracks) == 0)
+        if(TrackPropertiesAt(i)->process.category == kRocProfVisDmPmcTrack && (flags & (kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludePmcTracksOnly)) == 0)
         {
             continue;
         }
@@ -1102,7 +1107,7 @@ ProfileDatabase::BuildTableQuery(
                 {
                     uint64_t fetch_start = begin + (step * j);
                     uint64_t fetch_end = begin + (step * j) + step;
-                    if (IsEmptyRange(fetch_start, fetch_end)) continue;
+                    if (IsEmptyRange(tracks[i], fetch_start, fetch_end)) continue;
                     query += it_query->first;
                     if(it_instance->second.empty())
                     {
@@ -1208,20 +1213,33 @@ ProfileDatabase::BuildTableQuery(
 }
 
 
-bool ProfileDatabase::IsEmptyRange(uint64_t start, uint64_t end) {
+bool ProfileDatabase::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end) {
     uint64_t start_bucket =
         (start - TraceProperties()->start_time) / TraceProperties()->histogram_bucket_size;
 
     uint64_t end_bucket =
         (end - TraceProperties()->start_time) / TraceProperties()->histogram_bucket_size;
 
-    auto it = TraceProperties()->histogram.lower_bound(start_bucket);
 
-    while (it != TraceProperties()->histogram.end() && it->first <= end_bucket) {
-        if (it->second > 0) {
-            return false;  
+    if (TABLE_QUERY_UNPACK_OP_TYPE(track) != 0)
+    {
+        auto it = TraceProperties()->histogram.lower_bound(start_bucket);
+        while (it != TraceProperties()->histogram.end() && it->first <= end_bucket) {
+            if (it->second > 0) {
+                return false;
+            }
+            ++it;
         }
-        ++it;
+    }
+    else
+    {
+        auto it = TrackPropertiesAt(TABLE_QUERY_UNPACK_TRACK_ID(track))->histogram.lower_bound(start_bucket);
+        while (it != TrackPropertiesAt(TABLE_QUERY_UNPACK_TRACK_ID(track))->histogram.end() && it->first <= end_bucket) {
+            if (it->second.first > 0) {
+                return false;
+            }
+            ++it;
+        }
     }
 
     return true;
@@ -1656,7 +1674,7 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future, uint
 
 
 int ProfileDatabase::CallBackLoadHistogram(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 5, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void* func = (void*)&CallBackLoadHistogram;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
@@ -1665,7 +1683,8 @@ int ProfileDatabase::CallBackLoadHistogram(void* data, int argc, sqlite3_stmt* s
     uint32_t track_id = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
     uint32_t bucket_num = db->Sqlite3ColumnInt(func, stmt, azColName, 2);
     uint32_t events_count = db->Sqlite3ColumnInt(func, stmt, azColName, 3);
-    db->TrackPropertiesAt(track_id)->histogram[bucket_num] = events_count;
+    double bucket_value = db->Sqlite3ColumnDouble(func, stmt, azColName, 4);
+    db->TrackPropertiesAt(track_id)->histogram[bucket_num] = std::make_pair(events_count, bucket_value);
     callback_params->future->CountThisRow();
     return 0;
 
@@ -1676,7 +1695,8 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
         { "id", "INTEGER PRIMARY KEY" },
         { "track_number", "INTEGER" },
         { "bucket_number", "INTEGER" },
-        { "events_count", "INTEGER" }
+        { "events_count", "INTEGER" },
+        { "bucket_value", "REAL" }
     };
 
     typedef struct store_params {
@@ -1684,6 +1704,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
         uint32_t track_id;
         uint32_t bucket_num;
         uint32_t events_count;
+        double bucket_value;
     } store_params;
 
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
@@ -1696,13 +1717,20 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
     TraceProperties()->histogram_bucket_size = bucket_size;
     TraceProperties()->histogram_bucket_count = (trace_length + bucket_size) / bucket_size;
 
+    const char* histogram_content_version = "4";
+
     std::string histogram_query_prefix = "WITH params AS ( SELECT ";
     histogram_query_prefix += std::to_string(TraceProperties()->start_time);
     histogram_query_prefix += " AS start_time, ";
     histogram_query_prefix += std::to_string(bucket_size);
     histogram_query_prefix += " AS bucket_size, ";
-    histogram_query_prefix += " 2 AS version ), ";
-    histogram_query_prefix += "events_src AS ( SELECT (id + op << 60) as event_id, startTs as start_ts, endTs as end_ts, ";
+    histogram_query_prefix += histogram_content_version;
+    histogram_query_prefix += " AS version ), ";
+    histogram_query_prefix += "events_src AS ( SELECT (id + op << 60) as event_id, ";
+    histogram_query_prefix += Builder::START_SERVICE_NAME;
+    histogram_query_prefix += " as start_ts, ";
+    histogram_query_prefix += Builder::END_SERVICE_NAME;
+    histogram_query_prefix += " as end_ts, ";
 
     std::string histogram_query_suffix = "), ";
     histogram_query_suffix += "event_bucket_ranges AS( "
@@ -1749,6 +1777,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
     histogram_query_suffix += "SELECT "
         "bucket_no, "
         "COUNT(DISTINCT event_id) AS event_count, "
+        "SUM(overlap_end - overlap_start)  AS total_duration, "
         "track_id "
         "FROM bucket_events "
         "WHERE overlap_end > overlap_start "
@@ -1798,8 +1827,55 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                 [](rocprofvis_dm_track_params_t* params) {},
                 guids_per_file);
 
+
             if (kRocProfVisDmResultSuccess == result)
             {
+                histogram_query = std::string("SELECT (") + Builder::START_SERVICE_NAME + " - " +
+                    std::to_string(TraceProperties()->start_time) + ") / " +
+                    std::to_string(bucket_size) + " AS bucket, COUNT(*), AVG(" + Builder::COUNTER_VALUE_SERVICE_NAME+"), ";
+
+                result = ExecuteQueryForAllTracksAsync(
+                    kRocProfVisDmTrySplitTrack | kRocProfVisDmIncludePmcTracksOnly, kRPVQuerySliceByTrackSliceQuery,
+                    histogram_query.c_str(),
+                    "GROUP BY bucket", &CallbackMakeHistogramPerTrack,
+                    [](rocprofvis_dm_track_params_t* params) {},
+                    guids_per_file);
+            }
+
+            if (kRocProfVisDmResultSuccess == result)
+            {
+                // let's linear interpolation for all missing buckets in counter's track histogram
+                for (int i = 0; i < NumTracks(); i++)
+                {
+                    auto & data = TrackPropertiesAt(i)->histogram;
+
+                    if (data.size() > 1)
+                    {
+
+                        auto it = data.begin();
+                        auto next = std::next(it);
+
+                        while (next != data.end()) {
+                            uint32_t x0 = it->first;
+                            uint32_t x1 = next->first;
+                            double   y0 = it->second.second;
+                            double   y1 = next->second.second;
+
+                            uint32_t dx = x1 - x0;
+
+                            if (dx > 1) {
+                                double step = (y1 - y0) / dx;
+
+                                for (uint32_t x = x0 + 1; x < x1; ++x) {
+                                    data.emplace(x, std::make_pair(0, y0 + step * (x - x0)));
+                                }
+                            }
+
+                            it = next;
+                            ++next;
+                        }
+                    }
+                }
 
                 uint32_t counter = 0;
                 for (int i = 0; i < NumTracks(); i++)
@@ -1813,25 +1889,26 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                             p.id = counter++;
                             p.track_id = i;
                             p.bucket_num = key;
-                            p.events_count = value;
+                            p.events_count = value.first;
+                            p.bucket_value = value.second;
                             v.push_back(p);
                         }
                     }
                 }
-                for (auto it = v.begin(); it != v.end(); ++it)
-                {
-                    result = CreateSQLTable(
-                        (std::string("histogram_") + std::to_string(hitogram_query_hash_value)).c_str(), params, 4,
-                        v.size(),
-                        [&](sqlite3_stmt* stmt, int index) {
-                            store_params& p = v[index];
-                            sqlite3_bind_int(stmt, 1, p.id);
-                            sqlite3_bind_int(stmt, 2, p.track_id);
-                            sqlite3_bind_int(stmt, 3, p.bucket_num);
-                            sqlite3_bind_int(stmt, 4, p.events_count);
-                        },
-                        file_node->node_id);
-                }
+
+                result = CreateSQLTable(
+                    (std::string("histogram_") + std::to_string(hitogram_query_hash_value)).c_str(), params, 5,
+                    v.size(),
+                    [&](sqlite3_stmt* stmt, int index) {
+                        store_params& p = v[index];
+                        sqlite3_bind_int(stmt, 1, p.id);
+                        sqlite3_bind_int(stmt, 2, p.track_id);
+                        sqlite3_bind_int(stmt, 3, p.bucket_num);
+                        sqlite3_bind_int(stmt, 4, p.events_count);
+                        sqlite3_bind_double(stmt, 5, p.bucket_value);
+                    },
+                    file_node->node_id);
+
             }        
         }      
     }
@@ -1839,7 +1916,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
     {
         for (auto& [key, value] : TrackPropertiesAt(i)->histogram)
         {
-            TraceProperties()->histogram[key] += value;
+            TraceProperties()->histogram[key] += value.first;
         }
     }
     return result;

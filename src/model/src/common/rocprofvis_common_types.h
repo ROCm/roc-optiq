@@ -118,7 +118,7 @@ typedef struct {
     // maximum level or value
     rocprofvis_dm_value_t max_value;
     //histogram of events.
-    std::map<uint32_t,uint32_t> histogram;
+    std::map<uint32_t,std::pair<uint32_t,double>> histogram;
     rocprofvis_dm_op_t op;
     std::set<uint32_t> load_id;
     rocprofvis_db_instance_t db_instance;

@@ -73,8 +73,8 @@ rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
     for (int i = 0; i < buckets_num; i++)
     {
         uint64_t value = rocprofvis_dm_get_property_as_uint64(
-            m_dm_handle, kRPVDMTrackHistogramEventDensityUInt64Indexed, 0);
-        result = array.SetUInt64(kRPVControllerArrayEntryIndexed, i, value);
+            m_dm_handle, kRPVDMTrackHistogramBucketValueDoubleIndexed, i);
+        result = array.SetDouble(kRPVControllerArrayEntryIndexed, i, value);
     }
     return result;
 }
@@ -242,7 +242,7 @@ uint32_t Track::GetNumberOfEventsForTimeRange(double start, double end)
     for (int i = start_bucket; i <= end_bucket; i++)
     {
         num_events += rocprofvis_dm_get_property_as_uint64(
-            m_dm_handle, kRPVDMTrackHistogramEventDensityUInt64Indexed, i);
+            m_dm_handle, kRPVDMTrackHistogramBucketEventDensityUInt64Indexed, i);
     }
     return num_events;
 }
@@ -588,11 +588,19 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerTrackHistogramBucketValueIndexed:
             {
-                *value = rocprofvis_dm_get_property_as_uint64(
-                    m_dm_handle, kRPVDMTrackHistogramEventDensityUInt64Indexed, index);
+                *value = rocprofvis_dm_get_property_as_double(
+                    m_dm_handle, kRPVDMTrackHistogramBucketValueDoubleIndexed, index);
                 result = kRocProfVisResultSuccess;
                 break;
-            }   
+            }  
+            case kRPVControllerTrackHistogramBucketDensityIndexed:
+            {
+                *value = rocprofvis_dm_get_property_as_uint64(
+                    m_dm_handle, kRPVDMTrackHistogramBucketEventDensityUInt64Indexed, index);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            
             default:
             {
                 result = UnhandledProperty(property);

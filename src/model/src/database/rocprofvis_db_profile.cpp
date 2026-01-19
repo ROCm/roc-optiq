@@ -1844,7 +1844,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
 
             if (kRocProfVisDmResultSuccess == result)
             {
-                // let's liniar interpolation for all missing buckets in counter's track histogram
+                // let's linear interpolation for all missing buckets in counter's track histogram
                 for (int i = 0; i < NumTracks(); i++)
                 {
                     auto & data = TrackPropertiesAt(i)->histogram;

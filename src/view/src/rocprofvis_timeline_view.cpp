@@ -1744,28 +1744,28 @@ TimelineView::HandleTopSurfaceTouch()
 
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            if (io.KeyCtrl) {
-
+            if(io.KeyCtrl &&
+               TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
+            {
                 m_highlighted_region.first    = TimelineSelection::INVALID_SELECTION_TIME;
                 m_highlighted_region.second   = TimelineSelection::INVALID_SELECTION_TIME;
-                ImVec2 mouse_pos = ImGui::GetMousePos();
+                ImVec2 mouse_pos              = ImGui::GetMousePos();
                 float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
-                m_highlighted_region.first = m_tpt->PixelToTime(cursor_screen_position);
- 
-       
-
+                m_highlighted_region.first    = m_tpt->PixelToTime(cursor_screen_position);
             }
-            else {
+            else if(!io.KeyCtrl)
+            {
                 m_can_drag_to_pan = true;
             }
-             
         }
         if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
-            if(io.KeyCtrl) {
-                ImVec2 mouse_pos = ImGui::GetMousePos();
+            if(io.KeyCtrl &&
+               TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
+            {
+                ImVec2 mouse_pos              = ImGui::GetMousePos();
                 float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
-                m_highlighted_region.second = m_tpt->PixelToTime(cursor_screen_position);
+                m_highlighted_region.second   = m_tpt->PixelToTime(cursor_screen_position);
             }
         }
 
@@ -1877,15 +1877,17 @@ TimelineView::HandleTopSurfaceTouch()
     // Stop panning if mouse released
     if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
-        if(io.KeyCtrl) {
-            ImVec2 mouse_pos = ImGui::GetMousePos();
+        if(io.KeyCtrl &&
+           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
+        {
+            ImVec2 mouse_pos              = ImGui::GetMousePos();
             float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
-            m_highlighted_region.second = m_tpt->PixelToTime(cursor_screen_position);
+            m_highlighted_region.second   = m_tpt->PixelToTime(cursor_screen_position);
         }
-        else {
+        else if(!io.KeyCtrl)
+        {
             m_can_drag_to_pan = false;
         }
-      
     }
 
     // Handle Panning (but only if in graph area)

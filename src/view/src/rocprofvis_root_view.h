@@ -11,16 +11,23 @@ namespace RocProfVis
 namespace View
 {
 
+class SettingsManager;
+
 class RootView : public RocWidget
 {
 public:
-    RootView() {};
-    virtual ~RootView() {};
+    RootView();
+    virtual ~RootView();
 
-    virtual std::shared_ptr<RocWidget> GetToolbar() {return nullptr;};
+    virtual std::shared_ptr<RocWidget> GetToolbar();
 
-    virtual void RenderEditMenuOptions() {};
+    virtual void RenderEditMenuOptions();
+
+protected:
+    void RenderLoadingScreen(const char* progress_label);
+
+    SettingsManager& m_settings_manager;
 };
 
-}
-}
+}  // namespace View
+}  // namespace RocProfVis

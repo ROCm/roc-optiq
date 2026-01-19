@@ -20,7 +20,7 @@
 #include "rocprofvis_version.h"
 #include "rocprofvis_utils.h"
 #ifdef COMPUTE_UI_SUPPORT
-#    include "rocprofvis_navigation_manager.h"
+#    include "compute/rocprofvis_navigation_manager.h"
 #endif
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_trace_view.h"
@@ -529,38 +529,17 @@ AppWindow::RenderFileMenu(Project* project)
 void
 AppWindow::RenderEditMenu(Project* project)
 {
-    Project::TraceType trace_type =
-        project == nullptr ? Project::Undefined : project->GetTraceType();
-
     if(ImGui::BeginMenu("Edit"))
     {
-        // Trace project specific menu options
-        if(trace_type == Project::System)
+        if(project)
         {
             std::shared_ptr<RootView> root_view =
                 std::dynamic_pointer_cast<RootView>(project->GetView());
-
             if(root_view)
             {
                 root_view->RenderEditMenuOptions();
             }
         }
-        if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
-                           project && project->IsTrimSaveAllowed()))
-        {
-            FileFilter trace_filter;
-            trace_filter.m_name = "Traces";
-            trace_filter.m_extensions = { "db", "rpd" };
-
-            std::vector<FileFilter> filters;
-            filters.push_back(trace_filter);
-
-            ShowSaveFileDialog("Save Trace Selection", filters, "",
-                           [project](std::string file_path) -> void {
-                               project->TrimSave(file_path);
-                           });
-        }
-        ImGui::Separator();
         if(ImGui::MenuItem("Preferences"))
         {
             m_settings_panel->Show();
@@ -586,6 +565,19 @@ AppWindow::RenderViewMenu(Project* project)
                 tool_bar_item->m_visible = settings.show_toolbar;
             }
         }
+#ifdef COMPUTE_UI_SUPPORT
+        if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
+        {
+            if(m_notification_callback)
+            {
+                m_notification_callback(
+                    rocprofvis_view_notification_t::
+                        kRocProfVisViewNotification_Toggle_Fullscreen);
+            }
+        }
+        ImGui::Separator();
+        ImGui::MenuItem("ROCm(TM) Systems Profiler", NULL, false, false);
+#endif
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))
         {
@@ -619,9 +611,11 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
-        
         ImGui::Separator();
-        
+#ifdef COMPUTE_UI_SUPPORT
+        ImGui::MenuItem("ROCm(TM) Compute Profiler", NULL, false, false);
+        ImGui::MenuItem("Compute View Item");
+#else
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
         {
             if(m_notification_callback)
@@ -630,7 +624,7 @@ AppWindow::RenderViewMenu(Project* project)
                     rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen);
             }
         }
-        
+#endif
         ImGui::EndMenu();
     }
 }

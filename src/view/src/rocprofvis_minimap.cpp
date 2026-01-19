@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_minimap.h"
-#include "imgui.h"
+#include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include "imgui.h"
 
 namespace RocProfVis
 {
@@ -27,8 +28,27 @@ Minimap::Minimap(DataProvider& dp, TimelineView* tv)
 , m_raw_max_value(0.0)
 , m_data_provider(dp)
 , m_timeline_view(tv)
+{
+    UpdateColorCache();
+}
+void
+Minimap::UpdateColorCache()
+{
+    SettingsManager& sm = SettingsManager::GetInstance();
+    m_event_color_bins = {
+        sm.GetColor(Colors::kMinimapBin1), sm.GetColor(Colors::kMinimapBin2),
+        sm.GetColor(Colors::kMinimapBin3), sm.GetColor(Colors::kMinimapBin4),
+        sm.GetColor(Colors::kMinimapBin5), sm.GetColor(Colors::kMinimapBin6),
+        sm.GetColor(Colors::kMinimapBin7)
+    };
+    m_counter_color_bins = {
+        sm.GetColor(Colors::kMinimapBinCounter1), sm.GetColor(Colors::kMinimapBinCounter2),
+        sm.GetColor(Colors::kMinimapBinCounter3), sm.GetColor(Colors::kMinimapBinCounter4),
+        sm.GetColor(Colors::kMinimapBinCounter5), sm.GetColor(Colors::kMinimapBinCounter6),
+        sm.GetColor(Colors::kMinimapBinCounter7)
+    };
+}
 
-{}
 void
 Minimap::UpdateData()
 {
@@ -150,6 +170,12 @@ Minimap::NormalizeRawData()
     int    count  = 0;
     auto   tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
 
+    // Ensure tracks and downsampled data sizes match to avoid out-of-bounds access
+    if(tracks.size() != m_downsampled_data.size())
+    {
+        return;
+    }
+
     for(auto& row : m_downsampled_data)
     {
         for(double& v : row)
@@ -188,35 +214,26 @@ Minimap::NormalizeRawData()
 }
 
 ImU32
-Minimap::GetColor(double v, int type) const
+Minimap::GetColor(double v, rocprofvis_controller_track_type_t type) const
 {
-    SettingsManager& sm  = SettingsManager::GetInstance();
-    if(type == 1 && !m_show_counters) return sm.GetColor(Colors::kMinimapBg);
-    if(type != 1 && !m_show_events) return sm.GetColor(Colors::kMinimapBg);
+    SettingsManager& sm = SettingsManager::GetInstance();
+    if(type == kRPVControllerTrackTypeSamples && !m_show_counters)
+        return sm.GetColor(Colors::kMinimapBg);
+    if(type == kRPVControllerTrackTypeEvents && !m_show_events)
+        return sm.GetColor(Colors::kMinimapBg);
 
-    int              bin = static_cast<int>(v);
+    int bin = static_cast<int>(v);
+    bin     = std::clamp(bin, 1, 7);
 
-    const std::vector<ImU32> minimap_bins = {
-        sm.GetColor(Colors::kMinimapBin1), sm.GetColor(Colors::kMinimapBin2),
-        sm.GetColor(Colors::kMinimapBin3), sm.GetColor(Colors::kMinimapBin4),
-        sm.GetColor(Colors::kMinimapBin5), sm.GetColor(Colors::kMinimapBin6),
-        sm.GetColor(Colors::kMinimapBin7)
-    };
-    const std::vector<ImU32> minimap_bins2 = {
-        IM_COL32(230, 230, 230, 255),  // lightest
-        IM_COL32(210, 210, 210, 255), IM_COL32(190, 190, 190, 255),
-        IM_COL32(170, 170, 170, 255), IM_COL32(140, 140, 140, 255),
-        IM_COL32(110, 110, 110, 255), IM_COL32(80, 80, 80, 255)  // darkest
-    };
-
-    if(type == 1)
+    if(type == kRPVControllerTrackTypeSamples)
     {
-        bin = std::clamp(bin, 1, 7);
-        return minimap_bins2[bin - 1];
+        return m_counter_color_bins[bin - 1];
     }
-    bin = std::clamp(bin, 1, 7);
-    return minimap_bins[bin - 1];
-}
+    else 
+    {
+        return m_event_color_bins[bin - 1];
+    }
+ }
 
 void
 Minimap::Render()
@@ -226,9 +243,9 @@ Minimap::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
 
-    float  pad      = 8.0f;
-    float  legend_w = 120.0f;
-    float  top_padding  = 5.0f;
+    float  pad         = 8.0f;
+    float  legend_w    = 120.0f;
+    float  top_padding = 5.0f;
     ImVec2 avail    = ImGui::GetContentRegionAvail();
 
     if(ImGui::BeginChild("Minimap", avail, true))
@@ -281,14 +298,14 @@ Minimap::RenderMinimapData(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
                     dl->AddRectFilled(
                         ImVec2(map_pos.x + x * bw, map_pos.y + y * bh),
                         ImVec2(map_pos.x + x * bw + bw, map_pos.y + y * bh + bh),
-                        GetColor(v, 1));
+                        GetColor(v, kRPVControllerTrackTypeSamples));
                 }
                 else
                 {
                     dl->AddRectFilled(
                         ImVec2(map_pos.x + x * bw, map_pos.y + y * bh),
                         ImVec2(map_pos.x + x * bw + bw, map_pos.y + y * bh + bh),
-                        GetColor(v, 0));
+                        GetColor(v, kRPVControllerTrackTypeEvents));
                 }
             }
 }
@@ -412,7 +429,7 @@ Minimap::RenderLegend(float w, float h)
     ImDrawList*      dl  = ImGui::GetWindowDrawList();
     ImVec2           pos = ImGui::GetCursorScreenPos();
 
-    float bar_w       = 15.0f;
+    float bar_w       = 10.0f;
     float text_height = ImGui::CalcTextSize("1.0").y;
     float checkbox_sz = ImGui::GetFrameHeight();
     float gap         = 4.0f;
@@ -423,19 +440,6 @@ Minimap::RenderLegend(float w, float h)
     float bar_y  = pos.y + text_height + gap;
 
     float bin_h = bar_h / 7.0f;
-    // bool  dark  = sm.GetUserSettings().display_settings.use_dark_mode;
-    const std::vector<ImU32> minimap_bins = {
-        sm.GetColor(Colors::kMinimapBin1), sm.GetColor(Colors::kMinimapBin2),
-        sm.GetColor(Colors::kMinimapBin3), sm.GetColor(Colors::kMinimapBin4),
-        sm.GetColor(Colors::kMinimapBin5), sm.GetColor(Colors::kMinimapBin6),
-        sm.GetColor(Colors::kMinimapBin7)
-    };
-    const std::vector<ImU32> minimap_bins2 = {
-        IM_COL32(230, 230, 230, 255),  // lightest
-        IM_COL32(210, 210, 210, 255), IM_COL32(190, 190, 190, 255),
-        IM_COL32(170, 170, 170, 255), IM_COL32(140, 140, 140, 255),
-        IM_COL32(110, 110, 110, 255), IM_COL32(80, 80, 80, 255)  // darkest
-    };
 
     auto DimColor = [](ImU32 col) -> ImU32 {
         ImVec4 c = ImGui::ColorConvertU32ToFloat4(col);
@@ -448,15 +452,15 @@ Minimap::RenderLegend(float w, float h)
         // 0 is bottom (low value), 6 is top (high value)
         float y0  = bar_y + bar_h - (i * bin_h);
         float y1  = y0 - bin_h;
-        ImU32 col = minimap_bins[i];
+        ImU32 col = m_event_color_bins[i];
         if(!m_show_events) col = DimColor(col);
         dl->AddRectFilled(ImVec2(bar_x1, y1), ImVec2(bar_x1 + bar_w, y0), col);
 
-        ImU32 col2 = minimap_bins2[i];
+        ImU32 col2 = m_counter_color_bins[i];
         if(!m_show_counters) col2 = DimColor(col2);
         dl->AddRectFilled(ImVec2(bar_x2, y1), ImVec2(bar_x2 + bar_w, y0), col2);
     }
-    
+
     ImU32 border_col = sm.GetColor(Colors::kBorderColor);
     dl->AddRect(ImVec2(bar_x1, bar_y), ImVec2(bar_x1 + bar_w, bar_y + bar_h),
                 !m_show_events ? DimColor(border_col) : border_col);
@@ -505,7 +509,7 @@ Minimap::RenderLegend(float w, float h)
         dl->AddText(font, font->FontSize, draw_pos, text_col, text);
         int v_end = dl->VtxBuffer.Size;
 
-        // Rotate 90° CCW: (x,y) -> (y, -x) relative to center
+        // Rotate 90ï¿½ CCW: (x,y) -> (y, -x) relative to center
         for(int i = v_start; i < v_end; ++i)
         {
             ImDrawVert& v  = dl->VtxBuffer[i];

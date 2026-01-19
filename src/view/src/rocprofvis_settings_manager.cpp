@@ -76,6 +76,13 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(200, 50, 0, 255),     // Colors::kMinimapBin5
     IM_COL32(240, 120, 0, 255),    // Colors::kMinimapBin6
     IM_COL32(255, 240, 180, 255),  // Colors::kMinimapBin7
+    IM_COL32(80, 80, 80, 255),     // Colors::kMinimapBinCounter1
+    IM_COL32(110, 110, 110, 255),  // Colors::kMinimapBinCounter2
+    IM_COL32(140, 140, 140, 255),  // Colors::kMinimapBinCounter3
+    IM_COL32(170, 170, 170, 255),  // Colors::kMinimapBinCounter4
+    IM_COL32(190, 190, 190, 255),  // Colors::kMinimapBinCounter5
+    IM_COL32(210, 210, 210, 255),  // Colors::kMinimapBinCounter6
+    IM_COL32(230, 230, 230, 255),  // Colors::kMinimapBinCounter7
     IM_COL32(0, 0, 0, 255),        // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 180),        // Colors::kLoadingScreenColor
 
@@ -137,6 +144,13 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(240, 120, 40, 255),   // Colors::kMinimapBin5
     IM_COL32(255, 160, 60, 255),   // Colors::kMinimapBin6
     IM_COL32(255, 200, 120, 255),  // Colors::kMinimapBin7
+    IM_COL32(230, 230, 230, 255),  // Colors::kMinimapBinCounter1
+    IM_COL32(210, 210, 210, 255),  // Colors::kMinimapBinCounter2
+    IM_COL32(190, 190, 190, 255),  // Colors::kMinimapBinCounter3
+    IM_COL32(170, 170, 170, 255),  // Colors::kMinimapBinCounter4
+    IM_COL32(140, 140, 140, 255),  // Colors::kMinimapBinCounter5
+    IM_COL32(110, 110, 110, 255),  // Colors::kMinimapBinCounter6
+    IM_COL32(80, 80, 80, 255),     // Colors::kMinimapBinCounter7
     IM_COL32(255, 255, 255, 255),  // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 60),        //Colors::kLoadingScreenColor
 

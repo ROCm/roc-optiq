@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "rocprofvis_controller_enums.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include <vector>
@@ -30,7 +31,8 @@ private:
 
     void  BinData(const std::vector<std::vector<double>>& input_data);
     void  NormalizeRawData();
-    ImU32 GetColor(double normalized_value, int type) const;
+    void  UpdateColorCache();
+    ImU32 GetColor(double normalized_value, rocprofvis_controller_track_type_t type) const;
     void  RenderLegend(float width, float height);
     void  RenderMinimapData(ImDrawList* dl, ImVec2 pos, ImVec2 size);
     void  RenderViewport(ImDrawList* dl, ImVec2 pos, ImVec2 size);
@@ -44,6 +46,10 @@ private:
     bool                m_show_counters;
     double              m_raw_min_value;
     double              m_raw_max_value;
+
+    // Cached color arrays for performance
+    std::vector<ImU32>  m_event_color_bins;
+    std::vector<ImU32>  m_counter_color_bins;
 
     DataProvider& m_data_provider;
     TimelineView* m_timeline_view;

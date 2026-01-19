@@ -703,9 +703,14 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         float normalized_start_box_highlighted_end =
             window_position.x + m_tpt->TimeToPixel(m_highlighted_region.second);
 
+        // Clamp to not overlap scrollbar
+        float max_x = window_position.x + m_tpt->GetGraphSizeX() - scrollbar_width;
+        float clamped_start = std::min(normalized_start_box_highlighted, max_x);
+        float clamped_end = std::min(normalized_start_box_highlighted_end, max_x);
+
         draw_list->AddRectFilled(
-            ImVec2(normalized_start_box_highlighted, cursor_position.y),
-            ImVec2(normalized_start_box_highlighted_end,
+            ImVec2(clamped_start, cursor_position.y),
+            ImVec2(clamped_end,
                    cursor_position.y + container_size.y - m_ruler_height),
             m_settings.GetColor(Colors::kSelection));
     }

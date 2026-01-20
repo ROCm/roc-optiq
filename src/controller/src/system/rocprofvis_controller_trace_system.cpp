@@ -33,7 +33,6 @@
 #include <cstdint>
 #include <cstring>
 #include <set>
-#include <algorithm>
 
 namespace RocProfVis
 {

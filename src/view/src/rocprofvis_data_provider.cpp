@@ -343,13 +343,14 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
     // Load the system topology
     HandleLoadSystemTopology();
 
-    result = rocprofvis_controller_get_object(m_trace_controller, kRPVControllerSystemTimeline,
-                                              0, &m_trace_timeline);
+    result = rocprofvis_controller_get_object(
+        m_trace_controller, kRPVControllerSystemTimeline, 0, &m_trace_timeline);
 
     // Minimap and histogram load
     uint64_t num_buckets = 0;
     result               = rocprofvis_controller_get_uint64(
-        m_trace_controller, kRPVControllerSystemGetHistogramBucketsNumber, 0, &num_buckets);
+        m_trace_controller, kRPVControllerSystemGetHistogramBucketsNumber, 0,
+        &num_buckets);
 
     // Resize histogram in model
     TimelineModel& tlm = m_model.GetTimeline();
@@ -376,15 +377,38 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
                 m_trace_controller, kRPVControllerSystemTrackIndexed, graphs, &track);
             std::vector<double> histogram_track(num_buckets, 0.0);
 
-            for(int bin_num = 0; bin_num < num_buckets; bin_num++)
-            {
-                double binval;
-                result = rocprofvis_controller_get_double(
-                    track, kRPVControllerTrackHistogramBucketValueIndexed, bin_num,
-                    &binval);
+            uint64_t track_type = 0;
+            result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
+                                                      &track_type);
 
-                histogram_track[bin_num] = binval;
-                histogram[bin_num] += binval;
+            if(track_type == kRPVControllerTrackTypeSamples)
+            {
+                double max_val = 0.0;
+                rocprofvis_controller_get_double(track, kRPVControllerTrackMaxValue, 0,
+                                                 &max_val);
+                for(int bin_num = 0; bin_num < num_buckets; bin_num++)
+                {
+                    double binval;
+                    result = rocprofvis_controller_get_double(
+                        track, kRPVControllerTrackHistogramBucketValueIndexed, bin_num,
+                        &binval);
+
+                    histogram_track[bin_num] = binval / max_val;
+                    histogram[bin_num] += binval / max_val;
+                }
+            }
+            else
+            {
+                for(int bin_num = 0; bin_num < num_buckets; bin_num++)
+                {
+                    double binval;
+                    result = rocprofvis_controller_get_double(
+                        track, kRPVControllerTrackHistogramBucketDensityIndexed, bin_num,
+                        &binval);
+
+                    histogram_track[bin_num] = binval;
+                    histogram[bin_num] += binval;
+                }
             }
 
             histogram_minimap[graphs] = std::make_tuple(histogram_track, true);
@@ -395,12 +419,12 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
         tlm.NormalizeHistogram();
 
         double min_ts = 0;
-        result   = rocprofvis_controller_get_double(
+        result        = rocprofvis_controller_get_double(
             m_trace_timeline, kRPVControllerTimelineMinTimestamp, 0, &min_ts);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         double max_ts = 0;
-        result   = rocprofvis_controller_get_double(
+        result        = rocprofvis_controller_get_double(
             m_trace_timeline, kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
@@ -429,6 +453,7 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
         m_trace_data_ready_callback(m_model.GetTraceFilePath(), kRocProfVisResultSuccess);
     }
 }
+
 
 void
 DataProvider::HandleLoadSystemTopology()

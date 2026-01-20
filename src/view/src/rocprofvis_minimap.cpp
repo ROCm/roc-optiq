@@ -198,15 +198,10 @@ Minimap::NormalizeRawData()
             {
                 if(v != 0)
                 {
-                    // Bin into 1-7
-                    int bin = 7;
-                    if(range > 0)
-                    {
-                        double t = (v) / tracks[count]->max_value;
-                        bin      = 1 + static_cast<int>(t * 6.999);
-                    }
-                    v = static_cast<double>(bin);
+                    int bin = 1 + static_cast<int>(v * 6.999);
+                    v       = static_cast<double>(bin);
                 }
+
             }
         }
         count++;

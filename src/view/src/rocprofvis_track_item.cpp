@@ -448,29 +448,6 @@ TrackItem::FetchHelper()
     }
 }
 
-bool
-TrackItem::IsItMainThreadTrack(const TrackInfo* track_info)
-{
-    if(track_info != nullptr)
-    {
-        if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread)
-        {
-            const ThreadInfo* thread_info =
-                m_data_provider.DataModel().GetTopology().GetInstrumentedThread(
-                    track_info->topology.id);
-            if(thread_info->tid == track_info->topology.process_id)
-            {
-                return true;
-            }
-        }
-    }
-    else
-    {
-        spdlog::error("TrackItem: Invalid track id {}", m_track_id);
-    }
-    return false;
-}
-
 void
 TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 {

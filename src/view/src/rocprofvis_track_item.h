@@ -109,7 +109,6 @@ protected:
     virtual bool ExtractPointsFromData() = 0;
 
     void FetchHelper();
-    bool IsItMainThreadTrack(const TrackInfo* track_info);
     void SetDefaultPillLabel(const TrackInfo* track_info);
     void SetMetaAreaLabel(const TrackInfo* track_info);
     std::string CreateTrackName(const TrackInfo* track_info);

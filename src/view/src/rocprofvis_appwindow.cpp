@@ -575,8 +575,7 @@ AppWindow::RenderViewMenu(Project* project)
                         kRocProfVisViewNotification_Toggle_Fullscreen);
             }
         }
-        ImGui::Separator();
-        ImGui::MenuItem("ROCm(TM) Systems Profiler", NULL, false, false);
+        ImGui::SeparatorText("System Profiler Panels");
 #endif
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))
@@ -611,11 +610,12 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
-        ImGui::Separator();
+
 #ifdef COMPUTE_UI_SUPPORT
-        ImGui::MenuItem("ROCm(TM) Compute Profiler", NULL, false, false);
+        ImGui::SeparatorText("Compute Profiler Panels");
         ImGui::MenuItem("Compute View Item");
 #else
+        ImGui::Separator();
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
         {
             if(m_notification_callback)

@@ -9,6 +9,7 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <memory>
+#include <algorithm>
 
 namespace RocProfVis
 {

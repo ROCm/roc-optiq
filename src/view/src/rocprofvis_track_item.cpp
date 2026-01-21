@@ -50,7 +50,13 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
     const TrackInfo* track_info =
         m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
 
-    m_name = CreateTrackName(track_info);
+    if(track_info == nullptr)
+    {
+        spdlog::error("TrackItem: failed to get TrackInfo for track_id {}", m_track_id);
+        return;
+    }
+
+    SetTrackName(track_info);
     SetMetaAreaLabel(track_info);
     SetDefaultPillLabel(track_info);
 }
@@ -508,7 +514,6 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
     if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread)
     {
-
         std::string process_name_path = m_data_provider.DataModel()
                                             .GetTopology()
                                             .GetProcess(track_info->topology.process_id)
@@ -528,49 +533,48 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
     }
 }
 
-std::string
-TrackItem::CreateTrackName(const TrackInfo* track_info)
+void
+TrackItem::SetTrackName(const TrackInfo* track_info)
 {
-    std::string track_name = "";
+    m_name = "";
     switch (track_info->topology.type)
     {
         case TrackInfo::Topology::Queue:
         {
-            track_name += track_info->category + ":" + track_info->sub_name;
+            m_name += track_info->category + ":" + track_info->sub_name;
             break;
         }
         case TrackInfo::Topology::InstrumentedThread:
         {
-            track_name += track_info->sub_name;
+            m_name += track_info->sub_name;
             break;
         }
         case TrackInfo::Topology::SampledThread:
         {
-            track_name += "Sampled ";
+            m_name += "Sampled ";
             std::string lower_case_sub_name = track_info->sub_name;
             std::transform(
                 lower_case_sub_name.begin(), lower_case_sub_name.end(), lower_case_sub_name.begin(),
                 [](unsigned char c) {
                 return static_cast<char>(std::tolower(c));
             });
-            track_name += lower_case_sub_name;
+            m_name += lower_case_sub_name;
             break;
         }
         case TrackInfo::Topology::Counter:
         {
 
-            track_name += track_info->sub_name;
+            m_name += track_info->sub_name;
             break;
         }
         default:
         {
-            track_name += track_info->category
+            m_name += track_info->category
             + ":" + track_info->main_name
             + ":" + track_info->sub_name;
             break;
         }
     }
-    return track_name;
 }
 
 bool
@@ -661,14 +665,14 @@ TrackProjectSettings::Height() const
                            .getNumber());
 }
 
-Pill::Pill(std::string label, bool shown, bool active)
+Pill::Pill(const std::string& label, bool shown, bool active)
 : m_pill_label(label)
 , m_show_pill_label(shown)
 , m_active(active)
 {}
 
 void
-Pill::SetLabel(std::string label)
+Pill::SetLabel(const std::string& label)
 {
     m_pill_label = label;
 }

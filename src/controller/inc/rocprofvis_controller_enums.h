@@ -484,7 +484,7 @@ typedef enum rocprofvis_controller_track_properties_t : uint32_t
     kRPVControllerTrackEntry,
     // Category of the track
     kRPVControllerCategory,
-    //Track main process string (PID, GPUID, etc)
+    // Track main process string (PID, GPUID, etc)
     kRPVControllerMainName,
     // Track sub process string (TID, QueueID, PMC name)
     kRPVControllerSubName,

@@ -361,7 +361,9 @@ typedef enum rocprofvis_dm_table_property_t {
     // Row handle by specified index
     kRPVDMExtTableRowHandleIndexed,
     // Column enum constant by specified index
-    kRPVDMExtTableColumnEnumUInt64Indexed
+    kRPVDMExtTableColumnEnumUInt64Indexed,
+    // Column type constant by specified index
+    kRPVDMExtTableColumnTypeUInt64Indexed
 } rocprofvis_dm_table_property_t;
 
 // Table row object properties
@@ -464,6 +466,13 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnSubTableId,
     kRPVComputeColumnMetricTableName,
     kRPVComputeColumnMetricSubTableName,
+
+    kRPVComputeColumnMetricName,
+    kRPVComputeColumnMetricDescription,
+    kRPVComputeColumnMetricUnit,
+
+    kRPVComputeColumnMetricValueName,
+    kRPVComputeColumnMetricValue
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations
@@ -473,9 +482,11 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchWorkloadRooflineCeiling,
     kRPVComputeFetchWorkloadTopKernels,
     kRPVComputeFetchWorkloadKernelsList,
+    kRPVComputeFetchWorkloadMetricsDefinition,
     kRPVComputeFetchKernelRooflineIntensities,
     kRPVComputeFetchKernelMetricCategoriesList,
     kRPVComputeFetchMetricCategoryTablesList,
+    kRPVComputeFetchMetricValues,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration

@@ -240,14 +240,16 @@ TrackItem::RenderMetaArea()
         }
 
         // Reordering grip decoration
+        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
+        float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
         ImGui::SetCursorPos(
-            ImVec2((m_reorder_grip_width - ImGui::CalcTextSize(ICON_GRID).x) / 2,
+            ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
 
         ImGui::TextUnformatted(ICON_GRID);
 
-        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
+        
         ImGui::PopFont();
 
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
@@ -267,13 +269,22 @@ TrackItem::RenderMetaArea()
         //         }
         //     }
         // }
-
-        ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
-                               (menu_button_width + 2 * m_metadata_padding.x));
+        float occupied_space =
+            m_meta_area_scale_width + (menu_button_width + 2 * m_metadata_padding.x);
+        ImGui::PushTextWrapPos(content_size.x - occupied_space);
 
         ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
 
         ImGui::PushFont(large_font);
+
+        ImVec2 unwrapped_text_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
+        float  availble_space_for_text =
+            content_size.x - grid_icon_width - occupied_space - 3 * m_metadata_padding.x;
+
+        if(unwrapped_text_size.x > availble_space_for_text)
+            m_pill.Hide();
+        else
+            m_pill.Show();
 
         ImGui::TextUnformatted(m_meta_area_label.c_str());
 
@@ -324,7 +335,6 @@ TrackItem::RenderMetaArea()
         m_meta_area_clicked = false;
     }
 }
-
 
 void
 TrackItem::RenderResizeBar(const ImVec2& parent_size)
@@ -480,7 +490,7 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
             {
                 m_pill.Show();
                 m_pill.Activate();
-                m_pill.SetLabel("MAIN");
+                m_pill.SetLabel("MAIN THREAD");
             }
             else
             {
@@ -512,7 +522,8 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 void
 TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
-    if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread)
+    if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread ||
+       track_info->topology.type == TrackInfo::Topology::SampledThread)
     {
         std::string process_name_path = m_data_provider.DataModel()
                                             .GetTopology()
@@ -526,6 +537,9 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
                                ->tid);
         m_meta_area_label =
             get_executable_name(process_name_path) + " (" + thread_id + ")";
+
+        if(track_info->topology.type == TrackInfo::Topology::SampledThread)
+            m_meta_area_label += "(S)";
     }
     else
     {

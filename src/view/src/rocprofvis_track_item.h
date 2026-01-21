@@ -42,7 +42,7 @@ private:
 class Pill
 {
 public:
-    Pill(std::string label, bool shown, bool active);
+    Pill(const std::string& label, bool shown, bool active);
     void SetLabel(const std::string& label);
     void SetTooltipLabel(std::string label);
     void Activate();

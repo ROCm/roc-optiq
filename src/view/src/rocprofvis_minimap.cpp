@@ -74,6 +74,15 @@ Minimap::UpdateData()
             const auto& vec = std::get<0>(it->second);
             // Copy data to the corresponding row
             std::copy(vec.begin(), vec.end(), data[i].begin());
+
+            // Normalize sample tracks locally for minimap visualization
+            if(t->track_type == kRPVControllerTrackTypeSamples && t->max_value > 0.0)
+            {
+                for(double& val : data[i])
+                {
+                    val /= t->max_value;
+                }
+            }
         }
     }
 
@@ -201,6 +210,7 @@ Minimap::NormalizeRawData()
                     int bin = 1 + static_cast<int>(v * 6.999);
                     v       = static_cast<double>(bin);
                 }
+
 
             }
         }

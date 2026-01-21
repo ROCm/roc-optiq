@@ -383,9 +383,6 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
 
             if(track_type == kRPVControllerTrackTypeSamples)
             {
-                double max_val = 0.0;
-                rocprofvis_controller_get_double(track, kRPVControllerTrackMaxValue, 0,
-                                                 &max_val);
                 for(int bin_num = 0; bin_num < num_buckets; bin_num++)
                 {
                     double binval;
@@ -393,9 +390,8 @@ DataProvider::ProcessLoadTrace(RequestInfo& req)
                         track, kRPVControllerTrackHistogramBucketValueIndexed, bin_num,
                         &binval);
 
-                    histogram_track[bin_num] = binval / max_val;
-                    histogram[bin_num] += binval / max_val;
-                }
+                    histogram_track[bin_num] = binval;
+                 }
             }
             else
             {

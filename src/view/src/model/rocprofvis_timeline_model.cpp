@@ -165,10 +165,19 @@ TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool ad
         std::fill(m_histogram.begin(), m_histogram.end(), 0.0);
         for(const auto& kv : m_mini_map)
         {
-            const std::vector<double>& mini_data   = std::get<0>(kv.second);
-            bool                       is_included = std::get<1>(kv.second);
+            bool is_included = std::get<1>(kv.second);
             if(is_included)
             {
+                // Retrieve track metadata to check its type
+                const TrackInfo* track_info = GetTrack(kv.first);
+
+                // If it's a counter/sample track, skip adding it to the global histogram
+                if(track_info && track_info->track_type == kRPVControllerTrackTypeSamples)
+                {
+                    continue;
+                }
+
+                const std::vector<double>& mini_data = std::get<0>(kv.second);
                 for(size_t i = 0; i < mini_data.size() && i < m_histogram.size(); ++i)
                 {
                     m_histogram[i] += mini_data[i];

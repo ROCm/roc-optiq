@@ -468,6 +468,9 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnMetricSubTableName,
 
     kRPVComputeColumnMetricName,
+    kRPVComputeColumnMetricDescription,
+    kRPVComputeColumnMetricUnit,
+
     kRPVComputeColumnMetricValueName,
     kRPVComputeColumnMetricValue
 } rocprofvis_db_compute_column_enum_t;
@@ -479,6 +482,7 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchWorkloadRooflineCeiling,
     kRPVComputeFetchWorkloadTopKernels,
     kRPVComputeFetchWorkloadKernelsList,
+    kRPVComputeFetchWorkloadMetricsDefinition,
     kRPVComputeFetchKernelRooflineIntensities,
     kRPVComputeFetchKernelMetricCategoriesList,
     kRPVComputeFetchMetricCategoryTablesList,

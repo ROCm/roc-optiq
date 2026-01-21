@@ -90,11 +90,6 @@ public:
      */
     jt::Json& GetSettingsJson();
 
-    // System trace specific stuff...(could subclass to SystemsProject if there gets to be
-    // many)
-    bool IsTrimSaveAllowed();
-    void TrimSave(const std::string& file_path_str);
-
 private:
     /*
      * Opens a project + attached trace file and returns Success/Duplicate/Failed.

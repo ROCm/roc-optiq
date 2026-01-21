@@ -32,7 +32,10 @@ enum class RequestType
     kFetchSummary,
     kSaveTrimmedTrace,
     kTableExport,
-    kFetchTrace
+    kFetchSystemTrace,
+#ifdef COMPUTE_UI_SUPPORT
+    kFetchComputeTrace
+#endif   
 };
 
 enum class RequestState

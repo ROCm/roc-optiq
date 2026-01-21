@@ -61,9 +61,12 @@ public:
     static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
-    static const uint64_t FETCH_TRACE_REQUEST_ID;
+    static const uint64_t FETCH_SYSTEM_TRACE_REQUEST_ID;
     static const uint64_t SUMMARY_REQUEST_ID;
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+#ifdef COMPUTE_UI_SUPPORT
+    static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
+#endif
 
     DataProvider();
     ~DataProvider();
@@ -232,7 +235,7 @@ private:
     void HandleRequests();
 
     void ProcessRequest(RequestInfo& req);
-    void ProcessLoadTrace(RequestInfo& req);
+    void ProcessLoadSystemTrace(RequestInfo& req);
     void ProcessEventExtendedRequest(RequestInfo& req);
     void ProcessEventFlowDetailsRequest(RequestInfo& req);
     void ProcessEventCallStackRequest(RequestInfo& req);
@@ -287,6 +290,14 @@ private:
     std::string m_progress_mesage;
     // Current loading status progress in percents
     uint64_t m_progress_percent;
+
+#ifdef COMPUTE_UI_SUPPORT
+public:
+
+
+private:
+    void ProcessLoadComputeTrace(RequestInfo& req);
+#endif
 };
 
 }  // namespace View

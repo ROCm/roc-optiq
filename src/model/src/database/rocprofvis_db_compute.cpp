@@ -44,8 +44,10 @@ namespace DataModel
 		{"sub_table_name", kRPVComputeColumnMetricSubTableName},
 		{"metric_id", kRPVComputeColumnMetricId},
 		{"metric_name", kRPVComputeColumnMetricName},
+		{"metric_description", kRPVComputeColumnMetricDescription},
 		{"value_name", kRPVComputeColumnMetricValueName},
 		{"value", kRPVComputeColumnMetricValue},
+		{"unit", kRPVComputeColumnMetricUnit},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -102,7 +104,7 @@ namespace DataModel
 			query += "duration_ns_max, ";
 			query += "duration_ns_median ";
 			query += "FROM ";
-			query += "compute_kernel_view WHERE K.workload_id = ";
+			query += "compute_kernel_view WHERE workload_id = ";
 			query += params[0].param_str;
 		}
 		return query;
@@ -123,6 +125,27 @@ namespace DataModel
 		}
 		return query;
 	}
+
+	std::string ComputeQueryFactory::GetComputeWorkloadMetricsDefinition(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
+		{
+			query = "SELECT ";
+			query += "workload_id, ";
+			query += "name as metric_name, ";
+			query += "description as metric_description, ";
+			query += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
+			query += "metric_id as sub_table_id, "; //parsed in callback method
+			query += "table_name, ";
+			query += "sub_table_name, ";
+			query += "unit ";
+			query += "FROM compute_metric_definition ";
+			query += "WHERE workload_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+
 	std::string ComputeQueryFactory::GetComputeKernelRooflineIntensities(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
 		std::string query;
 		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
@@ -164,7 +187,7 @@ namespace DataModel
 		if (num == 2 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId && params[1].param_type == kRPVComputeParamMetricId)
 		{
 			query = "SELECT ";
-			query += "metric_id as sub_table_id, ";
+			query += "metric_id as sub_table_id, "; //parsed in callback method
 			query += "sub_table_name ";
 			query += "FROM compute_metric_view ";
 			query += "WHERE kernel_uuid = ";
@@ -346,6 +369,9 @@ namespace DataModel
 				break;
 			case kRPVComputeFetchWorkloadKernelsList:
 				query = m_query_factory.GetComputeWorkloadKernelsList(num, params);
+				break;
+			case kRPVComputeFetchWorkloadMetricsDefinition:
+				query = m_query_factory.GetComputeWorkloadMetricsDefinition(num, params);
 				break;
 			case kRPVComputeFetchKernelRooflineIntensities:
 				query = m_query_factory.GetComputeKernelRooflineIntensities(num, params);

@@ -28,12 +28,12 @@ namespace DataModel
 		{"roofline_bench_extdata", kRPVComputeColumnWorkloadRooflineBenchBlob},
 		{"kernel_uuid", kRPVComputeColumnKernelUUID},
 		{"kernel_name", kRPVComputeColumnKernelName},
-		{"kernels_count", kRPVComputeColumnKernelsCount},
-		{"sum_durations", kRPVComputeColumnKernelDurationsSum},
-		{"avg_durations", kRPVComputeColumnKernelDurationsAvg},
-		{"median_durations", kRPVComputeColumnKernelDurationsMedian},
-		{"min_durations", kRPVComputeColumnKernelDurationsMin},
-		{"min_durations", kRPVComputeColumnKernelDurationsMax},
+		{"dispatch_count", kRPVComputeColumnKernelsCount},
+		{"duration_ns_sum", kRPVComputeColumnKernelDurationsSum},
+		{"duration_ns_mean", kRPVComputeColumnKernelDurationsAvg},
+		{"duration_ns_median", kRPVComputeColumnKernelDurationsMedian},
+		{"duration_ns_min", kRPVComputeColumnKernelDurationsMin},
+		{"duration_ns_max", kRPVComputeColumnKernelDurationsMax},
 		{"total_flops", kRPVComputeColumnRooflineTotalFlops},
 		{"l1_cache_data", kRPVComputeColumnRooflineL1CacheData},
 		{"l2_cache_data", kRPVComputeColumnRooflineL2CacheData},
@@ -42,6 +42,10 @@ namespace DataModel
 		{"sub_table_id", kRPVComputeColumnSubTableId},
 		{"table_name", kRPVComputeColumnMetricTableName},
 		{"sub_table_name", kRPVComputeColumnMetricSubTableName},
+		{"metric_id", kRPVComputeColumnMetricId},
+		{"metric_name", kRPVComputeColumnMetricName},
+		{"value_name", kRPVComputeColumnMetricValueName},
+		{"value", kRPVComputeColumnMetricValue},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -88,23 +92,18 @@ namespace DataModel
 		std::string query;
 		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
 		{
-			// This seems like complicated and messy query tome. Considering C++ aggregation.
 			query = "SELECT ";
-			query += "t.kernel_uuid, ";
-			query += "t.kernel_name, ";
-			query += "COUNT(*) as kernels_count, ";
-			query += "SUM(duration) as sum_durations, ";
-			query += "AVG(duration) as avg_durations, ";
-			query += "MIN(duration) as min_durations, ";
-			query += "MAX(duration) as max_durations, ";
-			query += "AVG(CASE WHEN rn IN ((cnt + 1) / 2, (cnt + 2) / 2) THEN duration END) AS median_durations ";
+			query += "kernel_uuid, ";
+			query += "kernel_name, ";
+			query += "dispatch_count, ";
+			query += "duration_ns_sum, ";
+			query += "duration_ns_mean, ";
+			query += "duration_ns_min, ";
+			query += "duration_ns_max, ";
+			query += "duration_ns_median ";
 			query += "FROM ";
-			query += "(SELECT D.kernel_uuid, kernel_name, (end_timestamp-start_timestamp) as duration, ";
-			query += "ROW_NUMBER() OVER( PARTITION BY D.kernel_uuid ORDER BY (end_timestamp-start_timestamp)) AS rn, ";
-			query += "COUNT(*) OVER(PARTITION BY D.kernel_uuid) AS cnt ";
-			query += "FROM compute_dispatch D INNER JOIN compute_kernel K ON D.kernel_uuid = K.kernel_uuid WHERE K.workload_id = ";
+			query += "compute_kernel_view WHERE K.workload_id = ";
 			query += params[0].param_str;
-			query += ") T GROUP BY T.kernel_uuid ORDER BY T.duration DESC";
 		}
 		return query;
 		
@@ -128,35 +127,19 @@ namespace DataModel
 		std::string query;
 		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 		{
-			if (IsVersionGreaterOrEqual("1.1.1"))
-			{
-				query = "WITH AVG_D AS (SELECT AVG(end_timestamp - start_timestamp), kernel_uuid FROM compute_dispatch WHERE kernel_uuid = ";
-				query += params[0].param_str;
-				query += " GROUP BY kernel_uuid)";
-				query += " SELECT ";
-				query += " kernel_uuid, ";
-				query += " kernel_name, ";
-				query += " total_flops, ";
-				query += " l1_cache_data, ";
-				query += " l2_cache_data, ";
-				query += " hbm_cache_data ";
-				query += " FROM compute_roofline_data CRD ";
-				query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid";
-			}
-			else
-			{
-				query = "WITH AVG_D AS (SELECT AVG(end_timestamp - start_timestamp), kernel_uuid FROM compute_dispatch WHERE kernel_uuid = ";
-				query += params[0].param_str;
-				query += " GROUP BY kernel_uuid)";
-				query += " SELECT ";
-				query += " CK.kernel_name, ";
-				query += " total_flops, ";
-				query += " l1_cache_data, ";
-				query += " l2_cache_data, ";
-				query += " hbm_cache_data ";
-				query += " FROM compute_roofline_data CRD ";
-				query += " INNER JOIN compute_kernel CK ON CRD.kernel_name = CK.kernel_name INNER JOIN AVG_D ON CK.kernel_uuid = AVG_D.kernel_uuid";
-			}
+			query = "WITH AVG_D AS (SELECT AVG(end_timestamp - start_timestamp), kernel_uuid FROM compute_dispatch WHERE kernel_uuid = ";
+			query += params[0].param_str;
+			query += " GROUP BY kernel_uuid)";
+			query += " SELECT ";
+			query += " K.kernel_uuid, ";
+			query += " K.kernel_name, ";
+			query += " total_flops, ";
+			query += " l1_cache_data, ";
+			query += " l2_cache_data, ";
+			query += " hbm_cache_data ";
+			query += " FROM compute_roofline_data CRD ";
+			query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid ";
+			query += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";
 		}
 		return query;
 	}
@@ -168,7 +151,7 @@ namespace DataModel
 			query = "SELECT ";
 			query += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
 			query += "table_name ";
-			query += "FROM compute_metric ";
+			query += "FROM compute_metric_view ";
 			query += "WHERE kernel_uuid = ";
 			query += params[0].param_str;
 			query += " GROUP BY table_name";
@@ -183,14 +166,126 @@ namespace DataModel
 			query = "SELECT ";
 			query += "metric_id as sub_table_id, ";
 			query += "sub_table_name ";
-			query += "FROM compute_metric ";
+			query += "FROM compute_metric_view ";
 			query += "WHERE kernel_uuid = ";
 			query += params[0].param_str;
 			query += " AND metric_id LIKE '";
 			query += params[1].param_str;
-			query += ".%' GROUP BY table_name";
+			query += "%' GROUP BY table_name";
 		}
 		return query;
+	}
+
+	MetricIdFormat ComputeQueryFactory::ClassifyMetricIdFormat(const std::string& s) {
+		size_t first = s.find('.');
+		if (first == std::string::npos) return MetricIdFormat::Other;
+
+		size_t second = s.find('.', first + 1);
+
+		if (second == std::string::npos) {
+			if (first > 0 && first < s.size() - 1)
+				return MetricIdFormat::XY;
+		} else {
+			if (first > 0 &&
+				second > first + 1 &&
+				second < s.size() - 1 &&
+				s.find('.', second + 1) == std::string::npos)
+				return MetricIdFormat::XYZ;
+		}
+
+		return MetricIdFormat::Other;
+	}
+
+	std::string ComputeQueryFactory::GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		std::set<std::string> metric_ids;
+		std::set<std::string> kernel_ids;
+		for (int i = 0; i < num; i++)
+		{
+			if (params[i].param_type == kRPVComputeParamKernelId)
+			{
+				kernel_ids.insert(params[i].param_str);
+			} else
+			if (params[i].param_type == kRPVComputeParamMetricId)
+			{
+				metric_ids.insert(params[i].param_str);
+			} 
+		}
+		if (metric_ids.size() > 0 && kernel_ids.size() > 0)
+		{
+			bool use_in_clause_for_metric_ids = true;
+
+			if (metric_ids.size() > 1)
+			{
+				for (auto metric_id : metric_ids)
+				{
+					MetricIdFormat f = ClassifyMetricIdFormat(metric_id);
+					if (f == MetricIdFormat::Other)
+					{
+						spdlog::debug("Invalid metric format {}", metric_id);
+						return query;
+					}
+					else
+						if (f != MetricIdFormat::XYZ)
+						{
+							use_in_clause_for_metric_ids = false;
+							break;
+						}
+				}
+			}
+			else
+			{
+				use_in_clause_for_metric_ids = false;
+			}
+
+			query = "SELECT metric_id, metric_name, kernel_uuid, value_name, value from compute_metric_view WHERE (";
+			if (use_in_clause_for_metric_ids)
+			{
+				query += "metric_id IN (";
+				int count = 0;
+				for (auto metric_id : metric_ids)
+				{
+					if (count > 0)
+					{
+						query += ",";
+					}
+					query += "'";
+					query += metric_id;
+					query += "'";
+					count++;
+				}
+				query += ")";
+			}
+			else
+			{
+				int count = 0;
+				for (auto metric_id : metric_ids)
+				{
+					if (count > 0)
+					{
+						query += " OR ";
+					}
+					query += "metric_id LIKE '";
+					query += metric_id;
+					query += "%' ";
+					count++;
+				}
+			}
+
+			query += ") AND kernel_uuid IN (";
+			int count = 0;
+			for (auto kernel_id : kernel_ids)
+			{
+				if (count > 0)
+				{
+					query += ",";
+				}
+				query += kernel_id;
+				count++;
+			}
+			query += ")";
+		}
+		return query;		
 	}
 
 	rocprofvis_dm_result_t  ComputeDatabase::ExecuteQuery(
@@ -236,8 +331,10 @@ namespace DataModel
 		ComputeDatabase::BuildComputeQuery(
 			rocprofvis_db_compute_use_case_enum_t use_case, rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
 			rocprofvis_dm_string_t& query) {
-		switch (use_case)
+		if (m_query_factory.IsVersionGreaterOrEqual("1.2.0"))
 		{
+			switch (use_case)
+			{
 			case kRPVComputeFetchListOfWorkloads:
 				query = m_query_factory.GetComputeListOfWorkloads(num, params);
 				break;
@@ -259,16 +356,25 @@ namespace DataModel
 			case kRPVComputeFetchMetricCategoryTablesList:
 				query = m_query_factory.GetComputeMetricCategoryTablesList(num, params);
 				break;
+			case kRPVComputeFetchMetricValues:
+				query = m_query_factory.GetComputeMetricValues(num, params);
+				break;
 			default:
 				return kRocProfVisDmResultInvalidParameter;
-		}
-		if (query.empty())
-		{
-			return kRocProfVisDmResultInvalidParameter;
+			}
+
+			if (query.empty())
+			{
+				return kRocProfVisDmResultInvalidParameter;
+			}
+			else
+			{
+				return kRocProfVisDmResultSuccess;
+			}
 		}
 		else
 		{
-			return kRocProfVisDmResultSuccess;
+			return kRocProfVisDmResultNotSupported;
 		}
 	}
 
@@ -297,6 +403,7 @@ namespace DataModel
 				case kRPVComputeFetchKernelRooflineIntensities:
 				case kRPVComputeFetchKernelMetricCategoriesList:
 				case kRPVComputeFetchMetricCategoryTablesList:
+				case kRPVComputeFetchMetricValues:
 					callback = CallbackGetComputeGeneric;
 					break;
 				case kRPVComputeFetchWorkloadRooflineCeiling:
@@ -351,11 +458,13 @@ namespace DataModel
 		{
 			for (int i=0; i < argc; i++)
 			{
+				rocprofvis_db_data_type_t type = (rocprofvis_db_data_type_t) sqlite3_column_type(stmt, i);
 				auto it = ColumnNameToEnum.find(azColName[i]);
 				if (it != ColumnNameToEnum.end())
 				{
 					if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumn(callback_params->handle, azColName[i])) return 1;
 					if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumnEnum(callback_params->handle,it->second)) return 1;
+					if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumnType(callback_params->handle,type)) return 1;
 				}
 			}
 		}
@@ -399,6 +508,7 @@ namespace DataModel
 					{
 						if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumn(callback_params->handle, name.c_str())) return 1;
 						if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumnEnum(callback_params->handle,enumeration)) return 1;
+						if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableColumnType(callback_params->handle,kRPVDataTypeDouble)) return 1;
 					}
 				}
 			}

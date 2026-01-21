@@ -48,6 +48,17 @@ rocprofvis_dm_result_t Table::AddColumnEnum(rocprofvis_db_table_column_enum_t co
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t Table::AddColumnType(rocprofvis_db_data_type_t column_type){
+    try{
+        m_column_types.push_back(column_type);
+    }
+    catch(std::exception ex)
+    {
+        return kRocProfVisDmResultAllocFailure;
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_table_row_t Table::AddRow(){
     try{
         m_rows.push_back(std::make_shared<TableRow>(this));
@@ -68,6 +79,13 @@ rocprofvis_dm_result_t Table::GetColumnNameAt(const rocprofvis_dm_property_index
 rocprofvis_dm_result_t Table::GetColumnEnumAt(const rocprofvis_dm_property_index_t index, rocprofvis_db_table_column_enum_t& column_enum) {
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_columns.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     column_enum = m_column_enums[index];
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t Table::GetColumnTypeAt(const rocprofvis_dm_property_index_t index, rocprofvis_db_data_type_t & column_type) {
+    column_type = kRPVDataTypeString; // default, in case caller does not check return status;
+    ROCPROFVIS_ASSERT_MSG_RETURN(index < m_columns.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
+    column_type = m_column_types[index];
     return kRocProfVisDmResultSuccess;
 }
 
@@ -93,6 +111,8 @@ rocprofvis_dm_result_t Table::GetPropertyAsUint64(rocprofvis_dm_property_t prope
             return kRocProfVisDmResultSuccess;
         case kRPVDMExtTableColumnEnumUInt64Indexed:
             return GetColumnEnumAt(index, *(rocprofvis_db_table_column_enum_t*)value);
+        case kRPVDMExtTableColumnTypeUInt64Indexed:
+            return GetColumnTypeAt(index, *(rocprofvis_db_data_type_t*)value);
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }

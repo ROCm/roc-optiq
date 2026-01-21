@@ -240,6 +240,11 @@ class Trace : public DmBase{
         // @param column_enum - enumeration constant of new column
         // @return status of operation 
         static rocprofvis_dm_result_t                   AddTableColumnEnum(const rocprofvis_dm_table_t object, rocprofvis_db_table_column_enum_t column_enum);
+        // Static method to add new column type to table object. Used by database component via binding interface
+        // @param object - table object handle to add new column to.
+        // @param column_type - type constant of new column
+        // @return status of operation 
+        static rocprofvis_dm_result_t                   AddTableColumnType(const rocprofvis_dm_table_t object, rocprofvis_db_data_type_t column_type);
         // Static method to add new cell to table row object. Used by database component via binding interface
         // @param object - table row object handle to add new cell to.
         // @param cell_value - pointer to table value string

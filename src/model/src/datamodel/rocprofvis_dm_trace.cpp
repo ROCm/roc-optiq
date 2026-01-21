@@ -40,6 +40,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddTableRow = AddTableRow;
     m_binding_info.FuncAddTableColumn = AddTableColumn;
     m_binding_info.FuncAddTableColumnEnum = AddTableColumnEnum;
+    m_binding_info.FuncAddTableColumnType = AddTableColumnType;
     m_binding_info.FuncAddTableRowCell = AddTableRowCell;
     m_binding_info.FuncAddEventLevel = AddEventLevel;
     m_binding_info.FuncCheckEventPropertyExists = CheckEventPropertyExists;
@@ -493,6 +494,13 @@ rocprofvis_dm_result_t Trace::AddTableColumnEnum(const rocprofvis_dm_table_t obj
     Table* table = (Table*) object;
     TimedLock<std::unique_lock<std::shared_mutex>> lock(*table->Mutex(), __func__, table);
     return table->AddColumnEnum(column_enum);
+}
+
+rocprofvis_dm_result_t Trace::AddTableColumnType(const rocprofvis_dm_table_t object, rocprofvis_db_data_type_t column_type){
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    Table* table = (Table*) object;
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*table->Mutex(), __func__, table);
+    return table->AddColumnType(column_type);
 }
 
 rocprofvis_dm_result_t Trace::AddTableRowCell(const rocprofvis_dm_table_row_t object, rocprofvis_dm_charptr_t cell_value){

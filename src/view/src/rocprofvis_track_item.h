@@ -44,6 +44,7 @@ class Pill
 public:
     Pill(std::string label, bool shown, bool active);
     void SetLabel(std::string label);
+    void SetTooltipLabel(std::string label);
     void Activate();
     void Deactivate();
     void Show();
@@ -54,6 +55,7 @@ private:
     bool        m_show_pill_label;
     bool        m_active;
     std::string m_pill_label;
+    std::string m_tooltip_label;
 };
 
 class TrackItem

@@ -43,7 +43,7 @@ class Pill
 {
 public:
     Pill(std::string label, bool shown, bool active);
-    void SetLabel(std::string label);
+    void SetLabel(const std::string& label);
     void SetTooltipLabel(std::string label);
     void Activate();
     void Deactivate();
@@ -113,7 +113,7 @@ protected:
     void FetchHelper();
     void SetDefaultPillLabel(const TrackInfo* track_info);
     void SetMetaAreaLabel(const TrackInfo* track_info);
-    std::string CreateTrackName(const TrackInfo* track_info);
+    void SetTrackName(const TrackInfo* track_info);
 
     uint64_t              m_track_id;
     float                 m_track_height;

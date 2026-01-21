@@ -7,7 +7,6 @@
 #include "rocprofvis_controller_sample.h"
 #include "rocprofvis_controller_sample_lod.h"
 #include <chrono>
-#include <execution>
 #include <cmath>
 #include "spdlog/spdlog.h"
 #if defined(_MSC_VER)

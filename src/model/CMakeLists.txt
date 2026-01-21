@@ -44,6 +44,17 @@ target_link_libraries(${PROJECT_NAME} spdlog)
 target_link_libraries(${PROJECT_NAME} yaml-cpp)
 target_link_libraries(${PROJECT_NAME} json)
 
+# TBB is conditionally required on Linux when libtbb-dev is installed
+# - Windows MSVC: Has its own parallel backend, doesn't need TBB
+# - macOS: Parallel execution not yet supported in libc++
+# - Linux GCC: Auto-detects TBB headers and switches to TBB backend if available
+find_package(TBB QUIET)
+if(TBB_FOUND)
+    target_link_libraries(${PROJECT_NAME} TBB::tbb)
+    message(STATUS "TBB found and linked for parallel execution policies")
+else()
+    message(STATUS "TBB not found - parallel execution will use platform default")
+endif()
 
 add_executable(${PROJECT_NAME}-test ${MAIN_SRC} )
 target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)

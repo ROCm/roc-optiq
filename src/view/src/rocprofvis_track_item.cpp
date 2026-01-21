@@ -498,7 +498,16 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         case TrackInfo::Topology::Counter:
         {
             m_pill.Show();
-            m_pill.SetLabel("COUNTER");
+            // Get counter type label from topology model, ex: "GPU0"
+            std::string pill_label =
+                m_data_provider.DataModel().GetTopology().GetDeviceTypeLabelForCounter(
+                    track_info->topology.id);
+            m_pill.SetLabel(pill_label);
+            // Get counter product label from topology model, ex: "AMD Radeon RX 6800 XT"
+            std::string counter_product_label =
+                m_data_provider.DataModel().GetTopology().GetDeviceProductLabelForCounter(
+                    track_info->topology.id);
+            m_pill.SetTooltipLabel(counter_product_label);
             break;
         }
         default:
@@ -678,6 +687,12 @@ Pill::SetLabel(const std::string& label)
 }
 
 void
+Pill::SetTooltipLabel(std::string label)
+{
+    m_tooltip_label = label;
+}
+
+void
 Pill::Activate()
 {
     m_active = true;
@@ -735,6 +750,14 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     ImVec2 text_pos = pillbox_pos + ImVec2(padding_x, padding_y);
     ImGui::SetCursorPos(text_pos);
     ImGui::TextUnformatted(m_pill_label.c_str());
+    if(!m_tooltip_label.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        if(ImGui::BeginItemTooltip())
+        {
+            ImGui::TextUnformatted(m_tooltip_label.c_str());
+            ImGui::EndTooltip();
+        }
+    }    
     ImGui::PopStyleColor();
 
     ImGui::PopFont();

@@ -70,6 +70,10 @@ public:
     // Clear all topology data
     void Clear();
 
+    // Helpers
+    std::string GetDeviceTypeLabelForCounter(uint64_t counter_id) const;
+    std::string GetDeviceProductLabelForCounter(uint64_t counter_id) const;
+
 private:
     std::unordered_map<uint64_t, NodeInfo>    m_nodes;
     std::unordered_map<uint64_t, DeviceInfo>  m_devices;

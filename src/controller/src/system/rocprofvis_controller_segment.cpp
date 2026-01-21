@@ -10,7 +10,6 @@
 #include "rocprofvis_controller_future.h"
 
 #include <algorithm>
-#include <execution>
 
 namespace RocProfVis
 {

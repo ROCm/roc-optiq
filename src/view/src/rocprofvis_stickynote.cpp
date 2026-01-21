@@ -175,7 +175,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::sh
     // Cover hover case for input control
     ImVec2 sticky_max =
         ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
-    if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max))
+    if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) && !ImGui::GetIO().KeyCtrl)
     {
         TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
     }
@@ -219,7 +219,7 @@ StickyNote::HandleDrag(const ImVec2&                               window_positi
     // Only allow drag if no other note is being dragged or this is the one
     if((dragged_id == -1 || dragged_id == m_id) && !m_dragging &&
        ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) &&
-       ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+       ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyCtrl)
     {
         m_dragging    = true;
         m_drag_offset = ImVec2(mouse_pos.x - sticky_pos.x, mouse_pos.y - sticky_pos.y);
@@ -287,7 +287,7 @@ StickyNote::HandleResize(const ImVec2&       window_position,
     draw_list->AddRectFilled(handle_pos, handle_max, handle_color, 3.0f);
 
     if(!m_resizing && ImGui::IsMouseHoveringRect(handle_pos, handle_max) &&
-       ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+       ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyCtrl)
     {
         m_resizing      = true;
         m_resize_offset = ImVec2(mouse_pos.x - sticky_max.x, mouse_pos.y - sticky_max.y);

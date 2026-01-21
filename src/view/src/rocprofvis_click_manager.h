@@ -13,8 +13,12 @@ enum class Layer
 {
     kNone = -1,
     kGraphLayer,
+ 
     kInteractiveLayer,
-    kCount
+
+        kScrubberLayer,
+
+     kCount
 };
 
 class TimelineFocusManager

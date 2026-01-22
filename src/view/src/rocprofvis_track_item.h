@@ -4,9 +4,12 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_project.h"
+#include "rocprofvis_time_to_pixel.h"
+#include "rocprofvis_event_manager.h"
+
 #include <deque>
 #include <unordered_map>
-#include "rocprofvis_time_to_pixel.h"
+
 
 namespace RocProfVis
 {
@@ -51,11 +54,17 @@ public:
     void Hide();
     void RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
                          float reorder_grip_width);
+    ImVec2 GetPillSize();
+
 private:
-    bool        m_show_pill_label;
-    bool        m_active;
-    std::string m_pill_label;
-    std::string m_tooltip_label;
+    bool                            m_show_pill_label;
+    bool                            m_active;
+    std::string                     m_pill_label;
+    std::string                     m_tooltip_label;
+    ImVec2                          m_pillbox_size;
+    const float                     m_padding_x = 8.0f;
+    const float                     m_padding_y = 2.0f;
+    EventManager::SubscriptionToken m_font_changed_token;
 };
 
 class TrackItem

@@ -69,6 +69,12 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
     const TrackInfo* track_info =
         m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
 
+    if(!track_info)
+    {
+        spdlog::error("FlameTrackItem: TrackInfo is null for track_id {}", m_track_id);
+        return;
+    }
+
     m_min_level = static_cast<float>(track_info->min_value);
     m_max_level = static_cast<float>(track_info->max_value);
 

@@ -280,8 +280,12 @@ TrackItem::RenderMetaArea()
 
         if(available_for_text < 0.0f) available_for_text = 0.0f;
 
-        ImVec2 unwrapped_text_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
-        if(unwrapped_text_size.x > available_for_text)
+        ImVec2 text_size = ImGui::CalcTextSize(
+            m_meta_area_label.c_str(), nullptr, false, available_for_text);
+
+        auto available_y = content_size.y - text_size.y;
+        auto pill_height = m_pill.GetPillSize().y;
+        if(available_y < pill_height)
             m_pill.Hide();
         else
             m_pill.Show();
@@ -483,10 +487,11 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         }
         case TrackInfo::Topology::InstrumentedThread:
         {
-            const ThreadInfo* thread_info =
-                m_data_provider.DataModel().GetTopology().GetInstrumentedThread(
-                    track_info->topology.id);
-            if(thread_info->tid == track_info->topology.process_id)
+
+            if(const ThreadInfo* thread_info =
+                   m_data_provider.DataModel().GetTopology().GetInstrumentedThread(
+                       track_info->topology.id);
+               thread_info && thread_info->tid == track_info->topology.process_id)
             {
                 m_pill.Show();
                 m_pill.Activate();
@@ -574,7 +579,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
                 thread_id += std::to_string(thread_info->tid);
             }
             m_meta_area_label =
-                get_executable_name(process_name_path) + " (" + thread_id + ")" + "(S)";
+                get_executable_name(process_name_path) + " (" + thread_id + ")" + " (S)";
             break;
         }
         default:
@@ -615,8 +620,7 @@ TrackItem::SetTrackName(const TrackInfo* track_info)
         }
         case TrackInfo::Topology::Counter:
         {
-
-            m_name += track_info->main_name + ":" + track_info->sub_name;
+            m_name += track_info->sub_name;
             break;
         }
         default:
@@ -721,12 +725,23 @@ Pill::Pill(const std::string& label, bool shown, bool active)
 : m_pill_label(label)
 , m_show_pill_label(shown)
 , m_active(active)
-{}
+, m_font_changed_token(static_cast<uint64_t>(-1))
+{
+    auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        ImVec2 text_size = ImGui::CalcTextSize(m_pill_label.c_str());
+        m_pillbox_size =
+            ImVec2(text_size.x + 2 * m_padding_x, text_size.y + 2 * m_padding_y);
+    };
+    m_font_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+}
 
 void
 Pill::SetLabel(const std::string& label)
 {
     m_pill_label = label;
+    ImVec2 text_size = ImGui::CalcTextSize(m_pill_label.c_str());
+    m_pillbox_size = ImVec2(text_size.x + 2 * m_padding_x, text_size.y + 2 * m_padding_y);
 }
 
 void
@@ -769,20 +784,15 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     }
     ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kSmall));
 
-    ImVec2 text_size = ImGui::CalcTextSize(m_pill_label.c_str());
-    float  padding_x = 8.0f;
-    float  padding_y = 2.0f;
-    ImVec2 pillbox_size(text_size.x + 2 * padding_x, text_size.y + 2 * padding_y);
-
-    ImVec2 pillbox_pos(reorder_grip_width, container_size.y - pillbox_size.y - 2.0f);
+    ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
 
     if (m_active)
     {
         ImDrawList* draw_list     = ImGui::GetWindowDrawList();
         ImU32       pillbox_color = settings.GetColor(Colors::kBorderGray);
         draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
-                                 ImGui::GetWindowPos() + pillbox_pos + pillbox_size,
-                                 pillbox_color, pillbox_size.y * 0.5f);
+                                 ImGui::GetWindowPos() + pillbox_pos + m_pillbox_size,
+                                 pillbox_color, m_pillbox_size.y * 0.5f);
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     }
     else
@@ -790,7 +800,7 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
     }
 
-    ImVec2 text_pos = pillbox_pos + ImVec2(padding_x, padding_y);
+    ImVec2 text_pos = pillbox_pos + ImVec2(m_padding_x, m_padding_y);
     ImGui::SetCursorPos(text_pos);
     ImGui::TextUnformatted(m_pill_label.c_str());
     if(!m_tooltip_label.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
@@ -800,12 +810,17 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
             ImGui::TextUnformatted(m_tooltip_label.c_str());
             ImGui::EndTooltip();
         }
-    }    
+    }
     ImGui::PopStyleColor();
 
     ImGui::PopFont();
 }
 
+ImVec2
+Pill::GetPillSize()
+{
+    return m_pillbox_size;
+}
 
 }  // namespace View
 }  // namespace RocProfVis

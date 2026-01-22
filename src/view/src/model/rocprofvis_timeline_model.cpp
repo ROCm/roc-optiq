@@ -16,6 +16,8 @@ TimelineModel::TimelineModel()
 , m_min_ts(0.0)
 , m_max_ts(0.0)
 , m_histogram_max_value_global(DBL_MIN)
+, m_minimap_global_min(DBL_MAX)
+, m_minimap_global_max(-DBL_MAX)
 , m_normalize_global(true)
 {}
 
@@ -193,6 +195,9 @@ TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool ad
              * normalization*/
             std::vector<double> global_sum_histogram(m_histogram.size(), 0.0);
 
+            m_minimap_global_min = DBL_MAX;
+            m_minimap_global_max = -DBL_MAX;
+
             for(const auto& kv : m_mini_map)
             {
                 // Retrieve track metadata to check its type
@@ -205,6 +210,16 @@ TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool ad
                 }
 
                 const std::vector<double>& mini_data = std::get<0>(kv.second);
+
+                for(double val : mini_data)
+                {
+                    if(val != 0)  // Skip zeros to match local min/max calculation
+                    {
+                        if(val < m_minimap_global_min) m_minimap_global_min = val;
+                        if(val > m_minimap_global_max) m_minimap_global_max = val;
+                    }
+                }
+
                 for(size_t i = 0; i < mini_data.size() && i < global_sum_histogram.size(); ++i)
                 {
                     global_sum_histogram[i] += mini_data[i];
@@ -216,6 +231,8 @@ TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool ad
                     *std::max_element(global_sum_histogram.begin(),
                                       global_sum_histogram.end());
             }
+            if(m_minimap_global_min == DBL_MAX) m_minimap_global_min = 0.0;
+            if(m_minimap_global_max == -DBL_MAX) m_minimap_global_max = 0.0;
         }
 
         // Normalize histogram to [0, 1]
@@ -253,6 +270,8 @@ TimelineModel::Clear()
     m_histogram.clear();
     m_mini_map.clear();
     m_histogram_max_value_global = DBL_MIN;
+    m_minimap_global_min         = DBL_MAX;
+    m_minimap_global_max         = -DBL_MAX;
 }
 
 bool

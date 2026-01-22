@@ -68,6 +68,8 @@ public:
     void                       SetHistogram(std::vector<double>&& histogram);
     void                       ResizeHistogram(size_t size);
     double                     GetHistogramMaxValueGlobal() const { return m_histogram_max_value_global; }
+    double                     GetMinimapGlobalMin() const { return m_minimap_global_min; }
+    double                     GetMinimapGlobalMax() const { return m_minimap_global_max; }
 
     // Mini-map access
     const std::map<uint64_t, std::tuple<std::vector<double>, bool>>& GetMiniMap() const
@@ -110,6 +112,8 @@ private:
     std::vector<double>                                       m_histogram;
     std::map<uint64_t, std::tuple<std::vector<double>, bool>> m_mini_map;
     double                                                    m_histogram_max_value_global;
+    double                                                    m_minimap_global_min;
+    double                                                    m_minimap_global_max;
     bool                                                      m_normalize_global;
 };
 

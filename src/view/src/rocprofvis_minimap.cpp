@@ -174,29 +174,55 @@ Minimap::NormalizeRawData()
 {
     if(m_downsampled_data.empty() || m_downsampled_data.front().empty()) return;
 
-    m_raw_min_value = std::numeric_limits<double>::max();
-    m_raw_max_value = std::numeric_limits<double>::lowest();
-    for(const auto& row : m_downsampled_data)
-        for(double v : row)
-            if(v != 0)
-            {
-                m_raw_min_value = std::min(m_raw_min_value, v);
-                m_raw_max_value = std::max(m_raw_max_value, v);
-            }
-
-    m_event_global_max =
-        m_data_provider.DataModel().GetTimeline().GetHistogramMaxValueGlobal();
-    bool   is_global = m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
-    double range     = is_global ? m_event_global_max : (m_raw_max_value - m_raw_min_value);
-
-    int    count  = 0;
-    auto   tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
-
     // Ensure tracks and downsampled data sizes match to avoid out-of-bounds access
+    auto tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
     if(tracks.size() != m_downsampled_data.size())
     {
         return;
     }
+
+    m_raw_min_value = std::numeric_limits<double>::max();
+    m_raw_max_value = std::numeric_limits<double>::lowest();
+    for(size_t i = 0; i < m_downsampled_data.size(); ++i)
+    {
+        if(tracks[i]->track_type == kRPVControllerTrackTypeEvents)
+        {
+            for(double v : m_downsampled_data[i])
+            {
+                if(v != 0)
+                {
+                    m_raw_min_value = std::min(m_raw_min_value, v);
+                    m_raw_max_value = std::max(m_raw_max_value, v);
+                }
+            }
+        }
+    }
+
+    m_event_global_max =
+        m_data_provider.DataModel().GetTimeline().GetHistogramMaxValueGlobal();
+    
+    double global_max = m_data_provider.DataModel().GetTimeline().GetMinimapGlobalMax();
+    double global_min = m_data_provider.DataModel().GetTimeline().GetMinimapGlobalMin();
+
+    bool   is_global = m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
+    
+    double range;
+    double min_val;
+
+    if(is_global)
+    {
+        range   = global_max - global_min;
+        min_val = global_min; 
+    }
+    else
+    {
+        range   = m_raw_max_value - m_raw_min_value;
+        min_val = m_raw_min_value;
+    }
+
+    std::cout << m_event_global_max << "\n";
+    double x =  m_raw_max_value - m_raw_min_value;
+    int    count  = 0;
 
     for(auto& row : m_downsampled_data)
     {
@@ -210,7 +236,7 @@ Minimap::NormalizeRawData()
                     int bin = 7;
                     if(range > 0)
                     {
-                        double t = (v - m_raw_min_value) / range;
+                        double t = (v - min_val) / range;
                         bin      = 1 + static_cast<int>(t * 6.999);
                     }
                     v = static_cast<double>(bin);

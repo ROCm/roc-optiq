@@ -10,7 +10,6 @@
 #include "rocprofvis_settings_manager.h"
 #include <algorithm>
 #include <spdlog/spdlog.h>
-#include <spdlog/spdlog.h>
 
 namespace RocProfVis
 {
@@ -20,7 +19,8 @@ namespace View
 static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
                        const std::string& text, const std::string& title,
-                       const std::string& project_id, double v_min, double v_max)
+                       const std::string& project_id, double v_min, double v_max,
+                       bool sticky_style)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
 , m_size(size)
@@ -31,6 +31,7 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 , m_is_visible(true)
 , m_v_min_x(v_min)
 , m_v_max_x(v_max)
+, m_sticky_style(sticky_style)
 {
     s_unique_id_counter = s_unique_id_counter + 1;
 }
@@ -101,15 +102,17 @@ StickyNote::SetTitle(std::string title)
     m_title = title;
 }
 void
-StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::shared_ptr<TimePixelTransform> tpt)
+StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
+                   std::shared_ptr<TimePixelTransform> tpt)
 {
     if(!tpt)
     {
-        spdlog::error("StickyNote::Render: conversion_manager shared_ptr is null, cannot render");
+        spdlog::error(
+            "StickyNote::Render: conversion_manager shared_ptr is null, cannot render");
         return;
     }
     SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            bg_color     = settings.GetColor(Colors::kFillerColor);
+    ImU32            bg_color     = settings.GetColor(Colors::kStickyNote);
     ImU32            border_color = settings.GetColor(Colors::kBorderColor);
     ImU32            accent_color = settings.GetColor(Colors::kStickyNote);
 
@@ -126,72 +129,121 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position, std::sh
     // Set the cursor to the sticky note position inside the parent window
     ImGui::SetCursorScreenPos(sticky_pos);
 
-    // Round corners
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
-
-    ImGui::SetCursorScreenPos(sticky_pos);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg_color);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
-
-    ImGui::BeginChild(
-        ("StickyNoteChild##" + std::to_string(reinterpret_cast<uintptr_t>(this))).c_str(),
-        sticky_size, true);
-
-    // Header (accent bar)
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, accent_color);
-    ImGui::BeginChild("Header", ImVec2(sticky_size.x, header_height), false);
-
-    // Title (left)
-    ImGui::SetCursorPos(ImVec2(margin, 4.0f));
-    ImGui::TextUnformatted(m_title.c_str());
-
-    // Edit button (right)
-    ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size - margin / 2,
-                               (header_height - edit_btn_size) / 2));
-    ImGui::PushFont(
-        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault));
-    if(ImGui::Button((std::string(ICON_EDIT) + "##" +
-                      std::to_string(reinterpret_cast<uintptr_t>(this)))
-                         .c_str(),
-                     ImVec2(edit_btn_size, edit_btn_size)))
+    if(m_sticky_style)
     {
-        EventManager::GetInstance()->AddEvent(
-            std::make_shared<StickyNoteEvent>(m_id, m_project_id));
+        // Wrap in child window to enable inputs (parent has NoInputs)
+        std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
+        ImGui::BeginChild(child_id.c_str(), m_size, false, ImGuiWindowFlags_None);
+
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
+            FontType::kDefault);
+        ImGui::PushFont(icon_font);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+        if(ImGui::Button(
+               (std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str()))
+        {
+            m_sticky_style = false;
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::PopFont();
+        ImGui::EndChild();
     }
-    ImGui::PopFont();
-
-    ImGui::EndChild();
-
-    ImGui::PopStyleColor();
-
-    // Text area
-    ImGui::SetCursorPos(ImVec2(margin, header_height + margin));
-    ImGui::PushTextWrapPos(sticky_size.x - margin);
-    ImGui::TextUnformatted(m_text.c_str());
-    ImGui::PopTextWrapPos();
-
-    ImGui::EndChild();
-    // Cover hover case for input control
-    ImVec2 sticky_max =
-        ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
-    if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max))
-    {
-        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
-    }
-
     else
     {
-        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
-    }
+        // Round corners
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
 
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+        ImGui::SetCursorScreenPos(sticky_pos);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, bg_color);
+        ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+
+        ImGui::BeginChild(
+            ("StickyNoteChild##" + std::to_string(reinterpret_cast<uintptr_t>(this)))
+                .c_str(),
+            sticky_size, true);
+
+        // Header (accent bar)
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, accent_color);
+        ImGui::BeginChild("Header", ImVec2(sticky_size.x, header_height), false);
+
+        // Title (left)
+        ImGui::SetCursorPos(ImVec2(margin, 4.0f));
+        ImGui::TextUnformatted(m_title.c_str());
+
+        // Edit button (left of close)
+        ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size * 2 - margin,
+                                   (header_height - edit_btn_size) / 2));
+        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
+            FontType::kDefault));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+        if(ImGui::Button((std::string(ICON_EDIT) + "##" +
+                          std::to_string(reinterpret_cast<uintptr_t>(this)))
+                             .c_str(),
+                         ImVec2(edit_btn_size, edit_btn_size)))
+        {
+            EventManager::GetInstance()->AddEvent(
+                std::make_shared<StickyNoteEvent>(m_id, m_project_id));
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::PopFont();
+
+        // Close/Minimize button (far right)
+        ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size - margin / 2,
+                                   (header_height - edit_btn_size) / 2));
+        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
+            FontType::kDefault));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+        if(ImGui::Button(
+               (std::string(ICON_X_CIRCLED) + "##icon_switch_" + std::to_string(m_id))
+                   .c_str(),
+               ImVec2(edit_btn_size, edit_btn_size)))
+        {
+            m_sticky_style = true;
+        }
+        ImGui::PopStyleColor(3);
+        ImGui::PopFont();
+
+        ImGui::EndChild();
+
+        ImGui::PopStyleColor();
+
+        // Text area
+        ImGui::SetCursorPos(ImVec2(margin, header_height + margin));
+        ImGui::PushTextWrapPos(sticky_size.x - margin);
+        ImGui::TextUnformatted(m_text.c_str());
+        ImGui::PopTextWrapPos();
+
+        ImGui::EndChild();
+        // Cover hover case for input control
+        ImVec2 sticky_max =
+            ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
+        if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max))
+        {
+            TimelineFocusManager::GetInstance().RequestLayerFocus(
+                Layer::kInteractiveLayer);
+        }
+
+        else
+        {
+            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
+        }
+
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(2);
+    }
 }
 
 bool
-StickyNote::HandleDrag(const ImVec2&                               window_position,
-                       std::shared_ptr<TimePixelTransform> conversion_manager, int& dragged_id)
+StickyNote::HandleDrag(const ImVec2&                       window_position,
+                       std::shared_ptr<TimePixelTransform> conversion_manager,
+                       int&                                dragged_id)
 {
     if(!conversion_manager)
     {
@@ -205,6 +257,19 @@ StickyNote::HandleDrag(const ImVec2&                               window_positi
     ImVec2 sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);
 
+    if(m_sticky_style)
+    {
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
+            FontType::kDefault);
+        ImGui::PushFont(icon_font);
+        ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
+        ImGui::PopFont();
+
+        ImVec2 padding = ImGui::GetStyle().FramePadding;
+        // Button size = text size + frame padding * 2
+        sticky_max = ImVec2(sticky_pos.x + icon_size.x + padding.x * 2.0f,
+                            sticky_pos.y + icon_size.y + padding.y * 2.0f);
+    }
     const float handle_size = 12.0f;
     ImVec2 handle_pos = ImVec2(sticky_max.x - handle_size, sticky_max.y - handle_size);
     ImVec2 handle_max = ImVec2(sticky_max.x, sticky_max.y);
@@ -256,7 +321,7 @@ StickyNote::HandleDrag(const ImVec2&                               window_positi
 }
 
 bool
-StickyNote::HandleResize(const ImVec2&       window_position,
+StickyNote::HandleResize(const ImVec2&                       window_position,
                          std::shared_ptr<TimePixelTransform> conversion_manager)
 {
     if(!conversion_manager)
@@ -265,7 +330,7 @@ StickyNote::HandleResize(const ImVec2&       window_position,
         return false;
     }
     // Only allow resize if not dragging
-    if(m_dragging) return false;
+    if(m_dragging || m_sticky_style) return false;
 
     float  x          = conversion_manager->TimeToPixel(m_time_ns);
     float  y          = m_y_offset;

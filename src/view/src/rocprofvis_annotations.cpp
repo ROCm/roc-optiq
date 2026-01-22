@@ -45,10 +45,15 @@ AnnotationsManagerProjectSettings::FromJson()
             note_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X].getNumber());
         double v_max = static_cast<double>(
             note_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X].getNumber());
+        
+        bool sticky_style = true;
+        if (note_json.contains("sticky_style") && note_json["sticky_style"].isBool()) {
+            sticky_style = note_json["sticky_style"].getBool();
+        }
 
         ImVec2 size(size_x, size_y);
         m_annotations_manager.AddSticky(time_ns, y_offset, size, text, title, v_min,
-                                        v_max);
+                                        v_max, sticky_style);
     }
 }
 
@@ -70,6 +75,7 @@ AnnotationsManagerProjectSettings::ToJson()
         sticky_json[JSON_KEY_ANNOTATION_ID]               = notes[i].GetID();
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X] = notes[i].GetVMinX();
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X] = notes[i].GetVMaxX();
+        sticky_json["sticky_style"]                       = notes[i].GetStickyStyle();
 
         m_settings_json[JSON_KEY_ANNOTATIONS][i] = sticky_json;
     }
@@ -170,10 +176,10 @@ AnnotationsManager::Clear()
 void
 AnnotationsManager::AddSticky(double time_ns, float y_offset, const ImVec2& size,
                               const std::string& text, const std::string& title,
-                              double v_min, double v_max)
+                              double v_min, double v_max, bool sticky_style)
 {
     m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id, v_min,
-                                v_max);
+                                v_max, sticky_style);
 }
 
 bool

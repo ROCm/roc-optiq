@@ -19,7 +19,7 @@ class StickyNote
 public:
     StickyNote(double time_ns, float y_offset, const ImVec2& size,
                const std::string& text, const std::string& title,
-               const std::string& project_id, double v_min, double v_max);
+               const std::string& project_id, double v_min, double v_max, bool sticky_style = true);
 
     void Render(ImDrawList* draw_list, const ImVec2& window_position,
                 std::shared_ptr<TimePixelTransform> conversion_manager);
@@ -44,6 +44,7 @@ public:
     void               SetYOffset(float y) { m_y_offset = y; }
     double             GetVMinX() const;
     double             GetVMaxX() const;
+    bool               GetStickyStyle() const { return m_sticky_style; }
 
 private:
     double      m_time_ns;
@@ -60,6 +61,7 @@ private:
     double      m_v_min_x;
     double      m_v_max_x;
     bool        m_resizing = false;
+    bool        m_sticky_style;
 };
 
 }  // namespace View

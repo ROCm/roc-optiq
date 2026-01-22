@@ -15,6 +15,8 @@ TimelineModel::TimelineModel()
 : m_num_tracks(0)
 , m_min_ts(0.0)
 , m_max_ts(0.0)
+, m_histogram_max_value_global(DBL_MIN)
+, m_normalize_global(true)
 {}
 
 TimelineModel::~TimelineModel() { FreeAllTrackData(); }
@@ -185,6 +187,32 @@ TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool ad
             }
         }
 
+        if(m_histogram_max_value_global == DBL_MIN)
+        {
+            /*This block only exists to get the global maximum value for
+             * normalization*/
+            std::vector<double> global_sum_histogram(m_histogram.size(), 0.0);
+
+            for(const auto& kv : m_mini_map)
+            {
+                // Retrieve track metadata to check its type
+                const TrackInfo* track_info = GetTrack(kv.first);
+
+                // If it's a counter/sample track, skip adding it to the global histogram
+                if(track_info && track_info->track_type == kRPVControllerTrackTypeSamples)
+                {
+                    continue;
+                }
+
+                const std::vector<double>& mini_data = std::get<0>(kv.second);
+                for(size_t i = 0; i < mini_data.size() && i < global_sum_histogram.size(); ++i)
+                {
+                    global_sum_histogram[i] += mini_data[i];
+                }
+            }
+            m_histogram_max_value_global = *std::max_element(global_sum_histogram.begin(), global_sum_histogram.end());
+        }
+
         // Normalize histogram to [0, 1]
         NormalizeHistogram();
     }
@@ -197,9 +225,13 @@ TimelineModel::NormalizeHistogram()
     double max_value = *std::max_element(m_histogram.begin(), m_histogram.end());
     if(max_value > 0.0)
     {
-        for(auto& val : m_histogram)
+        double norm_factor = m_normalize_global ? m_histogram_max_value_global : max_value;
+        if(norm_factor > 0.0)
         {
-            val /= max_value;
+            for(auto& val : m_histogram)
+            {
+                val /= norm_factor;
+            }
         }
     }
 }
@@ -215,6 +247,7 @@ TimelineModel::Clear()
     FreeAllTrackData();
     m_histogram.clear();
     m_mini_map.clear();
+    m_histogram_max_value_global = DBL_MIN;
 }
 
 bool
@@ -234,9 +267,8 @@ TimelineModel::DumpTrack(uint64_t track_id) const
                         dynamic_cast<RawTrackSampleData*>(it->second);
                     if(track)
                     {
-                        const std::vector<TraceCounter>& buffer =
-                            track->GetData();
-                        int64_t i = 0;
+                        const std::vector<TraceCounter>& buffer = track->GetData();
+                        int64_t                          i      = 0;
                         for(const auto item : buffer)
                         {
                             spdlog::debug("{}, start_ts {}, value {}", i, item.m_start_ts,
@@ -257,9 +289,8 @@ TimelineModel::DumpTrack(uint64_t track_id) const
                         dynamic_cast<RawTrackEventData*>(it->second);
                     if(track)
                     {
-                        const std::vector<TraceEvent>& buffer =
-                            track->GetData();
-                        int64_t i = 0;
+                        const std::vector<TraceEvent>& buffer = track->GetData();
+                        int64_t                        i      = 0;
                         for(const auto item : buffer)
                         {
                             spdlog::debug(

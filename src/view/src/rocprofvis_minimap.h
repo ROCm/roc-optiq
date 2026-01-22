@@ -53,6 +53,8 @@ private:
 
     DataProvider& m_data_provider;
     TimelineView* m_timeline_view;
+    double        event_global_max;
+    bool          m_last_normalize_global;
 };
 
 }  // namespace View

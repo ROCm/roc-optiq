@@ -26,10 +26,16 @@ Minimap::Minimap(DataProvider& dp, TimelineView* tv)
 , m_show_counters(true)
 , m_raw_min_value(0.0)
 , m_raw_max_value(0.0)
-, m_data_provider(dp)
+,     m_data_provider(dp)
 , m_timeline_view(tv)
+, event_global_max(0.0)
+, m_last_normalize_global(true)
 {
     UpdateColorCache();
+    event_global_max =
+        m_data_provider.DataModel().GetTimeline().GetHistogramMaxValueGlobal();
+    m_last_normalize_global =
+        m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
 }
 void
 Minimap::UpdateColorCache()
@@ -178,7 +184,11 @@ Minimap::NormalizeRawData()
                 m_raw_max_value = std::max(m_raw_max_value, v);
             }
 
-    double range  = m_raw_max_value - m_raw_min_value;
+    event_global_max =
+        m_data_provider.DataModel().GetTimeline().GetHistogramMaxValueGlobal();
+    bool   is_global = m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
+    double range     = is_global ? event_global_max : (m_raw_max_value - m_raw_min_value);
+
     int    count  = 0;
     auto   tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
 
@@ -244,6 +254,14 @@ Minimap::GetColor(double v, rocprofvis_controller_track_type_t type) const
 void
 Minimap::Render()
 {
+    bool current_normalize_global =
+        m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
+    if(m_last_normalize_global != current_normalize_global)
+    {
+        m_last_normalize_global = current_normalize_global;
+        UpdateData();
+    }
+
     SettingsManager& sm = SettingsManager::GetInstance();
     ImGui::PushStyleColor(ImGuiCol_ChildBg, sm.GetColor(Colors::kBgPanel));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);

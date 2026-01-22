@@ -67,6 +67,7 @@ public:
     std::vector<double>&       GetHistogram() { return m_histogram; }
     void                       SetHistogram(std::vector<double>&& histogram);
     void                       ResizeHistogram(size_t size);
+    double                     GetHistogramMaxValueGlobal() const { return m_histogram_max_value_global; }
 
     // Mini-map access
     const std::map<uint64_t, std::tuple<std::vector<double>, bool>>& GetMiniMap() const
@@ -82,6 +83,8 @@ public:
     // Histogram updates
     void UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add);
     void NormalizeHistogram();
+    void ToggleNormalization() { m_normalize_global = !m_normalize_global; }
+    bool IsNormalizeGlobal() const { return m_normalize_global; }
 
     // Metadata modification
     std::unordered_map<uint64_t, TrackInfo>& GetMutableTrackMetadata()
@@ -106,6 +109,8 @@ private:
 
     std::vector<double>                                       m_histogram;
     std::map<uint64_t, std::tuple<std::vector<double>, bool>> m_mini_map;
+    double                                                    m_histogram_max_value_global;
+    bool                                                      m_normalize_global;
 };
 
 }  // namespace View

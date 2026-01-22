@@ -1239,11 +1239,59 @@ TimelineView::RenderHistogram()
     const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
     const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
 
-    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+    // Sidebar area with normalization toggle (left side, before histogram)
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
+    ImGui::BeginChild("HistogramSidebar", ImVec2(m_sidebar_size, kHistogramTotalHeight),
+                      false, ImGuiWindowFlags_NoScrollbar);
 
-    float splitter_size = 5.0f;
+    // Normalization Switch
+    TimelineModel& timeline_model = m_data_provider.DataModel().GetTimeline();
+    bool           is_global      = timeline_model.IsNormalizeGlobal();
+
+    float       switch_w      = 20.0f;
+    float       switch_h      = kHistogramTotalHeight;  // Full height
+    float       switch_x      = m_sidebar_size - switch_w;  // Hug right side, no gap
+
+    ImGui::SetCursorPos(ImVec2(switch_x, 0));
+
+    ImVec2      p             = ImGui::GetCursorScreenPos();
+    ImDrawList* sidebar_draw  = ImGui::GetWindowDrawList();
+
+    // Interaction
+    ImGui::InvisibleButton("##NormalizeSwitch", ImVec2(switch_w, switch_h));
+    if(ImGui::IsItemClicked())
+    {
+        timeline_model.ToggleNormalization();
+        timeline_model.UpdateHistogram({}, false);
+    }
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(is_global ? "Normalization: Global Max"
+                                    : "Normalization: Local Max");
+    }
+
+    // Visuals
+    ImU32 bg_col   = ImGui::GetColorU32(ImGuiCol_FrameBg);
+    ImU32 knob_col = m_settings.GetColor(Colors::kAccentRedActive);
+
+    // Background
+    sidebar_draw->AddRectFilled(p, ImVec2(p.x + switch_w, p.y + switch_h), bg_col);
+
+    // Knob (Up = Global, Down = Local)
+    float knob_h = switch_h / 2.0f;
+    float knob_y = is_global ? p.y : p.y + knob_h;
+
+    sidebar_draw->AddRectFilled(ImVec2(p.x + 2, knob_y + 2),
+                                ImVec2(p.x + switch_w - 2, knob_y + knob_h - 2), knob_col);
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
 
     // Vertical splitter
+    float splitter_size = 5.0f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
     ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
                       false);

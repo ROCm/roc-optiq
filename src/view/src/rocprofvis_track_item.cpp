@@ -616,7 +616,7 @@ TrackItem::SetTrackName(const TrackInfo* track_info)
         case TrackInfo::Topology::Counter:
         {
 
-            m_name += track_info->sub_name;
+            m_name += track_info->main_name + ":" + track_info->sub_name;
             break;
         }
         default:

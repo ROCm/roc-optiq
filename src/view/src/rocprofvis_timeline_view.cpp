@@ -1152,11 +1152,12 @@ TimelineView::MakeGraphView()
 
     std::vector<const TrackInfo*> track_list    = tlm.GetTrackList();
     bool                          project_valid = m_project_settings.Valid();
+    std::vector<uint64_t>         hidden_tracks;
 
     for(int i = 0; i < track_list.size(); i++)
     {
         const TrackInfo* track_info = track_list[i];
-        bool                display    = true;
+        bool             display    = true;
 
         if(project_valid)
         {
@@ -1170,15 +1171,21 @@ TimelineView::MakeGraphView()
             display    = m_project_settings.DisplayTrack(track_id_at_index);
         }
 
-        if(!track_info)
+        if(track_info)
+        {
+            if(!display)
+            {
+                hidden_tracks.push_back(track_info->id);
+            }
+        }
+        else
         {
             // log warning (should this be an error?)
             spdlog::warn("Missing track meta data for track id {}", i);
             continue;
         }
 
-        TrackGraph graph = { GraphType::TYPE_FLAMECHART, display, false,
-                                     nullptr, false };
+        TrackGraph graph = { GraphType::TYPE_FLAMECHART, display, false, nullptr, false };
         switch(track_info->track_type)
         {
             case kRPVControllerTrackTypeEvents:
@@ -1214,6 +1221,9 @@ TimelineView::MakeGraphView()
             (*m_graphs)[track_info->index] = std::move(graph);
         }
     }
+
+    m_data_provider.DataModel().GetTimeline().UpdateHistogram(hidden_tracks, false);
+
     UpdateAllMaxMetaAreaSizes();
     m_histogram       = &tlm.GetHistogram();
     m_meta_map_made   = true;

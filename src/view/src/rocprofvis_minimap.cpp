@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_minimap.h"
+#include "imgui.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
@@ -11,7 +12,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include "imgui.h"
 
 namespace RocProfVis
 {
@@ -35,18 +35,19 @@ void
 Minimap::UpdateColorCache()
 {
     SettingsManager& sm = SettingsManager::GetInstance();
-    m_event_color_bins = {
+    m_event_color_bins  = {
         sm.GetColor(Colors::kMinimapBin1), sm.GetColor(Colors::kMinimapBin2),
         sm.GetColor(Colors::kMinimapBin3), sm.GetColor(Colors::kMinimapBin4),
         sm.GetColor(Colors::kMinimapBin5), sm.GetColor(Colors::kMinimapBin6),
         sm.GetColor(Colors::kMinimapBin7)
     };
-    m_counter_color_bins = {
-        sm.GetColor(Colors::kMinimapBinCounter1), sm.GetColor(Colors::kMinimapBinCounter2),
-        sm.GetColor(Colors::kMinimapBinCounter3), sm.GetColor(Colors::kMinimapBinCounter4),
-        sm.GetColor(Colors::kMinimapBinCounter5), sm.GetColor(Colors::kMinimapBinCounter6),
-        sm.GetColor(Colors::kMinimapBinCounter7)
-    };
+    m_counter_color_bins = { sm.GetColor(Colors::kMinimapBinCounter1),
+                             sm.GetColor(Colors::kMinimapBinCounter2),
+                             sm.GetColor(Colors::kMinimapBinCounter3),
+                             sm.GetColor(Colors::kMinimapBinCounter4),
+                             sm.GetColor(Colors::kMinimapBinCounter5),
+                             sm.GetColor(Colors::kMinimapBinCounter6),
+                             sm.GetColor(Colors::kMinimapBinCounter7) };
 }
 
 void
@@ -76,11 +77,13 @@ Minimap::UpdateData()
             std::copy(vec.begin(), vec.end(), data[i].begin());
 
             // Normalize sample tracks locally for minimap visualization
-            if(t->track_type == kRPVControllerTrackTypeSamples && t->max_value > 0.0)
+            if(t->track_type == kRPVControllerTrackTypeSamples &&
+               t->max_value > t->min_value)
             {
+                double range = t->max_value - t->min_value;
                 for(double& val : data[i])
                 {
-                    val /= t->max_value;
+                    val = (val - t->min_value) / range;
                 }
             }
         }
@@ -210,8 +213,6 @@ Minimap::NormalizeRawData()
                     int bin = 1 + static_cast<int>(v * 6.999);
                     v       = static_cast<double>(bin);
                 }
-
-
             }
         }
         count++;
@@ -234,11 +235,11 @@ Minimap::GetColor(double v, rocprofvis_controller_track_type_t type) const
     {
         return m_counter_color_bins[bin - 1];
     }
-    else 
+    else
     {
         return m_event_color_bins[bin - 1];
     }
- }
+}
 
 void
 Minimap::Render()
@@ -251,7 +252,7 @@ Minimap::Render()
     float  pad         = 8.0f;
     float  legend_w    = 120.0f;
     float  top_padding = 5.0f;
-    ImVec2 avail    = ImGui::GetContentRegionAvail();
+    ImVec2 avail       = ImGui::GetContentRegionAvail();
 
     if(ImGui::BeginChild("Minimap", avail, true))
     {
@@ -526,10 +527,12 @@ Minimap::RenderLegend(float w, float h)
     };
 
     // Event Density (Left of bar 1)
-    DrawRotatedText("Event Density", ImVec2(bar_x1 - gap * 3.0f, bar_y + bar_h * 0.5f), !m_show_events);
+    DrawRotatedText("Event Density", ImVec2(bar_x1 - gap * 3.0f, bar_y + bar_h * 0.5f),
+                    !m_show_events);
 
     // Counter Density (Left of bar 2)
-    DrawRotatedText("Counter Density", ImVec2(bar_x2 - gap * 3.0f, bar_y + bar_h * 0.5f), !m_show_counters);
+    DrawRotatedText("Counter Density", ImVec2(bar_x2 - gap * 3.0f, bar_y + bar_h * 0.5f),
+                    !m_show_counters);
 }
 
 }  // namespace View

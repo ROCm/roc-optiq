@@ -40,6 +40,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 , m_chunk_duration_ns(TimeConstants::ns_per_s * 30)  // Default chunk duration
 , m_tpt(tpt)  
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
+, m_meta_area_label("")
 , m_pill("", false, false)
 {
     if(m_track_project_settings.Valid())
@@ -608,11 +609,10 @@ TrackItem::SetTrackName(const TrackInfo* track_info)
         {
             m_name += "Sampled ";
             std::string lower_case_sub_name = track_info->sub_name;
-            std::transform(
-                lower_case_sub_name.begin(), lower_case_sub_name.end(), lower_case_sub_name.begin(),
-                [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            });
+            std::transform(lower_case_sub_name.begin(), lower_case_sub_name.end(),
+                           lower_case_sub_name.begin(), [](unsigned char c) {
+                               return static_cast<char>(std::tolower(c));
+                           });
             m_name += lower_case_sub_name;
             break;
         }
@@ -725,21 +725,26 @@ Pill::Pill(const std::string& label, bool shown, bool active)
 , m_active(active)
 , m_font_changed_token(static_cast<uint64_t>(-1))
 {
+    CalculatePillSize();
+
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        ImVec2 text_size = ImGui::CalcTextSize(m_pill_label.c_str());
-        m_pillbox_size =
-            ImVec2(text_size.x + 2 * m_padding_x, text_size.y + 2 * m_padding_y);
+        CalculatePillSize();
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+}
+
+Pill::~Pill() 
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), m_font_changed_token);
 }
 
 void
 Pill::SetLabel(const std::string& label)
 {
     m_pill_label = label;
-    ImVec2 text_size = ImGui::CalcTextSize(m_pill_label.c_str());
-    m_pillbox_size = ImVec2(text_size.x + 2 * m_padding_x, text_size.y + 2 * m_padding_y);
+    CalculatePillSize();
 }
 
 void
@@ -818,6 +823,13 @@ ImVec2
 Pill::GetPillSize()
 {
     return m_pillbox_size;
+}
+
+void
+Pill::CalculatePillSize()
+{
+    ImVec2 text_size = ImGui::CalcTextSize(m_pill_label.c_str());
+    m_pillbox_size = ImVec2(text_size.x + 2 * m_padding_x, text_size.y + 2 * m_padding_y);
 }
 
 }  // namespace View

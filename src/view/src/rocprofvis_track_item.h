@@ -46,6 +46,7 @@ class Pill
 {
 public:
     Pill(const std::string& label, bool shown, bool active);
+    ~Pill();
     void SetLabel(const std::string& label);
     void SetTooltipLabel(std::string label);
     void Activate();
@@ -57,6 +58,7 @@ public:
     ImVec2 GetPillSize();
 
 private:
+    void                            CalculatePillSize();
     bool                            m_show_pill_label;
     bool                            m_active;
     std::string                     m_pill_label;

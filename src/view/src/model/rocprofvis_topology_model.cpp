@@ -194,5 +194,45 @@ TopologyDataModel::Clear()
     ClearCounters();
 }
 
+std::string TopologyDataModel::GetDeviceTypeLabelForCounter(uint64_t counter_id) const
+{
+    const CounterInfo* counter_info = GetCounter(counter_id);
+    if(!counter_info)
+    {
+        return "Unknown Device";
+    }
+
+    const DeviceInfo* device_info = GetDevice(counter_info->device_id);
+    if(device_info)
+    {
+        switch (device_info->type)
+        {
+            case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeCPU:
+                return "CPU" + std::to_string(device_info->type_index);
+            case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeGPU:
+                return "GPU" + std::to_string(device_info->type_index);
+            default:
+                break;
+        }
+    }
+    return "Unknown Device";
+}
+
+std::string TopologyDataModel::GetDeviceProductLabelForCounter(uint64_t counter_id) const
+{
+    const CounterInfo* counter_info = GetCounter(counter_id);
+    if(!counter_info)
+    {
+        return "Unknown";
+    }
+
+    const DeviceInfo* device_info = GetDevice(counter_info->device_id);
+    if(device_info)
+    {
+        return device_info->product_name;
+    }
+    return "Unknown";
+}
+
 }  // namespace View
 }  // namespace RocProfVis

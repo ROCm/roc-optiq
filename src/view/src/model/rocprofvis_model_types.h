@@ -50,7 +50,9 @@ struct TrackInfo
     double min_value;  // minimum value in the track (for samples) or level (for events)
     double max_value;  // maximum value in the track (for samples) or level (for events)
     rocprofvis_handle_t* graph_handle;  // handle to the graph object owned by the track
-
+    std::string category;  // Category of the track
+    std::string main_name; // Track main process string (PID, GPUID, etc)
+    std::string sub_name;  // Track sub process string (TID, QueueID, PMC name)
     struct Topology
     {
         uint64_t node_id;     // ID of track's parent node

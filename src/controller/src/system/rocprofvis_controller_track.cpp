@@ -227,7 +227,6 @@ inline uint64_t hash_combine(uint64_t a, uint64_t b)
     return a;
 }
 
-
 uint32_t Track::GetNumberOfEventsForTimeRange(double start, double end)
 {
     rocprofvis_dm_trace_t trace = rocprofvis_dm_get_property_as_handle(
@@ -600,7 +599,6 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            
             default:
             {
                 result = UnhandledProperty(property);
@@ -610,6 +608,7 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+
 rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -661,12 +660,21 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerTrackName:
+        case kRPVControllerCategory:
         {
-            result = GetStdStringImpl(value, length, m_name);
+            result = GetStdStringImpl(value, length, m_category);
             break;
         }
-
+        case kRPVControllerMainName:
+        {
+            result = GetStdStringImpl(value, length, m_main_name);
+            break;
+        }
+        case kRPVControllerSubName:
+        {
+            result = GetStdStringImpl(value, length, m_sub_name);
+            break;
+        }
         case kRPVControllerTrackExtDataCategoryIndexed:
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
@@ -733,6 +741,7 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+
 rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -770,6 +779,7 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+
 rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -966,6 +976,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+
 rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -973,9 +984,21 @@ rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
-            case kRPVControllerTrackName:
+            case kRPVControllerCategory:
             {
-                m_name = value;
+                m_category = value;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerMainName:
+            {
+                m_main_name = value;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerSubName:
+            {
+                m_sub_name = value;
                 result = kRocProfVisResultSuccess;
                 break;
             }

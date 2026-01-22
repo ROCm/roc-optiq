@@ -47,15 +47,12 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
 
 FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
                                std::shared_ptr<TimelineSelection> timeline_selection,
-                               uint64_t id, std::string name, float level_min,
-                               float level_max, std::shared_ptr<TimePixelTransform> tpt)
-: TrackItem(dp, id, name, tpt)
+                               uint64_t track_id, std::shared_ptr<TimePixelTransform> tpt)
+: TrackItem(dp, track_id, tpt)
 , m_event_color_mode(EventColorMode::kByEventName)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
 , m_timeline_selection(timeline_selection)
-, m_min_level(level_min)
-, m_max_level(level_max)
 , m_deferred_click_handled(false)
 , m_has_drawn_tool_tip(false)
 , m_flame_track_project_settings(dp.GetTraceFilePath(), *this)
@@ -69,30 +66,21 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
         spdlog::error("FlameTrackItem: m_tpt shared_ptr is null, cannot construct");
         return;
     }
+    const TrackInfo* track_info =
+        m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
+
+    if(!track_info)
+    {
+        spdlog::error("FlameTrackItem: TrackInfo is null for track_id {}", m_track_id);
+        return;
+    }
+
+    m_min_level = static_cast<float>(track_info->min_value);
+    m_max_level = static_cast<float>(track_info->max_value);
+
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
     };
-
-      // Check if thread is main thread.
-    const TrackInfo* track_info = m_data_provider.DataModel().GetTimeline().GetTrack(m_id);
-
-    if(track_info != nullptr)
-    {
-        if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread)
-        {
-            const ThreadInfo* thread_info =
-                m_data_provider.DataModel().GetTopology().GetInstrumentedThread(track_info->topology.id);
-            if(thread_info->tid == track_info->topology.process_id)
-            {
-                m_show_pill_label = true;
-                m_pill_label      = "MAIN";
-            }
-        }
-    }
-    else
-    {
-        spdlog::error("TrackItem: Invalid track id {}", m_id);
-    }
 
     // Subscribe to timeline selection changed event
     m_timeline_event_selection_changed_token = EventManager::GetInstance()->Subscribe(
@@ -170,13 +158,13 @@ FlameTrackItem::ReleaseData()
 bool
 FlameTrackItem::ExtractPointsFromData()
 {
-    const RawTrackData* rtd = m_data_provider.DataModel().GetTimeline().GetTrackData(m_id);
+    const RawTrackData* rtd = m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id);
 
     // If no raw track data is found, this means the track was unloaded before the
     // response was processed
     if(!rtd)
     {
-        spdlog::error("No raw track data found for track {}", m_id);
+        spdlog::error("No raw track data found for track {}", m_track_id);
         // Reset the request state to idle
         m_request_state = TrackDataRequestState::kIdle;
         return false;
@@ -186,7 +174,7 @@ FlameTrackItem::ExtractPointsFromData()
 
     if(!event_track)
     {
-        spdlog::debug("Invalid track data type for track {}", m_id);
+        spdlog::debug("Invalid track data type for track {}", m_track_id);
         m_request_state = TrackDataRequestState::kError;
         return false;
     }
@@ -198,7 +186,7 @@ FlameTrackItem::ExtractPointsFromData()
 
     if(event_track->GetData().empty())
     {
-        spdlog::debug("No data for track {}", m_id);
+        spdlog::debug("No data for track {}", m_track_id);
         return false;
     }
 
@@ -396,8 +384,8 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
             }
 
             chart_item.selected
-                ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id.uuid)
-                : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id.uuid);
+                ? m_timeline_selection->SelectTrackEvent(m_track_id, chart_item.event.m_id.uuid)
+                : m_timeline_selection->UnselectTrackEvent(m_track_id, chart_item.event.m_id.uuid);
             // Always reset layer clicked after handling
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }

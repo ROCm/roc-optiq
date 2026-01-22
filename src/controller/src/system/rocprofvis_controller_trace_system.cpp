@@ -177,22 +177,27 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                     Track* track =
                                         new Track(type, track_id, dm_track_handle, this);
                                     {
-                                        std::string dm_track_name =
+                                        std::string category =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackCategoryEnumCharPtr, 0);
-                                        dm_track_name += ":";
-                                        dm_track_name +=
+
+                                        track->SetString(kRPVControllerCategory, 0,
+                                                         category.c_str());
+
+                                        std::string main_name =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackMainProcessNameCharPtr, 0);
-                                        dm_track_name += ":";
-                                        dm_track_name +=
+                                        track->SetString(kRPVControllerMainName, 0,
+                                                         main_name.c_str());
+
+                                        std::string sub_name =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackSubProcessNameCharPtr, 0);
-                                        track->SetString(kRPVControllerTrackName, 0,
-                                                         dm_track_name.c_str());
+                                        track->SetString(kRPVControllerSubName, 0,
+                                                         sub_name.c_str());
 
                                         uint64_t num_records =
                                             rocprofvis_dm_get_property_as_uint64(

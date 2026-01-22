@@ -771,8 +771,15 @@ DataProvider::HandleLoadTrackMetaData()
                                         ? kRPVControllerTrackTypeSamples
                                         : kRPVControllerTrackTypeEvents;
 
-            // get track name
-            result = GetString(track, kRPVControllerTrackName, 0, track_info.name);
+            result = GetString(track, kRPVControllerCategory, 0, track_info.category);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = GetString(track, kRPVControllerMainName, 0,
+                               track_info.main_name);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            
+            result = GetString(track, kRPVControllerSubName, 0,
+                               track_info.sub_name);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             result = rocprofvis_controller_get_double(

@@ -40,7 +40,6 @@ protected:
                                  rocprofvis_db_progress_percent_t progress_percent,
                                  rocprofvis_db_status_t           status,
                                  rocprofvis_db_status_message_t message, void* user_data);
-
 };
 
 }  // namespace Controller

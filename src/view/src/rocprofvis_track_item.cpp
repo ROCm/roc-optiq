@@ -283,9 +283,7 @@ TrackItem::RenderMetaArea()
         ImVec2 text_size = ImGui::CalcTextSize(
             m_meta_area_label.c_str(), nullptr, false, available_for_text);
 
-        auto available_y = content_size.y - text_size.y;
-        auto pill_height = m_pill.GetPillSize().y;
-        if(available_y < pill_height)
+        if(content_size.y - text_size.y < m_pill.GetPillSize().y)
             m_pill.Hide();
         else
             m_pill.Show();

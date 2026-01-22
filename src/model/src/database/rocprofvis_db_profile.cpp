@@ -1844,7 +1844,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
 
             if (kRocProfVisDmResultSuccess == result)
             {
-                // let's linear interpolation for all missing buckets in counter's track histogram
+                // use last known value for all missing buckets in counter's track histogram
                 for (int i = 0; i < NumTracks(); i++)
                 {
                     auto & data = TrackPropertiesAt(i)->histogram;
@@ -1859,16 +1859,9 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                             uint32_t x0 = it->first;
                             uint32_t x1 = next->first;
                             double   y0 = it->second.second;
-                            double   y1 = next->second.second;
 
-                            uint32_t dx = x1 - x0;
-
-                            if (dx > 1) {
-                                double step = (y1 - y0) / dx;
-
-                                for (uint32_t x = x0 + 1; x < x1; ++x) {
-                                    data.emplace(x, std::make_pair(0, y0 + step * (x - x0)));
-                                }
+                            for (uint32_t x = x0 + 1; x < x1; ++x) {
+                                data.emplace(x, std::make_pair(0, y0));
                             }
 
                             it = next;

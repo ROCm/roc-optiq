@@ -26,13 +26,13 @@ Minimap::Minimap(DataProvider& dp, TimelineView* tv)
 , m_show_counters(true)
 , m_raw_min_value(0.0)
 , m_raw_max_value(0.0)
-,     m_data_provider(dp)
+, m_data_provider(dp)
 , m_timeline_view(tv)
-, event_global_max(0.0)
+, m_event_global_max(0.0)
 , m_last_normalize_global(true)
 {
     UpdateColorCache();
-    event_global_max =
+    m_event_global_max =
         m_data_provider.DataModel().GetTimeline().GetHistogramMaxValueGlobal();
     m_last_normalize_global =
         m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
@@ -184,10 +184,10 @@ Minimap::NormalizeRawData()
                 m_raw_max_value = std::max(m_raw_max_value, v);
             }
 
-    event_global_max =
+    m_event_global_max =
         m_data_provider.DataModel().GetTimeline().GetHistogramMaxValueGlobal();
     bool   is_global = m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
-    double range     = is_global ? event_global_max : (m_raw_max_value - m_raw_min_value);
+    double range     = is_global ? m_event_global_max : (m_raw_max_value - m_raw_min_value);
 
     int    count  = 0;
     auto   tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();

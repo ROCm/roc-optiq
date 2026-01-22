@@ -210,7 +210,12 @@ TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool ad
                     global_sum_histogram[i] += mini_data[i];
                 }
             }
-            m_histogram_max_value_global = *std::max_element(global_sum_histogram.begin(), global_sum_histogram.end());
+            if(!global_sum_histogram.empty())
+            {
+                m_histogram_max_value_global =
+                    *std::max_element(global_sum_histogram.begin(),
+                                      global_sum_histogram.end());
+            }
         }
 
         // Normalize histogram to [0, 1]

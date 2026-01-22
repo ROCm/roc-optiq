@@ -8,6 +8,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include <algorithm>
 #include <spdlog/spdlog.h>
 
@@ -20,7 +21,7 @@ static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
                        const std::string& text, const std::string& title,
                        const std::string& project_id, double v_min, double v_max,
-                       bool sticky_style)
+                       bool is_minimized)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
 , m_size(size)
@@ -31,7 +32,7 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 , m_is_visible(true)
 , m_v_min_x(v_min)
 , m_v_max_x(v_max)
-, m_sticky_style(sticky_style)
+, m_is_minimized(is_minimized)
 {
     s_unique_id_counter = s_unique_id_counter + 1;
 }
@@ -129,7 +130,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     // Set the cursor to the sticky note position inside the parent window
     ImGui::SetCursorScreenPos(sticky_pos);
 
-    if(m_sticky_style)
+    if(m_is_minimized)
     {
         // Wrap in child window to enable inputs (parent has NoInputs)
         std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
@@ -139,23 +140,39 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
             FontType::kDefault);
         ImGui::PushFont(icon_font);
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-        if(ImGui::Button(
-               (std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str()))
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::Button(
+            (std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str());
+        // Use drag check to prevent click during drag operations
+        if(ImGui::IsItemHovered() && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
         {
-            m_sticky_style = false;
+            m_is_minimized = false;
         }
         ImGui::PopStyleColor(3);
         ImGui::PopFont();
+
+        // Calculate icon button bounds for focus handling
+        ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
+        ImVec2 padding   = ImGui::GetStyle().FramePadding;
+        ImVec2 btn_max   = ImVec2(sticky_pos.x + icon_size.x + padding.x * 2.0f,
+                                  sticky_pos.y + icon_size.y + padding.y * 2.0f);
+        if(ImGui::IsMouseHoveringRect(sticky_pos, btn_max))
+        {
+            TimelineFocusManager::GetInstance().RequestLayerFocus(
+                Layer::kInteractiveLayer);
+        }
+        else
+        {
+            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
+        }
+
         ImGui::EndChild();
     }
     else
     {
         // Round corners
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
-
-        ImGui::SetCursorScreenPos(sticky_pos);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, bg_color);
         ImGui::PushStyleColor(ImGuiCol_Border, border_color);
@@ -198,14 +215,14 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
             FontType::kDefault));
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
         if(ImGui::Button(
                (std::string(ICON_X_CIRCLED) + "##icon_switch_" + std::to_string(m_id))
                    .c_str(),
                ImVec2(edit_btn_size, edit_btn_size)))
         {
-            m_sticky_style = true;
+            m_is_minimized = true;
         }
         ImGui::PopStyleColor(3);
         ImGui::PopFont();
@@ -257,7 +274,7 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     ImVec2 sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);
 
-    if(m_sticky_style)
+    if(m_is_minimized)
     {
         ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
             FontType::kDefault);
@@ -330,7 +347,7 @@ StickyNote::HandleResize(const ImVec2&                       window_position,
         return false;
     }
     // Only allow resize if not dragging
-    if(m_dragging || m_sticky_style) return false;
+    if(m_dragging || m_is_minimized) return false;
 
     float  x          = conversion_manager->TimeToPixel(m_time_ns);
     float  y          = m_y_offset;

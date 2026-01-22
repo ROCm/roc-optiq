@@ -240,8 +240,11 @@ TrackItem::RenderMetaArea()
         }
 
         // Reordering grip decoration
-        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
+        
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
+        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
+        float arrow_width       = ImGui::GetTextLineHeight();
+
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
@@ -249,7 +252,6 @@ TrackItem::RenderMetaArea()
 
         ImGui::TextUnformatted(ICON_GRID);
 
-        
         ImGui::PopFont();
 
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
@@ -269,28 +271,27 @@ TrackItem::RenderMetaArea()
         //         }
         //     }
         // }
-        float occupied_space =
-            m_meta_area_scale_width + (menu_button_width + 2 * m_metadata_padding.x);
-        ImGui::PushTextWrapPos(content_size.x - occupied_space);
-
         ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
-
         ImGui::PushFont(large_font);
 
-        ImVec2 unwrapped_text_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
-        float  availble_space_for_text =
-            content_size.x - grid_icon_width - occupied_space - 3 * m_metadata_padding.x;
+        float available_for_text =
+            content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
+            4.0f * m_metadata_padding.x + 2.0f);
 
-        if(unwrapped_text_size.x > availble_space_for_text)
+        if(available_for_text < 0.0f) available_for_text = 0.0f;
+
+        ImVec2 unwrapped_text_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
+        if(unwrapped_text_size.x > available_for_text)
             m_pill.Hide();
         else
             m_pill.Show();
 
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + available_for_text);
+
         ImGui::TextUnformatted(m_meta_area_label.c_str());
 
-        ImGui::PopFont();
-
         ImGui::PopTextWrapPos();
+        ImGui::PopFont();
 
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
@@ -320,7 +321,6 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
 
-        // Render MAIN pillbox for main thread tracks
         m_pill.RenderPillLabel(content_size, m_settings, m_reorder_grip_width);
     }
     ImGui::EndChild();  // end metadata area
@@ -531,28 +531,57 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 void
 TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
-    if(track_info->topology.type == TrackInfo::Topology::InstrumentedThread ||
-       track_info->topology.type == TrackInfo::Topology::SampledThread)
+    switch (track_info->topology.type)
     {
-        std::string process_name_path = m_data_provider.DataModel()
-                                            .GetTopology()
-                                            .GetProcess(track_info->topology.process_id)
-                                            ->command;
+        case TrackInfo::Topology::InstrumentedThread:
+        {
+            std::string process_name_path;
+            if(const ProcessInfo* process_info =
+                m_data_provider.DataModel().GetTopology().GetProcess(
+                        track_info->topology.process_id); process_info)
+            {
+                process_name_path += process_info->command;
+            }
 
-        std::string thread_id =
-            std::to_string(m_data_provider.DataModel()
-                               .GetTopology()
-                               .GetInstrumentedThread(track_info->topology.id)
-                               ->tid);
-        m_meta_area_label =
-            get_executable_name(process_name_path) + " (" + thread_id + ")";
+            std::string thread_id;
+            if(const ThreadInfo* thread_info =
+                   m_data_provider.DataModel().GetTopology().GetInstrumentedThread(
+                       track_info->topology.id); thread_info)
+            {
+                thread_id += std::to_string(thread_info->tid);
+            }
+            m_meta_area_label =
+                get_executable_name(process_name_path) + " (" + thread_id + ")";
+            break;
+        }
+        case TrackInfo::Topology::SampledThread:
+        {
+            std::string process_name_path;
+            if(const ProcessInfo* process_info =
+                   m_data_provider.DataModel().GetTopology().GetProcess(
+                       track_info->topology.process_id);
+               process_info)
+            {
+                process_name_path += process_info->command;
+            }
 
-        if(track_info->topology.type == TrackInfo::Topology::SampledThread)
-            m_meta_area_label += "(S)";
-    }
-    else
-    {
-        m_meta_area_label = m_name;
+            std::string thread_id;
+            if(const ThreadInfo* thread_info =
+                   m_data_provider.DataModel().GetTopology().GetSampledThread(
+                       track_info->topology.id);
+               thread_info)
+            {
+                thread_id += std::to_string(thread_info->tid);
+            }
+            m_meta_area_label =
+                get_executable_name(process_name_path) + " (" + thread_id + ")" + "(S)";
+            break;
+        }
+        default:
+        {
+            m_meta_area_label = m_name;
+            return;
+        }
     }
 }
 

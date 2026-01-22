@@ -220,8 +220,6 @@ Minimap::NormalizeRawData()
         min_val = m_raw_min_value;
     }
 
-    std::cout << m_event_global_max << "\n";
-    double x =  m_raw_max_value - m_raw_min_value;
     int    count  = 0;
 
     for(auto& row : m_downsampled_data)

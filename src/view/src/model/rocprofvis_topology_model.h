@@ -71,8 +71,31 @@ public:
     void Clear();
 
     // Helpers
-    std::string GetDeviceTypeLabelForCounter(uint64_t counter_id) const;
-    std::string GetDeviceProductLabelForCounter(uint64_t counter_id) const;
+
+    /* Gets the device ID associated with a given topology info ID and track type
+        @oaram info_id - id of the topology item ex: TrackInfo::topology.id
+        @oaram track_type - type of the topology item ex: TrackInfo::topology.type
+        @return device ID if found, INVALID_UINT64_INDEX otherwise
+    */
+    uint64_t GetDeviceIdByInfoId(uint64_t info_id, TrackInfo::TrackType track_type) const;
+    
+    /* Gets the device info associated with a given topology info ID and track type
+        @oaram info_id - id of the topology item ex: TrackInfo::topology.id
+        @oaram track_type - type of the topology item ex: TrackInfo::topology.type
+        @return a pointer to the device info if found, nullptr otherwise
+    */    
+    const DeviceInfo* GetDeviceByInfoId(uint64_t             info_id,
+                                        TrackInfo::TrackType track_type) const;
+
+    std::string GetDeviceTypeLabelByInfoId(
+        uint64_t info_id, TrackInfo::TrackType track_type,
+        std::string_view default_label = "Unknown Device") const;
+
+    std::string GetDeviceProductLabelByInfoId(
+        uint64_t info_id, TrackInfo::TrackType track_type,
+        std::string_view default_label = "Unknown") const;
+
+    bool GetDeviceTypeLabel(const DeviceInfo& device_info, std::string& label_out) const;
 
 private:
     std::unordered_map<uint64_t, NodeInfo>    m_nodes;

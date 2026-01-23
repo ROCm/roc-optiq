@@ -40,6 +40,16 @@ struct TrackGraph
 // Track Information
 struct TrackInfo
 {
+    enum TrackType
+    {
+        Unknown,
+        Queue,
+        Stream,
+        InstrumentedThread,
+        SampledThread,
+        Counter
+    };    
+
     uint64_t                           index;  // index of the track in the controller
     uint64_t                           id;     // id of the track in the controller
     std::string                        name;   // name of the track
@@ -58,15 +68,7 @@ struct TrackInfo
         uint64_t node_id;     // ID of track's parent node
         uint64_t process_id;  // ID of track's parent process
         uint64_t device_id;   // ID of track's parent device
-        enum
-        {
-            Unknown,
-            Queue,
-            Stream,
-            InstrumentedThread,
-            SampledThread,
-            Counter
-        } type;
+        TrackType type;
         uint64_t id;  // ID of queue/stream/thread/counter
     } topology;
 };

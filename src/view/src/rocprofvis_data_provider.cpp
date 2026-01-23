@@ -836,7 +836,7 @@ DataProvider::HandleLoadTrackMetaData()
                 result = rocprofvis_controller_get_object(
                     queue, kRPVControllerQueueProcessor, 0, &processor);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                track_info.topology.type = TrackInfo::Topology::Queue;
+                track_info.topology.type = TrackInfo::TrackType::Queue;
             }
             else if(stream)
             {
@@ -852,7 +852,7 @@ DataProvider::HandleLoadTrackMetaData()
                 result = rocprofvis_controller_get_object(
                     stream, kRPVControllerStreamProcessor, 0, &processor);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                track_info.topology.type = TrackInfo::Topology::Stream;
+                track_info.topology.type = TrackInfo::TrackType::Stream;
             }
             else if(thread)
             {
@@ -871,8 +871,8 @@ DataProvider::HandleLoadTrackMetaData()
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
                                   type != kRPVControllerThreadTypeUndefined);
                 track_info.topology.type = type == kRPVControllerThreadTypeInstrumented
-                                               ? TrackInfo::Topology::InstrumentedThread
-                                               : TrackInfo::Topology::SampledThread;
+                                               ? TrackInfo::TrackType::InstrumentedThread
+                                               : TrackInfo::TrackType::SampledThread;
             }
             else if(counter)
             {
@@ -887,11 +887,11 @@ DataProvider::HandleLoadTrackMetaData()
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 result = rocprofvis_controller_get_object(
                     queue, kRPVControllerCounterProcessor, 0, &processor);
-                track_info.topology.type = TrackInfo::Topology::Counter;
+                track_info.topology.type = TrackInfo::TrackType::Counter;
             }
             else
             {
-                track_info.topology.type = TrackInfo::Topology::Unknown;
+                track_info.topology.type = TrackInfo::TrackType::Unknown;
                 spdlog::warn("No thread/queue/counter binding found for track {}",
                              track_info.id);
             }

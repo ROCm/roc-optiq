@@ -8,6 +8,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr uint64_t INVALID_UINT64_INDEX = std::numeric_limits<uint64_t>::max();
+
 // Node access
 const NodeInfo*
 TopologyDataModel::GetNode(uint64_t node_id) const
@@ -194,44 +196,104 @@ TopologyDataModel::Clear()
     ClearCounters();
 }
 
-std::string TopologyDataModel::GetDeviceTypeLabelForCounter(uint64_t counter_id) const
+uint64_t
+TopologyDataModel::GetDeviceIdByInfoId(uint64_t             info_id,
+                                       TrackInfo::TrackType track_type) const
 {
-    const CounterInfo* counter_info = GetCounter(counter_id);
-    if(!counter_info)
-    {
-        return "Unknown Device";
-    }
+    uint64_t device_id = INVALID_UINT64_INDEX;
 
-    const DeviceInfo* device_info = GetDevice(counter_info->device_id);
-    if(device_info)
+    switch(track_type)
     {
-        switch (device_info->type)
+        case TrackInfo::TrackType::Counter:
         {
-            case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeCPU:
-                return "CPU" + std::to_string(device_info->type_index);
-            case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeGPU:
-                return "GPU" + std::to_string(device_info->type_index);
-            default:
-                break;
+            const CounterInfo* counter_info = GetCounter(info_id);
+            if(counter_info)
+            {
+                device_id = counter_info->device_id;
+            }
         }
+        break;
+        case TrackInfo::TrackType::Queue:
+        {
+            const QueueInfo* queue_info = GetQueue(info_id);
+            if(queue_info)
+            {
+                device_id = queue_info->device_id;
+            }
+        }
+        break;
+        case TrackInfo::TrackType::Stream:
+        {
+            const StreamInfo* stream_info = GetStream(info_id);
+            if(stream_info)
+            {
+                device_id = stream_info->device_id;
+            }
+        }
+        break;
+        default: break;
     }
-    return "Unknown Device";
+    return device_id;
 }
 
-std::string TopologyDataModel::GetDeviceProductLabelForCounter(uint64_t counter_id) const
+const DeviceInfo*
+TopologyDataModel::GetDeviceByInfoId(uint64_t             info_id,
+                                     TrackInfo::TrackType track_type) const
 {
-    const CounterInfo* counter_info = GetCounter(counter_id);
-    if(!counter_info)
-    {
-        return "Unknown";
-    }
+    DeviceInfo* device_info = nullptr;
+    uint64_t    device_id   = GetDeviceIdByInfoId(info_id, track_type);
 
-    const DeviceInfo* device_info = GetDevice(counter_info->device_id);
+    if(device_id != INVALID_UINT64_INDEX)
+    {
+        device_info = const_cast<DeviceInfo*>(GetDevice(device_id));
+    }
+    return device_info;
+}
+
+std::string
+TopologyDataModel::GetDeviceTypeLabelByInfoId(uint64_t             info_id,
+                                              TrackInfo::TrackType track_type,
+                                              std::string_view default_label) const
+{
+    const DeviceInfo* device_info = GetDeviceByInfoId(info_id, track_type);
+    if(device_info)
+    {
+        std::string label;
+        if(GetDeviceTypeLabel(*device_info, label))
+        {
+            return label;
+        }
+    }
+    return std::string(default_label);
+}
+
+std::string
+TopologyDataModel::GetDeviceProductLabelByInfoId(uint64_t             info_id,
+                                                 TrackInfo::TrackType track_type,
+                                                std::string_view default_label) const
+{
+    const DeviceInfo* device_info = GetDeviceByInfoId(info_id, track_type);
     if(device_info)
     {
         return device_info->product_name;
     }
-    return "Unknown";
+    return std::string(default_label);
+}
+
+bool
+TopologyDataModel::GetDeviceTypeLabel(const DeviceInfo& device_info,
+                                      std::string&      label_out) const
+{
+    switch(device_info.type)
+    {
+        case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeCPU:
+            label_out = "CPU" + std::to_string(device_info.type_index);
+            return true;
+        case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeGPU:
+            label_out = "GPU" + std::to_string(device_info.type_index);
+            return true;
+        default: return false;
+    }
 }
 
 }  // namespace View

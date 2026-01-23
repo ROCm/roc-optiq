@@ -500,7 +500,7 @@ TrackTopology::UpdateGraphs()
                 const uint64_t& index      = track->index;
                 switch(track->topology.type)
                 {
-                    case TrackInfo::Topology::Queue:
+                    case TrackInfo::TrackType::Queue:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -508,7 +508,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case TrackInfo::Topology::Stream:
+                    case TrackInfo::TrackType::Stream:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -516,7 +516,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case TrackInfo::Topology::InstrumentedThread:
+                    case TrackInfo::TrackType::InstrumentedThread:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -524,7 +524,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case TrackInfo::Topology::SampledThread:
+                    case TrackInfo::TrackType::SampledThread:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -532,7 +532,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case TrackInfo::Topology::Counter:
+                    case TrackInfo::TrackType::Counter:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]

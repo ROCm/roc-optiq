@@ -96,7 +96,7 @@ typedef struct rocprofvis_db_sqlite_rocpd_table_query_format
 
 typedef struct rocprofvis_db_sqlite_sample_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 8;
+    static constexpr const int NUM_PARAMS = 7;
     ProfileDatabase*           owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;

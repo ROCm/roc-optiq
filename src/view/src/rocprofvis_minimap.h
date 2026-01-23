@@ -15,6 +15,7 @@ namespace View
 
 class TimelineView;
 class DataProvider;
+struct TrackInfo;
 
 class Minimap : public RocWidget
 {
@@ -39,6 +40,7 @@ private:
     void  HandleNavigation(ImVec2 pos, ImVec2 size);
 
     std::vector<std::vector<double>> m_downsampled_data;
+    std::vector<const TrackInfo*>    m_visible_tracks;
     size_t              m_data_width;
     size_t              m_data_height;
     bool                m_data_valid;

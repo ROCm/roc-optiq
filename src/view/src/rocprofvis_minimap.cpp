@@ -67,16 +67,30 @@ Minimap::UpdateData()
 
     if(width == 0) return;
 
-    size_t height = tracks.size();
-
-    // Make copy needed to modify and render data without ruining source.
-    std::vector<std::vector<double>> data(height, std::vector<double>(width, 0.0));
-
+    // Build list of visible tracks only
+    m_visible_tracks.clear();
     for(size_t i = 0; i < tracks.size(); ++i)
     {
         const auto* t  = tracks[i];
         auto        it = map.find(t->id);
         if(it != map.end() && std::get<1>(it->second))
+        {
+            m_visible_tracks.push_back(t);
+        }
+    }
+
+    if(m_visible_tracks.empty()) return;
+
+    size_t height = m_visible_tracks.size();
+
+    // Make copy needed to modify and render data without ruining source.
+    std::vector<std::vector<double>> data(height, std::vector<double>(width, 0.0));
+
+    for(size_t i = 0; i < m_visible_tracks.size(); ++i)
+    {
+        const auto* t  = m_visible_tracks[i];
+        auto        it = map.find(t->id);
+        if(it != map.end())
         {
             const auto& vec = std::get<0>(it->second);
             // Copy data to the corresponding row
@@ -174,9 +188,8 @@ Minimap::NormalizeRawData()
 {
     if(m_downsampled_data.empty() || m_downsampled_data.front().empty()) return;
 
-    // Ensure tracks and downsampled data sizes match to avoid out-of-bounds access
-    auto tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
-    if(tracks.size() != m_downsampled_data.size())
+    // Ensure visible tracks and downsampled data sizes match to avoid out-of-bounds access
+    if(m_visible_tracks.size() != m_downsampled_data.size())
     {
         return;
     }
@@ -185,7 +198,7 @@ Minimap::NormalizeRawData()
     m_raw_max_value = std::numeric_limits<double>::lowest();
     for(size_t i = 0; i < m_downsampled_data.size(); ++i)
     {
-        if(tracks[i]->track_type == kRPVControllerTrackTypeEvents)
+        if(m_visible_tracks[i]->track_type == kRPVControllerTrackTypeEvents)
         {
             for(double v : m_downsampled_data[i])
             {
@@ -226,7 +239,7 @@ Minimap::NormalizeRawData()
     {
         for(double& v : row)
         {
-            if(tracks[count]->track_type == kRPVControllerTrackTypeEvents)
+            if(m_visible_tracks[count]->track_type == kRPVControllerTrackTypeEvents)
             {
                 if(v != 0)
                 {
@@ -334,14 +347,14 @@ Minimap::Render()
 void
 Minimap::RenderMinimapData(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
 {
-    auto tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
+    if(m_visible_tracks.empty() || m_data_width == 0 || m_data_height == 0) return;
 
     float bw = map_size.x / m_data_width, bh = map_size.y / m_data_height;
-    for(size_t y = 0; y < m_data_height; ++y)
+    for(size_t y = 0; y < m_data_height && y < m_visible_tracks.size(); ++y)
         for(size_t x = 0; x < m_data_width; ++x)
             if(double v = m_downsampled_data[y][x])
             {
-                if(tracks[y]->track_type == kRPVControllerTrackTypeSamples)
+                if(m_visible_tracks[y]->track_type == kRPVControllerTrackTypeSamples)
                 {
                     dl->AddRectFilled(
                         ImVec2(map_pos.x + x * bw, map_pos.y + y * bh),

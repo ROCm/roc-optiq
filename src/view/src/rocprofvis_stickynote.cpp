@@ -132,7 +132,6 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 
     if(m_is_minimized)
     {
-        // Wrap in child window to enable inputs (parent has NoInputs)
         std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
         ImGui::BeginChild(child_id.c_str(), m_size, false, ImGuiWindowFlags_None);
 
@@ -144,15 +143,14 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
         ImGui::Button(
             (std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str());
-        // Use drag check to prevent click during drag operations
         if(ImGui::IsItemHovered() && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
         {
-            m_is_minimized = false;
+            m_expanded_screen_pos = ImVec2(-1, -1);
+            m_is_minimized        = false;
         }
         ImGui::PopStyleColor(3);
         ImGui::PopFont();
 
-        // Calculate icon button bounds for focus handling
         ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
         ImVec2 padding   = ImGui::GetStyle().FramePadding;
         ImVec2 btn_max   = ImVec2(sticky_pos.x + icon_size.x + padding.x * 2.0f,
@@ -171,30 +169,35 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     }
     else
     {
-        // Check if expanded note would go outside window bounds
         ImVec2 window_size = ImGui::GetWindowSize();
-        float  note_end_x  = x + sticky_size.x;
-        float  note_end_y  = y + sticky_size.y;
-        float  adjusted_x  = x;
-        float  adjusted_y  = y;
+        float  adjusted_x;
+        float  adjusted_y;
 
-        // If note exceeds window width, move it back by size * 1.1
-        if(note_end_x > window_size.x)
+        if(m_expanded_screen_pos.x >= 0 && m_expanded_screen_pos.y >= 0)
         {
-            adjusted_x = x - (sticky_size.x * 1.1f);
-            adjusted_x = std::max(adjusted_x, 0.0f);
+            adjusted_x = m_expanded_screen_pos.x;
+            adjusted_y = m_expanded_screen_pos.y;
         }
-        // If note exceeds window height, move it back by size * 1.1
-        if(note_end_y > window_size.y)
+        else
         {
-            adjusted_y = y - (sticky_size.y * 1.1f);
-            adjusted_y = std::max(adjusted_y, 0.0f);
+            float note_end_x = x + sticky_size.x;
+            float note_end_y = y + sticky_size.y;
+            adjusted_x       = x;
+            adjusted_y       = y;
+
+            if(note_end_x > window_size.x)
+            {
+                adjusted_x = x - (sticky_size.x * 1.1f);
+                adjusted_x = std::max(adjusted_x, 0.0f);
+            }
+            if(note_end_y > window_size.y)
+            {
+                adjusted_y = y - (sticky_size.y * 1.1f);
+                adjusted_y = std::max(adjusted_y, 0.0f);
+            }
         }
 
-        // Update sticky_pos with adjusted values for hover detection
         sticky_pos = ImVec2(window_position.x + adjusted_x, window_position.y + adjusted_y);
-
-        // Set cursor to adjusted position
         ImGui::SetCursorPos(ImVec2(adjusted_x, adjusted_y));
 
         // Round corners
@@ -216,7 +219,6 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::SetCursorPos(ImVec2(margin, 4.0f));
         ImGui::TextUnformatted(m_title.c_str());
 
-
         // Edit button (left of close)
         ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size * 2 - margin,
                                    (header_height - edit_btn_size) / 2));
@@ -236,7 +238,6 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PopStyleColor(3);
         ImGui::PopFont();
 
-        // Close/Minimize button (far right)
         ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size - margin / 2,
                                    (header_height - edit_btn_size) / 2));
         ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
@@ -265,6 +266,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PopTextWrapPos();
 
         ImGui::EndChild();
+
         // Cover hover case for input control
         ImVec2 sticky_max =
             ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
@@ -294,36 +296,67 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         spdlog::error("StickyNote::HandleDrag: conversion_manager shared_ptr is null");
         return false;
     }
-    // Only allow drag for minimized (icon) state
-    if(m_resizing || !m_is_minimized) return false;
+    if(m_resizing) return false;
 
-    // Calculate icon position and bounds
-    float  x        = conversion_manager->TimeToPixel(m_time_ns);
-    float  y        = m_y_offset;
-    ImVec2 icon_pos = ImVec2(window_position.x + x, window_position.y + y);
+    ImVec2 drag_pos;
+    ImVec2 drag_max;
+    float  drag_w;
+    float  drag_h;
 
-    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-        FontType::kDefault);
-    ImGui::PushFont(icon_font);
-    ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
-    ImGui::PopFont();
+    float x = conversion_manager->TimeToPixel(m_time_ns);
+    float y = m_y_offset;
 
-    ImVec2 padding  = ImGui::GetStyle().FramePadding;
-    float  icon_w   = icon_size.x + padding.x * 2.0f;
-    float  icon_h   = icon_size.y + padding.y * 2.0f;
-    ImVec2 icon_max = ImVec2(icon_pos.x + icon_w, icon_pos.y + icon_h);
+    if(m_is_minimized)
+    {
+        ImVec2 icon_pos = ImVec2(window_position.x + x, window_position.y + y);
+
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
+            FontType::kDefault);
+        ImGui::PushFont(icon_font);
+        ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
+        ImGui::PopFont();
+
+        ImVec2 padding = ImGui::GetStyle().FramePadding;
+        drag_w         = icon_size.x + padding.x * 2.0f;
+        drag_h         = icon_size.y + padding.y * 2.0f;
+        drag_pos       = icon_pos;
+        drag_max       = ImVec2(icon_pos.x + drag_w, icon_pos.y + drag_h);
+    }
+    else
+    {
+        if(m_expanded_screen_pos.x >= 0 && m_expanded_screen_pos.y >= 0)
+        {
+            drag_pos = ImVec2(window_position.x + m_expanded_screen_pos.x,
+                              window_position.y + m_expanded_screen_pos.y);
+        }
+        else
+        {
+            drag_pos = ImVec2(window_position.x + x, window_position.y + y);
+        }
+        drag_w   = m_size.x;
+        drag_h   = m_size.y;
+        drag_max = ImVec2(drag_pos.x + drag_w, drag_pos.y + drag_h);
+    }
 
     ImVec2 mouse_pos      = ImGui::GetMousePos();
     bool   mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     bool   mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
-    // Start drag if clicking on icon
+    if(!m_is_minimized)
+    {
+        const float handle_size = 12.0f;
+        ImVec2      handle_pos  = ImVec2(drag_max.x - handle_size, drag_max.y - handle_size);
+        if(ImGui::IsMouseHoveringRect(handle_pos, drag_max))
+            return false;
+    }
+
+    // Only allow drag if no other note is being dragged or this is the one
     if((dragged_id == -1 || dragged_id == m_id) && !m_dragging &&
-       ImGui::IsMouseHoveringRect(icon_pos, icon_max) &&
+       ImGui::IsMouseHoveringRect(drag_pos, drag_max) &&
        ImGui::IsMouseClicked(ImGuiMouseButton_Left))
     {
         m_dragging    = true;
-        m_drag_offset = ImVec2(mouse_pos.x - icon_pos.x, mouse_pos.y - icon_pos.y);
+        m_drag_offset = ImVec2(mouse_pos.x - drag_pos.x, mouse_pos.y - drag_pos.y);
         dragged_id    = m_id;
         TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
     }
@@ -333,15 +366,20 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         float  new_x       = mouse_pos.x - window_position.x - m_drag_offset.x;
         float  new_y       = mouse_pos.y - window_position.y - m_drag_offset.y;
         ImVec2 window_size = ImGui::GetWindowSize();
+        new_x = std::clamp(new_x, 0.0f, window_size.x - drag_w);
+        new_y = std::clamp(new_y, 0.0f, window_size.y - drag_h);
 
-        // Clamp using icon size
-        new_x = std::clamp(new_x, 0.0f, window_size.x - icon_w);
-        new_y = std::clamp(new_y, 0.0f, window_size.y - icon_h);
-
-        m_time_ns  = conversion_manager->PixelToTime(new_x);
-        m_y_offset = new_y;
-        m_v_max_x  = conversion_manager->GetVMaxX();
-        m_v_min_x  = conversion_manager->GetVMinX();
+        if(m_is_minimized)
+        {
+            m_time_ns  = conversion_manager->PixelToTime(new_x);
+            m_y_offset = new_y;
+            m_v_max_x  = conversion_manager->GetVMaxX();
+            m_v_min_x  = conversion_manager->GetVMinX();
+        }
+        else
+        {
+            m_expanded_screen_pos = ImVec2(new_x, new_y);
+        }
 
         return true;
     }
@@ -368,9 +406,18 @@ StickyNote::HandleResize(const ImVec2&                       window_position,
     // Only allow resize if not dragging
     if(m_dragging || m_is_minimized) return false;
 
-    float  x          = conversion_manager->TimeToPixel(m_time_ns);
-    float  y          = m_y_offset;
-    ImVec2 sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
+    ImVec2 sticky_pos;
+    if(m_expanded_screen_pos.x >= 0 && m_expanded_screen_pos.y >= 0)
+    {
+        sticky_pos = ImVec2(window_position.x + m_expanded_screen_pos.x,
+                            window_position.y + m_expanded_screen_pos.y);
+    }
+    else
+    {
+        float x = conversion_manager->TimeToPixel(m_time_ns);
+        float y = m_y_offset;
+        sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
+    }
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);
 
     const float handle_size = 12.0f;

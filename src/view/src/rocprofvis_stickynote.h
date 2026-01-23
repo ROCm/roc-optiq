@@ -62,6 +62,7 @@ private:
     double      m_v_max_x;
     bool        m_resizing = false;
     bool        m_is_minimized;
+    ImVec2      m_expanded_screen_pos = ImVec2(-1, -1);  // Temporary position for expanded note (not saved)
 };
 
 }  // namespace View

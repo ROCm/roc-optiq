@@ -556,6 +556,26 @@ TimelineView::RenderSplitter()
 }
 
 void
+TimelineView::TimelineDragShimmy(int shimmy_amount)
+{
+
+
+    if (shimmy_amount < 0) {
+        // Shift the timeline to the left
+        m_tpt->SetViewTimeOffsetNs(
+            m_tpt->GetViewTimeOffsetNs() -
+            (m_tpt->GetVWidth() * 0.01));  // Shift by 10% of view width
+    }
+    else {
+        //shift the timeline to the right
+        m_tpt->SetViewTimeOffsetNs(
+            m_tpt->GetViewTimeOffsetNs() +
+            (m_tpt->GetVWidth() * 0.01));  // Shift by 10% of view width
+    }
+
+ }
+
+void
 TimelineView::RenderScrubber(ImVec2 screen_pos)
 {
     // Scrubber Line
@@ -707,14 +727,56 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             m_stop_user_interaction = true;
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
             float cursor_screen_position = mouse_pos.x - window_position.x;
-            m_highlighted_region.first   = m_tpt->PixelToTime(cursor_screen_position);
+            
+            // Clamp cursor position to valid graph area (excluding scrollbar)
+            float max_x = m_tpt->GetGraphSizeX() - scrollbar_width;
+            cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
+
+            float left_edge_threshold = max_x * 0.10f;
+            float right_edge_threshold = max_x * 0.90f;
+
+            if(cursor_screen_position < left_edge_threshold)
+            {
+                TimelineDragShimmy(-1);
+            }
+            else if(cursor_screen_position > right_edge_threshold)
+            {
+                TimelineDragShimmy(1);
+            }
+            
+            // Recalculate time value after potential shimmy to ensure alignment
+            // Re-read cursor position to account for any view changes
+            cursor_screen_position = mouse_pos.x - window_position.x;
+            cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
+            m_highlighted_region.first = m_tpt->PixelToTime(cursor_screen_position);
         }
         if(m_dragging_selection_end)
         {
             m_stop_user_interaction = true;
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
             float cursor_screen_position = mouse_pos.x - window_position.x;
-            m_highlighted_region.second  = m_tpt->PixelToTime(cursor_screen_position);
+            
+            // Clamp cursor position to valid graph area (excluding scrollbar)
+            float max_x = m_tpt->GetGraphSizeX() - scrollbar_width;
+            cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
+            
+            float left_edge_threshold = max_x * 0.10f;
+            float right_edge_threshold = max_x * 0.90f;
+            
+            if(cursor_screen_position < left_edge_threshold)
+            {
+                TimelineDragShimmy(-1);
+            }
+            else if(cursor_screen_position > right_edge_threshold)
+            {
+                TimelineDragShimmy(1);
+            }
+            
+            // Recalculate time value after potential shimmy to ensure alignment
+            // Re-read cursor position to account for any view changes
+            cursor_screen_position = mouse_pos.x - window_position.x;
+            cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
+            m_highlighted_region.second = m_tpt->PixelToTime(cursor_screen_position);
         }
     }
 
@@ -728,9 +790,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             window_position.x + m_tpt->TimeToPixel(m_highlighted_region.second);
 
         // Clamp to not overlap scrollbar
+        float min_x = window_position.x;
         float max_x = window_position.x + m_tpt->GetGraphSizeX() - scrollbar_width;
-        float clamped_start = std::min(normalized_start_box_highlighted, max_x);
-        float clamped_end   = std::min(normalized_start_box_highlighted_end, max_x);
+        float clamped_start = std::clamp(normalized_start_box_highlighted, min_x, max_x);
+        float clamped_end   = std::clamp(normalized_start_box_highlighted_end, min_x, max_x);
 
         draw_list->AddRectFilled(
             ImVec2(clamped_start, cursor_position.y),
@@ -1753,6 +1816,12 @@ TimelineView::HandleTopSurfaceTouch()
                 m_highlighted_region.second   = TimelineSelection::INVALID_SELECTION_TIME;
                 ImVec2 mouse_pos              = ImGui::GetMousePos();
                 float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
+                
+                // Clamp cursor position to valid graph area (excluding scrollbar)
+                float scrollbar_width = ImGui::GetStyle().ScrollbarSize;
+                float max_x = m_tpt->GetGraphSizeX() - scrollbar_width;
+                cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
+                
                 m_highlighted_region.first = m_tpt->PixelToTime(cursor_screen_position);
             }
             else if(!io.KeyCtrl)
@@ -1767,6 +1836,30 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 ImVec2 mouse_pos              = ImGui::GetMousePos();
                 float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
+                
+                // Clamp cursor position to valid graph area (excluding scrollbar)
+                float scrollbar_width = ImGui::GetStyle().ScrollbarSize;
+                float max_x = m_tpt->GetGraphSizeX() - scrollbar_width;
+                cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
+
+                float left_edge_threshold = max_x * 0.10f;
+                float right_edge_threshold = max_x * 0.90f;
+
+                if(cursor_screen_position < left_edge_threshold)
+                {
+                    TimelineDragShimmy(-1);
+                    offset_ns = m_tpt->GetViewTimeOffsetNs();
+                }
+                else if(cursor_screen_position > right_edge_threshold)
+                {
+                    TimelineDragShimmy(1);
+                    offset_ns = m_tpt->GetViewTimeOffsetNs();
+                }
+                
+                // Recalculate time value after potential shimmy to ensure alignment
+                // Re-read cursor position to account for any view changes
+                cursor_screen_position = mouse_pos.x - graph_area_min.x;
+                cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
                 m_highlighted_region.second = m_tpt->PixelToTime(cursor_screen_position);
             }
         }
@@ -1885,6 +1978,12 @@ TimelineView::HandleTopSurfaceTouch()
         {
             ImVec2 mouse_pos              = ImGui::GetMousePos();
             float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
+            
+            // Clamp cursor position to valid graph area (excluding scrollbar)
+            float scrollbar_width = ImGui::GetStyle().ScrollbarSize;
+            float max_x = m_tpt->GetGraphSizeX() - scrollbar_width;
+            cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
+            
             m_highlighted_region.second   = m_tpt->PixelToTime(cursor_screen_position);
         }
         else if(!io.KeyCtrl)

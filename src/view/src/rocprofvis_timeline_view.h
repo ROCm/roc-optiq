@@ -77,6 +77,7 @@ public:
 
     void           RenderGrid();
     float          GetScrollPosition();
+    void           TimelineDragShimmy(int shimmy_amount);
     void           RenderScrubber(ImVec2 screen_pos);
     void           RenderSplitter();
     void           RenderGraphView();

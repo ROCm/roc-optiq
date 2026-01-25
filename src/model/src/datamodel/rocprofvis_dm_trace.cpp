@@ -154,6 +154,80 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
 }
 
+rocprofvis_dm_result_t  Trace::DeleteEventProperty(     rocprofvis_dm_event_property_type_t type,
+    rocprofvis_dm_handle_t object) {
+    switch (type)
+    {
+    case kRPVDMEventFlowTrace:
+    {
+        // To delete single vector array element thread-safe, we must retain a local copy 
+        // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+        std::shared_ptr<FlowTrace> item;
+        {
+            TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type),__func__, this);
+            auto it = std::find_if(
+                m_flow_traces.begin(), m_flow_traces.end(),
+                [&object](std::shared_ptr<FlowTrace>& x) {
+                    return x.get() == object;
+                });
+            if (it == m_flow_traces.end())
+            {
+                return kRocProfVisDmResultNotLoaded;
+            }
+            item    = *it;
+            m_flow_traces.erase(it);
+        }
+        return kRocProfVisDmResultSuccess;
+    }
+    break;
+    case kRPVDMEventStackTrace:
+    {
+        // To delete single vector array element thread-safe, we must retain a local copy 
+        // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+        std::shared_ptr<StackTrace> item;
+        {
+            TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type), __func__, this);
+            auto             it =
+                std::find_if(m_stack_traces.begin(), m_stack_traces.end(),
+                    [&object](std::shared_ptr<StackTrace>& x) {
+                        return x.get() ==object;
+                    });
+            if(it == m_stack_traces.end())
+            {
+                return kRocProfVisDmResultNotLoaded;
+            }
+            item = *it;
+            m_stack_traces.erase(it);
+        }
+        return kRocProfVisDmResultSuccess;
+    }
+    break;
+    case kRPVDMEventExtData:
+    {
+        // To delete single vector array element thread-safe, we must retain a local copy 
+        // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+        std::shared_ptr<ExtData> item;
+        {
+            TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type), __func__, this);
+            auto             it =
+                std::find_if(m_ext_data.begin(), m_ext_data.end(),
+                    [&object](std::shared_ptr<ExtData>& x) {
+                        return x.get() == object;
+                    });
+            if(it == m_ext_data.end())
+            {
+                return kRocProfVisDmResultNotLoaded;
+            }
+            item = *it;
+            m_ext_data.erase(it);
+        }
+        return kRocProfVisDmResultSuccess;
+    }  
+    break;   
+    }
+    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
+}
+
 rocprofvis_dm_result_t  Trace::DeleteAllEventPropertiesFor(rocprofvis_dm_event_property_type_t type){
     switch(type)
     {

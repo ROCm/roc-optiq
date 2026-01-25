@@ -75,6 +75,11 @@ class Trace : public DmBase{
         // @param event_id - 60-bit event id and 4-bit operation type
         // @return status of operation 
         rocprofvis_dm_result_t                          DeleteEventPropertyFor(rocprofvis_dm_event_property_type_t type, rocprofvis_dm_event_id_t event_id);
+        // Method to delete flowtrace, stacktrace and extended data property objects for event
+        // @param type - property type (kEventFlowTrace, kEventStackTrace or kEventExtData)
+        // @param object reference
+        // @return status of operation 
+        rocprofvis_dm_result_t                          DeleteEventProperty(rocprofvis_dm_event_property_type_t type, rocprofvis_dm_handle_t object);
         // Method to delete flowtrace, stacktrace and extended data property objects for all events
         // @param type - property type (kEventFlowTrace, kEventStackTrace or kEventExtData)
         // @return status of operation 

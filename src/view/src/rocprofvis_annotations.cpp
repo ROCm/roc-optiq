@@ -47,8 +47,8 @@ AnnotationsManagerProjectSettings::FromJson()
             note_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X].getNumber());
         
         bool is_minimized = true;
-        if (note_json.contains("is_minimized") && note_json["is_minimized"].isBool()) {
-            is_minimized = note_json["is_minimized"].getBool();
+        if (note_json.contains(JSON_KEY_ANNOTATION_IS_MINIMIZED) && note_json[JSON_KEY_ANNOTATION_IS_MINIMIZED].isBool()) {
+            is_minimized = note_json[JSON_KEY_ANNOTATION_IS_MINIMIZED].getBool();
         }
 
         ImVec2 size(size_x, size_y);
@@ -75,7 +75,7 @@ AnnotationsManagerProjectSettings::ToJson()
         sticky_json[JSON_KEY_ANNOTATION_ID]               = notes[i].GetID();
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X] = notes[i].GetVMinX();
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X] = notes[i].GetVMaxX();
-        sticky_json["is_minimized"]                       = notes[i].IsMinimized();
+        sticky_json[JSON_KEY_ANNOTATION_IS_MINIMIZED]     = notes[i].IsMinimized();
 
         m_settings_json[JSON_KEY_ANNOTATIONS][i] = sticky_json;
     }

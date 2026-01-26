@@ -138,9 +138,9 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
             FontType::kDefault);
         ImGui::PushFont(icon_font);
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kTransparent));
         ImGui::Button(
             (std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str());
         if(ImGui::IsItemHovered() && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
@@ -224,9 +224,9 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
                                    (header_height - edit_btn_size) / 2));
         ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
             FontType::kDefault));
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kTransparent));
         if(ImGui::Button((std::string(ICON_EDIT) + "##" +
                           std::to_string(reinterpret_cast<uintptr_t>(this)))
                              .c_str(),
@@ -242,9 +242,9 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
                                    (header_height - edit_btn_size) / 2));
         ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
             FontType::kDefault));
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kTransparent));
         if(ImGui::Button(
                (std::string(ICON_X_CIRCLED) + "##icon_switch_" + std::to_string(m_id))
                    .c_str(),

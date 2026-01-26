@@ -559,22 +559,38 @@ TimelineView::RenderSplitter()
 void
 TimelineView::TimelineDragShimmy(int shimmy_amount)
 {
-
-
-    if (shimmy_amount < 0) {
-        // Shift the timeline to the left
-        m_tpt->SetViewTimeOffsetNs(
-            m_tpt->GetViewTimeOffsetNs() -
-            (m_tpt->GetVWidth() * 0.01));  // Shift by 10% of view width
+    // Get current view state (all in nanoseconds as double)
+    double view_offset = m_tpt->GetViewTimeOffsetNs();
+    double view_width  = m_tpt->GetVWidth();
+    double total_range = m_tpt->GetRangeX();
+    
+    // Calculate shimmy amount (1% of view width)
+    double shimmy_delta = view_width * 0.01;
+    
+    if(shimmy_amount < 0)
+    {
+        // Trying to shimmy left - only if there's more timeline to the left
+        if(view_offset > 0.0)
+        {
+            double new_offset = view_offset - shimmy_delta;
+            // Clamp to not go below 0
+            new_offset = std::max(new_offset, 0.0);
+            m_tpt->SetViewTimeOffsetNs(new_offset);
+        }
     }
-    else {
-        //shift the timeline to the right
-        m_tpt->SetViewTimeOffsetNs(
-            m_tpt->GetViewTimeOffsetNs() +
-            (m_tpt->GetVWidth() * 0.01));  // Shift by 10% of view width
+    else if(shimmy_amount > 0)
+    {
+        // Trying to shimmy right - only if there's more timeline to the right
+        double max_offset = total_range - view_width;
+        if(view_offset < max_offset)
+        {
+            double new_offset = view_offset + shimmy_delta;
+            // Clamp to not exceed max
+            new_offset = std::min(new_offset, max_offset);
+            m_tpt->SetViewTimeOffsetNs(new_offset);
+        }
     }
-
- }
+}
 
 void
 TimelineView::RenderScrubber(ImVec2 screen_pos)

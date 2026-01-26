@@ -1152,11 +1152,12 @@ TimelineView::MakeGraphView()
 
     std::vector<const TrackInfo*> track_list    = tlm.GetTrackList();
     bool                          project_valid = m_project_settings.Valid();
+    std::vector<uint64_t>         hidden_tracks;
 
     for(int i = 0; i < track_list.size(); i++)
     {
         const TrackInfo* track_info = track_list[i];
-        bool                display    = true;
+        bool             display    = true;
 
         if(project_valid)
         {
@@ -1170,15 +1171,21 @@ TimelineView::MakeGraphView()
             display    = m_project_settings.DisplayTrack(track_id_at_index);
         }
 
-        if(!track_info)
+        if(track_info)
+        {
+            if(!display)
+            {
+                hidden_tracks.push_back(track_info->id);
+            }
+        }
+        else
         {
             // log warning (should this be an error?)
             spdlog::warn("Missing track meta data for track id {}", i);
             continue;
         }
 
-        TrackGraph graph = { GraphType::TYPE_FLAMECHART, display, false,
-                                     nullptr, false };
+        TrackGraph graph = { GraphType::TYPE_FLAMECHART, display, false, nullptr, false };
         switch(track_info->track_type)
         {
             case kRPVControllerTrackTypeEvents:
@@ -1212,6 +1219,9 @@ TimelineView::MakeGraphView()
             (*m_graphs)[track_info->index] = std::move(graph);
         }
     }
+
+    m_data_provider.DataModel().GetTimeline().UpdateHistogram(hidden_tracks, false);
+
     UpdateAllMaxMetaAreaSizes();
     m_histogram       = &tlm.GetHistogram();
     m_meta_map_made   = true;
@@ -1227,11 +1237,59 @@ TimelineView::RenderHistogram()
     const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
     const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
 
-    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+    // Sidebar area with normalization toggle (left side, before histogram)
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
+    ImGui::BeginChild("HistogramSidebar", ImVec2(m_sidebar_size, kHistogramTotalHeight),
+                      false, ImGuiWindowFlags_NoScrollbar);
 
-    float splitter_size = 5.0f;
+    // Normalization Switch
+    TimelineModel& timeline_model = m_data_provider.DataModel().GetTimeline();
+    bool           is_global      = timeline_model.IsNormalizeGlobal();
+
+    float       switch_w      = 20.0f;
+    float       switch_h      = kHistogramTotalHeight;  // Full height
+    float       switch_x      = m_sidebar_size - switch_w;  // Hug right side, no gap
+
+    ImGui::SetCursorPos(ImVec2(switch_x, 0));
+
+    ImVec2      p             = ImGui::GetCursorScreenPos();
+    ImDrawList* sidebar_draw  = ImGui::GetWindowDrawList();
+
+    // Interaction
+    ImGui::InvisibleButton("##NormalizeSwitch", ImVec2(switch_w, switch_h));
+    if(ImGui::IsItemClicked())
+    {
+        timeline_model.ToggleNormalization();
+        timeline_model.UpdateHistogram({}, false);
+    }
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(is_global ? "Normalization: All Tracks"
+                                    : "Normalization: Visible Tracks");
+    }
+
+    // Visuals
+    ImU32 bg_col   = ImGui::GetColorU32(ImGuiCol_FrameBg);
+    ImU32 knob_col = m_settings.GetColor(Colors::kAccentRedActive);
+
+    // Background
+    sidebar_draw->AddRectFilled(p, ImVec2(p.x + switch_w, p.y + switch_h), bg_col);
+
+    // Knob (Up = Global, Down = Local)
+    float knob_h = switch_h / 2.0f;
+    float knob_y = is_global ? p.y : p.y + knob_h;
+
+    sidebar_draw->AddRectFilled(ImVec2(p.x + 2, knob_y + 2),
+                                ImVec2(p.x + switch_w - 2, knob_y + knob_h - 2), knob_col);
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
 
     // Vertical splitter
+    float splitter_size = 5.0f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
     ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
                       false);
@@ -1784,6 +1842,66 @@ float
 TimelineView::GetTotalTrackHeight() const
 {
     return m_track_height_sum;
+}
+
+float
+TimelineView::GetTrackViewportHeight() const
+{
+    return m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
+}
+
+void
+TimelineView::GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const
+{
+    start_fraction = 0.0f;
+    end_fraction   = 1.0f;
+
+    if(!m_graphs || m_graphs->empty()) return;
+
+    // Count displayed tracks and find visible range
+    int   displayed_count = 0;
+    float first_visible   = -1.0f;
+    float last_visible    = -1.0f;
+    float view_top        = static_cast<float>(m_scroll_position_y);
+    float view_bottom     = view_top + GetTrackViewportHeight();
+    float cumulative_y    = 0.0f;
+
+    for(int i = 0; i < static_cast<int>(m_graphs->size()); i++)
+    {
+        const auto& graph = (*m_graphs)[i];
+        if(!graph.display) continue;
+
+        float track_height = graph.chart->GetTrackHeight();
+        float track_top    = cumulative_y;
+        float track_bottom = cumulative_y + track_height;
+
+        // Check if this track overlaps with the viewport
+        if(track_bottom > view_top && track_top < view_bottom)
+        {
+            // Calculate fractional visibility within this track
+            float visible_top    = std::max(track_top, view_top);
+            float visible_bottom = std::min(track_bottom, view_bottom);
+
+            if(first_visible < 0.0f)
+            {
+                // First visible track - include partial
+                float partial = (visible_top - track_top) / track_height;
+                first_visible = static_cast<float>(displayed_count) + partial;
+            }
+            // Update last visible with partial coverage
+            float partial = (visible_bottom - track_top) / track_height;
+            last_visible  = static_cast<float>(displayed_count) + partial;
+        }
+
+        cumulative_y += track_height;
+        displayed_count++;
+    }
+
+    if(displayed_count > 0 && first_visible >= 0.0f)
+    {
+        start_fraction = first_visible / static_cast<float>(displayed_count);
+        end_fraction   = last_visible / static_cast<float>(displayed_count);
+    }
 }
 
 TimelineArrow&

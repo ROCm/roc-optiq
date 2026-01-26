@@ -773,7 +773,7 @@ DataProvider::ParseThreadData(rocprofvis_handle_t* thread_handle, ThreadInfo& th
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         result = rocprofvis_controller_get_double(
             thread_handle, kRPVControllerThreadEndTime, 0, &thread_info.end_time);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);            
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         result = rocprofvis_controller_get_uint64(thread_handle, kRPVControllerThreadTid,
                                                   0, &thread_info.tid);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);

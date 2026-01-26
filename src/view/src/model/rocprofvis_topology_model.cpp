@@ -242,12 +242,12 @@ const DeviceInfo*
 TopologyDataModel::GetDeviceByInfoId(uint64_t             info_id,
                                      TrackInfo::TrackType track_type) const
 {
-    DeviceInfo* device_info = nullptr;
+    const DeviceInfo* device_info = nullptr;
     uint64_t    device_id   = GetDeviceIdByInfoId(info_id, track_type);
 
     if(device_id != INVALID_UINT64_INDEX)
     {
-        device_info = const_cast<DeviceInfo*>(GetDevice(device_id));
+        device_info = GetDevice(device_id);
     }
     return device_info;
 }

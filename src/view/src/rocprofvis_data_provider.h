@@ -244,10 +244,11 @@ private:
     bool ParseProcessData(rocprofvis_handle_t* process_handle, ProcessInfo& process_info,
                           ProcessChildCount& process_child_count);
     bool ParseQueueData(rocprofvis_handle_t* queue_handle, QueueInfo& queue_info);
-    bool ParseThreadData(rocprofvis_handle_t* thread_handle, ThreadInfo& thread_info, uint64_t &thread_type);
+    bool ParseThreadData(rocprofvis_handle_t* thread_handle, ThreadInfo& thread_info,
+                         uint64_t& thread_type);
     bool ParseCounterData(rocprofvis_handle_t* counter_handle, CounterInfo& counter_info);
     bool ParseStreamData(rocprofvis_handle_t* stream_handle, StreamInfo& stream_info);
-    
+
     void HandleLoadTrackMetaData();
     void HandleRequests();
 

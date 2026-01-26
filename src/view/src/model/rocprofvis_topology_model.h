@@ -73,17 +73,17 @@ public:
     // Helpers
 
     /* Gets the device ID associated with a given topology info ID and track type
-        @oaram info_id - id of the topology item ex: TrackInfo::topology.id
-        @oaram track_type - type of the topology item ex: TrackInfo::topology.type
+        @param info_id - id of the topology item ex: TrackInfo::topology.id
+        @param track_type - type of the topology item ex: TrackInfo::topology.type
         @return device ID if found, INVALID_UINT64_INDEX otherwise
     */
     uint64_t GetDeviceIdByInfoId(uint64_t info_id, TrackInfo::TrackType track_type) const;
-    
+
     /* Gets the device info associated with a given topology info ID and track type
-        @oaram info_id - id of the topology item ex: TrackInfo::topology.id
-        @oaram track_type - type of the topology item ex: TrackInfo::topology.type
+        @param info_id - id of the topology item ex: TrackInfo::topology.id
+        @param track_type - type of the topology item ex: TrackInfo::topology.type
         @return a pointer to the device info if found, nullptr otherwise
-    */    
+    */
     const DeviceInfo* GetDeviceByInfoId(uint64_t             info_id,
                                         TrackInfo::TrackType track_type) const;
 
@@ -101,7 +101,7 @@ public:
     std::string TopologyToString();
     std::string DeviceInfoToString(const DeviceInfo* device_info, int indent = 0) const;
     std::string ProcessInfoToString(const ProcessInfo* process_info, int indent = 0) const;
-    std::string ThreadInfoToString(const ThreadInfo* thread_info, int indent =  0) const;
+    std::string ThreadInfoToString(const ThreadInfo* thread_info, int indent = 0) const;
     std::string QueueInfoToString(const QueueInfo* queue_info, int indent = 0) const;
     std::string StreamInfoToString(const StreamInfo* stream_info, int indent = 0) const;
     std::string CounterInfoToString(const CounterInfo* counter_info, int indent = 0) const;

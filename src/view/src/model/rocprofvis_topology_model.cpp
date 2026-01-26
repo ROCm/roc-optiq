@@ -244,7 +244,7 @@ TopologyDataModel::GetDeviceByInfoId(uint64_t             info_id,
                                      TrackInfo::TrackType track_type) const
 {
     const DeviceInfo* device_info = nullptr;
-    uint64_t    device_id   = GetDeviceIdByInfoId(info_id, track_type);
+    uint64_t          device_id   = GetDeviceIdByInfoId(info_id, track_type);
 
     if(device_id != INVALID_UINT64_INDEX)
     {
@@ -319,19 +319,19 @@ TopologyDataModel::TopologyToString()
         ss << indent(level) << "OS release: " << it->second.os_release << std::endl;
         ss << indent(level) << "OS version: " << it->second.os_version << std::endl;
         
-        std::vector<uint64_t>& device_ids = it->second.device_ids;
+        const std::vector<uint64_t>& device_ids = it->second.device_ids;
         ss  << indent(level) << "Devices: " << device_ids.size() << std::endl;
-        for(uint64_t& d_id : device_ids)
+        for(const uint64_t& d_id : device_ids)
         {
             const DeviceInfo* devInfo = GetDevice(d_id);
             ss << DeviceInfoToString(devInfo, level+1) << std::endl;
         }
 
-        std::vector<uint64_t>& process_ids = it->second.process_ids;
+        const std::vector<uint64_t>& process_ids = it->second.process_ids;
         ss << indent(level) << "Processes: " << process_ids.size() << std::endl;
        
         level++;
-        for(uint64_t& p_id : process_ids)
+        for(const uint64_t& p_id : process_ids)
         {
             const ProcessInfo* procInfo = GetProcess(p_id);
             if(procInfo)

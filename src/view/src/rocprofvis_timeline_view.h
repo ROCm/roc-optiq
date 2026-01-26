@@ -78,6 +78,7 @@ public:
     void           RenderGrid();
     float          GetScrollPosition();
     void           TimelineDragShimmy(int shimmy_amount);
+    double         CalculateHighlightTimeWithShimmy(float mouse_x, float origin_x);
     void           RenderScrubber(ImVec2 screen_pos);
     void           RenderSplitter();
     void           RenderGraphView();

@@ -568,29 +568,6 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
     switch(track_info->topology.type)
     {
         case TrackInfo::TrackType::InstrumentedThread:
-        {
-            std::string process_name_path;
-            if(const ProcessInfo* process_info =
-                   tdm.GetProcess(track_info->topology.process_id);
-               process_info)
-            {
-                process_name_path += process_info->command;
-            }
-
-            std::string thread_id;
-            if(const ThreadInfo* thread_info =
-                   tdm.GetInstrumentedThread(track_info->topology.id);
-               thread_info)
-            {
-                thread_id = std::to_string(thread_info->tid);
-            }
-            m_meta_area_label =
-                get_executable_name(process_name_path) + " (" + thread_id + ")";
-
-            // set tooltip to full path
-            m_meta_area_tooltip = process_name_path;
-            break;
-        }
         case TrackInfo::TrackType::SampledThread:
         {
             std::string process_name_path;
@@ -601,15 +578,22 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
                 process_name_path += process_info->command;
             }
 
-            std::string thread_id;
-            if(const ThreadInfo* thread_info =
-                   tdm.GetSampledThread(track_info->topology.id);
-               thread_info)
+            std::string       thread_id;
+            const ThreadInfo* thread_info =
+                (track_info->topology.type == TrackInfo::TrackType::SampledThread)
+                    ? tdm.GetSampledThread(track_info->topology.id)
+                    : tdm.GetInstrumentedThread(track_info->topology.id);
+            if(thread_info)
             {
                 thread_id = std::to_string(thread_info->tid);
             }
+
             m_meta_area_label =
-                get_executable_name(process_name_path) + " (" + thread_id + ")" + " (S)";
+                get_executable_name(process_name_path) + " (" + thread_id + ")";
+            if(track_info->topology.type == TrackInfo::TrackType::SampledThread)
+            {
+                m_meta_area_label += " (S)";
+            }
 
             // set tooltip to full path
             m_meta_area_tooltip = process_name_path;
@@ -671,13 +655,7 @@ TrackItem::SetTrackName(const TrackInfo* track_info)
         }
         case TrackInfo::TrackType::SampledThread:
         {
-            m_name                          = "Sampled ";
-            std::string lower_case_sub_name = track_info->sub_name;
-            std::transform(lower_case_sub_name.begin(), lower_case_sub_name.end(),
-                           lower_case_sub_name.begin(), [](unsigned char c) {
-                               return static_cast<char>(std::tolower(c));
-                           });
-            m_name = lower_case_sub_name;
+            m_name = track_info->sub_name + " (S)";
             break;
         }
         case TrackInfo::TrackType::Counter:

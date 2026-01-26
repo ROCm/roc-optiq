@@ -54,6 +54,8 @@ public:
 private:
     uint64_t m_id;
     uint64_t m_node;
+    uint64_t m_agent_id_or_pid;
+    uint64_t m_queue_id_or_tid;
     uint64_t m_num_entries;
     rocprofvis_controller_track_type_t m_type;
     SegmentTimeline m_segments;

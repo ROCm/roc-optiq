@@ -384,17 +384,11 @@ Minimap::RenderViewport(ImDrawList* drawlist, ImVec2 map_pos, ImVec2 map_size)
     float x_start     = map_pos.x + std::clamp(start_ratio, 0.0f, 1.0f) * map_size.x;
     float x_end       = map_pos.x + std::clamp(end_ratio, 0.0f, 1.0f) * map_size.x;
 
-    float total_h = m_timeline_view->GetTotalTrackHeight();
-    float view_h  = m_timeline_view->GetGraphSize().y;
-
+    // Get visible track fractions based on track indices (not pixel heights)
+    // This correctly maps to the minimap which renders tracks with equal height
     float y_start_ratio = 0.0f;
     float y_end_ratio   = 1.0f;
-
-    if(total_h > 0)
-    {
-        y_start_ratio = view_coords.y / total_h;
-        y_end_ratio   = (view_coords.y + view_h) / total_h;
-    }
+    m_timeline_view->GetVisibleTrackFractions(y_start_ratio, y_end_ratio);
 
     float y_start = map_pos.y + std::clamp(y_start_ratio, 0.0f, 1.0f) * map_size.y;
     float y_end   = map_pos.y + std::clamp(y_end_ratio, 0.0f, 1.0f) * map_size.y;

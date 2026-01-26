@@ -1846,6 +1846,66 @@ TimelineView::GetTotalTrackHeight() const
     return m_track_height_sum;
 }
 
+float
+TimelineView::GetTrackViewportHeight() const
+{
+    return m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
+}
+
+void
+TimelineView::GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const
+{
+    start_fraction = 0.0f;
+    end_fraction   = 1.0f;
+
+    if(!m_graphs || m_graphs->empty()) return;
+
+    // Count displayed tracks and find visible range
+    int   displayed_count = 0;
+    float first_visible   = -1.0f;
+    float last_visible    = -1.0f;
+    float view_top        = static_cast<float>(m_scroll_position_y);
+    float view_bottom     = view_top + GetTrackViewportHeight();
+    float cumulative_y    = 0.0f;
+
+    for(int i = 0; i < static_cast<int>(m_graphs->size()); i++)
+    {
+        const auto& graph = (*m_graphs)[i];
+        if(!graph.display) continue;
+
+        float track_height = graph.chart->GetTrackHeight();
+        float track_top    = cumulative_y;
+        float track_bottom = cumulative_y + track_height;
+
+        // Check if this track overlaps with the viewport
+        if(track_bottom > view_top && track_top < view_bottom)
+        {
+            // Calculate fractional visibility within this track
+            float visible_top    = std::max(track_top, view_top);
+            float visible_bottom = std::min(track_bottom, view_bottom);
+
+            if(first_visible < 0.0f)
+            {
+                // First visible track - include partial
+                float partial = (visible_top - track_top) / track_height;
+                first_visible = static_cast<float>(displayed_count) + partial;
+            }
+            // Update last visible with partial coverage
+            float partial = (visible_bottom - track_top) / track_height;
+            last_visible  = static_cast<float>(displayed_count) + partial;
+        }
+
+        cumulative_y += track_height;
+        displayed_count++;
+    }
+
+    if(displayed_count > 0 && first_visible >= 0.0f)
+    {
+        start_fraction = first_visible / static_cast<float>(displayed_count);
+        end_fraction   = last_visible / static_cast<float>(displayed_count);
+    }
+}
+
 TimelineArrow&
 TimelineView::GetArrowLayer()
 {

@@ -3,6 +3,8 @@
 
 #include "rocprofvis_topology_model.h"
 
+#include <sstream>
+
 namespace RocProfVis
 {
 namespace View
@@ -294,6 +296,201 @@ TopologyDataModel::GetDeviceTypeLabel(const DeviceInfo& device_info,
             return true;
         default: return false;
     }
+}
+
+std::string
+TopologyDataModel::TopologyToString()
+{
+    std::ostringstream ss;
+
+    auto indent = [](int level) {
+        return std::string(level, ' ');
+    };
+    int level = 1;
+
+    // iterate nodes
+    ss << "Nodes: " << m_nodes.size() << std::endl;
+    for(auto it = m_nodes.begin(); it != m_nodes.end(); it++)
+    {
+        ss << indent(level) << "Node ID: " << it->second.id << std::endl;
+        ss << indent(level) << "Hostname: " << it->second.host_name << std::endl;
+        ss << indent(level) << "OS name: " << it->second.os_name << std::endl;
+        ss << indent(level) << "OS release: " << it->second.os_release << std::endl;
+        ss << indent(level) << "OS version: " << it->second.os_version << std::endl;
+        
+        std::vector<uint64_t>& device_ids = it->second.device_ids;
+        ss  << indent(level) << "Devices: " << device_ids.size() << std::endl;
+        for(uint64_t& d_id : device_ids)
+        {
+            const DeviceInfo* devInfo = GetDevice(d_id);
+            ss << DeviceInfoToString(devInfo, level+1) << std::endl;
+        }
+
+        std::vector<uint64_t>& process_ids = it->second.process_ids;
+        ss << indent(level) << "Processes: " << process_ids.size() << std::endl;
+       
+        level++;
+        for(uint64_t& p_id : process_ids)
+        {
+            const ProcessInfo* procInfo = GetProcess(p_id);
+            if(procInfo)
+            {
+                ss << ProcessInfoToString(procInfo, level) << std::endl;
+
+                ss << indent(level) << "Instrumented Threads: " << procInfo->instrumented_thread_ids.size() << std::endl;
+                for(const uint64_t& d : procInfo->instrumented_thread_ids)
+                {
+                    const ThreadInfo* threadInfo = GetInstrumentedThread(d);
+                    ss << ThreadInfoToString(threadInfo, level+1) << std::endl;                       
+                }
+
+                ss << indent(level) << "Sampled Threads: " << procInfo->sampled_thread_ids.size() << std::endl;
+                for(const uint64_t& d : procInfo->sampled_thread_ids)
+                {
+                    const ThreadInfo* threadInfo = GetSampledThread(d);
+                    ss << ThreadInfoToString(threadInfo, level+1) << std::endl;                       
+                }
+
+                ss << indent(level) << "Queues: " << procInfo->queue_ids.size() << std::endl;
+                for(const uint64_t& d : procInfo->queue_ids)
+                {
+                    const QueueInfo* queueInfo = GetQueue(d);
+                    ss << QueueInfoToString(queueInfo, level+1) << std::endl;                       
+                }
+
+                ss << indent(level) << "Streams: " << procInfo->stream_ids.size() << std::endl;
+                for(const uint64_t& d : procInfo->stream_ids)
+                {
+                    const StreamInfo* streamInfo = GetStream(d);
+                    ss << StreamInfoToString(streamInfo, level+1) << std::endl;                       
+                }
+
+                ss << indent(level) << "Counters: " << procInfo->counter_ids.size() << std::endl;
+                for(const uint64_t& d : procInfo->counter_ids)
+                {
+                    const CounterInfo* counterInfo = GetCounter(d);
+                    ss << CounterInfoToString(counterInfo, level+1) << std::endl;                       
+                }
+            }
+        }
+    }
+    return ss.str();
+}
+
+std::string
+TopologyDataModel::DeviceInfoToString(const DeviceInfo* device_info, int indent) const
+{
+    std::ostringstream ss;
+    std::string indent_str = std::string(indent, ' ');
+    if(device_info)
+    {
+        ss << indent_str << "Device ID: " << device_info->id << std::endl;
+        ss << indent_str << "Product Name: " << device_info->product_name << std::endl;
+        ss << indent_str << "Type: " << static_cast<uint32_t>(device_info->type) << std::endl;
+        ss << indent_str << "Type Index: " << device_info->type_index << std::endl;
+    }
+    else
+    {
+        ss << indent_str << "DeviceInfo: nullptr";
+    }
+    return ss.str();
+}
+
+std::string
+TopologyDataModel::ProcessInfoToString(const ProcessInfo* process_info, int indent) const
+{
+    std::ostringstream ss;
+    std::string indent_str = std::string(indent, ' ');
+    if(process_info)
+    {
+        ss << indent_str << "Process ID: " << process_info->id << std::endl;
+        ss << indent_str << "Command: " << process_info->command << std::endl;
+        ss << indent_str << "Start Time: " << process_info->start_time << std::endl;
+        ss << indent_str << "End Time: " << process_info->end_time << std::endl;
+        ss << indent_str << "Environment: " << process_info->environment << std::endl;
+    }
+    else
+    {
+        ss << indent_str << "ProcessInfo: nullptr" << std::endl;
+    }
+    return ss.str();
+}
+
+std::string
+TopologyDataModel::ThreadInfoToString(const ThreadInfo* thread_info, int indent) const
+{
+    std::ostringstream ss;
+    std::string indent_str = std::string(indent, ' ');
+    if(thread_info)
+    {
+        ss << indent_str << "Thread ID: " << thread_info->id << std::endl;
+        ss << indent_str << "Name: " << thread_info->name << std::endl;
+        ss << indent_str << "TID: " << thread_info->tid << std::endl;
+        ss << indent_str << "Start Time: " << thread_info->start_time << std::endl;
+        ss << indent_str << "End Time: " << thread_info->end_time << std::endl;
+    }
+    else
+    {
+        ss << indent_str << "ThreadInfo: nullptr" << std::endl;
+    }
+    return ss.str();
+}
+
+std::string
+TopologyDataModel::QueueInfoToString(const QueueInfo* queue_info, int indent) const
+{
+    std::ostringstream ss;
+    std::string indent_str = std::string(indent, ' ');
+    if(queue_info)
+    {
+        ss << indent_str << "Queue ID: " << queue_info->id << std::endl;
+        ss << indent_str << "Name: " << queue_info->name << std::endl;
+        ss << indent_str << "Device ID: " << queue_info->device_id << std::endl;
+    }
+    else
+    {
+        ss << indent_str << "QueueInfo: nullptr" << std::endl;
+    }
+    return ss.str();
+}
+
+std::string
+TopologyDataModel::StreamInfoToString(const StreamInfo* stream_info, int indent) const
+{
+    std::ostringstream ss;
+    std::string indent_str = std::string(indent, ' ');
+    if(stream_info)
+    {
+        ss << indent_str << "Stream ID: " << stream_info->id << std::endl;
+        ss << indent_str << "Name: " << stream_info->name << std::endl;
+        ss << indent_str << "Device ID: " << stream_info->device_id << std::endl;
+    }
+    else
+    {
+        ss << indent_str << "StreamInfo: nullptr" << std::endl;
+    }
+    return ss.str();
+}
+
+std::string
+TopologyDataModel::CounterInfoToString(const CounterInfo* counter_info, int indent) const
+{
+    std::ostringstream ss;
+    std::string indent_str = std::string(indent, ' ');
+    if(counter_info)
+    {
+        ss << indent_str << "Counter ID: " << counter_info->id << std::endl;
+        ss << indent_str << "Name: " << counter_info->name << std::endl;
+        ss << indent_str << "Device ID: " << counter_info->device_id << std::endl;
+        ss << indent_str << "Description: " << counter_info->description << std::endl;
+        ss << indent_str << "Units: " << counter_info->units << std::endl;
+        ss << indent_str << "Value Type: " << counter_info->value_type << std::endl;
+    }
+    else
+    {
+        ss << indent_str << "CounterInfo: nullptr" << std::endl;
+    }
+    return ss.str();
 }
 
 }  // namespace View

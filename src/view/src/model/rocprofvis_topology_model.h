@@ -97,6 +97,15 @@ public:
 
     bool GetDeviceTypeLabel(const DeviceInfo& device_info, std::string& label_out) const;
 
+    // Debug
+    std::string TopologyToString();
+    std::string DeviceInfoToString(const DeviceInfo* device_info, int indent = 0) const;
+    std::string ProcessInfoToString(const ProcessInfo* process_info, int indent = 0) const;
+    std::string ThreadInfoToString(const ThreadInfo* thread_info, int indent =  0) const;
+    std::string QueueInfoToString(const QueueInfo* queue_info, int indent = 0) const;
+    std::string StreamInfoToString(const StreamInfo* stream_info, int indent = 0) const;
+    std::string CounterInfoToString(const CounterInfo* counter_info, int indent = 0) const;
+
 private:
     std::unordered_map<uint64_t, NodeInfo>    m_nodes;
     std::unordered_map<uint64_t, DeviceInfo>  m_devices;

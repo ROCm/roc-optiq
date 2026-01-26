@@ -603,6 +603,8 @@ DataProvider::HandleLoadSystemTopology()
             m_model.GetTopology().AddNode(node_info.id, std::move(node_info));
         }
     }
+
+    spdlog::debug("\n" + m_model.GetTopology().TopologyToString());
 }
 
 bool

@@ -182,8 +182,8 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                         result = kRocProfVisResultTimeout;
                     }
                 }
-                rocprofvis_dm_delete_event_property_for(
-                    dm_trace_handle, kRPVDMEventFlowTrace, dm_event_id);
+                rocprofvis_dm_delete_event_property(
+                    dm_trace_handle, kRPVDMEventFlowTrace, dm_flowtrace);
             }
             rocprofvis_db_future_free(object);
         }
@@ -293,7 +293,7 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                         result = kRocProfVisResultTimeout;
                     }
                 }
-                rocprofvis_dm_delete_event_property_for(dm_trace_handle, kRPVDMEventStackTrace, dm_event_id);
+                rocprofvis_dm_delete_event_property(dm_trace_handle, kRPVDMEventStackTrace, dm_stacktrace);
             }
             rocprofvis_db_future_free(object);
         }
@@ -439,8 +439,8 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
                         result = kRocProfVisResultTimeout;
                     }
                 }
-                rocprofvis_dm_delete_event_property_for(dm_trace_handle,
-                                                        kRPVDMEventExtData, dm_event_id);
+                rocprofvis_dm_delete_event_property(dm_trace_handle,
+                                                        kRPVDMEventExtData, dm_extdata);
             }
             rocprofvis_db_future_free(object);
         }

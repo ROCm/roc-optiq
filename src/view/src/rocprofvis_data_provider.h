@@ -32,14 +32,6 @@ enum class ProviderState
 class DataProvider
 {
 public:
-    struct ProcessChildCount
-    {
-        size_t thread_count;
-        size_t queue_count;
-        size_t stream_count;
-        size_t counter_count;
-    };
-
     static constexpr uint8_t TRACK_CHUNK_OFFSET_BITS = sizeof(uint32_t) * 8;
     static constexpr uint8_t TRACK_GROUP_OFFSET_BITS =
         sizeof(uint16_t) * 8 + TRACK_CHUNK_OFFSET_BITS;
@@ -238,6 +230,14 @@ public:
     TraceDataModel&       DataModel() { return m_model; };
 
 private:
+    struct ProcessChildCount
+    {
+        size_t thread_count;
+        size_t queue_count;
+        size_t stream_count;
+        size_t counter_count;
+    };
+
     void HandleLoadSystemTopology();
     bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
     bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info);

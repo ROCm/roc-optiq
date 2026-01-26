@@ -148,6 +148,7 @@ private:
 
     bool m_dragging_selection_start;
     bool m_dragging_selection_end;
+    bool m_is_selecting_region;
 
     TimelineViewProjectSettings m_project_settings;
 };

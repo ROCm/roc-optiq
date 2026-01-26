@@ -3,6 +3,7 @@
 
 #include "rocprofvis_topology_model.h"
 
+#include <limits>
 #include <sstream>
 
 namespace RocProfVis

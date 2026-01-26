@@ -1268,8 +1268,8 @@ TimelineView::RenderHistogram()
 
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip(is_global ? "Normalization: Global Max"
-                                    : "Normalization: Local Max");
+        ImGui::SetTooltip(is_global ? "Normalization: All Tracks"
+                                    : "Normalization: Visible Tracks");
     }
 
     // Visuals

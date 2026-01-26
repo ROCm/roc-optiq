@@ -268,6 +268,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
             {
                 m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
                 m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
+                m_timeline_selection->ClearTimeRange();
             }
         }
 
@@ -656,6 +657,19 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // Process Dragging
     if(!mouse_down)
     {
+        // Check if we were dragging and just released - call SelectTimeRange once on completion
+        if(m_dragging_selection_start || m_dragging_selection_end)
+        {
+            if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
+               m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+            {
+                m_timeline_selection->SelectTimeRange(
+                    m_tpt->DenormalizeTime(std::min(m_highlighted_region.first,
+                                                    m_highlighted_region.second)),
+                    m_tpt->DenormalizeTime(std::max(m_highlighted_region.first,
+                                                    m_highlighted_region.second)));
+            }
+        }
         m_dragging_selection_start = false;
         m_dragging_selection_end   = false;
     }
@@ -1810,15 +1824,22 @@ TimelineView::HandleTopSurfaceTouch()
             if(io.KeyCtrl &&
                TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
             {
+                // Clear any existing selection before starting a new one
+                if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
+                   m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+                {
+                    m_timeline_selection->ClearTimeRange();
+                }
                 m_highlighted_region.first    = TimelineSelection::INVALID_SELECTION_TIME;
                 m_highlighted_region.second   = TimelineSelection::INVALID_SELECTION_TIME;
+                m_is_selecting_region         = true;  // Track that we started a selection drag
                 ImVec2 mouse_pos              = ImGui::GetMousePos();
                 float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
-                
+
                 // Clamp cursor position to valid graph area (excluding scrollbar)
                 float max_x = m_tpt->GetGraphSizeX();
                 cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
-                
+
                 m_highlighted_region.first = std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
             }
             else if(!io.KeyCtrl)
@@ -1826,16 +1847,12 @@ TimelineView::HandleTopSurfaceTouch()
                 m_can_drag_to_pan = true;
             }
         }
-        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left) && m_is_selecting_region)
         {
-            if(io.KeyCtrl &&
-               TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
-            {
-                ImVec2 mouse_pos = ImGui::GetMousePos();
-                m_highlighted_region.second = CalculateHighlightTimeWithShimmy(mouse_pos.x, graph_area_min.x);
-                // Update offset_ns in case shimmy changed the view
-                offset_ns = m_tpt->GetViewTimeOffsetNs();
-            }
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            m_highlighted_region.second = CalculateHighlightTimeWithShimmy(mouse_pos.x, graph_area_min.x);
+            // Update offset_ns in case shimmy changed the view
+            offset_ns = m_tpt->GetViewTimeOffsetNs();
         }
 
         // Enables horizontal scrolling using mouse.
@@ -1947,19 +1964,30 @@ TimelineView::HandleTopSurfaceTouch()
     // Stop panning if mouse released
     if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
-        if(io.KeyCtrl &&
-           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
+        if(m_is_selecting_region)
         {
             ImVec2 mouse_pos              = ImGui::GetMousePos();
             float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
-            
+
             // Clamp cursor position to valid graph area (excluding scrollbar)
             float max_x = m_tpt->GetGraphSizeX();
             cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
-            
+
             m_highlighted_region.second = std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
+
+            // Call SelectTimeRange once on drag complete - not during drag
+            if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
+               m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+            {
+                m_timeline_selection->SelectTimeRange(
+                    m_tpt->DenormalizeTime(std::min(m_highlighted_region.first,
+                                                    m_highlighted_region.second)),
+                    m_tpt->DenormalizeTime(std::max(m_highlighted_region.first,
+                                                    m_highlighted_region.second)));
+            }
+            m_is_selecting_region = false;
         }
-        else if(!io.KeyCtrl)
+        else
         {
             m_can_drag_to_pan = false;
         }

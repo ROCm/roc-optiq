@@ -19,7 +19,7 @@
 /*******************************Types******************************/
 
 
-typedef uint32_t                          rocprofvis_dm_node_id_t;
+typedef uint64_t                          rocprofvis_dm_node_id_t;
 typedef uint64_t                          rocprofvis_dm_process_id_t;
 typedef uint64_t                          rocprofvis_dm_stream_id_t;
 typedef std::string                       rocprofvis_dm_string_t;
@@ -87,7 +87,7 @@ typedef struct rocprofvis_dm_process_identifiers_t
 {
     // track category enumeration (PMC, Region, Kernel, SQQT, NIC, etc)  
     rocprofvis_dm_track_category_t category;
-    // 32-bit process IDs
+    // 64-bit process IDs
     rocprofvis_dm_process_id_t id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
     // database column name for process id
     rocprofvis_dm_string_t tag[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];

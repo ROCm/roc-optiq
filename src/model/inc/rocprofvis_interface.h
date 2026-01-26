@@ -338,6 +338,23 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_event_property_for(
                                     rocprofvis_dm_trace_t,
                                     rocprofvis_dm_event_property_type_t,
                                     rocprofvis_dm_event_id_t);     
+/****************************************************************************************************
+* @brief Delete event property object of specified type
+*
+* @param trace trace object handle created with rocprofvis_dm_create_trace()
+* @param type type of property
+*                             kRPVDMEventFlowTrace,
+*                             kRPVDMEventStackTrace,
+*                             kRPVDMEventExtData,
+* @param object reference
+*
+* @return status of operation
+*
+***************************************************************************************************/
+rocprofvis_dm_result_t  rocprofvis_dm_delete_event_property( 
+    rocprofvis_dm_trace_t,
+    rocprofvis_dm_event_property_type_t,
+    rocprofvis_dm_handle_t); 
 
 /****************************************************************************************************
  * @brief Delete all event property objects of specified type

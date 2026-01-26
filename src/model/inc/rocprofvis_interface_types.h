@@ -254,6 +254,10 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackHistogramBucketValueDoubleIndexed,
     // Track Instance ID (Guid index)
     kRPVDMTrackInstanceIdUInt64,
+    // Track process ID (PID or Agent ID)
+    kRPVDMTrackProcessIdUInt64,
+    // Track process ID (TID or Queue ID)
+    kRPVDMTrackSubProcessIdUInt64
 } rocprofvis_dm_track_property_t;
 
 // Slice properties

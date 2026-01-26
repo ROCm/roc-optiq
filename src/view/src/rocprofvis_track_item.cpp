@@ -243,7 +243,6 @@ TrackItem::RenderMetaArea()
         // Reordering grip decoration
         
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
-        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
         float arrow_width       = ImGui::GetTextLineHeight();
 
         ImGui::SetCursorPos(
@@ -252,7 +251,8 @@ TrackItem::RenderMetaArea()
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
 
         ImGui::TextUnformatted(ICON_GRID);
-
+        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
+      
         ImGui::PopFont();
 
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));

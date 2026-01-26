@@ -518,6 +518,10 @@ typedef enum rocprofvis_controller_track_properties_t : uint32_t
     kRPVControllerTrackHistogramBucketDensityIndexed,
     // Get histogram bucket value
     kRPVControllerTrackHistogramBucketValueIndexed,
+    // Get track agent id or PID
+    kRPVControllerTrackAgentIdOrPid,
+    // Get track queue id or TID
+    kRPVControllerTrackQueueIdOrTid,
     __kRPVControllerTrackPropertiesLast
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack

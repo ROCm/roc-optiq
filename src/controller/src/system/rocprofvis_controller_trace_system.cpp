@@ -237,6 +237,14 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackNodeIdUInt64, 0);
+                                        uint64_t agent_id_or_pid =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackProcessIdUInt64, 0);
+                                        uint64_t queue_id_or_tid =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackSubProcessIdUInt64, 0);
                                         if (type == kRPVControllerTrackTypeSamples)
                                         {
                                             max_ts = end_time;
@@ -251,6 +259,10 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                                          0, max_value);
                                         track->SetUInt64(kRPVControllerTrackNode, 0,
                                                          node);
+                                        track->SetUInt64(kRPVControllerTrackAgentIdOrPid, 0,
+                                            agent_id_or_pid);
+                                        track->SetUInt64(kRPVControllerTrackQueueIdOrTid, 0,
+                                            queue_id_or_tid);
 
                                         uint64_t num_ext_data = 0;
                                         track->GetUInt64(

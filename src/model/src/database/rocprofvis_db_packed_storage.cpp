@@ -98,13 +98,27 @@ namespace DataModel
 
     DbInstance* PackedTable::GetDbInstanceForRow(ProfileDatabase * db, int row_index)
     {
+        ROCPROFVIS_ASSERT_MSG_RETURN(row_index < m_rows.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
+        return GetDbInstanceForRow(db, m_rows[row_index].get());
+    }
+
+    DbInstance* PackedTable::GetDbInstanceForRow(ProfileDatabase * db, PackedRow* row)
+    {
         auto columns = GetMergedColumns();
-        uint8_t op = GetOperationValue(row_index);
-        auto track_column_it = find_if(columns.begin(), columns.end(), [op](MergedColumnDef& cd) {return cd.m_schema_index[op] == Builder::SCHEMA_INDEX_TRACK_ID; });
-        ROCPROFVIS_ASSERT_MSG_RETURN(track_column_it != columns.end(), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
-        Numeric track = GetMergeTableValue(op, row_index, track_column_it - columns.begin(), db);
-        ROCPROFVIS_ASSERT_MSG_RETURN(db->IsTrackIndexValid(track.data.u64), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
-        return (DbInstance*)db->TrackPropertiesAt(track.data.u64)->db_instance;
+        uint8_t op = row->Get<uint8_t>(0);
+        auto track_column_it = find_if(columns.rbegin(), columns.rend(), [op](MergedColumnDef& cd) {return cd.m_schema_index[op] == Builder::SCHEMA_INDEX_TRACK_ID; });
+        ROCPROFVIS_ASSERT_MSG_RETURN(track_column_it != columns.rend(), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
+        uint8_t size = ColumnTypeSize(Builder::TRACK_ID_TYPE);
+        uint32_t track = row->Get<uint64_t>(track_column_it->m_offset[op], size);
+        if (!db->IsTrackIndexValid(track))
+        {
+            track_column_it = std::find_if(columns.rbegin(), columns.rend(),
+                [](MergedColumnDef& cdef) { return cdef.m_name == Builder::STREAM_TRACK_ID_PUBLIC_NAME; });
+            ROCPROFVIS_ASSERT_MSG_RETURN(track_column_it != columns.rend(), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
+            track = row->Get<uint64_t>(track_column_it->m_offset[op], size);
+        }
+        ROCPROFVIS_ASSERT_MSG_RETURN(db->IsTrackIndexValid(track), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
+        return (DbInstance*)db->TrackPropertiesAt(track)->db_instance;
     }
 
     void PackedTable::PlaceValue(size_t col, double value)
@@ -267,11 +281,6 @@ namespace DataModel
             }
             if (agg_params.size() == 0) return false;
 
-            auto column_it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [](MergedColumnDef& cdef) { return cdef.m_name == Builder::TRACK_ID_PUBLIC_NAME; });
-            if (column_it != m_merged_columns.end())
-            {
-                column_def[Builder::TRACK_ID_PUBLIC_NAME] = *column_it;
-            }
             m_aggregation.agg_params = agg_params;
             m_aggregation.column_def = column_def;
             if (m_aggregation.agg_params[0].command != FilterExpression::SqlCommand::Column) return false;
@@ -390,16 +399,14 @@ namespace DataModel
 
     void PackedTable::AggregateRow(ProfileDatabase* db, int row_index, int map_index)
     {
+        if (row_index >= m_rows.size()) return;
         std::unique_ptr<PackedRow>& r = m_rows[row_index];
         uint8_t op = r->Get<uint8_t>(0);
         std::string group_by = m_aggregation.agg_params[0].column;
         MergedColumnDef& group_by_column_info = m_aggregation.column_def[group_by];
-        MergedColumnDef& track_column_info = m_aggregation.column_def[Builder::TRACK_ID_PUBLIC_NAME];
-        uint8_t size = ColumnTypeSize(Builder::TRACK_ID_TYPE);
-        uint32_t track = r->Get<uint64_t>(track_column_info.m_offset[op], size);
-        DbInstance* db_instance = (DbInstance*)db->TrackPropertiesAt(track)->db_instance;
+        DbInstance* db_instance = GetDbInstanceForRow(db, row_index);
         ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
-        size = ColumnTypeSize(group_by_column_info.m_type[op]);
+        uint8_t size = ColumnTypeSize(group_by_column_info.m_type[op]);
         double value = 0;
         if (size > 0)
         {
@@ -560,12 +567,9 @@ namespace DataModel
                 sort_values.reserve(m_rows.size());
                 for (std::unique_ptr<PackedRow> & row : m_rows) {
                     uint8_t op = row->Get<uint8_t>(0);
-                    MergedColumnDef& track_column_info = m_aggregation.column_def[Builder::TRACK_ID_PUBLIC_NAME];
-                    uint8_t size = ColumnTypeSize(Builder::TRACK_ID_TYPE);
-                    uint32_t track = row->Get<uint64_t>(track_column_info.m_offset[op], size);
-                    DbInstance* db_instance = (DbInstance*)db->TrackPropertiesAt(track);
+                    DbInstance* db_instance = GetDbInstanceForRow(db, row.get());
                     ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
-                    size = ColumnTypeSize(it->m_type[op]);
+                    uint8_t size = ColumnTypeSize(it->m_type[op]);
                     if (size > 0)
                     {
                         uint64_t value = row->Get<uint64_t>(it->m_offset[op], size);

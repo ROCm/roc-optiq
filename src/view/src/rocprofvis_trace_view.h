@@ -94,9 +94,6 @@ private:
 
     DataProvider m_data_provider;
     bool         m_view_created;
-    bool         m_open_loading_popup;
-
-    SettingsManager& m_settings_manager;
 
     typedef struct popup_info_t
     {
@@ -106,7 +103,7 @@ private:
     } popup_info_t;
 
     popup_info_t                        m_popup_info;
-    bool                                m_show_minimap_popup = false;
+    bool                                m_show_minimap_popup;
     std::unordered_map<int, ViewCoords> m_bookmarks;
 
     std::shared_ptr<AnnotationsManager> m_annotations;

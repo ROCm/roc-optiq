@@ -20,10 +20,10 @@ constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 constexpr float SCALE_SEPERATOR_WIDTH    = 2.0f;
 
-LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name,
-                             float                               max_meta_area_width,
+LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
+                             float max_meta_area_width,
                              std::shared_ptr<TimePixelTransform> tpt)
-: TrackItem(dp, id, name, tpt)
+: TrackItem(dp, track_id, tpt)
 , m_data({})
 , m_highlight_y_limits()
 , m_highlight_y_range(false)
@@ -57,7 +57,7 @@ LineTrackItem::~LineTrackItem() {}
 void
 LineTrackItem::UpdateMetadata()
 {
-    const TrackInfo* track_info = m_data_provider.DataModel().GetTimeline().GetTrack(m_id);
+    const TrackInfo* track_info = m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
     if(track_info)
     {
         const CounterInfo* counter =
@@ -71,7 +71,7 @@ LineTrackItem::UpdateMetadata()
     }
     else
     {
-        spdlog::warn("Track info not found for track ID: {}", m_id);
+        spdlog::warn("Track info not found for track ID: {}", m_track_id);
     }
     // Ensure that min and max are not equal to allow rendering
     if(m_min_y.Value() == m_max_y.Value())
@@ -232,13 +232,13 @@ LineTrackItem::ReleaseData()
 bool
 LineTrackItem::ExtractPointsFromData()
 {
-    const RawTrackData* rtd = m_data_provider.DataModel().GetTimeline().GetTrackData(m_id);
+    const RawTrackData* rtd = m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id);
 
     // If no raw track data is found, this means the track was unloaded before the
     // response was processed
     if(!rtd)
     {
-        spdlog::error("No raw track data found for track {}", m_id);
+        spdlog::error("No raw track data found for track {}", m_track_id);
         // Reset the request state to idle
         m_request_state = TrackDataRequestState::kIdle;
         return false;
@@ -247,7 +247,7 @@ LineTrackItem::ExtractPointsFromData()
     const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
     if(!sample_track)
     {
-        spdlog::debug("Invalid track data type for track {}", m_id);
+        spdlog::debug("Invalid track data type for track {}", m_track_id);
         m_request_state = TrackDataRequestState::kError;
         return false;
     }
@@ -259,7 +259,7 @@ LineTrackItem::ExtractPointsFromData()
 
     if(sample_track->GetData().empty())
     {
-        spdlog::debug("No data for track {}", m_id);
+        spdlog::debug("No data for track {}", m_track_id);
         return false;
     }
     const std::vector<TraceCounter>& track_data = sample_track->GetData();

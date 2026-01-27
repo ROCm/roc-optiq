@@ -77,7 +77,7 @@ class LineTrackItem : public TrackItem
     };
 
 public:
-    LineTrackItem(DataProvider& dp, uint64_t id, std::string name,
+    LineTrackItem(DataProvider& dp, uint64_t track_id,
                   float max_meta_area_width, std::shared_ptr<TimePixelTransform> time_to_pixel_manager);
     ~LineTrackItem();
 

@@ -177,22 +177,27 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                     Track* track =
                                         new Track(type, track_id, dm_track_handle, this);
                                     {
-                                        std::string dm_track_name =
+                                        std::string category =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackCategoryEnumCharPtr, 0);
-                                        dm_track_name += ":";
-                                        dm_track_name +=
+
+                                        track->SetString(kRPVControllerCategory, 0,
+                                                         category.c_str());
+
+                                        std::string main_name =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackMainProcessNameCharPtr, 0);
-                                        dm_track_name += ":";
-                                        dm_track_name +=
+                                        track->SetString(kRPVControllerMainName, 0,
+                                                         main_name.c_str());
+
+                                        std::string sub_name =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackSubProcessNameCharPtr, 0);
-                                        track->SetString(kRPVControllerTrackName, 0,
-                                                         dm_track_name.c_str());
+                                        track->SetString(kRPVControllerSubName, 0,
+                                                         sub_name.c_str());
 
                                         uint64_t num_records =
                                             rocprofvis_dm_get_property_as_uint64(
@@ -232,6 +237,14 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackNodeIdUInt64, 0);
+                                        uint64_t agent_id_or_pid =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackProcessIdUInt64, 0);
+                                        uint64_t queue_id_or_tid =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                track->GetDmHandle(),
+                                                kRPVDMTrackSubProcessIdUInt64, 0);
                                         if (type == kRPVControllerTrackTypeSamples)
                                         {
                                             max_ts = end_time;
@@ -246,6 +259,10 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                                          0, max_value);
                                         track->SetUInt64(kRPVControllerTrackNode, 0,
                                                          node);
+                                        track->SetUInt64(kRPVControllerTrackAgentIdOrPid, 0,
+                                            agent_id_or_pid);
+                                        track->SetUInt64(kRPVControllerTrackQueueIdOrTid, 0,
+                                            queue_id_or_tid);
 
                                         uint64_t num_ext_data = 0;
                                         track->GetUInt64(

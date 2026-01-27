@@ -186,6 +186,7 @@ namespace DataModel
         const std::vector<FilterExpression::SqlAggregation>& GetAggregationSpec() const { return m_aggregation.agg_params; }
         const std::vector<MergedColumnDef>& GetMergedColumns() const { return m_merged_columns; }
         DbInstance* GetDbInstanceForRow(ProfileDatabase * db, int row_index);
+        DbInstance* GetDbInstanceForRow(ProfileDatabase* db, PackedRow* row);
         uint32_t SortedIndex(uint32_t index) { return m_sort_order[index]; };
 
         void Merge(std::vector<std::unique_ptr<PackedTable>>& tables);

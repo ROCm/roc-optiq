@@ -76,6 +76,10 @@ class Table : public DmBase {
         // @param column_enum - column enumeration constant
         // @return status of operation
         rocprofvis_dm_result_t                  AddColumnEnum(rocprofvis_db_table_column_enum_t column_enum);
+        // Method to add column type to a vector array of columns
+        // @param column_type - column type constant
+        // @return status of operation
+        rocprofvis_dm_result_t                  AddColumnType(rocprofvis_db_data_type_t column_type);
         // Method to create and add empty row object to a vector array of rows
         // @param column_name - pointer to column name string
         // @return status of operation
@@ -139,6 +143,8 @@ class Table : public DmBase {
         std::vector<std::string>                            m_columns;
         // vector array of column names
         std::vector<rocprofvis_db_table_column_enum_t>      m_column_enums;
+        // vector array of column names
+        std::vector<rocprofvis_db_data_type_t>              m_column_types;      
         // vector array of row objects
         std::vector<std::shared_ptr<TableRow>>              m_rows;
         // table query string
@@ -155,9 +161,14 @@ class Table : public DmBase {
         rocprofvis_dm_result_t          GetColumnNameAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & column);
         // Method to get column enumeration constant
         // @param index - column index
-        // @param column - column enumeration constant
+        // @param column_enum - column enumeration constant
         // @return status of operation
         rocprofvis_dm_result_t          GetColumnEnumAt(const rocprofvis_dm_property_index_t index, rocprofvis_db_table_column_enum_t & column_enum);
+        // Method to get column type constant
+        // @param index - column index
+        // @param column - column type constant
+        // @return status of operation
+        rocprofvis_dm_result_t          GetColumnTypeAt(const rocprofvis_dm_property_index_t index, rocprofvis_db_data_type_t & column_type);
         // Method to get handle to row (TableRow) object at provided index
         // @param index - row index
         // @param row - reference to row (TableRow) object

@@ -160,29 +160,42 @@ namespace DataModel
             return "";
         }
 
-        std::string GetStringLiteral(bool & empty_string)
+        std::string GetStringLiteral(bool& empty_string)
         {
             SkipSpaces();
-            if (m_pos >= m_text.size() || m_text[m_pos] != '\'')
+            if (m_pos >= m_text.size())
+                return "";
+
+            char quote = m_text[m_pos];
+            if (quote != '\'' && quote != '"')
                 return "";
 
             ++m_pos; // skip opening quote
+
             std::string result;
             while (m_pos < m_text.size())
             {
                 char c = m_text[m_pos++];
-                if (c == '\'')
+
+                if (c == quote)
                 {
-                    if (m_pos < m_text.size() && m_text[m_pos] == '\'')
+                    // Escaped quote: '' or ""
+                    if (m_pos < m_text.size() && m_text[m_pos] == quote)
                     {
-                        // Escaped quote
-                        result += '\'';
+                        result += quote;
                         ++m_pos;
                     }
-                    else break;
+                    else
+                    {
+                        break; // closing quote
+                    }
                 }
-                else result += c;
+                else
+                {
+                    result += c;
+                }
             }
+
             empty_string = result.empty();
             return result;
         }

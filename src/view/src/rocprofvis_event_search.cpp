@@ -17,7 +17,8 @@ namespace View
 constexpr uint64_t    MAX_RESULTS_DISPLAYED = 5;
 constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
 constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
-constexpr const char* ID_COLUMN_NAME        = "id";
+constexpr const char* ID_COLUMN_NAME        = "__uuid";
+constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 
 EventSearch::EventSearch(DataProvider& dp)
@@ -48,7 +49,7 @@ EventSearch::Update()
             m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
         for(size_t i = 0; i < column_names.size(); i++)
         {
-            if(i != m_important_column_idxs[kId] && i != m_important_column_idxs[kName] &&
+            if(i != m_important_column_idxs[kDbEventId] && i != m_important_column_idxs[kName] &&
                i != m_time_column_indices[kTimeStartNs] &&
                i != m_time_column_indices[kDurationNs])
             {
@@ -282,7 +283,11 @@ EventSearch::IndexColumns()
             }
             else if(col == ID_COLUMN_NAME)
             {
-                m_important_column_idxs[kId] = i;
+                m_important_column_idxs[kUUId] = i;
+            }
+            else if(col == EVENT_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kDbEventId] = i;
             }
             else if(col == NAME_COLUMN_NAME)
             {

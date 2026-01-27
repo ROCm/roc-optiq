@@ -90,11 +90,6 @@ public:
      */
     jt::Json& GetSettingsJson();
 
-    // System trace specific stuff...(could subclass to SystemsProject if there gets to be
-    // many)
-    bool IsTrimSaveAllowed();
-    void TrimSave(const std::string& file_path_str);
-
 private:
     /*
      * Opens a project + attached trace file and returns Success/Duplicate/Failed.
@@ -163,6 +158,7 @@ constexpr const char* JSON_KEY_ANNOTATION_TITLE            = "title";
 constexpr const char* JSON_KEY_ANNOTATION_ID               = "id";
 constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
 constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
+constexpr const char* JSON_KEY_ANNOTATION_IS_MINIMIZED     = "is_minimized";
 
 class ProjectSetting
 {

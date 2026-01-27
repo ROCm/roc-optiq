@@ -19,7 +19,7 @@
 /*******************************Types******************************/
 
 
-typedef uint32_t                          rocprofvis_dm_node_id_t;
+typedef uint64_t                          rocprofvis_dm_node_id_t;
 typedef uint64_t                          rocprofvis_dm_process_id_t;
 typedef uint64_t                          rocprofvis_dm_stream_id_t;
 typedef std::string                       rocprofvis_dm_string_t;
@@ -87,7 +87,7 @@ typedef struct rocprofvis_dm_process_identifiers_t
 {
     // track category enumeration (PMC, Region, Kernel, SQQT, NIC, etc)  
     rocprofvis_dm_track_category_t category;
-    // 32-bit process IDs
+    // 64-bit process IDs
     rocprofvis_dm_process_id_t id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
     // database column name for process id
     rocprofvis_dm_string_t tag[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
@@ -118,7 +118,7 @@ typedef struct {
     // maximum level or value
     rocprofvis_dm_value_t max_value;
     //histogram of events.
-    std::map<uint32_t,uint32_t> histogram;
+    std::map<uint32_t,std::pair<uint32_t,double>> histogram;
     rocprofvis_dm_op_t op;
     std::set<uint32_t> load_id;
     rocprofvis_db_instance_t db_instance;
@@ -195,6 +195,7 @@ typedef rocprofvis_dm_table_t (*rocprofvis_dm_add_table_func_t) (const rocprofvi
 typedef rocprofvis_dm_table_row_t (*rocprofvis_dm_add_table_row_func_t) (const rocprofvis_dm_table_t object);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t column_name);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_enum_func_t) (const rocprofvis_dm_table_t object, rocprofvis_db_table_column_enum_t column_enum);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_type_func_t) (const rocprofvis_dm_table_t object, rocprofvis_db_data_type_t column_type);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_row_cell_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t cell_value);
 typedef rocprofvis_dm_result_t (*rocprofvis_db_find_cached_table_value_func_t) (const rocprofvis_dm_database_t object, rocprofvis_dm_charptr_t table, 
                                                                                 const rocprofvis_dm_id_t id, rocprofvis_dm_charptr_t column, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t* value);
@@ -244,6 +245,7 @@ typedef struct
         rocprofvis_dm_add_table_row_func_t FuncAddTableRow;             // Called by database query callback to add new row to a table object
         rocprofvis_dm_add_table_column_func_t FuncAddTableColumn;       // Called by database query callback to add new column name to a table object
         rocprofvis_dm_add_table_column_enum_func_t FuncAddTableColumnEnum; // Called by database query callback to add new column enumeration constant to a table object
+        rocprofvis_dm_add_table_column_type_func_t FuncAddTableColumnType; // Called by database query callback to add new column type constant to a table object
         rocprofvis_dm_add_table_row_cell_func_t FuncAddTableRowCell;    // Called by database query callback to add new cell to a table row
         rocprofvis_dm_add_event_level_func_t FuncAddEventLevel;         // Called by database query callback to add event level to a map array located in trace object
         rocprofvis_dm_check_slice_exists_t FuncCheckSliceExists;        // Called by database async interface before quering a slice with the same parameters

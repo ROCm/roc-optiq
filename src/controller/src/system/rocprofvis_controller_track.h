@@ -54,6 +54,8 @@ public:
 private:
     uint64_t m_id;
     uint64_t m_node;
+    uint64_t m_agent_id_or_pid;
+    uint64_t m_queue_id_or_tid;
     uint64_t m_num_entries;
     rocprofvis_controller_track_type_t m_type;
     SegmentTimeline m_segments;
@@ -62,6 +64,9 @@ private:
     double m_min_value;
     double m_max_value;
     std::string m_name;
+    std::string m_category;
+    std::string m_main_name;
+    std::string m_sub_name;
     rocprofvis_dm_track_t m_dm_handle;
     Thread* m_thread;
     Queue* m_queue;
@@ -69,7 +74,6 @@ private:
     Counter* m_counter;
     SystemTrace* m_ctx;
     std::condition_variable_any  m_cv;
-
 
 private:
     rocprofvis_result_t FetchFromDataModel(double start, double end, Future* future);

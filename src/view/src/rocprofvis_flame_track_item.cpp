@@ -402,17 +402,9 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 m_timeline_selection->UnselectAllEvents();
             }
 
-            if(chart_item.selected)
-            {
-                m_timeline_selection->SelectTrackEvent(
-                    m_id, chart_item.event.m_id.uuid,
-                    chart_item.event.m_start_ts,
-                    chart_item.event.m_start_ts + chart_item.event.m_duration);
-            }
-            else
-            {
-                m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id.uuid);
-            }
+            chart_item.selected
+                ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id.uuid)
+                : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id.uuid);
             // Always reset layer clicked after handling
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }

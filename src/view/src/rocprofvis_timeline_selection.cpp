@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Advanced Micro Devces, Inc. All rights reserved.
 
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_track_item.h"
 #include "spdlog/spdlog.h"
@@ -132,12 +133,11 @@ TimelineSelection::HasValidTimeRangeSelection() const
 }
 
 void
-TimelineSelection::SelectTrackEvent(uint64_t track_id, uint64_t event_id, double start_ts, double end_ts)
+TimelineSelection::SelectTrackEvent(uint64_t track_id, uint64_t event_id)
 {
     if(m_selected_event_ids.count(event_id) == 0)
     {
         m_selected_event_ids.insert(event_id);
-        m_selected_event_times[event_id] = {start_ts, end_ts};
         SendEventSelectionChanged(event_id, track_id, true);
     }
 }
@@ -148,7 +148,6 @@ TimelineSelection::UnselectTrackEvent(uint64_t track_id, uint64_t event_id)
     if(m_selected_event_ids.count(event_id) > 0)
     {
         m_selected_event_ids.erase(event_id);
-        m_selected_event_times.erase(event_id);
         SendEventSelectionChanged(event_id, track_id, false);
     }
 }
@@ -176,27 +175,15 @@ void
 TimelineSelection::UnselectAllEvents()
 {
     m_selected_event_ids.clear();
-    m_selected_event_times.clear();
     SendEventSelectionChanged(INVALID_SELECTION_ID, INVALID_SELECTION_ID, false, true);
 }
 
 bool
 TimelineSelection::GetSelectedEventsTimeRange(double& start_ts_out, double& end_ts_out) const
 {
-    if(m_selected_event_times.empty())
-    {
-        return false;
-    }
-
-    start_ts_out = std::numeric_limits<double>::max();
-    end_ts_out   = std::numeric_limits<double>::lowest();
-
-    for(const auto& [event_id, times] : m_selected_event_times)
-    {
-        start_ts_out = std::min(start_ts_out, times.first);
-        end_ts_out   = std::max(end_ts_out, times.second);
-    }
-    return true;
+    std::vector<uint64_t> event_ids(m_selected_event_ids.begin(), m_selected_event_ids.end());
+    return m_data_provider.DataModel().GetEvents().GetEventTimeRange(event_ids, start_ts_out,
+                                                                     end_ts_out);
 }
 
 void

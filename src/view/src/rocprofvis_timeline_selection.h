@@ -34,7 +34,7 @@ public:
     void ClearTimeRange();
     bool HasValidTimeRangeSelection() const;
 
-    void SelectTrackEvent(uint64_t track_id, uint64_t event_id, double start_ts, double end_ts);
+    void SelectTrackEvent(uint64_t track_id, uint64_t event_id);
     void UnselectTrackEvent(uint64_t track_id, uint64_t event_id);
     bool GetSelectedEvents(std::vector<uint64_t>& event_ids) const;
     bool EventSelected(uint64_t event_id) const;
@@ -60,8 +60,7 @@ private:
     double                       m_selected_range_start;
     double                       m_selected_range_end;
 
-    std::unordered_set<uint64_t>                        m_selected_event_ids;
-    std::unordered_map<uint64_t, std::pair<double, double>> m_selected_event_times;
+    std::unordered_set<uint64_t> m_selected_event_ids;
 };
 
 }  // namespace View

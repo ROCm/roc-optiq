@@ -1644,6 +1644,12 @@ TimelineView::RenderTraceView()
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+    {
+        // Reset per-click context so only event right-clicks repopulate it.
+        TimelineFocusManager::GetInstance().ClearRightClickLayer();
+    }
+
     ImGui::BeginChild("Grid View 2",
                       ImVec2(subcomponent_size_main.x,
                              subcomponent_size_main.y - m_artificial_scrollbar_height),

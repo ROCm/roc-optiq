@@ -4,6 +4,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_track_item.h"
 #include "spdlog/spdlog.h"
+#include <algorithm>
 
 namespace RocProfVis
 {

@@ -77,6 +77,8 @@ public:
 
     void           RenderGrid();
     float          GetScrollPosition();
+    void           TimelineDragShimmy(int shimmy_amount);
+    double         CalculateHighlightTimeWithShimmy(float mouse_x, float origin_x);
     void           RenderScrubber(ImVec2 screen_pos);
     void           RenderSplitter();
     void           RenderGraphView();
@@ -146,6 +148,11 @@ private:
         uint64_t track_id;
         int      new_index;
     } m_reorder_request;
+
+    bool m_dragging_selection_start;
+    bool m_dragging_selection_end;
+    bool m_is_selecting_region;
+
     TimelineViewProjectSettings m_project_settings;
 };
 

@@ -14,6 +14,7 @@ enum class Layer
     kNone = -1,
     kGraphLayer,
     kInteractiveLayer,
+    kScrubberLayer,
     kCount
 };
 

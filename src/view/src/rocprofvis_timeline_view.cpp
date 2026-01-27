@@ -1819,11 +1819,15 @@ TimelineView::HandleTopSurfaceTouch()
             m_pseudo_focus = true;
         }
 
-        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        // Handle drag start
+        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) && !m_is_selecting_region && !m_can_drag_to_pan)
         {
             if(io.KeyCtrl &&
                TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
             {
+                // Claim focus so FlameTrackItem doesn't also handle this click
+                TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
+
                 // Clear any existing selection before starting a new one
                 if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
                    m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
@@ -1833,8 +1837,11 @@ TimelineView::HandleTopSurfaceTouch()
                 m_highlighted_region.first    = TimelineSelection::INVALID_SELECTION_TIME;
                 m_highlighted_region.second   = TimelineSelection::INVALID_SELECTION_TIME;
                 m_is_selecting_region         = true;  // Track that we started a selection drag
+                
+                // Calculate click position by subtracting drag delta
                 ImVec2 mouse_pos              = ImGui::GetMousePos();
-                float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
+                ImVec2 drag_delta             = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 5.0f);
+                float  cursor_screen_position = (mouse_pos.x - drag_delta.x) - graph_area_min.x;
 
                 // Clamp cursor position to valid graph area (excluding scrollbar)
                 float max_x = m_tpt->GetGraphSizeX();
@@ -1849,6 +1856,9 @@ TimelineView::HandleTopSurfaceTouch()
         }
         if(ImGui::IsMouseDragging(ImGuiMouseButton_Left) && m_is_selecting_region)
         {
+            // Keep claiming focus while dragging
+            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
+
             ImVec2 mouse_pos = ImGui::GetMousePos();
             m_highlighted_region.second = CalculateHighlightTimeWithShimmy(mouse_pos.x, graph_area_min.x);
             // Update offset_ns in case shimmy changed the view

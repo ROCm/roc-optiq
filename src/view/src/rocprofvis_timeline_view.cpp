@@ -14,6 +14,7 @@
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
@@ -249,11 +250,11 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup("StickyNoteContextMenu"))
     {
-        // Show "Make Selection" when there are selected events
+        // Show "Make Time Range Selection" when there are selected events
         if(m_timeline_selection->HasSelectedEvents() &&
            TimelineFocusManager::GetInstance().GetRightClickLayer() == Layer::kGraphLayer)
         {
-            if(ImGui::MenuItem("Make Selection"))
+            if(ImGui::MenuItem("Make Time Range Selection"))
             {
                 double start_ts, end_ts;
                 if(m_timeline_selection->GetSelectedEventsTimeRange(start_ts, end_ts))
@@ -282,9 +283,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         {
             if(ImGui::MenuItem("Remove Selection"))
             {
-                m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
-                m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
-                m_timeline_selection->ClearTimeRange();
+                ClearTimeRangeSelection();
             }
         }
 
@@ -301,6 +300,19 @@ TimelineView::ScrollToTrack(const uint64_t& track_id)
         m_scroll_position_y =
             std::min(m_content_max_y_scroll, m_track_position_y[track_id]);
         ImGui::SetScrollY(m_scroll_position_y);
+    }
+}
+
+// Helper to clear any active time range selection and reset highlight state
+void
+TimelineView::ClearTimeRangeSelection()
+{
+    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
+       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+    {
+        m_timeline_selection->ClearTimeRange();
+        m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
+        m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
     }
 }
 
@@ -640,7 +652,6 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                                     ImGuiWindowFlags_NoInputs;
 
     ImVec2 container_size  = ImGui::GetWindowSize();
-    float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
     ImGui::SetNextWindowSize(m_tpt->GetGraphSize(), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
@@ -1859,15 +1870,7 @@ TimelineView::HandleTopSurfaceTouch()
                     Layer::kInteractiveLayer);
 
                 // Clear any existing selection before starting a new one
-                if(m_highlighted_region.first !=
-                       TimelineSelection::INVALID_SELECTION_TIME ||
-                   m_highlighted_region.second !=
-                       TimelineSelection::INVALID_SELECTION_TIME)
-                {
-                    m_timeline_selection->ClearTimeRange();
-                }
-                m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
-                m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
+                ClearTimeRangeSelection();
                 m_is_selecting_region = true;  // Track that we started a selection drag
 
                 // Calculate click position by subtracting drag delta
@@ -2004,6 +2007,39 @@ TimelineView::HandleTopSurfaceTouch()
             m_scroll_position_y =
                 std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y,
                            0.0f, m_content_max_y_scroll);
+        }
+
+        // Escape to clear time range selection
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape))
+        {
+            ClearTimeRangeSelection();
+        }
+
+        // M to mark/unmark selected events as a time range
+        if(ImGui::IsKeyPressed(ImGuiKey_M))
+        {
+            if(m_timeline_selection->HasValidTimeRangeSelection())
+            {
+                ClearTimeRangeSelection();
+            }
+            else
+            {
+                double start_ts, end_ts;
+                if(m_timeline_selection->GetSelectedEventsTimeRange(start_ts, end_ts))
+                {
+                    // Convert absolute timestamps to normalized time for
+                    // m_highlighted_region
+                    m_highlighted_region = { m_tpt->NormalizeTime(start_ts),
+                                             m_tpt->NormalizeTime(end_ts) };
+                    m_timeline_selection->SelectTimeRange(start_ts, end_ts);
+                }
+                else
+                {
+                    // show notificaton that no events are selected
+                    NotificationManager::GetInstance().Show("No events selected to mark.",
+                                                            NotificationLevel::Warning);
+                }
+            }
         }
     }
 

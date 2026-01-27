@@ -152,12 +152,6 @@ TimelineView::RenderInteractiveUI()
         m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
     float overlay_width = m_tpt->GetGraphSizeX();
 
-    // Adjust width if vertical scrollbar is needed
-    // if(m_track_height_sum > overlay_height)
-    // {
-    //     overlay_width -= ImGui::GetStyle().ScrollbarSize;
-    // }
-
     ImGui::BeginChild("UI Interactive Overlay", ImVec2(overlay_width, overlay_height),
                       false, window_flags);
 

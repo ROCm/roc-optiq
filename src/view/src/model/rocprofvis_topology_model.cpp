@@ -307,12 +307,13 @@ TopologyDataModel::TopologyToString()
     auto indent = [](int level) {
         return std::string(level, ' ');
     };
-    int level = 1;
 
     // iterate nodes
     ss << "Nodes: " << m_nodes.size() << std::endl;
     for(auto it = m_nodes.begin(); it != m_nodes.end(); it++)
     {
+        int level = 1;
+
         ss << indent(level) << "Node ID: " << it->second.id << std::endl;
         ss << indent(level) << "Hostname: " << it->second.host_name << std::endl;
         ss << indent(level) << "OS name: " << it->second.os_name << std::endl;

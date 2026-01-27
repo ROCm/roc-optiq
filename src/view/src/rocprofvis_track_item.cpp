@@ -477,10 +477,15 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 {
     TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
 
-    // Get counter type label from topology model, ex: "GPU0"
-    // This may be empty for some tracks
-    std::string device_type_label = tdm.GetDeviceTypeLabelByInfoId(
-        track_info->topology.id, track_info->topology.type, "");
+    // Get Processor (device) type label from using track's agent_or_pid, ex: "GPU0".
+    // The associated device in topology is unreliable, so we use agent_or_pid to find the
+    // device. This may be empty for some tracks.
+    std::string       device_type_label;
+    const DeviceInfo* device_info = tdm.GetDevice(track_info->agent_or_pid);
+    if(device_info)
+    {
+        tdm.GetDeviceTypeLabel(*device_info, device_type_label);
+    }
 
     switch(track_info->topology.type)
     {
@@ -546,9 +551,11 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::Counter:
         {
             // Get product label from topology model, ex: "AMD Radeon RX 6800 XT"
-            std::string product_label = tdm.GetDeviceProductLabelByInfoId(
-                track_info->topology.id, track_info->topology.type, "");
-            m_pill.SetTooltipLabel(product_label);
+            if(device_info)
+            {
+                device_info->product_name;
+                m_pill.SetTooltipLabel(device_info->product_name);
+            }
             break;
         }
         case TrackInfo::TrackType::InstrumentedThread:
@@ -564,6 +571,12 @@ void
 TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
     TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+
+    std::string node_id_str    = std::to_string(track_info->topology.node_id);
+    std::string process_id_str = std::to_string(track_info->topology.process_id);
+
+    bool show_node_id    = tdm.NodeCount() > 1;
+    bool show_process_id = tdm.ProcessCount() > 1;
 
     switch(track_info->topology.type)
     {
@@ -589,7 +602,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
             }
 
             m_meta_area_label =
-                get_executable_name(process_name_path) + " (" + thread_id + ")";
+                get_executable_name(process_name_path) + " (TID: " + thread_id + ")";
             if(track_info->topology.type == TrackInfo::TrackType::SampledThread)
             {
                 m_meta_area_label += " (S)";
@@ -602,6 +615,14 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::Counter:
         {
             m_meta_area_label = track_info->sub_name;
+            if(show_node_id)
+            {
+                m_meta_area_label += " (NID: " + node_id_str + ")";
+            }
+            if(show_process_id)
+            {
+                m_meta_area_label += " (PID: " + process_id_str + ")";
+            }
             // set tooltip to counter description
             const CounterInfo* counter_info = tdm.GetCounter(track_info->topology.id);
             if(counter_info)
@@ -610,10 +631,45 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
             }
             break;
         }
+        case TrackInfo::TrackType::Queue:
+        {
+            if(track_info->category != "GPU Queue")
+            {
+                m_meta_area_label = track_info->category + ": " + track_info->sub_name;
+            }
+            else
+            {
+                m_meta_area_label = track_info->sub_name;
+            }
+
+            if(show_node_id)
+            {
+                m_meta_area_label += " (NID: " + node_id_str + ")";
+            }
+            if(show_process_id)
+            {
+                m_meta_area_label += " (PID " + process_id_str + ")";
+            }
+            break;
+        }
+        case TrackInfo::TrackType::Stream:
+        {
+            m_meta_area_label = track_info->main_name;
+
+            if(show_node_id)
+            {
+                m_meta_area_label += " (NID: " + node_id_str + ")";
+            }
+            if(show_process_id)
+            {
+                m_meta_area_label += " (PID " + process_id_str + ")";
+            }
+            break;
+        }
         default:
         {
             m_meta_area_label = m_name;
-            return;
+            break;
         }
     }
 }
@@ -622,6 +678,14 @@ void
 TrackItem::SetTrackName(const TrackInfo* track_info)
 {
     TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+
+    std::string       device_type_label;
+    const DeviceInfo* device_info = tdm.GetDevice(track_info->agent_or_pid);
+    if(device_info)
+    {
+        tdm.GetDeviceTypeLabel(*device_info, device_type_label);
+    }
+
     switch(track_info->topology.type)
     {
         case TrackInfo::TrackType::Queue:
@@ -630,22 +694,32 @@ TrackItem::SetTrackName(const TrackInfo* track_info)
             // For example, "Memory Copy", "Memory Allocation", etc
             if(track_info->category != "GPU Queue")
             {
-                m_name = track_info->category + ":" + track_info->main_name + ":" +
-                         track_info->sub_name;
+                m_name = track_info->category;
+                if(device_info)
+                {
+                    m_name +=
+                        " (" + device_type_label + ": " + device_info->product_name + ")";
+                }
             }
             else
             {
-                m_name = tdm.GetDeviceProductLabelByInfoId(
-                             track_info->topology.id, track_info->topology.type, "") +
-                         ":" + track_info->sub_name;
+                m_name = track_info->sub_name;
+                if(device_info)
+                {
+                    m_name +=
+                        " (" + device_type_label + ": " + device_info->product_name + ")";
+                }
             }
             break;
         }
         case TrackInfo::TrackType::Stream:
         {
-            m_name = tdm.GetDeviceProductLabelByInfoId(track_info->topology.id,
-                                                       track_info->topology.type, "") +
-                     ":" + track_info->main_name;
+            m_name = track_info->main_name;
+            if(device_info)
+            {
+                m_name +=
+                    " (" + device_type_label + ": " + device_info->product_name + ")";
+            }
             break;
         }
         case TrackInfo::TrackType::InstrumentedThread:
@@ -660,11 +734,19 @@ TrackItem::SetTrackName(const TrackInfo* track_info)
         }
         case TrackInfo::TrackType::Counter:
         {
-            // Get counter type label from topology model, ex: "GPU0"
-            std::string device_str = tdm.GetDeviceTypeLabelByInfoId(
-                track_info->topology.id, track_info->topology.type);
+            // Get Processor (device) type label from using track's agent_or_pid, ex:
+            // "GPU0".
+            m_name = track_info->sub_name;
 
-            m_name = track_info->sub_name + " (" + device_str + ")";
+            if(device_info)
+            {
+                std::string device_str;
+                if(tdm.GetDeviceTypeLabel(*device_info, device_str))
+                {
+                    m_name = device_str + ":" + m_name;
+                }
+            }
+
             break;
         }
         default:

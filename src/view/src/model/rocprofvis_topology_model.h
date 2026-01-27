@@ -31,42 +31,50 @@ public:
     std::vector<const NodeInfo*> GetNodeList() const;
     void AddNode(uint64_t node_id, NodeInfo&& node);
     void ClearNodes();
+    size_t NodeCount() const { return m_nodes.size(); }
 
     // Device access
     const DeviceInfo* GetDevice(uint64_t device_id) const;
     void AddDevice(uint64_t device_id, DeviceInfo&& device);
     void ClearDevices();
+    size_t DeviceCount() const { return m_devices.size(); }
 
     // Process access
     const ProcessInfo* GetProcess(uint64_t process_id) const;
     void AddProcess(uint64_t process_id, ProcessInfo&& process);
     void ClearProcesses();
+    size_t ProcessCount() const { return m_processes.size(); }
 
     // Thread access (instrumented)
     const ThreadInfo* GetInstrumentedThread(uint64_t thread_id) const;
     void AddInstrumentedThread(uint64_t thread_id, ThreadInfo&& thread);
     void ClearInstrumentedThreads();
+    size_t InstrumentedThreadCount() const { return m_instrumented_threads.size(); }
 
     // Thread access (sampled)
     const ThreadInfo* GetSampledThread(uint64_t thread_id) const;
     void AddSampledThread(uint64_t thread_id, ThreadInfo&& thread);
     void ClearSampledThreads();
+    size_t SampledThreadCount() const { return m_sampled_threads.size(); }
 
     // Queue access
     const QueueInfo* GetQueue(uint64_t queue_id) const;
     void AddQueue(uint64_t queue_id, QueueInfo&& queue);
     void ClearQueues();
+    size_t QueueCount() const { return m_queues.size(); }
 
     // Stream access
     const StreamInfo* GetStream(uint64_t stream_id) const;
     void AddStream(uint64_t stream_id, StreamInfo&& stream);
     void ClearStreams();
+    size_t StreamCount() const { return m_streams.size(); }
 
     // Counter access
     const CounterInfo* GetCounter(uint64_t counter_id) const;
     void AddCounter(uint64_t counter_id, CounterInfo&& counter);
     void ClearCounters();
-
+    size_t CounterCount() const { return m_counters.size(); }
+    
     // Clear all topology data
     void Clear();
 

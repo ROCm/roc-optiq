@@ -245,6 +245,8 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 
     if(!ImGui::IsPopupOpen("StickyNoteContextMenu"))
     {
+        // Clear right-click state when popup closes
+        TimelineFocusManager::GetInstance().ClearRightClickLayer();
         return;
     }
     auto style = m_settings.GetDefaultStyle();
@@ -252,6 +254,25 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup("StickyNoteContextMenu"))
     {
+        // Show "Make Selection" when there are selected events
+        if(m_timeline_selection->HasSelectedEvents() &&
+           TimelineFocusManager::GetInstance().GetRightClickLayer() == Layer::kGraphLayer)
+        {
+            if(ImGui::MenuItem("Make Selection"))
+            {
+                double start_ts, end_ts;
+                if(m_timeline_selection->GetSelectedEventsTimeRange(start_ts, end_ts))
+                {
+                    // Convert absolute timestamps to normalized time for
+                    // m_highlighted_region
+                    m_highlighted_region = { m_tpt->NormalizeTime(start_ts),
+                                             m_tpt->NormalizeTime(end_ts) };
+                    m_timeline_selection->SelectTimeRange(start_ts, end_ts);
+                }
+                ImGui::CloseCurrentPopup();
+            }
+        }
+
         if(ImGui::MenuItem("Add Annotation"))
         {
             float  x_in_chart = rel_mouse_pos.x;
@@ -564,10 +585,10 @@ TimelineView::TimelineDragShimmy(int shimmy_amount)
     double view_offset = m_tpt->GetViewTimeOffsetNs();
     double view_width  = m_tpt->GetVWidth();
     double total_range = m_tpt->GetRangeX();
-    
+
     // Calculate shimmy amount (1% of view width)
     double shimmy_delta = view_width * 0.01;
-    
+
     if(shimmy_amount < 0)
     {
         // Trying to shimmy left - only if there's more timeline to the left
@@ -596,22 +617,23 @@ TimelineView::TimelineDragShimmy(int shimmy_amount)
 double
 TimelineView::CalculateHighlightTimeWithShimmy(float mouse_x, float origin_x)
 {
-    float max_x = m_tpt->GetGraphSizeX();
+    float max_x                  = m_tpt->GetGraphSizeX();
     float cursor_screen_position = mouse_x - origin_x;
-    cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
-    
+    cursor_screen_position       = std::clamp(cursor_screen_position, 0.0f, max_x);
+
     float left_threshold  = max_x * 0.10f;
     float right_threshold = max_x * 0.90f;
-    
+
     if(cursor_screen_position < left_threshold)
         TimelineDragShimmy(-1);
     else if(cursor_screen_position > right_threshold)
         TimelineDragShimmy(1);
-    
+
     // Recalculate after potential shimmy to ensure alignment
     cursor_screen_position = mouse_x - origin_x;
     cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
-    return std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
+    return std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0,
+                      m_tpt->GetRangeX());
 }
 
 void
@@ -657,7 +679,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // Process Dragging
     if(!mouse_down)
     {
-        // Check if we were dragging and just released - call SelectTimeRange once on completion
+        // Check if we were dragging and just released - call SelectTimeRange once on
+        // completion
         if(m_dragging_selection_start || m_dragging_selection_end)
         {
             if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
@@ -679,13 +702,15 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         {
             m_stop_user_interaction = true;
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-            m_highlighted_region.first = CalculateHighlightTimeWithShimmy(mouse_pos.x, window_position.x);
+            m_highlighted_region.first =
+                CalculateHighlightTimeWithShimmy(mouse_pos.x, window_position.x);
         }
         if(m_dragging_selection_end)
         {
             m_stop_user_interaction = true;
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-            m_highlighted_region.second = CalculateHighlightTimeWithShimmy(mouse_pos.x, window_position.x);
+            m_highlighted_region.second =
+                CalculateHighlightTimeWithShimmy(mouse_pos.x, window_position.x);
         }
     }
 
@@ -798,10 +823,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             window_position.x + m_tpt->TimeToPixel(m_highlighted_region.second);
 
         // Clamp to not overlap scrollbar
-        float min_x = window_position.x;
-        float max_x = window_position.x + m_tpt->GetGraphSizeX();
+        float min_x         = window_position.x;
+        float max_x         = window_position.x + m_tpt->GetGraphSizeX();
         float clamped_start = std::clamp(normalized_start_box_highlighted, min_x, max_x);
-        float clamped_end   = std::clamp(normalized_start_box_highlighted_end, min_x, max_x);
+        float clamped_end =
+            std::clamp(normalized_start_box_highlighted_end, min_x, max_x);
 
         draw_list->AddRectFilled(
             ImVec2(clamped_start, cursor_position.y),
@@ -810,10 +836,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     }
 
     // IsMouseHoveringRect check in screen coordinates
-    if(ImGui::IsMouseHoveringRect(
-           window_position,
-           ImVec2(window_position.x + m_tpt->GetGraphSizeX(),
-                  window_position.y + m_tpt->GetGraphSizeY())) &&
+    if(ImGui::IsMouseHoveringRect(window_position,
+                                  ImVec2(window_position.x + m_tpt->GetGraphSizeX(),
+                                         window_position.y + m_tpt->GetGraphSizeY())) &&
        !m_stop_user_interaction)
     {
         float  cursor_screen_position = mouse_position.x - window_position.x;
@@ -1628,8 +1653,10 @@ TimelineView::RenderTraceView()
     // Scale used in all graphs computed here
 
     float scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    float available_height = subcomponent_size_main.y - m_ruler_height - m_artificial_scrollbar_height;
-    float width_adjustment = (m_track_height_sum > available_height) ? scrollbar_width : 0.0f;
+    float available_height =
+        subcomponent_size_main.y - m_ruler_height - m_artificial_scrollbar_height;
+    float width_adjustment =
+        (m_track_height_sum > available_height) ? scrollbar_width : 0.0f;
 
     m_tpt->SetGraphSize(subcomponent_size_main.x - m_sidebar_size - width_adjustment,
                         subcomponent_size_main.y);
@@ -1819,38 +1846,56 @@ TimelineView::HandleTopSurfaceTouch()
             m_pseudo_focus = true;
         }
 
-        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        // Handle drag start
+        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) &&
+           !m_is_selecting_region && !m_can_drag_to_pan)
         {
             if(io.KeyCtrl &&
                TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
             {
+                // Claim focus so FlameTrackItem doesn't also handle this click
+                TimelineFocusManager::GetInstance().RequestLayerFocus(
+                    Layer::kInteractiveLayer);
+
                 // Clear any existing selection before starting a new one
-                if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
-                   m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+                if(m_highlighted_region.first !=
+                       TimelineSelection::INVALID_SELECTION_TIME ||
+                   m_highlighted_region.second !=
+                       TimelineSelection::INVALID_SELECTION_TIME)
                 {
                     m_timeline_selection->ClearTimeRange();
                 }
-                m_highlighted_region.first    = TimelineSelection::INVALID_SELECTION_TIME;
-                m_highlighted_region.second   = TimelineSelection::INVALID_SELECTION_TIME;
-                m_is_selecting_region         = true;  // Track that we started a selection drag
-                ImVec2 mouse_pos              = ImGui::GetMousePos();
-                float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
+                m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
+                m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
+                m_is_selecting_region = true;  // Track that we started a selection drag
+
+                // Calculate click position by subtracting drag delta
+                ImVec2 mouse_pos  = ImGui::GetMousePos();
+                ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 5.0f);
+                float  cursor_screen_position =
+                    (mouse_pos.x - drag_delta.x) - graph_area_min.x;
 
                 // Clamp cursor position to valid graph area (excluding scrollbar)
-                float max_x = m_tpt->GetGraphSizeX();
+                float max_x            = m_tpt->GetGraphSizeX();
                 cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
 
-                m_highlighted_region.first = std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
+                m_highlighted_region.first = std::clamp(
+                    m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
             }
             else if(!io.KeyCtrl)
             {
                 m_can_drag_to_pan = true;
             }
         }
-        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left) && m_is_selecting_region)
+        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) && m_is_selecting_region)
         {
+            // Keep claiming focus while dragging
+            TimelineFocusManager::GetInstance().RequestLayerFocus(
+                Layer::kInteractiveLayer);
+
             ImVec2 mouse_pos = ImGui::GetMousePos();
-            m_highlighted_region.second = CalculateHighlightTimeWithShimmy(mouse_pos.x, graph_area_min.x);
+            m_highlighted_region.second =
+                CalculateHighlightTimeWithShimmy(mouse_pos.x, graph_area_min.x);
             // Update offset_ns in case shimmy changed the view
             offset_ns = m_tpt->GetViewTimeOffsetNs();
         }
@@ -1970,10 +2015,11 @@ TimelineView::HandleTopSurfaceTouch()
             float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
 
             // Clamp cursor position to valid graph area (excluding scrollbar)
-            float max_x = m_tpt->GetGraphSizeX();
+            float max_x            = m_tpt->GetGraphSizeX();
             cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
 
-            m_highlighted_region.second = std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
+            m_highlighted_region.second = std::clamp(
+                m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
 
             // Call SelectTimeRange once on drag complete - not during drag
             if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&

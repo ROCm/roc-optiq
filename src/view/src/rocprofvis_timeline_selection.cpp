@@ -131,11 +131,12 @@ TimelineSelection::HasValidTimeRangeSelection() const
 }
 
 void
-TimelineSelection::SelectTrackEvent(uint64_t track_id, uint64_t event_id)
+TimelineSelection::SelectTrackEvent(uint64_t track_id, uint64_t event_id, double start_ts, double end_ts)
 {
     if(m_selected_event_ids.count(event_id) == 0)
     {
         m_selected_event_ids.insert(event_id);
+        m_selected_event_times[event_id] = {start_ts, end_ts};
         SendEventSelectionChanged(event_id, track_id, true);
     }
 }
@@ -146,6 +147,7 @@ TimelineSelection::UnselectTrackEvent(uint64_t track_id, uint64_t event_id)
     if(m_selected_event_ids.count(event_id) > 0)
     {
         m_selected_event_ids.erase(event_id);
+        m_selected_event_times.erase(event_id);
         SendEventSelectionChanged(event_id, track_id, false);
     }
 }
@@ -173,7 +175,27 @@ void
 TimelineSelection::UnselectAllEvents()
 {
     m_selected_event_ids.clear();
+    m_selected_event_times.clear();
     SendEventSelectionChanged(INVALID_SELECTION_ID, INVALID_SELECTION_ID, false, true);
+}
+
+bool
+TimelineSelection::GetSelectedEventsTimeRange(double& start_ts_out, double& end_ts_out) const
+{
+    if(m_selected_event_times.empty())
+    {
+        return false;
+    }
+
+    start_ts_out = std::numeric_limits<double>::max();
+    end_ts_out   = std::numeric_limits<double>::lowest();
+
+    for(const auto& [event_id, times] : m_selected_event_times)
+    {
+        start_ts_out = std::min(start_ts_out, times.first);
+        end_ts_out   = std::max(end_ts_out, times.second);
+    }
+    return true;
 }
 
 void

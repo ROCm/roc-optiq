@@ -372,8 +372,15 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
        ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
                               ImGuiHoveredFlags_NoPopupHierarchy))
     {
+        // Right-click context menu - set layer so timeline view knows we're on an event
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+        {
+            TimelineFocusManager::GetInstance().SetRightClickLayer(Layer::kGraphLayer);
+        }
+
         // Select on click
-        if(IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
+        if(IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left) &&
+           TimelineFocusManager::GetInstance().GetFocusedLayer() != Layer::kInteractiveLayer)
         {
             // Defer on click execution to next frame if no other layer takes focus
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kGraphLayer);
@@ -395,9 +402,17 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 m_timeline_selection->UnselectAllEvents();
             }
 
-            chart_item.selected
-                ? m_timeline_selection->SelectTrackEvent(m_id, chart_item.event.m_id.uuid)
-                : m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id.uuid);
+            if(chart_item.selected)
+            {
+                m_timeline_selection->SelectTrackEvent(
+                    m_id, chart_item.event.m_id.uuid,
+                    chart_item.event.m_start_ts,
+                    chart_item.event.m_start_ts + chart_item.event.m_duration);
+            }
+            else
+            {
+                m_timeline_selection->UnselectTrackEvent(m_id, chart_item.event.m_id.uuid);
+            }
             // Always reset layer clicked after handling
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }

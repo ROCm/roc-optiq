@@ -488,12 +488,12 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
 void
 DataProvider::HandleLoadSystemTopology()
 {
-    size_t              num_nodes = 0;
+    uint64_t            num_nodes = 0;
     rocprofvis_result_t result    = rocprofvis_controller_get_uint64(
         m_trace_controller, kRPVControllerSystemNumNodes, 0, &num_nodes);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     // Query nodes...
-    for(size_t i = 0; i < num_nodes; i++)
+    for(uint64_t i = 0; i < num_nodes; i++)
     {
         rocprofvis_handle_t* node_handle = nullptr;
 

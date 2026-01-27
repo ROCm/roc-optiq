@@ -16,8 +16,8 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float MIN_TOOL_TIP_WIDTH = 200.0f;
-constexpr float MAX_TOOL_TIP_WIDTH = 600.0f;
+constexpr float kMinTooltipWrapWidth = 200.0f;
+constexpr float kMaxTooltipWrapWidth = 600.0f;
 
 float TrackItem::s_metadata_width = 400.0f;
 
@@ -300,9 +300,9 @@ TrackItem::RenderMetaArea()
         if(!m_meta_area_tooltip.empty() && ImGui::IsItemHovered())
         {
             const float tooltip_max_width = std::max(
-                MIN_TOOL_TIP_WIDTH,
-                std::min(MAX_TOOL_TIP_WIDTH, s_metadata_width - m_reorder_grip_width -
-                                                 2.0f * m_metadata_padding.x));
+                kMinTooltipWrapWidth,
+                std::min(kMaxTooltipWrapWidth, s_metadata_width - m_reorder_grip_width -
+                                                   2.0f * m_metadata_padding.x));
 
             // Constrain tooltip window width (height auto-fits)
             ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),

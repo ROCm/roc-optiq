@@ -751,12 +751,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
                 if(mouse_clicked)
                 {
-                    TimelineFocusManager::GetInstance().RequestLayerFocus(
-                        Layer::kScrubberLayer);
-
                     m_dragging_selection_start = true;
                     m_stop_user_interaction    = true;
                 }
+                TimelineFocusManager::GetInstance().RequestLayerFocus(
+                    Layer::kScrubberLayer);
             }
             else
             {

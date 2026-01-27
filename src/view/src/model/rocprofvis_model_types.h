@@ -48,15 +48,17 @@ struct TrackInfo
         InstrumentedThread,
         SampledThread,
         Counter
-    };    
+    };
 
     uint64_t                           index;  // index of the track in the controller
     uint64_t                           id;     // id of the track in the controller
     std::string                        name;   // name of the track
-    rocprofvis_controller_track_type_t track_type;   // the type of track
-    double                             min_ts;       // starting time stamp of track
-    double                             max_ts;       // ending time stamp of track
-    uint64_t                           num_entries;  // number of entries in the track
+    rocprofvis_controller_track_type_t track_type;       // the type of track
+    double                             min_ts;           // starting time stamp of track
+    double                             max_ts;           // ending time stamp of track
+    uint64_t                           num_entries;      // number of entries in the track
+    uint64_t                           agent_or_pid;     // agent id or process id
+    uint64_t                           queue_id_or_tid;  // queue id or thread id
     double min_value;  // minimum value in the track (for samples) or level (for events)
     double max_value;  // maximum value in the track (for samples) or level (for events)
     rocprofvis_handle_t* graph_handle;  // handle to the graph object owned by the track

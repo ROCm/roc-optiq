@@ -916,6 +916,14 @@ DataProvider::HandleLoadTrackMetaData()
                 track, kRPVControllerTrackNumberOfEntries, 0, &track_info.num_entries);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+            result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackAgentIdOrPid, 0, &track_info.agent_or_pid);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackQueueIdOrTid, 0, &track_info.queue_id_or_tid);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
             result = rocprofvis_controller_get_double(track, kRPVControllerTrackMinValue,
                                                       0, &track_info.min_value);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);

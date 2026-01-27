@@ -230,7 +230,25 @@ public:
     TraceDataModel&       DataModel() { return m_model; };
 
 private:
+    struct ProcessChildCount
+    {
+        size_t thread_count;
+        size_t queue_count;
+        size_t stream_count;
+        size_t counter_count;
+    };
+
     void HandleLoadSystemTopology();
+    bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
+    bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info);
+    bool ParseProcessData(rocprofvis_handle_t* process_handle, ProcessInfo& process_info,
+                          ProcessChildCount& process_child_count);
+    bool ParseQueueData(rocprofvis_handle_t* queue_handle, QueueInfo& queue_info);
+    bool ParseThreadData(rocprofvis_handle_t* thread_handle, ThreadInfo& thread_info,
+                         uint64_t& thread_type);
+    bool ParseCounterData(rocprofvis_handle_t* counter_handle, CounterInfo& counter_info);
+    bool ParseStreamData(rocprofvis_handle_t* stream_handle, StreamInfo& stream_info);
+
     void HandleLoadTrackMetaData();
     void HandleRequests();
 

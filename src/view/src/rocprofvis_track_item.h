@@ -152,6 +152,7 @@ protected:
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;
     static float                                     s_metadata_width;
     std::string                                      m_meta_area_label;
+    std::string                                      m_meta_area_tooltip;
     Pill                                             m_pill;
 
 private:

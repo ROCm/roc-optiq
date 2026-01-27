@@ -143,7 +143,7 @@ TrackDetails::Update()
         {
             const TrackInfo* metadata =
                 m_data_provider.DataModel().GetTimeline().GetTrack(item.track_id);
-            if(metadata && metadata->topology.type != TrackInfo::Topology::Unknown)
+            if(metadata && metadata->topology.type != TrackInfo::TrackType::Unknown)
             {
                 item.track_name = &metadata->name;
 
@@ -160,7 +160,7 @@ TrackDetails::Update()
                         item.process          = &process;
                         switch(metadata->topology.type)
                         {
-                            case TrackInfo::Topology::Queue:
+                            case TrackInfo::TrackType::Queue:
                             {
                                 if(process.queue_lut.count(type_id) > 0)
                                 {
@@ -168,7 +168,7 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case TrackInfo::Topology::InstrumentedThread:
+                            case TrackInfo::TrackType::InstrumentedThread:
                             {
                                 if(process.instrumented_thread_lut.count(type_id) > 0)
                                 {
@@ -177,7 +177,7 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case TrackInfo::Topology::SampledThread:
+                            case TrackInfo::TrackType::SampledThread:
                             {
                                 if(process.sampled_thread_lut.count(type_id) > 0)
                                 {
@@ -186,7 +186,7 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case TrackInfo::Topology::Counter:
+                            case TrackInfo::TrackType::Counter:
                             {
                                 if(process.counter_lut.count(type_id) > 0)
                                 {
@@ -194,7 +194,7 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case TrackInfo::Topology::Stream:
+                            case TrackInfo::TrackType::Stream:
                             {
                                 if(process.stream_lut.count(type_id) > 0)
                                 {

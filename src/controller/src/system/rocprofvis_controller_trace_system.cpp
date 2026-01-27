@@ -989,7 +989,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                             Node* thread_node = nullptr;
                                             char* end = nullptr;
                                             Process* thread_process = nullptr;
-
+                                            char const* name = nullptr;
 
                                             std::vector<std::string> row;
                                             for (int j = 0; j < num_cells; j++)
@@ -1062,6 +1062,11 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                                     uint64_t val = std::strtoull(prop_string, &end, 10);
                                                     thread_process = processes[val];
                                                 }
+                                                else if (columns[j] == kRPVControllerThreadName)
+                                                {
+                                                    name = prop_string;
+                                                }
+                                                
 
                                             }
 
@@ -1077,6 +1082,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                                 thread->SetDouble(kRPVControllerThreadStartTime, 0, thread_start);
                                                 thread->SetDouble(kRPVControllerThreadEndTime, 0, thread_end);
                                                 thread->SetObject(kRPVControllerThreadProcess, 0, (rocprofvis_handle_t*)thread_process);
+                                                thread->SetString(kRPVControllerThreadName, 0, name);
 
                                                 uint64_t num_threads = 0;
                                                 thread_process->GetUInt64(kRPVControllerProcessNumThreads, 0, &num_threads);

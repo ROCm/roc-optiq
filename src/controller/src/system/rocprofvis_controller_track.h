@@ -63,7 +63,6 @@ private:
     double m_end_timestamp;
     double m_min_value;
     double m_max_value;
-    std::string m_name;
     std::string m_category;
     std::string m_main_name;
     std::string m_sub_name;

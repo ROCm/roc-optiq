@@ -544,6 +544,18 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerTrackAgentIdOrPid:
+            {
+                *value = m_agent_id_or_pid;
+                result = kRocProfVisResultSuccess;
+                break;
+            }     
+            case kRPVControllerTrackQueueIdOrTid:
+            {
+                *value = m_queue_id_or_tid;
+                result = kRocProfVisResultSuccess;
+                break;
+            }  
             default:
             {
                 result = UnhandledProperty(property);
@@ -730,6 +742,18 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         case kRPVControllerTrackNode:
         {
             m_node = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerTrackAgentIdOrPid:
+        {
+            m_agent_id_or_pid = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerTrackQueueIdOrTid:
+        {
+            m_queue_id_or_tid = value;
             result = kRocProfVisResultSuccess;
             break;
         }

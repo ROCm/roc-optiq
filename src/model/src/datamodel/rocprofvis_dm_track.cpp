@@ -204,6 +204,7 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackNodeIdUInt64:
             *value = NodeId();
+            return kRocProfVisDmResultSuccess;
         case kRPVDMTrackInstanceIdUInt64:
             *value = InstanceId();
             return kRocProfVisDmResultSuccess;
@@ -227,6 +228,12 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
             return kRocProfVisDmResultSuccess;
         case kRPVDMTrackHistogramBucketEventDensityUInt64Indexed:
             *value = GetHistogramBucketNumEventsAt(index);
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackProcessIdUInt64:
+            *value = ProcessId();
+            return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackSubProcessIdUInt64:
+            *value = SubProcessId();
             return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);

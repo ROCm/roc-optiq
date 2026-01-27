@@ -37,6 +37,10 @@ public:
     rocprofvis_dm_track_id_t                            TrackId() { return m_track_params->track_id; }
     // Returns node id
     rocprofvis_dm_node_id_t                             NodeId() { return m_track_params->process.id[TRACK_ID_NODE]; }
+    // Returns pid or agent id
+    rocprofvis_dm_process_id_t                          ProcessId() { return m_track_params->process.id[TRACK_ID_PID_OR_AGENT]; }
+    // Returns tid or queue id
+    rocprofvis_dm_process_id_t                          SubProcessId() { return m_track_params->process.id[TRACK_ID_TID_OR_QUEUE]; }
     // Returns pointer to process string
     rocprofvis_dm_charptr_t                             Process() { return m_track_params->process.name[TRACK_ID_PID_OR_AGENT].c_str(); }
     // Returns pointer to subprocess string

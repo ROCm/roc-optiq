@@ -553,7 +553,6 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
             // Get product label from topology model, ex: "AMD Radeon RX 6800 XT"
             if(device_info)
             {
-                device_info->product_name;
                 m_pill.SetTooltipLabel(device_info->product_name);
             }
             break;
@@ -648,7 +647,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
             }
             if(show_process_id)
             {
-                m_meta_area_label += " (PID " + process_id_str + ")";
+                m_meta_area_label += " (PID: " + process_id_str + ")";
             }
             break;
         }
@@ -662,7 +661,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
             }
             if(show_process_id)
             {
-                m_meta_area_label += " (PID " + process_id_str + ")";
+                m_meta_area_label += " (PID: " + process_id_str + ")";
             }
             break;
         }

@@ -145,7 +145,8 @@ TrackTopology::UpdateTopology()
                                 InfoTable::Cell{ process_info->environment, false } } }
                         };
                         m_topology.nodes[i].processes[j].header =
-                            "[" + std::to_string(process_info->id) + "]";
+                            process_info->command + 
+                            " (" + std::to_string(process_info->id) + ")";
                         const std::vector<uint64_t>& queue_ids = process_info->queue_ids;
                         m_topology.nodes[i].processes[j].queues.resize(queue_ids.size());
                         m_topology.nodes[i].processes[j].queue_header =
@@ -266,7 +267,7 @@ TrackTopology::UpdateTopology()
                         m_topology.nodes[i].processes[j].sampled_threads.resize(
                             sampled_thread_ids.size());
                         m_topology.nodes[i].processes[j].sampled_thread_header =
-                            "Sample Threads (" +
+                            "Sampled Threads (" +
                             std::to_string(sampled_thread_ids.size()) + ")";
                         for(int k = 0; k < sampled_thread_ids.size(); k++)
                         {
@@ -499,7 +500,7 @@ TrackTopology::UpdateGraphs()
                 const uint64_t& index      = track->index;
                 switch(track->topology.type)
                 {
-                    case TrackInfo::Topology::Queue:
+                    case TrackInfo::TrackType::Queue:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -507,7 +508,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case TrackInfo::Topology::Stream:
+                    case TrackInfo::TrackType::Stream:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -515,7 +516,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case TrackInfo::Topology::InstrumentedThread:
+                    case TrackInfo::TrackType::InstrumentedThread:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -523,7 +524,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case TrackInfo::Topology::SampledThread:
+                    case TrackInfo::TrackType::SampledThread:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]
@@ -531,7 +532,7 @@ TrackTopology::UpdateGraphs()
                             ->graph_index = index;
                         break;
                     }
-                    case TrackInfo::Topology::Counter:
+                    case TrackInfo::TrackType::Counter:
                     {
                         m_topology.node_lut[node_id]
                             ->process_lut[process_id]

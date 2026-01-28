@@ -6,8 +6,9 @@
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_version.h"
 #ifdef COMPUTE_UI_SUPPORT
-#    include "rocprofvis_compute_root.h"
-#    include "rocprofvis_navigation_manager.h"
+#    include "compute/rocprofvis_compute_root.h"
+#    include "compute/rocprofvis_compute_view.h"
+#    include "compute/rocprofvis_navigation_manager.h"
 #endif
 #include "widgets/rocprofvis_notification_manager.h"
 #include <fstream>
@@ -191,12 +192,22 @@ Project::OpenTrace(std::string& file_path)
 #ifdef COMPUTE_UI_SUPPORT
                 else if(type == kRPVControllerObjectTypeControllerCompute)
                 {
-                    std::shared_ptr<ComputeRoot> compute_view =
-                        std::make_shared<ComputeRoot>();
-                    trace_result = compute_view->LoadTrace(controller);
-                    trace_type   = Compute;
-                    view         = compute_view;
-                    NavigationManager::GetInstance()->RefreshNavigationTree();
+                    if(std::filesystem::path(file_path).extension().string() == ".csv")
+                    {
+                        std::shared_ptr<ComputeRoot> compute_view =
+                            std::make_shared<ComputeRoot>();
+                        trace_result = compute_view->LoadTrace(controller);
+                        view         = compute_view;
+                        NavigationManager::GetInstance()->RefreshNavigationTree();
+                    }
+                    else
+                    {
+                        std::shared_ptr<ComputeView> compute_view =
+                            std::make_shared<ComputeView>();
+                        trace_result = compute_view->LoadTrace(controller, file_path);
+                        view         = compute_view;
+                    }
+                    trace_type = Compute;
                 }
 #endif
             }
@@ -266,39 +277,6 @@ Project::SaveSetttingsJson()
         }
     }
     return result;
-}
-
-bool
-Project::IsTrimSaveAllowed()
-{
-    // Check if save is allowed
-    bool save_allowed = false;
-    if(m_trace_type == System)
-    {
-        // Check if the active tab is a TraceView
-        std::shared_ptr<TraceView> trace_view =
-            std::dynamic_pointer_cast<TraceView>(m_view);
-        if(trace_view)
-        {
-            // Check if the trace view has a selection that can be saved
-            save_allowed = trace_view->IsTrimSaveAllowed();
-        }
-    }
-    return save_allowed;
-}
-
-void
-Project::TrimSave(const std::string& file_path_str)
-{
-    if(m_trace_type == System)
-    {
-        std::shared_ptr<TraceView> trace_view =
-            std::dynamic_pointer_cast<TraceView>(m_view);
-        if(trace_view)
-        {
-            trace_view->SaveSelection(file_path_str);
-        }
-    }
 }
 
 ProjectSetting::ProjectSetting(const std::string project_id)

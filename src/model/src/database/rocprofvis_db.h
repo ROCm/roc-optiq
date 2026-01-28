@@ -194,7 +194,7 @@ public:
     size_t NumRows() { return m_rows.size(); }
 
 private:
-    std::string name;
+    std::string m_name;
     std::vector<std::string> m_columns;
     std::vector<Row> m_rows;
     std::unordered_map<std::string, uint32_t> m_column_index;

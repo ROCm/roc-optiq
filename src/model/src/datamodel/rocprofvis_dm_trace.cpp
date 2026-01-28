@@ -40,6 +40,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddTableRow = AddTableRow;
     m_binding_info.FuncAddTableColumn = AddTableColumn;
     m_binding_info.FuncAddTableColumnEnum = AddTableColumnEnum;
+    m_binding_info.FuncAddTableColumnType = AddTableColumnType;
     m_binding_info.FuncAddTableRowCell = AddTableRowCell;
     m_binding_info.FuncAddEventLevel = AddEventLevel;
     m_binding_info.FuncCheckEventPropertyExists = CheckEventPropertyExists;
@@ -149,6 +150,80 @@ rocprofvis_dm_result_t  Trace::DeleteEventPropertyFor(     rocprofvis_dm_event_p
             return kRocProfVisDmResultSuccess;
         }  
         break;   
+    }
+    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
+}
+
+rocprofvis_dm_result_t  Trace::DeleteEventProperty(     rocprofvis_dm_event_property_type_t type,
+    rocprofvis_dm_handle_t object) {
+    switch (type)
+    {
+    case kRPVDMEventFlowTrace:
+    {
+        // To delete single vector array element thread-safe, we must retain a local copy 
+        // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+        std::shared_ptr<FlowTrace> item;
+        {
+            TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type),__func__, this);
+            auto it = std::find_if(
+                m_flow_traces.begin(), m_flow_traces.end(),
+                [&object](std::shared_ptr<FlowTrace>& x) {
+                    return x.get() == object;
+                });
+            if (it == m_flow_traces.end())
+            {
+                return kRocProfVisDmResultNotLoaded;
+            }
+            item    = *it;
+            m_flow_traces.erase(it);
+        }
+        return kRocProfVisDmResultSuccess;
+    }
+    break;
+    case kRPVDMEventStackTrace:
+    {
+        // To delete single vector array element thread-safe, we must retain a local copy 
+        // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+        std::shared_ptr<StackTrace> item;
+        {
+            TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type), __func__, this);
+            auto             it =
+                std::find_if(m_stack_traces.begin(), m_stack_traces.end(),
+                    [&object](std::shared_ptr<StackTrace>& x) {
+                        return x.get() ==object;
+                    });
+            if(it == m_stack_traces.end())
+            {
+                return kRocProfVisDmResultNotLoaded;
+            }
+            item = *it;
+            m_stack_traces.erase(it);
+        }
+        return kRocProfVisDmResultSuccess;
+    }
+    break;
+    case kRPVDMEventExtData:
+    {
+        // To delete single vector array element thread-safe, we must retain a local copy 
+        // The element is protected by its own mutex and will be deleted outside the scope when mutex is unlocked
+        std::shared_ptr<ExtData> item;
+        {
+            TimedLock<std::unique_lock<std::shared_mutex>> lock(*EventPropertyMutex(type), __func__, this);
+            auto             it =
+                std::find_if(m_ext_data.begin(), m_ext_data.end(),
+                    [&object](std::shared_ptr<ExtData>& x) {
+                        return x.get() == object;
+                    });
+            if(it == m_ext_data.end())
+            {
+                return kRocProfVisDmResultNotLoaded;
+            }
+            item = *it;
+            m_ext_data.erase(it);
+        }
+        return kRocProfVisDmResultSuccess;
+    }  
+    break;   
     }
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
 }
@@ -493,6 +568,13 @@ rocprofvis_dm_result_t Trace::AddTableColumnEnum(const rocprofvis_dm_table_t obj
     Table* table = (Table*) object;
     TimedLock<std::unique_lock<std::shared_mutex>> lock(*table->Mutex(), __func__, table);
     return table->AddColumnEnum(column_enum);
+}
+
+rocprofvis_dm_result_t Trace::AddTableColumnType(const rocprofvis_dm_table_t object, rocprofvis_db_data_type_t column_type){
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    Table* table = (Table*) object;
+    TimedLock<std::unique_lock<std::shared_mutex>> lock(*table->Mutex(), __func__, table);
+    return table->AddColumnType(column_type);
 }
 
 rocprofvis_dm_result_t Trace::AddTableRowCell(const rocprofvis_dm_table_row_t object, rocprofvis_dm_charptr_t cell_value){

@@ -462,8 +462,6 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Indexing tables", kRPVDbBusy, future);
         CreateIndexes();
 
-        
-
         ShowProgress(10, "Load Information Tables", kRPVDbBusy, future);
         LoadInformationTables(future);
 

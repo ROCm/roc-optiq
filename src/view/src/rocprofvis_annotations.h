@@ -50,7 +50,7 @@ public:
     void SetCenter(const ImVec2& center);
     void AddSticky(double time_ns, float y_offset, const ImVec2& size,
                    const std::string& text, const std::string& title, double v_min,
-                   double v_max);
+                   double v_max, bool is_minimized = true);
     
 
     void                     ShowStickyNotePopup();

@@ -75,6 +75,11 @@ class Trace : public DmBase{
         // @param event_id - 60-bit event id and 4-bit operation type
         // @return status of operation 
         rocprofvis_dm_result_t                          DeleteEventPropertyFor(rocprofvis_dm_event_property_type_t type, rocprofvis_dm_event_id_t event_id);
+        // Method to delete flowtrace, stacktrace and extended data property objects for event
+        // @param type - property type (kEventFlowTrace, kEventStackTrace or kEventExtData)
+        // @param object reference
+        // @return status of operation 
+        rocprofvis_dm_result_t                          DeleteEventProperty(rocprofvis_dm_event_property_type_t type, rocprofvis_dm_handle_t object);
         // Method to delete flowtrace, stacktrace and extended data property objects for all events
         // @param type - property type (kEventFlowTrace, kEventStackTrace or kEventExtData)
         // @return status of operation 
@@ -240,6 +245,11 @@ class Trace : public DmBase{
         // @param column_enum - enumeration constant of new column
         // @return status of operation 
         static rocprofvis_dm_result_t                   AddTableColumnEnum(const rocprofvis_dm_table_t object, rocprofvis_db_table_column_enum_t column_enum);
+        // Static method to add new column type to table object. Used by database component via binding interface
+        // @param object - table object handle to add new column to.
+        // @param column_type - type constant of new column
+        // @return status of operation 
+        static rocprofvis_dm_result_t                   AddTableColumnType(const rocprofvis_dm_table_t object, rocprofvis_db_data_type_t column_type);
         // Static method to add new cell to table row object. Used by database component via binding interface
         // @param object - table row object handle to add new cell to.
         // @param cell_value - pointer to table value string

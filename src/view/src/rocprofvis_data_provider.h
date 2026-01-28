@@ -61,9 +61,12 @@ public:
     static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
-    static const uint64_t FETCH_TRACE_REQUEST_ID;
+    static const uint64_t FETCH_SYSTEM_TRACE_REQUEST_ID;
     static const uint64_t SUMMARY_REQUEST_ID;
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+#ifdef COMPUTE_UI_SUPPORT
+    static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
+#endif
 
     DataProvider();
     ~DataProvider();
@@ -227,12 +230,30 @@ public:
     TraceDataModel&       DataModel() { return m_model; };
 
 private:
+    struct ProcessChildCount
+    {
+        size_t thread_count;
+        size_t queue_count;
+        size_t stream_count;
+        size_t counter_count;
+    };
+
     void HandleLoadSystemTopology();
+    bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
+    bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info);
+    bool ParseProcessData(rocprofvis_handle_t* process_handle, ProcessInfo& process_info,
+                          ProcessChildCount& process_child_count);
+    bool ParseQueueData(rocprofvis_handle_t* queue_handle, QueueInfo& queue_info);
+    bool ParseThreadData(rocprofvis_handle_t* thread_handle, ThreadInfo& thread_info,
+                         uint64_t& thread_type);
+    bool ParseCounterData(rocprofvis_handle_t* counter_handle, CounterInfo& counter_info);
+    bool ParseStreamData(rocprofvis_handle_t* stream_handle, StreamInfo& stream_info);
+
     void HandleLoadTrackMetaData();
     void HandleRequests();
 
     void ProcessRequest(RequestInfo& req);
-    void ProcessLoadTrace(RequestInfo& req);
+    void ProcessLoadSystemTrace(RequestInfo& req);
     void ProcessEventExtendedRequest(RequestInfo& req);
     void ProcessEventFlowDetailsRequest(RequestInfo& req);
     void ProcessEventCallStackRequest(RequestInfo& req);
@@ -287,6 +308,14 @@ private:
     std::string m_progress_mesage;
     // Current loading status progress in percents
     uint64_t m_progress_percent;
+
+#ifdef COMPUTE_UI_SUPPORT
+public:
+
+
+private:
+    void ProcessLoadComputeTrace(RequestInfo& req);
+#endif
 };
 
 }  // namespace View

@@ -103,7 +103,7 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
     rocprofvis_dm_result_t result =  BindObject()->FuncCheckEventPropertyExists(BindObject()->trace_object, type, event_id);
     if(result != kRocProfVisDmResultNotLoaded)
     {
-        return future->SetPromise(result);
+        return future->SetPromise(kRocProfVisDmResultResourceBusy);
     }
     try {
         future->SetWorker(std::move(std::thread(ReadEventPropertyStatic, this, type, event_id, future)));

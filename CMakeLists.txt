@@ -76,6 +76,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp
     src/view/src/rocprofvis_data_provider.cpp
+    src/view/src/rocprofvis_root_view.cpp
     src/view/src/model/rocprofvis_topology_model.cpp
     src/view/src/model/rocprofvis_timeline_model.cpp
     src/view/src/model/rocprofvis_tables_model.cpp
@@ -108,13 +109,14 @@ set(VIEW_FILES
 
 if(COMPUTE_UI_SUPPORT) 
 list(APPEND VIEW_FILES
-    src/view/src/rocprofvis_compute_root.cpp
-	src/view/src/rocprofvis_compute_summary.cpp
-	src/view/src/rocprofvis_compute_block.cpp
-	src/view/src/rocprofvis_compute_table.cpp
-	src/view/src/rocprofvis_compute_data_provider.cpp
-	src/view/src/rocprofvis_compute_roofline.cpp
-	src/view/src/rocprofvis_navigation_manager.cpp
+    src/view/src/compute/rocprofvis_compute_view.cpp
+    src/view/src/compute/rocprofvis_compute_root.cpp
+    src/view/src/compute/rocprofvis_compute_summary.cpp
+    src/view/src/compute/rocprofvis_compute_block.cpp
+    src/view/src/compute/rocprofvis_compute_table.cpp
+    src/view/src/compute/rocprofvis_compute_data_provider.cpp
+    src/view/src/compute/rocprofvis_compute_roofline.cpp
+    src/view/src/compute/rocprofvis_navigation_manager.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
 )
 endif(COMPUTE_UI_SUPPORT)

@@ -217,5 +217,8 @@ compact_number_format(double number);
 bool 
 open_url(const std::string& url);
 
+std::string
+get_executable_name(const std::string& fullPath);
+
 }  // namespace View
 }  // namespace RocProfVis

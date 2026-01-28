@@ -54,10 +54,14 @@ SummaryView::SummaryView(DataProvider& dp)
         LayoutItem::CreateFromWidget(m_top_kernels),
         LayoutItem::CreateFromWidget(m_kernel_instance_table));
     m_v_container->SetSplit(0.5f);
+
+    auto hw_utilization_item = LayoutItem::CreateFromWidget(m_hw_utilization);
     m_h_container =
-        std::make_unique<HSplitContainer>(LayoutItem::CreateFromWidget(m_hw_utilization),
+        std::make_unique<HSplitContainer>(hw_utilization_item,
                                           LayoutItem::CreateFromWidget(m_v_container));
     m_h_container->SetSplit(0.25f);
+    // Hide HW utilization for now as the data is not yet reliable
+    hw_utilization_item->m_visible = false;
 }
 
 void

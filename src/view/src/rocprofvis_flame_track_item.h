@@ -49,9 +49,9 @@ class FlameTrackItem : public TrackItem
 
 public:
     FlameTrackItem(DataProvider&                      dp,
-                   std::shared_ptr<TimelineSelection> timeline_selection, uint64_t chart_id,
-                   std::string name, float level_min,
-                   float level_max, std::shared_ptr<TimePixelTransform> m_time_to_pixel_manager);
+                   std::shared_ptr<TimelineSelection> timeline_selection,
+                   uint64_t track_id,
+                   std::shared_ptr<TimePixelTransform> time_to_pixel_manager);
     ~FlameTrackItem();
 
     bool ReleaseData() override;

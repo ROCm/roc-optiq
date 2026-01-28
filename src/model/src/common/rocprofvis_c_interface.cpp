@@ -607,6 +607,28 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_event_property_for(
 }     
 
 /****************************************************************************************************
+* @brief Delete event property object of specified type
+*                                                     
+* @param trace trace object handle created with rocprofvis_dm_create_trace()
+* @param type type of property
+*                             kEventFlowTrace,
+*                             kEventStackTrace,
+*                             kEventExtData,
+* @param object reference
+* 
+* @return status of operation
+* 
+***************************************************************************************************/
+rocprofvis_dm_result_t  rocprofvis_dm_delete_event_property(
+    rocprofvis_dm_trace_t trace,
+    rocprofvis_dm_event_property_type_t type,
+    rocprofvis_dm_handle_t object){
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
+        kRocProfVisDmResultInvalidParameter);
+    return ((RocProfVis::DataModel::Trace*)trace)->DeleteEventProperty(type, object);
+} 
+/****************************************************************************************************
  * @brief Delete all event property objects of specified type
  *                                                     
  * @param trace trace object handle created with rocprofvis_dm_create_trace()

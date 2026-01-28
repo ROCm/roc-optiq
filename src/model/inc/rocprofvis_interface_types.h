@@ -248,10 +248,16 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackMinimumValueDouble,
     // Track maximum level or value
     kRPVDMTrackMaximumValueDouble,
-    // Histogram bucket value
-    kRPVDMTrackHistogramEventDensityUInt64Indexed,
+    //EventDensity for event and counter tracks
+    kRPVDMTrackHistogramBucketEventDensityUInt64Indexed,
+    // Histogram bucket value. EventDensity for event tracks and average counter value for counter tracks
+    kRPVDMTrackHistogramBucketValueDoubleIndexed,
     // Track Instance ID (Guid index)
     kRPVDMTrackInstanceIdUInt64,
+    // Track process ID (PID or Agent ID)
+    kRPVDMTrackProcessIdUInt64,
+    // Track process ID (TID or Queue ID)
+    kRPVDMTrackSubProcessIdUInt64
 } rocprofvis_dm_track_property_t;
 
 // Slice properties
@@ -359,7 +365,9 @@ typedef enum rocprofvis_dm_table_property_t {
     // Row handle by specified index
     kRPVDMExtTableRowHandleIndexed,
     // Column enum constant by specified index
-    kRPVDMExtTableColumnEnumUInt64Indexed
+    kRPVDMExtTableColumnEnumUInt64Indexed,
+    // Column type constant by specified index
+    kRPVDMExtTableColumnTypeUInt64Indexed
 } rocprofvis_dm_table_property_t;
 
 // Table row object properties
@@ -462,6 +470,13 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnSubTableId,
     kRPVComputeColumnMetricTableName,
     kRPVComputeColumnMetricSubTableName,
+
+    kRPVComputeColumnMetricName,
+    kRPVComputeColumnMetricDescription,
+    kRPVComputeColumnMetricUnit,
+
+    kRPVComputeColumnMetricValueName,
+    kRPVComputeColumnMetricValue
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations
@@ -471,9 +486,11 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchWorkloadRooflineCeiling,
     kRPVComputeFetchWorkloadTopKernels,
     kRPVComputeFetchWorkloadKernelsList,
+    kRPVComputeFetchWorkloadMetricsDefinition,
     kRPVComputeFetchKernelRooflineIntensities,
     kRPVComputeFetchKernelMetricCategoriesList,
     kRPVComputeFetchMetricCategoryTablesList,
+    kRPVComputeFetchMetricValues,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration

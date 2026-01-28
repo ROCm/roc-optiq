@@ -153,7 +153,6 @@ TimelineView::RenderInteractiveUI()
         m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
     float overlay_width = m_tpt->GetGraphSizeX();
 
-
     ImGui::BeginChild("UI Interactive Overlay", ImVec2(overlay_width, overlay_height),
                       false, window_flags);
 
@@ -481,9 +480,9 @@ TimelineView::Update()
                 {
                     const TrackInfo* metadata = tlm.GetTrack(graph.chart->GetID());
                     ROCPROFVIS_ASSERT(metadata);
-                    m_graphs_reordered[metadata->index] = std::move(graph);
+                    graphs_reordered[metadata->index] = std::move(graph);
                 }
-                *m_graphs = std::move(m_graphs_reordered);
+                *m_graphs = std::move(graphs_reordered);
             }
         }
         // Rebuild the positioning map.
@@ -624,13 +623,13 @@ TimelineView::TimelineDragShimmy(int shimmy_amount)
 double
 TimelineView::CalculateHighlightTimeWithShimmy(float mouse_x, float origin_x)
 {
-    float max_x                  = m_tpt->GetGraphSizeX();
+    float max_x = m_tpt->GetGraphSizeX();
     float cursor_screen_position = mouse_x - origin_x;
-    cursor_screen_position       = std::clamp(cursor_screen_position, 0.0f, max_x);
-
+    cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
+    
     float left_threshold  = max_x * 0.10f;
     float right_threshold = max_x * 0.90f;
-
+    
     if(cursor_screen_position < left_threshold)
         TimelineDragShimmy(-1);
     else if(cursor_screen_position > right_threshold)
@@ -1357,6 +1356,7 @@ TimelineView::MakeGraphView()
 
     std::vector<const TrackInfo*> track_list    = tlm.GetTrackList();
     bool                          project_valid = m_project_settings.Valid();
+    std::vector<uint64_t>         hidden_tracks;
 
     for(int i = 0; i < track_list.size(); i++)
     {
@@ -1375,7 +1375,14 @@ TimelineView::MakeGraphView()
             display    = m_project_settings.DisplayTrack(track_id_at_index);
         }
 
-        if(!track_info)
+        if(track_info)
+        {
+            if(!display)
+            {
+                hidden_tracks.push_back(track_info->id);
+            }
+        }
+        else
         {
             // log warning (should this be an error?)
             spdlog::warn("Missing track meta data for track id {}", i);
@@ -1389,9 +1396,7 @@ TimelineView::MakeGraphView()
             {
                 // Create FlameChart
                 graph.chart = new FlameTrackItem(
-                    m_data_provider, m_timeline_selection, track_info->id,
-                    track_info->name, static_cast<float>(track_info->min_value),
-                    static_cast<float>(track_info->max_value), m_tpt);
+                    m_data_provider, m_timeline_selection, track_info->id, m_tpt);
                 graph.graph_type = GraphType::TYPE_FLAMECHART;
                 break;
             }
@@ -1399,7 +1404,7 @@ TimelineView::MakeGraphView()
             {
                 // Linechart
                 graph.chart =
-                    new LineTrackItem(m_data_provider, track_info->id, track_info->name,
+                    new LineTrackItem(m_data_provider, track_info->id, 
                                       m_max_meta_area_size, m_tpt);
                 UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
                 graph.graph_type = GraphType::TYPE_LINECHART;
@@ -1418,6 +1423,9 @@ TimelineView::MakeGraphView()
             (*m_graphs)[track_info->index] = std::move(graph);
         }
     }
+
+    m_data_provider.DataModel().GetTimeline().UpdateHistogram(hidden_tracks, false);
+
     UpdateAllMaxMetaAreaSizes();
     m_histogram       = &tlm.GetHistogram();
     m_meta_map_made   = true;
@@ -1433,11 +1441,59 @@ TimelineView::RenderHistogram()
     const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
     const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
 
-    ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
+    // Sidebar area with normalization toggle (left side, before histogram)
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
+    ImGui::BeginChild("HistogramSidebar", ImVec2(m_sidebar_size, kHistogramTotalHeight),
+                      false, ImGuiWindowFlags_NoScrollbar);
 
-    float splitter_size = 5.0f;
+    // Normalization Switch
+    TimelineModel& timeline_model = m_data_provider.DataModel().GetTimeline();
+    bool           is_global      = timeline_model.IsNormalizeGlobal();
+
+    float       switch_w      = 20.0f;
+    float       switch_h      = kHistogramTotalHeight;  // Full height
+    float       switch_x      = m_sidebar_size - switch_w;  // Hug right side, no gap
+
+    ImGui::SetCursorPos(ImVec2(switch_x, 0));
+
+    ImVec2      p             = ImGui::GetCursorScreenPos();
+    ImDrawList* sidebar_draw  = ImGui::GetWindowDrawList();
+
+    // Interaction
+    ImGui::InvisibleButton("##NormalizeSwitch", ImVec2(switch_w, switch_h));
+    if(ImGui::IsItemClicked())
+    {
+        timeline_model.ToggleNormalization();
+        timeline_model.UpdateHistogram({}, false);
+    }
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip(is_global ? "Normalization: All Tracks"
+                                    : "Normalization: Visible Tracks");
+    }
+
+    // Visuals
+    ImU32 bg_col   = ImGui::GetColorU32(ImGuiCol_FrameBg);
+    ImU32 knob_col = m_settings.GetColor(Colors::kAccentRedActive);
+
+    // Background
+    sidebar_draw->AddRectFilled(p, ImVec2(p.x + switch_w, p.y + switch_h), bg_col);
+
+    // Knob (Up = Global, Down = Local)
+    float knob_h = switch_h / 2.0f;
+    float knob_y = is_global ? p.y : p.y + knob_h;
+
+    sidebar_draw->AddRectFilled(ImVec2(p.x + 2, knob_y + 2),
+                                ImVec2(p.x + switch_w - 2, knob_y + knob_h - 2), knob_col);
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
 
     // Vertical splitter
+    float splitter_size = 5.0f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
     ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
                       false);
@@ -1664,10 +1720,8 @@ TimelineView::RenderTraceView()
     // Scale used in all graphs computed here
 
     float scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    float available_height =
-        subcomponent_size_main.y - m_ruler_height - m_artificial_scrollbar_height;
-    float width_adjustment =
-        (m_track_height_sum > available_height) ? scrollbar_width : 0.0f;
+    float available_height = subcomponent_size_main.y - m_ruler_height - m_artificial_scrollbar_height;
+    float width_adjustment = (m_track_height_sum > available_height) ? scrollbar_width : 0.0f;
 
     m_tpt->SetGraphSize(subcomponent_size_main.x - m_sidebar_size - width_adjustment,
                         subcomponent_size_main.y);
@@ -1865,40 +1919,41 @@ TimelineView::HandleTopSurfaceTouch()
                TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
             {
                 // Claim focus so FlameTrackItem doesn't also handle this click
-                TimelineFocusManager::GetInstance().RequestLayerFocus(
-                    Layer::kInteractiveLayer);
+                TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
 
                 // Clear any existing selection before starting a new one
-                ClearTimeRangeSelection();
-                m_is_selecting_region = true;  // Track that we started a selection drag
-
+                if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
+                   m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+                {
+                    m_timeline_selection->ClearTimeRange();
+                }
+                m_highlighted_region.first    = TimelineSelection::INVALID_SELECTION_TIME;
+                m_highlighted_region.second   = TimelineSelection::INVALID_SELECTION_TIME;
+                m_is_selecting_region         = true;  // Track that we started a selection drag
+                
                 // Calculate click position by subtracting drag delta
-                ImVec2 mouse_pos  = ImGui::GetMousePos();
-                ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 5.0f);
-                float  cursor_screen_position =
-                    (mouse_pos.x - drag_delta.x) - graph_area_min.x;
+                ImVec2 mouse_pos              = ImGui::GetMousePos();
+                ImVec2 drag_delta             = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 5.0f);
+                float  cursor_screen_position = (mouse_pos.x - drag_delta.x) - graph_area_min.x;
 
                 // Clamp cursor position to valid graph area (excluding scrollbar)
-                float max_x            = m_tpt->GetGraphSizeX();
+                float max_x = m_tpt->GetGraphSizeX();
                 cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
 
-                m_highlighted_region.first = std::clamp(
-                    m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
+                m_highlighted_region.first = std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
             }
             else if(!io.KeyCtrl)
             {
                 m_can_drag_to_pan = true;
             }
         }
-        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) && m_is_selecting_region)
+        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left) && m_is_selecting_region)
         {
             // Keep claiming focus while dragging
-            TimelineFocusManager::GetInstance().RequestLayerFocus(
-                Layer::kInteractiveLayer);
+            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
 
             ImVec2 mouse_pos = ImGui::GetMousePos();
-            m_highlighted_region.second =
-                CalculateHighlightTimeWithShimmy(mouse_pos.x, graph_area_min.x);
+            m_highlighted_region.second = CalculateHighlightTimeWithShimmy(mouse_pos.x, graph_area_min.x);
             // Update offset_ns in case shimmy changed the view
             offset_ns = m_tpt->GetViewTimeOffsetNs();
         }
@@ -2105,6 +2160,66 @@ float
 TimelineView::GetTotalTrackHeight() const
 {
     return m_track_height_sum;
+}
+
+float
+TimelineView::GetTrackViewportHeight() const
+{
+    return m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
+}
+
+void
+TimelineView::GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const
+{
+    start_fraction = 0.0f;
+    end_fraction   = 1.0f;
+
+    if(!m_graphs || m_graphs->empty()) return;
+
+    // Count displayed tracks and find visible range
+    int   displayed_count = 0;
+    float first_visible   = -1.0f;
+    float last_visible    = -1.0f;
+    float view_top        = static_cast<float>(m_scroll_position_y);
+    float view_bottom     = view_top + GetTrackViewportHeight();
+    float cumulative_y    = 0.0f;
+
+    for(int i = 0; i < static_cast<int>(m_graphs->size()); i++)
+    {
+        const auto& graph = (*m_graphs)[i];
+        if(!graph.display) continue;
+
+        float track_height = graph.chart->GetTrackHeight();
+        float track_top    = cumulative_y;
+        float track_bottom = cumulative_y + track_height;
+
+        // Check if this track overlaps with the viewport
+        if(track_bottom > view_top && track_top < view_bottom)
+        {
+            // Calculate fractional visibility within this track
+            float visible_top    = std::max(track_top, view_top);
+            float visible_bottom = std::min(track_bottom, view_bottom);
+
+            if(first_visible < 0.0f)
+            {
+                // First visible track - include partial
+                float partial = (visible_top - track_top) / track_height;
+                first_visible = static_cast<float>(displayed_count) + partial;
+            }
+            // Update last visible with partial coverage
+            float partial = (visible_bottom - track_top) / track_height;
+            last_visible  = static_cast<float>(displayed_count) + partial;
+        }
+
+        cumulative_y += track_height;
+        displayed_count++;
+    }
+
+    if(displayed_count > 0 && first_visible >= 0.0f)
+    {
+        start_fraction = first_visible / static_cast<float>(displayed_count);
+        end_fraction   = last_visible / static_cast<float>(displayed_count);
+    }
 }
 
 TimelineArrow&

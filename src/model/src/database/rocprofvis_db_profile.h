@@ -18,7 +18,8 @@ typedef enum rocprofvis_db_async_tracks_flags_t
 {
     kRocProfVisDmIncludePmcTracks = 1,
     kRocProfVisDmIncludeStreamTracks = 2,
-    kRocProfVisDmTrySplitTrack = 4
+    kRocProfVisDmTrySplitTrack = 4,
+    kRocProfVisDmIncludePmcTracksOnly = 8,
 } rocprofvis_db_async_tracks_flags_t;
 
 typedef enum rocprofvis_track_load_params
@@ -128,7 +129,7 @@ class ProfileDatabase : public SqliteDatabase
         
         void BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props);
 
-        bool IsEmptyRange(uint64_t start, uint64_t end);
+        bool IsEmptyRange(uint32_t track, uint64_t start, uint64_t end);
 
         // Searches for strings containing the passed in list of filter strings and builds a WHERE IN clause for the table query.
         // @param num_string_table_filters - number of filter strings
@@ -301,6 +302,7 @@ class ProfileDatabase : public SqliteDatabase
                                           char** azColName);
         static int CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_stmt* stmt,
             char** azColName);
+
         static int CallBackLoadHistogram(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
         static rocprofvis_event_data_category_enum_t GetColumnDataCategory(

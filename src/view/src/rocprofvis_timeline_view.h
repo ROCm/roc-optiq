@@ -90,6 +90,8 @@ public:
     void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords     GetViewCoords() const;
     float          GetTotalTrackHeight() const;
+    float          GetTrackViewportHeight() const;
+    void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
 

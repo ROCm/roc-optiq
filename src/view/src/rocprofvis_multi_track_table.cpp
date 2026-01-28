@@ -126,80 +126,89 @@ MultiTrackTable::Render()
     auto table_params = m_data_provider.DataModel().GetTables().GetTableParams(m_table_type);
     if(table_params)
     {
+        #ifdef ROCPROFVIS_DEVELOPER_MODE
         ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks",
                     table_params->m_start_row,
                     table_params->m_start_row + table_params->m_req_row_count,
                     m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type),
                     table_params->m_track_ids.size());
+        #endif
+        ImGui::Text("Found %llu events on %llu tracks",
+                    table_params->m_start_row,
+                    table_params->m_start_row + table_params->m_req_row_count,
+                    m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type),
+                    table_params->m_track_ids.size());
+
     }
 
     ImGui::BeginGroup();
-    if(m_table_type == TableType::kEventTable)
-    {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Group By");
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Group Columns");
-    }
+
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Filter");
+    ImGui::TextUnformatted("Aggregate by Column:");
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Group Columns");
+#endif
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Filter:");
     ImGui::EndGroup();
 
     ImGui::SameLine();
 
     ImGui::BeginGroup();
-    if(m_table_type == TableType::kEventTable)
+    ImGui::SetNextItemAllowOverlap();
+    if(ImGui::Combo("##group_by", &m_group_by_selection_index,
+                    m_group_by_choices_ptr.data(),
+                    static_cast<int>(m_group_by_choices_ptr.size())))
     {
-        ImGui::SetNextItemAllowOverlap();
-        if(ImGui::Combo("##group_by", &m_group_by_selection_index,
-                        m_group_by_choices_ptr.data(),
-                        static_cast<int>(m_group_by_choices_ptr.size())))
+        if(m_group_by_selection_index == 0)
         {
-            if(m_group_by_selection_index == 0)
-            {
-                m_pending_filter_options.group_by = "";
-            }
-            else
-            {
-                m_pending_filter_options.group_by =
-                    m_group_by_choices_ptr[m_group_by_selection_index];
-            }
+            m_pending_filter_options.group_by = "";
         }
-
-        if(m_pending_filter_options.group_by != "")
+        else
         {
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() -
-                                 ImGui::GetFrameHeightWithSpacing() -
-                                 ImGui::GetFontSize());
-            if(XButton("clear_group"))
-            {
-                m_pending_filter_options.group_by = "";
-                m_group_by_selection_index = 0;
-            }
+            m_pending_filter_options.group_by =
+                m_group_by_choices_ptr[m_group_by_selection_index];
         }
-
-        ImGui::SetNextItemAllowOverlap();
-        ImGui::BeginDisabled(m_filter_options.group_by == "");
-        ImGui::InputTextWithHint(
-            "##group_columns",
-            "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
-            "MIN(duration) as min_duration, MAX(duration) as max_duration",
-            m_pending_filter_options.group_columns,
-            IM_ARRAYSIZE(m_pending_filter_options.group_columns));
-        if(strlen(m_pending_filter_options.group_columns) > 0)
-        {
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
-            if(XButton("clear_group_columns"))
-            {
-                m_pending_filter_options.group_columns[0] = '\0';
-            }
-        }
-        ImGui::EndDisabled();
     }
 
+    if(m_pending_filter_options.group_by != "")
+    {
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFrameHeightWithSpacing() -
+                             ImGui::GetFontSize());
+        if(XButton("clear_group"))
+        {
+            m_pending_filter_options.group_by = "";
+            m_group_by_selection_index        = 0;
+        }
+    }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
     ImGui::SetNextItemAllowOverlap();
+    ImGui::BeginDisabled(m_filter_options.group_by == "");
+    ImGui::InputTextWithHint(
+        "##group_columns",
+        "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+        "MIN(duration) as min_duration, MAX(duration) as max_duration",
+        m_pending_filter_options.group_columns,
+        IM_ARRAYSIZE(m_pending_filter_options.group_columns));
+    if(strlen(m_pending_filter_options.group_columns) > 0)
+    {
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
+        if(XButton("clear_group_columns"))
+        {
+            m_pending_filter_options.group_columns[0] = '\0';
+        }
+    }
+    ImGui::EndDisabled();
+#endif
+
+    ImGui::SetNextItemAllowOverlap();
+    //Filter disabled when "group by" is selected
+    ImGui::BeginDisabled(m_filter_options.group_by != "");
     ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
                              m_pending_filter_options.filter,
                              IM_ARRAYSIZE(m_pending_filter_options.filter));
@@ -212,6 +221,8 @@ MultiTrackTable::Render()
             m_pending_filter_options.filter[0] = '\0';
         }
     }
+    ImGui::EndDisabled();
+
     ImGui::EndGroup();
     ImGui::SameLine();
     if(ImGui::Button("Submit", ImVec2(0, ImGui::GetItemRectSize().y)))
@@ -243,48 +254,45 @@ MultiTrackTable::Update()
         const std::vector<std::string>& column_names =
             m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
 
-        if(m_table_type == TableType::kEventTable)
+        if(m_filter_options.group_by == "")
         {
-            if(m_filter_options.group_by == "")
+            m_group_by_selection_index = 0;
+            m_group_by_choices.clear();
+
+            // Create a list of choices for the combo box for selecting the group
+            // column. Populate the combo box with column names but filter out empty
+            // and internal columns (those starting with '_')
+            m_group_by_choices.reserve(column_names.size() + 1);
+            m_group_by_choices.push_back("-- None --");
+
+            // Filter out columns
+            for(size_t i = 0; i < column_names.size(); i++)
             {
-                m_group_by_selection_index = 0;
-                m_group_by_choices.clear();
-
-                // Create a list of choices for the combo box for selecting the group
-                // column. Populate the combo box with column names but filter out empty
-                // and internal columns (those starting with '_')
-                m_group_by_choices.reserve(column_names.size() + 1);
-                m_group_by_choices.push_back("-- None --");
-
-                // Filter out columns
-                for(size_t i = 0; i < column_names.size(); i++)
+                const auto& col = column_names[i];
+                if(col.empty() || col[0] == '_')
                 {
-                    const auto& col = column_names[i];
-                    if(col.empty() || col[0] == '_')
-                    {
-                        continue;  // Skip empty or internal columns
-                    }
-                    // skip event id column too
-                    if(i == m_important_column_idxs[ImportantColumns::kDbEventId])
-                    {
-                        continue;
-                    }
-                    m_group_by_choices.push_back(col);
+                    continue;  // Skip empty or internal columns
                 }
+                // skip event id column too
+                if(i == m_important_column_idxs[ImportantColumns::kDbEventId])
+                {
+                    continue;
+                }
+                m_group_by_choices.push_back(col);
             }
-            else
-            {
-                std::string selected_option = m_filter_options.group_by;
-                m_group_by_choices.resize(2);
-                m_group_by_choices[1]             = selected_option;
-                m_pending_filter_options.group_by = selected_option;
-                m_group_by_selection_index        = 1;
-            }
-            m_group_by_choices_ptr.resize(m_group_by_choices.size());
-            for(size_t i = 0; i < m_group_by_choices.size(); i++)
-            {
-                m_group_by_choices_ptr[i] = m_group_by_choices[i].c_str();
-            }
+        }
+        else
+        {
+            std::string selected_option = m_filter_options.group_by;
+            m_group_by_choices.resize(2);
+            m_group_by_choices[1]             = selected_option;
+            m_pending_filter_options.group_by = selected_option;
+            m_group_by_selection_index        = 1;
+        }
+        m_group_by_choices_ptr.resize(m_group_by_choices.size());
+        for(size_t i = 0; i < m_group_by_choices.size(); i++)
+        {
+            m_group_by_choices_ptr[i] = m_group_by_choices[i].c_str();
         }
     }
 

@@ -980,17 +980,19 @@ ProfileDatabase::BuildTableQuery(
     table_string_id_filter_map_t string_id_filter_map;
     std::string group_by_select;
     std::string group_by;
-    if(summary)
+    
+    bool sample_query = false;
+    if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
     {
-        bool sample_query = false;
-        if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
-        {
-            sample_query = TrackPropertiesAt(tracks[0])->process.category == kRocProfVisDmPmcTrack;
-        }
-        else
-        {
-            sample_query = (rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == kRocProfVisDmOperationNoOp;
-        }        
+        sample_query = TrackPropertiesAt(tracks[0])->process.category == kRocProfVisDmPmcTrack;
+    }
+    else
+    {
+        sample_query = (rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == kRocProfVisDmOperationNoOp;
+    }
+
+    if(summary)
+    {  
         BuildTableSummaryClause(sample_query, group_by_select, group_by);
     }
     else
@@ -1161,8 +1163,16 @@ ProfileDatabase::BuildTableQuery(
         else
         {
             query += group_by;
+            if(sample_query)
+            {
+                query += ", COUNT(*) as count, AVG(value) as avg_value, MIN(value) as "
+                         "min_value, MAX(value) as max_value";
+            }
+            else
+            {
             query += ", COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
-                "MIN(duration) as min_duration, MAX(duration) as max_duration";
+                "MIN(duration) as min_duration, MAX(duration) as max_duration";        
+            }
         }
         query += "\n";
     }

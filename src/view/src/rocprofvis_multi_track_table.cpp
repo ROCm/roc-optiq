@@ -23,6 +23,9 @@ constexpr const char* ID_COLUMN_NAME        = "__uuid";
 constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 
+constexpr const char* FOUND_ENTRIES_TEXT_SINGLE = "Found %llu items on %llu track";
+constexpr const char* FOUND_ENTRIES_TEXT_PLURAL = "Found %llu items on %llu tracks";
+
 MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
                                  std::shared_ptr<TimelineSelection> timeline_selection,
                                  TableType                          table_type)
@@ -126,19 +129,20 @@ MultiTrackTable::Render()
     auto table_params = m_data_provider.DataModel().GetTables().GetTableParams(m_table_type);
     if(table_params)
     {
-        #ifdef ROCPROFVIS_DEVELOPER_MODE
-        ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks",
-                    table_params->m_start_row,
-                    table_params->m_start_row + table_params->m_req_row_count,
-                    m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type),
-                    table_params->m_track_ids.size());
-        #endif
-        ImGui::Text("Found %llu events on %llu tracks",
-                    table_params->m_start_row,
-                    table_params->m_start_row + table_params->m_req_row_count,
-                    m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type),
-                    table_params->m_track_ids.size());
-
+        size_t track_count = table_params->m_track_ids.size();
+        const char* text =
+            (track_count == 1) ? FOUND_ENTRIES_TEXT_SINGLE : FOUND_ENTRIES_TEXT_PLURAL;
+        ImGui::Text(
+            text,
+            m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type),
+            track_count);
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+        ImGui::SameLine();
+        ImGui::Text(
+            " | Cached %llu to %llu entries",
+            table_params->m_start_row,
+            table_params->m_start_row + table_params->m_req_row_count);
+#endif
     }
 
     ImGui::BeginGroup();

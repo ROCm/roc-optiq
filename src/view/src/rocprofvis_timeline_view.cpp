@@ -473,9 +473,9 @@ TimelineView::Update()
             if(m_data_provider.SetGraphIndex(m_reorder_request.track_id,
                                              m_reorder_request.new_index))
             {
-                std::vector<TrackGraph> m_graphs_reordered;
+                std::vector<TrackGraph> graphs_reordered;
                 TimelineModel&          tlm = m_data_provider.DataModel().GetTimeline();
-                m_graphs_reordered.resize(tlm.GetTrackCount());
+                graphs_reordered.resize(tlm.GetTrackCount());
                 for(TrackGraph& graph : *m_graphs)
                 {
                     const TrackInfo* metadata = tlm.GetTrack(graph.chart->GetID());

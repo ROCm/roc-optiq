@@ -200,6 +200,12 @@ InfiniteScrollTable::Render()
                                   ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable |
                                   ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable;
 
+    // When grouping is active, disable saved settings to prevent stale column
+    // visibility from being applied to the new schema
+    if(!m_filter_options.group_by.empty())
+    {
+        table_flags |= ImGuiTableFlags_NoSavedSettings;
+    }
 
     if(!m_data_provider.IsRequestPending(GetRequestID()))
     {
@@ -231,8 +237,15 @@ InfiniteScrollTable::Render()
                           outer_size.y);
         }
 
+        // Use a unique table ID when grouping to prevent ImGui from applying cached state
+        std::string table_id = m_widget_name;
+        if(!m_filter_options.group_by.empty())
+        {
+            table_id += "_grouped_" + m_filter_options.group_by;
+        }
+
         if(column_names.size() &&
-           ImGui::BeginTable("Event Data Table", static_cast<int>(column_names.size()),
+           ImGui::BeginTable(table_id.c_str(), static_cast<int>(column_names.size()),
                              table_flags, outer_size))
         {
             if(m_skip_data_fetch && ImGui::GetScrollY() > 0.0f)
@@ -245,22 +258,27 @@ InfiniteScrollTable::Render()
             }
 
             ImGui::TableSetupScrollFreeze(0, 1);  // Freeze header row
-            int j = 0;
+            int  j = 0;
+            bool grouping_active = !m_filter_options.group_by.empty();
             for(int i = 0; i < column_names.size(); i++)
             {
                 ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_None;
-                if(!column_names[i].empty() && column_names[i][0] == '_')
+                // When grouping is active, show all columns by default
+                if(!grouping_active)
                 {
-                    col_flags = ImGuiTableColumnFlags_DefaultHide |
-                                ImGuiTableColumnFlags_Disabled;
-                }
-                if(!m_hidden_column_indices.empty() && i == m_hidden_column_indices[j])
-                {
-                    col_flags = ImGuiTableColumnFlags_DefaultHide |
-                                ImGuiTableColumnFlags_Disabled;
-                    if(j < m_hidden_column_indices.size() - 1)
+                    if(!column_names[i].empty() && column_names[i][0] == '_')
                     {
-                        j++;
+                        col_flags = ImGuiTableColumnFlags_DefaultHide |
+                                    ImGuiTableColumnFlags_Disabled;
+                    }
+                    if(!m_hidden_column_indices.empty() && i == m_hidden_column_indices[j])
+                    {
+                        col_flags = ImGuiTableColumnFlags_DefaultHide |
+                                    ImGuiTableColumnFlags_Disabled;
+                        if(j < m_hidden_column_indices.size() - 1)
+                        {
+                            j++;
+                        }
                     }
                 }
                 ImGui::TableSetupColumn(column_names[i].c_str(), col_flags);

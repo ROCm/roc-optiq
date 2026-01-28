@@ -231,8 +231,14 @@ InfiniteScrollTable::Render()
                           outer_size.y);
         }
 
+
+        //======Using table_id is a hacky workaround, Fix this properly later======
+
+         const std::string table_id =
+            std::string("Event Data Table##") + std::to_string(column_names.size());
+
         if(column_names.size() &&
-           ImGui::BeginTable("Event Data Table", static_cast<int>(column_names.size()),
+           ImGui::BeginTable(table_id.c_str(), static_cast<int>(column_names.size()),
                              table_flags, outer_size))
         {
             if(m_skip_data_fetch && ImGui::GetScrollY() > 0.0f)

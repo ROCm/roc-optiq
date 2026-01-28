@@ -211,7 +211,7 @@ MultiTrackTable::Render()
 #endif
 
     ImGui::SetNextItemAllowOverlap();
-    //Filter disabled when "group by" is selected
+    // Filter disabled when "group by" is selected
     ImGui::BeginDisabled(m_filter_options.group_by != "");
     ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
                              m_pending_filter_options.filter,

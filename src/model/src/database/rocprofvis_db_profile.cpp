@@ -992,7 +992,7 @@ ProfileDatabase::BuildTableQuery(
     }
 
     if(summary)
-    {  
+    {
         BuildTableSummaryClause(sample_query, group_by_select, group_by);
     }
     else

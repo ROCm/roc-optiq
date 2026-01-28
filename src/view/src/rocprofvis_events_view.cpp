@@ -407,6 +407,7 @@ EventsView::RenderArgumentData(const EventInfo* event_data)
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
+                        ImGui::PushID(i);
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
                         CopyableTextUnformatted(
@@ -421,6 +422,7 @@ EventsView::RenderArgumentData(const EventInfo* event_data)
                         ImGui::TableSetColumnIndex(3);
                         CopyableTextUnformatted(event_data->args[i].value.c_str(), "",
                                                 COPY_DATA_NOTIFICATION, false, true);
+                        ImGui::PopID();
                     }
                 }
                 ImGui::EndTable();

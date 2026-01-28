@@ -4,6 +4,7 @@
 #pragma once
 #include <cstdint>
 #include <limits>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -39,6 +40,7 @@ public:
     bool EventSelected(uint64_t event_id) const;
     void UnselectAllEvents();
     bool HasSelectedEvents() const;
+    bool GetSelectedEventsTimeRange(double& start_ts_out, double& end_ts_out) const;
 
     static constexpr double INVALID_SELECTION_TIME =
         std::numeric_limits<double>::lowest();

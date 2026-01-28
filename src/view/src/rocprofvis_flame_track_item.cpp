@@ -360,8 +360,15 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
        ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
                               ImGuiHoveredFlags_NoPopupHierarchy))
     {
+        // Right-click context menu - set layer so timeline view knows we're on an event
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+        {
+            TimelineFocusManager::GetInstance().SetRightClickLayer(Layer::kGraphLayer);
+        }
+
         // Select on click
-        if(IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
+        if(IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left) &&
+           TimelineFocusManager::GetInstance().GetFocusedLayer() != Layer::kInteractiveLayer)
         {
             // Defer on click execution to next frame if no other layer takes focus
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kGraphLayer);

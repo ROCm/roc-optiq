@@ -30,6 +30,8 @@ public:
     bool             RemoveEvent(uint64_t event_id);
     void             ClearEvents();
     size_t           EventCount() const;
+    bool GetEventTimeRange(const std::vector<uint64_t>& event_ids, double& start_ts_out,
+                           double& end_ts_out) const;
 
 private:
     std::unordered_map<uint64_t, EventInfo> m_event_data;

@@ -99,6 +99,7 @@ private:
     void                            UpdateMaxMetaAreaSize(float new_size);
     void                            CalculateMaxMetaAreaSize();
     void                            UpdateAllMaxMetaAreaSizes();
+    void                            ClearTimeRangeSelection();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
 

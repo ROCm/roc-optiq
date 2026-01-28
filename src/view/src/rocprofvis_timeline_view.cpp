@@ -14,6 +14,7 @@
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
@@ -239,6 +240,8 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 
     if(!ImGui::IsPopupOpen("StickyNoteContextMenu"))
     {
+        // Clear right-click state when popup closes
+        TimelineFocusManager::GetInstance().ClearRightClickLayer();
         return;
     }
     auto style = m_settings.GetDefaultStyle();
@@ -246,6 +249,25 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup("StickyNoteContextMenu"))
     {
+        // Show "Make Time Range Selection" when there are selected events
+        if(m_timeline_selection->HasSelectedEvents() &&
+           TimelineFocusManager::GetInstance().GetRightClickLayer() == Layer::kGraphLayer)
+        {
+            if(ImGui::MenuItem("Make Time Range Selection"))
+            {
+                double start_ts, end_ts;
+                if(m_timeline_selection->GetSelectedEventsTimeRange(start_ts, end_ts))
+                {
+                    // Convert absolute timestamps to normalized time for
+                    // m_highlighted_region
+                    m_highlighted_region = { m_tpt->NormalizeTime(start_ts),
+                                             m_tpt->NormalizeTime(end_ts) };
+                    m_timeline_selection->SelectTimeRange(start_ts, end_ts);
+                }
+                ImGui::CloseCurrentPopup();
+            }
+        }
+
         if(ImGui::MenuItem("Add Annotation"))
         {
             float  x_in_chart = rel_mouse_pos.x;
@@ -260,9 +282,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         {
             if(ImGui::MenuItem("Remove Selection"))
             {
-                m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
-                m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
-                m_timeline_selection->ClearTimeRange();
+                ClearTimeRangeSelection();
             }
         }
 
@@ -279,6 +299,19 @@ TimelineView::ScrollToTrack(const uint64_t& track_id)
         m_scroll_position_y =
             std::min(m_content_max_y_scroll, m_track_position_y[track_id]);
         ImGui::SetScrollY(m_scroll_position_y);
+    }
+}
+
+// Helper to clear any active time range selection and reset highlight state
+void
+TimelineView::ClearTimeRangeSelection()
+{
+    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
+       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+    {
+        m_timeline_selection->ClearTimeRange();
+        m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
+        m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
     }
 }
 
@@ -441,7 +474,7 @@ TimelineView::Update()
                                              m_reorder_request.new_index))
             {
                 std::vector<TrackGraph> graphs_reordered;
-                TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
+                TimelineModel&          tlm = m_data_provider.DataModel().GetTimeline();
                 graphs_reordered.resize(tlm.GetTrackCount());
                 for(TrackGraph& graph : *m_graphs)
                 {
@@ -558,10 +591,10 @@ TimelineView::TimelineDragShimmy(int shimmy_amount)
     double view_offset = m_tpt->GetViewTimeOffsetNs();
     double view_width  = m_tpt->GetVWidth();
     double total_range = m_tpt->GetRangeX();
-    
+
     // Calculate shimmy amount (1% of view width)
     double shimmy_delta = view_width * 0.01;
-    
+
     if(shimmy_amount < 0)
     {
         // Trying to shimmy left - only if there's more timeline to the left
@@ -601,11 +634,12 @@ TimelineView::CalculateHighlightTimeWithShimmy(float mouse_x, float origin_x)
         TimelineDragShimmy(-1);
     else if(cursor_screen_position > right_threshold)
         TimelineDragShimmy(1);
-    
+
     // Recalculate after potential shimmy to ensure alignment
     cursor_screen_position = mouse_x - origin_x;
     cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
-    return std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
+    return std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0,
+                      m_tpt->GetRangeX());
 }
 
 void
@@ -617,7 +651,6 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                                     ImGuiWindowFlags_NoInputs;
 
     ImVec2 container_size  = ImGui::GetWindowSize();
-    float  scrollbar_width = ImGui::GetStyle().ScrollbarSize;
     ImGui::SetNextWindowSize(m_tpt->GetGraphSize(), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
@@ -651,7 +684,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // Process Dragging
     if(!mouse_down)
     {
-        // Check if we were dragging and just released - call SelectTimeRange once on completion
+        // Check if we were dragging and just released - call SelectTimeRange once on
+        // completion
         if(m_dragging_selection_start || m_dragging_selection_end)
         {
             if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
@@ -673,13 +707,15 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         {
             m_stop_user_interaction = true;
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-            m_highlighted_region.first = CalculateHighlightTimeWithShimmy(mouse_pos.x, window_position.x);
+            m_highlighted_region.first =
+                CalculateHighlightTimeWithShimmy(mouse_pos.x, window_position.x);
         }
         if(m_dragging_selection_end)
         {
             m_stop_user_interaction = true;
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-            m_highlighted_region.second = CalculateHighlightTimeWithShimmy(mouse_pos.x, window_position.x);
+            m_highlighted_region.second =
+                CalculateHighlightTimeWithShimmy(mouse_pos.x, window_position.x);
         }
     }
 
@@ -714,12 +750,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
                 if(mouse_clicked)
                 {
-                    TimelineFocusManager::GetInstance().RequestLayerFocus(
-                        Layer::kScrubberLayer);
-
                     m_dragging_selection_start = true;
                     m_stop_user_interaction    = true;
                 }
+                TimelineFocusManager::GetInstance().RequestLayerFocus(
+                    Layer::kScrubberLayer);
             }
             else
             {
@@ -792,10 +827,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             window_position.x + m_tpt->TimeToPixel(m_highlighted_region.second);
 
         // Clamp to not overlap scrollbar
-        float min_x = window_position.x;
-        float max_x = window_position.x + m_tpt->GetGraphSizeX();
+        float min_x         = window_position.x;
+        float max_x         = window_position.x + m_tpt->GetGraphSizeX();
         float clamped_start = std::clamp(normalized_start_box_highlighted, min_x, max_x);
-        float clamped_end   = std::clamp(normalized_start_box_highlighted_end, min_x, max_x);
+        float clamped_end =
+            std::clamp(normalized_start_box_highlighted_end, min_x, max_x);
 
         draw_list->AddRectFilled(
             ImVec2(clamped_start, cursor_position.y),
@@ -804,10 +840,9 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     }
 
     // IsMouseHoveringRect check in screen coordinates
-    if(ImGui::IsMouseHoveringRect(
-           window_position,
-           ImVec2(window_position.x + m_tpt->GetGraphSizeX(),
-                  window_position.y + m_tpt->GetGraphSizeY())) &&
+    if(ImGui::IsMouseHoveringRect(window_position,
+                                  ImVec2(window_position.x + m_tpt->GetGraphSizeX(),
+                                         window_position.y + m_tpt->GetGraphSizeY())) &&
        !m_stop_user_interaction)
     {
         float  cursor_screen_position = mouse_position.x - window_position.x;
@@ -1670,6 +1705,12 @@ TimelineView::RenderTraceView()
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+    {
+        // Reset per-click context so only event right-clicks repopulate it.
+        TimelineFocusManager::GetInstance().ClearRightClickLayer();
+    }
+
     ImGui::BeginChild("Grid View 2",
                       ImVec2(subcomponent_size_main.x,
                              subcomponent_size_main.y - m_artificial_scrollbar_height),
@@ -1871,7 +1912,8 @@ TimelineView::HandleTopSurfaceTouch()
         }
 
         // Handle drag start
-        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) && !m_is_selecting_region && !m_can_drag_to_pan)
+        if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) &&
+           !m_is_selecting_region && !m_can_drag_to_pan)
         {
             if(io.KeyCtrl &&
                TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
@@ -2020,6 +2062,39 @@ TimelineView::HandleTopSurfaceTouch()
                 std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y,
                            0.0f, m_content_max_y_scroll);
         }
+
+        // Escape to clear time range selection
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape))
+        {
+            ClearTimeRangeSelection();
+        }
+
+        // M to mark/unmark selected events as a time range
+        if(ImGui::IsKeyPressed(ImGuiKey_M))
+        {
+            if(m_timeline_selection->HasValidTimeRangeSelection())
+            {
+                ClearTimeRangeSelection();
+            }
+            else
+            {
+                double start_ts, end_ts;
+                if(m_timeline_selection->GetSelectedEventsTimeRange(start_ts, end_ts))
+                {
+                    // Convert absolute timestamps to normalized time for
+                    // m_highlighted_region
+                    m_highlighted_region = { m_tpt->NormalizeTime(start_ts),
+                                             m_tpt->NormalizeTime(end_ts) };
+                    m_timeline_selection->SelectTimeRange(start_ts, end_ts);
+                }
+                else
+                {
+                    // show notificaton that no events are selected
+                    NotificationManager::GetInstance().Show("No events selected to mark.",
+                                                            NotificationLevel::Warning);
+                }
+            }
+        }
     }
 
     // Stop panning if mouse released
@@ -2031,10 +2106,11 @@ TimelineView::HandleTopSurfaceTouch()
             float  cursor_screen_position = mouse_pos.x - graph_area_min.x;
 
             // Clamp cursor position to valid graph area (excluding scrollbar)
-            float max_x = m_tpt->GetGraphSizeX();
+            float max_x            = m_tpt->GetGraphSizeX();
             cursor_screen_position = std::clamp(cursor_screen_position, 0.0f, max_x);
 
-            m_highlighted_region.second = std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
+            m_highlighted_region.second = std::clamp(
+                m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
 
             // Call SelectTimeRange once on drag complete - not during drag
             if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&

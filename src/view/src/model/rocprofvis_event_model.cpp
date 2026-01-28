@@ -3,6 +3,8 @@
 
 #include "rocprofvis_event_model.h"
 #include "spdlog/spdlog.h"
+#include <algorithm>
+#include <limits>
 
 namespace RocProfVis
 {
@@ -56,6 +58,33 @@ size_t
 EventModel::EventCount() const
 {
     return m_event_data.size();
+}
+
+bool
+EventModel::GetEventTimeRange(const std::vector<uint64_t>& event_ids, double& start_ts_out,
+                              double& end_ts_out) const
+{
+    if(event_ids.empty())
+    {
+        return false;
+    }
+
+    start_ts_out = std::numeric_limits<double>::max();
+    end_ts_out   = std::numeric_limits<double>::lowest();
+
+    bool found = false;
+    for(const auto& event_id : event_ids)
+    {
+        const auto* event = GetEvent(event_id);
+        if(event)
+        {
+            start_ts_out = std::min(start_ts_out, event->basic_info.start_ts);
+            end_ts_out =
+                std::max(end_ts_out, event->basic_info.start_ts + event->basic_info.duration);
+            found = true;
+        }
+    }
+    return found;
 }
 
 }  // namespace View

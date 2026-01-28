@@ -1171,7 +1171,7 @@ ProfileDatabase::BuildTableQuery(
             else
             {
             query += ", COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
-                "MIN(duration) as min_duration, MAX(duration) as max_duration";        
+                "MIN(duration) as min_duration, MAX(duration) as max_duration";
             }
         }
         query += "\n";

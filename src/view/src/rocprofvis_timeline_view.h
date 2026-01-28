@@ -97,9 +97,17 @@ public:
     TimelineArrow& GetArrowLayer();
 
 private:
-    void                            UpdateMaxMetaAreaSize(float new_size);
-    void                            CalculateMaxMetaAreaSize();
-    void                            UpdateAllMaxMetaAreaSizes();
+    void UpdateMaxMetaAreaSize(float new_size);
+    void CalculateMaxMetaAreaSize();
+    void UpdateAllMaxMetaAreaSizes();
+
+    bool IsRequestDataNeeded();
+    void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
+    void DrawTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
+                   bool is_reordering);
+    void DrawEmptyTrack(TrackItem* track_item);
+    void DrawReorderingTrack(TrackItem* track_item, ImVec2 container_size);
+
     void                            ClearTimeRangeSelection();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;

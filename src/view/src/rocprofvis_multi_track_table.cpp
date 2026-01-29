@@ -23,8 +23,7 @@ constexpr const char* ID_COLUMN_NAME        = "__uuid";
 constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 
-constexpr const char* FOUND_ENTRIES_TEXT_SINGLE = "Found %llu items on %llu track";
-constexpr const char* FOUND_ENTRIES_TEXT_PLURAL = "Found %llu items on %llu tracks";
+constexpr const char* FOUND_ENTRIES_TEXT = "Found %llu item(s) on %llu track(s)";
 
 MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
                                  std::shared_ptr<TimelineSelection> timeline_selection,
@@ -38,6 +37,7 @@ MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
     m_widget_name = (table_type == TableType::kEventTable)
                         ? GenUniqueName("Event Table")
                         : GenUniqueName("Sample Table");
+    m_filter_store[0] = '\0';
 }
 
 MultiTrackTable::~MultiTrackTable() {}
@@ -129,13 +129,10 @@ MultiTrackTable::Render()
     auto table_params = m_data_provider.DataModel().GetTables().GetTableParams(m_table_type);
     if(table_params)
     {
-        size_t track_count = table_params->m_track_ids.size();
-        const char* text =
-            (track_count == 1) ? FOUND_ENTRIES_TEXT_SINGLE : FOUND_ENTRIES_TEXT_PLURAL;
         ImGui::Text(
-            text,
+            FOUND_ENTRIES_TEXT,
             m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type),
-            track_count);
+            table_params->m_track_ids.size());
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         ImGui::SameLine();
         ImGui::Text(
@@ -232,6 +229,29 @@ MultiTrackTable::Render()
     if(ImGui::Button("Submit", ImVec2(0, ImGui::GetItemRectSize().y)))
     {
         m_filter_requested = true;
+
+        if(m_group_by_selection_index == 0)
+        {
+            if(m_filter_store[0] != '\0')
+            {
+                // restore previous filter
+                snprintf(m_pending_filter_options.filter,
+                         IM_ARRAYSIZE(m_pending_filter_options.filter), "%s",
+                         m_filter_store);
+                m_filter_store[0] = '\0';
+            }
+        }
+        else
+        {
+            if(m_pending_filter_options.filter[0] != '\0')
+            {
+                // backup current filter
+                snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s",
+                         m_pending_filter_options.filter);
+                // clear filter when group by is selected
+                m_pending_filter_options.filter[0] = '\0';
+            }
+        }
     }
     InfiniteScrollTable::Render();
     RenderContextMenu();

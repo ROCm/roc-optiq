@@ -543,6 +543,10 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
         {
             filter.group_columns[0] = '\0';
         }
+        else
+        {
+            filter.filter[0] = '\0';
+        }
         // check that sort order and column index actually are different from the
         // current values before fetching
         if(m_filter_requested || sort_order != table_params->m_sort_order ||

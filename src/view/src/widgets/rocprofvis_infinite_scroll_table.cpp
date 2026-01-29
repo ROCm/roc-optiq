@@ -231,6 +231,8 @@ InfiniteScrollTable::Render()
                           outer_size.y);
         }
 
+        // TODO: is there a more reliable way to detect Group by changes?
+        ImGui::PushID(static_cast<int>(column_names.size())); 
         if(column_names.size() &&
            ImGui::BeginTable("Event Data Table", static_cast<int>(column_names.size()),
                              table_flags, outer_size))
@@ -439,6 +441,7 @@ InfiniteScrollTable::Render()
         {
             ImGui::TextUnformatted(m_no_data_text.c_str());
         }
+        ImGui::PopID();
     }
 
     if(show_loading_indicator)

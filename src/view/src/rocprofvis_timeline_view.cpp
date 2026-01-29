@@ -235,10 +235,10 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                               ImGuiHoveredFlags_NoPopupHierarchy) &&
        ImGui::IsMouseHoveringRect(win_min, win_max))
     {
-        ImGui::OpenPopup("StickyNoteContextMenu");
+        ImGui::OpenPopup("TimelineContextMenu");
     }
 
-    if(!ImGui::IsPopupOpen("StickyNoteContextMenu"))
+    if(!ImGui::IsPopupOpen("TimelineContextMenu"))
     {
         // Clear right-click state when popup closes
         TimelineFocusManager::GetInstance().ClearRightClickLayer();
@@ -247,7 +247,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     auto style = m_settings.GetDefaultStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-    if(ImGui::BeginPopup("StickyNoteContextMenu"))
+    if(ImGui::BeginPopup("TimelineContextMenu"))
     {
         // Show "Make Time Range Selection" when there are selected events
         if(m_timeline_selection->HasSelectedEvents() &&
@@ -267,6 +267,14 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                 ImGui::CloseCurrentPopup();
             }
         }
+        if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
+           m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+        {
+            if(ImGui::MenuItem("Remove Time Range Selection"))
+            {
+                ClearTimeRangeSelection();
+            }
+        }
 
         if(ImGui::MenuItem("Add Annotation"))
         {
@@ -277,14 +285,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                                                m_tpt->GetVMaxX(), m_tpt->GetGraphSize());
             ImGui::CloseCurrentPopup();
         }
-        if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
-           m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
-        {
-            if(ImGui::MenuItem("Remove Selection"))
-            {
-                ClearTimeRangeSelection();
-            }
-        }
+
 
         ImGui::EndPopup();
     }

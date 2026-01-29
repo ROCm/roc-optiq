@@ -541,14 +541,14 @@ Minimap::RenderLegend(float w, float h)
     ImGui::Checkbox("##events", &m_show_events);
     if(ImGui::BeginItemTooltip())
     {
-        ImGui::Text("Show/Hide Event Density");
+        ImGui::Text("Show/Hide Event Tracks");
         ImGui::EndTooltip();
     }
     ImGui::SetCursorScreenPos(ImVec2(bar_x2 - (checkbox_sz - bar_w) * 0.5f, chk_y));
     ImGui::Checkbox("##counters", &m_show_counters);
     if(ImGui::BeginItemTooltip())
     {
-        ImGui::Text("Show/Hide Counter Density");
+        ImGui::Text("Show/Hide Counter Tracks");
         ImGui::EndTooltip();
     }
 
@@ -579,8 +579,8 @@ Minimap::RenderLegend(float w, float h)
     DrawRotatedText("Event Density", ImVec2(bar_x1 - gap * 3.0f, bar_y + bar_h * 0.5f),
                     !m_show_events);
 
-    // Counter Density (Left of bar 2)
-    DrawRotatedText("Counter Density", ImVec2(bar_x2 - gap * 3.0f, bar_y + bar_h * 0.5f),
+    // Counter Value (Left of bar 2)
+    DrawRotatedText("Counter Value", ImVec2(bar_x2 - gap * 3.0f, bar_y + bar_h * 0.5f),
                     !m_show_counters);
 }
 

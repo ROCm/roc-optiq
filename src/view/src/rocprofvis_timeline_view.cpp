@@ -2157,6 +2157,12 @@ TimelineView::GetViewCoords() const
              m_tpt->GetVMaxX() };
 }
 
+std::shared_ptr<TimePixelTransform>
+TimelineView::GetTransform() const
+{
+    return m_tpt;
+}
+
 float
 TimelineView::GetTotalTrackHeight() const
 {

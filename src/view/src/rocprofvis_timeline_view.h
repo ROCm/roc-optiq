@@ -88,7 +88,8 @@ public:
     void           CalculateGridInterval();
     ImVec2         GetGraphSize();
     void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
-    ViewCoords     GetViewCoords() const;
+    ViewCoords                          GetViewCoords() const;
+    std::shared_ptr<TimePixelTransform> GetTransform() const;
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;

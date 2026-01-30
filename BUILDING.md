@@ -98,7 +98,7 @@ fi
 
 dnf install -y \
   cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget \
-  libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel
+  libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel tbb-devel 
 ```
 
 ### Vulkan SDK

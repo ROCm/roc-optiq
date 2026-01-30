@@ -71,7 +71,7 @@ TrackTopology::GetTopology() const
 }
 
 void
-TrackTopology::UpdateTopology()
+TrackTopology::UpdateTopology() //TODO: Fill my new provider class here
 {
     if(m_topology_dirty && m_data_provider.GetState() == ProviderState::kReady)
     {

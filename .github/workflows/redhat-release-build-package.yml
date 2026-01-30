@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-          os-release: [ '9', '10' ]
+          os-release: [ '8', '9', '10' ]
           vulkan-sdk: [ '1.4.328.1' ]
     env:
       ARTIFACT_NAME: roc-optiq-rocky-${{ matrix.os-release }}-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
@@ -51,9 +51,16 @@ jobs:
       - name: Install Dependencies
         run: |
             dnf groupinstall -y "Development Tools"
-            dnf install -y epel-release && crb enable
+            if [ "${{ matrix.os-release }}" = "8" ]; then
+              dnf install -y epel-release && dnf config-manager --set-enabled powertools
+            else
+              dnf install -y epel-release && crb enable
+            fi
             dnf install -y cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget
-            dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel
+            dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel tbb-devel
+            if [ "${{ matrix.os-release }}" = "8" ]; then
+              dnf install -y gcc-toolset-11
+            fi
             echo "✅ Dependencies Installed!"
       - name: Install Vulkan SDK
         run: |
@@ -69,9 +76,15 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/${{ matrix.vulkan-sdk }}/setup-env.sh
+          if [ "${{ matrix.os-release }}" = "8" ]; then
+            source /opt/rh/gcc-toolset-11/enable
+            EXTRA_LINK_FLAGS="-ldl -ltbb"
+          else
+            EXTRA_LINK_FLAGS=""
+          fi
           
           mkdir -p ${{ env.BUILD_DIR }}
-          cmake -B ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake -B ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
           cmake --build ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_BUILD }}" --parallel 4 --target package
           
           if [ -e ${{ env.BUILD_DIR }}/${{ env.VISUALIZER_FILE_NAME }} ]; then

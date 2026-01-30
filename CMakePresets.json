@@ -55,28 +55,6 @@
             }
         },        
         {
-            "name": "x86-debug",
-            "displayName": "x86 Debug",
-            "description": "Configure ROCm Optiq for Windows (32-bit) with Visual Studio, enabling detailed debugging symbols and checks.",
-            "inherits": "windows-base",
-            "architecture": {
-                "value": "x86",
-                "strategy": "external"
-            },
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
-            "name": "x86-release",
-            "displayName": "x86 Release",
-            "description": "Configure ROCm Optiq for Windows (32-bit) with Visual Studio, optimized for speed and efficiency.",
-            "inherits": "windows-base",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
-            }
-        },
-        {
             "name": "linux-base",
             "hidden": true,
             "description": "Base settings for Linux GCC builds of ROCm Optiq",

@@ -162,7 +162,7 @@ cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --
 - Homebrew (for Molten VK)
 - Molten VK
 
-### Instal Homebrew
+### Install Homebrew
 
 ```
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 

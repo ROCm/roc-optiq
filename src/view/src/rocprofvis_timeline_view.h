@@ -89,6 +89,7 @@ public:
     ImVec2         GetGraphSize();
     void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords     GetViewCoords() const;
+    double         PixelToTime(float x_position) const;
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;

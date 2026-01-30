@@ -691,10 +691,13 @@ TraceView::RenderAnnotationControls()
     ImGui::PushID("add_new_sticky");
     if(ImGui::Button(ICON_ADD_NOTE))
     {
-        ViewCoords coords = m_timeline_view->GetViewCoords();
+        ViewCoords coords       = m_timeline_view->GetViewCoords();
+        ImVec2     graph_size   = m_timeline_view->GetGraphSize();
+        double     center_time  = m_timeline_view->PixelToTime(graph_size.x * 0.5f);
+        float      center_y     = m_timeline_view->GetScrollPosition() + graph_size.y * 0.5f;
         m_annotations->OpenStickyNotePopup(
-            INVALID_TIME_NS, m_timeline_view->GetScrollPosition(), coords.v_min_x,
-            coords.v_max_x, m_timeline_view->GetGraphSize());
+            center_time, center_y, coords.v_min_x,
+            coords.v_max_x, graph_size);
         m_annotations->ShowStickyNotePopup();
     }
     if(ImGui::IsItemHovered())

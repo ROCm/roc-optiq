@@ -2157,10 +2157,10 @@ TimelineView::GetViewCoords() const
              m_tpt->GetVMaxX() };
 }
 
-double
-TimelineView::PixelToTime(float x_position) const
+std::shared_ptr<TimePixelTransform>
+TimelineView::GetTransform() const
 {
-    return m_tpt->PixelToTime(x_position);
+    return m_tpt;
 }
 
 float

@@ -25,10 +25,13 @@ Set a time range filter in the :ref:`timeline` to limit the data displayed to a 
 
 To set a time range filter, press and hold **CTRL** while selecting a range with your mouse in the **Timeline View**.
 
-Once a time range is selected, the selection boundaries can be adjusted by dragging the boundaries. 
-To clear the time range selection, press **ESC** or right-click and select **Remove Selection**.
+.. image:: ../images/filter.png
+   :width: 600
 
-If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click.
+Once a time range is selected, the selection boundaries can be adjusted by dragging the boundaries. 
+The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
+
+If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click:
 
 |make|
 
@@ -38,15 +41,7 @@ Selecting this will set a time range filter with boundaries at the start and end
 
    You can press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
 
-.. image:: ../images/filter.png
-   :width: 600
-
 To clear the time range selection, press **ESC** or right-click and select **Remove Selection**.
-
-.. image:: ../images/time-range-filter.gif
-   :width: 600
-
-The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
 
 Save trace selections
 ---------------------

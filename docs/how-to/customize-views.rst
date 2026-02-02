@@ -13,6 +13,7 @@ Customize your ROCm Optiq project
 .. |flow| image:: ../images/flow-change.png
 .. |reset| image:: ../images/reset.png
 .. |make| image:: ../images/make-selection.png
+.. |remove| image:: ../images/remove-time.png
 
 You can customize the data views of an open trace file in ROCm Optiq, including display settings, saved trace selections, added bookmarks/annotations, and more.
 
@@ -23,7 +24,7 @@ Set a time range filter
 
 Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
 
-To set a time range filter, press and hold **CTRL** while selecting a range with your mouse in the **Timeline View**.
+To set a time range filter, press and hold **CTRL** while dragging your mouse in the in the **Timeline View** to select a range.
 
 .. image:: ../images/filter.png
    :width: 600
@@ -41,7 +42,9 @@ Selecting this will set a time range filter with boundaries at the start and end
 
    You can press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
 
-To clear the time range selection, press **ESC** or right-click and select **Remove Selection**.
+To clear the time range selection, press **ESC** or right-click and select **Remove Selection**:
+
+|remove|
 
 Save trace selections
 ---------------------
@@ -98,8 +101,8 @@ To create and use a bookmark:
    
 Or:
 
-1.	Press **Ctrl** + any key from **0** ‒ **9** to create a view bookmark. The bookmark saves to an index based on the number used and creates a shortcut.
-2.	Press any key from **0** ‒ **9** to restore the view to a stored bookmark from that index number shortcut. For example, if you save a bookmark using **Ctrl** + **1**, pressing **1** restores that bookmark.
+1.	Press **Ctrl** + any key from **0** - **9** to create a view bookmark. The bookmark saves to an index based on the number used and creates a shortcut.
+2.	Press any key from **0** - **9** to restore the view to a stored bookmark from that index number shortcut. For example, if you save a bookmark using **Ctrl** + **1**, pressing **1** restores that bookmark.
 
 Delete bookmarks
 ----------------

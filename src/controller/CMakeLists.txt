@@ -54,6 +54,9 @@ list(APPEND rocprofvis_controller_source_files
     src/compute/rocprofvis_controller_plot.cpp
     src/compute/rocprofvis_controller_plot_series.cpp
     src/compute/rocprofvis_controller_plot_compute.cpp
+    src/compute/rocprofvis_controller_workload.cpp
+    src/compute/rocprofvis_controller_kernel.cpp
+    src/compute/rocprofvis_controller_metrics_container.cpp
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)

@@ -14,16 +14,18 @@ namespace DataModel
 		{kRPVComputeFetchWorkloadRooflineCeiling,  "Fetch roofline ceilings of a workload" },
 		{kRPVComputeFetchWorkloadTopKernels, "Fetch top kernels by duration of a workload" },
 		{kRPVComputeFetchWorkloadKernelsList, "Fetch list of kernels in a workload" },
+		{kRPVComputeFetchWorkloadMetricsDefinition, "Fetch list of metrics in a workload" },
 		{kRPVComputeFetchKernelRooflineIntensities, "Fetch roofline intensities of a kernel" },
 		{kRPVComputeFetchKernelMetricCategoriesList, "Fetch list of metric categories in a kernel" },
-		{kRPVComputeFetchMetricCategoryTablesList, "Fetch list of tables in a category" },
+		{kRPVComputeFetchMetricCategoryTablesList, "Fetch list of tables in a category" },		
+		{kRPVComputeFetchMetricValues, "Fetch values of metrics"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
 		{"workload_id", kRPVComputeColumnWorkloadId},
 		{"workload_name", kRPVComputeColumnWorkloadName},
 		{"workload_sub_name", kRPVComputeColumnWorkloadSubName},
-		{"sys_info_ext_data", kRPVComputeColumnWorkloadSysInfo},
+		{"sys_info_extdata", kRPVComputeColumnWorkloadSysInfo},
 		{"profiling_config_extdata", kRPVComputeColumnWorkloadProfileConfig},
 		{"roofline_bench_extdata", kRPVComputeColumnWorkloadRooflineBenchBlob},
 		{"kernel_uuid", kRPVComputeColumnKernelUUID},
@@ -426,6 +428,7 @@ namespace DataModel
 				case kRPVComputeFetchListOfWorkloads:
 				case kRPVComputeFetchWorkloadTopKernels:
 				case kRPVComputeFetchWorkloadKernelsList:
+				case kRPVComputeFetchWorkloadMetricsDefinition:
 				case kRPVComputeFetchKernelRooflineIntensities:
 				case kRPVComputeFetchKernelMetricCategoriesList:
 				case kRPVComputeFetchMetricCategoryTablesList:

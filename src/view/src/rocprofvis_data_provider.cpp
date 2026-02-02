@@ -43,6 +43,8 @@ const uint64_t DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID =
 #ifdef COMPUTE_UI_SUPPORT
 const uint64_t DataProvider::FETCH_COMPUTE_TRACE_REQUEST_ID =
     MakeRequestId(RequestType::kFetchComputeTrace);
+const uint64_t DataProvider::METRICS_REQUEST_ID =
+    MakeRequestId(RequestType::kFetchMetrics);
 #endif
 
 DataProvider::DataProvider()
@@ -2481,6 +2483,11 @@ DataProvider::ProcessRequest(RequestInfo& req)
             ProcessLoadComputeTrace(req);
             break;
         }
+        case RequestType::kFetchMetrics:
+        {
+            ProcessMetricsRequest(req);
+            break;
+        }
 #endif
         default:
         {
@@ -3518,10 +3525,296 @@ DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t prope
 }
 
 #ifdef COMPUTE_UI_SUPPORT
+ComputeDataModel&
+DataProvider::ComputeModel()
+{
+    return m_compute_model;
+}
+
+bool
+DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
+{
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+    auto it = m_requests.find(METRICS_REQUEST_ID);
+    if(it == m_requests.end())
+    {
+        rocprofvis_controller_future_t*    future = rocprofvis_controller_future_alloc();
+        rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+        rocprofvis_controller_metrics_container_t* output =
+            rocprofvis_controller_metrics_container_alloc();
+        ROCPROFVIS_ASSERT(future && args && output);
+        rocprofvis_result_t result =
+            rocprofvis_controller_set_uint64(args, kRPVControllerMetricArgsNumKernels, 0,
+                                             metrics_params.m_kernel_ids.size());
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        for(size_t i = 0; i < metrics_params.m_kernel_ids.size(); i++)
+        {
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerMetricArgsKernelIdIndexed, i,
+                static_cast<uint64_t>(metrics_params.m_kernel_ids[i]));
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
+        result =
+            rocprofvis_controller_set_uint64(args, kRPVControllerMetricArgsNumMetrics, 0,
+                                             metrics_params.m_metric_ids.size());
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        for(size_t i = 0; i < metrics_params.m_metric_ids.size(); i++)
+        {
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerMetricArgsMetricCategoryIdIndexed, i,
+                static_cast<uint64_t>(metrics_params.m_metric_ids[i].category_id));
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            if(metrics_params.m_metric_ids[i].table_id)
+            {
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerMetricArgsMetricTableIdIndexed, i,
+                    static_cast<uint64_t>(
+                        metrics_params.m_metric_ids[i].table_id.value()));
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            }
+            if(metrics_params.m_metric_ids[i].entry_id)
+            {
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerMetricArgsMetricEntryIdIndexed, i,
+                    static_cast<uint64_t>(
+                        metrics_params.m_metric_ids[i].entry_id.value()));
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            }
+        }
+        result = rocprofvis_controller_metric_fetch_async(m_trace_controller, args,
+                                                          future, output);
+        if(result == kRocProfVisResultSuccess)
+        {
+            m_requests.emplace(
+                METRICS_REQUEST_ID,
+                RequestInfo{ METRICS_REQUEST_ID, future, nullptr, output, args,
+                             RequestState::kLoading, RequestType::kFetchMetrics,
+                             std::make_shared<MetricsRequestParams>(metrics_params) });
+            return true;
+        }
+        else
+        {
+            spdlog::error("Failed to fetch metrics, result: {}",
+                          static_cast<int>(result));
+            return false;
+        }
+    }
+    else
+    {
+        spdlog::debug("Request for metrics is already pending");
+    }
+    return false;
+}
+
 void
 DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
 {
+    m_state = ProviderState::kError;
+    if(req.response_code != kRocProfVisResultSuccess)
+    {
+        spdlog::error("Failed to load trace file: {}, error code: {}",
+                      m_model.GetTraceFilePath(), req.response_code);
+        return;
+    }
+    uint64_t            num_workloads = 0;
+    rocprofvis_result_t result        = rocprofvis_controller_get_uint64(
+        m_trace_controller, kRPVControllerNumWorkloads, 0, &num_workloads);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    for(uint64_t i = 0; i < num_workloads; i++)
+    {
+        rocprofvis_handle_t* workload_handle = nullptr;
+        result                               = rocprofvis_controller_get_object(
+            m_trace_controller, kRPVControllerWorkloadIndexed, i, &workload_handle);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && workload_handle);
+        uint64_t     uint64_data = 0;
+        WorkloadInfo workload;
+        result = rocprofvis_controller_get_uint64(
+            workload_handle, kRPVControllerWorkloadId, 0, &uint64_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        workload.id          = static_cast<uint32_t>(uint64_data);
+        workload.name        = GetString(workload_handle, kRPVControllerWorkloadName, 0);
+        uint64_t num_entries = 0;
+        result               = rocprofvis_controller_get_uint64(
+            workload_handle, kRPVControllerWorkloadSystemInfoNumEntries, 0, &num_entries);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        workload.system_info.resize(2);
+        workload.system_info[0].resize(num_entries);
+        workload.system_info[1].resize(num_entries);
+        for(uint64_t j = 0; j < num_entries; j++)
+        {
+            workload.system_info[0][j] = GetString(
+                workload_handle, kRPVControllerWorkloadSystemInfoEntryNameIndexed, j);
+            workload.system_info[1][j] = GetString(
+                workload_handle, kRPVControllerWorkloadSystemInfoEntryValueIndexed, j);
+        }
+        num_entries = 0;
+        result      = rocprofvis_controller_get_uint64(
+            workload_handle, kRPVControllerWorkloadConfigurationNumEntries, 0,
+            &num_entries);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        workload.profiling_config.resize(2);
+        workload.profiling_config[0].resize(num_entries);
+        workload.profiling_config[1].resize(num_entries);
+        for(uint64_t j = 0; j < num_entries; j++)
+        {
+            workload.profiling_config[0][j] = GetString(
+                workload_handle, kRPVControllerWorkloadConfigurationEntryNameIndexed, j);
+            workload.profiling_config[1][j] = GetString(
+                workload_handle, kRPVControllerWorkloadConfigurationEntryValueIndexed, j);
+        }
+        num_entries = 0;
+        result      = rocprofvis_controller_get_uint64(
+            workload_handle, kRPVControllerWorkloadNumAvailableMetrics, 0, &num_entries);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        workload.available_metrics.list.resize(num_entries);
+        for(uint64_t j = 0; j < num_entries; j++)
+        {
+            result = rocprofvis_controller_get_uint64(
+                workload_handle, kRPVControllerWorkloadAvailableMetricCategoryIdIndexed,
+                j, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            workload.available_metrics.list[j].index = static_cast<size_t>(j);
+            workload.available_metrics.list[j].category_id =
+                static_cast<uint32_t>(uint64_data);
+            result = rocprofvis_controller_get_uint64(
+                workload_handle, kRPVControllerWorkloadAvailableMetricTableIdIndexed, j,
+                &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            workload.available_metrics.list[j].table_id =
+                static_cast<uint32_t>(uint64_data);
+            workload.available_metrics.list[j].name = GetString(
+                workload_handle, kRPVControllerWorkloadAvailableMetricNameIndexed, j);
+            workload.available_metrics.list[j].description =
+                GetString(workload_handle,
+                          kRPVControllerWorkloadAvailableMetricDescriptionIndexed, j);
+            workload.available_metrics.list[j].unit = GetString(
+                workload_handle, kRPVControllerWorkloadAvailableMetricUnitIndexed, j);
+            AvailableMetrics::Category& category =
+                workload.available_metrics
+                    .tree[workload.available_metrics.list[j].category_id];
+            category.id = workload.available_metrics.list[j].category_id;
+            category.name =
+                GetString(workload_handle,
+                          kRPVControllerWorkloadAvailableMetricCategoryNameIndexed, j);
+            AvailableMetrics::Table& table =
+                category.tables[workload.available_metrics.list[j].table_id];
+            table.id = workload.available_metrics.list[j].table_id;
+            table.name =
+                GetString(workload_handle,
+                          kRPVControllerWorkloadAvailableMetricTableNameIndexed, j);
+            workload.available_metrics.list[j].id = table.entries.size();
+            table.entries.insert({ static_cast<uint32_t>(table.entries.size()),
+                                   workload.available_metrics.list[j] });
+        }
+        num_entries = 0;
+        result      = rocprofvis_controller_get_uint64(
+            workload_handle, kRPVControllerWorkloadNumKernels, 0, &num_entries);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        for(uint64_t j = 0; j < num_entries; j++)
+        {
+            rocprofvis_handle_t* kernel_handle = nullptr;
+            result                             = rocprofvis_controller_get_object(
+                workload_handle, kRPVControllerWorkloadKernelIndexed, j, &kernel_handle);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && kernel_handle);
+            KernelInfo kernel;
+            result = rocprofvis_controller_get_uint64(
+                kernel_handle, kRPVControllerKernelId, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            kernel.id   = static_cast<uint32_t>(uint64_data);
+            kernel.name = GetString(kernel_handle, kRPVControllerKernelName, 0);
+            result      = rocprofvis_controller_get_uint64(
+                kernel_handle, kRPVControllerKernelInvocationCount, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            kernel.invocation_count = static_cast<uint32_t>(uint64_data);
+            result                  = rocprofvis_controller_get_uint64(
+                kernel_handle, kRPVControllerKernelDurationTotal, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            kernel.duration_total = uint64_data;
+            result                = rocprofvis_controller_get_uint64(
+                kernel_handle, kRPVControllerKernelDurationMin, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            kernel.duration_min = static_cast<uint32_t>(uint64_data);
+            result              = rocprofvis_controller_get_uint64(
+                kernel_handle, kRPVControllerKernelDurationMax, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            kernel.duration_max = static_cast<uint32_t>(uint64_data);
+            result              = rocprofvis_controller_get_uint64(
+                kernel_handle, kRPVControllerKernelDurationMean, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            kernel.duration_mean = static_cast<uint32_t>(uint64_data);
+            result               = rocprofvis_controller_get_uint64(
+                kernel_handle, kRPVControllerKernelDurationMedian, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            kernel.duration_median = static_cast<uint32_t>(uint64_data);
+            workload.kernels[kernel.id] = std::move(kernel);
+        }
+        m_compute_model.AddWorkload(workload);
+    }
     m_state = ProviderState::kReady;
+}
+
+void
+DataProvider::ProcessMetricsRequest(RequestInfo& req)
+{
+    if(req.request_args)
+    {
+        rocprofvis_controller_arguments_free(req.request_args);
+        req.request_args = nullptr;
+    }
+    std::shared_ptr<MetricsRequestParams> request_params =
+        std::dynamic_pointer_cast<MetricsRequestParams>(req.custom_params);
+    if(req.request_obj_handle && request_params)
+    {
+        rocprofvis_controller_metrics_container_t* container = req.request_obj_handle;
+        if(req.response_code == kRocProfVisResultSuccess)
+        {
+            uint64_t            num_metrics = 0;
+            uint64_t            uint_data;
+            double              double_data;
+            std::string         string_data;
+            rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+                container, kRPVControllerMetricsContainerNumMetrics, 0, &num_metrics);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            for(uint64_t i = 0; i < num_metrics; i++)
+            {
+                result = rocprofvis_controller_get_uint64(
+                    container, kRPVControllerMetricsContainerKernelIdIndexed, i, &uint_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                uint32_t kernel_id       = static_cast<uint32_t>(uint_data);
+                string_data              = GetString(container,
+                                                     kRPVControllerMetricsContainerMetricIdIndexed, i);
+                auto     category_id_end = string_data.find('.');
+                auto     table_id_end    = string_data.find('.', category_id_end + 1);
+                // Should be chunked by datamodel if separate components are desirable...
+                uint32_t category_id     = static_cast<uint32_t>(
+                    std::stoll(string_data.substr(0, category_id_end)));
+                uint32_t table_id = static_cast<uint32_t>(
+                    std::stoll(string_data.substr(category_id_end + 1, table_id_end)));
+                uint32_t entry_id = static_cast<uint32_t>(
+                    std::stoll(string_data.substr(table_id_end + 1, string_data.back())));
+                string_data = GetString(
+                    container, kRPVControllerMetricsContainerMetricValueNameIndexed, i);
+                result = rocprofvis_controller_get_double(
+                    container, kRPVControllerMetricsContainerMetricValueValueIndexed, i,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                m_compute_model.AddMetricValue(request_params->m_workload_id, kernel_id,
+                                               category_id, table_id, entry_id,
+                                               string_data, double_data);
+            }
+        }
+        else
+        {
+            spdlog::debug("Summary request failed with code {}", req.response_code);
+        }
+        rocprofvis_controller_metrics_container_free(container);
+        req.request_obj_handle = nullptr;
+    }
 }
 #endif
 

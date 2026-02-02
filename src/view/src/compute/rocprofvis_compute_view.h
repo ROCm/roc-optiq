@@ -11,6 +11,7 @@ namespace View
 {
 
 class SettingsManager;
+class ComputeTester;
 
 class ComputeView : public RootView
 {
@@ -36,6 +37,31 @@ private:
 
     DataProvider                     m_data_provider;
     std::shared_ptr<RocCustomWidget> m_tool_bar;
+    std::unique_ptr<ComputeTester>   m_tester;
+};
+
+class ComputeTester : public RocWidget
+{
+public:
+    ComputeTester(DataProvider& data_provider);
+    ~ComputeTester();
+
+    void Update();
+    void Render();
+
+private:
+    struct SelectionState
+    {
+        uint32_t                     workload_id;
+        std::unordered_set<uint32_t> kernel_ids;
+        std::unordered_map<
+            uint32_t,
+            std::unordered_map<uint32_t, std::pair<bool, std::unordered_set<uint32_t>>>>
+            metric_ids;
+    };
+
+    DataProvider&  m_data_provider;
+    SelectionState m_selections;
 };
 
 }  // namespace View

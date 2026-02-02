@@ -9,7 +9,7 @@ View trace data in ROCm Optiq
 .. |scroll| image:: ../images/scroll-to.png
 .. |eye| image:: ../images/eye.png
 .. |grip| image:: ../images/grip.png
-.. |views| image:: ../images/summary-tabs-views.png
+.. |views| image:: ../images/summary-views-tabs.png
 .. |pie| image:: ../images/pie-view.png
 .. |bar| image:: ../images/bar-view.png
 .. |table| image:: ../images/table-view.png
@@ -219,13 +219,13 @@ You can select one of these views from the icons in the bottom-left corner of th
 
 |views|
 
-Once a kernel is selected, the dispatch details display in a table below the chart. 
+Once a kernel is selected, the dispatch details display in a table below the chart:
 
 .. image:: ../images/table-highlight.png
    :width: 800
    :align: center
 
-You can also select the **Node** and **GPU** from the drop-down menus to focus on the expected nodes and GPU. 
+You can also select the **Node** and **GPU** from the drop-down menus to focus on the expected nodes and GPU:
 
 |node|
 |gpu| 
@@ -236,7 +236,7 @@ Minimap
 The **Minimap** provides a compact overview that visualizes event density of each track and/or counter values across the entire profiling trace, enabling you to identify hot spots without manually scanning the full timeline.  
 
 .. image:: ../images/minimap.png
-   :width: 800
+   :width: 600
    :align: center
 
 The **Minimap** provides:

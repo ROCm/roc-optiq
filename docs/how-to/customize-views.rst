@@ -12,6 +12,7 @@ Customize your ROCm Optiq project
 .. |pen| image:: ../images/pencil.png
 .. |flow| image:: ../images/flow-change.png
 .. |reset| image:: ../images/reset.png
+.. |make| image:: ../images/make-selection.png
 
 You can customize the data views of an open trace file in ROCm Optiq, including display settings, saved trace selections, added bookmarks/annotations, and more.
 
@@ -27,7 +28,7 @@ To set a time range filter, press and hold **CTRL** while selecting a range with
 Once a time range is selected, the selection boundaries can be adjusted by dragging the boundaries. 
 To clear the time range selection, press **ESC** or right-click and select **Remove Selection**.
 
-If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click. 
+If one or more events are selected, the **Make Time Range Selection** option |make| displays on the timeline context menu when you right-click. 
 Selecting this will set a time range filter with boundaries at the start and end time of the event, or the first start time and last end time if multiple events are selected. 
 
 .. tip::

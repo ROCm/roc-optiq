@@ -541,7 +541,7 @@ namespace DataModel
         auto InvalidateSorting = [&]()
         {
             m_sort_order = true;
-            m_sort_column = "id";
+            m_sort_column = "";
         };
         
 
@@ -565,6 +565,7 @@ namespace DataModel
         {
             InvalidateFiltering();
             InvalidateGrouping();
+            InvalidateSorting();
         }
 
         bool filtered = !m_last_filter_str.empty();

@@ -177,6 +177,11 @@ main(int argc, char** argv)
 #endif
 
     glfwSetErrorCallback(glfw_error_callback);
+#ifdef __linux__
+    // Force X11 on Linux for multi-viewport support
+    // Wayland does not support window positioning which is required for ImGui viewports
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+#endif
     if(glfwInit())
     {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);

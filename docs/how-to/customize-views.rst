@@ -28,7 +28,10 @@ To set a time range filter, press and hold **CTRL** while selecting a range with
 Once a time range is selected, the selection boundaries can be adjusted by dragging the boundaries. 
 To clear the time range selection, press **ESC** or right-click and select **Remove Selection**.
 
-If one or more events are selected, the **Make Time Range Selection** option |make| displays on the timeline context menu when you right-click. 
+If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click.
+
+|make|
+
 Selecting this will set a time range filter with boundaries at the start and end time of the event, or the first start time and last end time if multiple events are selected. 
 
 .. tip::
@@ -79,7 +82,7 @@ To add an annotation:
    Once saved, the annotation displays as a marker that can be expanded on the timeline:
 
    .. image:: ../images/annotation-example.png
-      :width: 500
+      :width: 200
 
 .. tip::
 

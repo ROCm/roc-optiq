@@ -215,9 +215,7 @@ There are three ways you can view this data:
 - A bar chart |bar|
 - A table |table|
 
-You can select one of these views from the icons in the bottom-left corner of the **Summary View**.
-
-|views|
+You can select one of these views from the icons in the bottom-left corner of the **Summary View** |views|.
 
 Once a kernel is selected, the dispatch details display in a table below the chart:
 
@@ -237,7 +235,7 @@ The **Minimap** provides a compact overview that visualizes event density of eac
 
 .. image:: ../images/minimap.png
    :width: 600
-   :align: center
+   :align: left
 
 The **Minimap** provides:
 

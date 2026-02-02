@@ -161,8 +161,8 @@ The **Histogram** shows an event-density visual representation of all visible tr
 
 It provides two display modes:
 
-- **Normalization: All Tracks**: Event density is normalized across all tracks visible and hidden. 
-- **Normalization: Visible Tracks**: Event density is normalized based *only* on the visible tracks.
+- **All Tracks**: Event density is normalized across all tracks visible and hidden. 
+- **Visible Tracks**: Event density is normalized based *only* on the visible tracks.
 
 .. image:: ../images/histogram.png
    :width: 800

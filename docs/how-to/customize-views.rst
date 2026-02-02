@@ -21,12 +21,23 @@ Set a time range filter
 =======================
 
 Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
-To set a time range filter, double-click a range in the **Timeline View**.
+
+To set a time range filter, press and hold **CTRL** while selecting a range with your mouse in the **Timeline View**.
+
+Once a time range is selected, the selection boundaries can be adjusted by dragging the boundaries. 
+To clear the time range selection, press **ESC** or right-click and select **Remove Selection**.
+
+If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click. 
+Selecting this will set a time range filter with boundaries at the start and end time of the event, or the first start time and last end time if multiple events are selected. 
+
+.. tip::
+
+   You can press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
 
 .. image:: ../images/filter.png
    :width: 600
 
-Double-click in the **Timeline View** again to clear the selection.
+To clear the time range selection, press **ESC** or right-click and select **Remove Selection**.
 
 .. image:: ../images/time-range-filter.gif
    :width: 600
@@ -64,7 +75,7 @@ To add an annotation:
    .. image:: ../images/save-annotation.png
       :width: 500
 
-   Once saved, the annotation displays on the timeline:
+   Once saved, the annotation displays as a marker that can be expanded on the timeline:
 
    .. image:: ../images/annotation-example.png
       :width: 500

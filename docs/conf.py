@@ -14,8 +14,9 @@ flavor options: rocm, rocm-docs-home, rocm-blogs, rocm-ds, instinct, ai-develope
 html_theme = "rocm_docs_theme"
 html_theme_options = {
     "flavor": "generic",
-    "header_title": "ROCm™ Optiq (Beta) 0.1.0",
+    "header_title": "ROCm™ Optiq (Beta) 0.2.0",
     "header_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/",
+    "version_list_link": False, 
     "nav_secondary_items": {
         "GitHub": "https://github.com/ROCm/roc-optiq",
         "Community": "https://github.com/ROCm/roc-optiq/discussions",
@@ -42,7 +43,7 @@ all_article_info_author = ""
 #                      f.read())
 #    if not match:
 #        raise ValueError("VERSION not found!")
-version_number = "0.1.0"
+version_number = "0.2.0"
 
 # for PDF output on Read the Docs
 project = "ROCm Optiq (Beta)"

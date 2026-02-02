@@ -9,6 +9,13 @@ View trace data in ROCm Optiq
 .. |scroll| image:: ../images/scroll-to.png
 .. |eye| image:: ../images/eye.png
 .. |grip| image:: ../images/grip.png
+.. |views| image:: ../images/summary-tabs-views.png
+.. |pie| image:: ../images/pie-view.png
+.. |bar| image:: ../images/bar-view.png
+.. |table| image:: ../images/table-view.png
+.. |node| image:: ../images/node-menu.png
+.. |gpu| image:: ../images/gpu-menu.png
+.. |mini| image:: ../images/minimap-icon.png
 
 ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata. It captures what happened, when it happened, and often how long it took.
 
@@ -131,7 +138,11 @@ Select an event
 ^^^^^^^^^^^^^^^
 
 Clicking on an event in the **Graph** area selects or deselects an event. 
-When selected, event details are displayed in the **Event Details** tab of the **Advanced Details** section.
+
+- Click on an event to select a single event.
+- Press and hold **CTRL** while clicking events to select multiple events. If you only click on one event, any events you selected previously will be deselected.
+
+When an event is selected, its event details are displayed in the **Event Details** tab of the **Advanced Details** section.
 
 .. tip::
 
@@ -147,6 +158,11 @@ Histogram
 ~~~~~~~~~
 
 The **Histogram** shows an event-density visual representation of all visible tracks.
+
+It provides two display modes:
+
+- **Normalization: All Tracks**: Event density is normalized across all tracks visible and hidden. 
+- **Normalization: Visible Tracks**: Event density is normalized based *only* on the visible tracks.
 
 .. image:: ../images/histogram.png
    :width: 800
@@ -169,20 +185,71 @@ This section provides an interface for multiple data perspectives, offering gran
     :width: 800
     :align: center
 
-  - **Group By**: This drop-down groups the results by the selected column and displays the default aggregations shown in the **Group Columns** box. Click **Submit** to group the results.
-  - **Group Columns**: Enter custom SQL aggregation statements. Click **Submit** to group the columns by your SQL statements.
-  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“min_duration > 2000”`` will filter all events shorter than 2000 ns. Click **Submit** to filter the data.
+  - **Group By**: A drop-down menu that groups the results by the selected column and displays the default aggregations shown in the **Group Columns** box. Click **Submit** to group the results.
+  - **Aggregate by Column**: A drop-down menu that groups the results be the selected column. Click **Submit** to group the results. To remove the grouping, select **-- None --** from the drop-down menu, then click **Submit**.
+  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` filters all events shorter than 2000 ns. Click **Submit** to filter the data.
   
   .. tip::
 
-     - Right-click on the column headers to show/hide columns.
+     - Right-click on the column headers to show/hide columns, or to size a column / all columns to fit your screen.
      - Right-click on a table row and select **Go to event** to navigate to the **Timeline View** to the highlighted event.
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
-- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the Event Table, it supports time-range selection and SQL-like query capabilities for detailed performance analysis.
-- **Event Details**: Shows extended information about the event that is not shown in the timeline or the Event Table. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs and API method parameters. It also shows Flow and Call stack information, if available.
+- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the Event Table, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.
+- **Event Details**: Shows extended information about the event that is not shown in the timeline or the Event Table. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs and API method parameters. It also shows Flow and Call stack information, if available. It also shows flow, call stack information, and function call arguments, if available.  
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
+
+Summary View
+~~~~~~~~~~~~
+
+The **Summary View** displays data from the top 10 kernels by execution time.
+
+.. image:: ../images/summary-view.png
+   :width: 800
+   :align: center
+
+There are three ways you can view this data: 
+
+- A pie chart |pie|
+- A bar chart |bar|
+- A table |table|
+
+You can select one of these views from the icons in the bottom-left corner of the **Summary View**.
+
+|views|
+
+Once a kernel is selected, the dispatch details display in a table below the chart. 
+
+.. image:: ../images/table-highlight.png
+   :width: 800
+   :align: center
+
+You can also select the **Node** and **GPU** from the drop-down menus to focus on the expected nodes and GPU. 
+
+|node|
+|gpu| 
+
+Minimap
+~~~~~~~
+
+The **Minimap** provides a compact overview that visualizes event density of each track and/or counter values across the entire profiling trace, enabling you to identify hot spots without manually scanning the full timeline.  
+
+.. image:: ../images/minimap.png
+   :width: 800
+   :align: center
+
+The **Minimap** provides:
+
+- An event density view to quickly identify regions with high volumes of CPU/GPU events. 
+- A counter value view to visualize where sampled performance metrics peak. 
+- Independent toggles to show or hide event density or counter value layers. 
+- The ability to quickly locate performance-critical intervals by highlighting dense regions of events. 
+- The ability to navigate large datasets with ease.
+- The ability to accelerate root-cause analysis by allowing rapid transitions between coarse-grained overview and fine-grained timeline details.
+
+You can open the **Minimap** by clicking |mini| from the main **Toolbar**.
+
 
 Search for events
 =================

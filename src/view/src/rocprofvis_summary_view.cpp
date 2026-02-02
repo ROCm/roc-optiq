@@ -796,7 +796,7 @@ TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
             ImGui::TableSetColumnIndex(0);
             if(ImGui::Selectable((*m_kernels)[i].name.c_str(), m_selected_idx == i,
                                  ImGuiSelectableFlags_SpanAllColumns |
-                                     ImGuiSelectableFlags_AllowItemOverlap))
+                                     ImGuiSelectableFlags_AllowOverlap))
             {
                 ToggleSelectKernel(i);
             }
@@ -863,7 +863,7 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
         ImGui::BeginChild("legend", ImVec2(region.x * 0.25f, 0),
-                          ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY);
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         float legend_width     = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
         float icon_width       = ImGui::GetFontSize();
         float elide_width      = ImGui::CalcTextSize(" [...]").x;

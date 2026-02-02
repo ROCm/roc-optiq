@@ -89,6 +89,11 @@ private:
     std::shared_ptr<SummaryView>       m_summary_view;
     std::shared_ptr<Minimap>           m_minimap;
 
+    // Widget references (also stored in LayoutItems)
+    std::shared_ptr<RocWidget>         m_sidebar_widget;
+    std::shared_ptr<RocWidget>         m_analysis_widget;
+    std::shared_ptr<RocWidget>         m_histogram_widget;
+
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_analysis_item;
 

@@ -285,6 +285,20 @@ main(int argc, char** argv)
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
+                    }
+
+                    // Update and render additional platform windows (for detachable panels)
+                    ImGuiIO& io = ImGui::GetIO();
+                    if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+                    {
+                        GLFWwindow* backup_current_context = glfwGetCurrentContext();
+                        ImGui::UpdatePlatformWindows();
+                        ImGui::RenderPlatformWindowsDefault();
+                        glfwMakeContextCurrent(backup_current_context);
+                    }
+
+                    if(!is_minimized)
+                    {
                         backend.m_present(&backend);
                     }
                 }

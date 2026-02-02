@@ -121,6 +121,10 @@ AppWindow::Init()
     static std::string    ini_path_str = ini_path.string();
     io.IniFilename                     = ini_path_str.c_str();
 
+    // Enable docking and viewports (for detachable windows)
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
     ImPlot::CreateContext();
 
     SettingsManager& settings = SettingsManager::GetInstance();
@@ -315,8 +319,8 @@ AppWindow::Render()
 #endif
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->GetWorkPos());
-    ImGui::SetNextWindowSize(viewport->GetWorkSize());
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
     ImGui::SetNextWindowViewport(viewport->ID);
 #else
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));

@@ -4,6 +4,7 @@
 #include "rocprofvis_trace_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#include "imgui_internal.h"  // For DockBuilder
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_appwindow.h"
@@ -182,7 +183,7 @@ TraceView::Update()
     {
         m_track_topology->Update();
     }
-    if(m_analysis_item->m_item)
+    if(m_analysis_item && m_analysis_item->m_item)
     {
         m_analysis_item->m_item->Update();
     }
@@ -212,31 +213,31 @@ TraceView::CreateView()
     m_event_search          = std::make_shared<EventSearch>(m_data_provider);
     m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
-    auto m_histogram_widget = std::make_shared<RocCustomWidget>(
+    m_histogram_widget      = std::make_shared<RocCustomWidget>(
         [this]() { m_timeline_view->RenderHistogram(); });
 
-    auto sidebar =
+    m_sidebar_widget =
         std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
                                   m_timeline_view->GetGraphs(), m_data_provider);
-    auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+    m_analysis_widget = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                    m_timeline_selection, m_annotations);
 
-    m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);
+    m_sidebar_item            = LayoutItem::CreateFromWidget(m_sidebar_widget);
     m_sidebar_item->m_visible = m_settings_manager.GetAppWindowSettings().show_sidebar;
     m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
-    m_analysis_item = LayoutItem::CreateFromWidget(analysis);
+    m_analysis_item = LayoutItem::CreateFromWidget(m_analysis_widget);
     m_analysis_item->m_visible =
         m_settings_manager.GetAppWindowSettings().show_details_panel;
 
-    LayoutItem m_histogram_item(0, 80);
-    m_histogram_item.m_item    = m_histogram_widget;
-    m_histogram_item.m_visible = m_settings_manager.GetAppWindowSettings().show_histogram;
+    LayoutItem histogram_item(0, 80);
+    histogram_item.m_item    = m_histogram_widget;
+    histogram_item.m_visible = m_settings_manager.GetAppWindowSettings().show_histogram;
     LayoutItem timeline_item(0, 0);
     timeline_item.m_item = m_timeline_view;
 
     std::vector<LayoutItem> layout_items;
-    layout_items.push_back(m_histogram_item);
+    layout_items.push_back(histogram_item);
     layout_items.push_back(timeline_item);
     m_timeline_container         = std::make_shared<VFixedContainer>(layout_items);
     auto timeline_container_item = LayoutItem::CreateFromWidget(m_timeline_container);
@@ -284,11 +285,97 @@ TraceView::LoadTrace(rocprofvis_controller_t* controller, const std::string& fil
 void 
 TraceView::Render()
 {
-
-    if(m_horizontal_split_container &&
-       m_data_provider.GetState() == ProviderState::kReady)
+    if(m_data_provider.GetState() == ProviderState::kReady)
     {
-        m_horizontal_split_container->Render();
+        AppWindowSettings& settings = m_settings_manager.GetAppWindowSettings();
+        
+        // Create a unique dockspace for this trace view
+        std::string dockspace_name = "TraceViewDockSpace##" + m_widget_name;
+        ImGuiID dockspace_id = ImGui::GetID(dockspace_name.c_str());
+        
+        // Set up initial dock layout on first use
+        if(ImGui::DockBuilderGetNode(dockspace_id) == nullptr)
+        {
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetContentRegionAvail());
+            
+            // Split: left sidebar (20%), right area (80%)
+            ImGuiID dock_left, dock_right;
+            ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, &dock_left, &dock_right);
+            
+            // Split right area: top timeline (75%), bottom analysis (25%)
+            ImGuiID dock_timeline, dock_analysis;
+            ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.25f, &dock_analysis, &dock_timeline);
+            
+            // Dock windows to their positions
+            std::string sidebar_name = "System Topology##sidebar_" + m_widget_name;
+            std::string timeline_name = "Timeline##timeline_" + m_widget_name;
+            std::string analysis_name = "Details##analysis_" + m_widget_name;
+            
+            ImGui::DockBuilderDockWindow(sidebar_name.c_str(), dock_left);
+            ImGui::DockBuilderDockWindow(timeline_name.c_str(), dock_timeline);
+            ImGui::DockBuilderDockWindow(analysis_name.c_str(), dock_analysis);
+            
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
+        
+        // Create the dockspace
+        ImGui::DockSpace(dockspace_id, ImVec2(0, 0), ImGuiDockNodeFlags_None);
+        
+        // Render Sidebar as dockable window
+        if(m_sidebar_widget)
+        {
+            std::string sidebar_name = "System Topology##sidebar_" + m_widget_name;
+            bool show_sidebar = settings.show_sidebar;
+            if(show_sidebar)
+            {
+                if(ImGui::Begin(sidebar_name.c_str(), &show_sidebar, 
+                               ImGuiWindowFlags_HorizontalScrollbar))
+                {
+                    m_sidebar_widget->Render();
+                }
+                ImGui::End();
+            }
+            settings.show_sidebar = show_sidebar;
+        }
+        
+        // Render Timeline as dockable window (with histogram)
+        if(m_timeline_view)
+        {
+            std::string timeline_name = "Timeline##timeline_" + m_widget_name;
+            if(ImGui::Begin(timeline_name.c_str(), nullptr, ImGuiWindowFlags_None))
+            {
+                // Render histogram if visible
+                if(settings.show_histogram && m_histogram_widget)
+                {
+                    ImGui::BeginChild("Histogram", ImVec2(0, 80), ImGuiChildFlags_None);
+                    m_histogram_widget->Render();
+                    ImGui::EndChild();
+                }
+                
+                // Render timeline
+                m_timeline_view->Render();
+            }
+            ImGui::End();
+        }
+        
+        // Render Analysis/Details as dockable window
+        if(m_analysis_widget)
+        {
+            std::string analysis_name = "Details##analysis_" + m_widget_name;
+            bool show_details = settings.show_details_panel;
+            if(show_details)
+            {
+                if(ImGui::Begin(analysis_name.c_str(), &show_details, ImGuiWindowFlags_None))
+                {
+                    m_analysis_widget->Render();
+                }
+                ImGui::End();
+            }
+            settings.show_details_panel = show_details;
+        }
+        
         HandleHotKeys();
     }
 

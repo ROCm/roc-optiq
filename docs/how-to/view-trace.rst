@@ -200,6 +200,8 @@ This section provides an interface for multiple data perspectives, offering gran
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
 
+.. _summary-view:
+
 Summary View
 ~~~~~~~~~~~~
 
@@ -232,6 +234,8 @@ You can also select the **Node** and **GPU** from the drop-down menus to focus o
 
 |node|
 |gpu| 
+
+.. _minimap:
 
 Minimap
 ~~~~~~~

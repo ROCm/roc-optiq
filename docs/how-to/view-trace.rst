@@ -203,11 +203,16 @@ This section provides an interface for multiple data perspectives, offering gran
 Summary View
 ~~~~~~~~~~~~
 
-The **Summary View** displays data from the top 10 kernels by execution time.
+The **Summary View** displays data from the top 10 kernels by execution time. 
 
 .. image:: ../images/summary-view.png
    :width: 800
    :align: center
+
+You can access **Summary View** by clicking **View** > **Show Summary**.
+
+.. image:: ../images/show-summary.png
+   :width: 300
 
 There are three ways you can view this data: 
 

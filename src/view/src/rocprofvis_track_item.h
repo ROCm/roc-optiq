@@ -81,7 +81,7 @@ public:
     void Start();
     bool IsStarted() const { return m_started; }
     bool IsExpired();
-    void Reset();
+    void Restart();
     void Tick();
 private:
     std::chrono::time_point<std::chrono::steady_clock> m_last_tick;
@@ -131,8 +131,6 @@ public:
     float GetMetaAreaScaleWidth() { return m_meta_area_scale_width; }
     void  UpdateMaxMetaAreaSize(float newSize);
 
-    LoadingTimer& GetLoadingTimer() { return m_loading_timer; }
-
 protected:
     virtual void RenderMetaArea();
     virtual void RenderMetaAreaScale()          = 0;
@@ -174,7 +172,6 @@ protected:
     std::string                                      m_meta_area_label;
     std::string                                      m_meta_area_tooltip;
     Pill                                             m_pill;
-    LoadingTimer                                     m_loading_timer;
 
 private:
     TrackProjectSettings m_track_project_settings;

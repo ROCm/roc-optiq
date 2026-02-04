@@ -22,7 +22,6 @@ constexpr float kMaxTooltipWrapWidth = 600.0f;
 float TrackItem::s_metadata_width = 400.0f;
 
 inline constexpr float    DEFAULT_MIN_TRACK_HEIGHT = 10.0f;
-inline constexpr uint64_t DEFAULT_LOADING_TIMER    = 150;
 inline constexpr float    DEFAULT_GRIP_WIDTH       = 20.0f;
 inline constexpr uint64_t DEFAULT_CHUNK_DURATION   = TimeConstants::ns_per_s * 30;
 
@@ -49,7 +48,6 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_meta_area_label("")
 , m_pill("", false, false)
-, m_loading_timer(DEFAULT_LOADING_TIMER)
 , m_distance_to_view_y(0.0f)
 {
     if(m_track_project_settings.Valid())
@@ -1001,10 +999,10 @@ LoadingTimer::IsExpired()
 }
 
 void
-LoadingTimer::Reset()
+LoadingTimer::Restart()
 {
-    m_started = false;
     m_timer = std::chrono::milliseconds(0);
+    m_last_tick = std::chrono::steady_clock::now();
 }
 
 void

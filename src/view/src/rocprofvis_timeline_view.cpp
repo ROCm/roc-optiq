@@ -25,10 +25,13 @@ namespace View
 {
 
 // 20% top and bottom of the window size
-constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
-constexpr float SIDEBAR_WIDTH_MAX             = 600.0f;
-constexpr float SIDEBAR_DEFAULT_SIZE          = 400.0f;
-constexpr float LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
+constexpr float           REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
+constexpr float           SIDEBAR_WIDTH_MAX             = 600.0f;
+constexpr float           SIDEBAR_DEFAULT_SIZE          = 400.0f;
+constexpr float           LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
+constexpr float           SCROLL_SPEED                  = 100.0f;
+inline constexpr uint64_t DEFAULT_LOADING_TIMER         = 800; //milliseconds
+
 
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -76,6 +79,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_dragging_selection_start(false)
 , m_dragging_selection_end(false)
 , m_is_selecting_region(false)
+, m_loading_timer(DEFAULT_LOADING_TIMER)
 {
     // Subscribe to events
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -139,6 +143,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 
     // force initial calculation of flame track label width
     FlameTrackItem::CalculateMaxEventLabelWidth();
+    m_loading_timer.Start();
 }
 
 void
@@ -1057,9 +1062,6 @@ TimelineView::RenderGraphView()
             TrackItem* track_item = track_graph.chart;
             ROCPROFVIS_ASSERT(track_item);
 
-            LoadingTimer& loading_timer = track_item->GetLoadingTimer();
-            loading_timer.Tick();
-
             // Get track height and position to check if the track is in view
             float  track_height = track_item->GetTrackHeight();
             ImVec2 track_pos    = ImGui::GetCursorPos();
@@ -1095,13 +1097,7 @@ TimelineView::RenderGraphView()
 
             m_resize_activity |= track_item->TrackHeightChanged();
 
-            if ((is_visible ||
-                track_item->GetDistanceToView() <= m_unload_track_distance) && !loading_timer.IsStarted())
-            {
-                loading_timer.Start();
-            }
-
-            if(loading_timer.IsExpired())
+            if(m_loading_timer.IsExpired())
             {
                 if(is_visible ||
                    track_item->GetDistanceToView() <= m_unload_track_distance)
@@ -1110,7 +1106,7 @@ TimelineView::RenderGraphView()
                 }
             }
 
-            if(is_visible && loading_timer.IsExpired())
+            if(is_visible)
             {
                 DrawTrack(track_graph, i, window_flags, is_reordering);
             }
@@ -1295,13 +1291,11 @@ TimelineView::DrawEmptyTrack(TrackItem* track_item)
 {
     // If the track is not visible past a certain distance, release its
     // data to free up memory
-    LoadingTimer& loading_timer = track_item->GetLoadingTimer();
     float track_height = track_item->GetTrackHeight();
     if(track_item->GetDistanceToView() > m_unload_track_distance &&
        (track_item->HasData() || track_item->HasPendingRequests()))
     {
         track_item->ReleaseData();
-        loading_timer.Reset();
     }
     // Render dummy to maintain layout
     ImGui::Dummy(ImVec2(0, track_height));
@@ -1740,6 +1734,7 @@ TimelineView::RenderHistogram()
 void
 TimelineView::RenderTraceView()
 {
+    m_loading_timer.Tick();
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
@@ -1934,10 +1929,9 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel = io.MouseWheel;
         if(scroll_wheel != 0.0f)
         {
-            // Adjust scroll speed as needed (here, 40.0f per scroll step)
-            float scroll_speed = 100.0f;
+            m_loading_timer.Restart();
             m_scroll_position_y =
-                std::clamp(m_scroll_position_y - scroll_wheel * scroll_speed, 0.0f,
+                std::clamp(m_scroll_position_y - scroll_wheel * SCROLL_SPEED, 0.0f,
                            m_content_max_y_scroll);
         }
     }

@@ -164,6 +164,7 @@ private:
     bool m_is_selecting_region;
 
     TimelineViewProjectSettings m_project_settings;
+    LoadingTimer                m_loading_timer;
 };
 
 }  // namespace View

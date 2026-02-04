@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <chrono>
  
 namespace RocProfVis
 {

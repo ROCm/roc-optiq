@@ -9,7 +9,6 @@
 
 #include <deque>
 #include <unordered_map>
-#include <chrono>
 
 
 namespace RocProfVis

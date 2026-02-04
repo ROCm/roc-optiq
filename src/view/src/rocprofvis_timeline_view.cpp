@@ -25,13 +25,13 @@ namespace View
 {
 
 // 20% top and bottom of the window size
-constexpr float           REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
-constexpr float           SIDEBAR_WIDTH_MAX             = 600.0f;
-constexpr float           SIDEBAR_DEFAULT_SIZE          = 400.0f;
-constexpr float           LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
-constexpr float           SCROLL_SPEED                  = 100.0f;
-inline constexpr uint64_t DEFAULT_LOADING_TIMER         = 800; //milliseconds
-
+constexpr float    REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
+constexpr float    SIDEBAR_WIDTH_MAX             = 600.0f;
+constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
+constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
+constexpr float    SCROLL_SPEED                  = 100.0f;
+constexpr uint64_t DEFAULT_LOADING_TIMER         = 800;  // milliseconds
+constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 30.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -55,16 +55,15 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_font_changed_token(static_cast<uint64_t>(-1))
 , m_set_view_range_token(static_cast<uint64_t>(-1))
 , m_settings(SettingsManager::GetInstance())
-, m_last_data_req_v_width(0)
-, m_last_data_req_view_time_offset_ns(0)
+, m_last_data_req_v_width(0.0)
+, m_last_data_req_view_time_offset_ns(0.0)
 , m_can_drag_to_pan(false)
-, m_artificial_scrollbar_height(30)
 , m_grid_interval_ns(0.0)
 , m_recalculate_grid_interval(true)
 , m_last_zoom(1.0f)
 , m_last_graph_size(0.0f, 0.0f)
 , m_reorder_request({ true, 0, 0 })
-, m_track_height_sum(0)
+, m_track_height_sum(0.0f)
 , m_arrow_layer(m_data_provider, timeline_selection)
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
@@ -157,7 +156,7 @@ TimelineView::RenderInteractiveUI()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
     float overlay_height =
-        m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
+        m_tpt->GetGraphSizeY() - m_ruler_height - ARTIFICIAL_SCROLLBAR_HEIGHT;
     float overlay_width = m_tpt->GetGraphSizeX();
 
     ImGui::BeginChild("UI Interactive Overlay", ImVec2(overlay_width, overlay_height),
@@ -580,8 +579,7 @@ TimelineView::RenderSplitter()
 
     // Horizontal Splitter
     ImGui::SetNextWindowSize(ImVec2(display_size.x, 1.0f), ImGuiCond_Always);
-    ImGui::SetCursorPos(ImVec2(0, m_tpt->GetGraphSizeY() - m_ruler_height -
-                                      m_artificial_scrollbar_height));
+    ImGui::SetCursorPos(ImVec2(0, m_tpt->GetGraphSizeY() - m_ruler_height - ARTIFICIAL_SCROLLBAR_HEIGHT));
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
 
@@ -668,7 +666,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     ImGui::BeginChild("Scrubber View",
                       ImVec2(m_tpt->GetGraphSizeX(),
-                             m_tpt->GetGraphSizeY() - m_artificial_scrollbar_height),
+                             m_tpt->GetGraphSizeY() - ARTIFICIAL_SCROLLBAR_HEIGHT),
                       ImGuiChildFlags_None, window_flags);
 
     ImGui::SetItemAllowOverlap();
@@ -1749,14 +1747,15 @@ TimelineView::RenderTraceView()
 
     ImGui::BeginChild("Grid View 2",
                       ImVec2(subcomponent_size_main.x,
-                             subcomponent_size_main.y - m_artificial_scrollbar_height),
+                             subcomponent_size_main.y - ARTIFICIAL_SCROLLBAR_HEIGHT),
                       false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     // Scale used in all graphs computed here
 
     float scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    float available_height = subcomponent_size_main.y - m_ruler_height - m_artificial_scrollbar_height;
+    float available_height =
+        subcomponent_size_main.y - m_ruler_height - ARTIFICIAL_SCROLLBAR_HEIGHT;
     float width_adjustment = (m_track_height_sum > available_height) ? scrollbar_width : 0.0f;
 
     m_tpt->SetGraphSize(subcomponent_size_main.x - m_sidebar_size - width_adjustment,
@@ -1786,7 +1785,7 @@ TimelineView::RenderTraceView()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
     ImGui::BeginChild("scrollbar",
-                      ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_height),
+                      ImVec2(subcomponent_size_main.x, ARTIFICIAL_SCROLLBAR_HEIGHT),
                       true, ImGuiWindowFlags_NoScrollbar);
 
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
@@ -2209,7 +2208,7 @@ TimelineView::GetTotalTrackHeight() const
 float
 TimelineView::GetTrackViewportHeight() const
 {
-    return m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
+    return m_tpt->GetGraphSizeY() - m_ruler_height - ARTIFICIAL_SCROLLBAR_HEIGHT;
 }
 
 void

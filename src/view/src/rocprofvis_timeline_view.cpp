@@ -1131,6 +1131,9 @@ bool
 TimelineView::IsRequestDataNeeded()
 {
     bool request_data = false;
+    if(!m_loading_timer.IsExpired())
+        return request_data;
+
     // for zooming out
     if(m_tpt->GetVWidth() - m_last_data_req_v_width > m_last_data_req_v_width)
     {
@@ -2004,6 +2007,7 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel = io.MouseWheel;
         if(scroll_wheel != 0.0f)
         {
+            m_loading_timer.Restart();
             // Get mouse position relative to graph area
             ImVec2 mouse_pos        = ImGui::GetMousePos();
             ImVec2 graph_pos        = graph_area_min;

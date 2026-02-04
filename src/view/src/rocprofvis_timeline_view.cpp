@@ -44,7 +44,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_meta_map_made(false)
 , m_previous_scroll_position(0.0f)
 , m_ruler_height(ImGui::GetTextLineHeightWithSpacing())
-, m_ruler_padding(4)
+, m_ruler_padding(4.0f)
 , m_unload_track_distance(LOADING_TRACK_DISTANCE)
 , m_sidebar_size(SIDEBAR_DEFAULT_SIZE)
 , m_resize_activity(false)

@@ -1049,75 +1049,9 @@ TimelineView::RenderGraphView()
 
     bool request_data = IsRequestDataNeeded();
 
-    for(int i = 0; i < m_graphs->size(); i++)
+    for(int index = 0; index < m_graphs->size(); index++)
     {
-        TrackGraph& track_graph = (*m_graphs)[i];
-
-        m_resize_activity |= track_graph.display_changed;
-
-        if(track_graph.display)
-        {
-            TrackItem* track_item = track_graph.chart;
-            ROCPROFVIS_ASSERT(track_item);
-
-            // Get track height and position to check if the track is in view
-            float  track_height = track_item->GetTrackHeight();
-            ImVec2 track_pos    = ImGui::GetCursorPos();
-
-            // Calculate the track's position in the scrollable area
-            float track_top    = track_pos.y;
-            float track_bottom = track_top + track_height;
-
-            // Calculate deltas for out-of-view tracks
-            float delta_top = m_scroll_position_y -
-                              track_bottom;  // Positive if the track is above the view
-            float delta_bottom =
-                track_top -
-                (m_scroll_position_y +
-                 m_tpt->GetGraphSizeY());  // Positive if the track is below the view
-
-            // Save distance for book keeping
-            track_item->SetDistanceToView(
-                std::max(std::max(delta_bottom, delta_top), 0.0f));
-
-            // This item is being reordered if there is an active payload and its id
-            // matches the payload's id.
-            bool is_reordering = ImGui::GetDragDropPayload() &&
-                                 m_reorder_request.track_id == track_item->GetID();
-
-            // Check if the track is visible
-            bool is_visible =
-                (track_bottom >= m_scroll_position_y &&
-                 track_top <= m_scroll_position_y + m_tpt->GetGraphSizeY()) ||
-                is_reordering;
-
-            track_item->SetInViewVertical(is_visible);
-
-            m_resize_activity |= track_item->TrackHeightChanged();
-
-            if(m_loading_timer.IsExpired())
-            {
-                if(is_visible ||
-                   track_item->GetDistanceToView() <= m_unload_track_distance)
-                {
-                    RequestDataIfEmpty(track_item, request_data);
-                }
-            }
-
-            if(is_visible)
-            {
-                DrawTrack(track_graph, i, window_flags, is_reordering);
-            }
-            else
-            {
-                DrawEmptyTrack(track_item);
-            }
-
-            if(is_reordering)
-            {
-                DrawReorderingTrack(track_item, container_size);
-            }
-        }
+        RenderTrack(index, request_data, window_flags, container_size);
     }
 
     TrackItem::SetSidebarSize(m_sidebar_size);
@@ -1169,6 +1103,75 @@ TimelineView::IsRequestDataNeeded()
         request_data                        = true;
     }
     return request_data;
+}
+
+void
+TimelineView::RenderTrack(int track_index, bool request_data,
+                          ImGuiWindowFlags window_flags, ImVec2 container_size)
+{
+    TrackGraph& track_graph = (*m_graphs)[track_index];
+    m_resize_activity |= track_graph.display_changed;
+
+    if(track_graph.display)
+    {
+        TrackItem* track_item = track_graph.chart;
+        ROCPROFVIS_ASSERT(track_item);
+
+        // Get track height and position to check if the track is in view
+        float  track_height = track_item->GetTrackHeight();
+        ImVec2 track_pos    = ImGui::GetCursorPos();
+
+        // Calculate the track's position in the scrollable area
+        float track_top    = track_pos.y;
+        float track_bottom = track_top + track_height;
+
+        // Calculate deltas for out-of-view tracks
+        float delta_top = m_scroll_position_y -
+                          track_bottom;  // Positive if the track is above the view
+        float delta_bottom =
+            track_top -
+            (m_scroll_position_y +
+             m_tpt->GetGraphSizeY());  // Positive if the track is below the view
+
+        // Save distance for book keeping
+        track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
+
+        // This item is being reordered if there is an active payload and its id
+        // matches the payload's id.
+        bool is_reordering = ImGui::GetDragDropPayload() &&
+                             m_reorder_request.track_id == track_item->GetID();
+
+        // Check if the track is visible
+        bool is_visible = (track_bottom >= m_scroll_position_y &&
+                           track_top <= m_scroll_position_y + m_tpt->GetGraphSizeY()) ||
+                          is_reordering;
+
+        track_item->SetInViewVertical(is_visible);
+
+        m_resize_activity |= track_item->TrackHeightChanged();
+
+        if(m_loading_timer.IsExpired())
+        {
+            if(is_visible || track_item->GetDistanceToView() <= m_unload_track_distance)
+            {
+                RequestDataIfEmpty(track_item, request_data);
+            }
+        }
+
+        if(is_visible)
+        {
+            DrawTrack(track_graph, track_index, window_flags, is_reordering);
+        }
+        else
+        {
+            DrawEmptyTrack(track_item);
+        }
+
+        if(is_reordering)
+        {
+            DrawReorderingTrack(track_item, container_size);
+        }
+    }
 }
 
 void
@@ -1885,6 +1888,7 @@ TimelineView::HandleHistogramTouch()
     if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
        is_mouse_in_graph)
     {
+        m_loading_timer.Restart();
         float drag = io.MouseDelta.x;
         float user_requested_move =
             static_cast<float>((drag / m_tpt->GetGraphSizeX()) * m_tpt->GetRangeX());

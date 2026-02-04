@@ -119,6 +119,8 @@ private:
     void CalculateMaxMetaAreaSize();
     void UpdateAllMaxMetaAreaSizes();
 
+    void RenderTrack(int track_index, bool request_data, ImGuiWindowFlags window_flags,
+                     ImVec2 container_size);
     bool IsRequestDataNeeded();
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
     void DrawTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,

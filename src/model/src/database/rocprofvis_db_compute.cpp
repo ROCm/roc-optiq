@@ -251,8 +251,9 @@ namespace DataModel
 	std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
 		std::string query;
 		std::string workload_id;
-		std::string sort_column = "duration_ns_sum";  // default
+		int sort_column_index = 1;  // default to duration_ns_sum (index 1)
 		std::vector<std::pair<std::string, std::string>> metric_selectors;  // (metric_id, value_name)
+		std::vector<std::string> column_names;  // Track column order for sorting
 
 		// Parse parameters
 		for (int i = 0; i < num; i++) {
@@ -267,8 +268,9 @@ namespace DataModel
 					std::string value_name = selector_str.substr(colon_pos + 1);
 					metric_selectors.push_back({metric_id, value_name});
 				}
-			} else if (params[i].param_type == kRPVComputeParamSortColumn) {
-				sort_column = params[i].param_str;
+			} else if (params[i].param_type == kRPVComputeParamSortColumnIndex) {
+				// Parse string to integer
+				sort_column_index = std::atoi(params[i].param_str);
 			}
 		}
 
@@ -276,6 +278,10 @@ namespace DataModel
 		if (workload_id.empty() || metric_selectors.empty()) {
 			return query;  // Return empty on invalid input
 		}
+
+		// Build column name list (index 0 = kernel_name, index 1 = duration_ns_sum, index 2+ = metrics)
+		column_names.push_back("kernel_name");
+		column_names.push_back("duration_ns_sum");
 
 		// Build the SELECT clause
 		query = "SELECT \n";
@@ -293,7 +299,11 @@ namespace DataModel
 			// Generate column alias by replacing dots with underscores
 			std::string metric_alias = metric_id;
 			std::replace(metric_alias.begin(), metric_alias.end(), '.', '_');
-			query += "metric_" + metric_alias + "_" + value_name;
+			std::string column_name = "metric_" + metric_alias + "_" + value_name;
+			query += column_name;
+
+			// Track column name for sorting
+			column_names.push_back(column_name);
 		}
 
 		// Add FROM clause
@@ -307,9 +317,13 @@ namespace DataModel
 		// Add GROUP BY clause
 		query += "GROUP BY kernel_name, duration_ns_sum\n";
 
-		// Add ORDER BY clause
+		// Add ORDER BY clause with validated index
 		query += "ORDER BY ";
-		query += sort_column;
+		if (sort_column_index >= 0 && sort_column_index < static_cast<int>(column_names.size())) {
+			query += column_names[sort_column_index];
+		} else {
+			query += "duration_ns_sum";  // fallback to default
+		}
 		query += " DESC";
 
 		return query;

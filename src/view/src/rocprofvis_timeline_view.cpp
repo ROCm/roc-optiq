@@ -1824,6 +1824,7 @@ TimelineView::RenderTraceView()
                           static_cast<float>(max_offset), ""))
     {
         m_tpt->SetViewTimeOffsetNs(static_cast<double>(view_offset));
+        m_loading_timer.Restart();
     }
 
     ImGui::PopItemWidth();
@@ -2170,6 +2171,7 @@ TimelineView::HandleTopSurfaceTouch()
     if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
        is_mouse_in_graph)
     {
+        m_loading_timer.Restart();
         float drag_y = io.MouseDelta.y;
         m_scroll_position_y =
             std::clamp(m_scroll_position_y - drag_y, 0.0f, m_content_max_y_scroll);

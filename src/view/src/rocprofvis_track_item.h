@@ -72,24 +72,6 @@ private:
     EventManager::SubscriptionToken m_font_changed_token;
 };
 
-class LoadingTimer
-{
-public:
-    LoadingTimer(uint64_t delay);
-    ~LoadingTimer() = default;
-
-    void Start();
-    bool IsStarted() const { return m_started; }
-    bool IsExpired();
-    void Restart();
-    void Tick();
-private:
-    std::chrono::time_point<std::chrono::steady_clock> m_last_tick;
-    std::chrono::milliseconds                          m_timer;
-    std::chrono::milliseconds                          m_delay;
-    bool                                               m_started;
-};
-
 class TrackItem
 {
 public:

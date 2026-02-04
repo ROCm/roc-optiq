@@ -2406,5 +2406,48 @@ TimelineViewProjectSettings::DisplayTrack(uint64_t track_id) const
                               .getBool();
 }
 
+LoadingTimer::LoadingTimer(uint64_t delay)
+: m_timer(0)
+, m_started(false)
+, m_delay(std::chrono::milliseconds(delay))
+{}
+
+void
+LoadingTimer::Start()
+{
+    m_started   = true;
+    m_last_tick = std::chrono::steady_clock::now();
+}
+
+bool
+LoadingTimer::IsExpired()
+{
+    if(m_started)
+        return (m_timer >= m_delay);
+    else
+        return false;
+}
+
+void
+LoadingTimer::Restart()
+{
+    m_timer     = std::chrono::milliseconds(0);
+    m_last_tick = std::chrono::steady_clock::now();
+}
+
+void
+LoadingTimer::Tick()
+{
+    if(!m_started) return;
+
+    if(m_timer < m_delay)
+    {
+        auto now = std::chrono::steady_clock::now();
+        m_timer +=
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_tick);
+        m_last_tick = now;
+    }
+}
+
 }  // namespace View
 }  // namespace RocProfVis

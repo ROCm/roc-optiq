@@ -1039,6 +1039,7 @@ TimelineView::RenderGraphView()
     float temp_scroll_position = ImGui::GetScrollY();
     if(m_previous_scroll_position != temp_scroll_position)
     {
+        m_loading_timer.Restart();
         m_previous_scroll_position = temp_scroll_position;
         m_scroll_position_y        = temp_scroll_position;
     }
@@ -2092,12 +2093,14 @@ TimelineView::HandleTopSurfaceTouch()
         // Up/Down arrows for vertical scroll
         if(ImGui::IsKeyPressed(ImGuiKey_UpArrow))
         {
+            m_loading_timer.Restart();
             m_scroll_position_y =
                 std::clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y,
                            0.0f, m_content_max_y_scroll);
         }
         if(ImGui::IsKeyPressed(ImGuiKey_DownArrow))
         {
+            m_loading_timer.Restart();
             m_scroll_position_y =
                 std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y,
                            0.0f, m_content_max_y_scroll);

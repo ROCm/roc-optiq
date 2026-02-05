@@ -213,6 +213,13 @@ DataProvider::SetExportTableCallback(
     m_table_export_callback = callback;
 }
 
+void
+DataProvider::SetEventDataReadyCallback(
+    const std::function<void(uint64_t, const std::string&, const bool&)>& callback)
+{
+    m_event_data_ready_callback = callback;
+}
+
 bool
 DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
 {
@@ -2141,8 +2148,12 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
 
     std::shared_ptr<EventRequestParams> event_params =
         std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
+
+    uint64_t event_id = static_cast<uint64_t>(-1);
+    bool success = false;
     if(event_params && m_model.GetEvents().EventCount() > 0)
     {
+        event_id = event_params->m_event_id;
         EventInfo* event_info = m_model.GetEvents().GetEvent(event_params->m_event_id);
         if(event_info)
         {
@@ -2223,7 +2234,6 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                         }
                     }
                     break;
-                    // TODO: how to handle stream levels?
                     case kRocProfVisEventEssentialDataLevel:
                     {
                         uint64_t tmp_val = 0;
@@ -2234,6 +2244,32 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                         {
                             event_info->basic_info.level =
                                 static_cast<uint32_t>(tmp_val);
+                        }
+                    }
+                    break;
+                    case kRocProfVisEventEssentialDataStreamLevel:
+                    {
+                        uint64_t tmp_val = 0;
+                        ROCPROFVIS_ASSERT(data_type == kRPVControllerPrimitiveTypeUInt64);
+                        result = rocprofvis_controller_get_uint64(
+                            ext_data_handle, kRPVControllerExtDataValue, 0, &tmp_val);
+                        if(result == kRocProfVisResultSuccess)
+                        {
+                            event_info->basic_info.stream_level =
+                                static_cast<uint32_t>(tmp_val);
+                        }
+                    }
+                    break;
+                    case kRocProfVisEventEssentialDataTrack:
+                    {
+                        uint64_t tmp_val = 0;
+                        ROCPROFVIS_ASSERT(data_type == kRPVControllerPrimitiveTypeUInt64);
+                        result = rocprofvis_controller_get_uint64(
+                            ext_data_handle, kRPVControllerExtDataValue, 0, &tmp_val);
+                        if(result == kRocProfVisResultSuccess)
+                        {
+                            event_info->track_id =
+                                static_cast<uint64_t>(tmp_val);
                         }
                     }
                     break;
@@ -2284,11 +2320,19 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                     default: break;
                 }
             }
+
+            success = true;
         }
     }
 
     rocprofvis_controller_array_free(req.request_array);
     req.request_array = nullptr;
+
+    // call callback indicating that event is ready
+    if(m_event_data_ready_callback)
+    {
+        m_event_data_ready_callback(event_id, m_model.GetTraceFilePath(), success);
+    }
 }
 
 void
@@ -3328,7 +3372,7 @@ bool
 DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
 {
     EventInfo event_info{};
-    event_info.track_id = track_id;
+    event_info.track_id = static_cast<uint64_t>(-1);
     const RawTrackEventData* event_track =
         dynamic_cast<const RawTrackEventData*>(m_model.GetTimeline().GetTrackData(track_id));
     if(event_track)
@@ -3351,8 +3395,7 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
         }
     }
     m_model.GetEvents().AddEvent(event_id, std::move(event_info));
-    return FetchEventExtData(event_id) && FetchEventFlowDetails(event_id) &&
-           FetchEventCallStackData(event_id);
+    return FetchEventExtData(event_id);
 }
 
 bool

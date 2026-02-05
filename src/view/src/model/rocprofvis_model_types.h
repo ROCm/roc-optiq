@@ -121,10 +121,11 @@ struct CallStackData
 struct BasicEventData
 {
     TraceEventId id;
-    std::string name;
-    double      start_ts;
-    double      duration;
-    uint32_t    level;
+    std::string  name;
+    double       start_ts;
+    double       duration;
+    uint32_t     level;
+    uint32_t     stream_level;
 };
 
 struct EventArg

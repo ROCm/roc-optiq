@@ -77,7 +77,6 @@ public:
      * @param event_id: ID of event to fetch
      */
     bool FetchEvent(uint64_t track_id, uint64_t event_id);
-    bool FetchEventExtData(uint64_t event_id);
     bool FetchEventFlowDetails(uint64_t event_id);
     bool FetchEventCallStackData(uint64_t event_id);
 
@@ -214,6 +213,9 @@ public:
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
     void SetExportTableCallback(
         const std::function<void(const std::string&, bool)>& callback);
+    void SetEventDataReadyCallback(
+        const std::function<void(uint64_t, const std::string&, const bool&)>& callback);
+
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -238,6 +240,8 @@ private:
         size_t counter_count;
     };
 
+    /* Helper called by FetchEvent()*/
+    bool FetchEventExtData(uint64_t event_id);
     void HandleLoadSystemTopology();
     bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
     bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info);
@@ -298,6 +302,10 @@ private:
         m_track_data_ready_callback;
     // Called when a new trace is loaded
     std::function<void(const std::string&, uint64_t)> m_trace_data_ready_callback;
+    // called when event data is ready
+    std::function<void(uint64_t, const std::string&, const bool&)>
+        m_event_data_ready_callback;
+
     // Called when summary data has changed
     std::function<void()> m_summary_data_ready_callback;
     // Callback when trace is saved

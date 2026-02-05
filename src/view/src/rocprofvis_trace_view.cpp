@@ -42,6 +42,30 @@ TraceView::TraceView()
 , m_event_search(nullptr)
 , m_summary_view(nullptr)
 {
+    m_data_provider.SetEventDataReadyCallback([this](uint64_t           event_id,
+                                                     const std::string& trace_path,
+                                                     bool               success) {
+        (void)trace_path;                                    
+        if(!success)
+        {
+            spdlog::debug("Failed to fetch event data for event ID: {}", event_id);
+            return;
+        }
+
+        bool result = m_data_provider.FetchEventFlowDetails(event_id);
+        if(!result)
+        {
+            spdlog::debug("Failed to fetch event flow details for event ID: {}",
+                            event_id);
+        }
+        result = m_data_provider.FetchEventCallStackData(event_id);
+        if(!result)
+        {
+            spdlog::debug("Failed to fetch event call stack data for event ID: {}",
+                            event_id);
+        }
+    });
+
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const RequestInfo& req) {
             EventManager::GetInstance()->AddEvent(std::make_shared<TrackDataEvent>(

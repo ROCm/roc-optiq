@@ -50,18 +50,8 @@ public:
     void Render();
 
 private:
-    struct SelectionState
-    {
-        uint32_t                     workload_id;
-        std::unordered_set<uint32_t> kernel_ids;
-        std::unordered_map<
-            uint32_t,
-            std::unordered_map<uint32_t, std::pair<bool, std::unordered_set<uint32_t>>>>
-            metric_ids;
-    };
-
-    DataProvider&  m_data_provider;
-    SelectionState m_selections;
+    void RenderCategory(const AvailableMetrics::Category& cat);
+    DataProvider& m_data_provider;
 };
 
 }  // namespace View

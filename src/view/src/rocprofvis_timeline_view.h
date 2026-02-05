@@ -124,10 +124,10 @@ private:
                      ImVec2 container_size);
     bool IsRequestDataNeeded();
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
-    void DrawTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
+    void RenderNormalTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
                    bool is_reordering);
-    void DrawEmptyTrack(TrackItem* track_item);
-    void DrawReorderingTrack(TrackItem* track_item, ImVec2 container_size);
+    void RenderEmptyTrack(TrackItem* track_item);
+    void RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size);
 
     void                            ClearTimeRangeSelection();
     EventManager::SubscriptionToken m_scroll_to_track_token;

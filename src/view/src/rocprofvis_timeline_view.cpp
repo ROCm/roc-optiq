@@ -1160,16 +1160,16 @@ TimelineView::RenderTrack(int track_index, bool request_data,
 
         if(is_visible)
         {
-            DrawTrack(track_graph, track_index, window_flags, is_reordering);
+            RenderNormalTrack(track_graph, track_index, window_flags, is_reordering);
         }
         else
         {
-            DrawEmptyTrack(track_item);
+            RenderEmptyTrack(track_item);
         }
 
         if(is_reordering)
         {
-            DrawReorderingTrack(track_item, container_size);
+            RenderReorderingTrack(track_item, container_size);
         }
     }
 }
@@ -1195,7 +1195,7 @@ TimelineView::RequestDataIfEmpty(TrackItem* track_item, bool request_data)
 }
 
 void
-TimelineView::DrawTrack(TrackGraph& track_graph, int track_index,
+TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
                         ImGuiWindowFlags window_flags, bool is_reordering)
 {
     TrackItem* track_item = track_graph.chart;
@@ -1291,7 +1291,7 @@ TimelineView::DrawTrack(TrackGraph& track_graph, int track_index,
 }
 
 void
-TimelineView::DrawEmptyTrack(TrackItem* track_item)
+TimelineView::RenderEmptyTrack(TrackItem* track_item)
 {
     // If the track is not visible past a certain distance, release its
     // data to free up memory
@@ -1306,7 +1306,7 @@ TimelineView::DrawEmptyTrack(TrackItem* track_item)
 }
 
 void
-TimelineView::DrawReorderingTrack(TrackItem* track_item, ImVec2 container_size)
+TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size)
 {
     // Show the track as tooltip while being reordered.
     ImVec2 graph_view_pos     = ImGui::GetWindowPos();

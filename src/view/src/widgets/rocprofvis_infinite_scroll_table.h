@@ -15,7 +15,6 @@ namespace RocProfVis
 {
 namespace View
 {
-constexpr uint64_t INVALID_UINT64_INDEX = std::numeric_limits<uint64_t>::max();
 
 class SettingsManager;
 class TableDataEvent;

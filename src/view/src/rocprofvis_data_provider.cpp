@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_common_defs.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
@@ -2149,7 +2150,7 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
     std::shared_ptr<EventRequestParams> event_params =
         std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
 
-    uint64_t event_id = static_cast<uint64_t>(-1);
+    uint64_t event_id = INVALID_UINT64_INDEX;
     bool success = false;
     if(event_params && m_model.GetEvents().EventCount() > 0)
     {
@@ -3372,7 +3373,7 @@ bool
 DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
 {
     EventInfo event_info{};
-    event_info.track_id = static_cast<uint64_t>(-1);
+    event_info.track_id = INVALID_UINT64_INDEX;
     const RawTrackEventData* event_track =
         dynamic_cast<const RawTrackEventData*>(m_model.GetTimeline().GetTrackData(track_id));
     if(event_track)
@@ -3381,8 +3382,8 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
         {
             if(event.m_id.uuid == event_id)
             {
-                event_info.basic_info.id.uuid       = event.m_id.uuid;
-                event_info.basic_info.start_ts    = event.m_start_ts;
+                event_info.basic_info.id.uuid  = event.m_id.uuid;
+                event_info.basic_info.start_ts = event.m_start_ts;
                 // only set values below if this is single event, not a combined event
                 if(event.m_child_count == 1)
                 {

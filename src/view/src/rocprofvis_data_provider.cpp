@@ -216,7 +216,7 @@ DataProvider::SetExportTableCallback(
 
 void
 DataProvider::SetEventDataReadyCallback(
-    const std::function<void(uint64_t, const std::string&, const bool&)>& callback)
+    const std::function<void(uint64_t, const std::string&, bool)>& callback)
 {
     m_event_data_ready_callback = callback;
 }

@@ -214,8 +214,7 @@ public:
     void SetExportTableCallback(
         const std::function<void(const std::string&, bool)>& callback);
     void SetEventDataReadyCallback(
-        const std::function<void(uint64_t, const std::string&, const bool&)>& callback);
-
+        const std::function<void(uint64_t, const std::string&, bool)>& callback);
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -303,7 +302,7 @@ private:
     // Called when a new trace is loaded
     std::function<void(const std::string&, uint64_t)> m_trace_data_ready_callback;
     // called when event data is ready
-    std::function<void(uint64_t, const std::string&, const bool&)>
+    std::function<void(uint64_t, const std::string&, bool)>
         m_event_data_ready_callback;
 
     // Called when summary data has changed

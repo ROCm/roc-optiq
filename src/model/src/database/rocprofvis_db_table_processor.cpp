@@ -411,6 +411,7 @@ namespace DataModel
 
     rocprofvis_dm_result_t TableProcessor::AddAggregatedCells(bool to_file, rocprofvis_dm_handle_t handle, uint32_t row_index)
     {
+        ROCPROFVIS_ASSERT_MSG_RETURN(row_index < m_merged_table.AggregationRowCount(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
         rocprofvis_dm_table_row_t* row = (rocprofvis_dm_table_row_t*)handle;
         std::ofstream* file = (std::ofstream*)handle;
         rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;

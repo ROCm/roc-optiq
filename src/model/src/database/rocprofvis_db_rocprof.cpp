@@ -1336,6 +1336,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
                    &CallbackAddExtInfo))
                 break;
             query = m_query_factory.GetRocprofEssentialInfoQueryForRegionEvent(event_id.bitfield.event_id, event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample);
+            future->SetRuntimeStorageValue(kRPVFutureStorageEventId, event_id.value);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
             future->ResetRowCount();
             query = m_query_factory.GetRocprofArgumentsInfoQueryForRegionEvent(event_id.bitfield.event_id);

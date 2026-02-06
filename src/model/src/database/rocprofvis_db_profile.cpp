@@ -393,6 +393,7 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
     rocprofvis_db_ext_data_t record;
     if (callback_params->future->Interrupted()) return SQLITE_ABORT;
     rocprofvis_db_sqlite_track_service_data_t service_data{};
+    uint64_t event_id = callback_params->future->GetRuntimeStorageValue(kRPVFutureStorageEventId, (uint64_t)0);
 
     for(int i = 0; i < argc-2; i++)
     {
@@ -403,9 +404,9 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
     std::string column_data;
 
     uint32_t track_id;
+    rocprofvis_dm_track_category_t cat = ((rocprofvis_dm_event_id_t*)&event_id)->bitfield.event_op == kRocProfVisDmOperationLaunchSample ? kRocProfVisDmRegionSampleTrack : kRocProfVisDmProcessTrack;
 
-
-    if (!db->TrackTracker()->FindTrack(kRocProfVisDmProcessTrack, 
+    if (!db->TrackTracker()->FindTrack(cat, 
         service_data.process_id,
         service_data.sub_process_id,
         callback_params->db_instance->GuidIndex(),

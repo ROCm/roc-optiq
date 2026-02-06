@@ -11,37 +11,6 @@ namespace RocProfVis
 namespace DataModel
 {
 
-rocprofvis_dm_result_t RocpdDatabase::FindTrackId(
-                                                    uint64_t node,
-                                                    uint32_t process, 
-                                                    const char* subprocess,
-                                                    rocprofvis_dm_op_t operation,    
-                                                    rocprofvis_dm_track_id_t& track_id) {
-    if (operation > 0)
-    {
-        auto it1 = find_track_map.find(process);
-        if (it1!=find_track_map.end()){
-            auto it2 = it1->second.find(std::atol(subprocess));
-            if (it2!=it1->second.end()){
-                track_id = it2->second;
-                return kRocProfVisDmResultSuccess;
-            }
-        }
-        return kRocProfVisDmResultNotLoaded;
-    } else
-    {
-        auto it1 = find_track_pmc_map.find(process);
-        if (it1!=find_track_pmc_map.end()){
-            auto it2 = it1->second.find(subprocess);
-            if (it2!=it1->second.end()){
-                track_id = it2->second;
-                return kRocProfVisDmResultSuccess;
-            }
-        }
-        return kRocProfVisDmResultNotLoaded;
-    }
-}
-
 rocprofvis_dm_result_t RocpdDatabase::RemapStringIds(rocprofvis_db_record_data_t & record)
 {
     if (!RemapStringIdHelper(record.event.category)) return kRocProfVisDmResultNotLoaded;
@@ -83,21 +52,13 @@ int RocpdDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocp
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(track_params.db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     DbInstance* db_instance = (DbInstance*)track_params.db_instance;
-    rocprofvis_dm_track_params_it it = FindTrack(track_params.process, db_instance);
+    rocprofvis_dm_track_params_it it = TrackTracker()->FindTrackParamsIterator(track_params.process, db_instance->GuidIndex());
     UpdateQueryForTrack(it, track_params, newqueries);    
     if(it == TrackPropertiesEnd())
     {
         track_params.process.name[TRACK_ID_PID_OR_AGENT] = ProcessNameSuffixFor(track_params.process.category);
         track_params.process.name[TRACK_ID_PID_OR_AGENT] += std::to_string(track_params.process.id[TRACK_ID_PID_OR_AGENT]);
-
-        if (track_params.process.category != kRocProfVisDmPmcTrack){
-            track_params.process.name[TRACK_ID_TID_OR_QUEUE] = SubProcessNameSuffixFor(track_params.process.category);
-            track_params.process.name[TRACK_ID_TID_OR_QUEUE] += std::to_string(track_params.process.id[TRACK_ID_TID_OR_QUEUE]);
-            find_track_map[track_params.process.id[TRACK_ID_PID_OR_AGENT]][track_params.process.id[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
-        } else
-        {
-            find_track_pmc_map[track_params.process.id[TRACK_ID_PID_OR_AGENT]][track_params.process.name[TRACK_ID_TID_OR_QUEUE]] = track_params.track_id;
-        }
+        TrackTracker()->AddTrack(track_params.process, db_instance->GuidIndex(), track_params.track_id);
 
         if (kRocProfVisDmResultSuccess != AddTrackProperties(track_params)) return 1;
         if (BindObject()->FuncAddTrack(BindObject()->trace_object, TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1; 
@@ -232,7 +193,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                          Builder::SpaceSaver(0),
                          Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                          Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
-                         Builder::QParam("L.level", Builder::EVENT_LEVEL_SERVICE_NAME) },
+                         Builder::QParam("L.level", Builder::EVENT_LEVEL_SERVICE_NAME),
+                         Builder::QParamCategory(kRocProfVisDmRegionTrack )
+                         },
                        { Builder::From("rocpd_api",MultiNode::No),
                          Builder::LeftJoin(Builder::LevelTable("api"), "L", "id = L.eid", MultiNode::No) } })),
                         // Slice query by stream
@@ -274,7 +237,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                          Builder::SpaceSaver(0),
                          Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
                            Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME),
-                         Builder::QParam("L.level", Builder::EVENT_LEVEL_SERVICE_NAME) },
+                         Builder::QParam("L.level", Builder::EVENT_LEVEL_SERVICE_NAME),
+                         Builder::QParamCategory(kRocProfVisDmKernelDispatchTrack)
+                       },
                        { Builder::From("rocpd_op", MultiNode::No),
                          Builder::LeftJoin(Builder::LevelTable("op"), "L", "id = L.eid",MultiNode::No) } })),
                         // Slice query by stream
@@ -315,7 +280,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                          Builder::SpaceSaver(0),
                          Builder::QParam("deviceId", Builder::AGENT_ID_SERVICE_NAME),
                          Builder::QParam("monitorType", Builder::COUNTER_NAME_SERVICE_NAME),
-                         Builder::QParam("CAST(value AS REAL)", Builder::EVENT_LEVEL_SERVICE_NAME) },
+                         Builder::QParam("CAST(value AS REAL)", Builder::EVENT_LEVEL_SERVICE_NAME),
+                         Builder::QParamCategory(kRocProfVisDmPmcTrack)
+                         },
                        { Builder::From("rocpd_monitor", MultiNode::No) } })),
                         // Slice query by stream
                         "",

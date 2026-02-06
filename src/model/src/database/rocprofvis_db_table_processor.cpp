@@ -934,6 +934,7 @@ namespace DataModel
         {
             if (op == kRocProfVisDmOperationLaunch || 
                 op == kRocProfVisDmOperationLaunchSample || 
+                table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index == -1 ||
                 !db->TrackTracker()->FindTrack(kRocProfVisDmStreamTrack,
                 db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index),
                 -1,

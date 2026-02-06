@@ -315,8 +315,8 @@ class ProfileDatabase : public SqliteDatabase
     static void CollectTrackServiceData(ProfileDatabase* db,
         sqlite3_stmt* stmt, int column_index, char** azColName,
         rocprofvis_db_sqlite_track_service_data_t& service_data);
-    static void ProfileDatabase::GetTrackIdentifierIndices(
-        ProfileDatabase* db,int column_index, char** azColName,
+    static void GetTrackIdentifierIndices( ProfileDatabase* db,
+        int column_index, char** azColName,
         rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices);
     static const rocprofvis_dm_track_search_id_t GetTrackSearchId(rocprofvis_dm_track_category_t category);
     rocprofvis_dm_result_t SaveTrackProperties(Future* future, uint64_t hash);

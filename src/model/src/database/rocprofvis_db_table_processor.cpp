@@ -113,7 +113,7 @@ namespace DataModel
                     
                 }
 
-                m_merged_table.RemoveRowsForSetOfTracks(removed_tracks, sametracks && query_updated);
+                m_merged_table.RemoveRowsForSetOfTracks(tracks, removed_tracks, sametracks && query_updated);
 
                 if (new_queries.size())
                 {
@@ -411,6 +411,7 @@ namespace DataModel
 
     rocprofvis_dm_result_t TableProcessor::AddAggregatedCells(bool to_file, rocprofvis_dm_handle_t handle, uint32_t row_index)
     {
+        ROCPROFVIS_ASSERT_MSG_RETURN(row_index < m_merged_table.AggregationRowCount(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
         rocprofvis_dm_table_row_t* row = (rocprofvis_dm_table_row_t*)handle;
         std::ofstream* file = (std::ofstream*)handle;
         rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
@@ -541,7 +542,7 @@ namespace DataModel
         auto InvalidateSorting = [&]()
         {
             m_sort_order = true;
-            m_sort_column = "id";
+            m_sort_column = "";
         };
         
 
@@ -565,6 +566,7 @@ namespace DataModel
         {
             InvalidateFiltering();
             InvalidateGrouping();
+            InvalidateSorting();
         }
 
         bool filtered = !m_last_filter_str.empty();
@@ -821,7 +823,6 @@ namespace DataModel
 
     int TableProcessor::CallbackRunCompoundQuery(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-        rocprofvis_db_sqlite_track_service_data_t service_data{};
         rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
         ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
         ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
@@ -836,12 +837,12 @@ namespace DataModel
 
         if (callback_params->future->GetProcessedRowsCount() == 0)
         {
+            table_processor->m_tables[callback_params->track_id]->ResetTrackIdetifiers();
+
             for (; column_index < argc; column_index++)
             {
                 uint8_t size = 0;
                 std::string column = azColName[column_index];
-
-                db->CollectTrackServiceData(db, stmt, column_index, azColName, service_data);
 
                 auto it = Builder::table_view_schema.find(azColName[column_index]);
 
@@ -849,19 +850,16 @@ namespace DataModel
                 {
                     table_processor->m_tables[callback_params->track_id]->AddColumn(it->second.public_name, it->second.type, column_index, it->second.index);
                 }
+                db->GetTrackIdentifierIndices(db, column_index, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices);
             }
 
             auto it = Builder::table_view_schema.find(Builder::TRACK_ID_PUBLIC_NAME);
             table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, column_index, it->second.index); 
-            if (service_data.op != kRocProfVisDmOperationNoOp)
+            if (!table_processor->m_tables[callback_params->track_id]->track_ids_indices.is_pmc_identifier)
             {
                 it = Builder::table_view_schema.find(Builder::STREAM_TRACK_ID_PUBLIC_NAME);
                 table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, column_index, Builder::table_view_schema.size());
             }
-
-            ProfileDatabase::FindTrackIDs(db, service_data, callback_params->db_instance,
-                table_processor->m_tables[callback_params->track_id]->track_id, 
-                table_processor->m_tables[callback_params->track_id]->stream_track_id);
 
         }
 
@@ -921,13 +919,31 @@ namespace DataModel
             
         }
 
+        uint32_t track_id;
+        if (!db->TrackTracker()->FindTrack(kRocProfVisDmProcessTrack,
+            db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.process_index),
+            db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.sub_process_index),
+            callback_params->db_instance->GuidIndex(),
+            track_id))
+        {
+            track_id = -1;
+        }
 
-        table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index++, 
-            (uint64_t)table_processor->m_tables[callback_params->track_id]->track_id);
+        table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index++, (uint64_t)track_id);
         if (op != kRocProfVisDmOperationNoOp)
         {
-            table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, 
-                (uint64_t)table_processor->m_tables[callback_params->track_id]->stream_track_id);
+            if (op == kRocProfVisDmOperationLaunch || 
+                op == kRocProfVisDmOperationLaunchSample || 
+                table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index == -1 ||
+                !db->TrackTracker()->FindTrack(kRocProfVisDmStreamTrack,
+                db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index),
+                -1,
+                callback_params->db_instance->GuidIndex(),
+                track_id))
+            {
+                track_id = -1;
+            }
+            table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index,(uint64_t) track_id);
         }
 
         callback_params->future->CountThisRow();

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_db_future.h"
+#include "rocprofvis_db_track.h"
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -19,8 +20,6 @@ namespace DataModel
 typedef std::map<std::string, std::string> table_dict_t;
 typedef std::map<uint64_t, table_dict_t> table_map_t;
 typedef std::map<std::string, table_map_t> ref_map_t;
-
-typedef std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator rocprofvis_dm_track_params_it;
 
 // type of map array for generating time slice query for multiple tracks
 typedef std::unordered_map<std::string, std::unordered_map<uint32_t,std::string>> slice_query_map_t;
@@ -271,6 +270,7 @@ private:
     std::vector<uint32_t> m_db_version;
 };
 
+
 class Database
 {
     public:
@@ -279,7 +279,8 @@ class Database
         Database(   
                     rocprofvis_db_filename_t path):
                     m_path(path),
-                    m_binding_info(nullptr) {
+                    m_binding_info(nullptr),
+                    m_track_lookup(this) {
         };
         // Database destructor, must be defined as virtual to free resources of derived classes 
         virtual ~Database(){};
@@ -410,6 +411,8 @@ class Database
 
        // returns pointer to cached tables map array
        DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
+
+       TrackLookup*                    TrackTracker() { return& m_track_lookup; }
 
        // returns pointer to track properties structure. Takes index of track as a parameter 
        rocprofvis_dm_track_params_t*   TrackPropertiesAt(rocprofvis_dm_index_t index) { return m_track_properties[index].get(); }
@@ -613,6 +616,8 @@ class Database
         // map array of cached tables, mostly with non-essential Track information
         std::unordered_map<uint32_t, DatabaseCache> m_cached_tables;
         guid_list_t   m_db_instances;
+        TrackLookup   m_track_lookup;
+
 
     protected:
         guid_list_t& DbInstances() { return m_db_instances; }
@@ -637,9 +642,6 @@ class Database
         // @return status of operation
         rocprofvis_dm_result_t          AddTrackProperties(
                                                                 rocprofvis_dm_track_params_t& props);
-        // finds and return iterator to track properties array
-        // @process track process identifiers structure
-        rocprofvis_dm_track_params_it   FindTrack( rocprofvis_dm_process_identifiers_t& process, DbInstance* db_instance);
         // adds a new query to the track queries collection 
         // multiple queries for single track are required to support data from multiple database tables on single track,
         // like Kernel Dispatch, Memory Copy and Memory Allocation
@@ -688,6 +690,7 @@ class Database
         // declare DatabaseCache as friend class, for having access to protected members
         friend class DatabaseCache;
         friend class TableProcessor;
+        friend class TrackLookup;
 };
 
 }  // namespace DataModel

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_topology_model.h"
+#include "rocprofvis_common_defs.h"
 
 #include <limits>
 #include <sstream>
@@ -10,8 +11,6 @@ namespace RocProfVis
 {
 namespace View
 {
-
-constexpr uint64_t INVALID_UINT64_INDEX = std::numeric_limits<uint64_t>::max();
 
 // Node access
 const NodeInfo*

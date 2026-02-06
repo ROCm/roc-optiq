@@ -1,6 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#include "rocprofvis_common_defs.h"
 #include "rocprofvis_multi_track_table.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_settings_manager.h"

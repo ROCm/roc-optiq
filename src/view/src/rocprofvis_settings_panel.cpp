@@ -253,11 +253,11 @@ SettingsPanel::RenderDisplayOptions()
         ImGui::PushFont(preview_font);
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
-            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm Visualizer") +
+            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm(TM) Optiq") +
                 ImVec2(style.FramePadding.x, 2 * style.FramePadding.y),
             ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)),
             style.FrameRounding);
-        ImGui::Text("AMD ROCm Visualizer");
+        ImGui::Text("AMD ROCm(TM) Optiq");
         ImGui::PopFont();
     }
 }

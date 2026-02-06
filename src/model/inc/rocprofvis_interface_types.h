@@ -82,25 +82,32 @@ typedef enum rocprofvis_dm_track_category_t {
     // Object is not track
     kRocProfVisDmNotATrack = 0,
     // Object is PMC track (performance counters track)
-    kRocProfVisDmPmcTrack = 1,
+    kRocProfVisDmPmcTrack = 0x1,
     // Object is region track (HIP calls)
-    kRocProfVisDmRegionTrack = 2,
+    kRocProfVisDmRegionTrack = 0x2,
     // Object is kernel track (kernel execution)
-    kRocProfVisDmKernelDispatchTrack = 3,
+    kRocProfVisDmKernelDispatchTrack = 0x4,
     // Object is SQTT track
-    kRocProfVisDmSQTTTrack = 4,
+    kRocProfVisDmSQTTTrack = 0x8,
     // Object is NIC track
-    kRocProfVisDmNICTrack = 5,
+    kRocProfVisDmNICTrack = 0x10,
     // Object is memory allocation track
-    kRocProfVisDmMemoryAllocationTrack = 6,
+    kRocProfVisDmMemoryAllocationTrack = 0x20,
     // Object is memory copy track
-    kRocProfVisDmMemoryCopyTrack = 7,
+    kRocProfVisDmMemoryCopyTrack = 0x40,
     // Object is stream track
-    kRocProfVisDmStreamTrack = 8,
+    kRocProfVisDmStreamTrack = 0x80,
     // Object is region sample track
-    kRocProfVisDmRegionMainTrack = 9,
+    kRocProfVisDmRegionMainTrack = 0x100,
     // Object is region sample track
-    kRocProfVisDmRegionSampleTrack = 10,
+    kRocProfVisDmRegionSampleTrack = 0x200,
+
+    kRocProfVisDmLaunchTrack = kRocProfVisDmRegionTrack | kRocProfVisDmRegionMainTrack | kRocProfVisDmRegionSampleTrack,
+    kRocProfVisDmDispatchTrack = kRocProfVisDmKernelDispatchTrack | kRocProfVisDmMemoryAllocationTrack | kRocProfVisDmMemoryCopyTrack,
+    kRocProfVisDmEventTrack = kRocProfVisDmLaunchTrack | kRocProfVisDmDispatchTrack,
+    kRocProfVisDmCounterTrack = kRocProfVisDmPmcTrack,
+    kRocProfVisDmAgentTrack = kRocProfVisDmDispatchTrack | kRocProfVisDmCounterTrack,
+    kRocProfVisDmProcessTrack = kRocProfVisDmEventTrack | kRocProfVisDmCounterTrack
 } rocprofvis_dm_track_category_t;
 
 //Event operation

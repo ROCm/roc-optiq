@@ -4,6 +4,7 @@
 #include "rocprofvis_infinite_scroll_table.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_common_defs.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"

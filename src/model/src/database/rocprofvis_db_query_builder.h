@@ -14,16 +14,15 @@ namespace DataModel
 
 class ProfileDatabase;
 
+
 typedef struct rocprofvis_db_sqlite_track_service_data_t
 {
     rocprofvis_dm_event_operation_t op;
-    rocprofvis_dm_track_category_t  category;
     uint64_t                        id;
     uint64_t                        nid;
     uint32_t                        stream_id;
-    uint32_t                        process;
-    uint32_t                        thread;
-    std::string                     monitor_type;
+    uint32_t                        process_id;
+    uint32_t                        sub_process_id;
 } rocprofvis_db_sqlite_track_service_data_t;
 
 typedef struct rocprofvis_db_sqlite_track_query_format
@@ -50,7 +49,7 @@ typedef struct rocprofvis_db_sqlite_level_query_format
 
 typedef struct rocprofvis_db_sqlite_slice_query_format
 {
-    static constexpr const int NUM_PARAMS = 10;
+    static constexpr const int NUM_PARAMS = 11;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_slice_query_format;

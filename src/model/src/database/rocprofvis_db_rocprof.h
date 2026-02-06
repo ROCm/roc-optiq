@@ -28,12 +28,7 @@ typedef struct rocprofvis_db_string_id_hash_t
 
 class RocprofDatabase : public ProfileDatabase
 {
-    // map array for fast track ID search
-    typedef std::map<uint64_t, uint32_t> sub_process_map_t;
-    typedef std::map<uint64_t, sub_process_map_t> process_map_t;
-    typedef std::map<uint64_t, process_map_t> op_map_t;
-    //typedef std::map<uint64_t, process_map_t> op_map_t;
-    typedef std::map<uint32_t, process_map_t> track_find_map_t;
+
     // type of map array for string indexes remapping
     typedef std::unordered_map<rocprofvis_db_string_id_t, rocprofvis_dm_index_t, rocprofvis_db_string_id_hash_t> string_index_map_t;
     typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_db_string_id_t>> string_id_map_t;
@@ -154,19 +149,6 @@ private:
     // @return status of operation
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_record_data_t & record) override;
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_flow_data_t& record) override;
-    // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
-    // @param node_id - node id
-    // @param process_id - process id 
-    // @param sub_process_name - metric name
-    // @return status of operation
-    // @param operation - operation of event that requesting track id
-    // @return status of operation
-    rocprofvis_dm_result_t          FindTrackId(
-                                                        uint64_t node,
-                                                        uint32_t process,
-                                                        const char* subprocess,
-                                                        rocprofvis_dm_op_t operation,
-                                                        rocprofvis_dm_track_id_t& track_id) override;
 
     int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
 
@@ -197,7 +179,6 @@ private:
         rocprofvis_dm_result_t LoadInformationTables(Future* future);
         
     private:
-        track_find_map_t find_track_map;
         QueryFactory m_query_factory;
         std::string m_db_version;
         // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 

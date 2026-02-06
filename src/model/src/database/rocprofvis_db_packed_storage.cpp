@@ -660,13 +660,13 @@ namespace DataModel
     //    m_rows.erase(new_end, m_rows.end());
     //}
 
-    void PackedTable::RemoveRowsForSetOfTracks(std::set<uint32_t> tracks, bool remove_all)
+    void PackedTable::RemoveRowsForSetOfTracks(std::set<uint32_t> & selected_tracks, std::set<uint32_t> & unselected_tracks, bool remove_all)
     {
         if (remove_all)
         {
             m_rows.clear();
         } else
-        if (tracks.size() > 0 && m_merged_columns.size() > 0)
+        if (unselected_tracks.size() > 0 && m_merged_columns.size() > 0)
         {
             auto track_info_it = Builder::table_view_schema.find(Builder::TRACK_ID_PUBLIC_NAME);
             auto stream_track_info_it = Builder::table_view_schema.find(Builder::STREAM_TRACK_ID_PUBLIC_NAME);
@@ -674,21 +674,27 @@ namespace DataModel
             uint8_t stream_track_id_size = ColumnTypeSize(stream_track_info_it->second.type);
             auto track_id_it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [](MergedColumnDef col) {return col.m_name == Builder::TRACK_ID_PUBLIC_NAME; });
             auto stream_track_id_it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [](MergedColumnDef col) {return col.m_name == Builder::STREAM_TRACK_ID_PUBLIC_NAME; });
+            if (track_id_it == m_merged_columns.end()) 
+                throw std::runtime_error("Missing track ID in table data");
             m_rows.erase(
                 std::remove_if(m_rows.begin(), m_rows.end(),
                     [&](std::unique_ptr<PackedRow>& row) {
                         uint8_t op = row->Get<uint8_t>(0);
                         uint16_t track = row->Get<uint16_t>(track_id_it->m_offset[op], track_id_size);
-                        if (tracks.find(track) != tracks.end())
-                            return true;
-                        if (stream_track_id_it != m_merged_columns.end())
+                        if (stream_track_id_it == m_merged_columns.end())
+                        {
+                            if (unselected_tracks.find(track) != unselected_tracks.end())
+                                return true;
+                        }
+                        else
                         {
                             uint16_t stream_track = row->Get<uint16_t>(stream_track_id_it->m_offset[op], stream_track_id_size);
-                            if (tracks.find(stream_track) != tracks.end())
-                            {
+                            if (unselected_tracks.find(track) != unselected_tracks.end() && selected_tracks.find(stream_track) == selected_tracks.end())
                                 return true;
-                            }
+                            if (unselected_tracks.find(stream_track) != unselected_tracks.end() && selected_tracks.find(track) == selected_tracks.end())
+                                return true;
                         }
+
                         return false;
                     }
                 ),

@@ -436,34 +436,6 @@ rocprofvis_dm_size_t Database::GetMemoryFootprint()
     return size;
 }
 
-
-rocprofvis_dm_track_params_it
-Database::FindTrack(rocprofvis_dm_process_identifiers_t& process, DbInstance* db_instance)
-{
-        return std::find_if(
-            TrackPropertiesBegin(), TrackPropertiesEnd(),
-            [process, db_instance](std::unique_ptr<rocprofvis_dm_track_params_t>& params) {
-                if(db_instance == params.get()->db_instance && params.get()->process.category == process.category)
-                {
-                    for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++)
-                    {
-                        if(process.is_numeric[i])
-                        {
-                            if(params.get()->process.id[i] != process.id[i])
-                                return false;
-                        }
-                        else
-                        {
-                            if(params.get()->process.name[i] != process.name[i])
-                                return false;
-                        }
-                    }
-                    return true;
-                }
-                return false;
-            });
-}
-
 void
 Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it, 
                                 rocprofvis_dm_track_params_t& newprops,

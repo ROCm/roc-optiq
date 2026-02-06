@@ -11,32 +11,6 @@ namespace RocProfVis
 namespace DataModel
 {
 
-rocprofvis_dm_result_t RocprofDatabase::FindTrackId(
-                                                    uint64_t node,
-                                                    uint32_t process,
-                                                    const char* subprocess,
-                                                    rocprofvis_dm_op_t operation,
-                                                    rocprofvis_dm_track_id_t& track_id) {
-    
-    auto it_op = find_track_map.find(strcmp(subprocess, "-1") == 0 ? kRPVTrackSearchIdStreams  | (node << 16) : 
-        GetTrackSearchId(TranslateOperationToTrackCategory((rocprofvis_dm_event_operation_t) operation)) | (node << 16));
-    if(it_op != find_track_map.end())
-    {
-        auto it_process = it_op->second.find(process);
-        if(it_process != it_op->second.end())
-        {
-            auto it_subprocess = it_process->second.find(std::atoll(subprocess));
-            if(it_subprocess != it_process->second.end())
-            {
-                track_id = it_subprocess->second;
-                return kRocProfVisDmResultSuccess;
-            }
-        }
-    }
-    return kRocProfVisDmResultNotLoaded;
-   
-}
-
 rocprofvis_dm_result_t RocprofDatabase::RemapStringIds(rocprofvis_db_record_data_t & record)
 {
     rocprofvis_db_string_id_t string_id_category = { (uint32_t)record.event.category, (uint32_t)record.event.id.bitfield.event_node, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory };
@@ -118,14 +92,12 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, ro
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(track_params.db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     DbInstance* db_instance = (DbInstance*)track_params.db_instance;
-    rocprofvis_dm_track_params_it it = FindTrack(track_params.process, db_instance);
+    rocprofvis_dm_track_params_it it = TrackTracker()->FindTrackParamsIterator(track_params.process, db_instance->GuidIndex());
     UpdateQueryForTrack(it, track_params, newqueries);
     if(it == TrackPropertiesEnd())
     {
-        find_track_map[GetTrackSearchId(track_params.process.category) | db_instance->GuidIndex() << 16]
-            [track_params.process.id[TRACK_ID_PID_OR_AGENT]]
-            [track_params.process.id[TRACK_ID_TID_OR_QUEUE]] =
-            track_params.track_id;
+        TrackTracker()->AddTrack(track_params.process, db_instance->GuidIndex(), track_params.track_id);
+
         if(track_params.process.category == kRocProfVisDmRegionMainTrack ||
             track_params.process.category == kRocProfVisDmRegionSampleTrack)
         {

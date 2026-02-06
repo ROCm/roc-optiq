@@ -315,29 +315,14 @@ class ProfileDatabase : public SqliteDatabase
     static void CollectTrackServiceData(ProfileDatabase* db,
         sqlite3_stmt* stmt, int column_index, char** azColName,
         rocprofvis_db_sqlite_track_service_data_t& service_data);
-    static void FindTrackIDs(
-        ProfileDatabase* db, rocprofvis_db_sqlite_track_service_data_t& service_data,
-        DbInstance* db_instance,
-        int& trackId, int & streamTrackId);
-    rocprofvis_dm_track_category_t TranslateOperationToTrackCategory(rocprofvis_dm_event_operation_t op);
+    static void ProfileDatabase::GetTrackIdentifierIndices(
+        ProfileDatabase* db,int column_index, char** azColName,
+        rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices);
     static const rocprofvis_dm_track_search_id_t GetTrackSearchId(rocprofvis_dm_track_category_t category);
     rocprofvis_dm_result_t SaveTrackProperties(Future* future, uint64_t hash);
     rocprofvis_dm_result_t BuildHistogram(Future* future, uint32_t desired_bins);
 
     virtual int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) = 0;
-
-    // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
-    // @param node_id - node id
-    // @param process_id - process id 
-    // @param sub_process_name - metric name
-    // @param operation - operation of event that requesting track id
-    // @return status of operation
-    virtual rocprofvis_dm_result_t          FindTrackId(
-        uint64_t node,
-        uint32_t process,
-        const char* subprocess,
-        rocprofvis_dm_op_t operation,
-        rocprofvis_dm_track_id_t& track_id)=0;
 
     virtual rocprofvis_dm_string_t GetEventOperationQuery(
         const rocprofvis_dm_event_operation_t operation) = 0;

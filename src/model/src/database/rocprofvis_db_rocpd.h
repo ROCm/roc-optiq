@@ -19,10 +19,6 @@ class RocpdDatabase : public ProfileDatabase
     typedef std::unordered_map<uint64_t, uint32_t> string_index_map_t;
     typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_db_string_id_t>> string_id_map_t;
 
-    // map array for fast non-PMC track ID search
-    typedef std::map<uint32_t, uint32_t> sub_process_map_t;
-    typedef std::map<uint32_t, sub_process_map_t> track_find_map_t;
-
     // map array for fast PMC track ID search
     typedef std::map<std::string, uint32_t> sub_process_map_pmc_t;
     typedef std::map<uint32_t, sub_process_map_pmc_t> track_find_pmc_map_t;
@@ -120,19 +116,6 @@ private:
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_record_data_t & record) override;
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_flow_data_t& record) override;
 
-    // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
-    // @param node_id - node id
-    // @param process_id - process id 
-    // @param sub_process_name - metric name
-    // @param operation - operation of event that requesting track id
-    // @return status of operation
-    rocprofvis_dm_result_t          FindTrackId(
-                                                        uint64_t node,
-                                                        uint32_t process,
-                                                        const char* subprocess,
-                                                        rocprofvis_dm_op_t operation,
-                                                        rocprofvis_dm_track_id_t& track_id) override;
-
     // method to remap single string ID. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     // @param id - string id to be remapped
     // @return True if remapped
@@ -162,8 +145,6 @@ private:
         rocprofvis_dm_result_t CreateIndexes();
 
     private:
-        track_find_map_t find_track_map;
-        track_find_pmc_map_t find_track_pmc_map;
 
         inline static const rocprofvis_event_data_category_map_t
             s_rocpd_categorized_data = {

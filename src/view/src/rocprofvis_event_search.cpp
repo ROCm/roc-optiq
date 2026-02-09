@@ -6,6 +6,7 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -22,7 +23,7 @@ constexpr const char* ID_COLUMN_NAME        = "__uuid";
 constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 
-EventSearch::EventSearch(DataProvider& dp)
+EventSearch::EventSearch(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection)
 : InfiniteScrollTable(dp, TableType::kEventSearchTable)
 , m_should_open(false)
 , m_should_close(false)
@@ -32,6 +33,7 @@ EventSearch::EventSearch(DataProvider& dp)
 , m_searched(false)
 , m_width(1000.0f)
 , m_text_input("\0")
+, m_timeline_selection(timeline_selection)
 {
     m_widget_name = GenUniqueName("Event Search Table");
 }
@@ -193,6 +195,10 @@ EventSearch::Clear()
     m_text_input[0] = '\0';
     m_searched      = false;
     m_should_close  = true;
+    if(m_timeline_selection)
+    {
+        m_timeline_selection->ClearSearchHighlights();
+    }
 }
 
 void
@@ -306,6 +312,32 @@ EventSearch::RowSelected(const ImGuiMouseButton mouse_button)
     {
         SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
                                  m_important_column_idxs[kStreamId]);
+
+        if(m_timeline_selection && m_selected_row >= 0)
+        {
+            const std::vector<std::vector<std::string>>& table_data =
+                m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
+            if(m_selected_row < static_cast<int>(table_data.size()))
+            {
+                uint64_t uuid = INVALID_UINT64_INDEX;
+                uint64_t track_id = SelectedRowToTrackID(
+                    m_important_column_idxs[kTrackId],
+                    m_important_column_idxs[kStreamId]);
+                if(m_important_column_idxs[kUUId] != INVALID_UINT64_INDEX &&
+                   m_important_column_idxs[kUUId] < table_data[m_selected_row].size())
+                {
+                    uuid = std::stoull(
+                        table_data[m_selected_row][m_important_column_idxs[kUUId]]);
+                }
+                if(uuid != INVALID_UINT64_INDEX && track_id != INVALID_UINT64_INDEX)
+                {
+                    m_timeline_selection->UnselectAllEvents();
+                    m_timeline_selection->ClearSearchHighlights();
+                    m_timeline_selection->SearchHighlightEvent(track_id, uuid);
+                }
+            }
+        }
+
         m_should_close = true;
     }
     else if(mouse_button == ImGuiMouseButton_Right)

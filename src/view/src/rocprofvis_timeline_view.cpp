@@ -28,6 +28,8 @@ namespace View
 constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
 constexpr float SIDEBAR_WIDTH_MAX             = 600.0f;
 
+static float s_event_color[3] = {};
+
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotations)
@@ -275,6 +277,55 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                 ClearTimeRangeSelection();
             }
         }
+
+        const std::string& event_name =
+            TimelineFocusManager::GetInstance().GetRightClickEventName();
+        if(!event_name.empty() &&
+           TimelineFocusManager::GetInstance().GetRightClickLayer() == Layer::kGraphLayer)
+        {
+            ImGui::Separator();
+            if(ImGui::BeginMenu("Set Event Color"))
+            {
+                ImU32 current;
+                if(m_settings.HasCustomEventColor(event_name))
+                    current = m_settings.GetCustomEventColor(event_name);
+                else
+                {
+                    size_t hash = std::hash<std::string>{}(event_name);
+                    int    idx  = static_cast<int>(hash) %
+                               static_cast<int>(m_settings.GetColorWheel().size());
+                    current = m_settings.GetColorWheel()[idx];
+                }
+                ImVec4 col4 = ImGui::ColorConvertU32ToFloat4(current);
+                s_event_color[0] = col4.x;
+                s_event_color[1] = col4.y;
+                s_event_color[2] = col4.z;
+
+                ImGui::Text("Color for: %s", event_name.c_str());
+                ImGui::Separator();
+                if(ImGui::ColorPicker3("##eventcolor", s_event_color,
+                                       ImGuiColorEditFlags_NoSidePreview |
+                                           ImGuiColorEditFlags_NoSmallPreview))
+                {
+                    m_settings.SetCustomEventColor(
+                        event_name,
+                        ImGui::ColorConvertFloat4ToU32(ImVec4(
+                            s_event_color[0], s_event_color[1], s_event_color[2], 0.8f)));
+                }
+                ImGui::EndMenu();
+            }
+
+            if(m_settings.HasCustomEventColor(event_name))
+            {
+                if(ImGui::MenuItem("Reset Event Color"))
+                {
+                    m_settings.ClearCustomEventColor(event_name);
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+        }
+
+        ImGui::Separator();
 
         if(ImGui::MenuItem("Add Annotation"))
         {

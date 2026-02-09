@@ -64,6 +64,19 @@ void
 TimelineFocusManager::ClearRightClickLayer()
 {
     m_right_click_layer = Layer::kNone;
+    m_right_click_event_name.clear();
+}
+
+void
+TimelineFocusManager::SetRightClickEventName(const std::string& name)
+{
+    m_right_click_event_name = name;
+}
+
+const std::string&
+TimelineFocusManager::GetRightClickEventName() const
+{
+    return m_right_click_event_name;
 }
 
 }  // namespace View

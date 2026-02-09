@@ -309,15 +309,17 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
     ImVec2 rectMax = ImVec2(start_position.x + duration,
                             start_position.y + m_level_height + cursor_position.y);
 
+    const std::string& color_name = (chart_item.event.m_child_count > 1)
+                                        ? chart_item.event.m_top_combined_name
+                                        : chart_item.event.m_name;
+
     ImU32 rectColor;
-    if(m_event_color_mode == EventColorMode::kNone)
-    {
+    if(m_settings.HasCustomEventColor(color_name))
+        rectColor = m_settings.GetCustomEventColor(color_name);
+    else if(m_event_color_mode == EventColorMode::kNone)
         rectColor = m_settings.GetColor(Colors::kFlameChartColor);
-    }
     else
-    {
         rectColor = m_settings.GetColorWheel()[color_index];
-    }
 
     float rounding = 2.0f;
     draw_list->AddRectFilled(rectMin, rectMax, rectColor, rounding);
@@ -360,10 +362,10 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
        ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
                               ImGuiHoveredFlags_NoPopupHierarchy))
     {
-        // Right-click context menu - set layer so timeline view knows we're on an event
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
         {
             TimelineFocusManager::GetInstance().SetRightClickLayer(Layer::kGraphLayer);
+            TimelineFocusManager::GetInstance().SetRightClickEventName(color_name);
         }
 
         // Select on click
@@ -504,13 +506,19 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 
                 // Name column
                 ImGui::TableNextColumn();
-                if(m_event_color_mode != EventColorMode::kNone)
+                if(m_settings.HasCustomEventColor(chart_item.child_info[i].name))
+                {
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
+                                           m_settings.GetCustomEventColor(
+                                               chart_item.child_info[i].name));
+                }
+                else if(m_event_color_mode != EventColorMode::kNone)
                 {
                     auto c_idx =
                         static_cast<uint64_t>(chart_item.child_info[i].name_hash) %
                         color_count;
-                    ImU32 cellBgColor = m_settings.GetColorWheel()[c_idx];
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, cellBgColor);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
+                                           m_settings.GetColorWheel()[c_idx]);
                 }
                 ImGui::TextWrapped("%s", chart_item.child_info[i].name.c_str());
 
@@ -556,15 +564,18 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         event_id = chart_item.event.m_id;
         ImGui::TextUnformatted("Name: ");
         ImGui::SameLine();
-        if(m_event_color_mode != EventColorMode::kNone)
+        if(m_settings.HasCustomEventColor(chart_item.event.m_name) ||
+           m_event_color_mode != EventColorMode::kNone)
         {
+            ImU32 tooltipColor = m_settings.HasCustomEventColor(chart_item.event.m_name)
+                                     ? m_settings.GetCustomEventColor(chart_item.event.m_name)
+                                     : m_settings.GetColorWheel()[color_index];
             ImVec2 text_size = ImGui::CalcTextSize(
                 chart_item.event.m_name.c_str(), nullptr, false, s_max_event_label_width);
             ImVec2      p         = ImGui::GetCursorScreenPos();
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
-            ImU32       rectColor = m_settings.GetColorWheel()[color_index];
-            draw_list->AddRectFilled(p, ImVec2(p.x + text_size.x, p.y + text_size.y),
-                                     rectColor);
+            draw_list->AddRectFilled(
+                p, ImVec2(p.x + text_size.x, p.y + text_size.y), tooltipColor);
         }
         ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + s_max_event_label_width);
         ImGui::TextWrapped("%s", chart_item.event.m_name.c_str());

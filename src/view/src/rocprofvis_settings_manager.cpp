@@ -649,6 +649,36 @@ SettingsManager::DeserializeUnitSettings(jt::Json& json)
     }
 }
 
+void
+SettingsManager::SetCustomEventColor(const std::string& event_name, ImU32 color)
+{
+    m_custom_event_colors[event_name] = color;
+}
+
+bool
+SettingsManager::HasCustomEventColor(const std::string& event_name) const
+{
+    return m_custom_event_colors.count(event_name) > 0;
+}
+
+ImU32
+SettingsManager::GetCustomEventColor(const std::string& event_name) const
+{
+    return m_custom_event_colors.at(event_name);
+}
+
+void
+SettingsManager::ClearCustomEventColor(const std::string& event_name)
+{
+    m_custom_event_colors.erase(event_name);
+}
+
+void
+SettingsManager::ClearAllCustomEventColors()
+{
+    m_custom_event_colors.clear();
+}
+
 const float
 SettingsManager::GetEventLevelHeight() const
 {

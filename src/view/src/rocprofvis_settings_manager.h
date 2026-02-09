@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <list>
 #include <string>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -184,6 +185,13 @@ public:
 
     AppWindowSettings& GetAppWindowSettings();
 
+    // Custom event colors
+    void  SetCustomEventColor(const std::string& event_name, ImU32 color);
+    bool  HasCustomEventColor(const std::string& event_name) const;
+    ImU32 GetCustomEventColor(const std::string& event_name) const;
+    void  ClearCustomEventColor(const std::string& event_name);
+    void  ClearAllCustomEventColors();
+
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
@@ -227,6 +235,7 @@ private:
 
 
     std::filesystem::path m_json_path;
+    std::unordered_map<std::string, ImU32> m_custom_event_colors;
 };
 
 }  // namespace View

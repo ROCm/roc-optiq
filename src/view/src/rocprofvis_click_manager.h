@@ -3,6 +3,7 @@
 
 #pragma once
 #include <map>
+#include <string>
 #include <vector>
 namespace RocProfVis
 {
@@ -32,6 +33,9 @@ public:
     Layer GetRightClickLayer() const;
     void  ClearRightClickLayer();
 
+    void               SetRightClickEventName(const std::string& name);
+    const std::string& GetRightClickEventName() const;
+
 private:
     TimelineFocusManager();
     ~TimelineFocusManager()                              = default;
@@ -41,6 +45,7 @@ private:
     Layer                 m_layer_focused;
     std::map<Layer, bool> m_all_layers_focused;
     Layer                 m_right_click_layer;
+    std::string           m_right_click_event_name;
 };
 
 }  // namespace View

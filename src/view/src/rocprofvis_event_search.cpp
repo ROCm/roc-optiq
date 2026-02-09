@@ -312,7 +312,6 @@ EventSearch::RowSelected(const ImGuiMouseButton mouse_button)
         SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
                                  m_important_column_idxs[kStreamId]);
 
-        // Search-highlight the clicked event with yellow border
         if(m_timeline_selection && m_selected_row >= 0)
         {
             const std::vector<std::vector<std::string>>& table_data =
@@ -338,7 +337,6 @@ EventSearch::RowSelected(const ImGuiMouseButton mouse_button)
                 }
                 if(uuid != INVALID_UINT64_INDEX && track_id != INVALID_UINT64_INDEX)
                 {
-                    // Clear blue selection when applying yellow search highlight
                     m_timeline_selection->UnselectAllEvents();
                     m_timeline_selection->ClearSearchHighlights();
                     m_timeline_selection->SearchHighlightEvent(track_id, uuid);

@@ -366,7 +366,6 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
         {
             TimelineFocusManager::GetInstance().SetRightClickLayer(Layer::kGraphLayer);
-            // Clear yellow search highlight on right-click
             m_timeline_selection->ClearSearchHighlights();
             for(ChartItem& item : m_chart_items)
             {
@@ -390,7 +389,6 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 true;  // Ensure only one click is handled per render cycle
             chart_item.selected = !chart_item.selected;
 
-            // Clear yellow search highlight when blue-selecting
             m_timeline_selection->ClearSearchHighlights();
             for(ChartItem& item : m_chart_items)
             {
@@ -725,7 +723,6 @@ FlameTrackItem::RenderChart(float graph_width)
                        HIGHLIGHT_THICKNESS_HALF,
                    start_position.y + m_level_height + cursor_position.y -
                        HIGHLIGHT_THICKNESS_HALF + ANTI_ALIASING_WORKAROUND);
-        // Yellow border for search-highlighted events
         draw_list->AddRect(rectMin, rectMax, m_settings.GetColor(Colors::kSearchHighlight),
                            rounding, 0, HIGHLIGHT_THICKNESS);
     }

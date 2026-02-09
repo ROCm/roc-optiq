@@ -920,7 +920,7 @@ namespace DataModel
         }
 
         uint32_t track_id;
-        if (!db->TrackTracker()->FindTrack(kRocProfVisDmProcessTrack,
+        if (!db->TrackTracker()->FindTrack(op == kRocProfVisDmOperationLaunchSample ? kRocProfVisDmRegionSampleTrack : kRocProfVisDmProcessTrack,
             db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.process_index),
             db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.sub_process_index),
             callback_params->db_instance->GuidIndex(),

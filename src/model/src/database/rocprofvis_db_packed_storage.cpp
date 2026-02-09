@@ -681,7 +681,7 @@ namespace DataModel
                     [&](std::unique_ptr<PackedRow>& row) {
                         uint8_t op = row->Get<uint8_t>(0);
                         uint16_t track = row->Get<uint16_t>(track_id_it->m_offset[op], track_id_size);
-                        if (stream_track_id_it == m_merged_columns.end())
+                        if (stream_track_id_it == m_merged_columns.end() || op == kRocProfVisDmOperationLaunch || op == kRocProfVisDmOperationLaunchSample)
                         {
                             if (unselected_tracks.find(track) != unselected_tracks.end())
                                 return true;

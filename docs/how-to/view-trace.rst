@@ -157,12 +157,10 @@ Resize or reorder tracks
 Histogram
 ~~~~~~~~~
 
-The **Histogram** shows an event-density visual representation of all visible tracks.
+The **Histogram** provides two display modes:
 
-It provides two display modes:
-
-- **All Tracks**: Event density is normalized across all tracks visible and hidden. 
-- **Visible Tracks**: Event density is normalized based *only* on the visible tracks.
+- An event-density visual representation of all visible tracks.
+- A display across all tracks, visible and hidden.
 
 .. image:: ../images/histogram.png
    :width: 800
@@ -185,18 +183,17 @@ This section provides an interface for multiple data perspectives, offering gran
     :width: 800
     :align: center
 
-  - **Group By**: A drop-down menu that groups the results by the selected column and displays the default aggregations shown in the **Group Columns** box. Click **Submit** to group the results.
-  - **Aggregate by Column**: A drop-down menu that groups the results be the selected column. Click **Submit** to group the results. To remove the grouping, select **-- None --** from the drop-down menu, then click **Submit**.
+  - **Aggregate by Column**: A drop-down menu that groups the results by the selected column. Click **Submit** to group the results. To remove the grouping, select **-- None --** from the drop-down menu, then click **Submit**.
   - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` filters all events shorter than 2000 ns. Click **Submit** to filter the data.
   
   .. tip::
 
-     - Right-click on the column headers to show/hide columns, or to size a column / all columns to fit your screen.
+     - Right-click on the column headers to show/hide columns, size a column to fit, or size all columns to fit your screen.
      - Right-click on a table row and select **Go to event** to navigate to the **Timeline View** to the highlighted event.
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the Event Table, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.
-- **Event Details**: Shows extended information about the event that is not shown in the timeline or the Event Table. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs and API method parameters. It also shows Flow and Call stack information, if available. It also shows flow, call stack information, and function call arguments, if available.  
+- **Event Details**: Shows extended information about the event that is not shown in the timeline or the Event Table. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
 
@@ -240,6 +237,8 @@ You can also select the **Node** and **GPU** from the drop-down menus to focus o
 Minimap
 ~~~~~~~
 
+You can open the **Minimap** by clicking |mini| from the main **Toolbar**.
+
 The **Minimap** provides a compact overview that visualizes event density of each track and/or counter values across the entire profiling trace, enabling you to identify hot spots without manually scanning the full timeline.  
 
 .. image:: ../images/minimap.png
@@ -253,9 +252,6 @@ The **Minimap** provides:
 - The ability to quickly locate performance-critical intervals by highlighting dense regions of events. 
 - The ability to navigate large datasets with ease.
 - The ability to accelerate root-cause analysis by allowing rapid transitions between coarse-grained overview and fine-grained timeline details.
-
-You can open the **Minimap** by clicking |mini| from the main **Toolbar**.
-
 
 Search for events
 =================

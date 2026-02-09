@@ -17,13 +17,13 @@
 
 ### Additions
 
-- **Summary View**: Displays the top 10 kernels by execution time using pie charts, bar charts, or tables to help prioritize optimization efforts.
+- **Summary View**: Displays the top 10 kernels by execution time using pie charts, bar charts, or tables.
 - **Minimap**: Provides a compact overview of event density and counter values across the entire trace, enabling rapid navigation of large datasets.
 
 ### Enhancements/Changes
 
 - **Timeline View**: Improved navigation and selection. Added context menu option to create a time range filter from a selected event or events. 
-- **Advanced Details Panel**: **Aggregate by Column** drop-down groups the results by the selected column. Options to size column(s) to fit in **Event Table** and **Sample Table**. **Event Details Tab** now shows the function call’s arguments, if available.  
+- **Advanced Details Panel**: **Aggregate by Column** drop-down groups the results by the selected column. Options to size column(s) to fit in **Event Table** and **Sample Table**. **Event Details** now shows the function call’s arguments, if available.  
 - **Time Range Filtering**: Improved time range selection.
 - **Histogram**: Shows event density in two display modes: "all visible tracks" and "all tracks".
 - **Multi-node**: Multi-node data and new multi-database yaml file format are supported.

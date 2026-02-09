@@ -163,7 +163,6 @@ The **Histogram** provides two display modes:
 - A display across all tracks, visible and hidden.
 
 .. image:: ../images/histogram.png
-   :width: 800
    :align: center
 
 When the **Timeline View** is zoomed in, the area currently in view is highlighted on the **Histogram**. 

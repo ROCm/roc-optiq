@@ -638,7 +638,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                             roofline->GetUInt64(kRPVControllerRooflineNumCeilingsCompute, 0, &uint_data);
                                             for(uint64_t j = 0; j < uint_data; j++)
                                             {
-                                                roofline->SetDouble(kRPVControllerRooflineCeilingComputeXIndexed, j, max_data * 1.2);
+                                                roofline->SetDouble(kRPVControllerRooflineCeilingComputeXIndexed, j, max_data * roofline->DynamicMaxXFactor());
                                             }
                                         }
                                         workload->SetObject(kRPVControllerWorkloadRoofline, 0, (rocprofvis_handle_t*)roofline);

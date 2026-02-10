@@ -1193,7 +1193,7 @@ typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
  */
 typedef enum rocprofvis_controller_compute_table_types_t
 {
-    kRPVControllerComputeTableTypeKernelList = 0,
+    kRPVControllerComputeTableTypeKernelList = 0x1A000000,
     kRPVControllerComputeTableTypeDispatchList,
     kRPVControllerComputeTableTypeSysInfo,
     kRPVControllerComputeTableTypeSpeedOfLight,
@@ -1329,7 +1329,7 @@ typedef enum rocprofvis_controller_compute_metric_types_t
  */
 typedef enum rocprofvis_controller_plot_properties_t : uint32_t
 {
-    __kRPVControllerPlotPropertiesFirst = 0x1A000000,
+    __kRPVControllerPlotPropertiesFirst = 0x1B000000,
     // Id for the plot
     kRPVControllerPlotId = __kRPVControllerPlotPropertiesFirst,
     // Number of data series
@@ -1356,7 +1356,7 @@ typedef enum rocprofvis_controller_plot_properties_t : uint32_t
  */
 typedef enum rocprofvis_controller_plot_series_properties_t : uint32_t
 {
-    __kRPVControllerPlotSeriesPropertiesFirst = 0x2A000000,
+    __kRPVControllerPlotSeriesPropertiesFirst = 0x1C000000,
     // Number of x,y pairs in the series
     kRPVControllerPlotSeriesNumValues = __kRPVControllerPlotSeriesPropertiesFirst,
     // Indexed x values

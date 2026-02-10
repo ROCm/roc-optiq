@@ -34,6 +34,7 @@ public:
     bool QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocprofvis_controller_roofline_kernel_intensity_type_t& out) const;
     double MinX() const;
     double MaxX() const;
+    double DynamicMaxXFactor() const;
 
 private:
     struct Point {

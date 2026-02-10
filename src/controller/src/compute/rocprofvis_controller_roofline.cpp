@@ -8,8 +8,10 @@ namespace RocProfVis
 namespace Controller
 {
 
+// roofline_calc.py constants
 constexpr double kMinX = 0.01;
 constexpr double kMaxX = 1000.00;
+constexpr double KDynamicMaxXFactor = 1.2;
 
 Roofline::Roofline()
 : Handle(__kRPVControllerRooflinePropertiesFirst, __kRPVControllerRooflinePropertiesLast) 
@@ -649,6 +651,11 @@ double Roofline::MinX() const
 double Roofline::MaxX() const
 {
     return kMaxX;
+}
+
+double Roofline::DynamicMaxXFactor() const
+{
+    return KDynamicMaxXFactor;
 }
 
 }

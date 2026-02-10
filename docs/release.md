@@ -25,7 +25,7 @@
 - **Timeline View**: Improved navigation and selection. Added context menu option to create a time range filter from a selected event or events. 
 - **Advanced Details Panel**: **Aggregate by Column** drop-down groups the results by the selected column. Options to size column(s) to fit in **Event Table** and **Sample Table**. **Event Details** now shows the function call’s arguments, if available.  
 - **Time Range Filtering**: Improved time range selection.
-- **Histogram**: Shows event density in two display modes: "all visible tracks" and "all tracks".
+- **Histogram**: Shows event density in two display modes: "Normalization: All Tracks" and "Normalization: Visible Tracks".
 - **Multi-node**: Multi-node data and new multi-database yaml file format are supported.
 
 ## ROCm Optiq (Beta) 0.1.0

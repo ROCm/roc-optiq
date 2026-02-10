@@ -88,7 +88,7 @@ Use these commands to verify the ROCm Optiq version (when installed on Ubuntu):
    apt show roc-optiq
 
 Add ROCm binaries to your ``PATH``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
 Once you've installed ROCm Optiq for your operating system, add the ROCm binaries to your ``PATH`` if it isn't automatically configured:
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_dialog.h"
+#include "rocprofvis_widget.h"
 
 namespace RocProfVis
 {
@@ -10,7 +11,8 @@ namespace View
 
 void
 ConfirmationDialog::Show(const std::string& title, const std::string& message,
-                         std::function<void()> on_confirm_callback, std::function<void()> on_cancel_callback)
+                         std::function<void()> on_confirm_callback,
+                         std::function<void()> on_cancel_callback)
 {
     m_title       = title;
     m_message     = message;
@@ -28,26 +30,26 @@ ConfirmationDialog::Render()
         m_should_open = false;
     }
 
-    if (ImGui::IsPopupOpen(m_title.c_str(), ImGuiPopupFlags_None))
+    if(ImGui::IsPopupOpen(m_title.c_str(), ImGuiPopupFlags_None))
     {
-        // Always center this window when appearing
-        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+        popup_style.CenterPopup();
+        ImGui::SetNextWindowSize(ImVec2(580, 0));
 
-        // Todo: get rid of magic numbers
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
-
-        if(ImGui::BeginPopupModal(m_title.c_str(), NULL, ImGuiWindowFlags_AlwaysAutoResize))
+        if(ImGui::BeginPopupModal(m_title.c_str(), NULL,
+                                  ImGuiWindowFlags_AlwaysAutoResize |
+                                      ImGuiWindowFlags_NoSavedSettings))
         {
             ImGui::NewLine();
 
-            // Add message text with padding
-            ImGui::Dummy(ImVec2(5.0f, 0.0f));
-            ImGui::SameLine();
+            // Add message text
+
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() +
+                                   ImGui::GetContentRegionAvail().x);
             ImGui::TextUnformatted(m_message.c_str());
-            ImGui::SameLine();
-            ImGui::Dummy(ImVec2(5.0f, 0.0f));
+            ImGui::PopTextWrapPos();
 
             ImGui::NewLine();
             ImGui::Separator();
@@ -81,20 +83,19 @@ ConfirmationDialog::Render()
 
             ImGui::EndPopup();
         }
-
-        ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_WindowPadding, ImGuiStyleVar_ItemSpacing
+        popup_style.PopStyles();
     }
 }
 
 void
 ConfirmationDialog::DrawCheckboxOption()
 {
-    const char* cb_label  = "Don't ask me again";
-    ImGuiStyle& style     = ImGui::GetStyle();
-    float window_width    = ImGui::GetWindowSize().x;
-    float text_width      = ImGui::CalcTextSize(cb_label).x;
-    float checkbox_square = ImGui::GetFrameHeight();
-    float total_width =
+    const char* cb_label        = "Don't ask me again";
+    ImGuiStyle& style           = ImGui::GetStyle();
+    float       window_width    = ImGui::GetWindowSize().x;
+    float       text_width      = ImGui::CalcTextSize(cb_label).x;
+    float       checkbox_square = ImGui::GetFrameHeight();
+    float       total_width =
         checkbox_square + style.ItemInnerSpacing.x + text_width + style.FramePadding.x;
 
     float pos_x = window_width - style.WindowPadding.x - total_width;
@@ -119,16 +120,17 @@ MessageDialog::Render()
         m_should_open = false;
     }
 
-    if (ImGui::IsPopupOpen(m_title.c_str(), ImGuiPopupFlags_None))
+    if(ImGui::IsPopupOpen(m_title.c_str(), ImGuiPopupFlags_None))
     {
         // Always center this window when appearing
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));        
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
 
-        if(ImGui::BeginPopupModal(m_title.c_str(), NULL, ImGuiWindowFlags_AlwaysAutoResize))
+        if(ImGui::BeginPopupModal(m_title.c_str(), NULL,
+                                  ImGuiWindowFlags_AlwaysAutoResize))
         {
             ImGui::NewLine();
             ImGui::TextUnformatted(m_message.c_str());
@@ -140,7 +142,8 @@ MessageDialog::Render()
             ImGui::EndPopup();
         }
 
-        ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_WindowPadding, ImGuiStyleVar_ItemSpacing
+        ImGui::PopStyleVar(
+            2);  // Pop ImGuiStyleVar_WindowPadding, ImGuiStyleVar_ItemSpacing
     }
 }
 

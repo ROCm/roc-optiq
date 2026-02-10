@@ -18,7 +18,7 @@ TimelineFocusManager::GetInstance()
 TimelineFocusManager::TimelineFocusManager()
 : m_layer_focused(Layer::kNone)
 , m_all_layers_focused()
-
+, m_right_click_layer(Layer::kNone)
 {}
 
 void
@@ -46,6 +46,24 @@ Layer
 TimelineFocusManager::GetFocusedLayer() const
 {
     return m_layer_focused;
+}
+
+void
+TimelineFocusManager::SetRightClickLayer(Layer layer)
+{
+    m_right_click_layer = layer;
+}
+
+Layer
+TimelineFocusManager::GetRightClickLayer() const
+{
+    return m_right_click_layer;
+}
+
+void
+TimelineFocusManager::ClearRightClickLayer()
+{
+    m_right_click_layer = Layer::kNone;
 }
 
 }  // namespace View

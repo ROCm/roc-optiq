@@ -1,6 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#include "rocprofvis_common_defs.h"
 #include "rocprofvis_event_search.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_event_manager.h"
@@ -17,7 +18,8 @@ namespace View
 constexpr uint64_t    MAX_RESULTS_DISPLAYED = 5;
 constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
 constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
-constexpr const char* ID_COLUMN_NAME        = "id";
+constexpr const char* ID_COLUMN_NAME        = "__uuid";
+constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 
 EventSearch::EventSearch(DataProvider& dp)
@@ -45,10 +47,10 @@ EventSearch::Update()
     {
         m_hidden_column_indices.clear();
         const std::vector<std::string>& column_names =
-            m_data_provider.GetTableHeader(m_table_type);
+            m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
         for(size_t i = 0; i < column_names.size(); i++)
         {
-            if(i != m_important_column_idxs[kId] && i != m_important_column_idxs[kName] &&
+            if(i != m_important_column_idxs[kDbEventId] && i != m_important_column_idxs[kName] &&
                i != m_time_column_indices[kTimeStartNs] &&
                i != m_time_column_indices[kDurationNs])
             {
@@ -71,6 +73,7 @@ EventSearch::Render()
 
     if(Open())
     {
+        const TablesModel& tm = m_data_provider.DataModel().GetTables();
         ImGui::SetNextWindowSize(ImVec2(m_width, Height()));
         ImGui::SetNextWindowPos(
             ImVec2(ImGui::GetItemRectMin().x,
@@ -78,7 +81,7 @@ EventSearch::Render()
         if(ImGui::BeginPopup("event_search", ImGuiWindowFlags_NoFocusOnAppearing))
         {
             if(m_data_provider.IsRequestPending(GetRequestID()) ||
-               m_data_provider.GetTableTotalRowCount(m_table_type) > 0)
+               tm.GetTableTotalRowCount(m_table_type) > 0)
             {
                 ImGui::SetNextWindowSize(ImGui::GetContentRegionAvail() -
                                          ImVec2(0, ImGui::GetFrameHeightWithSpacing()));
@@ -87,17 +90,18 @@ EventSearch::Render()
             }
             ImGui::AlignTextToFramePadding();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-            auto table_params = m_data_provider.GetTableParams(m_table_type);
+            auto table_params =
+                tm.GetTableParams(m_table_type);
             if(table_params)
             {
                 ImGui::Text("Showing %llu to %llu of %llu result(s)",
                             table_params->m_start_row,
                             table_params->m_start_row + table_params->m_req_row_count,
-                            m_data_provider.GetTableTotalRowCount(m_table_type));
+                            tm.GetTableTotalRowCount(m_table_type));
             }
 #else
             ImGui::Text("Showing %llu result(s)",
-                        m_data_provider.GetTableTotalRowCount(m_table_type));
+                        tm.GetTableTotalRowCount(m_table_type));
 #endif
             if(m_should_close)
             {
@@ -162,13 +166,14 @@ EventSearch::Search()
         }
         if(valid)
         {
+            const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
             m_data_provider.CancelRequest(GetRequestID());
             m_search_deferred = !m_data_provider.FetchTable(TableRequestParams(
                 m_req_table_type, {},
                 { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
                   kRocProfVisDmOperationLaunchSample },
-                m_data_provider.GetStartTime(), m_data_provider.GetEndTime(), "", "", "",
-                "", { terms }, 0, m_fetch_chunk_size));
+                timeline.GetStartTime(), timeline.GetEndTime(), "", "", "", "", { terms },
+                0, m_fetch_chunk_size));
             m_searched        = true;
             m_should_open     = true;
         }
@@ -184,7 +189,7 @@ void
 EventSearch::Clear()
 {
     m_data_provider.CancelRequest(GetRequestID());
-    m_data_provider.ClearTable(m_table_type);
+    m_data_provider.DataModel().GetTables().ClearTable(m_table_type);
     m_text_input[0] = '\0';
     m_searched      = false;
     m_should_close  = true;
@@ -247,10 +252,12 @@ EventSearch::Width() const
 void
 EventSearch::FormatData() const
 {
-    std::vector<formatted_column_info_t>& formatted_column_data =
-        m_data_provider.GetMutableFormattedTableData(m_table_type);
+    TablesModel& tm = m_data_provider.DataModel().GetTables();
+
+    std::vector<FormattedColumnInfo>& formatted_column_data =
+        tm.GetMutableFormattedTableData(m_table_type);
     formatted_column_data.clear();
-    formatted_column_data.resize(m_data_provider.GetTableHeader(m_table_type).size());
+    formatted_column_data.resize(tm.GetTableHeader(m_table_type).size());
     InfiniteScrollTable::FormatTimeColumns();
 }
 
@@ -258,7 +265,7 @@ void
 EventSearch::IndexColumns()
 {
     const std::vector<std::string>& column_names =
-        m_data_provider.GetTableHeader(m_table_type);
+        m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
     m_important_column_idxs =
         std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
     m_hidden_column_indices.clear();
@@ -277,7 +284,11 @@ EventSearch::IndexColumns()
             }
             else if(col == ID_COLUMN_NAME)
             {
-                m_important_column_idxs[kId] = i;
+                m_important_column_idxs[kUUId] = i;
+            }
+            else if(col == EVENT_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kDbEventId] = i;
             }
             else if(col == NAME_COLUMN_NAME)
             {
@@ -345,7 +356,8 @@ float
 EventSearch::Height() const
 {
     float    height;
-    uint64_t results = m_data_provider.GetTableTotalRowCount(m_table_type);
+    uint64_t results =
+        m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type);
     if(results > 0)
     {
         height = (m_horizontal_scroll ? ImGui::GetStyle().ScrollbarSize : 0) +

@@ -3,9 +3,8 @@
 
 #pragma once
 
-#include "widgets/rocprofvis_dialog.h"
 #include "rocprofvis_events.h"
-
+#include "widgets/rocprofvis_dialog.h"
 #include "imgui.h"
 #include <functional>
 #include <memory>
@@ -31,30 +30,32 @@ protected:
     std::string m_widget_name;
 };
 
+
+
+
 class LayoutItem
 {
 public:
-    using Ptr = std::shared_ptr<LayoutItem>;
+    using Ptr    = std::shared_ptr<LayoutItem>;
     LayoutItem() = default;
     LayoutItem(float w, float h)
     : m_width(w)
-    , m_height(h)
-    {};
+    , m_height(h) {};
 
     static Ptr CreateFromWidget(std::shared_ptr<RocWidget> widget, float w = 0,
                                 float h = 0);
 
-    std::shared_ptr<RocWidget> m_item = nullptr;  // Widget that this item will render
-    float                      m_height = 0;
-    float                      m_width = 0;
+    std::shared_ptr<RocWidget> m_item    = nullptr;  // Widget that this item will render
+    float                      m_height  = 0;
+    float                      m_width   = 0;
     bool                       m_visible = true;
 
     int32_t m_bg_color = 0;
 
-    ImVec2 m_item_spacing = ImVec2(0, 0);
+    ImVec2 m_item_spacing   = ImVec2(0, 0);
     ImVec2 m_window_padding = ImVec2(0, 0);
 
-    ImGuiChildFlags  m_child_flags = ImGuiChildFlags_Borders;
+    ImGuiChildFlags  m_child_flags  = ImGuiChildFlags_Borders;
     ImGuiWindowFlags m_window_flags = ImGuiWindowFlags_None;
 };
 
@@ -94,6 +95,29 @@ CopyableTextUnformatted(const char* text, std::string_view unique_id = "",
 
 
 inline constexpr std::string_view COPY_DATA_NOTIFICATION = "Cell data was copied";
+
+class PopUpStyle
+{
+public:
+    PopUpStyle();
+    ~PopUpStyle();
+    
+    // Push all popup style variables (RAII - automatically pops on destruction)
+    void PushPopupStyles();
+    
+    // Center the popup window (call before BeginPopupModal)
+    void CenterPopup();
+    
+    // Push titlebar colors using grey from settings
+    void PushTitlebarColors();
+    
+    // Manually pop styles if needed before destruction
+    void PopStyles();
+
+private:
+    int m_style_var_count = 0;
+    int m_color_count = 0;
+};
 
 }  // namespace View
 }  // namespace RocProfVis

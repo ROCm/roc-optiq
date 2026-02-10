@@ -15,7 +15,6 @@ namespace RocProfVis
 {
 namespace View
 {
-constexpr uint64_t INVALID_UINT64_INDEX = std::numeric_limits<uint64_t>::max();
 
 class SettingsManager;
 class TableDataEvent;
@@ -35,7 +34,8 @@ public:
     // Important columns in the table
     enum ImportantColumns
     {
-        kId,
+        kUUId,
+        kDbEventId,
         kName,
         kTrackId,
         kStreamId,
@@ -50,12 +50,14 @@ protected:
         kDurationNs,
         kNumTimeColumns
     };
+
+    constexpr static size_t FILTER_SIZE = 256;
     struct FilterOptions
     {
-		char        where[256];
+        char        where[FILTER_SIZE];
         std::string group_by;
-        char        group_columns[256];
-        char        filter[256];
+        char        group_columns[FILTER_SIZE];
+        char        filter[FILTER_SIZE];
     };
 
     virtual void FormatData() const;

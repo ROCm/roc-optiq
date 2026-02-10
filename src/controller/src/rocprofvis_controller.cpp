@@ -6,21 +6,25 @@
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_array.h"
-#include "rocprofvis_controller_event.h"
-#include "rocprofvis_controller_sample.h"
-#include "rocprofvis_controller_sample_lod.h"
-#include "rocprofvis_controller_track.h"
-#include "rocprofvis_controller_timeline.h"
-#include "rocprofvis_controller_trace.h"
 #include "rocprofvis_controller_future.h"
-#include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_table.h"
-#include "rocprofvis_controller_plot.h"
-#include "rocprofvis_controller_json_trace.h"
-#include "rocprofvis_controller_summary.h"
-#include "rocprofvis_controller_summary_metrics.h"
+#include "rocprofvis_controller_trace.h"
 #include "rocprofvis_core_assert.h"
+#include "system/rocprofvis_controller_event.h"
+#include "system/rocprofvis_controller_sample.h"
+#include "system/rocprofvis_controller_sample_lod.h"
+#include "system/rocprofvis_controller_track.h"
+#include "system/rocprofvis_controller_timeline.h"
+#include "system/rocprofvis_controller_trace_system.h"
+#include "system/rocprofvis_controller_graph.h"
+#include "system/rocprofvis_controller_summary.h"
+#include "system/rocprofvis_controller_summary_metrics.h"
+#ifdef COMPUTE_UI_SUPPORT
+#include "compute/rocprofvis_controller_plot.h"
+#include "compute/rocprofvis_controller_trace_compute.h"
+#endif
+#include "rocprofvis_c_interface.h"
 
 #include <cstring>
 
@@ -28,7 +32,7 @@ namespace RocProfVis
 {
 namespace Controller
 {
-typedef Reference<rocprofvis_controller_t, Trace, kRPVControllerObjectTypeController> TraceRef;
+typedef Reference<rocprofvis_controller_t, SystemTrace, kRPVControllerObjectTypeControllerSystem> SystemTraceRef;
 typedef Reference<rocprofvis_controller_timeline_t, Timeline, kRPVControllerObjectTypeTimeline> TimelineRef;
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 typedef Reference<rocprofvis_controller_event_t, Event, kRPVControllerObjectTypeEvent> EventRef;
@@ -41,6 +45,7 @@ typedef Reference<rocprofvis_controller_arguments_t, Arguments, kRPVControllerOb
 typedef Reference<rocprofvis_controller_table_t, Summary, kRPVControllerObjectTypeSummary> SummaryRef;
 typedef Reference<rocprofvis_controller_summary_metrics_t, SummaryMetrics, kRPVControllerObjectTypeSummaryMetrics> SummaryMetricsRef;
 #ifdef COMPUTE_UI_SUPPORT
+typedef Reference<rocprofvis_controller_t, ComputeTrace, kRPVControllerObjectTypeControllerCompute> ComputeTraceRef;
 typedef Reference<rocprofvis_controller_plot_t, Plot, kRPVControllerObjectTypePlot> PlotRef;
 #endif
 }
@@ -75,6 +80,17 @@ rocprofvis_result_t rocprofvis_controller_get_object(rocprofvis_handle_t* object
     {
         RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*)object;
         result = handle->GetObject(property, index, value);
+    }
+    return result;
+}
+rocprofvis_result_t rocprofvis_controller_get_object_type(rocprofvis_handle_t* object, rocprofvis_controller_object_type_t* type)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(object && type)
+    {
+        RocProfVis::Controller::Handle* handle = (RocProfVis::Controller::Handle*) object;
+        *type = handle->GetType();
+        result = kRocProfVisResultSuccess;
     }
     return result;
 }
@@ -133,7 +149,7 @@ rocprofvis_result_t rocprofvis_controller_save_trimmed_trace(rocprofvis_handle_t
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(object && path)
     {
-        RocProfVis::Controller::TraceRef trace(object);
+        RocProfVis::Controller::SystemTraceRef trace(object);
         RocProfVis::Controller::FutureRef future_ref(future);
         if (trace.IsValid() && future_ref.IsValid())
         {
@@ -142,36 +158,77 @@ rocprofvis_result_t rocprofvis_controller_save_trimmed_trace(rocprofvis_handle_t
     }
     return result;
 }
-rocprofvis_controller_t* rocprofvis_controller_alloc()
+rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename)
 {
     rocprofvis_controller_t* controller = nullptr;
-    try
+    if(filename)
     {
-        RocProfVis::Controller::Trace* trace = new RocProfVis::Controller::Trace();
-        if(trace->Init() == kRocProfVisResultSuccess)
+        try
         {
-            controller = (rocprofvis_controller_t*) trace;
+            RocProfVis::Controller::Trace* trace = nullptr;
+            switch(rocprofvis_db_identify_type(filename))
+            {
+                case kRocpdSqlite:
+                case kRocprofSqlite:
+                case kRocprofMultinodeSqlite:
+                {
+                    trace = new RocProfVis::Controller::SystemTrace(filename);                 
+                    break;
+                }
+#ifdef COMPUTE_UI_SUPPORT
+                case kComputeSqlite:
+                {
+                    trace = new RocProfVis::Controller::ComputeTrace(filename);                  
+                    break;
+                }
+                default:
+                {
+                    size_t len = strlen(filename);
+                    if (len > 4 && strcmp(filename + len - 4, ".csv") == 0)
+                    {
+                        trace = new RocProfVis::Controller::ComputeTrace(filename); 
+                    }
+                    break;
+                }
+#endif
+            }
+            if(trace && trace->Init() == kRocProfVisResultSuccess)
+            {
+                controller = (rocprofvis_controller_t*) trace;
+            }
+            else
+            {
+                delete trace;
+            }
         }
-        else
+        catch(const std::exception& e)
         {
-            delete trace;
+            spdlog::error("Failed to allocate controller: {}", e.what());
         }
-    }
-    catch(const std::exception& e)
-    {
-        spdlog::error("Failed to allocate controller: {}", e.what());
-    }
+    }    
     return controller;
 }
-rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, char const* const filename, rocprofvis_controller_future_t* future)
+rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, rocprofvis_controller_future_t* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
 
-    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::SystemTraceRef system_trace(controller);
+#ifdef COMPUTE_UI_SUPPORT
+    RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
+#endif
     RocProfVis::Controller::FutureRef future_ref(future);
-    if(trace.IsValid() && future_ref.IsValid() && filename && strlen(filename))
+    if(future_ref.IsValid())
     {
-        result = trace->Load(filename, *future_ref);
+        if(system_trace.IsValid())
+        {
+            result = system_trace->Load(*future_ref);
+        }
+#ifdef COMPUTE_UI_SUPPORT
+        else if(compute_trace.IsValid())
+        {
+            result = compute_trace->Load(*future_ref);
+        }
+#endif
     }
 
     return result;
@@ -228,7 +285,7 @@ rocprofvis_result_t rocprofvis_controller_track_fetch_async(
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::SystemTraceRef trace(controller);
     RocProfVis::Controller::TrackRef track_ref(track);
     RocProfVis::Controller::FutureRef future(result);
     RocProfVis::Controller::ArrayRef array(output);
@@ -244,7 +301,7 @@ rocprofvis_result_t rocprofvis_controller_graph_fetch_async(
     rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t               error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::TraceRef  trace(controller);
+    RocProfVis::Controller::SystemTraceRef  trace(controller);
     RocProfVis::Controller::GraphRef  graph_ref(graph);
     RocProfVis::Controller::FutureRef future(result);
     RocProfVis::Controller::ArrayRef  array(output);
@@ -261,7 +318,7 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
     rocprofvis_controller_future_t* result, rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t               error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::TraceRef  trace(controller);
+    RocProfVis::Controller::SystemTraceRef  trace(controller);
     RocProfVis::Controller::Handle*   handle = (RocProfVis::Controller::Handle*) object;
     RocProfVis::Controller::EventRef  event_ref(object);
     RocProfVis::Controller::FutureRef future(result);
@@ -282,7 +339,7 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
                                           *future, *array, index, count);
                 break;
             }
-            case kRPVControllerObjectTypeController:
+            case kRPVControllerObjectTypeControllerSystem:
             {
                 error = trace->AsyncFetch(property, *future, *array, index, count);
             }
@@ -301,7 +358,7 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::SystemTraceRef trace(controller);
     RocProfVis::Controller::TableRef table_ref(table);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);
@@ -320,7 +377,7 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(
     char const* path)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::SystemTraceRef trace(controller);
     RocProfVis::Controller::TableRef table_ref(table);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);
@@ -338,7 +395,7 @@ rocprofvis_result_t rocprofvis_controller_summary_fetch_async(
     rocprofvis_controller_summary_metrics_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::SystemTraceRef trace(controller);
     RocProfVis::Controller::SummaryRef summary_ref(summary);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);
@@ -358,7 +415,7 @@ rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::TraceRef trace(controller);
+    RocProfVis::Controller::ComputeTraceRef trace(controller);
     RocProfVis::Controller::PlotRef plot_ref(plot);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);
@@ -396,9 +453,9 @@ void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
     if (array.IsValid())
     {
         if(array.Get()->GetContext() &&
-           ((RocProfVis::Controller::Trace*) array.Get()->GetContext())->GetMemoryManager())
+           ((RocProfVis::Controller::SystemTrace*) array.Get()->GetContext())->GetMemoryManager())
         {
-            ((RocProfVis::Controller::Trace*)array.Get()->GetContext())->GetMemoryManager()->CancelArrayOwnership(&array.Get()->GetVector(),
+            ((RocProfVis::Controller::SystemTrace*)array.Get()->GetContext())->GetMemoryManager()->CancelArrayOwnership(&array.Get()->GetVector(),
                                       RocProfVis::Controller::kRocProfVisOwnerTypeGraph);
         }
         delete array.Get();
@@ -414,7 +471,7 @@ void rocprofvis_controller_future_free(rocprofvis_controller_future_t* object)
 }
 void rocprofvis_controller_free(rocprofvis_controller_t* object)
 {
-    RocProfVis::Controller::TraceRef trace(object);
+    RocProfVis::Controller::SystemTraceRef trace(object);
     if (trace.IsValid())
     {
         delete trace.Get();

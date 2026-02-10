@@ -1,10 +1,11 @@
 // Copyright (C) 2025 Advanced Micro Devces, Inc. All rights reserved.
 
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_track_item.h"
-#include "rocprofvis_view_structs.h"
 #include "spdlog/spdlog.h"
+#include <algorithm>
 
 namespace RocProfVis
 {
@@ -20,7 +21,7 @@ TimelineSelection::TimelineSelection(DataProvider& dp)
 TimelineSelection::~TimelineSelection() {}
 
 void
-TimelineSelection::SelectTrack(rocprofvis_graph_t& graph)
+TimelineSelection::SelectTrack(TrackGraph& graph)
 {
     if(!graph.selected && graph.chart && !graph.chart->IsSelected() &&
        m_selected_track_ids.count(graph.chart->GetID()) == 0)
@@ -33,7 +34,7 @@ TimelineSelection::SelectTrack(rocprofvis_graph_t& graph)
 }
 
 void
-TimelineSelection::UnselectTrack(rocprofvis_graph_t& graph)
+TimelineSelection::UnselectTrack(TrackGraph& graph)
 {
     if(graph.selected && graph.chart && graph.chart->IsSelected() &&
        m_selected_track_ids.count(graph.chart->GetID()) > 0)
@@ -46,7 +47,7 @@ TimelineSelection::UnselectTrack(rocprofvis_graph_t& graph)
 }
 
 void
-TimelineSelection::UnselectAllTracks(std::vector<rocprofvis_graph_t>& graphs)
+TimelineSelection::UnselectAllTracks(std::vector<TrackGraph>& graphs)
 {
     for(auto& graph : graphs)
     {
@@ -61,7 +62,7 @@ TimelineSelection::UnselectAllTracks(std::vector<rocprofvis_graph_t>& graphs)
 }
 
 void
-TimelineSelection::ToggleSelectTrack(rocprofvis_graph_t& graph)
+TimelineSelection::ToggleSelectTrack(TrackGraph& graph)
 {
     if(graph.selected)
     {
@@ -175,6 +176,14 @@ TimelineSelection::UnselectAllEvents()
 {
     m_selected_event_ids.clear();
     SendEventSelectionChanged(INVALID_SELECTION_ID, INVALID_SELECTION_ID, false, true);
+}
+
+bool
+TimelineSelection::GetSelectedEventsTimeRange(double& start_ts_out, double& end_ts_out) const
+{
+    std::vector<uint64_t> event_ids(m_selected_event_ids.begin(), m_selected_event_ids.end());
+    return m_data_provider.DataModel().GetEvents().GetEventTimeRange(event_ids, start_ts_out,
+                                                                     end_ts_out);
 }
 
 void

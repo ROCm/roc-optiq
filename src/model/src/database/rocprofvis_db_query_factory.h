@@ -11,17 +11,12 @@ namespace RocProfVis
 namespace DataModel
 {
 
-class SqliteDatabase;
+class ProfileDatabase;
 
-class QueryFactory
+class QueryFactory : public DatabaseVersion
 {
 public:
-    QueryFactory(SqliteDatabase* db);
-
-    void SetVersion(const char* version);
-
-    bool IsVersionEqual(const char*);
-    bool IsVersionGreaterOrEqual(const char*);
+    QueryFactory(ProfileDatabase* db);
 
     std::string GetRocprofRegionTrackQuery(bool is_sample_track);
     std::string GetRocprofRegionLevelQuery(bool is_sample_track);
@@ -70,25 +65,14 @@ public:
     std::string GetRocprofEssentialInfoQueryForMemoryAllocEvent(uint64_t event_id);
     std::string GetRocprofEssentialInfoQueryForMemoryCopyEvent(uint64_t event_id);
 
+    std::string GetRocprofArgumentsInfoQueryForRegionEvent(uint64_t event_id);
+    std::string GetRocprofArgumentsInfoQueryForKernelDispatchEvent(uint64_t event_id);
+    std::string GetRocprofArgumentsInfoQueryForMemoryAllocEvent(uint64_t event_id);
+    std::string GetRocprofArgumentsInfoQueryForMemoryCopyEvent(uint64_t event_id);
+
 private:
 
-    std::vector<uint32_t>  ConvertVersionStringToInt(const char* version);
-
-    uint32_t GetMajorVersion()
-    {
-        return m_db_version.size() > 0 ? m_db_version[0] : 0;
-    }
-    uint32_t GetMinorVersion()
-    {
-        return m_db_version.size() > 1 ? m_db_version[1] : 0;
-    }
-    uint32_t GetPatchVersion()
-    {
-        return m_db_version.size() > 2 ? m_db_version[2] : 0;
-    }
-
-    SqliteDatabase* m_db;
-    std::vector<uint32_t> m_db_version;
+    ProfileDatabase* m_db;
 };
 
 

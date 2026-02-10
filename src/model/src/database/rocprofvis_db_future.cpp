@@ -3,6 +3,7 @@
 
 #include "rocprofvis_db_future.h"
 #include "rocprofvis_db.h"
+#include "rocprofvis_c_interface.h"
 
 namespace RocProfVis
 {
@@ -29,10 +30,49 @@ Future::~Future(){
     }
 }
 
+Future* Future::AddSubFuture() {
+    Future* sub_feature = (Future*)rocprofvis_db_future_alloc(nullptr);
+    std::unique_lock lock(m_mutex);
+    m_sub_futures.push_back(sub_feature);
+    return sub_feature;
+}
+
+void   
+Future::DeleteSubFuture(Future* sub_future) {
+
+    std::unique_lock lock(m_mutex);
+    auto it = std::find_if(m_sub_futures.begin(), m_sub_futures.end(), [&](Future* f) { return f == sub_future; });
+    if (it != m_sub_futures.end())
+    {
+        m_sub_futures.erase(it);
+        rocprofvis_db_future_free(sub_future);
+    }
+}
+
+rocprofvis_dm_result_t   
+Future::WaitAndDeleteSubFuture(Future* sub_future) {
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    if(kRocProfVisDmResultSuccess !=
+        rocprofvis_db_future_wait(sub_future, UINT64_MAX))
+    {
+        result = kRocProfVisDmResultUnknownError;
+    }
+    DeleteSubFuture(sub_future);
+    return result;
+}
+
+
 void
 Future::SetInterrupted()
 {
     std::unique_lock lock(m_mutex);
+    if (m_sub_futures.size() > 0)
+    {
+        for (auto future : m_sub_futures)
+        {
+            future->SetInterrupted();
+        }
+    }
     if (m_db != nullptr && m_connection != nullptr)
     {
         m_db->InterruptQuery(m_connection);
@@ -51,7 +91,6 @@ Future::LinkDatabase(Database* db, void* connection)
 rocprofvis_dm_result_t Future::WaitForCompletion(rocprofvis_db_timeout_ms_t timeout_ms) {
     rocprofvis_dm_result_t result = kRocProfVisDmResultTimeout;
     std::future_status     status;
-    m_processed_rows = 0;
     if(timeout_ms == UINT64_MAX)
     {
         m_future.wait();

@@ -37,23 +37,42 @@ file(GLOB MAIN_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/test/*.cpp
 
 add_library(${PROJECT_NAME} ${DATAMODEL_SRC} ${DATABASE_SRC} ${DATABASE_SRC} ${COMMON_SRC} )
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
 target_link_libraries(${PROJECT_NAME} roc-optiq-core)
 target_link_libraries(${PROJECT_NAME} sqlite3)
 target_link_libraries(${PROJECT_NAME} spdlog)
+target_link_libraries(${PROJECT_NAME} yaml-cpp)
+target_link_libraries(${PROJECT_NAME} json)
+
+# TBB is conditionally required on Linux when libtbb-dev is installed
+# - Windows MSVC: Has its own parallel backend, doesn't need TBB
+# - macOS: Parallel execution not yet supported in libc++
+# - Linux GCC: Auto-detects TBB headers and switches to TBB backend if available
+find_package(TBB QUIET)
+if(TBB_FOUND)
+    target_link_libraries(${PROJECT_NAME} TBB::tbb)
+    message(STATUS "TBB found and linked for parallel execution policies")
+else()
+    message(STATUS "TBB not found - parallel execution will use platform default")
+endif()
 
 add_executable(${PROJECT_NAME}-test ${MAIN_SRC} )
 target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
+target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
 target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}-test roc-optiq-core)
 target_link_libraries(${PROJECT_NAME}-test spdlog)
 target_link_libraries(${PROJECT_NAME}-test sqlite3)
+target_link_libraries(${PROJECT_NAME}-test json)
 
 add_executable(${PROJECT_NAME}-basic-tests src/tests/basic_tests.cpp)
 target_include_directories(${PROJECT_NAME}-basic-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
+target_include_directories(${PROJECT_NAME}-basic-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE ${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE Catch2::Catch2WithMain)
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE roc-optiq-core)
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE spdlog)
 target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE sqlite3)
+target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE json)
 add_test(NAME ${PROJECT_NAME}-basic-tests COMMAND ${PROJECT_NAME}-basic-tests)
 set_tests_properties(${PROJECT_NAME}-basic-tests PROPERTIES RUN_SERIAL ON)

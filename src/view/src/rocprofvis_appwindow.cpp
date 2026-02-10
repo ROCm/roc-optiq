@@ -20,7 +20,7 @@
 #include "rocprofvis_version.h"
 #include "rocprofvis_utils.h"
 #ifdef COMPUTE_UI_SUPPORT
-#    include "rocprofvis_navigation_manager.h"
+#    include "compute/rocprofvis_navigation_manager.h"
 #endif
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_trace_view.h"
@@ -529,38 +529,17 @@ AppWindow::RenderFileMenu(Project* project)
 void
 AppWindow::RenderEditMenu(Project* project)
 {
-    Project::TraceType trace_type =
-        project == nullptr ? Project::Undefined : project->GetTraceType();
-
     if(ImGui::BeginMenu("Edit"))
     {
-        // Trace project specific menu options
-        if(trace_type == Project::System)
+        if(project)
         {
             std::shared_ptr<RootView> root_view =
                 std::dynamic_pointer_cast<RootView>(project->GetView());
-
             if(root_view)
             {
                 root_view->RenderEditMenuOptions();
             }
         }
-        if(ImGui::MenuItem("Save Trace Selection", nullptr, false,
-                           project && project->IsTrimSaveAllowed()))
-        {
-            FileFilter trace_filter;
-            trace_filter.m_name = "Traces";
-            trace_filter.m_extensions = { "db", "rpd" };
-
-            std::vector<FileFilter> filters;
-            filters.push_back(trace_filter);
-
-            ShowSaveFileDialog("Save Trace Selection", filters, "",
-                           [project](std::string file_path) -> void {
-                               project->TrimSave(file_path);
-                           });
-        }
-        ImGui::Separator();
         if(ImGui::MenuItem("Preferences"))
         {
             m_settings_panel->Show();
@@ -586,6 +565,18 @@ AppWindow::RenderViewMenu(Project* project)
                 tool_bar_item->m_visible = settings.show_toolbar;
             }
         }
+#ifdef COMPUTE_UI_SUPPORT
+        if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
+        {
+            if(m_notification_callback)
+            {
+                m_notification_callback(
+                    rocprofvis_view_notification_t::
+                        kRocProfVisViewNotification_Toggle_Fullscreen);
+            }
+        }
+        ImGui::SeparatorText("System Profiler Panels");
+#endif
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))
         {
@@ -619,9 +610,12 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
-        
+
+#ifdef COMPUTE_UI_SUPPORT
+        ImGui::SeparatorText("Compute Profiler Panels");
+        ImGui::MenuItem("Compute View Item");
+#else
         ImGui::Separator();
-        
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
         {
             if(m_notification_callback)
@@ -630,7 +624,7 @@ AppWindow::RenderViewMenu(Project* project)
                     rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen);
             }
         }
-        
+#endif
         ImGui::EndMenu();
     }
 }
@@ -655,16 +649,11 @@ AppWindow::HandleOpenFile()
 
     FileFilter all_filter;
     all_filter.m_name = "All Supported";
-    all_filter.m_extensions = { "db", "rpd", "rpv" };
+    all_filter.m_extensions = { "db", "rpd", "yaml", "rpv" };
 
     FileFilter trace_filter;
     trace_filter.m_name = "Traces";
-    trace_filter.m_extensions = { "db", "rpd" };
-
-#ifdef JSON_TRACE_SUPPORT
-    all_filter.m_extensions.push_back("json");
-    trace_filter.m_extensions.push_back("json");
-#endif 
+    trace_filter.m_extensions = { "db", "rpd", "yaml" };
 #ifdef COMPUTE_UI_SUPPORT
     all_filter.m_extensions.push_back("csv");
     trace_filter.m_extensions.push_back("csv");
@@ -780,11 +769,17 @@ AppWindow::RenderAboutDialog()
         return ss.str();
     }();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+
+    // Set window size
+    ImGui::SetNextWindowSize(ImVec2(580, 0));
 
     if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize))
+                              ImGuiWindowFlags_AlwaysAutoResize |
+                                  ImGuiWindowFlags_NoMove))
     {
         ImFont* large_font =
             SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
@@ -835,8 +830,9 @@ AppWindow::RenderAboutDialog()
 
         ImGui::EndPopup();
     }
-    ImGui::PopStyleVar(2);
-}
+    popup_style.PopStyles();
+
+ }
 
 #ifdef USE_NATIVE_FILE_DIALOG
 void
@@ -1044,14 +1040,20 @@ AppWindow::RenderDeveloperMenu()
             FileFilter trace_filter;
             trace_filter.m_name       = "Traces";
             trace_filter.m_extensions = { "db", "rpd" };
-#    ifdef JSON_TRACE_SUPPORT
-            trace_filter.m_extensions.push_back("json");
-#    endif
+            file_filters.push_back(trace_filter);
             ShowOpenFileDialog("Choose File", file_filters, "",
                                [this](std::string file_path) -> void {
-                                   this->m_test_data_provider.FetchTrace(file_path);
-                                   spdlog::info("Opening file: {}", file_path);
-                                   m_show_provider_test_widow = true;
+                                   rocprofvis_controller_t* controller = rocprofvis_controller_alloc(file_path.c_str());
+                                   if(controller)
+                                   {
+                                       this->m_test_data_provider.FetchTrace(controller, file_path);
+                                       spdlog::info("Opening file: {}", file_path);
+                                       m_show_provider_test_widow = true;
+                                   }
+                                   else
+                                   {
+                                       rocprofvis_controller_free(controller);
+                                   }
                                });
         }
         ImGui::EndMenu();
@@ -1101,10 +1103,11 @@ RenderProviderTest(DataProvider& provider)
                      ImGuiInputTextFlags_CallbackCharFilter, NumericFilter);
     uint64_t row_count = std::atoi(row_count_buffer);
 
+    TimelineModel& timeline = provider.DataModel().GetTimeline();
     if(ImGui::Button("Fetch Single Track Event Table"))
     {
-        provider.FetchSingleTrackEventTable(index, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", "", "", start_row,
+        provider.FetchSingleTrackEventTable(index, timeline.GetStartTime(),
+                                            timeline.GetEndTime(), "", "", "", start_row,
                                             row_count);
     }
     if(ImGui::Button("Fetch Multi Track Event Table"))
@@ -1115,19 +1118,19 @@ RenderProviderTest(DataProvider& provider)
         {
             vect.push_back(i);
         }
-        provider.FetchMultiTrackEventTable(vect, provider.GetStartTime(),
-                                           provider.GetEndTime(), "", "", "", start_row,
+        provider.FetchMultiTrackEventTable(vect, timeline.GetStartTime(),
+                                           timeline.GetEndTime(), "", "", "", start_row,
                                            row_count);
     }
     if(ImGui::Button("Print Event Table"))
     {
-        provider.DumpTable(TableType::kEventTable);
+        provider.DataModel().GetTables().DumpTable(TableType::kEventTable);
     }
 
     if(ImGui::Button("Fetch Single Track Sample Table"))
     {
-        provider.FetchSingleTrackSampleTable(index, provider.GetStartTime(),
-                                             provider.GetEndTime(), "", start_row,
+        provider.FetchSingleTrackSampleTable(index, timeline.GetStartTime(),
+                                             timeline.GetEndTime(), "", start_row,
                                              row_count);
     }
     if(ImGui::Button("Fetch Multi Track Sample Table"))
@@ -1138,39 +1141,39 @@ RenderProviderTest(DataProvider& provider)
         {
             vect.push_back(i);
         }
-        provider.FetchMultiTrackSampleTable(vect, provider.GetStartTime(),
-                                            provider.GetEndTime(), "", start_row,
+        provider.FetchMultiTrackSampleTable(vect, timeline.GetStartTime(),
+                                            timeline.GetEndTime(), "", start_row,
                                             row_count);
     }
     if(ImGui::Button("Print Sample Table"))
     {
-        provider.DumpTable(TableType::kSampleTable);
+        provider.DataModel().GetTables().DumpTable(TableType::kSampleTable);
     }
 
     ImGui::Separator();
 
     if(ImGui::Button("Fetch Track"))
     {
-        provider.FetchTrack(index, provider.GetStartTime(), provider.GetEndTime(), 1000,
+        provider.FetchTrack(index, timeline.GetStartTime(), timeline.GetEndTime(), 1000,
                             group_id_counter++);
     }
 
     if(ImGui::Button("Fetch Whole Track"))
     {
-        provider.FetchWholeTrack(index, provider.GetStartTime(), provider.GetEndTime(),
+        provider.FetchWholeTrack(index, timeline.GetStartTime(), timeline.GetEndTime(),
                                  1000, group_id_counter++);
     }
     if(ImGui::Button("Delete Track"))
     {
-        provider.FreeTrack(index);
+        timeline.FreeTrackData(index);
     }
     if(ImGui::Button("Print Track"))
     {
-        provider.DumpTrack(index);
+        timeline.DumpTrack(index);
     }
     if(ImGui::Button("Print Track List"))
     {
-        provider.DumpMetaData();
+        timeline.DumpMetaData();
     }
 
     ImGui::End();

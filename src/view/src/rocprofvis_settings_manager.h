@@ -104,6 +104,24 @@ enum class Colors
     kLineChartColorAlt,
     kTrackColorWarningBand,
 
+    kMinimapBin1,
+    kMinimapBin2,
+    kMinimapBin3,
+    kMinimapBin4,
+    kMinimapBin5,
+    kMinimapBin6,
+    kMinimapBin7,
+
+    kMinimapBinCounter1,
+    kMinimapBinCounter2,
+    kMinimapBinCounter3,
+    kMinimapBinCounter4,
+    kMinimapBinCounter5,
+    kMinimapBinCounter6,
+    kMinimapBinCounter7,
+
+    kMinimapBg,
+    kLoadingScreenColor,
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -170,6 +188,7 @@ public:
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
 
+
 private:
     SettingsManager();
     ~SettingsManager();
@@ -205,6 +224,7 @@ private:
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
+
 
     std::filesystem::path m_json_path;
 };

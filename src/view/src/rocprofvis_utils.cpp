@@ -299,17 +299,18 @@ std::string
 RocProfVis::View::get_application_config_path(bool create_dirs)
 {
 #ifdef _WIN32
-    const char*           appdata = std::getenv("APPDATA");
+    const char*           app_config_dir_name = "AMD\\ROCm-Optiq";
+    const char*           local_appdata       = std::getenv("LOCALAPPDATA");
     std::filesystem::path config_dir =
-        appdata ? appdata : std::filesystem::current_path();
-    config_dir /= "rocprofvis";
+        local_appdata ? local_appdata : std::filesystem::current_path();
 #else
-    const char*           xdg_config = std::getenv("XDG_CONFIG_HOME");
+    const char*           app_config_dir_name = "rocm-optiq";
+    const char*           xdg_config          = std::getenv("XDG_CONFIG_HOME");
     std::filesystem::path config_dir =
         xdg_config ? xdg_config
                    : (std::filesystem::path(std::getenv("HOME")) / ".config");
-    config_dir /= "rocprofvis";
 #endif
+    config_dir /= app_config_dir_name;
     if(create_dirs)
     {
         std::filesystem::create_directories(config_dir);
@@ -377,4 +378,13 @@ bool RocProfVis::View::open_url(const std::string& url)
     int status = system(command.c_str());
     return status == 0;
 #endif
+}
+
+std::string
+RocProfVis::View::get_executable_name(const std::string& fullPath)
+{
+    const auto pos = fullPath.find_last_of("/\\");
+    return (pos == std::string::npos)
+        ? fullPath
+        : fullPath.substr(pos + 1);
 }

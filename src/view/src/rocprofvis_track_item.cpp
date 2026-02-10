@@ -8,24 +8,23 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include <memory>
+#include <algorithm>
 
 namespace RocProfVis
 {
 namespace View
 {
 
-float            TrackItem::s_metadata_width = 400.0f;
+constexpr float kMinTooltipWrapWidth = 200.0f;
+constexpr float kMaxTooltipWrapWidth = 600.0f;
 
-TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
-                     double time_offset_ns, double& min_x, double& max_x, double scale_x)
+float TrackItem::s_metadata_width = 400.0f;
+
+TrackItem::TrackItem(DataProvider& dp, uint64_t id,
+                     std::shared_ptr<TimePixelTransform> tpt)
 : m_data_provider(dp)
-, m_id(id)
-, m_zoom(zoom)
-, m_time_offset_ns(time_offset_ns)
-, m_min_x(min_x)
-, m_max_x(max_x)
-, m_scale_x(scale_x)
-, m_name(name)
+, m_track_id(id)
 , m_track_height(75.0f)
 , m_track_default_height(75.0f)
 , m_track_content_height(0.0f)
@@ -41,14 +40,29 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom
 , m_selected(false)
 , m_reorder_grip_width(20.0f)
 , m_group_id_counter(0)
-, m_chunk_duration_ns(TimeConstants::ns_per_s *
-                      30)  // Default chunk duration
+, m_chunk_duration_ns(TimeConstants::ns_per_s * 30)  // Default chunk duration
+, m_tpt(tpt)  
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
+, m_meta_area_label("")
+, m_pill("", false, false)
 {
     if(m_track_project_settings.Valid())
     {
         m_track_height = m_track_project_settings.Height();
     }
+
+    const TrackInfo* track_info =
+        m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
+
+    if(track_info == nullptr)
+    {
+        spdlog::error("TrackItem: failed to get TrackInfo for track_id {}", m_track_id);
+        return;
+    }
+
+    SetTrackName(track_info);
+    SetMetaAreaLabel(track_info);
+    SetDefaultPillLabel(track_info);
 }
 
 bool
@@ -58,6 +72,7 @@ TrackItem::TrackHeightChanged()
     m_track_height_changed = false;
     return height_changed;
 }
+
 float
 TrackItem::GetTrackHeight()
 {
@@ -73,7 +88,7 @@ TrackItem::GetName()
 uint64_t
 TrackItem::GetID()
 {
-    return m_id;
+    return m_track_id;
 }
 
 void
@@ -109,14 +124,9 @@ TrackItem::SetInViewVertical(bool in_view)
 void
 TrackItem::SetID(uint64_t id)
 {
-    m_id = id;
+    m_track_id = id;
 }
 
-std::tuple<double, double>
-TrackItem::GetMinMax()
-{
-    return std::make_tuple(m_min_x, m_max_x);
-}
 
 bool
 TrackItem::IsSelected() const
@@ -130,17 +140,6 @@ TrackItem::SetSelected(bool selected)
     m_selected = selected;
 }
 
-void
-TrackItem::UpdateMovement(float zoom, double time_offset_ns, double& min_x, double& max_x,
-                          double scale_x, float y_scroll_position)
-{
-    m_zoom           = zoom;
-    m_time_offset_ns = time_offset_ns;
-    m_scale_x        = scale_x;
-    m_min_x          = min_x;
-    m_max_x          = max_x;
-    (void) y_scroll_position;
-}
 
 void
 TrackItem::Render(float width)
@@ -157,7 +156,7 @@ TrackItem::Render(float width)
 
     if(ImGui::IsItemVisible())
     {
-        m_is_in_view_vertical = true; 
+        m_is_in_view_vertical = true;
     }
     else
     {
@@ -171,7 +170,7 @@ TrackItem::GetReorderGripWidth()
     return m_reorder_grip_width;
 }
 
-void 
+void
 TrackItem::UpdateMaxMetaAreaSize(float new_size)
 {
     m_meta_area_scale_width = std::max(CalculateNewMetaAreaSize(), new_size);
@@ -225,10 +224,8 @@ TrackItem::RenderMetaArea()
         ImVec2 container_pos  = ImGui::GetWindowPos() + ImVec2(m_reorder_grip_width, 0);
         ImVec2 container_size = ImGui::GetWindowSize();
 
-          if(m_request_state != TrackDataRequestState::kIdle)
+        if(m_request_state != TrackDataRequestState::kIdle)
         {
-            ImGuiStyle& style = ImGui::GetStyle();
-
             float  dot_radius  = 10.0f;
             int    num_dots    = 3;
             float  dot_spacing = 5.0f;
@@ -246,15 +243,19 @@ TrackItem::RenderMetaArea()
                                        anim_speed);
         }
 
-
         // Reordering grip decoration
+        
+        float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
+        float arrow_width       = ImGui::GetTextLineHeight();
+
         ImGui::SetCursorPos(
-            ImVec2((m_reorder_grip_width - ImGui::CalcTextSize(ICON_GRID).x) / 2,
+            ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-        ImGui::TextUnformatted(ICON_GRID);
 
+        ImGui::TextUnformatted(ICON_GRID);
         float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
+      
         ImGui::PopFont();
 
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
@@ -274,21 +275,46 @@ TrackItem::RenderMetaArea()
         //         }
         //     }
         // }
-
-        ImGui::PushTextWrapPos(content_size.x - m_meta_area_scale_width -
-                               (menu_button_width + 2 * m_metadata_padding.x));
-
-            ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
-
+        ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
         ImGui::PushFont(large_font);
 
-        ImGui::TextUnformatted(m_name.c_str());
+        float available_for_text =
+            content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
+            4.0f * m_metadata_padding.x + 2.0f);
 
-        ImGui::PopFont();   
+        if(available_for_text < 0.0f) available_for_text = 0.0f;
 
+        ImVec2 text_size = ImGui::CalcTextSize(
+            m_meta_area_label.c_str(), nullptr, false, available_for_text);
+
+        if(content_size.y - text_size.y < m_pill.GetPillSize().y)
+            m_pill.Hide();
+        else
+            m_pill.Show();
+
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + available_for_text);
+        ImGui::TextUnformatted(m_meta_area_label.c_str());
         ImGui::PopTextWrapPos();
+        ImGui::PopFont();
 
-      
+        if(!m_meta_area_tooltip.empty() && ImGui::IsItemHovered())
+        {
+            const float tooltip_max_width = std::max(
+                kMinTooltipWrapWidth,
+                std::min(kMaxTooltipWrapWidth, s_metadata_width - m_reorder_grip_width -
+                                                   2.0f * m_metadata_padding.x));
+
+            // Constrain tooltip window width (height auto-fits)
+            ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                                ImVec2(tooltip_max_width, FLT_MAX));
+            ImGui::BeginTooltip();
+            // Wrap text to the chosen width
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + tooltip_max_width);
+            ImGui::TextUnformatted(m_meta_area_tooltip.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
                                    m_metadata_padding.y));
@@ -316,6 +342,8 @@ TrackItem::RenderMetaArea()
         ImGui::PopStyleVar(2);
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
+
+        m_pill.RenderPillLabel(content_size, m_settings, m_reorder_grip_width);
     }
     ImGui::EndChild();  // end metadata area
     ImGui::PopStyleColor();
@@ -338,7 +366,7 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, m_resize_grip_thickness),
                       false);
 
-    ImGui::Selectable(("##MovePositionLine" + std::to_string(m_id)).c_str(), false,
+    ImGui::Selectable(("##MovePositionLine" + std::to_string(m_track_id)).c_str(), false,
                       ImGuiSelectableFlags_AllowDoubleClick,
                       ImVec2(0, m_resize_grip_thickness));
     if(ImGui::IsItemHovered())
@@ -385,20 +413,20 @@ TrackItem::RequestData(double min, double max, float width)
         float  percentage  = static_cast<float>(chunk_range / range);
         float  chunk_width = width * percentage;
 
-        TrackRequestParams request_params(static_cast<uint32_t>(m_id), chunk_start, chunk_end,
-                                          static_cast<uint32_t>(chunk_width),
-                                          m_group_id_counter, 
-                                          static_cast<uint16_t>(i), chunk_count);
+        TrackRequestParams request_params(static_cast<uint32_t>(m_track_id), chunk_start,
+                                          chunk_end, static_cast<uint32_t>(chunk_width),
+                                          m_group_id_counter, static_cast<uint16_t>(i),
+                                          chunk_count);
 
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
-                      m_id, chunk_start, chunk_end, chunk_range, chunk_width);
+                      m_track_id, chunk_start, chunk_end, chunk_range, chunk_width);
     }
 
     if(!m_request_queue.empty())
     {
         m_request_queue.clear();
-        spdlog::warn("Overwriting existing request queue for track {}", m_id);
+        spdlog::warn("Overwriting existing request queue for track {}", m_track_id);
     }
     m_request_queue = std::move(temp_request_queue);
 
@@ -409,12 +437,12 @@ TrackItem::RequestData(double min, double max, float width)
     else
     {
         spdlog::warn(
-            "Fetch request deferred for track {}, requests are already pending...", m_id);
+            "Fetch request deferred for track {}, requests are already pending...", m_track_id);
 
         for(const auto& [request_id, req] : m_pending_requests)
         {
             spdlog::debug("RequestData: Found pending request {} for track {}",
-                          request_id, m_id);
+                          request_id, m_track_id);
             m_data_provider.CancelRequest(request_id);
         }
     }
@@ -441,13 +469,13 @@ TrackItem::FetchHelper()
         std::pair<bool, uint64_t> result = m_data_provider.FetchTrack(req);
         if(!result.first)
         {
-            spdlog::error("Request for track {} failed", m_id);
+            spdlog::error("Request for track {} failed", m_track_id);
         }
         else
         {
             spdlog::debug(
-                "Fetching from {} to {} ( {} ) at zoom {} for track {} part of group {}",
-                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_zoom, m_id,
+                "Fetching from {} to {} ( {} ) for track {} part of group {}",
+                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_track_id,
                 req.m_data_group_id);
 
             m_request_state = TrackDataRequestState::kRequesting;
@@ -455,6 +483,291 @@ TrackItem::FetchHelper()
             m_pending_requests.insert({ result.second, req });
         }
         m_request_queue.pop_front();
+    }
+}
+
+void
+TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
+{
+    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+
+    // Get Processor (device) type label from using track's agent_or_pid, ex: "GPU0".
+    // The associated device in topology is unreliable, so we use agent_or_pid to find the
+    // device. This may be empty for some tracks.
+    std::string       device_type_label;
+    const DeviceInfo* device_info = tdm.GetDevice(track_info->agent_or_pid);
+    if(device_info)
+    {
+        tdm.GetDeviceTypeLabel(*device_info, device_type_label);
+    }
+
+    switch(track_info->topology.type)
+    {
+        case TrackInfo::TrackType::Queue:
+        {
+            std::string pill_label =
+                "QUEUE" + (device_type_label.empty() ? "" : " " + device_type_label);
+            m_pill.Show();
+            m_pill.SetLabel(pill_label);
+            break;
+        }
+        case TrackInfo::TrackType::Stream:
+        {
+            std::string pill_label =
+                "STREAM" + (device_type_label.empty() ? "" : " " + device_type_label);
+            m_pill.Show();
+            m_pill.SetLabel(pill_label);
+            break;
+        }
+        case TrackInfo::TrackType::Counter:
+        {
+            std::string pill_label =
+                "COUNTER" + (device_type_label.empty() ? "" : " " + device_type_label);
+            m_pill.Show();
+            m_pill.SetLabel(pill_label);
+            break;
+        }
+        case TrackInfo::TrackType::InstrumentedThread:
+        {
+            if(const ThreadInfo* thread_info =
+                   tdm.GetInstrumentedThread(track_info->topology.id);
+               thread_info && thread_info->tid == track_info->topology.process_id)
+            {
+                m_pill.Show();
+                m_pill.Activate();
+                m_pill.SetLabel("MAIN THREAD");
+            }
+            else
+            {
+                m_pill.Show();
+                m_pill.SetLabel("THREAD");
+            }
+            break;
+        }
+        case TrackInfo::TrackType::SampledThread:
+        {
+            m_pill.Show();
+            m_pill.SetLabel("SAMPLED THREAD");
+            break;
+        }
+        default:
+        {
+            m_pill.Hide();
+            break;
+        }
+    }
+
+    // Set pill tooltip label
+    switch(track_info->topology.type)
+    {
+        case TrackInfo::TrackType::Queue:
+        case TrackInfo::TrackType::Stream:
+        case TrackInfo::TrackType::Counter:
+        {
+            // Get product label from topology model, ex: "AMD Radeon RX 6800 XT"
+            if(device_info)
+            {
+                m_pill.SetTooltipLabel(device_info->product_name);
+            }
+            break;
+        }
+        case TrackInfo::TrackType::InstrumentedThread:
+        case TrackInfo::TrackType::SampledThread:
+        default:
+        {
+            break;
+        }
+    }
+}
+
+void
+TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
+{
+    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+
+    std::string node_id_str    = std::to_string(track_info->topology.node_id);
+    std::string process_id_str = std::to_string(track_info->topology.process_id);
+
+    bool show_node_id    = tdm.NodeCount() > 1;
+    bool show_process_id = tdm.ProcessCount() > 1;
+
+    switch(track_info->topology.type)
+    {
+        case TrackInfo::TrackType::InstrumentedThread:
+        case TrackInfo::TrackType::SampledThread:
+        {
+            std::string process_name_path;
+            if(const ProcessInfo* process_info =
+                   tdm.GetProcess(track_info->topology.process_id);
+               process_info)
+            {
+                process_name_path += process_info->command;
+            }
+
+            std::string       thread_id;
+            const ThreadInfo* thread_info =
+                (track_info->topology.type == TrackInfo::TrackType::SampledThread)
+                    ? tdm.GetSampledThread(track_info->topology.id)
+                    : tdm.GetInstrumentedThread(track_info->topology.id);
+            if(thread_info)
+            {
+                thread_id = std::to_string(thread_info->tid);
+            }
+
+            m_meta_area_label =
+                get_executable_name(process_name_path) + " (TID: " + thread_id + ")";
+            if(track_info->topology.type == TrackInfo::TrackType::SampledThread)
+            {
+                m_meta_area_label += " (S)";
+            }
+
+            // set tooltip to full path
+            m_meta_area_tooltip = process_name_path;
+            break;
+        }
+        case TrackInfo::TrackType::Counter:
+        {
+            m_meta_area_label = track_info->sub_name;
+            if(show_node_id)
+            {
+                m_meta_area_label += " (NID: " + node_id_str + ")";
+            }
+            if(show_process_id)
+            {
+                m_meta_area_label += " (PID: " + process_id_str + ")";
+            }
+            // set tooltip to counter description
+            const CounterInfo* counter_info = tdm.GetCounter(track_info->topology.id);
+            if(counter_info)
+            {
+                m_meta_area_tooltip = counter_info->description;
+            }
+            break;
+        }
+        case TrackInfo::TrackType::Queue:
+        {
+            if(track_info->category != "GPU Queue")
+            {
+                m_meta_area_label = track_info->category + ": " + track_info->sub_name;
+            }
+            else
+            {
+                m_meta_area_label = track_info->sub_name;
+            }
+
+            if(show_node_id)
+            {
+                m_meta_area_label += " (NID: " + node_id_str + ")";
+            }
+            if(show_process_id)
+            {
+                m_meta_area_label += " (PID: " + process_id_str + ")";
+            }
+            break;
+        }
+        case TrackInfo::TrackType::Stream:
+        {
+            m_meta_area_label = track_info->main_name;
+
+            if(show_node_id)
+            {
+                m_meta_area_label += " (NID: " + node_id_str + ")";
+            }
+            if(show_process_id)
+            {
+                m_meta_area_label += " (PID: " + process_id_str + ")";
+            }
+            break;
+        }
+        default:
+        {
+            m_meta_area_label = m_name;
+            break;
+        }
+    }
+}
+
+void
+TrackItem::SetTrackName(const TrackInfo* track_info)
+{
+    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+
+    std::string       device_type_label;
+    const DeviceInfo* device_info = tdm.GetDevice(track_info->agent_or_pid);
+    if(device_info)
+    {
+        tdm.GetDeviceTypeLabel(*device_info, device_type_label);
+    }
+
+    switch(track_info->topology.type)
+    {
+        case TrackInfo::TrackType::Queue:
+        {
+            // If the category is not "GPU Queue", use it as the name
+            // For example, "Memory Copy", "Memory Allocation", etc
+            if(track_info->category != "GPU Queue")
+            {
+                m_name = track_info->category;
+                if(device_info)
+                {
+                    m_name +=
+                        " (" + device_type_label + ": " + device_info->product_name + ")";
+                }
+            }
+            else
+            {
+                m_name = track_info->sub_name;
+                if(device_info)
+                {
+                    m_name +=
+                        " (" + device_type_label + ": " + device_info->product_name + ")";
+                }
+            }
+            break;
+        }
+        case TrackInfo::TrackType::Stream:
+        {
+            m_name = track_info->main_name;
+            if(device_info)
+            {
+                m_name +=
+                    " (" + device_type_label + ": " + device_info->product_name + ")";
+            }
+            break;
+        }
+        case TrackInfo::TrackType::InstrumentedThread:
+        {
+            m_name = track_info->sub_name;
+            break;
+        }
+        case TrackInfo::TrackType::SampledThread:
+        {
+            m_name = track_info->sub_name + " (S)";
+            break;
+        }
+        case TrackInfo::TrackType::Counter:
+        {
+            // Get Processor (device) type label from using track's agent_or_pid, ex:
+            // "GPU0".
+            m_name = track_info->sub_name;
+
+            if(device_info)
+            {
+                std::string device_str;
+                if(tdm.GetDeviceTypeLabel(*device_info, device_str))
+                {
+                    m_name = device_str + ":" + m_name;
+                }
+            }
+
+            break;
+        }
+        default:
+        {
+            m_name = track_info->category + ":" + track_info->main_name + ":" +
+                     track_info->sub_name;
+            break;
+        }
     }
 }
 
@@ -476,16 +789,16 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 bool
 TrackItem::HasData()
 {
-    return m_data_provider.GetRawTrackData(m_id) != nullptr;
+    return m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id) != nullptr;
 }
 
 bool
 TrackItem::ReleaseData()
 {
-    bool result = m_data_provider.FreeTrack(m_id, true);
+    bool result = m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, true);
     if(!result)
     {
-        spdlog::warn("Failed to release data for track {}", m_id);
+        spdlog::warn("Failed to release data for track {}", m_track_id);
     }
 
     // Clear pending requests
@@ -499,7 +812,7 @@ TrackItem::ReleaseData()
         else
         {
             spdlog::warn("Failed to cancel pending request {} for track {}", request_id,
-                         m_id);
+                         m_track_id);
             ++it;
         }
     }
@@ -544,6 +857,119 @@ TrackProjectSettings::Height() const
         m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                        [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT]
                            .getNumber());
+}
+
+Pill::Pill(const std::string& label, bool shown, bool active)
+: m_pill_label(label)
+, m_show_pill_label(shown)
+, m_active(active)
+, m_font_changed_token(static_cast<uint64_t>(-1))
+{
+    CalculatePillSize();
+
+    auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        CalculatePillSize();
+    };
+    m_font_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+}
+
+Pill::~Pill() 
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), m_font_changed_token);
+}
+
+void
+Pill::SetLabel(const std::string& label)
+{
+    m_pill_label = label;
+    CalculatePillSize();
+}
+
+void
+Pill::SetTooltipLabel(std::string label)
+{
+    m_tooltip_label = label;
+}
+
+void
+Pill::Activate()
+{
+    m_active = true;
+}
+
+void
+Pill::Deactivate()
+{
+    m_active = false;
+}
+
+void
+Pill::Show()
+{
+    m_show_pill_label = true;
+}
+
+void
+Pill::Hide()
+{
+    m_show_pill_label = false;
+}
+
+void
+Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
+                      float reorder_grip_width)
+{
+    if(m_show_pill_label == false)
+    {
+        return;
+    }
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kSmall));
+
+    ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
+
+    if (m_active)
+    {
+        ImDrawList* draw_list     = ImGui::GetWindowDrawList();
+        ImU32       pillbox_color = settings.GetColor(Colors::kBorderGray);
+        draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
+                                 ImGui::GetWindowPos() + pillbox_pos + m_pillbox_size,
+                                 pillbox_color, m_pillbox_size.y * 0.5f);
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
+    }
+    else
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+    }
+
+    ImVec2 text_pos = pillbox_pos + ImVec2(m_padding_x, m_padding_y);
+    ImGui::SetCursorPos(text_pos);
+    ImGui::TextUnformatted(m_pill_label.c_str());
+    if(!m_tooltip_label.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        if(ImGui::BeginItemTooltip())
+        {
+            ImGui::TextUnformatted(m_tooltip_label.c_str());
+            ImGui::EndTooltip();
+        }
+    }
+    ImGui::PopStyleColor();
+
+    ImGui::PopFont();
+}
+
+ImVec2
+Pill::GetPillSize()
+{
+    return m_pillbox_size;
+}
+
+void
+Pill::CalculatePillSize()
+{
+    ImVec2 text_size = ImGui::CalcTextSize(m_pill_label.c_str());
+    m_pillbox_size = ImVec2(text_size.x + 2 * m_padding_x, text_size.y + 2 * m_padding_y);
 }
 
 }  // namespace View

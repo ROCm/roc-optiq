@@ -47,6 +47,7 @@ private:
     int                      m_group_by_selection_index;
 
     bool m_open_context_menu;
+    char m_filter_store[FILTER_SIZE];
 };
 
 }  // namespace View

@@ -141,8 +141,9 @@ TrackDetails::Update()
         std::list<DetailItem> uncategorized_tracks;
         for(DetailItem& item : m_track_details)
         {
-            const track_info_t* metadata = m_data_provider.GetTrackInfo(item.track_id);
-            if(metadata && metadata->topology.type != track_info_t::Topology::Unknown)
+            const TrackInfo* metadata =
+                m_data_provider.DataModel().GetTimeline().GetTrack(item.track_id);
+            if(metadata && metadata->topology.type != TrackInfo::TrackType::Unknown)
             {
                 item.track_name = &metadata->name;
 
@@ -159,7 +160,7 @@ TrackDetails::Update()
                         item.process          = &process;
                         switch(metadata->topology.type)
                         {
-                            case track_info_t::Topology::Queue:
+                            case TrackInfo::TrackType::Queue:
                             {
                                 if(process.queue_lut.count(type_id) > 0)
                                 {
@@ -167,7 +168,7 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case track_info_t::Topology::InstrumentedThread:
+                            case TrackInfo::TrackType::InstrumentedThread:
                             {
                                 if(process.instrumented_thread_lut.count(type_id) > 0)
                                 {
@@ -176,7 +177,7 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case track_info_t::Topology::SampledThread:
+                            case TrackInfo::TrackType::SampledThread:
                             {
                                 if(process.sampled_thread_lut.count(type_id) > 0)
                                 {
@@ -185,7 +186,7 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case track_info_t::Topology::Counter:
+                            case TrackInfo::TrackType::Counter:
                             {
                                 if(process.counter_lut.count(type_id) > 0)
                                 {
@@ -193,7 +194,7 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case track_info_t::Topology::Stream:
+                            case TrackInfo::TrackType::Stream:
                             {
                                 if(process.stream_lut.count(type_id) > 0)
                                 {

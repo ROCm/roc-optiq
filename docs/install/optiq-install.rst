@@ -27,7 +27,7 @@ System requirements
 Install on Windows
 ==================
 
-1. Download the **ROCm-Optiq-Beta.exe** installer from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.2.0-optiq-beta-rc2>`_ and follow the instructions in the install wizard.
+1. Download the **ROCm-Optiq-Beta.exe** installer from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.2.0-optiq-beta-rc4>`_ and follow the instructions in the install wizard.
    
    .. image:: ../images/wizard.png
       :width: 500
@@ -61,7 +61,7 @@ The relevant fields are ``ID`` and the ``VERSION_ID``.
 Ubuntu 22.04 / 24.04 (Debian-based)
 -----------------------------------
 
-1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.2.0-optiq-beta-rc2>`_.
+1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.2.0-optiq-beta-rc4>`_.
 2. Install the ``.deb`` package:
 
    .. code-block:: shell
@@ -76,7 +76,7 @@ Ubuntu 22.04 / 24.04 (Debian-based)
 
 .. tip::
 
-   Download the latest ``.deb`` from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.2.0-optiq-beta-rc2>`_ to ensure ROCm Optiq is up-to-date.
+   Download the latest ``.deb`` from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.2.0-optiq-beta-rc4>`_ to ensure ROCm Optiq is up-to-date.
 
 Check the ROCm Optiq version
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

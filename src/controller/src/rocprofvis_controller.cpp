@@ -361,15 +361,27 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::SystemTraceRef trace(controller);
+    RocProfVis::Controller::SystemTraceRef system_trace(controller);
+#ifdef COMPUTE_UI_SUPPORT
+    RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
+#endif
     RocProfVis::Controller::TableRef table_ref(table);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);
     RocProfVis::Controller::ArrayRef array(output);
-    if (trace.IsValid() && table_ref.IsValid() && args_ref.IsValid() && future.IsValid() &&
-        array.IsValid())
+
+    if (table_ref.IsValid() && args_ref.IsValid() && future.IsValid() && array.IsValid())
     {
-        error = trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+        if (system_trace.IsValid())
+        {
+            error = system_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+        }
+#ifdef COMPUTE_UI_SUPPORT
+        else if (compute_trace.IsValid())
+        {
+            error = compute_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+        }
+#endif
     }
     return error;
 }
@@ -380,14 +392,27 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(
     char const* path)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::SystemTraceRef trace(controller);
+    RocProfVis::Controller::SystemTraceRef system_trace(controller);
+#ifdef COMPUTE_UI_SUPPORT
+    RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
+#endif
     RocProfVis::Controller::TableRef table_ref(table);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);
-    if (trace.IsValid() && table_ref.IsValid() && args_ref.IsValid() && future.IsValid() &&
-        path)
+
+    if (table_ref.IsValid() && args_ref.IsValid() && future.IsValid() && path)
     {
-        error = trace->TableExportCSV(*table_ref, *args_ref, *future, path);
+        if (system_trace.IsValid())
+        {
+            error = system_trace->TableExportCSV(*table_ref, *args_ref, *future, path);
+        }
+#ifdef COMPUTE_UI_SUPPORT
+        else if (compute_trace.IsValid())
+        {
+            // error = compute_trace->TableExportCSV(*table_ref, *args_ref, *future, path);
+            error = kRocProfVisResultUnknownError;
+        }
+#endif
     }
     return error;
 }

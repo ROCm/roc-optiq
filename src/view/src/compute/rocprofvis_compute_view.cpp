@@ -4,6 +4,9 @@
 #include "rocprofvis_compute_view.h"
 #include "implot/implot.h"
 #include "rocprofvis_settings_manager.h"
+#include "model/compute/rocprofvis_compute_data_model.h"
+
+#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -878,6 +881,91 @@ ComputeTester::Render()
         ImGui::EndChild();
         ImGui::EndChild();
         m_selections.init = false;
+    }
+
+    if(ImGui::Button("Fetch Test"))
+    {
+        ComputeTableRequestParams params(1, { "2.1.4:avg","2.1.3:avg","2.1.3:peak","5.1.1:avg","6.1.0:avg" });
+        m_data_provider.FetchMetricPivotTable(params);
+    }
+    RenderKernelSelectionTable();
+}
+
+void
+ComputeTester::RenderKernelSelectionTable()
+{
+    ComputeKernelSelectionTable& table =
+        m_data_provider.ComputeModel().GetKernelSelectionTable();
+    const std::vector<std::string>&              header = table.GetTableHeader();
+    const std::vector<std::vector<std::string>>& data   = table.GetTableData();
+
+    if(header.empty() && data.empty())
+    {
+        return;
+    }
+
+    bool sort_requested    = false;
+    int  sort_column_index = -1;
+    int  sort_order        = kRPVControllerSortOrderDescending;
+
+    if(ImGui::BeginTable("kernel_selection_table", header.size(),
+                         ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                             ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_Sortable,
+                         ImVec2(0.0f, data.empty()
+                                          ? ImGui::GetTextLineHeightWithSpacing()
+                                          : ImGui::GetTextLineHeightWithSpacing() *
+                                                (1.0f + data.size()))))
+    {
+
+        for(const std::string& col_name : header)
+        {
+            ImGui::TableSetupColumn(col_name.c_str());
+        }  
+        ImGui::TableHeadersRow();
+        if(data.empty())
+        {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled("None");
+        }
+
+        // Get sort specs
+        ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs();
+        if(sort_specs && sort_specs->SpecsDirty)
+        {
+            sort_requested    = true;
+            sort_column_index = sort_specs->Specs->ColumnIndex;
+            sort_order =
+                (sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending)
+                    ? kRPVControllerSortOrderAscending
+                    : kRPVControllerSortOrderDescending;
+
+            sort_specs->SpecsDirty = false;
+        }
+
+        for(const std::vector<std::string>& row : data)
+        {
+            ImGui::TableNextRow();
+            for(const std::string& cell : row)
+            {
+                ImGui::TableNextColumn();
+                ImGui::Text(cell.c_str());
+            }
+        }
+        ImGui::EndTable();
+    }
+
+    if(sort_requested)
+    {
+        ComputeTableInfo table_info = m_data_provider.ComputeModel().GetKernelSelectionTable().GetTableInfo();
+        ComputeTableRequestParams& params = *table_info.table_params;
+        
+        params.m_sort_column_index = sort_column_index;
+        params.m_sort_order        = static_cast<rocprofvis_controller_sort_order_t>(sort_order);
+
+        spdlog::debug("Requesting sorted kernel selection table: column {}, order {}",
+                      sort_column_index, sort_order == kRPVControllerSortOrderAscending ? "ASC" : "DESC");  
+        m_data_provider.FetchMetricPivotTable(params);
     }
 }
 

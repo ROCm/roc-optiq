@@ -222,6 +222,7 @@ namespace DataModel
 		return MetricIdFormat::Other;
 	}
 
+	//TODO: unused (remove ?)
 	std::string ComputeQueryFactory::SanitizeColumnName(const std::string& name) {
 		std::string temp;
 		temp.reserve(name.length() + 10);
@@ -252,6 +253,7 @@ namespace DataModel
 		std::string query;
 		std::string workload_id;
 		int sort_column_index = 1;  // default to duration_ns_sum (index 1)
+		std::string sort_order = "DESC"; // default to descending
 		std::vector<std::pair<std::string, std::string>> metric_selectors;  // (metric_id, value_name)
 		std::vector<std::string> column_names;  // Track column order for sorting
 
@@ -269,9 +271,21 @@ namespace DataModel
 					metric_selectors.push_back({metric_id, value_name});
 				}
 			} else if (params[i].param_type == kRPVComputeParamSortColumnIndex) {
-				// Parse string to integer
+				// Parse string to integer, TODO: 
 				sort_column_index = std::atoi(params[i].param_str);
+			} else if (params[i].param_type == kRPVComputeParamSortColumnOrder) {
+				std::string sort_order_in = params[i].param_str;
+				// convert to uppercase 
+				std::transform(sort_order_in.begin(), sort_order_in.end(), sort_order_in.begin(),
+					[](unsigned char c) { return std::toupper(c); });
+				if (sort_order_in == "ASC") {
+					sort_order = "ASC";
+				} else {
+					// Default to DESC if not ASC
+					sort_order = "DESC";
+				}
 			}
+
 		}
 
 		// Validate required parameters
@@ -279,11 +293,12 @@ namespace DataModel
 			return query;  // Return empty on invalid input
 		}
 
-		// Build column name list (index 0 = kernel_name, index 1 = duration_ns_sum, index 2+ = metrics)
-		column_names.push_back("kernel_name");
-		column_names.push_back("duration_ns_sum");
+        // Build column name list (index 0 = kernel_name, index 1 = duration_ns_sum, index
+        // 2+ = metrics)
+        column_names.push_back("kernel_name");
+        column_names.push_back("duration_ns_sum");
 
-		// Build the SELECT clause
+        // Build the SELECT clause
 		query = "SELECT \n";
 		query += "    kernel_name,\n";
 		query += "    duration_ns_sum";
@@ -312,6 +327,7 @@ namespace DataModel
 		// Add WHERE clause
 		query += "WHERE workload_id = ";
 		query += workload_id;
+		// TODO: allow other filtering ?
 		query += "\n";
 
 		// Add GROUP BY clause
@@ -324,7 +340,7 @@ namespace DataModel
 		} else {
 			query += "duration_ns_sum";  // fallback to default
 		}
-		query += " DESC";
+		query += " " + sort_order;
 
 		return query;
 	}

@@ -46,6 +46,8 @@ const uint64_t DataProvider::FETCH_COMPUTE_TRACE_REQUEST_ID =
     MakeRequestId(RequestType::kFetchComputeTrace);
 const uint64_t DataProvider::METRICS_REQUEST_ID =
     MakeRequestId(RequestType::kFetchMetrics);
+const uint64_t DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID =
+    MakeRequestId(RequestType::kFetchMetricPivotTable);
 #endif
 
 DataProvider::DataProvider()
@@ -2533,6 +2535,11 @@ DataProvider::ProcessRequest(RequestInfo& req)
             ProcessMetricsRequest(req);
             break;
         }
+        case RequestType::kFetchMetricPivotTable:
+        {
+            ProcessMetricPivotTable(req);
+            break;
+        }
 #endif
         default:
         {
@@ -3655,6 +3662,110 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
     return false;
 }
 
+bool
+DataProvider::FetchMetricPivotTable(const ComputeTableRequestParams& params)
+{
+    if (m_state != ProviderState::kReady)
+    {
+        spdlog::debug("Cannot fetch pivot table, provider not ready or error, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+
+    auto it = m_requests.find(METRIC_PIVOT_TABLE_REQUEST_ID);
+    if (it == m_requests.end())
+    {
+        // Get the table handle
+        rocprofvis_handle_t* table_handle = nullptr;
+        rocprofvis_result_t  result       = rocprofvis_controller_get_object(
+            m_trace_controller, kRPVControllerKernelMetricTable, 0, &table_handle);
+
+        ROCPROFVIS_ASSERT(table_handle);
+
+        // Allocate arguments
+        rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+        ROCPROFVIS_ASSERT(args);
+
+        // Set workload ID
+        result = rocprofvis_controller_set_uint64(
+            (rocprofvis_handle_t*)args,
+            kRPVControllerCPTArgsWorkloadId,
+            0,
+            params.m_workload_id);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // Set number of metric selectors
+        result = rocprofvis_controller_set_uint64(
+            (rocprofvis_handle_t*)args,
+            kRPVControllerCPTArgsNumMetricSelectors,
+            0,
+            params.m_metric_selectors.size());
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // Set metric selectors (indexed)
+        for (size_t i = 0; i < params.m_metric_selectors.size(); i++)
+        {
+            result = rocprofvis_controller_set_string(
+                (rocprofvis_handle_t*)args,
+                kRPVControllerCPTArgsMetricSelectorIndexed,
+                i,
+                params.m_metric_selectors[i].c_str());
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
+
+        // Set sort column index
+        result = rocprofvis_controller_set_uint64(
+            (rocprofvis_handle_t*)args,
+            kRPVControllerCPTArgsSortColumnIndex,
+            0,
+            params.m_sort_column_index);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // Set sort order
+        result = rocprofvis_controller_set_uint64(
+            (rocprofvis_handle_t*)args,
+            kRPVControllerCPTArgsSortOrder,
+            0,
+            static_cast<uint64_t>(params.m_sort_order));
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        
+        // Allocate future and array
+        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        ROCPROFVIS_ASSERT(future);
+
+        rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+        ROCPROFVIS_ASSERT(array);
+
+        // Fetch table asynchronously
+        result = rocprofvis_controller_table_fetch_async(
+            m_trace_controller, table_handle, args, future, array);
+
+        if (result == kRocProfVisResultSuccess)
+        {
+            m_requests.emplace(
+                METRIC_PIVOT_TABLE_REQUEST_ID,
+                RequestInfo{METRIC_PIVOT_TABLE_REQUEST_ID, future, array, table_handle, args,
+                           RequestState::kLoading, RequestType::kFetchMetricPivotTable,
+                           std::make_shared<ComputeTableRequestParams>(params)});
+            return true;
+        }
+        else
+        {
+            spdlog::error("Failed to fetch metric pivot table, result: {}",
+                         static_cast<int>(result));
+            rocprofvis_controller_future_free(future);
+            rocprofvis_controller_array_free(array);
+            rocprofvis_controller_arguments_free(args);
+            return false;
+        }
+    }
+    else
+    {
+        spdlog::debug("Request for metric pivot table is already pending");
+    }
+    return false;
+}
+
 void
 DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
 {
@@ -4015,6 +4126,116 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
         }
         rocprofvis_controller_metrics_container_free(container);
         req.request_obj_handle = nullptr;
+    }
+}
+
+void
+DataProvider::ProcessMetricPivotTable(RequestInfo& req)
+{
+    // Free arguments
+    if (req.request_args)
+    {
+        rocprofvis_controller_arguments_free(req.request_args);
+        req.request_args = nullptr;
+    }
+
+    std::shared_ptr<ComputeTableRequestParams> request_params =
+        std::dynamic_pointer_cast<ComputeTableRequestParams>(req.custom_params);
+
+    if (req.request_array && request_params)
+    {
+        rocprofvis_controller_array_t* array = req.request_array;
+        rocprofvis_controller_table_t* table = (rocprofvis_controller_table_t*)req.request_obj_handle;
+
+        if (req.response_code == kRocProfVisResultSuccess)
+        {
+            // Get number of rows
+            uint64_t num_rows = 0;
+            rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+                (rocprofvis_handle_t*)array, kRPVControllerArrayNumEntries, 0, &num_rows);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            // Get table metadata (column names and types)
+            uint64_t num_columns = 0;
+            result = rocprofvis_controller_get_uint64(
+                (rocprofvis_handle_t*)table, kRPVControllerTableNumColumns, 0, &num_columns);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            std::vector<std::string> column_names;
+            std::vector<uint64_t> column_types;
+
+            m_compute_model.GetKernelSelectionTable().Clear();
+
+            ComputeTableInfo& kernel_pivot_table =
+                m_compute_model.GetKernelSelectionTable().GetTableInfoMutable();
+
+            kernel_pivot_table.table_header.clear();
+
+            for(uint64_t col = 0; col < num_columns; col++)
+            {
+                // Get column name
+                std::string col_name = GetString(
+                    (rocprofvis_handle_t*)table,
+                    kRPVControllerTableColumnHeaderIndexed,
+                    col);
+                column_names.push_back(col_name);
+
+                // Get column type
+                uint64_t col_type = 0;
+                result = rocprofvis_controller_get_uint64(
+                    (rocprofvis_handle_t*)table,
+                    kRPVControllerTableColumnTypeIndexed,
+                    col,
+                    &col_type);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                column_types.push_back(col_type);
+
+                spdlog::debug("Column {}: name='{}', type={}", col, col_name, col_type);
+            }
+
+            kernel_pivot_table.table_header = column_names;
+
+            // Process rows and add to compute data model
+            for (uint64_t row_idx = 0; row_idx < num_rows; row_idx++)
+            {
+                rocprofvis_handle_t* row_handle = nullptr;
+                result = rocprofvis_controller_get_object(
+                    (rocprofvis_handle_t*)array,
+                    kRPVControllerArrayEntryIndexed,
+                    row_idx,
+                    &row_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && row_handle);
+
+                // Extract row data
+                std::vector<std::string> row_values;
+                row_values.resize(num_columns);
+                for (uint64_t col = 0; col < num_columns; col++)
+                {
+                    if (column_types[col] == kRPVControllerPrimitiveTypeString)
+                    {
+                        std::string value =
+                            GetString(row_handle, kRPVControllerArrayEntryIndexed, col);
+                        row_values[col] = value;
+                    }
+                    spdlog::debug("{}",row_values[col]);
+                }
+
+                kernel_pivot_table.table_data.push_back(row_values);
+            }
+
+            kernel_pivot_table.table_params = request_params;
+
+            spdlog::info("Processed {} rows from metric pivot table", num_rows);
+        }
+        else
+        {
+            spdlog::error("Metric pivot table request failed with code {}",
+                         req.response_code);
+        }
+
+        // Free array
+        rocprofvis_controller_array_free(array);
+        req.request_array = nullptr;
     }
 }
 #endif

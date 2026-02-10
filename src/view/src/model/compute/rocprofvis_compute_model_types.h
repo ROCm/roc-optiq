@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -12,6 +13,8 @@ namespace RocProfVis
 {
 namespace View
 {
+
+class ComputeTableRequestParams;
 
 struct AvailableMetrics
 {
@@ -112,6 +115,14 @@ struct MetricValue
     double                   value;
     AvailableMetrics::Entry& entry;
     KernelInfo&              kernel;
+};
+
+
+struct ComputeTableInfo
+{
+    std::shared_ptr<ComputeTableRequestParams>   table_params;
+    std::vector<std::string>              table_header;
+    std::vector<std::vector<std::string>> table_data;
 };
 
 }  // namespace View

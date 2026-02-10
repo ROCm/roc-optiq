@@ -25,6 +25,8 @@ class ComputePlot;
 class Workload;
 class MetricsContainer;
 class MetricID;
+class Table;
+class ComputePivotTable;
 
 class ComputeTrace : public Trace
 {
@@ -43,6 +45,7 @@ public:
     rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final;
 
     rocprofvis_result_t AsyncFetch(Arguments& args, Future& future, MetricsContainer& output);
+    rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future, Array& array);
 
 private:
     class MetricID
@@ -70,12 +73,25 @@ private:
     typedef std::function<void(const QueryDataStore&)> QueryCallback;
 
     rocprofvis_result_t LoadRocpd();
-    rocprofvis_dm_result_t ExecuteQuery(rocprofvis_dm_database_t db, rocprofvis_dm_trace_t dm, rocprofvis_db_future_t db_future, Future* controller_future, rocprofvis_db_compute_use_case_enum_t use_case, QueryArgumentStore& argument_store, QueryDataStore& data_store, QueryCallback callback);
-    rocprofvis_result_t SetObjectProperty(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, const char* value, rocprofvis_controller_primitive_type_t type);
+    
+    rocprofvis_result_t    SetObjectProperty(rocprofvis_handle_t*  object,
+                                             rocprofvis_property_t property, uint64_t index,
+                                             const char*                            value,
+                                             rocprofvis_controller_primitive_type_t type);
+    rocprofvis_dm_result_t ExecuteQuery(rocprofvis_dm_database_t db,
+                                        rocprofvis_dm_trace_t    dm,
+                                        rocprofvis_db_future_t   db_future,
+                                        Future*                  controller_future,
+                                        rocprofvis_db_compute_use_case_enum_t use_case,
+                                        QueryArgumentStore& argument_store,
+                                        QueryDataStore&     data_store,
+                                        QueryCallback       callback);
 
     std::vector<Workload*> m_workloads;
     QueryArgumentStore m_query_arguments;
     QueryDataStore m_query_output;
+
+    ComputePivotTable* m_kernel_metric_table;
 
 #pragma region Deprecated
 public:   

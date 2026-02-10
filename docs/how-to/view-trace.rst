@@ -42,31 +42,32 @@ ROCm Optiq supports the ROCm database formats (``.db`` and ``.rpd``).
 
 Select **File** > **Open** to open a trace. You can also open files by dragging and dropping them onto the application window.
 
-.. note:: 
+Troubleshooting
+---------------
 
-  If the trace file doesn't open, the file may be in an unsupported format. Convert the file to a supported format (``.db`` or ``.rpd``) using ROCm scripts.
+If the trace file doesn't open, the file may be in an unsupported format. Convert the file to a supported format (``.db`` or ``.rpd``) using ROCm scripts.
 
-  To generate profiling data in a compatible ROCpd format for ROCm Systems Profiler:
+To generate profiling data in a compatible ROCpd format for ROCm Systems Profiler:
 
-  1. Set the configuration environment to output data in the ROCpd format:
+1. Set the configuration environment to output data in the ROCpd format:
 
-     .. code-block:: shell
+   .. code-block:: shell
 
-       export ROCPROFSYS_USE_ROCPD=ON  # enable rocpd output
-       export ROCPROFSYS_USE_TRACE=OFF # disabling default Perfetto output
+      export ROCPROFSYS_USE_ROCPD=ON  # enable rocpd output
+      export ROCPROFSYS_USE_TRACE=OFF # disabling default Perfetto output
 
-  2. Trace your application with call-stack sampling:
+2. Trace your application with call-stack sampling:
 
-     .. code-block:: shell
+   .. code-block:: shell
 
-       rocprof-sys-sample -- ./your-application
+      rocprof-sys-sample -- ./your-application
 
-  3. Instrument your application using a binary rewrite:
+3. Instrument your application using a binary rewrite:
 
-     .. code-block:: shell
+   .. code-block:: shell
 
-       rocprof-sys-instrument -o your-application.inst -- ./your-application
-       rocprof-sys-run -- ./your-application.inst
+      rocprof-sys-instrument -o your-application.inst -- ./your-application
+      rocprof-sys-run -- ./your-application.inst
 
 View trace data
 ===============
@@ -140,7 +141,7 @@ Select an event
 Clicking on an event in the **Graph** area selects or deselects an event. 
 
 - Click on an event to select a single event.
-- Press and hold **CTRL** while clicking events to select multiple events. If you only click on one event, any events you selected previously will be deselected.
+- Press and hold **Ctrl** while clicking events to select multiple events. If you click only one event, any previously selected events will be deselected.
 
 When an event is selected, its event details are displayed in the **Event Details** tab of the **Advanced Details** section.
 
@@ -191,8 +192,8 @@ This section provides an interface for multiple data perspectives, offering gran
      - Right-click on a table row and select **Go to event** to navigate to the **Timeline View** to the highlighted event.
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
-- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the Event Table, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.
-- **Event Details**: Shows extended information about the event that is not shown in the timeline or the Event Table. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
+- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.
+- **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs, and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
 

@@ -226,7 +226,7 @@ Once a kernel is selected, the dispatch details display in a table below the cha
    :width: 800
    :align: center
 
-You can also select the **Node** and **GPU** from the drop-down menus to focus on the expected nodes and GPU:
+You can also select the **Node** and **GPU** from the drop-down menus to focus on the expected node and GPU:
 
 |node|
 |gpu| 

@@ -8,6 +8,10 @@
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_requests.h"
 #include "model/rocprofvis_trace_data_model.h"
+#ifdef COMPUTE_UI_SUPPORT
+#include "model/compute/rocprofvis_compute_data_model.h"
+#endif
+
 
 #include <functional>
 #include <memory>
@@ -66,6 +70,7 @@ public:
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
 #ifdef COMPUTE_UI_SUPPORT
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
+    static const uint64_t METRICS_REQUEST_ID;
 #endif
 
     DataProvider();
@@ -318,10 +323,14 @@ private:
 
 #ifdef COMPUTE_UI_SUPPORT
 public:
-
-
+    ComputeDataModel& ComputeModel();
+    
+    bool FetchMetrics(const MetricsRequestParams& metrics_params);
 private:
     void ProcessLoadComputeTrace(RequestInfo& req);
+    void ProcessMetricsRequest(RequestInfo& req);
+
+    ComputeDataModel m_compute_model;
 #endif
 };
 

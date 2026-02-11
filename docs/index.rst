@@ -19,7 +19,7 @@ The component public repository is located at `https://github.com/ROCm/roc-optiq
 ROCm Optiq 0.2.0 
 ================
 
-Listed below are the incremental changes compared to the previous release (`ROCm Optiq 0.1.0 <https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.1.0/index.html>`).
+Listed below are the incremental changes in this release compared to the previous release (`ROCm Optiq 0.1.0 <https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.1.0/index.html>`_).
 
 Additions
 ---------

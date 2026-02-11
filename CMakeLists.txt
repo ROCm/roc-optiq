@@ -20,8 +20,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
-option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
-option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
+option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" ON)
+option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" ON)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" OFF)
@@ -118,6 +118,7 @@ set(VIEW_FILES
 if(COMPUTE_UI_SUPPORT) 
 list(APPEND VIEW_FILES
     src/view/src/compute/rocprofvis_compute_view.cpp
+    src/view/src/compute/rocprofvis_compute_memory_chart.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/compute/rocprofvis_compute_root.cpp
     src/view/src/compute/rocprofvis_compute_summary.cpp

@@ -4,6 +4,7 @@
 #include "rocprofvis_compute_view.h"
 #include "implot/implot.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_compute_memory_chart.h"
 
 namespace RocProfVis
 {
@@ -165,7 +166,12 @@ ComputeTester::Update()
 void
 ComputeTester::Render()
 {
-    const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
+
+    ComputeMemoryChartView memory_chart = ComputeMemoryChartView(m_data_provider);
+    memory_chart.Render();
+ 
+
+    /*const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
         m_data_provider.ComputeModel().GetWorkloads();
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 15.0f);
     if(ImGui::BeginCombo("Workloads",
@@ -878,7 +884,7 @@ ComputeTester::Render()
         ImGui::EndChild();
         ImGui::EndChild();
         m_selections.init = false;
-    }
+    }*/
 }
 
 }  // namespace View

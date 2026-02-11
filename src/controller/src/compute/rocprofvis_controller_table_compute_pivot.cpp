@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_enums.h"
+#include "rocprofvis_controller_future.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
 
@@ -100,31 +101,28 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
     std::vector<std::string>                   param_storage;  // Storage for string data
 
     // Reserve capacity to prevent reallocations that would invalidate pointers
-    param_storage.reserve(3 + m_metric_selectors.size());
+    // Fixed params: workload_id, sort_column_index, sort_order
+    const size_t fixed_params_count = 3;
+    param_storage.reserve(fixed_params_count + m_metric_selectors.size());
 
     // Add workload ID
     param_storage.push_back(std::to_string(m_workload_id));
-    params.push_back(
-        { kRPVComputeParamWorkloadId, param_storage[param_storage.size() - 1].c_str() });
+    params.push_back({ kRPVComputeParamWorkloadId, param_storage.back().c_str() });
 
     // Add metric selectors
     for(const auto& selector : m_metric_selectors)
     {
         param_storage.push_back(selector);
-        params.push_back({ kRPVComputeParamMetricSelector,
-                           param_storage[param_storage.size() - 1].c_str() });
+        params.push_back({ kRPVComputeParamMetricSelector, param_storage.back().c_str() });
     }
 
     // Add sort column index
     param_storage.push_back(std::to_string(m_sort_column));
-    params.push_back({ kRPVComputeParamSortColumnIndex,
-                       param_storage[param_storage.size() - 1].c_str() });
+    params.push_back({ kRPVComputeParamSortColumnIndex, param_storage.back().c_str() });
 
     // Add sort order
-    std::string sort_order_str = (m_sort_order == kRPVControllerSortOrderAscending) ? "ASC" : "DESC";
-    param_storage.push_back(sort_order_str);
-    params.push_back({ kRPVComputeParamSortColumnOrder,
-                       param_storage[param_storage.size() - 1].c_str() });
+    param_storage.push_back((m_sort_order == kRPVControllerSortOrderAscending) ? "ASC" : "DESC");
+    params.push_back({ kRPVComputeParamSortColumnOrder, param_storage.back().c_str() });
 
     rocprofvis_dm_database_t db =
         rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
@@ -154,6 +152,7 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
             if(dm_result == kRocProfVisDmResultSuccess)
             {
                 // Wait for query completion
+                future->AddDependentFuture(db_future);
                 dm_result = rocprofvis_db_future_wait(db_future, UINT64_MAX);
 
                 uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(
@@ -220,28 +219,31 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
                     }
                 }
                 rocprofvis_db_future_free(db_future);
+                future->RemoveDependentFuture(db_future);
             }
         }
     }
 
     result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, m_rows.size());
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     for(size_t i = 0; i < m_rows.size(); i++)
     {
         try
         {
             Array* row_array = new Array();
+        
+            auto& row_vec = row_array->GetVector();
+            row_vec.resize(m_rows[i].size());
+            for(uint32_t j = 0; j < m_rows[i].size(); j++)
             {
-                auto& row_vec = row_array->GetVector();
-                row_vec.resize(m_rows[i].size());
-                for(uint32_t j = 0; j < m_rows[i].size(); j++)
-                {
-                    row_vec[j].SetType(m_rows[i][j].GetType());
-                    row_vec[j] = m_rows[i][j];
-                }
-                result = array.SetObject(kRPVControllerArrayEntryIndexed, i,
-                                         (rocprofvis_handle_t*) row_array);
+                row_vec[j].SetType(m_rows[i][j].GetType());
+                row_vec[j] = m_rows[i][j];
             }
+            result = array.SetObject(kRPVControllerArrayEntryIndexed, i,
+                                        (rocprofvis_handle_t*) row_array);
+        
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         } catch(const std::exception&)
         {
             result = kRocProfVisResultMemoryAllocError;

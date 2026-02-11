@@ -3728,7 +3728,7 @@ DataProvider::FetchMetricPivotTable(const ComputeTableRequestParams& params)
             0,
             static_cast<uint64_t>(params.m_sort_order));
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        
+
         // Allocate future and array
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future);
@@ -4217,7 +4217,6 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
                             GetString(row_handle, kRPVControllerArrayEntryIndexed, col);
                         row_values[col] = value;
                     }
-                    spdlog::debug("{}",row_values[col]);
                 }
 
                 kernel_pivot_table.table_data.push_back(row_values);

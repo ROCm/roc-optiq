@@ -25,8 +25,13 @@ namespace View
 {
 
 // 20% top and bottom of the window size
-constexpr float REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
-constexpr float SIDEBAR_WIDTH_MAX             = 600.0f;
+constexpr float    REORDER_AUTO_SCROLL_THRESHOLD = 0.2f;
+constexpr float    SIDEBAR_WIDTH_MAX             = 600.0f;
+constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
+constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
+constexpr float    SCROLL_SPEED                  = 100.0f;
+constexpr uint64_t DEFAULT_LOADING_TIMER         = 800;  // milliseconds
+constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 30.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -39,9 +44,9 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_meta_map_made(false)
 , m_previous_scroll_position(0.0f)
 , m_ruler_height(ImGui::GetTextLineHeightWithSpacing())
-, m_ruler_padding(4)
-, m_unload_track_distance(1000.0f)
-, m_sidebar_size(400)
+, m_ruler_padding(4.0f)
+, m_unload_track_distance(LOADING_TRACK_DISTANCE)
+, m_sidebar_size(SIDEBAR_DEFAULT_SIZE)
 , m_resize_activity(false)
 , m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
                          TimelineSelection::INVALID_SELECTION_TIME })
@@ -50,16 +55,15 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_font_changed_token(static_cast<uint64_t>(-1))
 , m_set_view_range_token(static_cast<uint64_t>(-1))
 , m_settings(SettingsManager::GetInstance())
-, m_last_data_req_v_width(0)
-, m_last_data_req_view_time_offset_ns(0)
+, m_last_data_req_v_width(0.0)
+, m_last_data_req_view_time_offset_ns(0.0)
 , m_can_drag_to_pan(false)
-, m_artificial_scrollbar_height(30)
 , m_grid_interval_ns(0.0)
 , m_recalculate_grid_interval(true)
 , m_last_zoom(1.0f)
 , m_last_graph_size(0.0f, 0.0f)
 , m_reorder_request({ true, 0, 0 })
-, m_track_height_sum(0)
+, m_track_height_sum(0.0f)
 , m_arrow_layer(m_data_provider, timeline_selection)
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
@@ -74,6 +78,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_dragging_selection_start(false)
 , m_dragging_selection_end(false)
 , m_is_selecting_region(false)
+, m_loading_timer(DEFAULT_LOADING_TIMER)
 {
     // Subscribe to events
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -137,6 +142,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 
     // force initial calculation of flame track label width
     FlameTrackItem::CalculateMaxEventLabelWidth();
+    m_loading_timer.Start();
 }
 
 void
@@ -150,7 +156,7 @@ TimelineView::RenderInteractiveUI()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
     float overlay_height =
-        m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
+        m_tpt->GetGraphSizeY() - m_ruler_height - ARTIFICIAL_SCROLLBAR_HEIGHT;
     float overlay_width = m_tpt->GetGraphSizeX();
 
     ImGui::BeginChild("UI Interactive Overlay", ImVec2(overlay_width, overlay_height),
@@ -573,8 +579,7 @@ TimelineView::RenderSplitter()
 
     // Horizontal Splitter
     ImGui::SetNextWindowSize(ImVec2(display_size.x, 1.0f), ImGuiCond_Always);
-    ImGui::SetCursorPos(ImVec2(0, m_tpt->GetGraphSizeY() - m_ruler_height -
-                                      m_artificial_scrollbar_height));
+    ImGui::SetCursorPos(ImVec2(0, m_tpt->GetGraphSizeY() - m_ruler_height - ARTIFICIAL_SCROLLBAR_HEIGHT));
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
 
@@ -661,7 +666,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
     ImGui::BeginChild("Scrubber View",
                       ImVec2(m_tpt->GetGraphSizeX(),
-                             m_tpt->GetGraphSizeY() - m_artificial_scrollbar_height),
+                             m_tpt->GetGraphSizeY() - ARTIFICIAL_SCROLLBAR_HEIGHT),
                       ImGuiChildFlags_None, window_flags);
 
     ImGui::SetItemAllowOverlap();
@@ -1034,6 +1039,7 @@ TimelineView::RenderGraphView()
     float temp_scroll_position = ImGui::GetScrollY();
     if(m_previous_scroll_position != temp_scroll_position)
     {
+        m_loading_timer.Restart();
         m_previous_scroll_position = temp_scroll_position;
         m_scroll_position_y        = temp_scroll_position;
     }
@@ -1042,7 +1048,24 @@ TimelineView::RenderGraphView()
         ImGui::SetScrollY(m_scroll_position_y);
     }
 
+    bool request_data = IsRequestDataNeeded();
+
+    for(int index = 0; index < m_graphs->size(); index++)
+    {
+        RenderTrack(index, request_data, window_flags, container_size);
+    }
+
+    TrackItem::SetSidebarSize(m_sidebar_size);
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+bool
+TimelineView::IsRequestDataNeeded()
+{
     bool request_data = false;
+    if(!m_loading_timer.IsExpired())
+        return request_data;
 
     // for zooming out
     if(m_tpt->GetVWidth() - m_last_data_req_v_width > m_last_data_req_v_width)
@@ -1080,242 +1103,255 @@ TimelineView::RenderGraphView()
         m_last_data_req_view_time_offset_ns = m_tpt->GetViewTimeOffsetNs();
         request_data                        = true;
     }
+    return request_data;
+}
 
-    for(int i = 0; i < m_graphs->size(); i++)
+void
+TimelineView::RenderTrack(int track_index, bool request_data,
+                          ImGuiWindowFlags window_flags, ImVec2 container_size)
+{
+    TrackGraph& track_graph = (*m_graphs)[track_index];
+    m_resize_activity |= track_graph.display_changed;
+
+    if(track_graph.display)
     {
-        TrackGraph& track_item = (*m_graphs)[i];
+        TrackItem* track_item = track_graph.chart;
+        ROCPROFVIS_ASSERT(track_item);
 
-        m_resize_activity |= track_item.display_changed;
+        // Get track height and position to check if the track is in view
+        float  track_height = track_item->GetTrackHeight();
+        ImVec2 track_pos    = ImGui::GetCursorPos();
 
-        if(track_item.display)
+        // Calculate the track's position in the scrollable area
+        float track_top    = track_pos.y;
+        float track_bottom = track_top + track_height;
+
+        // Calculate deltas for out-of-view tracks
+        float delta_top = m_scroll_position_y -
+                          track_bottom;  // Positive if the track is above the view
+        float delta_bottom =
+            track_top -
+            (m_scroll_position_y +
+             m_tpt->GetGraphSizeY());  // Positive if the track is below the view
+
+        // Save distance for book keeping
+        track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
+
+        // This item is being reordered if there is an active payload and its id
+        // matches the payload's id.
+        bool is_reordering = ImGui::GetDragDropPayload() &&
+                             m_reorder_request.track_id == track_item->GetID();
+
+        // Check if the track is visible
+        bool is_visible = (track_bottom >= m_scroll_position_y &&
+                           track_top <= m_scroll_position_y + m_tpt->GetGraphSizeY()) ||
+                          is_reordering;
+
+        track_item->SetInViewVertical(is_visible);
+
+        m_resize_activity |= track_item->TrackHeightChanged();
+
+        if(m_loading_timer.IsExpired())
         {
-            ROCPROFVIS_ASSERT(track_item.chart);
-            // Get track height and position to check if the track is in view
-            float  track_height = track_item.chart->GetTrackHeight();
-            ImVec2 track_pos    = ImGui::GetCursorPos();
-
-            // Calculate the track's position in the scrollable area
-            float track_top    = track_pos.y;
-            float track_bottom = track_top + track_height;
-
-            // Calculate deltas for out-of-view tracks
-            float delta_top = m_scroll_position_y -
-                              track_bottom;  // Positive if the track is above the view
-            float delta_bottom =
-                track_top -
-                (m_scroll_position_y +
-                 m_tpt->GetGraphSizeY());  // Positive if the track is below the view
-
-            // Save distance for book keeping
-            track_item.chart->SetDistanceToView(
-                std::max(std::max(delta_bottom, delta_top), 0.0f));
-
-            // This item is being reordered if there is an active payload and its id
-            // matches the payload's id.
-            bool is_reordering = ImGui::GetDragDropPayload() &&
-                                 m_reorder_request.track_id == track_item.chart->GetID();
-
-            // Check if the track is visible
-            bool is_visible =
-                (track_bottom >= m_scroll_position_y &&
-                 track_top <= m_scroll_position_y + m_tpt->GetGraphSizeY()) ||
-                is_reordering;
-
-            track_item.chart->SetInViewVertical(is_visible);
-
-            m_resize_activity |= track_item.chart->TrackHeightChanged();
-
-            if(is_visible ||
-               track_item.chart->GetDistanceToView() <= m_unload_track_distance)
+            if(is_visible || track_item->GetDistanceToView() <= m_unload_track_distance)
             {
-                // Request data for the chart if it doesn't have data.
-                if((!track_item.chart->HasData() && track_item.chart->GetRequestState() ==
-                                                        TrackDataRequestState::kIdle) ||
-                   request_data)
-
-                {
-                    // Request one viewport worth of data on each side of the current
-                    // view.
-                    double buffer_distance = m_tpt->GetVWidth();
-                    track_item.chart->RequestData(
-                        (m_tpt->GetViewTimeOffsetNs() - buffer_distance) +
-                            m_tpt->GetMinX(),
-                        (m_tpt->GetViewTimeOffsetNs() + m_tpt->GetVWidth() +
-                         buffer_distance) +
-                            m_tpt->GetMinX(),
-                        m_tpt->GetGraphSizeX() * 3);
-                }
-            }
-
-            if(is_visible)
-            {
-                ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
-                if(track_item.selected)
-                {
-                    selection_color = m_settings.GetColor(Colors::kHighlightChart);
-                }
-
-                ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
-                ImGui::PushID(i);
-                if(ImGui::BeginChild("", ImVec2(0, track_height), false,
-                                     window_flags | ImGuiWindowFlags_NoScrollbar |
-                                         ImGuiWindowFlags_NoMouseInputs))
-                {
-                    // call update function (TODO: move this to timeline's update
-                    // function?)
-                    track_item.chart->Update();
-
-                    if(is_reordering)
-                    {
-                        // Empty space if the track is being reordered
-                        ImGui::Dummy(ImVec2(0, track_height));
-                    }
-                    else
-                    {
-                        track_item.chart->Render(m_tpt->GetGraphSizeX());
-                    }
-
-                    // Region for recieving reordering request.
-                    if(ImGui::BeginDragDropTarget())
-                    {
-                        if(ImGui::AcceptDragDropPayload("reorder_request"))
-                        {
-                            m_reorder_request.handled   = false;
-                            m_reorder_request.new_index = i;
-                        }
-                        ImGui::EndDragDropTarget();
-                    }
-
-                    ImGui::PopStyleColor();  // ImGuiCol_ChildBg
-
-                    ImGui::SetCursorPos(ImVec2(0, 0));
-                    // Transparent region where reordering can be initiated.
-                    if(ImGui::BeginChild(
-                           "reorder_handle",
-                           ImVec2(track_item.chart->GetReorderGripWidth(), 0), false,
-                           window_flags | ImGuiWindowFlags_NoScrollbar))
-                    {
-                        // Check if the resize grip area is hovered to change the
-                        // cursor
-                        ImVec2 cursor_pos             = ImGui::GetCursorPos();
-                        ImVec2 invisible_hotspot_size = ImGui::GetContentRegionAvail();
-                        ImVec2 invisible_hotspot_pos  = cursor_pos;
-                        ImGui::SetCursorPos(invisible_hotspot_pos);
-                        ImGui::InvisibleButton("##InvisibleHotspot",
-                                               invisible_hotspot_size,
-                                               ImGuiButtonFlags_None);
-                        if(ImGui::IsItemHovered())
-                        {
-                            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-                        }
-                        ImGui::SetCursorPos(cursor_pos);  // Reset cursor position
-
-                        if(ImGui::BeginDragDropSource(
-                               ImGuiDragDropFlags_SourceNoPreviewTooltip))
-                        {
-                            char dummy_payload;
-                            ImGui::SetDragDropPayload("reorder_request", &dummy_payload,
-                                                      sizeof(char));
-                            m_reorder_request.track_id = track_item.chart->GetID();
-                            ImGui::EndDragDropSource();
-                        }
-                    }
-                    ImGui::EndChild();
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
-
-                    // check for mouse click
-                    if(track_item.chart->IsMetaAreaClicked())
-                    {
-                        m_timeline_selection->ToggleSelectTrack(track_item);
-                    }
-                }
-                ImGui::EndChild();
-                ImGui::PopID();
-                ImGui::PopStyleColor();
-
-                // Draw border around the track
-                // This is done after the child window to ensure it is on top
-                ImVec2 p_min = ImGui::GetItemRectMin();
-                ImVec2 p_max = ImGui::GetItemRectMax();
-                ImGui::GetWindowDrawList()->AddRect(
-                    p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0,
-                    1.0f);
-            }
-            else
-            {
-                // If the track is not visible past a certain distance, release its
-                // data to free up memory
-                if(track_item.chart->GetDistanceToView() > m_unload_track_distance &&
-                   (track_item.chart->HasData() ||
-                    track_item.chart->HasPendingRequests()))
-                {
-                    track_item.chart->ReleaseData();
-                }
-
-                // Render dummy to maintain layout
-                ImGui::Dummy(ImVec2(0, track_height));
-            }
-
-            if(is_reordering)
-            {
-                // Show the track as tooltip while being reordered.
-                ImVec2 graph_view_pos     = ImGui::GetWindowPos();
-                ImVec2 mouse_pos          = ImGui::GetMousePos();
-                ImVec2 mouse_relative_pos = mouse_pos - graph_view_pos;
-
-                ImGui::SetNextWindowPos(
-                    ImVec2(graph_view_pos.x, mouse_pos.y - ImGui::GetFrameHeight() / 2),
-                    ImGuiCond_Always);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-                if(ImGui::Begin("##ReorderPreview", nullptr,
-                                ImGuiWindowFlags_Tooltip | ImGuiWindowFlags_NoInputs |
-                                    ImGuiWindowFlags_NoNav |
-                                    ImGuiWindowFlags_NoDecoration |
-                                    ImGuiWindowFlags_AlwaysAutoResize |
-                                    ImGuiWindowFlags_NoSavedSettings |
-                                    ImGuiWindowFlags_NoFocusOnAppearing |
-                                    ImGuiWindowFlags_NoBringToFrontOnFocus))
-                {
-                    track_item.chart->Render(m_tpt->GetGraphSizeX());
-                }
-                ImGui::End();
-                ImGui::PopStyleVar();
-
-                // Scroll the view if the mouse is near the top or bottom of the
-                // window. Speed is proportional to frame height and depth of mouse
-                // inside auto-scroll zone
-                if(mouse_relative_pos.y <
-                   container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)
-                {
-                    ImGui::SetScrollY(
-                        m_scroll_position_y -
-                        ImGui::GetFrameHeight() *
-                            std::min(
-                                1.0f,
-                                (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD -
-                                 mouse_relative_pos.y) /
-                                    (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
-                }
-                else if(mouse_relative_pos.y >
-                        container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD))
-                {
-                    ImGui::SetScrollY(
-                        m_scroll_position_y +
-                        ImGui::GetFrameHeight() *
-                            std::min(
-                                1.0f,
-                                (mouse_relative_pos.y -
-                                 container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD)) /
-                                    (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
-                }
-                m_scroll_position_y = ImGui::GetScrollY();
+                RequestDataIfEmpty(track_item, request_data);
             }
         }
+
+        if(is_visible)
+        {
+            RenderNormalTrack(track_graph, track_index, window_flags, is_reordering);
+        }
+        else
+        {
+            RenderEmptyTrack(track_item);
+        }
+
+        if(is_reordering)
+        {
+            RenderReorderingTrack(track_item, container_size);
+        }
+    }
+}
+
+void
+TimelineView::RequestDataIfEmpty(TrackItem* track_item, bool request_data)
+{
+    // Request data for the chart if it doesn't have data.
+    if((!track_item->HasData() &&
+        track_item->GetRequestState() == TrackDataRequestState::kIdle) ||
+       request_data)
+
+    {
+        // Request one viewport worth of data on each side of the current
+        // view.
+        double buffer_distance = m_tpt->GetVWidth();
+        track_item->RequestData(
+            (m_tpt->GetViewTimeOffsetNs() - buffer_distance) + m_tpt->GetMinX(),
+            (m_tpt->GetViewTimeOffsetNs() + m_tpt->GetVWidth() + buffer_distance) +
+                m_tpt->GetMinX(),
+            m_tpt->GetGraphSizeX() * 3);
+    }
+}
+
+void
+TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
+                        ImGuiWindowFlags window_flags, bool is_reordering)
+{
+    TrackItem* track_item = track_graph.chart;
+    ROCPROFVIS_ASSERT(track_item);
+    float track_height = track_item->GetTrackHeight();
+
+    ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
+    if(track_graph.selected)
+    {
+        selection_color = m_settings.GetColor(Colors::kHighlightChart);
     }
 
-    TrackItem::SetSidebarSize(m_sidebar_size);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
+    ImGui::PushID(track_index);
+    if(ImGui::BeginChild("", ImVec2(0, track_height), false,
+                         window_flags | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoMouseInputs))
+    {
+        // call update function (TODO: move this to timeline's update
+        // function?)
+        track_item->Update();
+
+        if(is_reordering)
+        {
+            // Empty space if the track is being reordered
+            ImGui::Dummy(ImVec2(0, track_height));
+        }
+        else
+        {
+            track_item->Render(m_tpt->GetGraphSizeX());
+        }
+
+        // Region for receiving reordering request.
+        if(ImGui::BeginDragDropTarget())
+        {
+            if(ImGui::AcceptDragDropPayload("reorder_request"))
+            {
+                m_reorder_request.handled   = false;
+                m_reorder_request.new_index = track_index;
+            }
+            ImGui::EndDragDropTarget();
+        }
+
+        ImGui::PopStyleColor();  // ImGuiCol_ChildBg
+
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        // Transparent region where reordering can be initiated.
+        if(ImGui::BeginChild("reorder_handle",
+                             ImVec2(track_item->GetReorderGripWidth(), 0), false,
+                             window_flags | ImGuiWindowFlags_NoScrollbar))
+        {
+            // Check if the resize grip area is hovered to change the cursor
+            ImVec2 cursor_pos             = ImGui::GetCursorPos();
+            ImVec2 invisible_hotspot_size = ImGui::GetContentRegionAvail();
+            ImVec2 invisible_hotspot_pos  = cursor_pos;
+            ImGui::SetCursorPos(invisible_hotspot_pos);
+            ImGui::InvisibleButton("##InvisibleHotspot", invisible_hotspot_size,
+                                   ImGuiButtonFlags_None);
+            if(ImGui::IsItemHovered())
+            {
+                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+            }
+            ImGui::SetCursorPos(cursor_pos);  // Reset cursor position
+
+            if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
+            {
+                char dummy_payload;
+                ImGui::SetDragDropPayload("reorder_request", &dummy_payload,
+                                          sizeof(char));
+                m_reorder_request.track_id = track_item->GetID();
+                ImGui::EndDragDropSource();
+            }
+        }
+        ImGui::EndChild();
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
+
+        // check for mouse click
+        if(track_item->IsMetaAreaClicked())
+        {
+            m_timeline_selection->ToggleSelectTrack(track_graph);
+        }
+    }
     ImGui::EndChild();
+    ImGui::PopID();
     ImGui::PopStyleColor();
+
+    // Draw border around the track
+    // This is done after the child window to ensure it is on top
+    ImVec2 p_min = ImGui::GetItemRectMin();
+    ImVec2 p_max = ImGui::GetItemRectMax();
+    ImGui::GetWindowDrawList()->AddRect(
+        p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
+}
+
+void
+TimelineView::RenderEmptyTrack(TrackItem* track_item)
+{
+    // If the track is not visible past a certain distance, release its
+    // data to free up memory
+    float track_height = track_item->GetTrackHeight();
+    if(track_item->GetDistanceToView() > m_unload_track_distance &&
+       (track_item->HasData() || track_item->HasPendingRequests()))
+    {
+        track_item->ReleaseData();
+    }
+    // Render dummy to maintain layout
+    ImGui::Dummy(ImVec2(0, track_height));
+}
+
+void
+TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size)
+{
+    // Show the track as tooltip while being reordered.
+    ImVec2 graph_view_pos     = ImGui::GetWindowPos();
+    ImVec2 mouse_pos          = ImGui::GetMousePos();
+    ImVec2 mouse_relative_pos = mouse_pos - graph_view_pos;
+
+    ImGui::SetNextWindowPos(
+        ImVec2(graph_view_pos.x, mouse_pos.y - ImGui::GetFrameHeight() / 2),
+        ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    if(ImGui::Begin(
+           "##ReorderPreview", nullptr,
+           ImGuiWindowFlags_Tooltip | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+               ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+               ImGuiWindowFlags_NoBringToFrontOnFocus))
+    {
+        track_item->Render(m_tpt->GetGraphSizeX());
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
+
+    // Scroll the view if the mouse is near the top or bottom of the
+    // window. Speed is proportional to frame height and depth of mouse
+    // inside auto-scroll zone
+    if(mouse_relative_pos.y < container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)
+    {
+        ImGui::SetScrollY(
+            m_scroll_position_y -
+            ImGui::GetFrameHeight() *
+                std::min(1.0f, (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD -
+                                mouse_relative_pos.y) /
+                                   (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
+    }
+    else if(mouse_relative_pos.y > container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD))
+    {
+        ImGui::SetScrollY(
+            m_scroll_position_y +
+            ImGui::GetFrameHeight() *
+                std::min(1.0f, (mouse_relative_pos.y -
+                                container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD)) /
+                                   (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
+    }
+    m_scroll_position_y = ImGui::GetScrollY();
 }
 
 void
@@ -1703,6 +1739,7 @@ TimelineView::RenderHistogram()
 void
 TimelineView::RenderTraceView()
 {
+    m_loading_timer.Tick();
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
@@ -1714,14 +1751,15 @@ TimelineView::RenderTraceView()
 
     ImGui::BeginChild("Grid View 2",
                       ImVec2(subcomponent_size_main.x,
-                             subcomponent_size_main.y - m_artificial_scrollbar_height),
+                             subcomponent_size_main.y - ARTIFICIAL_SCROLLBAR_HEIGHT),
                       false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     // Scale used in all graphs computed here
 
     float scrollbar_width = ImGui::GetStyle().ScrollbarSize;
-    float available_height = subcomponent_size_main.y - m_ruler_height - m_artificial_scrollbar_height;
+    float available_height =
+        subcomponent_size_main.y - m_ruler_height - ARTIFICIAL_SCROLLBAR_HEIGHT;
     float width_adjustment = (m_track_height_sum > available_height) ? scrollbar_width : 0.0f;
 
     m_tpt->SetGraphSize(subcomponent_size_main.x - m_sidebar_size - width_adjustment,
@@ -1751,7 +1789,7 @@ TimelineView::RenderTraceView()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
     ImGui::BeginChild("scrollbar",
-                      ImVec2(subcomponent_size_main.x, m_artificial_scrollbar_height),
+                      ImVec2(subcomponent_size_main.x, ARTIFICIAL_SCROLLBAR_HEIGHT),
                       true, ImGuiWindowFlags_NoScrollbar);
 
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
@@ -1789,6 +1827,7 @@ TimelineView::RenderTraceView()
                           static_cast<float>(max_offset), ""))
     {
         m_tpt->SetViewTimeOffsetNs(static_cast<double>(view_offset));
+        m_loading_timer.Restart();
     }
 
     ImGui::PopItemWidth();
@@ -1850,6 +1889,7 @@ TimelineView::HandleHistogramTouch()
     if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
        is_mouse_in_graph)
     {
+        m_loading_timer.Restart();
         float drag = io.MouseDelta.x;
         float user_requested_move =
             static_cast<float>((drag / m_tpt->GetGraphSizeX()) * m_tpt->GetRangeX());
@@ -1897,10 +1937,9 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel = io.MouseWheel;
         if(scroll_wheel != 0.0f)
         {
-            // Adjust scroll speed as needed (here, 40.0f per scroll step)
-            float scroll_speed = 100.0f;
+            m_loading_timer.Restart();
             m_scroll_position_y =
-                std::clamp(m_scroll_position_y - scroll_wheel * scroll_speed, 0.0f,
+                std::clamp(m_scroll_position_y - scroll_wheel * SCROLL_SPEED, 0.0f,
                            m_content_max_y_scroll);
         }
     }
@@ -1973,6 +2012,7 @@ TimelineView::HandleTopSurfaceTouch()
         float scroll_wheel = io.MouseWheel;
         if(scroll_wheel != 0.0f)
         {
+            m_loading_timer.Restart();
             // Get mouse position relative to graph area
             ImVec2 mouse_pos        = ImGui::GetMousePos();
             ImVec2 graph_pos        = graph_area_min;
@@ -2053,12 +2093,14 @@ TimelineView::HandleTopSurfaceTouch()
         // Up/Down arrows for vertical scroll
         if(ImGui::IsKeyPressed(ImGuiKey_UpArrow))
         {
+            m_loading_timer.Restart();
             m_scroll_position_y =
                 std::clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y,
                            0.0f, m_content_max_y_scroll);
         }
         if(ImGui::IsKeyPressed(ImGuiKey_DownArrow))
         {
+            m_loading_timer.Restart();
             m_scroll_position_y =
                 std::clamp(m_scroll_position_y + pan_speed * region_moved_per_click_y,
                            0.0f, m_content_max_y_scroll);
@@ -2135,6 +2177,7 @@ TimelineView::HandleTopSurfaceTouch()
     if(m_can_drag_to_pan && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
        is_mouse_in_graph)
     {
+        m_loading_timer.Restart();
         float drag_y = io.MouseDelta.y;
         m_scroll_position_y =
             std::clamp(m_scroll_position_y - drag_y, 0.0f, m_content_max_y_scroll);
@@ -2172,7 +2215,7 @@ TimelineView::GetTotalTrackHeight() const
 float
 TimelineView::GetTrackViewportHeight() const
 {
-    return m_tpt->GetGraphSizeY() - m_ruler_height - m_artificial_scrollbar_height;
+    return m_tpt->GetGraphSizeY() - m_ruler_height - ARTIFICIAL_SCROLLBAR_HEIGHT;
 }
 
 void
@@ -2367,6 +2410,49 @@ TimelineViewProjectSettings::DisplayTrack(uint64_t track_id) const
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK][track_id]
                           [JSON_KEY_TIMELINE_TRACK_DISPLAY]
                               .getBool();
+}
+
+LoadingTimer::LoadingTimer(uint64_t delay)
+: m_timer(0)
+, m_started(false)
+, m_delay(std::chrono::milliseconds(delay))
+{}
+
+void
+LoadingTimer::Start()
+{
+    m_started   = true;
+    m_last_tick = std::chrono::steady_clock::now();
+}
+
+bool
+LoadingTimer::IsExpired()
+{
+    if(m_started)
+        return (m_timer >= m_delay);
+    else
+        return false;
+}
+
+void
+LoadingTimer::Restart()
+{
+    m_timer     = std::chrono::milliseconds(0);
+    m_last_tick = std::chrono::steady_clock::now();
+}
+
+void
+LoadingTimer::Tick()
+{
+    if(!m_started) return;
+
+    if(m_timer < m_delay)
+    {
+        auto now = std::chrono::steady_clock::now();
+        m_timer +=
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_tick);
+        m_last_tick = now;
+    }
 }
 
 }  // namespace View

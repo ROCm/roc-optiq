@@ -21,14 +21,17 @@ constexpr float kMaxTooltipWrapWidth = 600.0f;
 
 float TrackItem::s_metadata_width = 400.0f;
 
+inline constexpr float    DEFAULT_MIN_TRACK_HEIGHT = 10.0f;
+inline constexpr float    DEFAULT_GRIP_WIDTH       = 20.0f;
+inline constexpr uint64_t DEFAULT_CHUNK_DURATION   = TimeConstants::ns_per_s * 30;
+
 TrackItem::TrackItem(DataProvider& dp, uint64_t id,
                      std::shared_ptr<TimePixelTransform> tpt)
 : m_data_provider(dp)
 , m_track_id(id)
-, m_track_height(75.0f)
-, m_track_default_height(75.0f)
+, m_track_height(DEFAULT_TRACK_HEIGHT)
 , m_track_content_height(0.0f)
-, m_min_track_height(10.0f)
+, m_min_track_height(DEFAULT_MIN_TRACK_HEIGHT)
 , m_is_in_view_vertical(false)
 , m_metadata_padding(ImVec2(4.0f, 4.0f))
 , m_resize_grip_thickness(4.0f)
@@ -38,13 +41,14 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 , m_meta_area_scale_width(0.0f)
 , m_settings(SettingsManager::GetInstance())
 , m_selected(false)
-, m_reorder_grip_width(20.0f)
+, m_reorder_grip_width(DEFAULT_GRIP_WIDTH)
 , m_group_id_counter(0)
-, m_chunk_duration_ns(TimeConstants::ns_per_s * 30)  // Default chunk duration
+, m_chunk_duration_ns(DEFAULT_CHUNK_DURATION)
 , m_tpt(tpt)  
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_meta_area_label("")
 , m_pill("", false, false)
+, m_distance_to_view_y(0.0f)
 {
     if(m_track_project_settings.Valid())
     {

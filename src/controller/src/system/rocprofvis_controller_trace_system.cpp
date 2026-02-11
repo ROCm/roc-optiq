@@ -448,6 +448,8 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                     rocprofvis_dm_get_property_as_uint64( table, kRPVDMNumberOfTableColumnsUInt64, 0);
                                 uint64_t num_rows =
                                     rocprofvis_dm_get_property_as_uint64( table, kRPVDMNumberOfTableRowsUInt64, 0);
+                                ROCPROFVIS_ASSERT(num_columns);
+                                ROCPROFVIS_ASSERT(num_rows);
 
                                 std::vector<rocprofvis_controller_node_properties_t> columns;
                                 std::map<std::string, rocprofvis_controller_node_properties_t>
@@ -549,6 +551,8 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                     rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableColumnsUInt64, 0);
                                 uint64_t num_rows =
                                     rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableRowsUInt64, 0);
+                                ROCPROFVIS_ASSERT(num_columns);
+                                ROCPROFVIS_ASSERT(num_rows);
 
                                 std::vector<rocprofvis_controller_processor_properties_t>columns;
                                 std::map<std::string, rocprofvis_controller_processor_properties_t> columns_ids =
@@ -905,7 +909,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                                             rocprofvis_dm_get_property_as_uint64(table_row, kRPVDMNumberOfTableRowCellsUInt64, 0);
                                         if (num_cells == num_columns)
                                         {
-                               char const* stream_string =
+                                            char const* stream_string =
                                                 rocprofvis_dm_get_property_as_charptr( table_row, kRPVDMExtTableRowCellValueCharPtrIndexed, 1);
                                             char*    end = nullptr;
                                             uint64_t stream_id = std::strtoull(stream_string, &end, 10);

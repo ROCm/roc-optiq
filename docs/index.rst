@@ -16,6 +16,28 @@ The component public repository is located at `https://github.com/ROCm/roc-optiq
 
   ROCm Optiq is in beta. Running production workloads is not recommended.
 
+ROCm Optiq 0.2.0 
+================
+
+Additions
+---------
+
+- **Summary View**: Displays the top ten kernels by execution time using pie charts, bar charts, or tables.
+- **Minimap**: Provides a compact overview of event density and counter values across the entire trace, enabling rapid navigation of large datasets.
+
+Enhancements/changes
+--------------------
+
+- **Timeline View**: Improved navigation and selection. Added context menu option to create a time range filter from a selected event or events. 
+- **Advanced Details Panel**: **Aggregate by Column** drop-down groups the results by the selected column. Options to size columns to fit in **Event Table** and **Sample Table**. **Event Details** now shows the function call’s arguments, if available.  
+- **Time Range Filtering**: Improved time range selection.
+- **Histogram**: Shows event density in two display modes: "Normalization: All Tracks" and "Normalization: Visible Tracks".
+- **Multi-node**: Multi-node data and a new multi-database yaml file format are supported.
+
+.. tip::
+
+  You can find the full history of ROCm Optiq releases at :doc:`ROCm Optiq release history <release>`. 
+
 .. grid:: 2
   :gutter: 3
 

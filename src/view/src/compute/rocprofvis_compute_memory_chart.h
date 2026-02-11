@@ -14,6 +14,18 @@ namespace View
 
 class DataProvider;
 
+// Simple rectangle returned by each block render function.
+// Position the next block relative to this one using Right(), Bottom(), MidY(), etc.
+struct ChartBlock
+{
+    float x = 0, y = 0, w = 0, h = 0;
+
+    float Right()  const { return x + w; }
+    float Bottom() const { return y + h; }
+    float MidX()   const { return x + w * 0.5f; }
+    float MidY()   const { return y + h * 0.5f; }
+};
+
 // Maps 1:1 to metric entry IDs in table 3.1
 enum MemChartMetric
 {
@@ -86,23 +98,28 @@ public:
     void FetchMemChartMetrics(uint32_t workload_id, const std::vector<uint32_t>& kernel_ids);
 
 private:
-    // Pipeline stages
-    void RenderInstrBuff();
-    void RenderInstrDispatch();
-    void RenderActiveCUs();
+    // Each block render takes a position and returns its bounds.
+    // The next block is positioned relative to the previous one.
 
-    // Cache hierarchy
-    void RenderLDS();
-    void RenderVectorL1Cache();
-    void RenderScalarL1DCache();
-    void RenderInstrL1Cache();
+    // Pipeline stage blocks
+    ChartBlock RenderInstrBuff(float x, float y);
+    ChartBlock RenderInstrDispatch(float x, float y);
+    ChartBlock RenderActiveCUs(float x, float y);
 
-    // Memory subsystem
-    void RenderL2Cache();
-    void RenderFabric();
-    void RenderHBM();
+    // Cache hierarchy blocks
+    ChartBlock RenderLDS(float x, float y);
+    ChartBlock RenderVectorL1Cache(float x, float y);
+    ChartBlock RenderScalarL1DCache(float x, float y);
+    ChartBlock RenderInstrL1Cache(float x, float y);
 
-    // Connection arrows and labels between blocks
+    // Memory subsystem blocks
+    ChartBlock RenderL2Cache(float x, float y, float h);
+    ChartBlock RenderXGMIPCIe(float x, float y);
+    ChartBlock RenderFabricBlock(float x, float y);
+    ChartBlock RenderGMI(float x, float y);
+    ChartBlock RenderHBM(float x, float y);
+
+    // Connection arrows and labels (uses stored block positions)
     void RenderConnections();
 
     // Get the display string for a metric (returns "-" if not yet populated)
@@ -110,6 +127,13 @@ private:
 
     DataProvider& m_data_provider;
     std::array<std::string, MEMCHART_METRIC_COUNT> m_values;
+
+    // Block positions stored during Render() for use by RenderConnections()
+    ChartBlock m_instrBuff, m_instrDispatch, m_activeCUs;
+    ChartBlock m_lds, m_vectorL1, m_scalarL1D, m_instrL1;
+    ChartBlock m_l2;
+    ChartBlock m_xgmiPcie, m_fabric, m_gmi;
+    ChartBlock m_hbm;
 };
 
 }  // namespace View

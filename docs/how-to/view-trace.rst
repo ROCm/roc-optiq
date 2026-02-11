@@ -21,7 +21,7 @@ ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling
 
 Traces contain event tracks and counter tracks:
 
-- An event track is a horizontal lane in the profiler's timeline view that displays individual events such as API calls (for example, ROCm functions), kernel dispatches on the GPU, CPU function calls or other execution units. Each event is shown as a bar positioned according to its start and end timestamps, allowing you to visualize execution order and duration.
+- An event track is a horizontal lane in the profiler's timeline view that displays individual events such as API calls (for example, ROCm functions), kernel dispatches on the GPU, CPU function calls, or other execution units. Each event is shown as a bar positioned according to its start and end timestamps, allowing you to visualize execution order and duration.
 - A counter track is a timeline track that displays the value of a metric that changes over time. These tracks show a sampled scalar value at a specific timestamp. Examples of information shown in a counter track include: 
 
   - Processor frequency
@@ -120,8 +120,8 @@ The **WASD** and arrow keys can be also used to zoom and pan the view:
 - **A** or **Left Arrow** / **D** or **Right Arrow**: Pan left and right, respectively.
 - **Up Arrow** / **Down Arrow**: Scroll the track list up and down.
 
-Hold the mouse pointer over the **Description** area, the scroll wheel will scroll through the track list. 
-Hold the mouse pointer over the **Graph** area, the scroll wheel zooms the view in and out.
+Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
+Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
 
 Select a track
 ^^^^^^^^^^^^^^
@@ -147,7 +147,7 @@ When an event is selected, its event details are displayed in the **Event Detail
 
 .. tip::
 
-   When you hold the mouse pointer over a region with high-density events, the application displays the total number of events in each category.
+   When you hover the mouse pointer over a region with high-density events, the application displays the total number of events in each category.
 
 Resize or reorder tracks
 ^^^^^^^^^^^^^^^^^^^^^^^^

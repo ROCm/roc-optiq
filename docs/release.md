@@ -30,7 +30,7 @@
 
 ## ROCm Optiq (Beta) 0.1.0
 
-Initial release of the AMD ROCm Optiq (Beta).
+Initial release of ROCm Optiq (Beta).
 
 ### Added
 

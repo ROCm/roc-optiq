@@ -16,7 +16,7 @@ html_theme_options = {
     "flavor": "generic",
     "header_title": "ROCm™ Optiq (Beta) 0.2.0",
     "header_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/",
-    "version_list_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.2.0/release.html",
+    "version_list_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/release.html",
     "nav_secondary_items": {
         "GitHub": "https://github.com/ROCm/roc-optiq",
         "Community": "https://github.com/ROCm/roc-optiq/discussions",

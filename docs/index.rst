@@ -36,7 +36,7 @@ Enhancements/changes
 
 .. tip::
 
-  You can find the full history of ROCm Optiq releases at :doc:`ROCm Optiq release history <release>`. 
+  See :doc:`ROCm Optiq release history <release>` for the full release history. 
 
 .. grid:: 2
   :gutter: 3

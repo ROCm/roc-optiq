@@ -15,12 +15,12 @@
 
 ## ROCm Optiq (Beta) 0.2.0
 
-### Additions
+### Added
 
 - **Summary View**: Displays the top ten kernels by execution time using pie charts, bar charts, or tables.
 - **Minimap**: Provides a compact overview of event density and counter values across the entire trace, enabling rapid navigation of large datasets.
 
-### Enhancements/changes
+### Changed
 
 - **Timeline View**: Improved navigation and selection. Added context menu option to create a time range filter from a selected event or events. 
 - **Advanced Details Panel**: **Aggregate by Column** drop-down groups the results by the selected column. Options to size columns to fit in **Event Table** and **Sample Table**. **Event Details** now shows the function call’s arguments, if available.  
@@ -32,7 +32,7 @@
 
 Initial release of the AMD ROCm Optiq (Beta).
 
-### Additions
+### Added
 
 - **System Topology View**: Displays a hierarchical representation of the hardware or system components, such as nodes, processes, as well as the GPU queues, memory operations, threads, and more that belong to them.
 - **Timeline View**: Shows CPU and GPU activities, events, and performance metrics in chronological order for a detailed temporal analysis. ROCm Optiq allows you to zoom, filter, and bookmark data for fine-grained inspection. You can correlate GPU workloads with in-application CPU events and performance with hardware resource usage, enabling easy identification and remediation of performance blockers.

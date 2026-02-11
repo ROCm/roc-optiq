@@ -21,14 +21,14 @@ ROCm Optiq 0.2.0
 
 Listed below are the incremental changes in this release compared to the previous release (`ROCm Optiq 0.1.0 <https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.1.0/index.html>`_).
 
-Additions
----------
+Added
+-----
 
 - **Summary View**: Displays the top ten kernels by execution time using pie charts, bar charts, or tables.
 - **Minimap**: Provides a compact overview of event density and counter values across the entire trace, enabling rapid navigation of large datasets.
 
-Enhancements/changes
---------------------
+Changed
+-------
 
 - **Timeline View**: Improved navigation and selection. Added context menu option to create a time range filter from a selected event or events. 
 - **Advanced Details Panel**: **Aggregate by Column** drop-down groups the results by the selected column. Options to size columns to fit in **Event Table** and **Sample Table**. **Event Details** now shows the function call’s arguments, if available.  

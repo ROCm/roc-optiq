@@ -45,7 +45,8 @@ typedef     uint64_t                      rocprofvis_dm_size_t;                 
 typedef     uint8_t                       rocprofvis_dm_event_level_t;                  // event level, for stacking events
 typedef     uint16_t                      rocprofvis_dm_num_string_table_filters_t;     // number of string table filters for table query
 typedef     const char**                  rocprofvis_dm_string_table_filters_t;         // string table filters for table query
-
+typedef     rocprofvis_dm_handle_t        rocprofvis_db_instance_t;                     // Instance handle
+typedef     uint32_t                      rocprofvis_db_table_column_enum_t;            // database query column enumeration cast type
 
 /*******************************Enumerations******************************/
 
@@ -81,25 +82,32 @@ typedef enum rocprofvis_dm_track_category_t {
     // Object is not track
     kRocProfVisDmNotATrack = 0,
     // Object is PMC track (performance counters track)
-    kRocProfVisDmPmcTrack = 1,
+    kRocProfVisDmPmcTrack = 0x1,
     // Object is region track (HIP calls)
-    kRocProfVisDmRegionTrack = 2,
+    kRocProfVisDmRegionTrack = 0x2,
     // Object is kernel track (kernel execution)
-    kRocProfVisDmKernelDispatchTrack = 3,
+    kRocProfVisDmKernelDispatchTrack = 0x4,
     // Object is SQTT track
-    kRocProfVisDmSQTTTrack = 4,
+    kRocProfVisDmSQTTTrack = 0x8,
     // Object is NIC track
-    kRocProfVisDmNICTrack = 5,
+    kRocProfVisDmNICTrack = 0x10,
     // Object is memory allocation track
-    kRocProfVisDmMemoryAllocationTrack = 6,
+    kRocProfVisDmMemoryAllocationTrack = 0x20,
     // Object is memory copy track
-    kRocProfVisDmMemoryCopyTrack = 7,
+    kRocProfVisDmMemoryCopyTrack = 0x40,
     // Object is stream track
-    kRocProfVisDmStreamTrack = 8,
+    kRocProfVisDmStreamTrack = 0x80,
     // Object is region sample track
-    kRocProfVisDmRegionMainTrack = 9,
+    kRocProfVisDmRegionMainTrack = 0x100,
     // Object is region sample track
-    kRocProfVisDmRegionSampleTrack = 10,
+    kRocProfVisDmRegionSampleTrack = 0x200,
+
+    kRocProfVisDmLaunchTrack = kRocProfVisDmRegionTrack | kRocProfVisDmRegionMainTrack | kRocProfVisDmRegionSampleTrack,
+    kRocProfVisDmDispatchTrack = kRocProfVisDmKernelDispatchTrack | kRocProfVisDmMemoryAllocationTrack | kRocProfVisDmMemoryCopyTrack,
+    kRocProfVisDmEventTrack = kRocProfVisDmLaunchTrack | kRocProfVisDmDispatchTrack,
+    kRocProfVisDmCounterTrack = kRocProfVisDmPmcTrack,
+    kRocProfVisDmAgentTrack = kRocProfVisDmDispatchTrack | kRocProfVisDmCounterTrack,
+    kRocProfVisDmProcessTrack = kRocProfVisDmEventTrack | kRocProfVisDmCounterTrack
 } rocprofvis_dm_track_category_t;
 
 //Event operation
@@ -117,7 +125,8 @@ typedef enum rocprofvis_dm_event_operation_t {
     // Memory copy event
     kRocProfVisDmOperationLaunchSample = 5,
     // Number of operations
-    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1
+    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1,
+    kRocProfVisDmMultipleOperations,
 } rocprofvis_dm_event_operation_t;
 
 // Database type
@@ -127,7 +136,11 @@ typedef enum rocprofvis_db_type_t {
     // old schema Rocpd database
 	kRocpdSqlite = 1,
     // new schema Rocprof database
-	kRocprofSqlite = 2
+	kRocprofSqlite = 2,
+    // new schema Rocprof multinode database
+    kRocprofMultinodeSqlite = 3,
+    // compute database
+    kComputeSqlite = 4
 } rocprofvis_db_type_t;
 
 // Database query status, reported by database query progress callback
@@ -180,7 +193,20 @@ typedef enum  rocprofvis_dm_trace_property_t {
     // Number of buckets
     kRPVDMHistogramNumBuckets,
     // Size of histogram bucket
-    kRPVDMHistogramBucketSize
+    kRPVDMHistogramBucketSize,
+    // Number of nodes
+    kRPVDMNumberOfNodesUint64,
+    // Info table handlers
+    kRPVDNodeInfoTableHandleIndexed,
+    kRPVDAgentInfoTableHandleIndexed,
+    kRPVDQueueInfoTableHandleIndexed,
+    kRPVDProcessInfoTableHandleIndexed,
+    kRPVDThreadInfoTableHandleIndexed,
+    kRPVDStreamInfoTableHandleIndexed,
+    kRPVDPmcInfoTableHandleIndexed,
+    kRPVDAgentQueueMappingInfoTableHandleIndexed,
+    kRPVDAgentStreamMappingInfoTableHandleIndexed,
+    kRPVDStreamQueueMappingInfoTableHandleIndexed
 } rocprofvis_dm_trace_property_t;
 
 // Track properties
@@ -229,8 +255,16 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackMinimumValueDouble,
     // Track maximum level or value
     kRPVDMTrackMaximumValueDouble,
-    // Histogram bucket value
-    kRPVDMTrackHistogramEventDensityUInt64Indexed,
+    //EventDensity for event and counter tracks
+    kRPVDMTrackHistogramBucketEventDensityUInt64Indexed,
+    // Histogram bucket value. EventDensity for event tracks and average counter value for counter tracks
+    kRPVDMTrackHistogramBucketValueDoubleIndexed,
+    // Track Instance ID (Guid index)
+    kRPVDMTrackInstanceIdUInt64,
+    // Track process ID (PID or Agent ID)
+    kRPVDMTrackProcessIdUInt64,
+    // Track process ID (TID or Queue ID)
+    kRPVDMTrackSubProcessIdUInt64
 } rocprofvis_dm_track_property_t;
 
 // Slice properties
@@ -308,7 +342,17 @@ typedef enum rocprofvis_dm_extdata_property_t {
     // Extended data type
     kRPVDMExtDataTypeUint64Indexed,
     // Extended data category enumeration
-    kRPVDMExtDataEnumUint64Indexed
+    kRPVDMExtDataEnumUint64Indexed,
+    // Number of argument records
+    kRPVDMNumberOfArgumentRecordsUInt64,
+    // Argument position
+    kRPVDMArgumentPositionUint64Indexed,
+    // Argument type
+    kRPVDMArgumentTypeCharPtrIndexed,
+    // Argument name
+    kRPVDMArgumentNameCharPtrIndexed,
+    // Argument value
+    kRPVDMArgumentValueCharPtrIndexed,
 } rocprofvis_dm_extdata_property_t;
 
 // Table object properties
@@ -326,7 +370,11 @@ typedef enum rocprofvis_dm_table_property_t {
     // Column name by specified index
     kRPVDMExtTableColumnNameCharPtrIndexed,
     // Row handle by specified index
-    kRPVDMExtTableRowHandleIndexed
+    kRPVDMExtTableRowHandleIndexed,
+    // Column enum constant by specified index
+    kRPVDMExtTableColumnEnumUInt64Indexed,
+    // Column type constant by specified index
+    kRPVDMExtTableColumnTypeUInt64Indexed
 } rocprofvis_dm_table_property_t;
 
 // Table row object properties
@@ -361,7 +409,9 @@ typedef enum rocprofvis_dm_sort_order_t {
 typedef union { 
     struct {
         // Event ID from database
-        uint64_t    event_id:60;
+        uint64_t    event_id:52;
+        // Node index
+        uint64_t    event_node:8;
         // Event operation type
         uint64_t    event_op:4;
     } bitfield;
@@ -378,3 +428,93 @@ typedef void ( *rocprofvis_db_progress_callback_t)(
                 rocprofvis_db_status_message_t,
                 void*
 );
+
+/*******************************Compute******************************/
+
+// Compute database query result items enumeration
+typedef enum rocprofvis_db_compute_column_enum_t
+{
+    kRPVComputeColumnWorkloadId,
+    kRPVComputeColumnWorkloadName,
+    kRPVComputeColumnWorkloadSubName,
+    kRPVComputeColumnWorkloadSysInfo,
+    kRPVComputeColumnWorkloadProfileConfig,
+
+    kRPVComputeColumnWorkloadRooflineBenchBlob,
+    kRPVComputeColumnWorkloadRooflineBenchHBMBw,
+    kRPVComputeColumnWorkloadRooflineBenchL2Bw,
+    kRPVComputeColumnWorkloadRooflineBenchL1Bw,
+    kRPVComputeColumnWorkloadRooflineBenchLDSBw,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF8Flops,
+    kRPVComputeColumnWorkloadRooflineBenchFP16Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF16Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMABF16Flops,
+    kRPVComputeColumnWorkloadRooflineBenchFP32Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF32Flops,
+    kRPVComputeColumnWorkloadRooflineBenchFP64Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF64Flops,
+    kRPVComputeColumnWorkloadRooflineBenchI8Ops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAI8Ops,
+    kRPVComputeColumnWorkloadRooflineBenchI32Ops,
+    kRPVComputeColumnWorkloadRooflineBenchI64Ops,
+
+    kRPVComputeColumnKernelUUID,
+    kRPVComputeColumnKernelName,
+    kRPVComputeColumnKernelsCount,
+    kRPVComputeColumnKernelDurationsSum,
+    kRPVComputeColumnKernelDurationsAvg,
+    kRPVComputeColumnKernelDurationsMedian,
+    kRPVComputeColumnKernelDurationsMin,
+    kRPVComputeColumnKernelDurationsMax,
+
+    kRPVComputeColumnRooflineTotalFlops,
+    kRPVComputeColumnRooflineL1CacheData,
+    kRPVComputeColumnRooflineL2CacheData,
+    kRPVComputeColumnRooflineHBMCacheData,
+
+    kRPVComputeColumnMetricId,
+    kRPVComputeColumnTableId,
+    kRPVComputeColumnSubTableId,
+    kRPVComputeColumnMetricTableName,
+    kRPVComputeColumnMetricSubTableName,
+
+    kRPVComputeColumnMetricName,
+    kRPVComputeColumnMetricDescription,
+    kRPVComputeColumnMetricUnit,
+
+    kRPVComputeColumnMetricValueName,
+    kRPVComputeColumnMetricValue
+} rocprofvis_db_compute_column_enum_t;
+
+// Compute database query use case enumerations
+typedef enum rocprofvis_db_compute_use_case_enum_t
+{
+    kRPVComputeFetchListOfWorkloads,
+    kRPVComputeFetchWorkloadRooflineCeiling,
+    kRPVComputeFetchWorkloadTopKernels,
+    kRPVComputeFetchWorkloadKernelsList,
+    kRPVComputeFetchWorkloadMetricsDefinition,
+    kRPVComputeFetchKernelRooflineIntensities,
+    kRPVComputeFetchKernelMetricCategoriesList,
+    kRPVComputeFetchMetricCategoryTablesList,
+    kRPVComputeFetchMetricValues,
+} rocprofvis_db_compute_use_case_enum_t;
+
+// Compute database query parameter enumeration
+typedef enum rocprofvis_db_compute_param_enum_t
+{
+    kRPVComputeParamWorkloadId,
+    kRPVComputeParamKernelId,
+    kRPVComputeParamMetricId
+} rocprofvis_db_compute_param_enum_t;
+
+// Compute database query input parameter structure
+typedef struct rocprofvis_db_compute_param_t
+{
+    rocprofvis_db_compute_param_enum_t param_type;
+    const char* param_str;
+} rocprofvis_db_compute_param_t;
+
+typedef rocprofvis_db_compute_param_t* rocprofvis_db_compute_params_t;
+typedef uint32_t rocprofvis_db_num_of_params_t;
+

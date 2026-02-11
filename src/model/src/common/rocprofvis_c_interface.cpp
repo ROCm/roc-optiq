@@ -6,6 +6,7 @@
 #include "rocprofvis_db_rocpd.h"
 #include "rocprofvis_db_rocprof.h"
 #include "rocprofvis_dm_trace.h"
+#include "rocprofvis_db_compute.h"
 
 #ifdef TEST
 #define ROCPROFVIS_DM_PROPSYMBOL(handle, property) ((RocProfVis::DataModel::DmBase*)handle)->GetPropertySymbol(property)
@@ -16,26 +17,45 @@
 
 /******************************************DATABASE INTERFACE***************************************/
 /****************************************************************************************************
- * @brief Opens database of provided path and type
+ * @brief Idetifies database type
  *      kAutodetect = 0, 
  *	    kRocpdSqlite = 1,
- *	    kRocprofSqlite = 2
+ *	    kRocprofSqlite = 2,
+ *      kRocprofMultinodeSqlite = 3,
+ *      kComputeSqlite = 4
  * 
  * @param filename path of the database file
- * @param type  type enumeration, kAutodetect for automatic detection 
- * @return handler to database object
- * 
- * @note Currently only old rocpd schema fully supported. Working on rocprof schema
  * 
  ***************************************************************************************************/
 
+rocprofvis_db_type_t rocprofvis_db_identify_type(
+    rocprofvis_db_filename_t filename) {
+    std::vector<std::string> multinode_files;
+    return RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
+}
+
+/****************************************************************************************************
+* @brief Opens database of provided path and type
+*      kAutodetect = 0, 
+*	    kRocpdSqlite = 1,
+*	    kRocprofSqlite = 2,
+*      kRocprofMultinodeSqlite = 3,
+*      kComputeSqlite = 4
+* 
+* @param filename path of the database file
+* @param type  db_type enumeration, kAutodetect for automatic detection 
+* 
+* 
+***************************************************************************************************/
 rocprofvis_dm_database_t rocprofvis_db_open_database(
                                         rocprofvis_db_filename_t filename, 
                                         rocprofvis_db_type_t db_type){
     PROFILE;
+    std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
-        db_type = RocProfVis::DataModel::Database::Autodetect(filename);
+        db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
     } 
+
     if (db_type == rocprofvis_db_type_t::kRocpdSqlite)
     {
         try {
@@ -43,7 +63,7 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
             if (kRocProfVisDmResultSuccess == db->Open()) {
                 return db;
             } else {
-                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database!",
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open old schema rocpd database!",
                                                     nullptr);
             }
         }
@@ -53,25 +73,62 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
                 RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
         }
     } else
-        if (db_type == rocprofvis_db_type_t::kRocprofSqlite)
-        {
-            try {
-                RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::RocprofDatabase(filename);
-                if (kRocProfVisDmResultSuccess == db->Open()) {
-                    return db;
-                }
-                else {
-                    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database!",
-                                                        nullptr);
-                }
+    if (db_type == rocprofvis_db_type_t::kRocprofSqlite)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::RocprofDatabase(filename);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
             }
-            catch (std::exception ex)
-            {
-                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
-                    RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+            else {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open new schema rocpd database!",
+                                                    nullptr);
             }
         }
-        else
+        catch (std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    } else
+    if (db_type == rocprofvis_db_type_t::kRocprofMultinodeSqlite)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::RocprofDatabase(filename, multinode_files);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            }
+            else {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open multinode rocpd database!",
+                                                    nullptr);
+            }
+        }
+        catch (std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    }
+    else
+    if (db_type == rocprofvis_db_type_t::kComputeSqlite)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::ComputeDatabase(filename);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            }
+            else {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open compute database!",
+                    nullptr);
+            }
+        }
+        catch (std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    }
+    else
     {
         spdlog::debug("Database type not supported!");
         return nullptr;
@@ -251,6 +308,31 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     return result;
 }
 
+rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
+    rocprofvis_dm_database_t database, 
+    rocprofvis_db_compute_use_case_enum_t use_case, rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, 
+    char** out_query)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+        RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+        kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(out_query, "Error! Query cannot be null.",
+        kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    std::string query;
+    rocprofvis_dm_result_t result = db->BuildComputeQuery(use_case, num, params, query);
+    if (result == kRocProfVisDmResultSuccess)
+    {
+        char* ptr = (char*) calloc(query.length() + 1, 1);
+        ROCPROFVIS_ASSERT_MSG_RETURN(ptr, "Error! Couldn't allocate query string.",
+            kRocProfVisDmResultAllocFailure);
+        strncpy(ptr, query.c_str(), query.length());
+        *out_query = ptr;
+    }
+    return result;
+}
+
 rocprofvis_dm_result_t rocprofvis_db_export_table_csv_async(
     rocprofvis_dm_database_t database,
     rocprofvis_dm_charptr_t query,
@@ -345,6 +427,36 @@ rocprofvis_dm_result_t  rocprofvis_db_execute_query_async(
     RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
     return db->ExecuteQueryAsync(query, description, object, id);
 }
+
+/****************************************************************************************************
+* @brief Asynchronous call to read a table result of specified compute SQL query
+*                                                     
+* @param database database object handle
+* @param use_case enumeration constant describing the query
+* @param query SQL query string
+* @param object future handle allocated by rocprofvis_db_future_alloc
+* @param id new id is assigned to the table and returned using this reference pointer
+* @return status of operation
+* 
+* @note Object will stay in trace memory until deleted. 
+*          Use rocprofvis_dm_delete_table_at or rocprofvis_dm_delete_all_tables for deletion
+* 
+***************************************************************************************************/
+rocprofvis_dm_result_t  rocprofvis_db_execute_compute_query_async(
+                                    rocprofvis_dm_database_t database,  
+                                    rocprofvis_db_compute_use_case_enum_t use_case,
+                                    rocprofvis_dm_charptr_t query,
+                                    rocprofvis_db_future_t object, 
+                                    rocprofvis_dm_table_id_t* id)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+        RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+        kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    return db->ExecuteComputeQueryAsync(use_case, query, object, id);
+}
+
 
 /*******************************************TRACE INTERFACE*****************************************/
 
@@ -494,6 +606,28 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_event_property_for(
     return ((RocProfVis::DataModel::Trace*)trace)->DeleteEventPropertyFor(type, event_id);
 }     
 
+/****************************************************************************************************
+* @brief Delete event property object of specified type
+*                                                     
+* @param trace trace object handle created with rocprofvis_dm_create_trace()
+* @param type type of property
+*                             kEventFlowTrace,
+*                             kEventStackTrace,
+*                             kEventExtData,
+* @param object reference
+* 
+* @return status of operation
+* 
+***************************************************************************************************/
+rocprofvis_dm_result_t  rocprofvis_dm_delete_event_property(
+    rocprofvis_dm_trace_t trace,
+    rocprofvis_dm_event_property_type_t type,
+    rocprofvis_dm_handle_t object){
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
+        kRocProfVisDmResultInvalidParameter);
+    return ((RocProfVis::DataModel::Trace*)trace)->DeleteEventProperty(type, object);
+} 
 /****************************************************************************************************
  * @brief Delete all event property objects of specified type
  *                                                     

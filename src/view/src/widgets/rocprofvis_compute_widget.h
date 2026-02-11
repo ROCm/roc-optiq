@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "rocprofvis_compute_data_provider.h"
+#include "compute/rocprofvis_compute_data_provider.h"
 #include "rocprofvis_widget.h"
 
 namespace RocProfVis

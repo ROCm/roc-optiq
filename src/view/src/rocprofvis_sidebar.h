@@ -3,7 +3,6 @@
 
 #pragma once
 #include "rocprofvis_track_topology.h"
-#include "rocprofvis_view_structs.h"
 #include "widgets/rocprofvis_widget.h"
 
 #include <optional>
@@ -24,7 +23,7 @@ class SideBar : public RocWidget
 public:
     SideBar(std::shared_ptr<TrackTopology>                   topology,
             std::shared_ptr<TimelineSelection>               timeline_selection,
-            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs, DataProvider& dp);
+            std::shared_ptr<std::vector<TrackGraph>> graphs, DataProvider& dp);
     ~SideBar();
     virtual void Render() override;
     virtual void Update() override;
@@ -36,7 +35,7 @@ private:
         kAllHidden,
         kMixed
     };
-    bool RenderTrackItem(const int& index);
+    bool RenderTrackItem(const uint64_t& index);
 
     bool IsAllSubItemsHidden(const std::vector<IterableModel>& container);
     void HideAllSubItems(const std::vector<IterableModel>& container);
@@ -69,7 +68,7 @@ private:
     SettingsManager&                                 m_settings;
     std::shared_ptr<TrackTopology>                   m_track_topology;
     std::shared_ptr<TimelineSelection>               m_timeline_selection;
-    std::shared_ptr<std::vector<rocprofvis_graph_t>> m_graphs;
+    std::shared_ptr<std::vector<TrackGraph>> m_graphs;
     DataProvider&                                    m_data_provider;
     EyeButtonState                                   m_root_eye_button_state;
 };

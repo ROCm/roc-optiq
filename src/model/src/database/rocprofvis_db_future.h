@@ -19,6 +19,7 @@ using RuntimeValue = std::variant<uint64_t, double, std::string>;
 typedef enum  rocprofvis_db_future_runtime_storage_t
 {
     kRPVFutureStorageSampleValue,
+    kRPVFutureStorageEventId,
 
     kRPVFutureRuntimeStorageSize
 }rocprofvis_db_future_runtime_storage_t;
@@ -79,10 +80,11 @@ class Future
 
         const char*                         GetAsyncQueryPtr(){return m_async_query.c_str(); }
 
+        std::vector<Future*>&               SubFeatures() { return m_sub_futures; }
         template <typename T> 
         void                                SetRuntimeStorageValue(rocprofvis_db_future_runtime_storage_t key, T&& value) 
         {
-            static_assert(std::is_same_v<std::decay_t<T>, int> || 
+            static_assert(std::is_same_v<std::decay_t<T>, uint64_t> || 
                 std::is_same_v<std::decay_t<T>, double> ||
                 std::is_same_v<std::decay_t<T>, std::string>,
                 "Unsupported type!");
@@ -101,6 +103,10 @@ class Future
         }
 
         void                               ResetRowCount() { m_processed_rows = 0; }
+
+        Future*                             AddSubFuture();
+        void                                DeleteSubFuture(Future* sub_future);
+        rocprofvis_dm_result_t              WaitAndDeleteSubFuture(Future* sub_future);
 
     private:
         // stdlib promise object
@@ -122,6 +128,7 @@ class Future
         void*                 m_user_data;
         std::mutex            m_mutex;
         std::string           m_async_query;
+        std::vector<Future*>  m_sub_futures;
         std::array<RuntimeValue, static_cast<size_t>(kRPVFutureRuntimeStorageSize)> m_runtime_storage;
 };
 

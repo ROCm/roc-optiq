@@ -13,21 +13,21 @@ Install ROCm Optiq for Windows or Linux using the installation files in the `htt
 System requirements
 ===================
 
-- You must be running ROCm version 7.1.0 or later for ROCm database file support. See :ref:`trace-file` for more information on these files.
+- You must be running ROCm 7.1.0 or later for ROCm database file support. See :ref:`trace-file` for more information on these files.
 - Your system must be running one of these operating systems:
 
   - Microsoft Windows 11
-  - Ubuntu 22.04 / Ubuntu 24.04
+  - Ubuntu 22.04 or 24.04 (Debian-based)
 
 .. note::
 
-   It's recommended to have at least 16GB of RAM to run large traces in ROCm Optiq.
+   It's recommended to have at least 16 GB of RAM to run large traces in ROCm Optiq.
 
 
 Install on Windows
 ==================
 
-1. Download the **ROCm-Optiq-Beta.exe** installer from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ and follow the instructions in the install wizard.
+1. Download the **ROCm-Optiq-Beta.exe** installer from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.2.0-optiq-beta-rc4>`_ and follow the instructions in the install wizard.
    
    .. image:: ../images/wizard.png
       :width: 500
@@ -61,7 +61,7 @@ The relevant fields are ``ID`` and the ``VERSION_ID``.
 Ubuntu 22.04 / 24.04 (Debian-based)
 -----------------------------------
 
-1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_.
+1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.2.0-optiq-beta-rc4>`_.
 2. Install the ``.deb`` package:
 
    .. code-block:: shell
@@ -76,7 +76,7 @@ Ubuntu 22.04 / 24.04 (Debian-based)
 
 .. tip::
 
-   Download the latest ``.deb`` from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.1.0-optiq-beta/>`_ to ensure ROCm Optiq is up-to-date.
+   Download the latest ``.deb`` from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.2.0-optiq-beta-rc4>`_ to ensure ROCm Optiq is up-to-date.
 
 Check the ROCm Optiq version
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -88,7 +88,7 @@ Use these commands to verify the ROCm Optiq version (when installed on Ubuntu):
    apt show roc-optiq
 
 Add ROCm binaries to your ``PATH``
-==================================
+----------------------------------
 
 Once you've installed ROCm Optiq for your operating system, add the ROCm binaries to your ``PATH`` if it isn't automatically configured:
 

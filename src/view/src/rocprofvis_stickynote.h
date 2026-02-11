@@ -3,6 +3,8 @@
 
 #pragma once
 #include "imgui.h"
+#include "rocprofvis_time_to_pixel.h"
+#include <memory>
 #include <string>
 
 namespace RocProfVis
@@ -10,20 +12,22 @@ namespace RocProfVis
 namespace View
 {
 
+class TimePixelTransform;
+
 class StickyNote
 {
 public:
     StickyNote(double time_ns, float y_offset, const ImVec2& size,
                const std::string& text, const std::string& title,
-               const std::string& project_id, double v_min, double v_max);
+               const std::string& project_id, double v_min, double v_max, bool is_minimized = true);
 
-    void Render(ImDrawList* draw_list, const ImVec2& window_position, double v_min_x,
-                double pixels_per_ns);
-    bool HandleResize(const ImVec2& window_position, double v_min_x, double v_max_x,
-                      double pixels_per_ns);
+    void Render(ImDrawList* draw_list, const ImVec2& window_position,
+                std::shared_ptr<TimePixelTransform> conversion_manager);
+    bool HandleResize(const ImVec2&       window_position,
+                      std::shared_ptr<TimePixelTransform> conversion_manager);
 
     // Drag interaction
-    bool HandleDrag(const ImVec2& window_position, double v_min_x, double v_max_x, double pixels_per_ns,
+    bool HandleDrag(const ImVec2& window_position, std::shared_ptr<TimePixelTransform> conversion_manager,
                     int& dragged_id);
     void SetTitle(std::string title);
     void SetText(std::string title);
@@ -40,6 +44,7 @@ public:
     void               SetYOffset(float y) { m_y_offset = y; }
     double             GetVMinX() const;
     double             GetVMaxX() const;
+    bool               IsMinimized() const { return m_is_minimized; }
 
 private:
     double      m_time_ns;
@@ -56,6 +61,8 @@ private:
     double      m_v_min_x;
     double      m_v_max_x;
     bool        m_resizing = false;
+    bool        m_is_minimized;
+    ImVec2      m_expanded_screen_pos = ImVec2(-1, -1);  // Temporary position for expanded note (not saved)
 };
 
 }  // namespace View

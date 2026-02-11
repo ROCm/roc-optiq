@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "widgets/rocprofvis_widget.h"
 
 // Layout constants
 constexpr float kCategorywidth = 150.0f;
@@ -61,11 +62,14 @@ SettingsPanel::Render()
 
     if(ImGui::IsPopupOpen("Settings"))
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                            m_settings.GetDefaultStyle().WindowPadding);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                            m_settings.GetDefaultStyle().ItemSpacing);
-        if(ImGui::BeginPopupModal("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+        popup_style.CenterPopup();
+
+        if(ImGui::BeginPopupModal("Settings", nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize |
+                                      ImGuiWindowFlags_NoSavedSettings))
         {
             ImGui::BeginChild("SettingsCategories",
                               ImVec2(kCategorywidth, kContentHeight),
@@ -160,15 +164,15 @@ SettingsPanel::Render()
             }
             ImGui::EndPopup();
         }
-        ImGui::PopStyleVar(2);
 
         if(m_settings_changed)
         {
             m_settings.ApplyUserSettings(m_usersettings_previous, m_settings_confirmed);
             m_usersettings_previous = m_settings.GetUserSettings();
-            m_settings_changed   = false;
-            m_settings_confirmed = false;
+            m_settings_changed      = false;
+            m_settings_confirmed    = false;
         }
+        popup_style.PopStyles();
     }
 }
 
@@ -223,7 +227,8 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::Combo("##font_size", &m_font_settings.size_index, m_font_sizes_ptr.data(),
                  static_cast<int>(m_font_sizes_ptr.size()));
     ImGui::SameLine();
-    ImGui::BeginDisabled(m_font_settings.size_index > m_fonts.GetAvailableFonts().size() - 2);
+    ImGui::BeginDisabled(m_font_settings.size_index >
+                         m_fonts.GetAvailableFonts().size() - 2);
     if(ImGui::Button("+", ImVec2(button_width, 0)))
     {
         m_font_settings.size_index++;
@@ -248,11 +253,11 @@ SettingsPanel::RenderDisplayOptions()
         ImGui::PushFont(preview_font);
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
-            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm Visualizer") +
+            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm(TM) Optiq") +
                 ImVec2(style.FramePadding.x, 2 * style.FramePadding.y),
             ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)),
             style.FrameRounding);
-        ImGui::Text("AMD ROCm Visualizer");
+        ImGui::Text("AMD ROCm(TM) Optiq");
         ImGui::PopFont();
     }
 }
@@ -272,14 +277,14 @@ SettingsPanel::RenderUnitOptions()
                             2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
-    //Options must match TimeFormat enum
-    if(ImGui::Combo("##time_format", &time_format_index, 
-        "Timecode\0"
-        "Condensed Timecode\0"
-        "Seconds\0"
-        "Milliseconds\0"
-        "Microseconds\0"
-        "Nanoseconds\0\0"))
+    // Options must match TimeFormat enum
+    if(ImGui::Combo("##time_format", &time_format_index,
+                    "Timecode\0"
+                    "Condensed Timecode\0"
+                    "Seconds\0"
+                    "Milliseconds\0"
+                    "Microseconds\0"
+                    "Nanoseconds\0\0"))
     {
         m_usersettings.unit_settings.time_format =
             static_cast<TimeFormat>(time_format_index);
@@ -293,8 +298,10 @@ SettingsPanel::RenderOtherSettings()
     ImGui::TextUnformatted("Closing options");
     ImGui::Separator();
     ImGui::AlignTextToFramePadding();
-    ImGui::Checkbox("Don't ask before exiting application", &m_usersettings.dont_ask_before_exit);
-    ImGui::Checkbox("Don't ask before closing tabs", &m_usersettings.dont_ask_before_tab_closing);
+    ImGui::Checkbox("Don't ask before exiting application",
+                    &m_usersettings.dont_ask_before_exit);
+    ImGui::Checkbox("Don't ask before closing tabs",
+                    &m_usersettings.dont_ask_before_tab_closing);
     m_settings_changed = true;
 }
 

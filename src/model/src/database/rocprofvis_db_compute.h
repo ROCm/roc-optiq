@@ -31,7 +31,7 @@ namespace DataModel
         std::string GetComputeKernelMetricsMatrix(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
     private:
         MetricIdFormat ClassifyMetricIdFormat(const std::string& s);
-        std::string SanitizeColumnName(const std::string& name);
+        std::string SanitizeMetricValueName(const std::string& name);
     };
 
 

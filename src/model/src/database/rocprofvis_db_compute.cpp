@@ -222,15 +222,14 @@ namespace DataModel
 		return MetricIdFormat::Other;
 	}
 
-	//TODO: unused (remove ?)
-	std::string ComputeQueryFactory::SanitizeColumnName(const std::string& name) {
+	std::string ComputeQueryFactory::SanitizeMetricValueName(const std::string& name) {
 		std::string temp;
 		temp.reserve(name.length() + 10);
 
 		// Check if the name is purely numeric (handles 0-127 case)
 		bool is_numeric = !name.empty() && std::all_of(name.begin(), name.end(), ::isdigit);
 		if (is_numeric) {
-			temp = "metric_" + name;
+			temp = "mv_" + name; // Prefix numeric names with 'mv_' for "metric value"
 		} else {
 			temp = name;
 		}
@@ -260,7 +259,7 @@ namespace DataModel
         std::vector<std::string> column_names;  // Track column order for sorting
 
         // Parse parameters
-        for(int i = 0; i < num; i++)
+        for(size_t i = 0; i < num; i++)
         {
             if(params[i].param_type == kRPVComputeParamWorkloadId)
             {
@@ -280,7 +279,7 @@ namespace DataModel
             }
             else if(params[i].param_type == kRPVComputeParamSortColumnIndex)
             {
-                // Parse string to integer, TODO:
+                // Parse string to integer, TODO: make safer with error handling
                 sort_column_index = std::atoi(params[i].param_str);
             }
             else if(params[i].param_type == kRPVComputeParamSortColumnOrder)
@@ -289,7 +288,7 @@ namespace DataModel
                 // convert to uppercase
                 std::transform(sort_order_in.begin(), sort_order_in.end(),
                                sort_order_in.begin(),
-                               [](unsigned char c) { return std::toupper(c); });
+                               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
                 if(sort_order_in == "ASC")
                 {
                     sort_order = "ASC";
@@ -327,11 +326,10 @@ namespace DataModel
             query += metric_id;
             query += "' THEN value END) AS ";
 
-            // Generate column alias by replacing dots and spaces with underscores
+            // Generate column alias by replacing dots with underscores and sanitizing value name
             std::string metric_alias = metric_id;
             std::replace(metric_alias.begin(), metric_alias.end(), '.', '_');
-            std::string sanitized_value_name = value_name;
-            std::replace(sanitized_value_name.begin(), sanitized_value_name.end(), ' ', '_');
+            std::string sanitized_value_name = SanitizeMetricValueName(value_name);
             std::string column_name = "metric_" + metric_alias + "_" + sanitized_value_name;
             query += column_name;
 

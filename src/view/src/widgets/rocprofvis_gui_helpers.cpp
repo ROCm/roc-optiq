@@ -101,6 +101,23 @@ RocProfVis::View::IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
     return clicked;
 }
 
+bool
+RocProfVis::View::IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold)
+{
+    if(ImGui::IsMouseReleased(button))
+    {
+        ImVec2 drag_delta = ImGui::GetMouseDragDelta(button);
+        if((drag_delta.x * drag_delta.x + drag_delta.y * drag_delta.y) <
+           (drag_threshold * drag_threshold))
+        {
+            // this is a click, not a drag
+            return true;
+        }
+    }
+    //the user is dragging. 
+    return false;
+}
+
 std::pair<bool, bool>
 RocProfVis::View::InputTextWithClear(const char* id, const char* hint, char* buf,
                                      size_t buf_size, ImFont* icon_font, ImU32 bg_color,

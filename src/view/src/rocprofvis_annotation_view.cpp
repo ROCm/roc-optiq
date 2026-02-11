@@ -39,7 +39,8 @@ AnnotationView::Render()
         ImGui::TableSetupColumn("Visibility");
         ImGui::TableHeadersRow();
 
-        double      trace_start_time = m_data_provider.GetStartTime();
+        double trace_start_time =
+            m_data_provider.DataModel().GetTimeline().GetStartTime();
         const auto& time_format =
             SettingsManager::GetInstance().GetUserSettings().unit_settings.time_format;
         std::string time_label;
@@ -76,8 +77,10 @@ AnnotationView::Render()
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                                       ImGui::GetStyleColorVec4(ImGuiCol_TableRowBg));
             }
+            std::string selectable_label =
+                note.GetTitle() + "##sticky_note_" + std::to_string(note.GetID());
 
-            if(ImGui::Selectable(note.GetTitle().c_str(), is_selected,
+            if(ImGui::Selectable(selectable_label.c_str(), is_selected,
                                  ImGuiSelectableFlags_SpanAllColumns |
                                      ImGuiSelectableFlags_AllowItemOverlap,
                                  ImVec2(0, max_row_height)))
@@ -99,7 +102,7 @@ AnnotationView::Render()
 
             // Time column
             ImGui::TableNextColumn();
-            time_label = nanosecond_to_formatted_str(note.GetTimeNs() - trace_start_time, time_format,
+            time_label = nanosecond_to_formatted_str(note.GetTimeNs(), time_format,
                                         true);
             ImGui::TextUnformatted(time_label.c_str());
 

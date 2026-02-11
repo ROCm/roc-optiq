@@ -20,7 +20,7 @@ constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
 
 SideBar::SideBar(std::shared_ptr<TrackTopology>                   topology,
                  std::shared_ptr<TimelineSelection>               timeline_selection,
-                 std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs,
+                 std::shared_ptr<std::vector<TrackGraph>> graphs,
                  DataProvider&                                    dp)
 : m_settings(SettingsManager::GetInstance())
 , m_track_topology(topology)
@@ -83,7 +83,7 @@ SideBar::Render()
                 }
                 if(header_open)
                 {
-                    for(const int& index : topology.uncategorized_graph_indices)
+                    for(const uint64_t& index : topology.uncategorized_graph_indices)
                     {
                         if(RenderTrackItem(index))
                         {
@@ -108,7 +108,7 @@ SideBar::Update()
 {}
 
 bool
-SideBar::RenderTrackItem(const int& index)
+SideBar::RenderTrackItem(const uint64_t& index)
 {
     bool state_changed = false;
 
@@ -116,9 +116,9 @@ SideBar::RenderTrackItem(const int& index)
     {
         return state_changed;
     }
-    rocprofvis_graph_t& graph = (*m_graphs)[index];
+    TrackGraph& graph = (*m_graphs)[index];
 
-    ImGui::PushID(graph.chart->GetID());
+    ImGui::PushID(static_cast<int>(graph.chart->GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
                           m_settings.GetColor(Colors::kTransparent));
@@ -133,13 +133,14 @@ SideBar::RenderTrackItem(const int& index)
         state_changed         = true;
         if(!graph.display)
         {
-            m_data_provider.UpdateHistogram({ graph.chart->GetID() }, false);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
+                { graph.chart->GetID() }, false);
         }
         else
         {
-            m_data_provider.UpdateHistogram({ graph.chart->GetID() }, true);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
+                { graph.chart->GetID() }, true);
         }
-
     }
 
     ImGui::PopFont();
@@ -229,7 +230,7 @@ SideBar::IsAllSubItemsHidden(const std::vector<IterableModel>& container)
     {
         for(const IterableModel& elem : container)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
+            TrackGraph& graph = (*m_graphs)[elem.graph_index];
             if(graph.display)
             {
                 all_hidden = false;
@@ -248,7 +249,7 @@ SideBar::HideAllSubItems(const std::vector<IterableModel>& container)
         std::vector<uint64_t> ids_to_remove;
         for(const IterableModel& elem : container)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
+            TrackGraph& graph = (*m_graphs)[elem.graph_index];
             if(graph.display == true)
             {
                 graph.display         = false;
@@ -258,7 +259,7 @@ SideBar::HideAllSubItems(const std::vector<IterableModel>& container)
         }
         if(!ids_to_remove.empty())
         {
-            m_data_provider.UpdateHistogram(ids_to_remove, false);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_remove, false);
         }
     }
 }
@@ -271,7 +272,7 @@ SideBar::HideAllUncategorizedItems(const std::vector<uint64_t>& indices)
         std::vector<uint64_t> ids_to_remove;
         for(const uint64_t& index : indices)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[index];
+            TrackGraph& graph = (*m_graphs)[index];
             if(graph.display == true)
             {
                 graph.display         = false;
@@ -281,7 +282,7 @@ SideBar::HideAllUncategorizedItems(const std::vector<uint64_t>& indices)
         }
         if(!ids_to_remove.empty())
         {
-            m_data_provider.UpdateHistogram(ids_to_remove, false);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_remove, false);
         }
     }
 }
@@ -294,7 +295,7 @@ SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
         std::vector<uint64_t> ids_to_add;
         for(const uint64_t& index : indices)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[index];
+            TrackGraph& graph = (*m_graphs)[index];
             if(graph.display == false)
             {
                 graph.display         = true;
@@ -304,7 +305,7 @@ SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
         }
         if(!ids_to_add.empty())
         {
-            m_data_provider.UpdateHistogram(ids_to_add, true);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_add, true);
         }
     }
 }
@@ -317,7 +318,7 @@ SideBar::UnhideAllSubItems(const std::vector<IterableModel>& container)
         std::vector<uint64_t> ids_to_add;
         for(const IterableModel& elem : container)
         {
-            rocprofvis_graph_t& graph = (*m_graphs)[elem.graph_index];
+            TrackGraph& graph = (*m_graphs)[elem.graph_index];
             if(graph.display == false)
             {
                 graph.display         = true;
@@ -327,7 +328,7 @@ SideBar::UnhideAllSubItems(const std::vector<IterableModel>& container)
         }
         if(!ids_to_add.empty())
         {
-            m_data_provider.UpdateHistogram(ids_to_add, true);
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_add, true);
         }
     }
 }
@@ -401,7 +402,7 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
                 ImGui::SameLine();
             }
 
-            ImGui::PushID(node.info->id);
+            ImGui::PushID(static_cast<int>(node.info->id));
             if(ImGui::TreeNodeEx(node.info->host_name.c_str(),
                                  CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
             {
@@ -487,7 +488,7 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
             EyeButtonState instrumented_thread_button_state = parent_eye_button_state;
             EyeButtonState sampled_thread_button_state      = parent_eye_button_state;
             EyeButtonState counter_button_state             = parent_eye_button_state;
-            ImGui::PushID(process.info->id);
+            ImGui::PushID(static_cast<int>(process.info->id));
 
             EyeButtonState current_eye_button_state = parent_eye_button_state;
             if(show_eye_button)

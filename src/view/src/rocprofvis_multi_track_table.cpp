@@ -1,6 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#include "rocprofvis_common_defs.h"
 #include "rocprofvis_multi_track_table.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_settings_manager.h"
@@ -19,8 +20,11 @@ constexpr const char* NO_DATA_TEXT =
     "No data available for the selected tracks or filters.";
 constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
 constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
-constexpr const char* ID_COLUMN_NAME        = "id";
+constexpr const char* ID_COLUMN_NAME        = "__uuid";
+constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
+
+constexpr const char* FOUND_ENTRIES_TEXT = "Found %llu item(s) on %llu track(s)";
 
 MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
                                  std::shared_ptr<TimelineSelection> timeline_selection,
@@ -34,6 +38,7 @@ MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
     m_widget_name = (table_type == TableType::kEventTable)
                         ? GenUniqueName("Event Table")
                         : GenUniqueName("Sample Table");
+    m_filter_store[0] = '\0';
 }
 
 MultiTrackTable::~MultiTrackTable() {}
@@ -46,6 +51,7 @@ MultiTrackTable::HandleTrackSelectionChanged()
     double                end_ns;
     m_timeline_selection->GetSelectedTracks(tracks);
 
+    const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
     // If no valid time range is provided, use the full trace range
     if(m_timeline_selection->HasValidTimeRangeSelection())
     {
@@ -53,15 +59,15 @@ MultiTrackTable::HandleTrackSelectionChanged()
     }
     else
     {
-        start_ns = m_data_provider.GetStartTime();
-        end_ns   = m_data_provider.GetEndTime();
+        start_ns = tlm.GetStartTime();
+        end_ns   = tlm.GetEndTime();
     }
 
     // loop trough tracks and filter out ones that don't match the table type
     std::vector<uint64_t> filtered_tracks;
     for(uint64_t track_id : tracks)
     {
-        const track_info_t* track_info = m_data_provider.GetTrackInfo(track_id);
+        const TrackInfo* track_info = tlm.GetTrack(track_id);
         if(track_info)
         {
             if((track_info->track_type == kRPVControllerTrackTypeSamples &&
@@ -85,7 +91,7 @@ MultiTrackTable::HandleTrackSelectionChanged()
     // if no tracks match the table type, clear the table
     if(filtered_tracks.empty())
     {
-        m_data_provider.ClearTable(m_table_type);
+        m_data_provider.DataModel().GetTables().ClearTable(m_table_type);
         fetch_result = true;
     }
     else
@@ -121,83 +127,90 @@ MultiTrackTable::HandleTrackSelectionChanged()
 void
 MultiTrackTable::Render()
 {
-    auto table_params = m_data_provider.GetTableParams(m_table_type);
+    auto table_params = m_data_provider.DataModel().GetTables().GetTableParams(m_table_type);
     if(table_params)
     {
-        ImGui::Text("Cached %llu to %llu of %llu events for %llu tracks",
-                    table_params->m_start_row,
-                    table_params->m_start_row + table_params->m_req_row_count,
-                    m_data_provider.GetTableTotalRowCount(m_table_type),
-                    table_params->m_track_ids.size());
+        ImGui::Text(
+            FOUND_ENTRIES_TEXT,
+            m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type),
+            table_params->m_track_ids.size());
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+        ImGui::SameLine();
+        ImGui::Text(
+            " | Cached %llu to %llu entries",
+            table_params->m_start_row,
+            table_params->m_start_row + table_params->m_req_row_count);
+#endif
     }
 
     ImGui::BeginGroup();
-    if(m_table_type == TableType::kEventTable)
-    {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Group By");
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Group Columns");
-    }
+
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Filter");
+    ImGui::TextUnformatted("Aggregate by Column:");
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Group Columns");
+#endif
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Filter:");
     ImGui::EndGroup();
 
     ImGui::SameLine();
 
     ImGui::BeginGroup();
-    if(m_table_type == TableType::kEventTable)
+    ImGui::SetNextItemAllowOverlap();
+    if(ImGui::Combo("##group_by", &m_group_by_selection_index,
+                    m_group_by_choices_ptr.data(),
+                    static_cast<int>(m_group_by_choices_ptr.size())))
     {
-        ImGui::SetNextItemAllowOverlap();
-        if(ImGui::Combo("##group_by", &m_group_by_selection_index,
-                        m_group_by_choices_ptr.data(),
-                        static_cast<int>(m_group_by_choices_ptr.size())))
+        if(m_group_by_selection_index == 0)
         {
-            if(m_group_by_selection_index == 0)
-            {
-                m_pending_filter_options.group_by = "";
-            }
-            else
-            {
-                m_pending_filter_options.group_by =
-                    m_group_by_choices_ptr[m_group_by_selection_index];
-            }
+            m_pending_filter_options.group_by = "";
         }
-
-        if(m_pending_filter_options.group_by != "")
+        else
         {
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() -
-                                 ImGui::GetFrameHeightWithSpacing() -
-                                 ImGui::GetFontSize());
-            if(XButton("clear_group"))
-            {
-                m_pending_filter_options.group_by = "";
-                m_group_by_selection_index = 0;
-            }
+            m_pending_filter_options.group_by =
+                m_group_by_choices_ptr[m_group_by_selection_index];
         }
-
-        ImGui::SetNextItemAllowOverlap();
-        ImGui::BeginDisabled(m_filter_options.group_by == "");
-        ImGui::InputTextWithHint(
-            "##group_columns",
-            "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
-            "MIN(duration) as min_duration, MAX(duration) as max_duration",
-            m_pending_filter_options.group_columns,
-            IM_ARRAYSIZE(m_pending_filter_options.group_columns));
-        if(strlen(m_pending_filter_options.group_columns) > 0)
-        {
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
-            if(XButton("clear_group_columns"))
-            {
-                m_pending_filter_options.group_columns[0] = '\0';
-            }
-        }
-        ImGui::EndDisabled();
     }
 
+    if(m_pending_filter_options.group_by != "")
+    {
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFrameHeightWithSpacing() -
+                             ImGui::GetFontSize());
+        if(XButton("clear_group"))
+        {
+            m_pending_filter_options.group_by = "";
+            m_group_by_selection_index        = 0;
+        }
+    }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
     ImGui::SetNextItemAllowOverlap();
+    ImGui::BeginDisabled(m_filter_options.group_by == "");
+    ImGui::InputTextWithHint(
+        "##group_columns",
+        "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+        "MIN(duration) as min_duration, MAX(duration) as max_duration",
+        m_pending_filter_options.group_columns,
+        IM_ARRAYSIZE(m_pending_filter_options.group_columns));
+    if(strlen(m_pending_filter_options.group_columns) > 0)
+    {
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
+        if(XButton("clear_group_columns"))
+        {
+            m_pending_filter_options.group_columns[0] = '\0';
+        }
+    }
+    ImGui::EndDisabled();
+#endif
+
+    ImGui::SetNextItemAllowOverlap();
+    // Filter disabled when "group by" is selected
+    ImGui::BeginDisabled(m_filter_options.group_by != "");
     ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
                              m_pending_filter_options.filter,
                              IM_ARRAYSIZE(m_pending_filter_options.filter));
@@ -210,11 +223,36 @@ MultiTrackTable::Render()
             m_pending_filter_options.filter[0] = '\0';
         }
     }
+    ImGui::EndDisabled();
+
     ImGui::EndGroup();
     ImGui::SameLine();
     if(ImGui::Button("Submit", ImVec2(0, ImGui::GetItemRectSize().y)))
     {
         m_filter_requested = true;
+
+        if(m_group_by_selection_index == 0)
+        {
+            if(m_filter_store[0] != '\0')
+            {
+                // restore previous filter
+                snprintf(m_pending_filter_options.filter,
+                         IM_ARRAYSIZE(m_pending_filter_options.filter), "%s",
+                         m_filter_store);
+                m_filter_store[0] = '\0';
+            }
+        }
+        else
+        {
+            if(m_pending_filter_options.filter[0] != '\0')
+            {
+                // backup current filter
+                snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s",
+                         m_pending_filter_options.filter);
+                // clear filter when group by is selected
+                m_pending_filter_options.filter[0] = '\0';
+            }
+        }
     }
     InfiniteScrollTable::Render();
     RenderContextMenu();
@@ -239,50 +277,47 @@ MultiTrackTable::Update()
     if(m_data_changed)
     {
         const std::vector<std::string>& column_names =
-            m_data_provider.GetTableHeader(m_table_type);
+            m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
 
-        if(m_table_type == TableType::kEventTable)
+        if(m_filter_options.group_by == "")
         {
-            if(m_filter_options.group_by == "")
+            m_group_by_selection_index = 0;
+            m_group_by_choices.clear();
+
+            // Create a list of choices for the combo box for selecting the group
+            // column. Populate the combo box with column names but filter out empty
+            // and internal columns (those starting with '_')
+            m_group_by_choices.reserve(column_names.size() + 1);
+            m_group_by_choices.push_back("-- None --");
+
+            // Filter out columns
+            for(size_t i = 0; i < column_names.size(); i++)
             {
-                m_group_by_selection_index = 0;
-                m_group_by_choices.clear();
-
-                // Create a list of choices for the combo box for selecting the group
-                // column. Populate the combo box with column names but filter out empty
-                // and internal columns (those starting with '_')
-                m_group_by_choices.reserve(column_names.size() + 1);
-                m_group_by_choices.push_back("-- None --");
-
-                // Filter out columns
-                for(size_t i = 0; i < column_names.size(); i++)
+                const auto& col = column_names[i];
+                if(col.empty() || col[0] == '_')
                 {
-                    const auto& col = column_names[i];
-                    if(col.empty() || col[0] == '_')
-                    {
-                        continue;  // Skip empty or internal columns
-                    }
-                    // skip id column too
-                    if(i == m_important_column_idxs[ImportantColumns::kId])
-                    {
-                        continue;
-                    }
-                    m_group_by_choices.push_back(col);
+                    continue;  // Skip empty or internal columns
                 }
+                // skip event id column too
+                if(i == m_important_column_idxs[ImportantColumns::kDbEventId])
+                {
+                    continue;
+                }
+                m_group_by_choices.push_back(col);
             }
-            else
-            {
-                std::string selected_option = m_filter_options.group_by;
-                m_group_by_choices.resize(2);
-                m_group_by_choices[1]             = selected_option;
-                m_pending_filter_options.group_by = selected_option;
-                m_group_by_selection_index        = 1;
-            }
-            m_group_by_choices_ptr.resize(m_group_by_choices.size());
-            for(size_t i = 0; i < m_group_by_choices.size(); i++)
-            {
-                m_group_by_choices_ptr[i] = m_group_by_choices[i].c_str();
-            }
+        }
+        else
+        {
+            std::string selected_option = m_filter_options.group_by;
+            m_group_by_choices.resize(2);
+            m_group_by_choices[1]             = selected_option;
+            m_pending_filter_options.group_by = selected_option;
+            m_group_by_selection_index        = 1;
+        }
+        m_group_by_choices_ptr.resize(m_group_by_choices.size());
+        for(size_t i = 0; i < m_group_by_choices.size(); i++)
+        {
+            m_group_by_choices_ptr[i] = m_group_by_choices[i].c_str();
         }
     }
 
@@ -292,12 +327,12 @@ MultiTrackTable::Update()
 void
 MultiTrackTable::FormatData() const
 {
-    std::vector<formatted_column_info_t>& formatted_column_data =
-        m_data_provider.GetMutableFormattedTableData(m_table_type);
+    std::vector<FormattedColumnInfo>& formatted_column_data =
+        m_data_provider.DataModel().GetTables().GetMutableFormattedTableData(m_table_type);
 
     // clear previous formatting info
     formatted_column_data.clear();
-    formatted_column_data.resize(m_data_provider.GetTableHeader(m_table_type).size());
+    formatted_column_data.resize(m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type).size());
     InfiniteScrollTable::FormatTimeColumns();
 }
 
@@ -305,7 +340,7 @@ void
 MultiTrackTable::IndexColumns()
 {
     const std::vector<std::string>& column_names =
-        m_data_provider.GetTableHeader(m_table_type);
+        m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
     // remember column index positions
     m_important_column_idxs =
         std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
@@ -324,7 +359,11 @@ MultiTrackTable::IndexColumns()
             }
             else if(col == ID_COLUMN_NAME)
             {
-                m_important_column_idxs[kId] = i;
+                m_important_column_idxs[kUUId] = i;
+            }
+            else if(col == EVENT_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kDbEventId] = i;
             }
             else if(col == NAME_COLUMN_NAME)
             {
@@ -411,7 +450,7 @@ MultiTrackTable::RenderContextMenu()
         else if(ImGui::MenuItem("Copy Cell Data", nullptr, false))
         {
             const std::vector<std::vector<std::string>>& table_data =
-                m_data_provider.GetTableData(m_table_type);
+                m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
             if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
             {
                 spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
@@ -436,11 +475,11 @@ MultiTrackTable::RenderContextMenu()
         // {
         //     uint64_t event_id = INVALID_UINT64_INDEX;
 
-        //     if(m_important_columns[kId] != INVALID_COLUMN_INDEX &&
-        //        m_important_columns[kId] < table_data[m_selected_row].size())
+        //     if(m_important_columns[kUUId] != INVALID_COLUMN_INDEX &&
+        //        m_important_columns[kUUId] < table_data[m_selected_row].size())
         //     {
         //         event_id =
-        //             std::stoull(table_data[m_selected_row][m_important_columns[kId]]);
+        //             std::stoull(table_data[m_selected_row][m_important_columns[kUUId]]);
         //     }
         // }
 

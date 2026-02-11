@@ -26,6 +26,7 @@ class TraceView;
 class SettingsManager;
 class EventSearch;
 class SummaryView;
+class Minimap;
 
 class SystemTraceProjectSettings : public ProjectSetting
 {
@@ -52,7 +53,7 @@ public:
     void Update() override;
     void Render() override;
 
-    bool OpenFile(const std::string& file_path);
+    bool LoadTrace(rocprofvis_controller_t* controller, const std::string& file_path);
 
     void CreateView();
     void DestroyView();
@@ -86,15 +87,13 @@ private:
     std::shared_ptr<VFixedContainer>   m_timeline_container;
     std::shared_ptr<EventSearch>       m_event_search;
     std::shared_ptr<SummaryView>       m_summary_view;
+    std::shared_ptr<Minimap>           m_minimap;
 
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_analysis_item;
 
     DataProvider m_data_provider;
     bool         m_view_created;
-    bool         m_open_loading_popup;
-
-    SettingsManager& m_settings_manager;
 
     typedef struct popup_info_t
     {
@@ -104,6 +103,7 @@ private:
     } popup_info_t;
 
     popup_info_t                        m_popup_info;
+    bool                                m_show_minimap_popup;
     std::unordered_map<int, ViewCoords> m_bookmarks;
 
     std::shared_ptr<AnnotationsManager> m_annotations;

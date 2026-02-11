@@ -26,6 +26,9 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size = ImVec2(0, 0),
            ImU32 bg_color_hover  = IM_COL32(0, 0, 0, 0),
            ImU32 bg_color_active = IM_COL32(0, 0, 0, 0), const char* id = nullptr);
 
+bool
+IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold = 5.0f);
+
 std::pair<bool, bool>
 InputTextWithClear(const char* id, const char* hint, char* buf, size_t buf_size,
                    ImFont* icon_font, ImU32 bg_color, const ImGuiStyle& style,

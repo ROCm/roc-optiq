@@ -8,9 +8,9 @@ project(${TARGET_NAME})
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
-set(PROJECT_VERSION_MINOR 1)
+set(PROJECT_VERSION_MINOR 2)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 0)
+set(PROJECT_VERSION_BUILD 3)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -20,15 +20,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
-option(JSON_TRACE_SUPPORT "Build with support for JSON traces" OFF)
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
+option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" OFF)
 
-if(JSON_TRACE_SUPPORT) 
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DJSON_TRACE_SUPPORT")
-endif(JSON_TRACE_SUPPORT)
+if(APPLE AND USE_NATIVE_FILE_DIALOG)
+    set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
+        "Use the OS native file dialog instead of ImGui file dialog" FORCE)
+    message(WARNING "Disabling native file dialog on macOS; it must run on the main thread.")
+endif()
+
 if(COMPUTE_UI_SUPPORT) 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)
@@ -42,6 +45,13 @@ if(USE_NATIVE_FILE_DIALOG)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NATIVE_FILE_DIALOG")
 endif(USE_NATIVE_FILE_DIALOG)
 
+# Set GLFW library type based on option
+if(GLFW_LINK_STATIC)
+    set(GLFW_LIBRARY_TYPE "STATIC" CACHE STRING "GLFW library type" FORCE)
+else()
+    set(GLFW_LIBRARY_TYPE "SHARED" CACHE STRING "GLFW library type" FORCE)
+endif()
+
 # Add third-party libraries, core, and model BEFORE controller
 add_subdirectory(thirdparty)
 add_subdirectory(src/core)
@@ -49,6 +59,8 @@ add_subdirectory(src/model)
 add_subdirectory(src/controller)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
+
+find_package(Vulkan REQUIRED)
 
 # View related src files
 set(VIEW_FILES
@@ -72,6 +84,13 @@ set(VIEW_FILES
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp
     src/view/src/rocprofvis_data_provider.cpp
+    src/view/src/rocprofvis_root_view.cpp
+    src/view/src/model/rocprofvis_topology_model.cpp
+    src/view/src/model/rocprofvis_timeline_model.cpp
+    src/view/src/model/rocprofvis_tables_model.cpp
+    src/view/src/model/rocprofvis_summary_model.cpp
+    src/view/src/model/rocprofvis_event_model.cpp
+    src/view/src/model/rocprofvis_trace_data_model.cpp
     src/view/src/rocprofvis_raw_track_data.cpp
     src/view/src/rocprofvis_events.cpp
     src/view/src/rocprofvis_event_manager.cpp
@@ -83,6 +102,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_multi_track_table.cpp
     src/view/src/rocprofvis_event_search.cpp
     src/view/src/rocprofvis_summary_view.cpp
+    src/view/src/rocprofvis_time_to_pixel.cpp
+    src/view/src/rocprofvis_minimap.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
     src/view/src/widgets/rocprofvis_tab_container.cpp
@@ -96,13 +117,14 @@ set(VIEW_FILES
 
 if(COMPUTE_UI_SUPPORT) 
 list(APPEND VIEW_FILES
-    src/view/src/rocprofvis_compute_root.cpp
-	src/view/src/rocprofvis_compute_summary.cpp
-	src/view/src/rocprofvis_compute_block.cpp
-	src/view/src/rocprofvis_compute_table.cpp
-	src/view/src/rocprofvis_compute_data_provider.cpp
-	src/view/src/rocprofvis_compute_roofline.cpp
-	src/view/src/rocprofvis_navigation_manager.cpp
+    src/view/src/compute/rocprofvis_compute_view.cpp
+    src/view/src/compute/rocprofvis_compute_root.cpp
+    src/view/src/compute/rocprofvis_compute_summary.cpp
+    src/view/src/compute/rocprofvis_compute_block.cpp
+    src/view/src/compute/rocprofvis_compute_table.cpp
+    src/view/src/compute/rocprofvis_compute_data_provider.cpp
+    src/view/src/compute/rocprofvis_compute_roofline.cpp
+    src/view/src/compute/rocprofvis_navigation_manager.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
 )
 endif(COMPUTE_UI_SUPPORT)
@@ -124,11 +146,21 @@ if(WIN32)
         )
 endif(WIN32)
 
-add_executable(${TARGET_NAME} 
-    src/app/src/rocprofvis_imgui_vulkan.cpp 
-    src/app/src/main.cpp
-    src/app/src/glfw_util.cpp
-    ${VIEW_FILES})
+if(APPLE)
+    add_executable(${TARGET_NAME} MACOSX_BUNDLE
+        src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/main.cpp
+        src/app/src/glfw_util.cpp
+        src/app/src/rocprofvis_cli_parser.cpp
+        ${VIEW_FILES})
+else()
+    add_executable(${TARGET_NAME}
+        src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/main.cpp
+        src/app/src/glfw_util.cpp
+        src/app/src/rocprofvis_cli_parser.cpp
+        ${VIEW_FILES})
+endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
 
@@ -137,11 +169,37 @@ if(WIN32)
     set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "/ENTRY:mainCRTStartup")
 endif(WIN32)
 
+if(APPLE)
+    set(MACOSX_BUNDLE_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/Info.plist.in")
+    configure_file("${MACOSX_BUNDLE_PLIST}" "${CMAKE_CURRENT_BINARY_DIR}/Info.plist" @ONLY)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.amd.roc-optiq"
+        MACOSX_BUNDLE_BUNDLE_NAME "ROCm Optiq"
+        MACOSX_BUNDLE_ICON_FILE "roc-optiq.icns"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING
+            "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION_BUILD}"
+    )
+    
+    # Set icon file location in bundle
+    set_source_files_properties(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.icns"
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    
+    # Add icon to target sources
+    target_sources(${TARGET_NAME} PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.icns"
+    )
+endif()
+
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
@@ -156,6 +214,35 @@ target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
+if(APPLE)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        BUILD_RPATH "@executable_path/../Frameworks"
+        INSTALL_RPATH "@executable_path/../Frameworks"
+    )
+    add_custom_command(
+        TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "$<TARGET_FILE_NAME:glfw>"
+            "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"
+        COMMENT "Creating GLFW soname symlink for macOS runtime lookup"
+    )
+    add_custom_command(
+        TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:glfw>"
+            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "$<TARGET_FILE_NAME:glfw>"
+            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${Vulkan_LIBRARIES}"
+            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+        COMMENT "Staging GLFW and Vulkan dylibs into the app bundle"
+    )
+endif()
+
 # === NativeFileDialog Extended ===
 if(USE_NATIVE_FILE_DIALOG)
   set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
@@ -168,16 +255,15 @@ if(NOT USE_NATIVE_FILE_DIALOG)
 endif()
 
 # === Vulkan ===
-find_package(Vulkan REQUIRED)
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")
 
 # Csv parser enables coverage in debug builds so we need to enable it too
-if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX) AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE)))
+if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang") AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE)))
     message(STATUS "Adding --coverage to linker flags for roc-optiq due to potential gcov symbols from dependencies.")
     target_link_options(${TARGET_NAME} PRIVATE --coverage)
 endif()
 
-#CPACK Packaging Enabling
+# CPACK Packaging Enabling
 set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
 if( NOT DEFINED BUILD_ID )
   if( DEFINED ENV{BUILD_ID} )
@@ -188,9 +274,9 @@ if( NOT DEFINED BUILD_ID )
   endif()
 endif()
 
-#Package Maintainer Name and Email
-set(PKG_MAINTAINER_NM  "ROCm Optiq Support")
-set(PKG_MAINTAINER_EMAIL  "rocm-optiq@amd.com")
+# Package Maintainer Name and Email
+set(PKG_MAINTAINER_NM "ROCm Optiq Support")
+set(PKG_MAINTAINER_EMAIL "rocm-optiq@amd.com")
 
 set(RUNTIME_COMP_TYPE "RV_RUNTIME")
 set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")
@@ -199,31 +285,35 @@ set(EXTENDED_PACKAGE_DESCRIPTION
 
 include(GNUInstallDirs)
 
-
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
-set(CPACK_GENERATOR "TGZ;DEB;RPM" CACHE STRING "package types to be produced")
 
-#Default Value is 0, this value will be used
-#When ROCM LibPatch Version when not explicitly set
+set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
+# Detect Linux distro for additional package types
+if(UNIX AND NOT APPLE)
+  # Add DEB for Debian based distros
+  if(EXISTS "/etc/debian_version")
+    list(APPEND CPACK_GENERATOR "DEB")
+  # Make RPM the default for RedHat based distros  
+  elseif(EXISTS "/etc/redhat-release" OR EXISTS "/etc/oracle-release" OR EXISTS "/etc/system-release")
+    list(APPEND CPACK_GENERATOR "RPM")
+  endif()
+endif()
+
+# Default Value is 0, this value will be used
+# When ROCM LibPatch Version when not explicitly set
 set(ROCM_VERSION_FOR_PACKAGE "0")
 if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
   set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
 endif()
-if (NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
-  if (DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
-     set(CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
-  else()
-     set(CPACK_DEBIAN_PACKAGE_RELEASE "local.${BUILD_ID}")
-  endif()
-endif()
 
-## Packaging directives
+
+# Packaging directives
 set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
 set(CPACK_PACKAGE_VERSION
-	"${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${ROCM_VERSION_FOR_PACKAGE}")
+	"${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${PROJECT_VERSION_BUILD}")
 set(CPACK_PACKAGE_CONTACT "${PKG_MAINTAINER_NM} <${PKG_MAINTAINER_EMAIL}>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PKG_DESCRIPTION}")
 
@@ -242,53 +332,65 @@ install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
         DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT ${RUNTIME_COMP_TYPE} )
 
-## Debian package specific variables
+# Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+# Set package version to 1 
+if(NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
+  set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
+endif()
 message(STATUS "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}")
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
-set(DEB_VULKAN_DEPENDS_STRING "libvulkan1")
-set(DEB_GLFW_DEPENDS_STRING "libglfw3")
-set(DEB_DEPENDS_STRING "${DEB_VULKAN_DEPENDS_STRING}, ${DEB_GLFW_DEPENDS_STRING}, libc6")
+set(DEB_DEPENDS_LIST "libvulkan1")
+if(NOT GLFW_LINK_STATIC)
+    list(APPEND DEB_DEPENDS_LIST "libglfw3")
+endif()
+list(APPEND DEB_DEPENDS_LIST "libc6")
+string(JOIN ", " DEB_DEPENDS_STRING ${DEB_DEPENDS_LIST})
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/roc-optiq")
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
-## RPM package specific variables
-set(CMAKE_SKIP_RPATH TRUE)
-set ( CPACK_RPM_COMPONENT_INSTALL ON )
-set ( CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}" )
-if( NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
-  if(DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE})
-    set(CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE})
-  else()
-    set(CPACK_RPM_PACKAGE_RELEASE "local.${BUILD_ID}")
-  endif()
+# RPM package specific variables
+if(NOT APPLE)
+    set(CMAKE_SKIP_RPATH TRUE)
+endif()
+set(CPACK_RPM_COMPONENT_INSTALL ON)
+set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+
+# Set package version to 1 
+if(NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
+  set(CPACK_RPM_PACKAGE_RELEASE "1")
 endif()
 
-## 'dist' breaks manual builds on debian systems due to empty Provides
+# 'dist' breaks manual builds on debian systems due to empty Provides
 execute_process( COMMAND rpm --eval %{?dist}
                  RESULT_VARIABLE PROC_RESULT
                  OUTPUT_VARIABLE EVAL_RESULT
-                 OUTPUT_STRIP_TRAILING_WHITESPACE )
-if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
-  string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
+                 OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "")
+  string(APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}")
 endif()
 message(STATUS "Using CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
-set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
+set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
 
-# TODO - To Review RPM Runtime package Dependencies for Vulkan, Others
-set ( RPM_VULKAN_DEPENDS_STRING "vulkan" )
-set ( RPM_GLFW_DEPENDS_STRING "glfw" )
-set ( RPM_DEPENDS_STRING "${RPM_VULKAN_DEPENDS_STRING} ${RPM_GLFW_DEPENDS_STRING}" )
-set ( CPACK_RPM_PACKAGE_REQUIRES ${RPM_DEPENDS_STRING} )
-set ( CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}" )
+# Use automatic shared libraries dependency detection
+set(CPACK_RPM_PACKAGE_AUTOREQPROV "yes")
+set(CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
-## Include packaging
+if("DEB" IN_LIST CPACK_GENERATOR)
+  message(STATUS "Expected DEB Filename: ${CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE}_<ARCH>.deb")
+endif()
+if("RPM" IN_LIST CPACK_GENERATOR)
+  message(STATUS "Expected RPM Filename: ${CPACK_RPM_RV_RUNTIME_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}.<ARCH>.rpm")
+endif()
+
+# Include packaging
 include(CPack)
 
+# Copy runtime files to target folder
 if(WIN32)
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD

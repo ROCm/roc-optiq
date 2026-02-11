@@ -9,6 +9,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_event_search.h"
+#include "rocprofvis_minimap.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_summary_view.h"
@@ -29,7 +30,7 @@ TraceView::TraceView()
 : m_timeline_view(nullptr)
 , m_horizontal_split_container(nullptr)
 , m_view_created(false)
-, m_open_loading_popup(false)
+, m_show_minimap_popup(false)
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
@@ -38,12 +39,35 @@ TraceView::TraceView()
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
-, m_settings_manager(SettingsManager::GetInstance())
 , m_event_search(nullptr)
 , m_summary_view(nullptr)
 {
+    m_data_provider.SetEventDataReadyCallback([this](uint64_t           event_id,
+                                                     const std::string& trace_path,
+                                                     bool               success) {
+        (void)trace_path;                                    
+        if(!success)
+        {
+            spdlog::debug("Failed to fetch event data for event ID: {}", event_id);
+            return;
+        }
+
+        bool result = m_data_provider.FetchEventFlowDetails(event_id);
+        if(!result)
+        {
+            spdlog::debug("Failed to fetch event flow details for event ID: {}",
+                            event_id);
+        }
+        result = m_data_provider.FetchEventCallStackData(event_id);
+        if(!result)
+        {
+            spdlog::debug("Failed to fetch event call stack data for event ID: {}",
+                            event_id);
+        }
+    });
+
     m_data_provider.SetTrackDataReadyCallback(
-        [](uint64_t track_id, const std::string& trace_path, const data_req_info_t& req) {
+        [](uint64_t track_id, const std::string& trace_path, const RequestInfo& req) {
             EventManager::GetInstance()->AddEvent(std::make_shared<TrackDataEvent>(
                 static_cast<int>(RocEvents::kNewTrackData), track_id, trace_path,
                 req.request_id, req.response_code));
@@ -110,11 +134,11 @@ TraceView::TraceView()
             }
             else if(event->IsBatch())
             {
-                m_data_provider.FreeAllEvents();
+                m_data_provider.DataModel().GetEvents().ClearEvents();
             }
             else
             {
-                m_data_provider.FreeEvent(event->GetEventID());
+                m_data_provider.DataModel().GetEvents().RemoveEvent(event->GetEventID());
             }
         }
     };
@@ -194,6 +218,10 @@ TraceView::Update()
     {
         m_summary_view->Update();
     }
+    if(m_minimap && m_show_minimap_popup)
+    {
+        m_minimap->UpdateData();
+    }
 }
 
 void
@@ -207,6 +235,7 @@ TraceView::CreateView()
                                                              m_timeline_selection, m_annotations);
     m_event_search          = std::make_shared<EventSearch>(m_data_provider);
     m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
+    m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
         [this]() { m_timeline_view->RenderHistogram(); });
 
@@ -225,7 +254,7 @@ TraceView::CreateView()
         m_settings_manager.GetAppWindowSettings().show_details_panel;
 
     LayoutItem m_histogram_item(0, 80);
-    m_histogram_item.m_item = m_histogram_widget;
+    m_histogram_item.m_item    = m_histogram_widget;
     m_histogram_item.m_visible = m_settings_manager.GetAppWindowSettings().show_histogram;
     LayoutItem timeline_item(0, 0);
     timeline_item.m_item = m_timeline_view;
@@ -252,6 +281,7 @@ TraceView::CreateView()
 void
 TraceView::DestroyView()
 {
+    m_minimap                    = nullptr;
     m_timeline_view              = nullptr;
     m_sidebar_item->m_item       = nullptr;
     m_horizontal_split_container = nullptr;
@@ -260,13 +290,12 @@ TraceView::DestroyView()
 }
 
 bool
-TraceView::OpenFile(const std::string& file_path)
+TraceView::LoadTrace(rocprofvis_controller_t* controller, const std::string& file_path)
 {
     bool result = false;
-    result      = m_data_provider.FetchTrace(file_path);
+    result      = m_data_provider.FetchTrace(controller, file_path);
     if(result)
     {
-        m_open_loading_popup = true;
         if(m_view_created)
         {
             m_timeline_view->ResetView();
@@ -276,14 +305,32 @@ TraceView::OpenFile(const std::string& file_path)
     return result;
 }
 
-void
+void 
 TraceView::Render()
 {
+
     if(m_horizontal_split_container &&
        m_data_provider.GetState() == ProviderState::kReady)
     {
         m_horizontal_split_container->Render();
         HandleHotKeys();
+    }
+
+    if(m_show_minimap_popup && m_minimap)
+    {
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+
+        float dpi = SettingsManager::GetInstance().GetDPI();
+        ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
+        if(ImGui::Begin("Minimap", &m_show_minimap_popup,
+                        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
+        {
+            m_minimap->Render();
+        }
+        ImGui::End();
+        popup_style.PopStyles();
     }
 
     if(m_popup_info.show_popup)
@@ -293,63 +340,10 @@ TraceView::Render()
                                                     m_popup_info.message);
     }
 
+    // Render loading overlay if loading
     if(m_data_provider.GetState() == ProviderState::kLoading)
     {
-        if(m_open_loading_popup)
-        {
-            ImGui::OpenPopup("Loading");
-            m_open_loading_popup = false;
-        }
-
-        ImGui::SetNextWindowSize(ImVec2(300, 200));
-        if(ImGui::BeginPopupModal("Loading"))
-        {
-            const char* label      = "Please wait...";
-            ImVec2      label_size = ImGui::CalcTextSize(label);
-
-            const char* progress_label      = m_data_provider.GetProgressMessage();
-            ImVec2      progress_label_size = ImGui::CalcTextSize(progress_label);
-
-            float item_spacing = 10.0f;
-
-            float dot_radius  = 5.0f;
-            int   num_dots    = 3;
-            float dot_spacing = 5.0f;
-            float anim_speed  = 5.0f;
-
-            ImVec2 dot_size =
-                MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
-
-            ImVec2 available_space = ImGui::GetContentRegionAvail();
-            ImVec2 pos             = ImGui::GetCursorScreenPos();
-            ImVec2 center_pos      = ImVec2(
-                pos.x + (available_space.x - label_size.x) * 0.5f,
-                pos.y + (available_space.y - (label_size.y + dot_size.y +
-                                              progress_label_size.y + item_spacing)) *
-                            0.5f);
-            ImGui::SetCursorScreenPos(center_pos);
-
-            ImGui::TextUnformatted(label);
-
-            pos            = ImGui::GetCursorScreenPos();
-            ImVec2 dot_pos = ImVec2(pos.x + (available_space.x - dot_size.x) * 0.5f,
-                                    pos.y + item_spacing);
-            ImGui::SetCursorScreenPos(dot_pos);
-
-            RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                                       IM_COL32(85, 85, 85, 255), anim_speed);
-
-            pos        = ImGui::GetCursorScreenPos();
-            center_pos = ImVec2(
-                pos.x + (available_space.x - progress_label_size.x) * 0.5f,
-                pos.y + (available_space.y - (label_size.y + dot_size.y +
-                                              progress_label_size.y + item_spacing)) *
-                            0.5f);
-            ImGui::SetCursorScreenPos(center_pos);
-            ImGui::TextUnformatted(progress_label);
-
-            ImGui::EndPopup();
-        }
+        RenderLoadingScreen(m_data_provider.GetProgressMessage());
     }
 
     if(m_summary_view)
@@ -499,7 +493,7 @@ TraceView::RenderEditMenuOptions()
     {
         if(m_timeline_selection)
         {
-            std::shared_ptr<std::vector<rocprofvis_graph_t>> graphs = m_timeline_view->GetGraphs();
+            std::shared_ptr<std::vector<TrackGraph>> graphs = m_timeline_view->GetGraphs();
             if(graphs)
             {
                 m_timeline_selection->UnselectAllTracks(*graphs);
@@ -513,6 +507,20 @@ TraceView::RenderEditMenuOptions()
         {
             m_timeline_selection->UnselectAllEvents();
         }
+    }
+    ImGui::Separator();
+    if(ImGui::MenuItem("Save Trace Selection", nullptr, false, IsTrimSaveAllowed()))
+    {
+        FileFilter trace_filter;
+        trace_filter.m_name       = "Traces";
+        trace_filter.m_extensions = { "db", "rpd" };
+
+        std::vector<FileFilter> filters;
+        filters.push_back(trace_filter);
+
+        AppWindow::GetInstance()->ShowSaveFileDialog(
+            "Save Trace Selection", filters, "",
+            [this](std::string file_path) -> void { SaveSelection(file_path); });
     }
     ImGui::Separator();
 }
@@ -574,12 +582,29 @@ TraceView::RenderToolbar()
     RenderSeparator();
     RenderBookmarkControls();
     RenderSeparator();
+    
+    ImFont* icon_font =
+        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+    ImGui::PushFont(icon_font);
+    if(ImGui::Button(ICON_COMPASS))
+    {
+        m_show_minimap_popup = !m_show_minimap_popup;
+    }
+    ImGui::PopFont();
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Show Minimap");
+    }
+    RenderSeparator();
+
     if(ImGui::Button("Reset View"))
     {
         if(m_timeline_view)
         {
-            m_timeline_view->MoveToPosition(m_data_provider.GetStartTime(),
-                                            m_data_provider.GetEndTime(), 0.0, false);
+            const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
+            m_timeline_view->MoveToPosition(timeline.GetStartTime(),
+                                            timeline.GetEndTime(), 0.0, false);
         }
     }
     if(ImGui::IsItemHovered())
@@ -690,11 +715,18 @@ TraceView::RenderAnnotationControls()
     ImGui::PushID("add_new_sticky");
     if(ImGui::Button(ICON_ADD_NOTE))
     {
-        ViewCoords coords = m_timeline_view->GetViewCoords();
-        m_annotations->OpenStickyNotePopup(
-            INVALID_TIME_NS, m_timeline_view->GetScrollPosition(), coords.v_min_x,
-            coords.v_max_x, m_timeline_view->GetGraphSize());
-        m_annotations->ShowStickyNotePopup();
+        auto tpt = m_timeline_view->GetTransform();
+        if(tpt)
+        {
+            ViewCoords coords       = m_timeline_view->GetViewCoords();
+            ImVec2     graph_size   = m_timeline_view->GetGraphSize();
+            double     center_time  = tpt->PixelToTime(graph_size.x * 0.5f);
+            float      center_y     = m_timeline_view->GetScrollPosition() + graph_size.y * 0.5f;
+            m_annotations->OpenStickyNotePopup(
+                center_time, center_y, coords.v_min_x,
+                coords.v_max_x, graph_size);
+            m_annotations->ShowStickyNotePopup();
+        }
     }
     if(ImGui::IsItemHovered())
     {
@@ -992,7 +1024,8 @@ SystemTraceProjectSettings::Bookmarks()
     for(jt::Json& bookmark :
         m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK].getArray())
     {
-        bookmarks[bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].getNumber()] = ViewCoords{
+        bookmarks[static_cast<int>(
+            bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].getNumber())] = ViewCoords{
             static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y].getNumber()),
             static_cast<float>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z].getNumber()),
             static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X].getNumber()),

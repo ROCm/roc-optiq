@@ -13,6 +13,31 @@ namespace DataModel
 {
 
 class Table;
+class InfoTable;
+
+class InfoTableRow : public DmBase {
+public:
+    InfoTableRow(InfoTable* ctx, rocprofvis_dm_table_row_t  handle) : m_ctx(ctx), m_handle(handle) {};
+    // Method to read TableRow object property as uint64
+    // @param property - property enumeration rocprofvis_dm_table_row_property_t
+    // @param index - index of any indexed property
+    // @param value - pointer reference to uint64_t return value
+    // @return status of operation   
+    rocprofvis_dm_result_t          GetPropertyAsUint64(rocprofvis_dm_property_t property,
+        rocprofvis_dm_property_index_t index,
+        uint64_t* value) override;
+    // Method to read TableRow object property as char*
+    // @param property - property enumeration rocprofvis_dm_table_row_property_t
+    // @param index - index of any indexed property
+    // @param value - pointer reference to char* return value
+    // @return status of operation   
+    rocprofvis_dm_result_t          GetPropertyAsCharPtr(rocprofvis_dm_property_t property,
+        rocprofvis_dm_property_index_t index,
+        char** value) override;
+private:
+    InfoTable* m_ctx;
+    rocprofvis_dm_table_row_t      m_handle;
+};
 
 // TableRow is class of table row object
 class TableRow : public DmBase {

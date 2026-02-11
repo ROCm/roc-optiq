@@ -6,6 +6,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_stickynote.h"
+#include "widgets/rocprofvis_widget.h"
 #include <algorithm>
 #include <cstring>
 #include <vector>
@@ -44,10 +45,15 @@ AnnotationsManagerProjectSettings::FromJson()
             note_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X].getNumber());
         double v_max = static_cast<double>(
             note_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X].getNumber());
+        
+        bool is_minimized = true;
+        if (note_json.contains(JSON_KEY_ANNOTATION_IS_MINIMIZED) && note_json[JSON_KEY_ANNOTATION_IS_MINIMIZED].isBool()) {
+            is_minimized = note_json[JSON_KEY_ANNOTATION_IS_MINIMIZED].getBool();
+        }
 
         ImVec2 size(size_x, size_y);
         m_annotations_manager.AddSticky(time_ns, y_offset, size, text, title, v_min,
-                                        v_max);
+                                        v_max, is_minimized);
     }
 }
 
@@ -69,6 +75,7 @@ AnnotationsManagerProjectSettings::ToJson()
         sticky_json[JSON_KEY_ANNOTATION_ID]               = notes[i].GetID();
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X] = notes[i].GetVMinX();
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X] = notes[i].GetVMaxX();
+        sticky_json[JSON_KEY_ANNOTATION_IS_MINIMIZED]     = notes[i].IsMinimized();
 
         m_settings_json[JSON_KEY_ANNOTATIONS][i] = sticky_json;
     }
@@ -169,10 +176,10 @@ AnnotationsManager::Clear()
 void
 AnnotationsManager::AddSticky(double time_ns, float y_offset, const ImVec2& size,
                               const std::string& text, const std::string& title,
-                              double v_min, double v_max)
+                              double v_min, double v_max, bool is_minimized)
 {
     m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id, v_min,
-                                v_max);
+                                v_max, is_minimized);
 }
 
 bool
@@ -193,22 +200,17 @@ AnnotationsManager::ShowStickyNoteEditPopup()
     if(!m_show_sticky_edit_popup) return;
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            popup_bg     = settings.GetColor(Colors::kFillerColor);
-    ImU32            border_color = settings.GetColor(Colors::kBorderColor);
     ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
     ImU32            button_color = settings.GetColor(Colors::kHighlightChart);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+    
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
     ImGui::OpenPopup("Edit Annotation");
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
-    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
     ImGui::SetNextWindowSize(ImVec2(390, 420),
                              ImGuiCond_Once);  // Initial size, user can resize
@@ -294,11 +296,8 @@ AnnotationsManager::ShowStickyNoteEditPopup()
 
         ImGui::EndPopup();
     }
-    ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar(2);
-
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(1);  // Pop text color
+    // PopUpStyle destructor will automatically pop remaining styles
 }
 
 void
@@ -325,30 +324,22 @@ AnnotationsManager::ShowStickyNotePopup()
     }
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            popup_bg     = settings.GetColor(Colors::kFillerColor);
-    ImU32            border_color = settings.GetColor(Colors::kBorderColor);
     ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
     ImU32            button_color = settings.GetColor(Colors::kHighlightChart);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
-
-    ImGui::OpenPopup("Annotation");
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 18));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, popup_bg);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+    
     ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+
+    ImGui::OpenPopup("Add Annotation");
 
     ImGui::SetNextWindowSize(ImVec2(390, 420),
                              ImGuiCond_Once);  // Initial size, user can resize
-    if(ImGui::BeginPopupModal("Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
+    if(ImGui::BeginPopupModal("Add Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
     {
-        ImGui::Text("Add Annotation");
-        ImGui::Separator();
-        ImGui::Spacing();
 
         ImGui::Text("Title:");
         ImGui::SetNextItemWidth(-FLT_MIN);  // Make the input take the full width
@@ -401,11 +392,8 @@ AnnotationsManager::ShowStickyNotePopup()
 
         ImGui::EndPopup();
     }
-    ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar(2);
-
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(1);  // Pop text color
+    // PopUpStyle destructor will automatically pop remaining styles
 }
 
 void

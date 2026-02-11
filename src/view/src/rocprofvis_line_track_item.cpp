@@ -20,10 +20,10 @@ constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 constexpr float SCALE_SEPERATOR_WIDTH    = 2.0f;
 
-LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, float zoom,
-                             double time_offset_ns, double& min_x, double& max_x,
-                             double scale_x, float max_meta_area_width)
-: TrackItem(dp, id, name, zoom, time_offset_ns, min_x, max_x, scale_x)
+LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
+                             float max_meta_area_width,
+                             std::shared_ptr<TimePixelTransform> tpt)
+: TrackItem(dp, track_id, tpt)
 , m_data({})
 , m_highlight_y_limits()
 , m_highlight_y_range(false)
@@ -35,6 +35,11 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t id, std::string name, fl
 , m_max_y("edit_max")
 , m_vertical_padding(DEFAULT_VERTICAL_PADDING)
 {
+    if(!m_tpt)
+    {
+        spdlog::error("LineTrackItem: m_tpt shared_ptr is null, cannot construct");
+        return;
+    }
     m_meta_area_scale_width = max_meta_area_width;
     UpdateMetadata();
 
@@ -52,11 +57,11 @@ LineTrackItem::~LineTrackItem() {}
 void
 LineTrackItem::UpdateMetadata()
 {
-    const track_info_t* track_info = m_data_provider.GetTrackInfo(m_id);
+    const TrackInfo* track_info = m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
     if(track_info)
     {
-        const counter_info_t* counter =
-            m_data_provider.GetCounterInfo(track_info->topology.id);
+        const CounterInfo* counter =
+            m_data_provider.DataModel().GetTopology().GetCounter(track_info->topology.id);
         if(counter)
         {
             m_units = counter->units;
@@ -66,7 +71,7 @@ LineTrackItem::UpdateMetadata()
     }
     else
     {
-        spdlog::warn("Track info not found for track ID: {}", m_id);
+        spdlog::warn("Track info not found for track ID: {}", m_track_id);
     }
     // Ensure that min and max are not equal to allow rendering
     if(m_min_y.Value() == m_max_y.Value())
@@ -123,9 +128,9 @@ LineTrackItem::BoxPlotRender(float graph_width)
     for(size_t i = 0; i < m_data.size(); ++i)
     {
         ImVec2 point_start = MapToUI(m_data[i].m_start_ts, m_data[i].m_value,
-                                     cursor_position, content_size, m_scale_x, scale_y);
+                                     cursor_position, content_size, scale_y);
         ImVec2 point_end = MapToUI(m_data[i].m_end_ts, m_data[i].m_value, cursor_position,
-                                   content_size, m_scale_x, scale_y);
+                                   content_size, scale_y);
 
         ImU32 fill_color = (!m_show_boxplot)                          ? transparent_color
                            : (m_show_boxplot_stripes && (i % 2 == 0)) ? alt_fill_color
@@ -140,7 +145,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
             // Map the start of the next box
             ImVec2 next_point_start =
                 MapToUI(m_data[i + 1].m_start_ts, m_data[i + 1].m_value, cursor_position,
-                        content_size, m_scale_x, scale_y);
+                        content_size, scale_y);
 
             draw_list->AddLine(point_end, next_point_start, outline_color,
                                DEFAULT_LINE_THICKNESS);
@@ -161,12 +166,12 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
     if(hovered_idx != -1)
     {
-        auto&       hovered_item           = m_data[hovered_idx];
-        const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
-        std::string start_str =
-            nanosecond_to_formatted_str(hovered_item.m_start_ts - m_min_x, time_format, true);
-        std::string dur_str =
-            nanosecond_to_formatted_str(hovered_item.m_end_ts - hovered_item.m_start_ts, time_format, true);
+        auto&       hovered_item = m_data[hovered_idx];
+        const auto& time_format  = m_settings.GetUserSettings().unit_settings.time_format;
+        std::string start_str    = nanosecond_to_formatted_str(
+            hovered_item.m_start_ts - m_tpt->GetMinX(), time_format, true);
+        std::string dur_str = nanosecond_to_formatted_str(
+            hovered_item.m_end_ts - hovered_item.m_start_ts, time_format, true);
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             m_settings.GetDefaultStyle().WindowPadding);
@@ -180,10 +185,10 @@ LineTrackItem::BoxPlotRender(float graph_width)
         ImGui::PopStyleVar(2);
 
         // Map start and end points
-        ImVec2 start_point = MapToUI(hovered_item.m_start_ts, hovered_item.m_value, cursor_position,
-                                     content_size, m_scale_x, scale_y);
-        ImVec2 end_point   = MapToUI(hovered_item.m_end_ts, hovered_item.m_value, cursor_position, content_size,
-                                     m_scale_x, scale_y);
+        ImVec2 start_point = MapToUI(hovered_item.m_start_ts, hovered_item.m_value,
+                                     cursor_position, content_size, scale_y);
+        ImVec2 end_point   = MapToUI(hovered_item.m_end_ts, hovered_item.m_value,
+                                     cursor_position, content_size, scale_y);
 
         // Draw a circle at the start
         draw_list->AddCircle(start_point, 4.0f, accent_red, 12, 3);
@@ -227,13 +232,13 @@ LineTrackItem::ReleaseData()
 bool
 LineTrackItem::ExtractPointsFromData()
 {
-    const RawTrackData* rtd = m_data_provider.GetRawTrackData(m_id);
+    const RawTrackData* rtd = m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id);
 
     // If no raw track data is found, this means the track was unloaded before the
     // response was processed
     if(!rtd)
     {
-        spdlog::error("No raw track data found for track {}", m_id);
+        spdlog::error("No raw track data found for track {}", m_track_id);
         // Reset the request state to idle
         m_request_state = TrackDataRequestState::kIdle;
         return false;
@@ -242,7 +247,7 @@ LineTrackItem::ExtractPointsFromData()
     const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
     if(!sample_track)
     {
-        spdlog::debug("Invalid track data type for track {}", m_id);
+        spdlog::debug("Invalid track data type for track {}", m_track_id);
         m_request_state = TrackDataRequestState::kError;
         return false;
     }
@@ -254,11 +259,10 @@ LineTrackItem::ExtractPointsFromData()
 
     if(sample_track->GetData().empty())
     {
-        spdlog::debug("No data for track {}", m_id);
+        spdlog::debug("No data for track {}", m_track_id);
         return false;
     }
-    const std::vector<rocprofvis_trace_counter_t> track_data = sample_track->GetData();
-    uint64_t                                      count      = track_data.size();
+    const std::vector<TraceCounter>& track_data = sample_track->GetData();
 
     m_data = track_data;
 
@@ -395,11 +399,11 @@ LineTrackItem::RenderMetaAreaOptions()
 
 ImVec2
 LineTrackItem::MapToUI(double x_in, double y_in, ImVec2& cursor_position,
-                       ImVec2& content_size, double scaleX, double scaleY)
+                       ImVec2& content_size, double scaleY)
 {
     ImVec2 container_pos = ImGui::GetWindowPos();
 
-    double x = container_pos.x + (x_in - (m_min_x + m_time_offset_ns)) * scaleX;
+    double x = container_pos.x + m_tpt->RawTimeToPixel(x_in);
     double y = cursor_position.y + content_size.y - (y_in - m_min_y.Value()) * scaleY;
 
     return ImVec2(static_cast<float>(x), static_cast<float>(y));
@@ -565,6 +569,22 @@ LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
     double      result = 0.0;
     const char* first  = input.data();
     const char* last   = input.data() + input.size();
+    
+#if defined(__APPLE__)
+    // macOS doesn't support from_chars for floating point yet, use strtod as fallback
+    char* end_ptr = nullptr;
+    std::string null_terminated(input);
+    result = std::strtod(null_terminated.c_str(), &end_ptr);
+    if(end_ptr == null_terminated.c_str() + null_terminated.size() && std::isfinite(result))
+    {
+        return result;
+    }
+    else
+    {
+        m_text_field.RevertToDefault();
+        return m_default_value;
+    }
+#else
     auto [ptr, error_code] =
         std::from_chars(first, last, result, std::chars_format::general);
     if(error_code == std::errc{} && std::isfinite(result) && ptr == last)
@@ -576,6 +596,7 @@ LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
         m_text_field.RevertToDefault();
         return m_default_value;
     }
+#endif
 }
 
 }  // namespace View

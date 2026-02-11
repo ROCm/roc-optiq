@@ -10,16 +10,29 @@
 
 /************************************Database interface methods*************************************/
 /****************************************************************************************************
+* @brief Deytects database type
+*       kAutodetect = 0, 
+*	    kRocpdSqlite = 1,
+*	    kRocprofSqlite = 2
+*       kRocprofMultinodeSqlite = 3
+*       kComputeSqlite = 4
+* 
+* @param filename path of the database file
+* @return database type enumeration
+* 
+***************************************************************************************************/
+rocprofvis_db_type_t rocprofvis_db_identify_type(rocprofvis_db_filename_t filename);
+/****************************************************************************************************
  * @brief Opens database of provided path and type
  *      kAutodetect = 0, 
  *	    kRocpdSqlite = 1,
  *	    kRocprofSqlite = 2
+ *      kRocprofMultinodeSqlite = 3
+ *      kComputeSqlite = 4
  * 
  * @param filename path of the database file
  * @param type  type enumeration, kAutodetect for automatic detection 
  * @return handler to database object
- * 
- * @note Currently only old rocpd schema fully supported. Working on rocprof schema
  * 
  ***************************************************************************************************/
 rocprofvis_dm_database_t rocprofvis_db_open_database(
@@ -110,6 +123,24 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                     rocprofvis_db_track_selection_t,
                                     rocprofvis_db_future_t);    
 
+/****************************************************************************************************
+* @brief method to build compute database query based on use case and set of parameters
+*
+* @param database database handle
+* @param use_case compute use case
+* @param num number of parameters
+* @param params tracks pointer to array of parameters as rocprofvis_db_compute_param_t structures
+* @param out_query pointer to a string returned to a caller
+* @return status of operation
+*
+***************************************************************************************************/
+rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
+    rocprofvis_dm_database_t database,
+    rocprofvis_db_compute_use_case_enum_t use_case, rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
+    char** out_query);
+
+/****************************************************************************************************
+* ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_database_t database, 
     rocprofvis_dm_timestamp_t start,
@@ -192,6 +223,27 @@ rocprofvis_dm_result_t  rocprofvis_db_execute_query_async(
                                     rocprofvis_dm_charptr_t,
                                     rocprofvis_db_future_t,
                                     rocprofvis_dm_table_id_t*);
+
+/****************************************************************************************************
+* @brief Asynchronous call to read a table result of specified compute SQL query
+*
+* @param database database handle
+* @param use_case
+* @param query SQL query string
+* @param object future handle allocated by rocprofvis_db_future_alloc
+* @param id new id is assigned to the table and returned using this reference pointer
+* @return status of operation
+*
+* @note Object will stay in trace memory until deleted.
+*          Use rocprofvis_dm_delete_table_at or rocprofvis_dm_delete_all_tables for deletion
+*
+***************************************************************************************************/
+rocprofvis_dm_result_t  rocprofvis_db_execute_compute_query_async(
+                                  rocprofvis_dm_database_t,  
+                                  rocprofvis_db_compute_use_case_enum_t,
+                                  rocprofvis_dm_charptr_t,
+                                  rocprofvis_db_future_t,
+                                  rocprofvis_dm_table_id_t*);
 
 /************************************Data model trace interface*************************************/
 
@@ -286,6 +338,23 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_event_property_for(
                                     rocprofvis_dm_trace_t,
                                     rocprofvis_dm_event_property_type_t,
                                     rocprofvis_dm_event_id_t);     
+/****************************************************************************************************
+* @brief Delete event property object of specified type
+*
+* @param trace trace object handle created with rocprofvis_dm_create_trace()
+* @param type type of property
+*                             kRPVDMEventFlowTrace,
+*                             kRPVDMEventStackTrace,
+*                             kRPVDMEventExtData,
+* @param object reference
+*
+* @return status of operation
+*
+***************************************************************************************************/
+rocprofvis_dm_result_t  rocprofvis_dm_delete_event_property( 
+    rocprofvis_dm_trace_t,
+    rocprofvis_dm_event_property_type_t,
+    rocprofvis_dm_handle_t); 
 
 /****************************************************************************************************
  * @brief Delete all event property objects of specified type

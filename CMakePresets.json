@@ -55,28 +55,6 @@
             }
         },        
         {
-            "name": "x86-debug",
-            "displayName": "x86 Debug",
-            "description": "Configure ROCm Optiq for Windows (32-bit) with Visual Studio, enabling detailed debugging symbols and checks.",
-            "inherits": "windows-base",
-            "architecture": {
-                "value": "x86",
-                "strategy": "external"
-            },
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
-            "name": "x86-release",
-            "displayName": "x86 Release",
-            "description": "Configure ROCm Optiq for Windows (32-bit) with Visual Studio, optimized for speed and efficiency.",
-            "inherits": "windows-base",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
-            }
-        },
-        {
             "name": "linux-base",
             "hidden": true,
             "description": "Base settings for Linux GCC builds of ROCm Optiq",
@@ -116,6 +94,54 @@
             "displayName": "ROCm Optiq release",
             "description": "Configure ROCm Optiq for Linux with GCC, optimized for speed and efficiency with symbols.",
             "inherits": "linux-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "macos-base",
+            "hidden": true,
+            "description": "Base settings for macOS builds of ROCm Optiq",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_INSTALL_PREFIX": "/usr/local",
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "macos-debug",
+            "displayName": "ROCm Optiq debug",
+            "description": "Configure ROCm Optiq for macOS with Clang, enabling detailed debugging symbols and checks.",
+            "inherits": "macos-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "JSON_TRACE_SUPPORT": "ON",
+                "COMPUTE_UI_SUPPORT": "ON",
+                "ROCPROFVIS_DEVELOPER_MODE": "ON"
+            }
+        },
+        {
+            "name": "macos-release",
+            "displayName": "ROCm Optiq release",
+            "description": "Configure ROCm Optiq for macOS with Clang, optimized for speed and efficiency in production.",
+            "inherits": "macos-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "macos-release-symbols",
+            "displayName": "ROCm Optiq release with symbols",
+            "description": "Configure ROCm Optiq for macOS with Clang, optimized for speed and efficiency with symbols.",
+            "inherits": "macos-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
@@ -160,6 +186,24 @@
             "displayName": "",
             "configurePreset": "x64-release-symbols",
             "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "macOS Debug Build",
+            "description": "Build ROCm Optiq for macOS in Debug mode",
+            "displayName": "macOS Debug Build",
+            "configurePreset": "macos-debug"
+        },
+        {
+            "name": "macOS Release Build",
+            "description": "Build ROCm Optiq for macOS in Release mode",
+            "displayName": "macOS Release Build",
+            "configurePreset": "macos-release"
+        },
+        {
+            "name": "macOS Release Build with Symbols",
+            "description": "Build ROCm Optiq for macOS in Release mode with debug symbols",
+            "displayName": "macOS Release Build with Symbols",
+            "configurePreset": "macos-release-symbols"
         }
     ]
 }

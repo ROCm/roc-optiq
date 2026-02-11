@@ -53,7 +53,7 @@ public:
 
 private:
     std::string MemoryString(float mb);
-    void        AlignedBar(const summary_info_t::AggregateMetrics& info,
+    void        AlignedBar(const SummaryInfo::AggregateMetrics& info,
                            const std::optional<float>& value, const char* overlay = nullptr);
 
     DataProvider&    m_data_provider;
@@ -88,17 +88,17 @@ private:
     };
     struct NodeFilterComboModel
     {
-        std::vector<const summary_info_t::AggregateMetrics*> info;
-        std::vector<const char*>                             labels;
-        int                                                  selected_idx;
+        std::vector<const SummaryInfo::AggregateMetrics*> info;
+        std::vector<const char*>                          labels;
+        int                                               selected_idx;
     };
     struct GPUFilterComboModel
     {
-        std::vector<const summary_info_t::AggregateMetrics*> info;
-        std::list<std::string>                               labels;
-        std::vector<const char*>                             labels_ptr;
-        int                                                  selected_idx;
-        const summary_info_t::AggregateMetrics*              parent_info;
+        std::vector<const SummaryInfo::AggregateMetrics*> info;
+        std::list<std::string>                            labels;
+        std::vector<const char*>                          labels_ptr;
+        int                                               selected_idx;
+        const SummaryInfo::AggregateMetrics*              parent_info;
     };
     struct KernelPieModel
     {
@@ -139,13 +139,13 @@ private:
     KernelPieModel       m_kernel_pie;
 
     // Widget state/properties...
-    const std::vector<summary_info_t::KernelMetrics>* m_kernels;
-    DisplayMode                                       m_display_mode;
-    bool                                              m_show_legend;
-    std::optional<size_t>                             m_hovered_idx;
-    std::optional<size_t>                             m_selected_idx;
-    std::optional<size_t>                             m_padded_idx; // Position of "Others" slice
-    ImVec2                                            m_min_size;
+    const std::vector<SummaryInfo::KernelMetrics>* m_kernels;
+    DisplayMode                                    m_display_mode;
+    bool                                           m_show_legend;
+    std::optional<size_t>                          m_hovered_idx;
+    std::optional<size_t>                          m_selected_idx;
+    std::optional<size_t> m_padded_idx;  // Position of "Others" slice
+    ImVec2                m_min_size;
 
     // Update flags.
     bool m_data_dirty;

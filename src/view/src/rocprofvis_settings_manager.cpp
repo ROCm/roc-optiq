@@ -19,6 +19,7 @@ namespace RocProfVis
 namespace View
 {
 
+
 constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(52, 54, 58, 255),     // kMetaDataColor
     IM_COL32(44, 46, 50, 255),     // kMetaDataColorSelected
@@ -65,9 +66,26 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(180, 160, 60, 255),   // kBgWarning
     IM_COL32(160, 60, 60, 255),    // kBgError
     IM_COL32(60, 160, 60, 255),    // kBgSuccess
-    IM_COL32(220, 180, 40, 255),   // kStickyNoteYellow
+    IM_COL32(60, 80, 100, 255),    // kStickyNoteYellow
     IM_COL32(230, 240, 255, 140),  // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
+    IM_COL32(60, 80, 120, 255),    // Colors::kMinimapBin1
+    IM_COL32(60, 0, 80, 255),      // Colors::kMinimapBin2
+    IM_COL32(100, 0, 120, 255),    // Colors::kMinimapBin3
+    IM_COL32(140, 20, 40, 255),    // Colors::kMinimapBin4
+    IM_COL32(200, 50, 0, 255),     // Colors::kMinimapBin5
+    IM_COL32(240, 120, 0, 255),    // Colors::kMinimapBin6
+    IM_COL32(255, 240, 180, 255),  // Colors::kMinimapBin7
+    IM_COL32(80, 80, 80, 255),     // Colors::kMinimapBinCounter1
+    IM_COL32(110, 110, 110, 255),  // Colors::kMinimapBinCounter2
+    IM_COL32(140, 140, 140, 255),  // Colors::kMinimapBinCounter3
+    IM_COL32(170, 170, 170, 255),  // Colors::kMinimapBinCounter4
+    IM_COL32(190, 190, 190, 255),  // Colors::kMinimapBinCounter5
+    IM_COL32(210, 210, 210, 255),  // Colors::kMinimapBinCounter6
+    IM_COL32(230, 230, 230, 255),  // Colors::kMinimapBinCounter7
+    IM_COL32(0, 0, 0, 255),        // Colors::kMinimapBg
+    IM_COL32(0, 0, 0, 180),        // Colors::kLoadingScreenColor
+
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
@@ -116,9 +134,25 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(250, 250, 100, 255),  // Colors::kBgWarning
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
-    IM_COL32(255, 230, 50, 255),   // Colors::kStickyNoteYellow
+    IM_COL32(255, 235, 110, 255),  // Colors::kStickyNoteYellow
     IM_COL32(20, 30, 50, 140),     // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
+    IM_COL32(180, 200, 220, 255),  // Colors::kMinimapBin1
+    IM_COL32(150, 100, 180, 255),  // Colors::kMinimapBin2
+    IM_COL32(180, 60, 140, 255),   // Colors::kMinimapBin3
+    IM_COL32(220, 80, 80, 255),    // Colors::kMinimapBin4
+    IM_COL32(240, 120, 40, 255),   // Colors::kMinimapBin5
+    IM_COL32(255, 160, 60, 255),   // Colors::kMinimapBin6
+    IM_COL32(255, 200, 120, 255),  // Colors::kMinimapBin7
+    IM_COL32(230, 230, 230, 255),  // Colors::kMinimapBinCounter1
+    IM_COL32(210, 210, 210, 255),  // Colors::kMinimapBinCounter2
+    IM_COL32(190, 190, 190, 255),  // Colors::kMinimapBinCounter3
+    IM_COL32(170, 170, 170, 255),  // Colors::kMinimapBinCounter4
+    IM_COL32(140, 140, 140, 255),  // Colors::kMinimapBinCounter5
+    IM_COL32(110, 110, 110, 255),  // Colors::kMinimapBinCounter6
+    IM_COL32(80, 80, 80, 255),     // Colors::kMinimapBinCounter7
+    IM_COL32(255, 255, 255, 255),  // Colors::kMinimapBg
+    IM_COL32(0, 0, 0, 60),        //Colors::kLoadingScreenColor
 
 
     // This must follow the ordering of Colors enum.
@@ -141,6 +175,8 @@ SettingsManager::GetInstance()
     static SettingsManager instance;
     return instance;
 }
+
+ 
 
 void
 SettingsManager::ApplyColorStyling()
@@ -478,11 +514,11 @@ SettingsManager::InitStyling()
     style.TabRounding       = 6.0f;
     style.WindowRounding    = 8.0f;
     style.ScrollbarRounding = 8.0f;
-
     style.FramePadding  = ImVec2(10, 6);
     style.ItemSpacing   = ImVec2(10, 8);
     style.WindowPadding = ImVec2(4, 4);
-
+    style.ChildRounding = 6.0f;
+ 
     m_default_style = style;  // Store the our customized style
 
     std::vector<ImU32> colormap;

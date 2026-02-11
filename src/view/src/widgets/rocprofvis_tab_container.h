@@ -21,6 +21,7 @@ public:
 
     void AddTab(const TabItem& tab);
     void AddTab(TabItem&& tab);
+
     void RemoveTab(const std::string& id);
     void RemoveTab(int index);
 
@@ -48,7 +49,6 @@ private:
     std::vector<TabItem> m_tabs;
     int                  m_active_tab_index;  // index of the currently active tab
     int  m_set_active_tab_index;      // used to programmatically set the active tab
-    int  m_index_to_remove;
     int  m_pending_to_remove;
     bool m_allow_tool_tips;           // whether to show tooltips for tabs
     bool m_enable_send_close_event;   // enable sending close tab events

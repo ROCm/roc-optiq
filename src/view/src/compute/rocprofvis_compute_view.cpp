@@ -125,6 +125,8 @@ ComputeView::RenderToolbar()
 
 ComputeTester::ComputeTester(DataProvider& data_provider)
 : m_data_provider(data_provider)
+, m_memory_chart(data_provider)
+, m_memory_chart_fetched(false)
 , m_selections({ true, 0, {}, {}, SelectionState::FP32, {}, {}, {} })
 , m_display_names({
       {
@@ -161,14 +163,34 @@ ComputeTester::~ComputeTester() {}
 
 void
 ComputeTester::Update()
-{}
+{
+    // Auto-fetch memory chart metrics once workloads are available
+    if(!m_memory_chart_fetched)
+    {
+        const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
+            m_data_provider.ComputeModel().GetWorkloads();
+        if(!workloads.empty())
+        {
+            // Use the first workload and all its kernels
+            const WorkloadInfo& workload = workloads.begin()->second;
+            std::vector<uint32_t> kernel_ids;
+            for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
+            {
+                kernel_ids.push_back(kernel.second.id);
+            }
+            m_memory_chart.FetchMemChartMetrics(workload.id, kernel_ids);
+            m_memory_chart_fetched = true;
+        }
+    }
+
+    m_memory_chart.Update();
+}
 
 void
 ComputeTester::Render()
 {
 
-    ComputeMemoryChartView memory_chart = ComputeMemoryChartView(m_data_provider);
-    memory_chart.Render();
+    m_memory_chart.Render();
  
 
     /*const std::unordered_map<uint32_t, WorkloadInfo>& workloads =

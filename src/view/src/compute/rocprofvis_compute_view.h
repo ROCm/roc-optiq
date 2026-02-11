@@ -4,6 +4,7 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_root_view.h"
+#include "rocprofvis_compute_memory_chart.h"
 
 namespace RocProfVis
 {
@@ -95,6 +96,9 @@ private:
     DataProvider&  m_data_provider;
     SelectionState m_selections;
     DisplayStrings m_display_names;
+
+    ComputeMemoryChartView m_memory_chart;
+    bool                   m_memory_chart_fetched;
 };
 
 }  // namespace View

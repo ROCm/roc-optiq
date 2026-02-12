@@ -9,6 +9,8 @@ paths-ignore:
 queries:
   - uses: security-and-quality
 
+# Filter out specific queries from the suite
 query-filters:
   - exclude:
       id: cpp/irregular-enum-init
+

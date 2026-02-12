@@ -8,7 +8,6 @@ paths-ignore:
 
 queries:
   - uses: security-and-quality
-  - name: queries to exclude
-    exclude:
-      id:
+  - name: queries to disable
+    disable:
         - cpp/irregular-enum-init

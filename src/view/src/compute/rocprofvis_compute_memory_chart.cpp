@@ -201,6 +201,13 @@ ComputeMemoryChartView::Render()
     // Outer container with themed background
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgMain));
     ImGui::PushStyleColor(ImGuiCol_Border, Settings().GetColor(Colors::kBorderGray));
+
+
+      ImVec2 avail   = ImGui::GetContentRegionAvail();
+    float  offsetX = std::max(0.0f, (avail.x - 1500.0f) * 0.5f);  // 1500 = diagram width
+    ImGui::SetCursorPosX(offsetX);
+
+
     ImGui::BeginChild("MemoryChart", ImVec2(0, 0), ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_HorizontalScrollbar);
     ImGui::PopStyleColor(2);
@@ -319,6 +326,10 @@ ComputeMemoryChartView::RenderInstrDispatch(float x, float y)
 
     ImGui::BeginChild("InstrDispatch_Container", ImVec2(w, h), ImGuiChildFlags_None);
 
+    // Store screen-space positions for cross-child arrow drawing
+    ImVec2 trapTopPositions[8];
+    ImVec2 trapMainScreenPos;
+
     // Lambda to draw a single trapezoid
     auto drawTrapezoid = [&](int index) {
         char id[64];
@@ -338,8 +349,10 @@ ComputeMemoryChartView::RenderInstrDispatch(float x, float y)
             dl->AddConvexPolyFilled(pts, 4, Settings().GetColor(Colors::kBgPanel));
             dl->AddPolyline(pts, 4, Settings().GetColor(Colors::kBorderGray),
                             ImDrawFlags_Closed, 1.0f);
-
-  
+            // Store midpoint of the visible right edge for connecting arrows
+            // (child is trap_w/2 wide, so the shape is clipped there)
+            trapTopPositions[index] =
+                ImVec2(pos.x + trap_w / 2.0f, pos.y + trap_h * 0.5f);
         }
         ImGui::EndChild();
         ImGui::PopStyleColor();
@@ -347,7 +360,7 @@ ComputeMemoryChartView::RenderInstrDispatch(float x, float y)
 
     // Trapezoid column — 8 trapezoids stacked vertically
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-    ImGui::BeginChild("TrapColumn", ImVec2(trap_w, h));
+    ImGui::BeginChild("TrapColumn", ImVec2(trap_w , h));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
     for(int i = 0; i < num_traps; ++i)
         drawTrapezoid(i);
@@ -375,32 +388,90 @@ ComputeMemoryChartView::RenderInstrDispatch(float x, float y)
     dl->AddConvexPolyFilled(pts, 4, Settings().GetColor(Colors::kBgPanel));
     dl->AddPolyline(pts, 4, Settings().GetColor(Colors::kBorderGray), ImDrawFlags_Closed,
                     1.0f);
+    trapMainScreenPos = pos;
     ImGui::PopStyleVar();
     ImGui::EndChild();
     ImGui::PopStyleColor();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(30, 0));
-    ImGui::SameLine();
 
-    // Main content block
-    ImGui::BeginChild("InstrDispatch", ImVec2(120, h), ImGuiChildFlags_Borders);
-
-    BlockHeader("Instr Dispatch");
-
-    if(ImGui::BeginTable("##dispatch", 2))
+    // Draw connecting arrows from each small trapezoid to TrapMain at the container level
+    // so they aren't clipped by the individual child window boundaries
     {
-        MetricRow("SALU:", Val(SALU));
-        MetricRow("SMEM:", Val(SMEM));
-        MetricRow("VALU:", Val(VALU));
-        MetricRow("MFMA:", Val(MFMA));
-        MetricRow("VMEM:", Val(VMEM));
-        MetricRow("LDS:", Val(LDS));
-        MetricRow("GWS:", Val(GWS));
-        MetricRow("Br:", Val(BR));
-        ImGui::EndTable();
-    }
+        ImDrawList* containerDl = ImGui::GetWindowDrawList();
+        ImU32       arrowColor  = Settings().GetColor(Colors::kArrowColor);
+        ImU32       textColor   = Settings().GetColor(Colors::kTextMain);
 
-    ImGui::EndChild();
+        // Labels and metrics matching the original dispatch table rows
+        const char*          labels[]  = { "SALU", "SMEM", "VALU", "MFMA",
+                                           "VMEM", "LDS",  "GWS",  "Br" };
+        const MemChartMetric metrics[] = { SALU, SMEM, VALU, MFMA, VMEM, LDS, GWS, BR };
+
+        const float pillPadX = 4.0f;   // horizontal padding inside pillbox
+        const float pillPadY = 1.0f;   // vertical padding inside pillbox
+        const float pillRound = 4.0f;  // corner rounding
+        const float pillGap   = 1.0f;  // gap between title and value pills
+
+        ImU32 borderCol   = IM_COL32(0, 0, 0, 255);
+        ImU32 titleBgCol  = Settings().GetColor(Colors::kBorderGray);
+        ImU32 valueBgCol  = IM_COL32(255, 255, 255, 255);
+        ImU32 titleTxtCol = Settings().GetColor(Colors::kTextMain);
+        ImU32 valueTxtCol = IM_COL32(0, 0, 0, 255);
+
+        // Pre-pass: find the widest pill across all entries so they're uniform
+        float uniformW = 0.0f;
+        float uniformH = 0.0f;
+        for(int i = 0; i < num_traps; ++i)
+        {
+            float tw = ImGui::CalcTextSize(labels[i]).x;
+            float vw = ImGui::CalcTextSize(Val(metrics[i])).x;
+            uniformW = std::max(uniformW, std::max(tw, vw));
+        }
+        uniformW += pillPadX * 2.0f;
+        uniformH  = ImGui::CalcTextSize("X").y + pillPadY * 2.0f;  // all rows same height
+
+
+
+        //Actual rendering of pills. 
+        for(int i = 0; i < num_traps; ++i)
+        {
+            ImVec2 lineStart = trapTopPositions[i];
+            ImVec2 lineEnd   = ImVec2(trapMainScreenPos.x + 250, trapTopPositions[i].y);
+
+            containerDl->AddLine(lineStart, lineEnd, arrowColor, 1.0f);
+
+            // Arrowhead at lineEnd pointing right
+            float sz = ARROW_HEAD_SZ;
+            containerDl->AddTriangleFilled(
+                lineEnd,
+                ImVec2(lineEnd.x - sz, lineEnd.y - sz * 0.6f),
+                ImVec2(lineEnd.x - sz, lineEnd.y + sz * 0.6f),
+                arrowColor);
+
+            // Place the pill stack right before the arrowhead
+            float pillRight = lineEnd.x - ARROW_HEAD_SZ - 20.0f;
+            float midY      = lineStart.y;  // arrow Y
+
+            ImVec2 titleSize = ImGui::CalcTextSize(labels[i]);
+            ImVec2 valSize   = ImGui::CalcTextSize(Val(metrics[i]));
+
+            // Title pill: above the arrow line
+            ImVec2 tMin(pillRight - uniformW, midY - uniformH - pillGap);
+            ImVec2 tMax(pillRight,            midY - pillGap);
+            containerDl->AddRectFilled(tMin, tMax, titleBgCol, pillRound);
+            containerDl->AddRect(tMin, tMax, borderCol, pillRound, 0, 1.0f);
+            containerDl->AddText(
+                ImVec2(tMin.x + (uniformW - titleSize.x) * 0.5f, tMin.y + pillPadY),
+                titleTxtCol, labels[i]);
+
+            // Value pill: below the arrow line
+            ImVec2 vMin(pillRight - uniformW, midY + pillGap);
+            ImVec2 vMax(pillRight,            midY + pillGap + uniformH);
+            containerDl->AddRectFilled(vMin, vMax, valueBgCol, pillRound);
+            containerDl->AddRect(vMin, vMax, borderCol, pillRound, 0, 1.0f);
+            containerDl->AddText(
+                ImVec2(vMin.x + (uniformW - valSize.x) * 0.5f, vMin.y + pillPadY),
+                valueTxtCol, Val(metrics[i]));
+        }
+    }
     ImGui::EndChild();
     ImGui::PopStyleColor();
     PopBlockStyle();

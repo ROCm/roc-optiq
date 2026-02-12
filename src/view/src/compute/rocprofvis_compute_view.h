@@ -92,6 +92,21 @@ private:
             intensity;
     };
 
+    void RenderSelectedView(const std::unordered_map<uint32_t, WorkloadInfo>& workloads,
+                            uint32_t                                          view_index);
+    void RenderSystemAndConfig(const WorkloadInfo& workload);
+    void RenderProfilingConfig(const WorkloadInfo& workload);
+    void RenderMetrics(const WorkloadInfo& workload);
+    void RenderKernels(const WorkloadInfo& workload);
+    void RenderFetcher(const WorkloadInfo& workload);
+    void RenderRoofLine(const WorkloadInfo& workload);
+
+    const std::vector<std::string_view> m_views = { "System Information",
+                                                    " Profiling Configuration", "Metrics",
+                                                    "Kernels",
+                                                    "Fetcher",
+                                                    "RoofLine" };
+
     DataProvider&  m_data_provider;
     SelectionState m_selections;
     DisplayStrings m_display_names;

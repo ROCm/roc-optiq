@@ -27,7 +27,7 @@
 #define MULTI_LINE_LOG_ARGS "{:.{}}",multi_line_log.data(),multi_line_log.size()
 
 
-std::string g_input_file="../../../sample/trace_70b_1024_32.rpd";
+std::string g_input_file="sample/trace_70b_1024_32.rpd";
 bool        g_all_tracks=false;
 bool        g_full_range=false;
 
@@ -84,7 +84,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "Tests for the Control
         REQUIRE(nullptr != m_controller);
     }
 
-    SECTION("Controller Initialisation")
+    SECTION("Controller Initialization")
     {
         spdlog::info("Allocating Future");
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();

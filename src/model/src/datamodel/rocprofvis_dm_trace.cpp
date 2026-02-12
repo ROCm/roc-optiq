@@ -344,7 +344,7 @@ rocprofvis_dm_result_t Trace::AddTrack(const rocprofvis_dm_trace_t object, rocpr
     try{
         trace->m_tracks.push_back(std::make_unique<Track>(trace, params));
     }
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failure allocating track", kRocProfVisDmResultAllocFailure);
     }
@@ -381,7 +381,7 @@ rocprofvis_dm_index_t Trace::AddString(const rocprofvis_dm_trace_t object,  cons
     try{
         trace->m_strings.push_back(stringValue);
     }
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating string memory", INVALID_INDEX);
     }
@@ -446,7 +446,7 @@ rocprofvis_dm_flowtrace_t Trace::AddFlowTrace(const rocprofvis_dm_trace_t object
     try{
         trace->m_flow_traces.push_back(std::make_shared<FlowTrace>(trace, event_id));
     }
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating flowtrace object", nullptr);
     }
@@ -467,7 +467,7 @@ rocprofvis_dm_stacktrace_t Trace::AddStackTrace(const rocprofvis_dm_trace_t obje
     try{
         trace->m_stack_traces.push_back(std::make_shared<StackTrace>(trace, event_id));
     }
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating stacktrace object", nullptr);
     }
@@ -481,7 +481,7 @@ rocprofvis_dm_extdata_t  Trace::AddExtData(const rocprofvis_dm_trace_t object, c
     try{
         trace->m_ext_data.push_back(std::make_shared<ExtData>(trace,event_id));
     }
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating extended data object", nullptr);
     }
@@ -495,7 +495,7 @@ rocprofvis_dm_result_t Trace::AddTopologyNode(const rocprofvis_dm_trace_t object
     try {
         result = trace->m_topology_root.AddNode(track_indentifiers);
     }
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating topology node", kRocProfVisDmResultAllocFailure);
     }
@@ -514,7 +514,7 @@ rocprofvis_dm_result_t  Trace::AddTopologyNodeProperty(
     try {
         trace->m_topology_root.AddProperty(track_identifiers, type, table, name, value);
     }
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure updating topology properties", kRocProfVisDmResultUnknownError);
     }
@@ -529,7 +529,7 @@ rocprofvis_dm_result_t Trace::AddEventLevel(const rocprofvis_dm_trace_t object, 
     {
         trace->m_event_level_map[*(uint64_t*) &event_id] = level;
     } 
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failure allocating event level array",
                                             kRocProfVisDmResultAllocFailure);
@@ -562,7 +562,7 @@ rocprofvis_dm_table_t Trace::AddInfoTable(const rocprofvis_dm_trace_t object, ro
         uint32_t id = trace->m_info_tables.size();
         trace->m_info_tables.push_back(std::make_unique<InfoTable>(trace, id, node, name, handle));
     }
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating table object", nullptr);
     }
@@ -576,7 +576,7 @@ rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocpro
     try{
         trace->m_tables.push_back(std::make_shared<Table>(trace,description, query));
     }
-    catch(std::exception ex)
+    catch(const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating table object", nullptr);
     }

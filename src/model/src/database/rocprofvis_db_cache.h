@@ -44,7 +44,7 @@ public:
 
     const char* GetColumnName(uint32_t column_index);
 
-    const rocprofvis_db_data_type_t GetColumnType(uint32_t column_index);
+    rocprofvis_db_data_type_t GetColumnType(uint32_t column_index);
 
     void* GetRow(uint64_t row_index);
 

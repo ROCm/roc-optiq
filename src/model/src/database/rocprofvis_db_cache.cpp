@@ -95,7 +95,7 @@ namespace DataModel
         return "";
     }
 
-    const rocprofvis_db_data_type_t TableCache::GetColumnType(uint32_t column_index)
+    rocprofvis_db_data_type_t TableCache::GetColumnType(uint32_t column_index)
     {
         if (column_index < m_columns.size())
         {

@@ -74,10 +74,10 @@ int RocpdDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocp
             track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmPmcTrack)
         {
-            auto it = m_pid_map.find(track_params.track_indentifiers.id[TRACK_ID_AGENT]);
-            if (it != m_pid_map.end())
+            auto it_pid = m_pid_map.find(track_params.track_indentifiers.id[TRACK_ID_AGENT]);
+            if (it_pid != m_pid_map.end())
             {
-                track_params.track_indentifiers.process_id = it->second;
+                track_params.track_indentifiers.process_id = it_pid->second;
             }
         }
 

@@ -388,7 +388,7 @@ rocprofvis_dm_result_t TopologyNodeProcess::AddNode(rocprofvis_dm_track_identifi
 		else
 		if (track_identifiers->category == kRocProfVisDmRegionTrack)
 		{
-			m_children.push_back(std::make_unique<TopologyNodeThread>(track_identifiers, this));
+			m_children.push_back(std::make_unique<TopologyNodeThreadInstrumented>(track_identifiers, this));
 		}
 		else
 		if (track_identifiers->category == kRocProfVisDmStreamTrack)
@@ -526,7 +526,7 @@ bool TopologyNodeThreadInstrumented::DoesThisNodeMatchIdentifiers(rocprofvis_dm_
 	bool result = TopologyNodeThread::DoesThisNodeMatchIdentifiers(track_identifiers);
 	if (result)
 	{
-		result = track_identifiers->category == kRocProfVisDmRegionMainTrack;
+		result = track_identifiers->category == kRocProfVisDmRegionMainTrack || track_identifiers->category == kRocProfVisDmRegionTrack;
 	}
 	return result;
 }

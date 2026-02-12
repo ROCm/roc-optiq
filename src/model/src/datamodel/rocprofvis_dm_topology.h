@@ -219,7 +219,7 @@ public:
         TopologyNode(kRPVControllerTopologyNodeThread, track_identifiers->id[TRACK_ID_TID], ctx),
         TopologyTrackRefence(track_identifiers->track_id),
         m_thread_type(track_identifiers->category == kRocProfVisDmRegionSampleTrack ? kRPVControllerThreadTypeSampled : kRPVControllerThreadTypeInstrumented) {}
-    ~TopologyNodeThread() {};
+    virtual ~TopologyNodeThread() {};
     virtual std::string GetNodeName() override; 
     rocprofvis_dm_result_t GetTrackId(uint64_t& id) override { id = m_track_id; return kRocProfVisDmResultSuccess;}
 
@@ -269,7 +269,7 @@ public:
         TopologyNode(kRPVControllerTopologyNodeQueue, track_identifiers->id[TRACK_ID_QUEUE], ctx),
         TopologyTrackRefence(track_identifiers->track_id),
         TopologyProcessRefence(track_identifiers->process_id) {}
-    ~TopologyNodeQueue() {};
+    virtual ~TopologyNodeQueue() {};
     virtual std::string GetNodeName() override;
     virtual bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
     rocprofvis_dm_result_t GetTrackId(uint64_t& id) override { id = m_track_id; return kRocProfVisDmResultSuccess;}

@@ -118,8 +118,7 @@ typedef struct rocprofvis_dm_track_identifiers_t
     bool is_numeric[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
 } rocprofvis_dm_track_identifiers_t;
 
-typedef struct {
-    //rocprofvis_dm_track_id_t track_id;   
+typedef struct { 
     rocprofvis_dm_track_identifiers_t track_indentifiers;
     // SQL query to get data for this track, may have multiple sub-queries
     std::vector<rocprofvis_dm_string_t> query[kRPVNumQueryTypes];   

@@ -8,6 +8,40 @@ namespace RocProfVis
 namespace View
 {
 
+ComputeKernelSelectionTable::ComputeKernelSelectionTable() {}
+
+const std::vector<std::string>&
+ComputeKernelSelectionTable::GetTableHeader() const
+{
+    return m_table_info.table_header;
+}
+
+const std::vector<std::vector<std::string>>&
+ComputeKernelSelectionTable::GetTableData() const
+{
+    return m_table_info.table_data;
+}
+
+const ComputeTableInfo&
+ComputeKernelSelectionTable::GetTableInfo() const
+{
+    return m_table_info;
+}
+
+ComputeTableInfo&
+ComputeKernelSelectionTable::GetTableInfoMutable()
+{
+    return m_table_info;
+}
+
+void
+ComputeKernelSelectionTable::Clear()
+{
+    m_table_info.table_header.clear();
+    m_table_info.table_data.clear();
+    m_table_info.table_params = nullptr;
+}
+
 ComputeDataModel::ComputeDataModel() {}
 
 const std::unordered_map<uint32_t, WorkloadInfo>&
@@ -68,6 +102,12 @@ void
 ComputeDataModel::ClearMetricValues()
 {
     m_metrics_data.clear();
+}
+
+ComputeKernelSelectionTable&
+ComputeDataModel::GetKernelSelectionTable()
+{
+    return m_kernel_selection_table;
 }
 
 }  // namespace View

@@ -50,6 +50,8 @@ public:
     void Render();
 
 private:
+    void RenderKernelSelectionTable();
+
     struct SelectionState
     {
         enum RooflinePreset

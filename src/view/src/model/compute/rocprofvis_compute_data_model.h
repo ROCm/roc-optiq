@@ -12,6 +12,27 @@ namespace RocProfVis
 namespace View
 {
 
+class ComputeKernelSelectionTable
+{
+public:
+    ComputeKernelSelectionTable();
+    ~ComputeKernelSelectionTable() = default;
+
+    const std::vector<std::string>&              GetTableHeader() const;
+    const std::vector<std::vector<std::string>>& GetTableData() const;
+
+    const ComputeTableInfo& GetTableInfo() const;
+    ComputeTableInfo& GetTableInfoMutable();
+
+    void SetTableInfo(const ComputeTableInfo& info);
+
+    void Clear();
+
+private:
+    ComputeTableInfo m_table_info;
+};
+
+
 class ComputeDataModel
 {
 public:
@@ -29,9 +50,13 @@ public:
     void Clear();
     void ClearMetricValues();
 
+    ComputeKernelSelectionTable& GetKernelSelectionTable();
+
 private:
     std::unordered_map<uint32_t, WorkloadInfo> m_workloads;
     std::vector<std::unique_ptr<MetricValue>>  m_metrics_data;
+
+    ComputeKernelSelectionTable m_kernel_selection_table;
 };
 
 }  // namespace View

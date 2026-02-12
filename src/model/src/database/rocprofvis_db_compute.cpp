@@ -17,8 +17,9 @@ namespace DataModel
 		{kRPVComputeFetchWorkloadMetricsDefinition, "Fetch list of metrics in a workload" },
 		{kRPVComputeFetchKernelRooflineIntensities, "Fetch roofline intensities of a kernel" },
 		{kRPVComputeFetchKernelMetricCategoriesList, "Fetch list of metric categories in a kernel" },
-		{kRPVComputeFetchMetricCategoryTablesList, "Fetch list of tables in a category" },		
-		{kRPVComputeFetchMetricValues, "Fetch values of metrics"}
+		{kRPVComputeFetchMetricCategoryTablesList, "Fetch list of tables in a category" },
+		{kRPVComputeFetchMetricValues, "Fetch values of metrics"},
+		{kRPVComputeFetchKernelMetricsMatrix, "Fetch kernel metrics matrix with pivoted metric columns"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
@@ -221,7 +222,150 @@ namespace DataModel
 		return MetricIdFormat::Other;
 	}
 
-	std::string ComputeQueryFactory::GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+	std::string ComputeQueryFactory::SanitizeMetricValueName(const std::string& name) {
+		std::string temp;
+		temp.reserve(name.length() + 10);
+
+		// Check if the name is purely numeric (handles 0-127 case)
+		bool is_numeric = !name.empty() && std::all_of(name.begin(), name.end(), ::isdigit);
+		if (is_numeric) {
+			temp = "mv_" + name; // Prefix numeric names with 'mv_' for "metric value"
+		} else {
+			temp = name;
+		}
+
+		// Convert to lowercase and replace spaces/special chars with underscores
+		std::string result;
+		result.reserve(temp.length());
+		for (char c : temp) {
+			if (std::isalnum(c)) {
+				result += std::tolower(c);
+			} else {
+				result += '_';
+			}
+		}
+
+		return result;
+	}
+
+	std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+        std::string query;
+        std::string workload_id;
+        int         sort_column_index = 1;       // default to duration_ns_sum (index 1)
+        std::string sort_order        = "DESC";  // default to descending
+        
+		// (metric_id, value_name) pairs
+		std::vector<std::pair<std::string, std::string>> metric_selectors;
+        std::vector<std::string> column_names;  // Track column order for sorting
+
+        // Parse parameters
+        for(size_t i = 0; i < num; i++)
+        {
+            if(params[i].param_type == kRPVComputeParamWorkloadId)
+            {
+                workload_id = params[i].param_str;
+            }
+            else if(params[i].param_type == kRPVComputeParamMetricSelector)
+            {
+                // Expected format: "metric_id:value_name" e.g., "2.1.4:peak"
+                std::string selector_str = params[i].param_str;
+                size_t      colon_pos    = selector_str.find(':');
+                if(colon_pos != std::string::npos)
+                {
+                    std::string metric_id  = selector_str.substr(0, colon_pos);
+                    std::string value_name = selector_str.substr(colon_pos + 1);
+                    metric_selectors.push_back({ metric_id, value_name });
+                }
+            }
+            else if(params[i].param_type == kRPVComputeParamSortColumnIndex)
+            {
+                // Parse string to integer, TODO: make safer with error handling
+                sort_column_index = std::atoi(params[i].param_str);
+            }
+            else if(params[i].param_type == kRPVComputeParamSortColumnOrder)
+            {
+                std::string sort_order_in = params[i].param_str;
+                // convert to uppercase
+                std::transform(sort_order_in.begin(), sort_order_in.end(),
+                               sort_order_in.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+                if(sort_order_in == "ASC")
+                {
+                    sort_order = "ASC";
+                }
+                else
+                {
+                    // Default to DESC if not ASC
+                    sort_order = "DESC";
+                }
+            }
+        }
+
+        // Validate required parameters
+        if(workload_id.empty())
+        {
+            return query;  // Return empty on invalid input
+        }
+
+        // Build column name list (index 0 = kernel_name, index 1 = duration_ns_sum, index
+        // 2+ = metrics)
+        column_names.push_back("kernel_name");
+        column_names.push_back("duration_ns_sum");
+
+        // Build the SELECT clause
+        query = "SELECT \n";
+        query += "    kernel_name,\n";
+        query += "    duration_ns_sum";
+
+        // Add CASE statements for each metric selector
+        for(const auto& [metric_id, value_name] : metric_selectors)
+        {
+            query += ",\n    MAX(CASE WHEN LOWER(value_name) = '";
+            query += value_name;
+            query += "' AND metric_id = '";
+            query += metric_id;
+            query += "' THEN value END) AS ";
+
+            // Generate column alias by replacing dots with underscores and sanitizing value name
+            std::string metric_alias = metric_id;
+            std::replace(metric_alias.begin(), metric_alias.end(), '.', '_');
+            std::string sanitized_value_name = SanitizeMetricValueName(value_name);
+            std::string column_name = "metric_" + metric_alias + "_" + sanitized_value_name;
+            query += column_name;
+
+            // Track column name for sorting
+            column_names.push_back(column_name);
+        }
+
+        // Add FROM clause
+        query += "\nFROM compute_kernel_metrics_view\n";
+
+        // Add WHERE clause
+        query += "WHERE workload_id = ";
+        query += workload_id;
+        // TODO: allow other filtering ?
+        query += "\n";
+
+        // Add GROUP BY clause
+        query += "GROUP BY kernel_name, duration_ns_sum\n";
+
+        // Add ORDER BY clause with validated index
+        query += "ORDER BY ";
+        if(sort_column_index >= 0 &&
+           sort_column_index < static_cast<int>(column_names.size()))
+        {
+            query += column_names[sort_column_index];
+        }
+        else
+        {
+            query += "duration_ns_sum";  // fallback to default
+        }
+        query += " " + sort_order;
+
+        return query;
+    }
+
+    std::string ComputeQueryFactory::GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
 		std::string query;
 		std::set<std::string> metric_ids;
 		std::set<std::string> kernel_ids;
@@ -345,9 +489,31 @@ namespace DataModel
 			m_query_factory.SetVersion(m_db_version.c_str());
 			TraceProperties()->metadata_loaded=true;
 			ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
-			return future->SetPromise(kRocProfVisDmResultSuccess);
+			
+			//add "kernel metrics" view to database
+			std::string create_view_query = "CREATE VIEW IF NOT EXISTS compute_kernel_metrics_view AS "
+			"SELECT "
+				"ckv.workload_id, "
+				"ckv.workload_name, "
+				"ckv.kernel_uuid, "
+				"ckv.kernel_name, "
+				"ckv.duration_ns_sum, "
+				"ckv.duration_ns_mean, "
+				"ckv.duration_ns_median, "
+				"ckv.duration_ns_min, "
+				"ckv.duration_ns_max, "
+				"ckv.dispatch_count, "
+				"cmv.metric_id, "
+				"cmv.metric_name, "
+				"cmv.value_name, "
+				"cmv.value "
+			"FROM compute_kernel_view ckv "
+			"LEFT JOIN compute_metric_view cmv ON ckv.kernel_uuid = cmv.kernel_uuid; ";
+			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, create_view_query.c_str(), nullptr)) break;
 
+			return future->SetPromise(kRocProfVisDmResultSuccess);
 		}
+		
 		ShowProgress(0, "Trace metadata not loaded!", kRPVDbError, future );
 		return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 	}
@@ -386,6 +552,9 @@ namespace DataModel
 				break;
 			case kRPVComputeFetchMetricValues:
 				query = m_query_factory.GetComputeMetricValues(num, params);
+				break;
+			case kRPVComputeFetchKernelMetricsMatrix:
+				query = m_query_factory.GetComputeKernelMetricsMatrix(num, params);
 				break;
 			default:
 				return kRocProfVisDmResultInvalidParameter;
@@ -437,6 +606,9 @@ namespace DataModel
 					break;
 				case kRPVComputeFetchWorkloadRooflineCeiling:
 					callback = CallbackGetComputeRooflineCeiling;
+					break;
+				case kRPVComputeFetchKernelMetricsMatrix:
+					callback = CallbackGetComputeKernelMetricsMatrix;
 					break;
 				default:
 					break;
@@ -552,6 +724,79 @@ namespace DataModel
 		callback_params->future->CountThisRow();
 		return 0;
 	}
+
+    int ComputeDatabase::CallbackGetComputeKernelMetricsMatrix(void* data, int argc,
+                                                               sqlite3_stmt* stmt,
+                                                               char**        azColName)
+    {
+        ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+        rocprofvis_db_sqlite_callback_parameters* callback_params =
+            (rocprofvis_db_sqlite_callback_parameters*) data;
+        ComputeDatabase* db   = (ComputeDatabase*) callback_params->db;
+        void*            func = (void*) &CallbackGetComputeKernelMetricsMatrix;
+        if(callback_params->future->Interrupted()) return 1;
+
+        rocprofvis_dm_table_row_t row =
+            db->BindObject()->FuncAddTableRow(callback_params->handle);
+        ROCPROFVIS_ASSERT_MSG_RETURN(row, ERROR_TABLE_ROW_CANNOT_BE_NULL, 1);
+
+        // Add column definitions on first row
+        if(0 == callback_params->future->GetProcessedRowsCount())
+        {
+            for(int i = 0; i < argc; i++)
+            {
+                rocprofvis_db_data_type_t type =
+                    (rocprofvis_db_data_type_t) sqlite3_column_type(stmt, i);
+
+                // Check if this is a known static column
+                auto it = ColumnNameToEnum.find(azColName[i]);
+                if(it != ColumnNameToEnum.end())
+                {
+                    // Static column with known enum
+                    if(kRocProfVisDmResultSuccess !=
+                       db->BindObject()->FuncAddTableColumn(callback_params->handle,
+                                                            azColName[i]))
+                        return 1;
+                    if(kRocProfVisDmResultSuccess !=
+                       db->BindObject()->FuncAddTableColumnEnum(callback_params->handle,
+                                                                it->second))
+                        return 1;
+                    if(kRocProfVisDmResultSuccess !=
+                       db->BindObject()->FuncAddTableColumnType(callback_params->handle,
+                                                                type))
+                        return 1;
+                }
+                else
+                {
+                    // Dynamic metric column - use generic enum
+                    if(kRocProfVisDmResultSuccess !=
+                       db->BindObject()->FuncAddTableColumn(callback_params->handle,
+                                                            azColName[i]))
+                        return 1;
+                    if(kRocProfVisDmResultSuccess !=
+                       db->BindObject()->FuncAddTableColumnEnum(
+                           callback_params->handle, kRPVComputeColumnDynamicMetricValue))
+                        return 1;
+                    if(kRocProfVisDmResultSuccess !=
+                       db->BindObject()->FuncAddTableColumnType(callback_params->handle,
+                                                                type))
+                        return 1;
+                }
+            }
+        }
+
+        // Add cell values for this row
+        for(int i = 0; i < argc; i++)
+        {
+            std::string column_text = db->Sqlite3ColumnText(func, stmt, azColName, i);
+            if(kRocProfVisDmResultSuccess !=
+               db->BindObject()->FuncAddTableRowCell(row, column_text.c_str()))
+                return 1;
+        }
+
+        callback_params->future->CountThisRow();
+        return 0;
+    }
 
 }  // namespace DataModel
 }  // namespace RocProfVis

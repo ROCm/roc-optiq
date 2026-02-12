@@ -9,6 +9,8 @@
 #include "rocprofvis_controller_roofline.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_controller_table_compute_pivot.h"
+
 #include "json.h"
 
 #pragma region Deprecated
@@ -24,7 +26,9 @@ namespace Controller
 {
 
 ComputeTrace::ComputeTrace(const std::string& filename)
-: Trace(__kRPVControllerComputePropertiesFirst, __kRPVControllerComputePropertiesLast, filename)
+: Trace(__kRPVControllerComputePropertiesFirst, __kRPVControllerComputePropertiesLast,
+        filename)
+, m_kernel_metric_table(nullptr)
 {}
 
 ComputeTrace::~ComputeTrace()
@@ -32,6 +36,10 @@ ComputeTrace::~ComputeTrace()
     for(Workload* workload : m_workloads)
     {
         delete workload;
+    }
+    if(m_kernel_metric_table)
+    {
+        delete m_kernel_metric_table;
     }
 #pragma region Deprecated
     for (auto& it : m_tables)
@@ -58,12 +66,15 @@ rocprofvis_result_t ComputeTrace::Init()
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
     {
+        m_kernel_metric_table = new ComputePivotTable(0);
         result = kRocProfVisResultSuccess;
     }
     catch(const std::exception&)
     {
         result = kRocProfVisResultMemoryAllocError;
     }
+    
+
     return result;
 }
 
@@ -206,6 +217,12 @@ rocprofvis_result_t ComputeTrace::GetObject(rocprofvis_property_t property, uint
                 {
                     result = kRocProfVisResultOutOfRange;
                 }
+                break;
+            }
+            case kRPVControllerKernelMetricTable:
+            {
+                *value = (rocprofvis_handle_t*)m_kernel_metric_table;
+                result = kRocProfVisResultSuccess;
                 break;
             }
             default:
@@ -360,6 +377,31 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
         }
     }
     return result;
+}
+
+rocprofvis_result_t ComputeTrace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
+{
+    rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+
+    future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
+            rocprofvis_result_t result = kRocProfVisResultUnknownError;
+            result = table.Setup(dm_handle, args, future);
+            if (result == kRocProfVisResultSuccess)
+            {
+                uint64_t start_index = 0;
+                uint64_t start_count = 0;
+                result = table.Fetch(dm_handle, start_index, start_count, array, future);
+            }
+            return result;
+        }, &future));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
 }
 
 rocprofvis_result_t ComputeTrace::LoadRocpd()

@@ -58,6 +58,7 @@ list(APPEND rocprofvis_controller_source_files
     src/compute/rocprofvis_controller_kernel.cpp
     src/compute/rocprofvis_controller_metrics_container.cpp
     src/compute/rocprofvis_controller_roofline.cpp
+    src/compute/rocprofvis_controller_table_compute_pivot.cpp
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)

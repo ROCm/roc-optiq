@@ -4,6 +4,9 @@
 #include "rocprofvis_compute_view.h"
 #include "implot/implot.h"
 #include "rocprofvis_settings_manager.h"
+#include "model/compute/rocprofvis_compute_data_model.h"
+
+#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -878,6 +881,127 @@ ComputeTester::Render()
         ImGui::EndChild();
         ImGui::EndChild();
         m_selections.init = false;
+    }
+
+    RenderKernelSelectionTable();
+}
+
+void
+ComputeTester::RenderKernelSelectionTable()
+{
+    static std::vector<std::string> metrics = {
+        "2.1.4:avg", "2.1.3:avg", "2.1.3:peak"
+    };
+
+    static char metric_id_buffer[256] = "2.1.4:avg";
+    static bool fetch_requested        = true; // force fetch on first render
+
+    static bool sort_requested    = false;
+    static int  sort_column_index = -1;
+    static int  sort_order        = kRPVControllerSortOrderDescending;
+
+    static const int built_in_columns_cnt = 2; // ID and Name columns that are always present in the table
+
+    int remove_index = -1;
+
+    if(ImGui::Button("Fetch Kernel Metric Pivot Test"))
+    {
+        fetch_requested = true;
+    }
+
+    ImGui::InputText("Metric ID:", metric_id_buffer, sizeof(metric_id_buffer));
+    
+    if(ImGui::Button("Add Metric"))
+    {
+        metrics.push_back(std::string(metric_id_buffer));
+        fetch_requested = true;
+    }
+
+    ImGui::Separator();
+
+    ComputeKernelSelectionTable& table =
+        m_data_provider.ComputeModel().GetKernelSelectionTable();
+    const std::vector<std::string>&              header = table.GetTableHeader();
+    const std::vector<std::vector<std::string>>& data   = table.GetTableData();
+
+    if(!header.empty() && !data.empty())
+    {
+        if(ImGui::BeginTable("kernel_selection_table", header.size(),
+                            ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                                ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_Sortable,
+                            ImVec2(0.0f, data.empty()
+                                            ? ImGui::GetTextLineHeightWithSpacing()
+                                            : ImGui::GetTextLineHeightWithSpacing() *
+                                                    (1.0f + data.size()))))
+        {
+
+            for(const std::string& col_name : header)
+            {
+                ImGui::TableSetupColumn(col_name.c_str()); 
+            }  
+            ImGui::TableHeadersRow();
+            if(data.empty())
+            {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextDisabled("None");
+            }
+
+            // Get sort specs
+            ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs();
+            if(sort_specs && sort_specs->SpecsDirty)
+            {
+                sort_requested    = true;
+                sort_column_index = sort_specs->Specs->ColumnIndex;
+                sort_order =
+                    (sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending)
+                        ? kRPVControllerSortOrderAscending
+                        : kRPVControllerSortOrderDescending;
+
+                sort_specs->SpecsDirty = false;
+            }
+
+            for(const std::vector<std::string>& row : data)
+            {
+                int index = 0;
+                ImGui::TableNextRow();
+                for(const std::string& cell : row)
+                {
+                    ImGui::TableNextColumn();
+                    ImGui::Text(cell.c_str());
+
+                    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+                    {
+                        remove_index   = index - built_in_columns_cnt;
+                        sort_requested = true;
+                        spdlog::debug("Clicked cell at row {}, column {}: {} {}",
+                                      index / header.size(), index % header.size(), cell, remove_index);
+                    }
+                    index++;                    
+                }
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    if(remove_index >= 0 && remove_index < static_cast<int>(metrics.size()))
+    {
+        metrics.erase(metrics.begin() + remove_index);
+    }
+
+    if(sort_requested || fetch_requested)
+    {
+        ComputeTableRequestParams params(1, metrics);
+        
+        params.m_sort_column_index = sort_column_index;
+        params.m_sort_order        = static_cast<rocprofvis_controller_sort_order_t>(sort_order);
+
+        spdlog::debug("Requesting sorted kernel selection table: column {}, order {}",
+                      sort_column_index, sort_order == kRPVControllerSortOrderAscending ? "ASC" : "DESC");  
+        m_data_provider.FetchMetricPivotTable(params);
+
+        fetch_requested = false;
+        sort_requested  = false;
     }
 }
 

@@ -1041,6 +1041,7 @@ typedef enum rocprofvis_controller_compute_properties_t : uint32_t
     kRPVControllerComputeId = __kRPVControllerComputePropertiesFirst,
     kRPVControllerNumWorkloads,
     kRPVControllerWorkloadIndexed,
+    kRPVControllerKernelMetricTable,
     __kRPVControllerComputePropertiesLast
 } rocprofvis_controller_compute_properties_t;
 
@@ -1101,6 +1102,23 @@ typedef enum rocprofvis_controller_metric_arguments_t : uint32_t
     kRPVControllerMetricArgsMetricTableIdIndexed,
     kRPVControllerMetricArgsMetricEntryIdIndexed,
 } rocprofvis_controller_metric_arguments_t;
+
+/*
+ * Arguments for fetching dynamic metrics matrix (pivot table).
+ */
+typedef enum rocprofvis_controller_compute_pivot_table_arguments_t : uint32_t
+{
+    // Workload ID to query (uint64)
+    kRPVControllerCPTArgsWorkloadId = 0x13000000,
+    // Number of metric selectors (uint64)
+    kRPVControllerCPTArgsNumMetricSelectors,
+    // Indexed metric selector strings in format "metric_id:value_name" (e.g., "2.1.4:peak")
+    kRPVControllerCPTArgsMetricSelectorIndexed,
+    // Optional sort column index (uint64) - 0=kernel_name, 1=duration_ns_sum (default), 2+=metrics
+    kRPVControllerCPTArgsSortColumnIndex,
+    // Optional sort order (rocprofvis_controller_sort_order_t) - 0=ascending, 1=descending (default = descending)
+    kRPVControllerCPTArgsSortOrder,
+} rocprofvis_controller_compute_pivot_table_arguments_t;
 
 /*
  * Properties for a metrics container.

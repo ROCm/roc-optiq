@@ -28,8 +28,10 @@ namespace DataModel
         std::string GetComputeWorkloadMetricsDefinition(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeMetricCategoryTablesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
+        std::string GetComputeKernelMetricsMatrix(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
     private:
         MetricIdFormat ClassifyMetricIdFormat(const std::string& s);
+        std::string SanitizeMetricValueName(const std::string& name);
     };
 
 
@@ -193,6 +195,7 @@ namespace DataModel
 
         static int CallbackGetComputeGeneric(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeRooflineCeiling(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        static int CallbackGetComputeKernelMetricsMatrix(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
         inline static const rocprofvis_null_data_exceptions_skip

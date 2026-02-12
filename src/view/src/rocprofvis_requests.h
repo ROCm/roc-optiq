@@ -36,6 +36,7 @@ enum class RequestType
 #ifdef COMPUTE_UI_SUPPORT
     kFetchComputeTrace,
     kFetchMetrics,
+    kFetchMetricPivotTable,
 #endif
 };
 
@@ -173,7 +174,30 @@ public:
     , m_metric_ids(metric_ids)
     {}
 };
+
+class ComputeTableRequestParams : public RequestParamsBase
+{
+public:
+    uint32_t                           m_workload_id;
+    std::vector<std::string>           m_metric_selectors;  // Format: "metric_id:value_name"
+    uint64_t                           m_sort_column_index;
+    rocprofvis_controller_sort_order_t m_sort_order;
+
+    ComputeTableRequestParams(const ComputeTableRequestParams& params) = default;
+    ComputeTableRequestParams& operator=(const ComputeTableRequestParams& params) = default;
+
+    ComputeTableRequestParams(uint32_t workload_id,
+                            const std::vector<std::string>& metric_selectors,
+                            uint64_t sort_column_index = 1,
+                            rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderDescending)
+    : m_workload_id(workload_id)
+    , m_metric_selectors(metric_selectors)
+    , m_sort_column_index(sort_column_index)
+    , m_sort_order(sort_order)
+    {}
+};
 #endif
+
 
 struct RequestInfo
 {

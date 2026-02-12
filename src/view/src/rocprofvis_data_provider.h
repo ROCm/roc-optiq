@@ -71,6 +71,7 @@ public:
 #ifdef COMPUTE_UI_SUPPORT
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
     static const uint64_t METRICS_REQUEST_ID;
+    static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
 #endif
 
     DataProvider();
@@ -326,9 +327,12 @@ public:
     ComputeDataModel& ComputeModel();
     
     bool FetchMetrics(const MetricsRequestParams& metrics_params);
+    bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
+
 private:
     void ProcessLoadComputeTrace(RequestInfo& req);
     void ProcessMetricsRequest(RequestInfo& req);
+    void ProcessMetricPivotTable(RequestInfo& req);
 
     ComputeDataModel m_compute_model;
 #endif

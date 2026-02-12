@@ -52,6 +52,8 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncGetStringOrder = GetStringOrder;
     m_binding_info.FuncGetStringIndices = GetStringIndices;
     m_binding_info.FuncAddInfoTable = AddInfoTable;
+    m_binding_info.FuncAddTopologyNode = AddTopologyNode;
+    m_binding_info.FuncAddTopologyNodeProperty = AddTopologyNodeProperty;
     bind_data = &m_binding_info;
     m_db = db;
     return kRocProfVisDmResultSuccess;
@@ -486,6 +488,38 @@ rocprofvis_dm_extdata_t  Trace::AddExtData(const rocprofvis_dm_trace_t object, c
     return trace->m_ext_data.back().get();
 }
 
+rocprofvis_dm_result_t Trace::AddTopologyNode(const rocprofvis_dm_trace_t object, rocprofvis_dm_track_identifiers_t* track_indentifiers) {
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    Trace* trace = (Trace*)object;
+    try {
+        result = trace->m_topology_root.AddNode(track_indentifiers);
+    }
+    catch(std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating topology node", kRocProfVisDmResultAllocFailure);
+    }
+    return result;
+}
+
+rocprofvis_dm_result_t  Trace::AddTopologyNodeProperty(
+    const rocprofvis_dm_trace_t object, 
+    rocprofvis_dm_track_identifiers_t* track_identifiers, 
+    rocprofvis_db_topology_data_type_t type, 
+    const char* table, 
+    const char* name, 
+    void* value) {
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    Trace* trace = (Trace*)object;
+    try {
+        trace->m_topology_root.AddProperty(track_identifiers, type, table, name, value);
+    }
+    catch(std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure updating topology properties", kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
 
 rocprofvis_dm_result_t Trace::AddEventLevel(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_id_t event_id, rocprofvis_dm_event_level_t level)
 {
@@ -830,6 +864,9 @@ rocprofvis_dm_result_t    Trace::GetPropertyAsHandle(rocprofvis_dm_property_t pr
             return GetInfoTableHandle("AgentToStream",index, *value);
         case kRPVDStreamQueueMappingInfoTableHandleIndexed:
             return GetInfoTableHandle("StreamToQueue",index, *value);
+        case kRPVDMTopologyHandle:
+            *value = Topology();
+            return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }

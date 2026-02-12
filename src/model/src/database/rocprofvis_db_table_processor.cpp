@@ -936,8 +936,8 @@ namespace DataModel
                 op == kRocProfVisDmOperationLaunchSample || 
                 table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index == -1 ||
                 !db->TrackTracker()->FindTrack(kRocProfVisDmStreamTrack,
+                   db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.pid_index),
                 db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index),
-                -1,
                 callback_params->db_instance->GuidIndex(),
                 track_id))
             {

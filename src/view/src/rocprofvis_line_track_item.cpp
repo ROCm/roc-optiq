@@ -61,7 +61,7 @@ LineTrackItem::UpdateMetadata()
     if(track_info)
     {
         const CounterInfo* counter =
-            m_data_provider.DataModel().GetTopology().GetCounter(track_info->topology.id);
+            m_data_provider.DataModel().GetTopology().GetCounter(track_info->topology.id.value);
         if(counter)
         {
             m_units = counter->units;

@@ -55,14 +55,18 @@ typedef union{
 #define NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS 3
 #define TRACK_ID_NODE 0
 #define TRACK_ID_PID 1
-#define TRACK_ID_STREAM 1
 #define TRACK_ID_AGENT 1
 #define TRACK_ID_PID_OR_AGENT 1
 #define TRACK_ID_TID 2
 #define TRACK_ID_QUEUE 2
 #define TRACK_ID_TID_OR_QUEUE 2
 #define TRACK_ID_COUNTER 2
-#define TRACK_ID_CATEGORY 3
+#define TRACK_ID_STREAM 2
+#define TRACK_ID_PROCESS 3
+#define TRACK_ID_CATEGORY 4
+#define TRACK_ID_OPERATION 5
+#define TRACK_ID_STORE_ID 6
+#define TRACK_ID_RECORD_COUNT 7
 
 
 typedef struct
@@ -83,10 +87,27 @@ typedef enum rocprofvis_db_query_type_t
     kRPVQuerySliceByTrackSliceQuery,
 } rocprofvis_db_query_type_t;
 
-typedef struct rocprofvis_dm_process_identifiers_t
+typedef enum rocprofvis_db_topology_data_type_t
 {
+    kRPVTopologyDataTypeDefault = rocprofvis_db_data_type_t::kRPVDataTypeDefault,
+    kRPVTopologyDataTypeInt     = rocprofvis_db_data_type_t::kRPVDataTypeInt,
+    kRPVTopologyDataTypeDouble  = rocprofvis_db_data_type_t::kRPVDataTypeDouble,
+    kRPVTopologyDataTypeString  = rocprofvis_db_data_type_t::kRPVDataTypeString,
+    kRPVTopologyDataTypeBlob    = rocprofvis_db_data_type_t::kRPVDataTypeBlob,
+    kRPVTopologyDataTypeNull    = rocprofvis_db_data_type_t::kRPVDataTypeNull,
+    kRPVTopologyDataTypeRef
+}rocprofvis_db_topology_data_type_t;
+
+typedef struct rocprofvis_dm_track_identifiers_t
+{
+    // 32-bit track id
+    rocprofvis_dm_track_id_t track_id;  
     // track category enumeration (PMC, Region, Kernel, SQQT, NIC, etc)  
     rocprofvis_dm_track_category_t category;
+    // 32-bit track pid
+    rocprofvis_dm_track_id_t process_id; 
+    // pointer to database instance descriptor
+    rocprofvis_db_instance_t db_instance;
     // 64-bit process IDs
     rocprofvis_dm_process_id_t id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
     // database column name for process id
@@ -95,12 +116,11 @@ typedef struct rocprofvis_dm_process_identifiers_t
     rocprofvis_dm_string_t name[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
     // is identifier numeric or string
     bool is_numeric[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
-} rocprofvis_dm_process_identifiers_t;
+} rocprofvis_dm_track_identifiers_t;
 
 typedef struct {
-    // 32-bit track id
-    rocprofvis_dm_track_id_t track_id;   
-    rocprofvis_dm_process_identifiers_t process;
+    //rocprofvis_dm_track_id_t track_id;   
+    rocprofvis_dm_track_identifiers_t track_indentifiers;
     // SQL query to get data for this track, may have multiple sub-queries
     std::vector<rocprofvis_dm_string_t> query[kRPVNumQueryTypes];   
     // handle of extended data object  
@@ -121,7 +141,7 @@ typedef struct {
     std::map<uint32_t,std::pair<uint32_t,double>> histogram;
     rocprofvis_dm_op_t op;
     std::set<uint32_t> load_id;
-    rocprofvis_db_instance_t db_instance;
+    
 } rocprofvis_dm_track_params_t;
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model and database. Physically located in trace object and referenced by a pointer in binding structure.
@@ -224,6 +244,10 @@ typedef rocprofvis_dm_table_row_t (*rocprofvis_db_get_info_table_rows_handle_fun
 typedef const char* (*rocprofvis_db_get_info_table_row_cell_value_func_t) (const rocprofvis_dm_table_row_t object, size_t column_index);
 typedef const size_t (*rocprofvis_db_get_info_table_row_num_cells_func_t) (const rocprofvis_dm_table_row_t object);
 
+typedef rocprofvis_dm_result_t (*rocprofvis_db_add_topology_node) (const rocprofvis_dm_trace_t object, rocprofvis_dm_track_identifiers_t* track_indentifiers);
+typedef rocprofvis_dm_result_t(*rocprofvis_db_add_topology_node_property) (const rocprofvis_dm_trace_t object,
+    rocprofvis_dm_track_identifiers_t* track_identifiers, rocprofvis_db_topology_data_type_t type, const char* table, const char* name, void* value);
+
 
 typedef struct 
 {
@@ -258,6 +282,8 @@ typedef struct
         rocprofvis_dm_metadata_loaded_func_t FuncMetadataLoaded;    // Called when metadata has been loaded
         rocprofvis_dm_string_indices_func_t FuncGetStringIndices;
         rocprofvis_dm_add_info_table_func_t FuncAddInfoTable;
+        rocprofvis_db_add_topology_node FuncAddTopologyNode;
+        rocprofvis_db_add_topology_node_property FuncAddTopologyNodeProperty;
 
         //database interface methods
         rocprofvis_db_find_cached_table_value_func_t FuncFindCachedTableValue; // Get value by instance id from tables cached in database component (tables like rocpd_node, rocpd_process, rocpd_thread, rocpd_agent, rocpd_queue, rocpd_stream, etc. )

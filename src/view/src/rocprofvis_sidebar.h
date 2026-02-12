@@ -58,6 +58,10 @@ private:
                                  EyeButtonState                   parent_eye_button_state,
                                  bool                             show_eye_button = true);
 
+    EyeButtonState DrawProcessors(const std::vector<ProcessorModel>& processors,
+                                 EyeButtonState                   parent_eye_button_state,
+                                 bool                             show_eye_button = true);
+
     EyeButtonState DrawCollapsable(const std::vector<IterableModel>& container,
                                    const std::string&                collapsable_header,
                                    EyeButtonState parent_eye_button_state);

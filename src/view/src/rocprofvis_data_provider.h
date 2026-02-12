@@ -234,8 +234,12 @@ private:
     struct ProcessChildCount
     {
         size_t thread_count;
-        size_t queue_count;
         size_t stream_count;
+    };
+
+    struct ProcessorChildCount
+    {
+        size_t queue_count;
         size_t counter_count;
     };
 
@@ -243,7 +247,8 @@ private:
     bool FetchEventExtData(uint64_t event_id);
     void HandleLoadSystemTopology();
     bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
-    bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info);
+    bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info,
+                          DataProvider::ProcessorChildCount& processor_child_count);
     bool ParseProcessData(rocprofvis_handle_t* process_handle, ProcessInfo& process_info,
                           ProcessChildCount& process_child_count);
     bool ParseQueueData(rocprofvis_handle_t* queue_handle, QueueInfo& queue_info);

@@ -30,6 +30,7 @@ class Node;
 class SystemTable;
 class Summary;
 class SummaryMetrics;
+class TopologyNode;
 
 class SystemTrace : public Trace
 {
@@ -89,9 +90,12 @@ private:
     SystemTable*          m_search_table;
     Summary*              m_summary;
     MemoryManager*        m_mem_mgmt;
+    TopologyNode*         m_topology_root;
 
 private:
     rocprofvis_result_t LoadRocpd();
+
+    void DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int level);
 
 };
 

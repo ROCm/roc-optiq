@@ -446,7 +446,26 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
         ImGui::SameLine();
     }
 
-    bool open = ImGui::TreeNodeEx(node.process_header.c_str(),
+
+    bool open = ImGui::TreeNodeEx(node.processor_header.c_str(),
+        CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
+
+    if(!node.processors.empty() && open)
+    {
+        new_button_state = DrawProcessors(node.processors, new_button_state, false);
+        if(new_button_state == EyeButtonState::kAllHidden)
+        {
+            node.all_subitems_hidden = true;
+        }
+        else
+        {
+            node.all_subitems_hidden = false;
+        }
+
+        ImGui::TreePop();
+    }
+
+    open = ImGui::TreeNodeEx(node.process_header.c_str(),
                                   CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
 
     if(!node.processes.empty() && open)
@@ -507,11 +526,6 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
             if(ImGui::TreeNodeEx(process.header.c_str(),
                                  CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
             {
-                if(!process.queues.empty())
-                {
-                    queue_button_state = DrawCollapsable(
-                        process.queues, process.queue_header, current_eye_button_state);
-                }
                 if(!process.streams.empty())
                 {
                     stream_button_state = DrawCollapsable(
@@ -529,12 +543,6 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
                         process.sampled_threads, process.sampled_thread_header,
                         current_eye_button_state);
                 }
-                if(!process.counters.empty())
-                {
-                    counter_button_state =
-                        DrawCollapsable(process.counters, process.counter_header,
-                                        current_eye_button_state);
-                }
                 ImGui::TreePop();
             }
 
@@ -550,6 +558,81 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
             else
             {
                 process.all_subitems_hidden = false;
+                all_process_state           = EyeButtonState::kMixed;
+            }
+            ImGui::PopID();
+        }
+    }
+    return all_process_state;
+}
+
+SideBar::EyeButtonState
+SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
+    EyeButtonState parent_eye_button_state, bool show_eye_button)
+{
+    if(parent_eye_button_state == EyeButtonState::kAllVisible)
+    {
+        for(const auto& process : processors)
+        {
+            process.all_subitems_hidden = false;
+        }
+    }
+
+    EyeButtonState all_process_state = EyeButtonState::kAllHidden;
+    for(const ProcessorModel& processor : processors)
+    {
+        if(processor.info)
+        {
+            EyeButtonState queue_button_state               = parent_eye_button_state;
+            EyeButtonState stream_button_state              = parent_eye_button_state;
+            EyeButtonState instrumented_thread_button_state = parent_eye_button_state;
+            EyeButtonState sampled_thread_button_state      = parent_eye_button_state;
+            EyeButtonState counter_button_state             = parent_eye_button_state;
+            ImGui::PushID(static_cast<int>(processor.info->id.fields.id));
+
+            EyeButtonState current_eye_button_state = parent_eye_button_state;
+            if(show_eye_button)
+            {
+                if(processor.all_subitems_hidden)
+                {
+                    current_eye_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
+                }
+                else
+                {
+                    current_eye_button_state = DrawEyeButton(parent_eye_button_state);
+                }
+                ImGui::SameLine();
+            }
+
+            if(ImGui::TreeNodeEx(processor.header.c_str(),
+                CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
+            {
+                if(!processor.queues.empty())
+                {
+                    queue_button_state = DrawCollapsable(
+                        processor.queues, processor.queue_header, current_eye_button_state);
+                }
+                if(!processor.counters.empty())
+                {
+                    counter_button_state =
+                        DrawCollapsable(processor.counters, processor.counter_header,
+                            current_eye_button_state);
+                }
+                ImGui::TreePop();
+            }
+
+            if(queue_button_state == EyeButtonState::kAllHidden &&
+                stream_button_state == EyeButtonState::kAllHidden &&
+                instrumented_thread_button_state == EyeButtonState::kAllHidden &&
+                sampled_thread_button_state == EyeButtonState::kAllHidden &&
+                counter_button_state == EyeButtonState::kAllHidden)
+            {
+                processor.all_subitems_hidden = true;
+                all_process_state           = EyeButtonState::kAllHidden;
+            }
+            else
+            {
+                processor.all_subitems_hidden = false;
                 all_process_state           = EyeButtonState::kMixed;
             }
             ImGui::PopID();

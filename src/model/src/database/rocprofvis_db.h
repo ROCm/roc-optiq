@@ -4,11 +4,13 @@
 #pragma once
 
 #include "rocprofvis_db_future.h"
+#include "rocprofvis_db_cache.h"
 #include "rocprofvis_db_track.h"
 #include <vector>
 #include <map>
 #include <unordered_map>
 #include <mutex>
+#include <shared_mutex>
 #include <condition_variable>
 
 namespace RocProfVis
@@ -16,10 +18,7 @@ namespace RocProfVis
 namespace DataModel
 {
 
-//types for creating multi-dimensional map array to cache non-essential track information
-typedef std::map<std::string, std::string> table_dict_t;
-typedef std::map<uint64_t, table_dict_t> table_map_t;
-typedef std::map<std::string, table_map_t> ref_map_t;
+typedef std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator rocprofvis_dm_track_params_it;
 
 // type of map array for generating time slice query for multiple tracks
 typedef std::unordered_map<std::string, std::unordered_map<uint32_t,std::string>> slice_query_map_t;
@@ -94,156 +93,6 @@ private:
     guid_list_t* m_db_instances;
 };
 
-// Helper class to manage cached information tables (node, agent, queue, process, thread information)
-
-class TableCache
-{
-public:
-    struct Row {
-        uint64_t id;
-        std::vector<std::string> values;
-    };
-
-    uint32_t AddColumn(const std::string& name)
-    {
-        uint32_t index = 0;
-        auto it = m_column_index.find(name);
-        if (it == m_column_index.end())
-        {
-            index = m_columns.size();
-            m_column_index[name] = index;
-            m_columns.push_back( name );
-        }
-        else
-        {
-            index = it->second;
-        }
-        return index;
-    }
-
-    void AddRow(uint64_t id)
-    {
-        auto it = m_row_index.find(id);
-        if (it == m_row_index.end())
-        {
-            m_row_index[id] = m_rows.size();
-            m_rows.push_back({ id });
-            m_rows.back().values.resize(m_columns.size());
-        }
-    }
-
-    void AddCell(uint32_t column_index, uint64_t row_id, std::string cell)
-    {
-        auto it = m_row_index.find(row_id);
-        if (it != m_row_index.end())
-        {
-            m_rows[it->second].values[column_index] = cell;
-        }
-    }
-
-    const char* GetCell(uint64_t row_id, const char* column_name)
-    {
-        auto it_row = m_row_index.find(row_id);
-        auto it_column = m_column_index.find(column_name);
-        if (it_row != m_row_index.end() && it_column!=m_column_index.end())
-        {
-            return m_rows[it_row->second].values[it_column->second].c_str();
-        }
-        return "";
-    }
-
-    const char* GetCell(uint64_t row_index, uint32_t column_index)
-    {
-        if (row_index < m_rows.size() && column_index < m_columns.size())
-        {
-            return m_rows[row_index].values[column_index].c_str();
-        }
-        return "";
-    }
-
-    const char* GetCellByIndex(uint64_t row_index, const char* column_name)
-    {
-        auto it_column = m_column_index.find(column_name);
-        if (row_index < m_rows.size() && it_column!=m_column_index.end())
-        {
-            return m_rows[row_index].values[it_column->second].c_str();
-        }
-        return "";
-    }
-
-    const char* GetColumn(uint32_t column_index)
-    {
-        if (column_index < m_columns.size())
-        {
-            return m_columns[column_index].c_str();
-        }
-        return "";
-    }
-
-    void* GetRow(uint64_t row_index)
-    {
-        if (row_index < m_rows.size())
-        {
-            return &m_rows[row_index];
-        }
-        return nullptr;
-    }
-
-    uint32_t NumColumns() { return m_columns.size(); }
-    size_t NumRows() { return m_rows.size(); }
-
-private:
-    std::string m_name;
-    std::vector<std::string> m_columns;
-    std::vector<Row> m_rows;
-    std::unordered_map<std::string, uint32_t> m_column_index;
-    std::unordered_map<uint64_t, uint32_t> m_row_index;
-};
-
-class DatabaseCache 
-{
-    public:
-        void AddTableCell(const char* table_name, uint64_t row_id, uint32_t column_index, const char* cell_value)
-        {
-            tables[table_name].AddCell(column_index, row_id, cell_value);
-        }
-        void AddTableCell(const char* table_name, uint64_t row_id, const char* column_name, const char* cell_value)
-        {
-            uint32_t column_index = tables[table_name].AddColumn(column_name);
-            tables[table_name].AddCell(column_index, row_id, cell_value);
-        }
-        void AddTableRow(const char* table_name, uint64_t row_id)
-        {
-            tables[table_name].AddRow(row_id);
-        }
-        void AddTableColumn(const char* table_name, const char* column_name)
-        {
-            tables[table_name].AddColumn(column_name);
-        }
-        const char* GetTableCell(const char* table_name, uint64_t row_id, const char* column_name)
-        {
-            return tables[table_name].GetCell(row_id,column_name);
-        }
-        const char* GetTableCellByIndex(const char* table_name, uint32_t row_index, const char* column_name)
-        {
-            return tables[table_name].GetCellByIndex(row_index,column_name);
-        }
-
-        void* GetTableHandle(const char* table_name)
-        {
-            return &tables[table_name];
-        }
-      
-        // Populate track extended data objects with table content
-        rocprofvis_dm_result_t PopulateTrackExtendedDataTemplate(Database * db, uint32_t node_id, const char* table_name, uint64_t instance_id ); 
-        // Get amount of memory used by the cached values map
-        rocprofvis_dm_size_t    GetMemoryFootprint(void); 
-
-    private:
-        
-        std::map<std::string, TableCache> tables;
-
-};
 
 class DatabaseVersion
 {
@@ -269,7 +118,6 @@ private:
     std::vector<uint32_t>  ConvertVersionStringToInt(const char* version);
     std::vector<uint32_t> m_db_version;
 };
-
 
 class Database
 {
@@ -412,8 +260,9 @@ class Database
        // returns pointer to cached tables map array
        DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
 
-       TrackLookup*                    TrackTracker() { return& m_track_lookup; }
-
+	   TrackLookup*                    TrackTracker() { return& m_track_lookup; }
+       // return current number of tracks
+       rocprofvis_dm_size_t            NumTracks() { return m_track_properties.size(); }
        // returns pointer to track properties structure. Takes index of track as a parameter 
        rocprofvis_dm_track_params_t*   TrackPropertiesAt(rocprofvis_dm_index_t index) { return m_track_properties[index].get(); }
 
@@ -627,8 +476,6 @@ class Database
         DbInstance* DbInstancePtrAt(int index) { return index < m_db_instances.size() ? &m_db_instances[index].first : nullptr; }
         // returns pointer to database file path
         rocprofvis_db_filename_t        Path() {return m_path.c_str();}
-        // return current number of tracks
-        rocprofvis_dm_size_t            NumTracks() { return m_track_properties.size(); }
         // returns pointer to last registered Track properties structure
         rocprofvis_dm_track_params_t*   TrackPropertiesLast() { return m_track_properties.back().get(); }
         // returns track properties begin iterator
@@ -642,6 +489,9 @@ class Database
         // @return status of operation
         rocprofvis_dm_result_t          AddTrackProperties(
                                                                 rocprofvis_dm_track_params_t& props);
+        // finds and return iterator to track properties array
+        // @process track process identifiers structure
+        rocprofvis_dm_track_params_it   FindTrack( rocprofvis_dm_track_identifiers_t& track_indentifiers, DbInstance* db_instance);
         // adds a new query to the track queries collection 
         // multiple queries for single track are required to support data from multiple database tables on single track,
         // like Kernel Dispatch, Memory Copy and Memory Allocation

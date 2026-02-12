@@ -90,91 +90,141 @@ int RocprofDatabase::CallbackParseMetadata(void* data, int argc, sqlite3_stmt* s
 
 int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries)
 {
-    ROCPROFVIS_ASSERT_MSG_RETURN(track_params.db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
-    DbInstance* db_instance = (DbInstance*)track_params.db_instance;
-    rocprofvis_dm_track_params_it it = TrackTracker()->FindTrackParamsIterator(track_params.process, db_instance->GuidIndex());
+    ROCPROFVIS_ASSERT_MSG_RETURN(track_params.track_indentifiers.db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
+    DbInstance* db_instance = (DbInstance*)track_params.track_indentifiers.db_instance;
+    rocprofvis_dm_track_params_it it = TrackTracker()->FindTrackParamsIterator(track_params.track_indentifiers, db_instance->GuidIndex());
     UpdateQueryForTrack(it, track_params, newqueries);
     if(it == TrackPropertiesEnd())
     {
-        TrackTracker()->AddTrack(track_params.process, db_instance->GuidIndex(), track_params.track_id);
-
-        if(track_params.process.category == kRocProfVisDmRegionMainTrack ||
-            track_params.process.category == kRocProfVisDmRegionSampleTrack)
+    	TrackTracker()->AddTrack(track_params.track_indentifiers, db_instance->GuidIndex(), track_params.track_indentifiers.track_id);
+    	
+        if(track_params.track_indentifiers.category == kRocProfVisDmRegionMainTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmRegionSampleTrack)
         {
-            track_params.process.name[TRACK_ID_PID] = CachedTables(db_instance->GuidIndex())->GetTableCell("Process", track_params.process.id[TRACK_ID_PID], "command");
-            track_params.process.name[TRACK_ID_PID] += "(";
-            track_params.process.name[TRACK_ID_PID] += std::to_string(track_params.process.id[TRACK_ID_PID]);
-            track_params.process.name[TRACK_ID_PID] += ")";
+                
+            track_params.track_indentifiers.name[TRACK_ID_PID] = CachedTables(db_instance->GuidIndex())->GetTableCell("Process", track_params.track_indentifiers.id[TRACK_ID_PID], "command");
+            track_params.track_indentifiers.name[TRACK_ID_PID] += "(";
+            track_params.track_indentifiers.name[TRACK_ID_PID] += std::to_string(track_params.track_indentifiers.id[TRACK_ID_PID]);
+            track_params.track_indentifiers.name[TRACK_ID_PID] += ")";
 
-            track_params.process.name[TRACK_ID_TID] = CachedTables(db_instance->GuidIndex())->GetTableCell("Thread", track_params.process.id[TRACK_ID_TID], "name");
-            track_params.process.name[TRACK_ID_TID] += "(";
-            track_params.process.name[TRACK_ID_TID] += std::to_string(track_params.process.id[TRACK_ID_TID]);
-            track_params.process.name[TRACK_ID_TID] += ")";
+            track_params.track_indentifiers.name[TRACK_ID_TID] = CachedTables(db_instance->GuidIndex())->GetTableCell("Thread", track_params.track_indentifiers.id[TRACK_ID_TID], "name");
+            track_params.track_indentifiers.name[TRACK_ID_TID] += "(";
+            track_params.track_indentifiers.name[TRACK_ID_TID] += std::to_string(track_params.track_indentifiers.id[TRACK_ID_TID]);
+            track_params.track_indentifiers.name[TRACK_ID_TID] += ")";
         }
-        else if(track_params.process.category == kRocProfVisDmKernelDispatchTrack ||
-            track_params.process.category == kRocProfVisDmMemoryAllocationTrack ||
-            track_params.process.category == kRocProfVisDmMemoryCopyTrack ||
-            track_params.process.category == kRocProfVisDmPmcTrack)
+        else if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmPmcTrack)
         {
-            track_params.process.name[TRACK_ID_AGENT] = CachedTables(db_instance->GuidIndex())->GetTableCell("Agent", track_params.process.id[TRACK_ID_AGENT], "product_name");
-            track_params.process.name[TRACK_ID_AGENT] += "(";
-            track_params.process.name[TRACK_ID_AGENT] += CachedTables(db_instance->GuidIndex())->GetTableCell("Agent", track_params.process.id[TRACK_ID_AGENT], "type_index");
-            track_params.process.name[TRACK_ID_AGENT] += ")";
-            if(track_params.process.category == kRocProfVisDmKernelDispatchTrack ||
-                track_params.process.category == kRocProfVisDmMemoryAllocationTrack ||
-                track_params.process.category == kRocProfVisDmMemoryCopyTrack)
+            track_params.track_indentifiers.name[TRACK_ID_AGENT] = CachedTables(db_instance->GuidIndex())->GetTableCell("Agent", track_params.track_indentifiers.id[TRACK_ID_AGENT], "product_name");
+            track_params.track_indentifiers.name[TRACK_ID_AGENT] += "(";
+            track_params.track_indentifiers.name[TRACK_ID_AGENT] += CachedTables(db_instance->GuidIndex())->GetTableCell("Agent", track_params.track_indentifiers.id[TRACK_ID_AGENT], "type_index");
+            track_params.track_indentifiers.name[TRACK_ID_AGENT] += ")";
+            if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
+                track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
+                track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack)
             {
-                track_params.process.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("Queue", track_params.process.id[TRACK_ID_QUEUE], "name");
+                track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("Queue", track_params.track_indentifiers.id[TRACK_ID_QUEUE], "name");
             }
             else {
-                track_params.process.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("PMC", track_params.process.id[TRACK_ID_QUEUE], "name");
+                track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("PMC", track_params.track_indentifiers.id[TRACK_ID_QUEUE], "name");
             }
 
         }
-        else if(track_params.process.category == kRocProfVisDmStreamTrack)
+        else if(track_params.track_indentifiers.category == kRocProfVisDmStreamTrack)
         {
-            track_params.process.name[TRACK_ID_STREAM] = CachedTables(db_instance->GuidIndex())->GetTableCell("Stream", track_params.process.id[TRACK_ID_STREAM], "name");
+            track_params.track_indentifiers.name[TRACK_ID_STREAM] = CachedTables(db_instance->GuidIndex())->GetTableCell("Stream", track_params.track_indentifiers.id[TRACK_ID_STREAM], "name");
+            track_params.track_indentifiers.name[TRACK_ID_PID] = track_params.track_indentifiers.name[TRACK_ID_STREAM];
         }
+
         if (kRocProfVisDmResultSuccess != AddTrackProperties(track_params)) return 1;
-        if (BindObject()->FuncAddTrack(BindObject()->trace_object, TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1;  
-        if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this,db_instance->GuidIndex(),  "Node", track_params.process.id[TRACK_ID_NODE]) != kRocProfVisDmResultSuccess) return 1;
-        if(track_params.process.category == kRocProfVisDmRegionMainTrack ||
-            track_params.process.category == kRocProfVisDmRegionSampleTrack)
+
+        if (BindObject()->FuncAddTrack(BindObject()->trace_object, TrackPropertiesLast()) != kRocProfVisDmResultSuccess) return 1; 
+
+        if (BindObject()->FuncAddTopologyNode(BindObject()->trace_object, &track_params.track_indentifiers) != kRocProfVisDmResultSuccess) return 1; 
+
+        if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this,db_instance->GuidIndex(),  "Node", track_params.track_indentifiers.id[TRACK_ID_NODE]) != kRocProfVisDmResultSuccess) return 1;
+        if(track_params.track_indentifiers.category == kRocProfVisDmRegionMainTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmRegionSampleTrack)
         {
-            if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(),  "Process", track_params.process.id[TRACK_ID_PID]) != kRocProfVisDmResultSuccess) return 1;
-            if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Thread", track_params.process.id[TRACK_ID_TID]) != kRocProfVisDmResultSuccess) return 1;
+            if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(),  "Process", track_params.track_indentifiers.id[TRACK_ID_PID]) != kRocProfVisDmResultSuccess) return 1;
+            if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Thread", track_params.track_indentifiers.id[TRACK_ID_TID]) != kRocProfVisDmResultSuccess) return 1;
         } 
-        else if(track_params.process.category == kRocProfVisDmStreamTrack)
+        else if(track_params.track_indentifiers.category == kRocProfVisDmStreamTrack)
         {
-            if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Stream", track_params.process.id[TRACK_ID_STREAM]) != kRocProfVisDmResultSuccess) return 1; 
+            if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(),  "Process", track_params.track_indentifiers.id[TRACK_ID_PID]) != kRocProfVisDmResultSuccess) return 1;
+            if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Stream", track_params.track_indentifiers.id[TRACK_ID_STREAM]) != kRocProfVisDmResultSuccess) return 1;         
         }
-        else if(track_params.process.category == kRocProfVisDmKernelDispatchTrack ||
-            track_params.process.category == kRocProfVisDmMemoryAllocationTrack ||
-            track_params.process.category == kRocProfVisDmMemoryCopyTrack ||
-            track_params.process.category == kRocProfVisDmPmcTrack)
+        else if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmPmcTrack)
         {
-            if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Agent", track_params.process.id[TRACK_ID_AGENT]) != kRocProfVisDmResultSuccess) return 1; 
-            if(track_params.process.category == kRocProfVisDmKernelDispatchTrack ||
-                track_params.process.category == kRocProfVisDmMemoryAllocationTrack ||
-                track_params.process.category == kRocProfVisDmMemoryCopyTrack)
+            if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Agent", track_params.track_indentifiers.id[TRACK_ID_AGENT]) != kRocProfVisDmResultSuccess) return 1; 
+            if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
+                track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
+                track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack)
             {
-                if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Queue", track_params.process.id[TRACK_ID_QUEUE]) != kRocProfVisDmResultSuccess) return 1;
+                if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Queue", track_params.track_indentifiers.id[TRACK_ID_QUEUE]) != kRocProfVisDmResultSuccess) return 1;
             }
             else
             {
-                if(track_params.process.id[TRACK_ID_QUEUE] > 0)
-                    if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "PMC", track_params.process.id[TRACK_ID_QUEUE]) != kRocProfVisDmResultSuccess) return 1;
+                if(track_params.track_indentifiers.id[TRACK_ID_QUEUE] > 0)
+                    if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "PMC", track_params.track_indentifiers.id[TRACK_ID_COUNTER]) != kRocProfVisDmResultSuccess) return 1;
             }
         }
     }
     else
     {
         it->get()->load_id.insert(*track_params.load_id.begin());
-        track_params.track_id = it->get()->track_id;
+        track_params.track_indentifiers.track_id = it->get()->track_indentifiers.track_id;
     }
     return 0;
 }
 
+
+int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc==rocprofvis_db_sqlite_memory_alloc_activity_query_format::NUM_PARAMS, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void*  func = (void*)&CallbackCaptureMemoryActivity;
+    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
+    RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
+    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
+    rocprofvis_db_memalloc_activity_t memact;
+    memact.start = db->Sqlite3ColumnInt64(func, stmt, azColName, 7);
+    memact.end = db->Sqlite3ColumnInt64(func, stmt, azColName, 8);
+    memact.address = db->Sqlite3ColumnInt64(func, stmt, azColName, 9);
+    memact.size= db->Sqlite3ColumnInt64(func, stmt, azColName, 10);
+    memact.id = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
+    memact.pid = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
+    memact.stream_id = db->Sqlite3ColumnInt(func, stmt, azColName, 4);
+    memact.agent_id = db->Sqlite3ColumnInt(func, stmt, azColName, 2);
+    memact.queue_id = db->Sqlite3ColumnInt(func, stmt, azColName, 3);
+    std::string type_str = db->Sqlite3ColumnText(func, stmt, azColName, 5);
+    std::string level_str = db->Sqlite3ColumnText(func, stmt, azColName, 6);
+    if (type_str == "ALLOC") memact.type = kRPVMemActivityAlloc; else
+        if (type_str == "FREE") memact.type = kRPVMemActivityFree; else
+            if (type_str == "REALLOC") memact.type = kRPVMemActivityRealloc; else
+                if (type_str == "RECLAIM") memact.type = kRPVMemActivityReclaim;
+    if (level_str == "REAL") memact.level = kRPVMemLevelReal; else
+        if (level_str == "VIRTUAL") memact.level = kRPVMemLevelVirtual; else
+            if (level_str == "SCRATCH") memact.level = kRPVMemLevelScratch;
+    auto& vec = db->m_memalloc_activity[callback_params->db_instance->GuidIndex()];
+    if (memact.type == kRPVMemActivityFree)
+    {
+        auto it = std::find_if(vec.rbegin(), vec.rend(), [memact](rocprofvis_db_memalloc_activity_t& _memact) {return memact.address == _memact.address; });
+        if (it != vec.rend())
+        {
+            memact.agent_id = it->agent_id;
+            db->m_memfree_stream_to_agent[callback_params->db_instance->GuidIndex()][memact.stream_id] = it->agent_id;
+        }
+    }
+    vec.push_back(memact);
+    callback_params->future->CountThisRow();
+    return 0;
+}
 
 int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==3, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
@@ -210,7 +260,7 @@ int RocprofDatabase::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt
     {
         for (int i = 0; i < argc; i++)
         {
-            ref_tables->AddTableColumn(callback_params->query[kRPVCacheTableName], azColName[i]);
+            ref_tables->AddTableColumn(callback_params->query[kRPVCacheTableName], azColName[i], (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i));
         }
     }
 
@@ -218,8 +268,16 @@ int RocprofDatabase::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt
     ref_tables->AddTableRow(callback_params->query[kRPVCacheTableName], id);
     for (int i = 0; i < argc; i++)
     {
-        ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName], id, i,
-            (char*)db->Sqlite3ColumnText(func, stmt, azColName, i));
+        rocprofvis_db_data_type_t col_type = (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i);
+        if (col_type == kRPVDataTypeNull && strcmp(azColName[i],"name") == 0)
+        {
+            ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName], id, i, callback_params->query[kRPVCacheTableName]);
+        }
+        else
+        {
+            ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName], id, i,
+                (char*)db->Sqlite3ColumnText(func, stmt, azColName, i));
+        }
     }
 
     callback_params->future->CountThisRow();
@@ -344,10 +402,16 @@ rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
     std::vector<std::thread> threads;
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
 
-    auto task = [&](DbInstance * db_instance, std::string query, std::string tag) {
+    auto get_info_table_task = [&](DbInstance* db_instance, std::string query, std::string tag) {
             Future* sub_future = future->AddSubFuture();
             result = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), tag.c_str(), (rocprofvis_dm_handle_t)CachedTables(db_instance->GuidIndex()), &CallbackCacheTable);
             future->DeleteSubFuture(sub_future);
+        };
+
+    auto get_memory_allocation_activity_task = [&](DbInstance * db_instance, std::string query) {
+        Future* sub_future = future->AddSubFuture();
+        result = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), &CallbackCaptureMemoryActivity);
+        future->DeleteSubFuture(sub_future);
         };
 
     std::vector<std::pair<std::string, std::string>> info_table_list = {
@@ -362,12 +426,32 @@ rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
         {"AgentToStream", "SELECT ROW_NUMBER() OVER (ORDER BY tuple) AS id, d.agent_id, d.stream_id FROM (SELECT DISTINCT concat(nid,'-',pid,'-',agent_id,'-',stream_id) as tuple, agent_id, stream_id FROM rocpd_kernel_dispatch_%GUID%) AS d;"},
         {"AgentToQueue", "SELECT ROW_NUMBER() OVER (ORDER BY tuple) AS id, d.agent_id, d.queue_id FROM (SELECT DISTINCT concat(nid,'-',pid,'-',agent_id,'-',queue_id) as tuple, agent_id, queue_id FROM rocpd_kernel_dispatch_%GUID%) AS d;"}
     };
+
+    info_table_list.push_back({ "StreamToHw", 
+        std::string("SELECT ROW_NUMBER() OVER (ORDER BY ") +
+        Builder::STREAM_ID_SERVICE_NAME +
+        ") AS row_num, * FROM (" +
+        m_query_factory.GetRocprofMemoryCopyStreamFlowQuery() +
+        Builder::Union() +
+        m_query_factory.GetRocprofMemoryAllocStreamFlowQuery() +
+        Builder::Union() +
+        m_query_factory.GetRocprofKernelDispatchStreamFlowQuery() +
+        ") ORDER BY " +
+        Builder::STREAM_ID_SERVICE_NAME
+        });
+
+    //pre-create cache tables before running multiple threads
+    for (auto& guid_info : DbInstances())
+    {
+        CachedTables(guid_info.first.GuidIndex());
+    }
+
     for (auto& guid_info : DbInstances())
     {
         for (auto table : info_table_list)
         {
             threads.emplace_back(
-                task, 
+                get_info_table_task, 
                 &guid_info.first,
                 table.second, 
                 table.first);
@@ -384,6 +468,122 @@ rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
             {
                 auto handle = CachedTables(guid_info.first.GuidIndex())->GetTableHandle(table.first.c_str());
                 BindObject()->FuncAddInfoTable(BindObject()->trace_object, guid_info.first.GuidIndex(), table.first.c_str(), handle);
+            }
+        }
+    }
+
+    threads.clear();
+
+    for (auto& guid_info : DbInstances())
+    {
+        threads.emplace_back(
+                get_memory_allocation_activity_task, 
+                &guid_info.first,
+                m_query_factory.GetRocprofMemoryAllocActivityQuery());
+    }
+    for (auto& t : threads)
+        t.join();
+
+    return result;
+}
+
+
+rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance ){
+    TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle("StreamToHw");
+    uint32_t num_columns = table->NumColumns();
+    uint32_t stream_id = TrackPropertiesAt(stream_track_index)->track_indentifiers.id[TRACK_ID_STREAM];
+
+    for (int ind = 0; ind < table->NumRows(); ind++)
+    {
+        uint64_t id = std::atoll(table->GetCellByIndex(ind, Builder::STREAM_ID_SERVICE_NAME));
+        if (id == stream_id)
+        {
+            uint32_t op = std::atoll(table->GetCellByIndex(ind, Builder::OPERATION_SERVICE_NAME));
+            std::string agent = table->GetCellByIndex(ind, Builder::AGENT_ID_SERVICE_NAME);
+            uint32_t agent_id = 0;
+            if (agent.empty() && op == kRocProfVisDmOperationMemoryAllocate)
+            {
+                auto it = m_memfree_stream_to_agent[db_instance].find(stream_id);
+                if (it != m_memfree_stream_to_agent[db_instance].end())
+                {
+                    agent_id = it->second;
+                }
+            }
+            else
+            {
+                agent_id = std::atoll(table->GetCellByIndex(ind, Builder::AGENT_ID_SERVICE_NAME));
+            }
+            uint32_t queue_id = std::atoll(table->GetCellByIndex(ind, Builder::QUEUE_ID_SERVICE_NAME));
+            uint32_t track;
+            if (TrackTracker()->FindTrack(
+                kRocProfVisDmEventTrack, 
+                agent_id, 
+                queue_id, 
+                db_instance, track))
+            {
+                rocprofvis_dm_track_params_t* track_properties = TrackPropertiesAt(track);
+                rocprofvis_dm_result_t result = BindObject()->FuncAddTopologyNodeProperty(
+                    BindObject()->trace_object,
+                    &TrackPropertiesAt(stream_track_index)->track_indentifiers,
+                    kRPVTopologyDataTypeRef,
+                    "QueueRef",
+                    "TrackRef",
+                    (void*)&TrackPropertiesAt(track)->track_indentifiers);
+                if (result != kRocProfVisDmResultSuccess) return result;
+            }
+        }
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instance)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    const char* table_name = "Agent";
+    TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle(table_name);
+    for (uint64_t i = 0; i < table->NumRows(); i++)
+    {
+        uint64_t agent_id = std::atoll(table->GetCellByIndex(i, "id"));
+        uint64_t node_id = std::atoll(table->GetCellByIndex(i,"nid"));
+        bool agent_in_use = false;
+        for (int track_id = 0; track_id < NumTracks(); track_id++)
+        {
+            DbInstance* instance = (DbInstance*)TrackPropertiesAt(track_id)->track_indentifiers.db_instance;
+
+            if (instance->GuidIndex() == db_instance)
+            {
+                rocprofvis_dm_track_identifiers_t& track_indentifiers = TrackPropertiesAt(track_id)->track_indentifiers;
+                if ((track_indentifiers.category == kRocProfVisDmPmcTrack || 
+                    track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
+                    track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
+                    track_indentifiers.category == kRocProfVisDmMemoryCopyTrack) &&
+                    track_indentifiers.id[TRACK_ID_NODE] == node_id && 
+                    track_indentifiers.id[TRACK_ID_AGENT] == agent_id)
+                {
+                    agent_in_use = true;
+                    break;
+                }
+            }            
+        }
+        if (agent_in_use == false)
+        {
+            rocprofvis_dm_track_identifiers_t track_indentifiers;
+
+            uint64_t pid = std::atoll(table->GetCell(i,"pid"));
+            track_indentifiers.category = kRocProfVisDmNotATrack;
+            track_indentifiers.id[TRACK_ID_NODE] = node_id;
+            track_indentifiers.id[TRACK_ID_AGENT] = agent_id;
+            track_indentifiers.process_id = pid;
+            track_indentifiers.is_numeric[TRACK_ID_NODE] = true;
+            track_indentifiers.is_numeric[TRACK_ID_QUEUE] = true;
+            track_indentifiers.tag[TRACK_ID_NODE] = "nodeId";
+            track_indentifiers.tag[TRACK_ID_AGENT] = "agentId";
+            track_indentifiers.tag[TRACK_ID_QUEUE] = "noData";
+            track_indentifiers.db_instance = DbInstancePtrAt(db_instance);
+            result = BindObject()->FuncAddTopologyNode(BindObject()->trace_object, &track_indentifiers);
+            if (kRocProfVisDmResultSuccess == result || kRocProfVisDmResultInvalidParameter == result)
+            {
+                result = CachedTables(db_instance)->PopulateTrackTopologyData(this, &track_indentifiers, db_instance, table_name, agent_id);
             }
         }
     }
@@ -677,7 +877,25 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 t.join();
             load_id++;
         }
-                                                                    
+          
+        for (auto& guid_info : DbInstances())
+        {
+            result = PopulateUnusedAgents( guid_info.first.GuidIndex());
+            if (result != kRocProfVisDmResultSuccess) break;
+        }
+
+        if (result != kRocProfVisDmResultSuccess) break;
+
+        for (int i = 0; i < NumTracks(); i++)
+        {
+            if (TrackPropertiesAt(i)->track_indentifiers.category == kRocProfVisDmStreamTrack)
+            {
+                DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
+                result = PopulateStreamToHardwareFlowProperties( i, db_instance->GuidIndex());
+                if (result != kRocProfVisDmResultSuccess) break;
+            }
+        }
+        if (result != kRocProfVisDmResultSuccess) break;
 
         ShowProgress(10, "Loading strings", kRPVDbBusy, future );
         BindObject()->FuncAddString(BindObject()->trace_object, ""); // 0 index string

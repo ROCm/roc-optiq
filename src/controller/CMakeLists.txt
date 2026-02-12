@@ -23,7 +23,6 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_table.cpp    
     src/rocprofvis_controller.cpp    
     src/rocprofvis_controller_job_system.cpp	
-    src/system/rocprofvis_controller_counter.cpp
     src/system/rocprofvis_controller_event.cpp
     src/system/rocprofvis_controller_graph.cpp
     src/system/rocprofvis_controller_sample.cpp
@@ -36,15 +35,10 @@ list(APPEND rocprofvis_controller_source_files
     src/system/rocprofvis_controller_flow_control.cpp
     src/system/rocprofvis_controller_call_stack.cpp
     src/system/rocprofvis_controller_ext_data.cpp
-    src/system/rocprofvis_controller_thread.cpp
-    src/system/rocprofvis_controller_queue.cpp
-    src/system/rocprofvis_controller_stream.cpp
-    src/system/rocprofvis_controller_process.cpp
-    src/system/rocprofvis_controller_processor.cpp
-    src/system/rocprofvis_controller_node.cpp
     src/system/rocprofvis_controller_mem_mgmt.cpp
     src/system/rocprofvis_controller_summary.cpp
     src/system/rocprofvis_controller_summary_metrics.cpp
+    src/system/rocprofvis_controller_topology.cpp
 )
 
 if(COMPUTE_UI_SUPPORT) 

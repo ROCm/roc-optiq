@@ -14,7 +14,6 @@ namespace DataModel
 
 class ProfileDatabase;
 
-
 typedef struct rocprofvis_db_sqlite_track_service_data_t
 {
     rocprofvis_dm_event_operation_t op;
@@ -27,14 +26,14 @@ typedef struct rocprofvis_db_sqlite_track_service_data_t
 
 typedef struct rocprofvis_db_sqlite_track_query_format
 {
-    static constexpr const int NUM_PARAMS = 6; 
+    static constexpr const int NUM_PARAMS = 7; 
     std::string                 parameters[NUM_PARAMS];
     std::vector<std::string>    from;
 } rocprofvis_db_sqlite_track_query_format;
 
 typedef struct rocprofvis_db_sqlite_region_track_query_format
 {
-    static constexpr const int NUM_PARAMS = 6;
+    static constexpr const int NUM_PARAMS = 7;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
     std::vector<std::string>   where;
@@ -42,7 +41,7 @@ typedef struct rocprofvis_db_sqlite_region_track_query_format
 
 typedef struct rocprofvis_db_sqlite_level_query_format
 {
-    static constexpr const int NUM_PARAMS = 8;
+    static constexpr const int NUM_PARAMS = 9;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_level_query_format;
@@ -64,7 +63,7 @@ typedef struct rocprofvis_db_sqlite_launch_table_query_format
 
 typedef struct rocprofvis_db_sqlite_dispatch_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 30;
+    static constexpr const int NUM_PARAMS = 31;
     ProfileDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
@@ -72,15 +71,22 @@ typedef struct rocprofvis_db_sqlite_dispatch_table_query_format
 
 typedef struct rocprofvis_db_sqlite_memory_alloc_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 23;
+    static constexpr const int NUM_PARAMS = 24;
     ProfileDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_memory_alloc_table_query_format;
 
+typedef struct rocprofvis_db_sqlite_memory_alloc_activity_query_format
+{
+    static constexpr const int NUM_PARAMS = 11;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_sqlite_memory_alloc_activity_query_format;
+
 typedef struct rocprofvis_db_sqlite_memory_copy_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 27;
+    static constexpr const int NUM_PARAMS = 28;
     ProfileDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
@@ -132,6 +138,13 @@ typedef struct rocprofvis_db_sqlite_argument_data_query_format
     std::vector<std::string>   from;
     std::vector<std::string>   where;
 } rocprofvis_db_sqlite_argument_data_query_format;
+
+typedef struct rocprofvis_db_sqlite_stream_to_hw_format
+{
+    static constexpr const int NUM_PARAMS = 5;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_sqlite_stream_to_hw_format;
 
 enum class MultiNode : bool { No = false, Yes = true };
 
@@ -228,8 +241,28 @@ class Builder
         static constexpr const int  LAST_SINGLE_NODE_LEVEL_CALCULATION_VERSION  = 3;
         static constexpr const int  FIRST_MULTINODE_NODE_LEVEL_CALCULATION_VERSION  = 4;
         static constexpr const int  LEVEL_CALCULATION_VERSION  = 4;
-        static constexpr const int  TRACKS_CONFIG_VERSION  = 1;
+        static constexpr const int  TRACKS_CONFIG_VERSION  = 2;
         static constexpr ColumnType TRACK_ID_TYPE = ColumnType::Word;
+
+        static constexpr const char* NODE_HOSTNAME_SERVICE_NAME = "hostname";
+        static constexpr const char* NODE_SYSTEM_SERVICE_NAME = "system_name";
+        static constexpr const char* NODE_RELEASE_SERVICE_NAME = "release";
+        static constexpr const char* NODE_VERSION_SERVICE_NAME = "version";
+
+
+        static constexpr const char* PROCESS_COMMAND_SERVICE_NAME = "command";
+        static constexpr const char* PROCESS_ENVIRONMENT_SERVICE_NAME = "environment";
+        static constexpr const char* TID_SERVICE_NAME = "tid";
+        static constexpr const char* PID_SERVICE_NAME = "pid";
+        static constexpr const char* AGENT_PRODUCT_NAME_SERVICE_NAME = "product_name";
+        static constexpr const char* AGENT_TYPE_SERVICE_NAME = "type";
+        static constexpr const char* AGENT_TYPE_INDEX_SERVICE_NAME = "type_index";
+
+        static constexpr const char* COUNTER_DESCRIPTION_SERVICE_NAME = "description";
+        static constexpr const char* COUNTER_UNITS_SERVICE_NAME = "units";
+        static constexpr const char* COUNTER_VALUE_TYPE_SERVICE_NAME = "value_type";
+
+        static constexpr const char* NOT_APLICABLE = "N/A";
 
         inline static std::vector<std::string> mem_alloc_types = {
             "ALLOC", "FREE", "REALLOC", "RECLAIM"
@@ -372,6 +405,8 @@ class Builder
         static std::string Select(rocprofvis_db_sqlite_dataflow_query_format params);
         static std::string Select(rocprofvis_db_sqlite_essential_data_query_format params);
         static std::string Select(rocprofvis_db_sqlite_argument_data_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_stream_to_hw_format params);
+        static std::string Select(rocprofvis_db_sqlite_memory_alloc_activity_query_format);
         static std::string SelectAll(std::string query);
         static std::string QParam(std::string name, std::string public_name);
         static std::string Blank();
@@ -395,10 +430,10 @@ class Builder
         static void OldLevelTables(std::string operation, std::vector<std::string> & table_list, std::string guid="");
         static std::string StoreConfigVersion();
     private:
-        static std::string BuildQuery(int num_params,
+        static std::string BuildQuery(std::string start_with, int num_params,
                                       std::string* params, std::vector<std::string> from,
                                       std::string finalize_with);
-        static std::string BuildQuery(int num_params,
+        static std::string BuildQuery(std::string start_with, int num_params,
                                       std::string* params, std::vector<std::string> from,
                                       std::vector<std::string> where,
                                       std::string              finalize_with);

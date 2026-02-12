@@ -530,7 +530,7 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::InstrumentedThread:
         {
             if(const ThreadInfo* thread_info =
-                   tdm.GetInstrumentedThread(track_info->topology.id);
+                   tdm.GetInstrumentedThread(track_info->topology.id.value);
                thread_info && thread_info->tid == track_info->topology.process_id)
             {
                 m_pill.Show();
@@ -607,8 +607,8 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
             std::string       thread_id;
             const ThreadInfo* thread_info =
                 (track_info->topology.type == TrackInfo::TrackType::SampledThread)
-                    ? tdm.GetSampledThread(track_info->topology.id)
-                    : tdm.GetInstrumentedThread(track_info->topology.id);
+                    ? tdm.GetSampledThread(track_info->topology.id.value)
+                    : tdm.GetInstrumentedThread(track_info->topology.id.value);
             if(thread_info)
             {
                 thread_id = std::to_string(thread_info->tid);
@@ -637,7 +637,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
                 m_meta_area_label += " (PID: " + process_id_str + ")";
             }
             // set tooltip to counter description
-            const CounterInfo* counter_info = tdm.GetCounter(track_info->topology.id);
+            const CounterInfo* counter_info = tdm.GetCounter(track_info->topology.id.value);
             if(counter_info)
             {
                 m_meta_area_tooltip = counter_info->description;
@@ -694,6 +694,8 @@ TrackItem::SetTrackName(const TrackInfo* track_info)
 
     std::string       device_type_label;
     const DeviceInfo* device_info = tdm.GetDevice(track_info->agent_or_pid);
+    const ProcessInfo* process_info = tdm.GetProcess(track_info->topology.process_id);
+
     if(device_info)
     {
         tdm.GetDeviceTypeLabel(*device_info, device_type_label);
@@ -708,20 +710,15 @@ TrackItem::SetTrackName(const TrackInfo* track_info)
             if(track_info->category != "GPU Queue")
             {
                 m_name = track_info->category;
-                if(device_info)
-                {
-                    m_name +=
-                        " (" + device_type_label + ": " + device_info->product_name + ")";
-                }
+
             }
             else
             {
                 m_name = track_info->sub_name;
-                if(device_info)
-                {
-                    m_name +=
-                        " (" + device_type_label + ": " + device_info->product_name + ")";
-                }
+            }
+            if (process_info && tdm.ProcessCount() > 1)
+            {
+                m_name += " (PID:" + std::to_string(process_info->id) + ")";
             }
             break;
         }
@@ -750,16 +747,10 @@ TrackItem::SetTrackName(const TrackInfo* track_info)
             // Get Processor (device) type label from using track's agent_or_pid, ex:
             // "GPU0".
             m_name = track_info->sub_name;
-
-            if(device_info)
+            if (process_info && tdm.ProcessCount() > 1)
             {
-                std::string device_str;
-                if(tdm.GetDeviceTypeLabel(*device_info, device_str))
-                {
-                    m_name = device_str + ":" + m_name;
-                }
+                m_name += " (PID:" + std::to_string(process_info->id) + ")";
             }
-
             break;
         }
         default:

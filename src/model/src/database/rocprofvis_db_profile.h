@@ -40,7 +40,8 @@ typedef enum rocprofvis_track_load_params
     kRpvDbTrackLoadProcessTag,
     kRpvDbTrackLoadSubprocessTag,
     kRpvDbTrackLoadGuid,
-    kRpvDbTrackLoadNumItems
+    kRpvDbTrackLoadPID,
+    kRpvDbTrackLoadNumItems,
 } rocprofvis_track_load_params;
 
 typedef struct rocprofvis_db_event_level_t

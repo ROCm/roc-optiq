@@ -25,6 +25,7 @@ option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" OFF)
+option(BUILD_TESTING "Build the testing tree" ON)
 
 if(APPLE AND USE_NATIVE_FILE_DIALOG)
     set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
@@ -50,6 +51,12 @@ if(GLFW_LINK_STATIC)
     set(GLFW_LIBRARY_TYPE "STATIC" CACHE STRING "GLFW library type" FORCE)
 else()
     set(GLFW_LIBRARY_TYPE "SHARED" CACHE STRING "GLFW library type" FORCE)
+endif()
+
+# Enable testing if BUILD_TESTING is ON
+if(BUILD_TESTING)
+    enable_testing()
+    include(CTest)
 endif()
 
 # Add third-party libraries, core, and model BEFORE controller

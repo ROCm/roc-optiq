@@ -3,9 +3,10 @@
 
 #include "rocprofvis_compute_memory_chart.h"
 #include "rocprofvis_data_provider.h"
-#include <imgui.h>
-#include <cstdio>
+#include "rocprofvis_settings_manager.h"
 #include <algorithm>
+#include <cstdio>
+#include <imgui.h>
 
 namespace RocProfVis
 {
@@ -13,25 +14,38 @@ namespace View
 {
 
 // =============================================================================
-// Layout constants — tweak these three values to adjust the entire diagram
+// Layout constants — tweak these to adjust the entire diagram
 // =============================================================================
-static constexpr float PAD       = 10.0f;   // padding from edges
-static constexpr float BLOCK_GAP = 10.0f;   // gap between adjacent blocks
-static constexpr float ARROW_GAP = 100.0f;  // gap between columns (room for arrows + labels)
+static constexpr float PAD       = 14.0f;  // padding from edges
+static constexpr float BLOCK_GAP = 12.0f;  // gap between adjacent blocks
+static constexpr float ARROW_GAP =
+    105.0f;  // gap between columns (room for arrows + labels)
 
 // Category and table IDs for the memory chart metrics
 static constexpr uint32_t MEMCHART_CATEGORY_ID = 3;
 static constexpr uint32_t MEMCHART_TABLE_ID    = 1;
 
+// Visual styling constants
+static constexpr float BLOCK_ROUNDING  = 8.0f;
+static constexpr float ARROW_THICKNESS = 2.0f;
+static constexpr float ARROW_HEAD_SZ   = 5.0f;
+
 // =============================================================================
 // Helpers
 // =============================================================================
 
-static std::string FormatMetricValue(double value)
+static SettingsManager&
+Settings()
 {
-    if (value != value) return "-";  // NaN check
+    return SettingsManager::GetInstance();
+}
+
+static std::string
+FormatMetricValue(double value)
+{
+    if(value != value) return "-";  // NaN check
     int64_t ival = static_cast<int64_t>(value);
-    if (value == static_cast<double>(ival))
+    if(value == static_cast<double>(ival))
     {
         return std::to_string(ival);
     }
@@ -40,13 +54,22 @@ static std::string FormatMetricValue(double value)
     return buf;
 }
 
-static void MetricRow(const char* label, const char* value, const char* unit = "")
+// Styled metric row: dim label, bright value
+static void
+MetricRow(const char* label, const char* value, const char* unit = "")
 {
+    ImU32 dimCol  = Settings().GetColor(Colors::kTextDim);
+    ImU32 mainCol = Settings().GetColor(Colors::kTextMain);
+
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
+    ImGui::PushStyleColor(ImGuiCol_Text, dimCol);
     ImGui::TextUnformatted(label);
+    ImGui::PopStyleColor();
+
     ImGui::TableNextColumn();
-    if (unit[0] != '\0')
+    ImGui::PushStyleColor(ImGuiCol_Text, mainCol);
+    if(unit[0] != '\0')
     {
         ImGui::Text("%s %s", value, unit);
     }
@@ -54,20 +77,62 @@ static void MetricRow(const char* label, const char* value, const char* unit = "
     {
         ImGui::TextUnformatted(value);
     }
+    ImGui::PopStyleColor();
 }
 
-static void DrawArrow(ImDrawList* dl, float x1, float y1, float x2, float y2, ImVec2 origin)
+// Push themed visual style for chart blocks
+static void
+PushBlockStyle()
+{
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, Settings().GetColor(Colors::kBorderGray));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, BLOCK_ROUNDING);
+}
+
+static void
+PopBlockStyle()
+{
+    ImGui::PopStyleVar(1);
+    ImGui::PopStyleColor(2);
+}
+
+// Section header: bold title with a thin separator below
+static void
+BlockHeader(const char* title)
+{
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
+    ImGui::TextUnformatted(title);
+    ImGui::PopStyleColor();
+
+    ImDrawList* dl  = ImGui::GetWindowDrawList();
+    ImVec2      pos = ImGui::GetCursorScreenPos();
+    float       w   = ImGui::GetContentRegionAvail().x;
+    dl->AddLine(pos, ImVec2(pos.x + w, pos.y), Settings().GetColor(Colors::kBorderGray),
+                1.0f);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
+}
+
+// Centered text helper for simple label blocks
+static void
+CenteredText(const char* text)
+{
+    float avail = ImGui::GetContentRegionAvail().x;
+    float textW = ImGui::CalcTextSize(text).x;
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - textW) * 0.5f);
+    ImGui::TextUnformatted(text);
+}
+
+// Themed arrow drawn between blocks
+static void
+DrawArrow(ImDrawList* dl, float x1, float y1, float x2, float y2, ImVec2 origin)
 {
     ImVec2 from(origin.x + x1, origin.y + y1);
     ImVec2 to(origin.x + x2, origin.y + y2);
-    ImU32 color = IM_COL32(255, 128, 0, 200);
-    dl->AddLine(from, to, color, 1.5f);
-    float sz = 4.0f;
-    dl->AddTriangleFilled(
-        to,
-        ImVec2(to.x - sz, to.y - sz * 0.6f),
-        ImVec2(to.x - sz, to.y + sz * 0.6f),
-        color);
+    ImU32  color = Settings().GetColor(Colors::kArrowColor);
+    dl->AddLine(from, to, color, ARROW_THICKNESS);
+    float sz = ARROW_HEAD_SZ;
+    dl->AddTriangleFilled(to, ImVec2(to.x - sz, to.y - sz * 0.6f),
+                          ImVec2(to.x - sz, to.y + sz * 0.6f), color);
 }
 
 // =============================================================================
@@ -82,41 +147,44 @@ ComputeMemoryChartView::ComputeMemoryChartView(DataProvider& data_provider)
 
 ComputeMemoryChartView::~ComputeMemoryChartView() {}
 
-const char* ComputeMemoryChartView::Val(MemChartMetric m) const
+const char*
+ComputeMemoryChartView::Val(MemChartMetric m) const
 {
-    if (m >= 0 && m < MEMCHART_METRIC_COUNT)
+    if(m >= 0 && m < MEMCHART_METRIC_COUNT)
     {
         return m_values[m].c_str();
     }
     return "-";
 }
 
-void ComputeMemoryChartView::FetchMemChartMetrics(uint32_t workload_id,
-                                                    const std::vector<uint32_t>& kernel_ids)
+void
+ComputeMemoryChartView::FetchMemChartMetrics(uint32_t                     workload_id,
+                                             const std::vector<uint32_t>& kernel_ids)
 {
     m_values.fill("-");
     m_data_provider.ComputeModel().ClearMetricValues();
 
     std::vector<MetricsRequestParams::MetricID> metric_ids;
-    metric_ids.push_back({MEMCHART_CATEGORY_ID, MEMCHART_TABLE_ID, std::nullopt});
+    metric_ids.push_back({ MEMCHART_CATEGORY_ID, MEMCHART_TABLE_ID, std::nullopt });
 
     m_data_provider.FetchMetrics(
         MetricsRequestParams(workload_id, kernel_ids, metric_ids));
 }
 
-void ComputeMemoryChartView::Update()
+void
+ComputeMemoryChartView::Update()
 {
     const std::vector<std::unique_ptr<MetricValue>>& metrics =
         m_data_provider.ComputeModel().GetMetricsData();
 
-    for (const std::unique_ptr<MetricValue>& metric : metrics)
+    for(const std::unique_ptr<MetricValue>& metric : metrics)
     {
-        if (!metric) continue;
-        if (metric->entry.category_id != MEMCHART_CATEGORY_ID) continue;
-        if (metric->entry.table_id    != MEMCHART_TABLE_ID)    continue;
+        if(!metric) continue;
+        if(metric->entry.category_id != MEMCHART_CATEGORY_ID) continue;
+        if(metric->entry.table_id != MEMCHART_TABLE_ID) continue;
 
         uint32_t id = metric->entry.id;
-        if (id < MEMCHART_METRIC_COUNT)
+        if(id < MEMCHART_METRIC_COUNT)
         {
             m_values[id] = FormatMetricValue(metric->value);
         }
@@ -127,10 +195,15 @@ void ComputeMemoryChartView::Update()
 // Render — each block is positioned relative to the previous one
 // =============================================================================
 
-void ComputeMemoryChartView::Render()
+void
+ComputeMemoryChartView::Render()
 {
+    // Outer container with themed background
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgMain));
+    ImGui::PushStyleColor(ImGuiCol_Border, Settings().GetColor(Colors::kBorderGray));
     ImGui::BeginChild("MemoryChart", ImVec2(0, 0), ImGuiChildFlags_Borders,
-                       ImGuiWindowFlags_HorizontalScrollbar);
+                      ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::PopStyleColor(2);
 
     // --- Pipeline column ---
     m_instrBuff     = RenderInstrBuff(PAD, PAD);
@@ -139,20 +212,20 @@ void ComputeMemoryChartView::Render()
 
     // --- Cache column (stacked vertically) ---
     float cacheX = m_activeCUs.Right() + ARROW_GAP;
-    m_lds       = RenderLDS(cacheX, PAD);
-    m_vectorL1  = RenderVectorL1Cache(cacheX, m_lds.Bottom() + BLOCK_GAP);
-    m_scalarL1D = RenderScalarL1DCache(cacheX, m_vectorL1.Bottom() + BLOCK_GAP);
-    m_instrL1   = RenderInstrL1Cache(cacheX, m_scalarL1D.Bottom() + BLOCK_GAP);
+    m_lds        = RenderLDS(cacheX, PAD);
+    m_vectorL1   = RenderVectorL1Cache(cacheX, m_lds.Bottom() + BLOCK_GAP);
+    m_scalarL1D  = RenderScalarL1DCache(cacheX, m_vectorL1.Bottom() + BLOCK_GAP);
+    m_instrL1    = RenderInstrL1Cache(cacheX, m_scalarL1D.Bottom() + BLOCK_GAP);
 
     // --- L2 column (spans full cache height) ---
     float l2H = m_instrL1.Bottom() - PAD;
-    m_l2 = RenderL2Cache(m_lds.Right() + ARROW_GAP, PAD, l2H);
+    m_l2      = RenderL2Cache(m_lds.Right() + ARROW_GAP, PAD, l2H);
 
     // --- Fabric column (stacked vertically) ---
     float fabricX = m_l2.Right() + ARROW_GAP;
-    m_xgmiPcie = RenderXGMIPCIe(fabricX, PAD);
-    m_fabric   = RenderFabricBlock(fabricX, m_xgmiPcie.Bottom() + BLOCK_GAP);
-    m_gmi      = RenderGMI(fabricX, m_fabric.Bottom() + BLOCK_GAP);
+    m_xgmiPcie    = RenderXGMIPCIe(fabricX, PAD);
+    m_fabric      = RenderFabricBlock(fabricX, m_xgmiPcie.Bottom() + BLOCK_GAP);
+    m_gmi         = RenderGMI(fabricX, m_fabric.Bottom() + BLOCK_GAP);
 
     // --- HBM (right of fabric) ---
     m_hbm = RenderHBM(m_fabric.Right() + ARROW_GAP / 2, m_fabric.y);
@@ -163,9 +236,9 @@ void ComputeMemoryChartView::Render()
     // Ensure scroll region covers the entire diagram
     float canvasW = m_hbm.Right() + PAD;
     float canvasH = m_instrBuff.Bottom();
-    canvasH = std::max(canvasH, m_instrDispatch.Bottom());
-    canvasH = std::max(canvasH, m_instrL1.Bottom());
-    canvasH = std::max(canvasH, m_gmi.Bottom());
+    canvasH       = std::max(canvasH, m_instrDispatch.Bottom());
+    canvasH       = std::max(canvasH, m_instrL1.Bottom());
+    canvasH       = std::max(canvasH, m_gmi.Bottom());
     canvasH += PAD;
     ImGui::SetCursorPos(ImVec2(canvasW, canvasH));
     ImGui::Dummy(ImVec2(1, 1));
@@ -177,144 +250,264 @@ void ComputeMemoryChartView::Render()
 // Pipeline blocks
 // =============================================================================
 
-ChartBlock ComputeMemoryChartView::RenderInstrBuff(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderInstrBuff(float x, float y)
 {
-    const float w = 145, h = 460;
+    const float w = 195, h = 460;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("InstrBuff", ImVec2(w, h), ImGuiChildFlags_Borders);
 
-    ImGui::SeparatorText("Instr Buff");
+    BlockHeader("Instr Buff");
+
+    // Wave buffers — subtle inset cards
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_Border, Settings().GetColor(Colors::kBorderGray));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
 
     ImGui::BeginChild("Wave0", ImVec2(-1, 30), ImGuiChildFlags_Borders);
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
     ImGui::TextUnformatted("Wave 0 Instr buff");
+    ImGui::PopStyleColor();
     ImGui::EndChild();
 
-    ImGui::Spacing();
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
 
     ImGui::BeginChild("WaveN", ImVec2(-1, 30), ImGuiChildFlags_Borders);
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
     ImGui::TextUnformatted("Wave N-1 Instr buff");
+    ImGui::PopStyleColor();
     ImGui::EndChild();
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::TextUnformatted("Wave Occupancy");
-    ImGui::Text("%s", Val(WAVEFRONT_OCCUPANCY));
-    ImGui::TextUnformatted("per-GCD");
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
+
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10);
+
+    // Metrics
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
+    ImGui::TextUnformatted("Wave Occupancy:");
+    ImGui::PopStyleColor();
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
+    ImGui::Text("%s per-GCD", Val(WAVEFRONT_OCCUPANCY));
+    ImGui::PopStyleColor();
 
     ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::TextUnformatted("Wave Life");
-    ImGui::Text("%s", Val(WAVE_LIFE));
-    ImGui::TextUnformatted("cycles");
+
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
+    ImGui::TextUnformatted("Wave Life:");
+    ImGui::PopStyleColor();
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
+    ImGui::Text("%s cycles", Val(WAVE_LIFE));
+    ImGui::PopStyleColor();
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
-ChartBlock ComputeMemoryChartView::RenderInstrDispatch(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderInstrDispatch(float x, float y)
 {
-    const float w = 120, h = 460;
+    const float w = 335, h = 460, trap_w = 50;
+    const int   num_traps = 8;
+    const float trap_h    = h / static_cast<float>(num_traps);
+
     ImGui::SetCursorPos(ImVec2(x, y));
-    ImGui::BeginChild("InstrDispatch", ImVec2(w, h), ImGuiChildFlags_Borders);
+    PushBlockStyle();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
 
-    ImGui::SeparatorText("Instr Dispatch");
+    ImGui::BeginChild("InstrDispatch_Container", ImVec2(w, h), ImGuiChildFlags_None);
 
-    if (ImGui::BeginTable("##dispatch", 2))
+    // Lambda to draw a single trapezoid
+    auto drawTrapezoid = [&](int index) {
+        char id[64];
+        snprintf(id, sizeof(id), "Trap_%d", index);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+        ImGui::BeginChild(id, ImVec2(trap_w/2, trap_h));
+        {
+            ImDrawList* dl          = ImGui::GetWindowDrawList();
+            ImVec2      pos         = ImGui::GetCursorScreenPos();
+            float       narrow_side = trap_h * (150.0f / 460.0f);
+            ImVec2      pts[4]      = {
+                ImVec2(pos.x, pos.y),
+                ImVec2(pos.x + trap_w, pos.y + (trap_h - narrow_side) * 0.5f),
+                ImVec2(pos.x + trap_w, pos.y + (trap_h + narrow_side) * 0.5f),
+                ImVec2(pos.x, pos.y + trap_h)
+            };
+            dl->AddConvexPolyFilled(pts, 4, Settings().GetColor(Colors::kBgPanel));
+            dl->AddPolyline(pts, 4, Settings().GetColor(Colors::kBorderGray),
+                            ImDrawFlags_Closed, 1.0f);
+
+  
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+    };
+
+    // Trapezoid column — 8 trapezoids stacked vertically
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+    ImGui::BeginChild("TrapColumn", ImVec2(trap_w, h));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+    for(int i = 0; i < num_traps; ++i)
+        drawTrapezoid(i);
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+
+     // Trapezoid main — 1 trapezoid
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+    ImGui::BeginChild("TrapMain", ImVec2(trap_w, h));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+    ImDrawList* dl          = ImGui::GetWindowDrawList();
+    ImVec2      pos         = ImGui::GetCursorScreenPos();
+    float       narrow_side = 390.0f;  // right side (short)
+    ImVec2      pts[4]      = {
+        ImVec2(pos.x, pos.y),  // top-left  (wide side)
+        ImVec2(pos.x + trap_w,
+                         pos.y + (h - narrow_side) * 0.5f),  // top-right  (short side)
+        ImVec2(pos.x + trap_w,
+                         pos.y + (h + narrow_side) * 0.5f),  // bot-right  (short side)
+        ImVec2(pos.x, pos.y + h)                   // bot-left  (wide side)
+    };
+    dl->AddConvexPolyFilled(pts, 4, Settings().GetColor(Colors::kBgPanel));
+    dl->AddPolyline(pts, 4, Settings().GetColor(Colors::kBorderGray), ImDrawFlags_Closed,
+                    1.0f);
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(30, 0));
+    ImGui::SameLine();
+
+    // Main content block
+    ImGui::BeginChild("InstrDispatch", ImVec2(120, h), ImGuiChildFlags_Borders);
+
+    BlockHeader("Instr Dispatch");
+
+    if(ImGui::BeginTable("##dispatch", 2))
     {
         MetricRow("SALU:", Val(SALU));
         MetricRow("SMEM:", Val(SMEM));
         MetricRow("VALU:", Val(VALU));
         MetricRow("MFMA:", Val(MFMA));
         MetricRow("VMEM:", Val(VMEM));
-        MetricRow("LDS:",  Val(LDS));
-        MetricRow("GWS:",  Val(GWS));
-        MetricRow("Br:",   Val(BR));
+        MetricRow("LDS:", Val(LDS));
+        MetricRow("GWS:", Val(GWS));
+        MetricRow("Br:", Val(BR));
         ImGui::EndTable();
     }
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
-ChartBlock ComputeMemoryChartView::RenderActiveCUs(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderActiveCUs(float x, float y)
 {
     const float w = 170, h = 380;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("ActiveCUs", ImVec2(w, h), ImGuiChildFlags_Borders);
 
-    ImGui::SeparatorText("Exec");
+    BlockHeader("Exec");
+
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
     ImGui::TextUnformatted("Active CUs");
+    ImGui::PopStyleColor();
+
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
     ImGui::Text("%s", Val(NUM_CUS));
+    ImGui::PopStyleColor();
 
-    ImGui::Separator();
+    ImDrawList* dl     = ImGui::GetWindowDrawList();
+    ImVec2      sepPos = ImGui::GetCursorScreenPos();
+    float       sepW   = ImGui::GetContentRegionAvail().x;
+    dl->AddLine(sepPos, ImVec2(sepPos.x + sepW, sepPos.y),
+                Settings().GetColor(Colors::kBorderGray), 1.0f);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
 
-    if (ImGui::BeginTable("##cus", 2))
+    if(ImGui::BeginTable("##cus", 2))
     {
-        MetricRow("VGPRs:",         Val(VGPR));
-        MetricRow("SGPRs:",         Val(SGPR));
-        MetricRow("LDS Alloc:",     Val(LDS_ALLOCATION));
+        MetricRow("VGPRs:", Val(VGPR));
+        MetricRow("SGPRs:", Val(SGPR));
+        MetricRow("LDS Alloc:", Val(LDS_ALLOCATION));
         MetricRow("Scratch Alloc:", Val(SCRATCH_ALLOCATION));
-        MetricRow("Wavefronts:",    Val(WAVEFRONTS));
-        MetricRow("Workgroups:",    Val(WORKGROUPS));
+        MetricRow("Wavefronts:", Val(WAVEFRONTS));
+        MetricRow("Workgroups:", Val(WORKGROUPS));
         ImGui::EndTable();
     }
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
 // =============================================================================
 // Cache blocks
 // =============================================================================
 
-ChartBlock ComputeMemoryChartView::RenderLDS(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderLDS(float x, float y)
 {
     const float w = 195, h = 100;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("LDS_Block", ImVec2(w, h), ImGuiChildFlags_Borders);
 
-    ImGui::SeparatorText("LDS");
+    BlockHeader("LDS");
 
-    if (ImGui::BeginTable("##lds", 2))
+    if(ImGui::BeginTable("##lds", 2))
     {
-        MetricRow("Util:", Val(LDS_UTIL),    "%");
-        MetricRow("Lat:",  Val(LDS_LATENCY), "cycles");
+        MetricRow("Util:", Val(LDS_UTIL), "%");
+        MetricRow("Lat:", Val(LDS_LATENCY), "cycles");
         ImGui::EndTable();
     }
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
-ChartBlock ComputeMemoryChartView::RenderVectorL1Cache(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderVectorL1Cache(float x, float y)
 {
     const float w = 195, h = 155;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("VectorL1", ImVec2(w, h), ImGuiChildFlags_Borders);
 
-    ImGui::SeparatorText("Vector L1 Cache");
+    BlockHeader("Vector L1 Cache");
 
-    if (ImGui::BeginTable("##vl1", 2))
+    if(ImGui::BeginTable("##vl1", 2))
     {
-        MetricRow("Hit:",    Val(VL1_HIT),      "%");
-        MetricRow("Coales:", Val(VL1_COALESCE),  "%");
-        MetricRow("Stall:",  Val(VL1_STALL),     "%");
+        MetricRow("Hit:", Val(VL1_HIT), "%");
+        MetricRow("Coales:", Val(VL1_COALESCE), "%");
+        MetricRow("Stall:", Val(VL1_STALL), "%");
         ImGui::EndTable();
     }
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
-ChartBlock ComputeMemoryChartView::RenderScalarL1DCache(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderScalarL1DCache(float x, float y)
 {
     const float w = 195, h = 100;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("ScalarL1D", ImVec2(w, h), ImGuiChildFlags_Borders);
 
-    ImGui::SeparatorText("Scalar L1D Cache");
+    BlockHeader("Scalar L1D Cache");
 
-    if (ImGui::BeginTable("##sl1d", 2))
+    if(ImGui::BeginTable("##sl1d", 2))
     {
         MetricRow("Hit:", Val(SL1D_HIT), "%");
         MetricRow("Lat:", Val(SL1D_LAT), "cycles");
@@ -322,18 +515,21 @@ ChartBlock ComputeMemoryChartView::RenderScalarL1DCache(float x, float y)
     }
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
-ChartBlock ComputeMemoryChartView::RenderInstrL1Cache(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderInstrL1Cache(float x, float y)
 {
-    const float w = 195, h = 80;
+    const float w = 195, h = 100;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("InstrL1", ImVec2(w, h), ImGuiChildFlags_Borders);
 
-    ImGui::SeparatorText("Instr L1 Cache");
+    BlockHeader("Instr L1 Cache");
 
-    if (ImGui::BeginTable("##il1", 2))
+    if(ImGui::BeginTable("##il1", 2))
     {
         MetricRow("Hit:", Val(IL1_HIT), "%");
         MetricRow("Lat:", Val(IL1_LAT), "cycles");
@@ -341,84 +537,109 @@ ChartBlock ComputeMemoryChartView::RenderInstrL1Cache(float x, float y)
     }
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
 // =============================================================================
 // Memory subsystem blocks
 // =============================================================================
 
-ChartBlock ComputeMemoryChartView::RenderL2Cache(float x, float y, float h)
+ChartBlock
+ComputeMemoryChartView::RenderL2Cache(float x, float y, float h)
 {
     const float w = 175;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("L2Cache", ImVec2(w, h), ImGuiChildFlags_Borders);
 
-    ImGui::SeparatorText("L2 Cache");
+    BlockHeader("L2 Cache");
 
-    if (ImGui::BeginTable("##l2", 2))
+    if(ImGui::BeginTable("##l2", 2))
     {
-        MetricRow("Rd:",     Val(L2_RD));
-        MetricRow("Wr:",     Val(L2_WR));
+        MetricRow("Rd:", Val(L2_RD));
+        MetricRow("Wr:", Val(L2_WR));
         MetricRow("Atomic:", Val(L2_ATOMIC));
-        MetricRow("Hit:",    Val(L2_HIT), "%");
+        MetricRow("Hit:", Val(L2_HIT), "%");
         ImGui::EndTable();
     }
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
-ChartBlock ComputeMemoryChartView::RenderXGMIPCIe(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderXGMIPCIe(float x, float y)
 {
     const float w = 115, h = 90;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("xGMI_PCIe", ImVec2(w, h), ImGuiChildFlags_Borders);
-    ImGui::TextUnformatted("xGMI /");
-    ImGui::TextUnformatted("PCIe");
+
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
+    CenteredText("xGMI /");
+    CenteredText("PCIe");
+    ImGui::PopStyleColor();
+
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
-ChartBlock ComputeMemoryChartView::RenderFabricBlock(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderFabricBlock(float x, float y)
 {
     const float w = 175, h = 270;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("Fabric", ImVec2(w, h), ImGuiChildFlags_Borders);
 
-    ImGui::SeparatorText("Fabric");
+    BlockHeader("Fabric");
 
-    if (ImGui::BeginTable("##fabric", 2))
+    if(ImGui::BeginTable("##fabric", 2))
     {
-        MetricRow("Rd:",     Val(FABRIC_RD_LAT),     "cycles");
-        MetricRow("Wr:",     Val(FABRIC_WR_LAT),     "cycles");
-        MetricRow("Atomic:", Val(FABRIC_ATOMIC_LAT),  "cycles");
+        MetricRow("Rd:", Val(FABRIC_RD_LAT), "cycles");
+        MetricRow("Wr:", Val(FABRIC_WR_LAT), "cycles");
+        MetricRow("Atomic:", Val(FABRIC_ATOMIC_LAT), "cycles");
         ImGui::EndTable();
     }
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
-ChartBlock ComputeMemoryChartView::RenderGMI(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderGMI(float x, float y)
 {
     const float w = 115, h = 75;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("GMI", ImVec2(w, h), ImGuiChildFlags_Borders);
-    ImGui::TextUnformatted("GMI");
+
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
+    CenteredText("GMI");
+    ImGui::PopStyleColor();
+
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
-ChartBlock ComputeMemoryChartView::RenderHBM(float x, float y)
+ChartBlock
+ComputeMemoryChartView::RenderHBM(float x, float y)
 {
     const float w = 95, h = 130;
     ImGui::SetCursorPos(ImVec2(x, y));
+    PushBlockStyle();
     ImGui::BeginChild("HBM", ImVec2(w, h), ImGuiChildFlags_Borders);
 
-    ImGui::SeparatorText("HBM");
+    BlockHeader("HBM");
 
-    if (ImGui::BeginTable("##hbm", 2))
+    if(ImGui::BeginTable("##hbm", 2))
     {
         MetricRow("Rd:", Val(HBM_RD));
         MetricRow("Wr:", Val(HBM_WR));
@@ -426,21 +647,27 @@ ChartBlock ComputeMemoryChartView::RenderHBM(float x, float y)
     }
 
     ImGui::EndChild();
-    return {x, y, w, h};
+    PopBlockStyle();
+    return { x, y, w, h };
 }
 
 // =============================================================================
 // Connection arrows and labels — all positions derived from stored blocks
 // =============================================================================
 
-void ComputeMemoryChartView::RenderConnections()
+void
+ComputeMemoryChartView::RenderConnections()
 {
     ImGui::SetCursorPos(ImVec2(0, 0));
-    ImVec2 origin = ImGui::GetCursorScreenPos();
-    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2      origin = ImGui::GetCursorScreenPos();
+    ImDrawList* dl     = ImGui::GetWindowDrawList();
 
     constexpr float SP    = 20.0f;  // vertical spacing between arrows in a group
     constexpr float LBL_Y = 12.0f;  // label sits this far above the arrow line
+
+    // Use dim text for connection labels
+    ImU32 labelCol = Settings().GetColor(Colors::kTextDim);
+    ImGui::PushStyleColor(ImGuiCol_Text, labelCol);
 
     // --- Pipeline -> Caches ---
 
@@ -573,6 +800,8 @@ void ComputeMemoryChartView::RenderConnections()
         ImGui::SetCursorPos(ImVec2(lx, my + hs - LBL_Y));
         ImGui::Text("Wr: %s", Val(HBM_WR));
     }
+
+    ImGui::PopStyleColor();  // labelCol
 }
 
 }  // namespace View

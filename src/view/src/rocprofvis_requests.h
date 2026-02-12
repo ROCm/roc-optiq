@@ -34,8 +34,9 @@ enum class RequestType
     kTableExport,
     kFetchSystemTrace,
 #ifdef COMPUTE_UI_SUPPORT
-    kFetchComputeTrace
-#endif   
+    kFetchComputeTrace,
+    kFetchMetrics,
+#endif
 };
 
 enum class RequestState
@@ -148,6 +149,31 @@ public:
     {}
 };
 
+#ifdef COMPUTE_UI_SUPPORT
+class MetricsRequestParams : public RequestParamsBase
+{
+public:
+    struct MetricID
+    {
+        uint32_t                category_id;
+        std::optional<uint32_t> table_id;
+        std::optional<uint32_t> entry_id;
+    };
+    uint32_t              m_workload_id;
+    std::vector<uint32_t> m_kernel_ids;
+    std::vector<MetricID> m_metric_ids;
+
+    MetricsRequestParams(const MetricsRequestParams& metrics_params)            = default;
+    MetricsRequestParams& operator=(const MetricsRequestParams& metrics_params) = default;
+
+    MetricsRequestParams(uint32_t workload_id, const std::vector<uint32_t>& kernel_ids,
+                         const std::vector<MetricID>& metric_ids)
+    : m_workload_id(workload_id)
+    , m_kernel_ids(kernel_ids)
+    , m_metric_ids(metric_ids)
+    {}
+};
+#endif
 
 struct RequestInfo
 {

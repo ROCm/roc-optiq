@@ -12,6 +12,8 @@ Customize your ROCm Optiq project
 .. |pen| image:: ../images/pencil.png
 .. |flow| image:: ../images/flow-change.png
 .. |reset| image:: ../images/reset.png
+.. |make| image:: ../images/make-selection.png
+.. |remove| image:: ../images/remove-time.png
 
 You can customize the data views of an open trace file in ROCm Optiq, including display settings, saved trace selections, added bookmarks/annotations, and more.
 
@@ -21,17 +23,28 @@ Set a time range filter
 =======================
 
 Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
-To set a time range filter, double-click a range in the **Timeline View**.
+
+To set a time range filter, press and hold **Ctrl** while dragging your mouse in the in the **Timeline View** to select a range.
 
 .. image:: ../images/filter.png
    :width: 600
 
-Double-click in the **Timeline View** again to clear the selection.
-
-.. image:: ../images/time-range-filter.gif
-   :width: 600
-
+Once a time range is selected, the selection boundaries can be adjusted by dragging them. 
 The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
+
+If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click:
+
+|make|
+
+Selecting this will set a time range filter with boundaries at the event's start and end times, or the first start time and last end time if multiple events are selected. 
+
+.. tip::
+
+   You can press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
+
+To clear the time range selection, press **Esc** or right-click and select **Remove Selection**:
+
+|remove|
 
 Save trace selections
 ---------------------
@@ -64,10 +77,10 @@ To add an annotation:
    .. image:: ../images/save-annotation.png
       :width: 500
 
-   Once saved, the annotation displays on the timeline:
+   Once saved, the annotation displays as a marker that can be expanded on the timeline:
 
    .. image:: ../images/annotation-example.png
-      :width: 500
+      :width: 200
 
 .. tip::
 
@@ -88,8 +101,8 @@ To create and use a bookmark:
    
 Or:
 
-1.	Press **Ctrl** + any key from **0** ‒ **9** to create a view bookmark. The bookmark saves to an index based on the number used and creates a shortcut.
-2.	Press any key from **0** ‒ **9** to restore the view to a stored bookmark from that index number shortcut. For example, if you save a bookmark using **Ctrl** + **1**, pressing **1** restores that bookmark.
+1.	Press **Ctrl** + any key from **0** - **9** to create a view bookmark. The bookmark saves to an index based on the number used and creates a shortcut.
+2.	Press any key from **0** - **9** to restore the view to a stored bookmark from that index number shortcut. For example, if you save a bookmark using **Ctrl** + **1**, pressing **1** restores that bookmark.
 
 Delete bookmarks
 ----------------

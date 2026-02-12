@@ -6,6 +6,7 @@
 #include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_compute_selection.h"
+#include "rocprofvis_compute_summary_view.h"
 
 namespace RocProfVis
 {
@@ -81,6 +82,7 @@ protected:
     std::shared_ptr<ComputeSelection> m_compute_selection;
 };
 
+
 class ComputeTester : public RocWidget
 {
 public:
@@ -135,9 +137,32 @@ private:
             intensity;
     };
 
+    void RenderSelectedView(const std::unordered_map<uint32_t, WorkloadInfo>& workloads,
+                            uint32_t                                          view_index);
+    void RenderSystemAndConfig(const WorkloadInfo& workload);
+    void RenderProfilingConfig(const WorkloadInfo& workload);
+    void RenderMetrics(const WorkloadInfo& workload);
+    void RenderKernels(const WorkloadInfo& workload);
+    void RenderFetcher(const WorkloadInfo& workload);
+    void RenderRoofLine(const WorkloadInfo& workload);
+    void RenderSummaryView(const WorkloadInfo& workload);
+
+    const std::vector<std::string_view> m_views = { "System Information",
+                                                    "Profiling Configuration", "Metrics",
+                                                    "Kernels",
+                                                    "Fetcher",
+                                                    "RoofLine",
+                                                    "Summary View" }; //TODO: figure out better way to store it
+
+    
+
     DataProvider&  m_data_provider;
     SelectionState m_selections;
     DisplayStrings m_display_names;
+
+    NewComputeSummaryView m_summary_view;
+    PieChart m_pie_chart;
+    BarChart m_bar_chart;
 };
 
 }  // namespace View

@@ -75,6 +75,15 @@ struct KernelInfo
     Roofline    roofline;
 };
 
+struct ChartData
+{
+    std::vector<const char*> m_labels;
+    std::vector<double>      m_x_values;
+    std::vector<double>      m_y_values;
+    std::vector<double>      m_fractions;  // TODO: needed only for Pie
+    double                   m_x_max;      // TODO: needed only for BAR
+};
+
 struct WorkloadInfo
 {
     struct Roofline
@@ -108,7 +117,31 @@ struct WorkloadInfo
     AvailableMetrics                         available_metrics;
     std::unordered_map<uint32_t, KernelInfo> kernels;
     Roofline                                 roofline;
-};
+    ChartData                                GenerateChartData() const
+    {
+        ChartData data;
+        double    total = 0.0;
+        for(const auto& kernel : kernels)
+        {
+            data.m_labels.push_back(kernel.second.name.c_str());
+            data.m_x_values.push_back(static_cast<double>(kernel.second.duration_total));
+            data.m_y_values.push_back(static_cast<double>(data.m_y_values.size()));
+            data.m_x_max = std::max(data.m_x_max, data.m_x_values.back());
+            total += data.m_x_values.back();
+        }
+
+        data.m_fractions.resize(
+            data.m_x_values
+                .size());  // TODO: It need only for PieChart thing how to read of there
+        for(size_t i = 0; i < data.m_x_values.size(); ++i)
+        {
+            data.m_fractions[i] = data.m_x_values[i] / total;
+        }
+
+        return data;
+    };  // TODO: generate diferent data depend by params
+ 
+    };
 
 struct MetricValue 
 {

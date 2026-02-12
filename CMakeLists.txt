@@ -20,7 +20,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
-option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
+option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" ON)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
@@ -105,6 +105,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_time_to_pixel.cpp
     src/view/src/rocprofvis_minimap.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
+    src/view/src/widgets/rocprofvis_charts.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
     src/view/src/widgets/rocprofvis_tab_container.cpp
     src/view/src/widgets/rocprofvis_editable_textfield.cpp
@@ -121,6 +122,7 @@ list(APPEND VIEW_FILES
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/compute/rocprofvis_compute_root.cpp
     src/view/src/compute/legacy/rocprofvis_compute_summary.cpp
+    src/view/src/compute/rocprofvis_compute_summary_view.cpp
     src/view/src/compute/legacy/rocprofvis_compute_block.cpp
     src/view/src/compute/legacy/rocprofvis_compute_table.cpp
     src/view/src/compute/rocprofvis_compute_data_provider.cpp

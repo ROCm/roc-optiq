@@ -325,6 +325,20 @@ TopologyDataModel::TopologyToString()
         {
             const DeviceInfo* devInfo = GetDevice(d_id);
             ss << DeviceInfoToString(devInfo, level+1) << std::endl;
+
+            ss << indent(level) << "Queues: " << devInfo->queue_ids.size() << std::endl;
+            for(const uint64_t& d : devInfo->queue_ids)
+            {
+                const QueueInfo* queueInfo = GetQueue(d);
+                ss << QueueInfoToString(queueInfo, level+1) << std::endl;                       
+            }
+
+            ss << indent(level) << "Counters: " << devInfo->counter_ids.size() << std::endl;
+            for(const uint64_t& d : devInfo->counter_ids)
+            {
+                const CounterInfo* counterInfo = GetCounter(d);
+                ss << CounterInfoToString(counterInfo, level+1) << std::endl;                       
+            }
         }
 
         const std::vector<uint64_t>& process_ids = it->second.process_ids;
@@ -352,25 +366,11 @@ TopologyDataModel::TopologyToString()
                     ss << ThreadInfoToString(threadInfo, level+1) << std::endl;                       
                 }
 
-                ss << indent(level) << "Queues: " << procInfo->queue_ids.size() << std::endl;
-                for(const uint64_t& d : procInfo->queue_ids)
-                {
-                    const QueueInfo* queueInfo = GetQueue(d);
-                    ss << QueueInfoToString(queueInfo, level+1) << std::endl;                       
-                }
-
                 ss << indent(level) << "Streams: " << procInfo->stream_ids.size() << std::endl;
                 for(const uint64_t& d : procInfo->stream_ids)
                 {
                     const StreamInfo* streamInfo = GetStream(d);
                     ss << StreamInfoToString(streamInfo, level+1) << std::endl;                       
-                }
-
-                ss << indent(level) << "Counters: " << procInfo->counter_ids.size() << std::endl;
-                for(const uint64_t& d : procInfo->counter_ids)
-                {
-                    const CounterInfo* counterInfo = GetCounter(d);
-                    ss << CounterInfoToString(counterInfo, level+1) << std::endl;                       
                 }
             }
         }
@@ -385,7 +385,7 @@ TopologyDataModel::DeviceInfoToString(const DeviceInfo* device_info, int indent)
     std::string indent_str = std::string(indent, ' ');
     if(device_info)
     {
-        ss << indent_str << "Device ID: " << device_info->id << std::endl;
+        ss << indent_str << "Device ID: " << device_info->id.fields.id << std::endl;
         ss << indent_str << "Product Name: " << device_info->product_name << std::endl;
         ss << indent_str << "Type: " << static_cast<uint32_t>(device_info->type) << std::endl;
         ss << indent_str << "Type Index: " << device_info->type_index << std::endl;

@@ -1,6 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#include "rocprofvis_shared_types.h"
 
 /*
 * This interface header file cannot have any pre-compiler conditions to be successfully built by CFFI   
@@ -24,6 +25,7 @@ typedef     rocprofvis_dm_handle_t        rocprofvis_dm_stacktrace_t;           
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_extdata_t;                      // External data object handle
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_table_t;                        // Table object handle
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_table_row_t;                    // Table row object handle
+typedef     rocprofvis_dm_handle_t        rocprofvis_dm_topology_node;                  // Topology node handle
 typedef     uint32_t                      rocprofvis_dm_index_t;                        // Any data model array index, assuming array sizes will not exceed 32-bit value
 typedef     uint64_t                      rocprofvis_dm_timestamp_t;                    // Timestamp
 typedef     uint32_t                      rocprofvis_dm_property_t;                     // any property enumeration
@@ -47,6 +49,7 @@ typedef     uint16_t                      rocprofvis_dm_num_string_table_filters
 typedef     const char**                  rocprofvis_dm_string_table_filters_t;         // string table filters for table query
 typedef     rocprofvis_dm_handle_t        rocprofvis_db_instance_t;                     // Instance handle
 typedef     uint32_t                      rocprofvis_db_table_column_enum_t;            // database query column enumeration cast type
+typedef     uint32_t                      rocprofvis_dm_process_id;                     // pid
 
 /*******************************Enumerations******************************/
 
@@ -206,7 +209,9 @@ typedef enum  rocprofvis_dm_trace_property_t {
     kRPVDPmcInfoTableHandleIndexed,
     kRPVDAgentQueueMappingInfoTableHandleIndexed,
     kRPVDAgentStreamMappingInfoTableHandleIndexed,
-    kRPVDStreamQueueMappingInfoTableHandleIndexed
+    kRPVDStreamQueueMappingInfoTableHandleIndexed,
+    // Topology handle
+    kRPVDMTopologyHandle,
 } rocprofvis_dm_trace_property_t;
 
 // Track properties

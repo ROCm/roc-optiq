@@ -23,6 +23,7 @@ namespace DataModel
                 { { Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.tid", Builder::THREAD_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(is_sample_track ? kRocProfVisDmRegionSampleTrack : kRocProfVisDmRegionMainTrack),
                 Builder::QParamOperation(is_sample_track ? kRocProfVisDmOperationLaunchSample : kRocProfVisDmOperationLaunch),
                 Builder::StoreConfigVersion()
@@ -41,6 +42,7 @@ namespace DataModel
                 { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(is_sample_track ? kRocProfVisDmRegionSampleTrack : kRocProfVisDmRegionMainTrack),
                 Builder::QParamOperation(is_sample_track ? kRocProfVisDmOperationLaunchSample : kRocProfVisDmOperationLaunch),
                 Builder::StoreConfigVersion()
@@ -60,6 +62,7 @@ namespace DataModel
                 { { Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmKernelDispatchTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                 Builder::StoreConfigVersion()
@@ -73,6 +76,7 @@ namespace DataModel
                 { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmKernelDispatchTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                 Builder::StoreConfigVersion()
@@ -88,6 +92,7 @@ namespace DataModel
                 { { Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmMemoryAllocationTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                 Builder::StoreConfigVersion()
@@ -101,6 +106,7 @@ namespace DataModel
                 { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmMemoryAllocationTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                 Builder::StoreConfigVersion()
@@ -116,6 +122,7 @@ namespace DataModel
                 { { Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmMemoryCopyTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
                 Builder::StoreConfigVersion()
@@ -129,6 +136,7 @@ namespace DataModel
                 { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("queue_id",     Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmMemoryCopyTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
                 Builder::StoreConfigVersion()
@@ -145,6 +153,7 @@ namespace DataModel
                 { { Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("PMC_E.pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmPmcTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::StoreConfigVersion()
@@ -160,6 +169,7 @@ namespace DataModel
                 { { Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("PMC_E.pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+                Builder::QParam("K.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmPmcTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::StoreConfigVersion()
@@ -179,6 +189,7 @@ namespace DataModel
                 { { Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("PMC_E.pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmPmcTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::StoreConfigVersion()
@@ -194,6 +205,7 @@ namespace DataModel
                 { { Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("PMC_E.pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+                Builder::QParam("PMC_I.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmPmcTrack),
                 Builder::QParamOperation(kRocProfVisDmOperationNoOp),
                 Builder::StoreConfigVersion()
@@ -215,8 +227,9 @@ namespace DataModel
         {
             return Builder::Select(rocprofvis_db_sqlite_track_query_format(
                 { { Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack),
                 Builder::QParamOperation(kRocProfVisDmMultipleOperations),
                 Builder::StoreConfigVersion()
@@ -228,8 +241,9 @@ namespace DataModel
         {
             return Builder::Select(rocprofvis_db_sqlite_track_query_format(
                 { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
+                Builder::QParam("pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack),
                 Builder::QParamOperation(kRocProfVisDmMultipleOperations),
                 Builder::StoreConfigVersion()
@@ -243,8 +257,9 @@ namespace DataModel
         {
             return Builder::Select(rocprofvis_db_sqlite_track_query_format(
                 { { Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack),
                 Builder::QParamOperation(kRocProfVisDmMultipleOperations),
                 Builder::StoreConfigVersion()
@@ -256,8 +271,9 @@ namespace DataModel
         {
             return Builder::Select(rocprofvis_db_sqlite_track_query_format(
                 { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
+                Builder::QParam("pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack),
                 Builder::QParamOperation(kRocProfVisDmMultipleOperations),
                 Builder::StoreConfigVersion()
@@ -271,8 +287,9 @@ namespace DataModel
         {
             return Builder::Select(rocprofvis_db_sqlite_track_query_format(
                 { { Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack),
                 Builder::QParamOperation(kRocProfVisDmMultipleOperations),
                 Builder::StoreConfigVersion()
@@ -284,8 +301,9 @@ namespace DataModel
         {
             return Builder::Select(rocprofvis_db_sqlite_track_query_format(
                 { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
+                Builder::QParam("pid", Builder::PROCESS_ID_PUBLIC_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack),
                 Builder::QParamOperation(kRocProfVisDmMultipleOperations),
                 Builder::StoreConfigVersion()
@@ -309,7 +327,9 @@ namespace DataModel
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.tid", Builder::THREAD_ID_SERVICE_NAME),
-                Builder::SpaceSaver(0) },
+                Builder::SpaceSaver(0), 
+                Builder::SpaceSaver(0)
+                },
                 { Builder::From("rocpd_region", "R"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_id"),
@@ -328,6 +348,7 @@ namespace DataModel
                 Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
+                Builder::SpaceSaver(0),
                 Builder::SpaceSaver(0) },
                 { Builder::From("rocpd_region", "R"),
                 is_sample_track ? Builder::InnerJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id") : 
@@ -347,7 +368,9 @@ namespace DataModel
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
+                Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME)
+                },
                 { Builder::From("rocpd_kernel_dispatch","K"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = K.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = K.start_id"),
@@ -363,7 +386,9 @@ namespace DataModel
                 Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME) },
+                Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME)
+                },
                 { Builder::From("rocpd_kernel_dispatch") } }));
         }
     }
@@ -379,7 +404,9 @@ namespace DataModel
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
+                Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME)
+                },
                 { Builder::From("rocpd_memory_allocate","M"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
@@ -395,7 +422,9 @@ namespace DataModel
                 Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME) },
+                Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME)
+                },
                 { Builder::From("rocpd_memory_allocate") } }));
         }
     }
@@ -411,7 +440,9 @@ namespace DataModel
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
+                Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME)    
+                },
                 { Builder::From("rocpd_memory_copy","M"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
@@ -427,7 +458,9 @@ namespace DataModel
                 Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME)},
+                Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME)
+                },
                 { Builder::From("rocpd_memory_copy") } }));
         }
     }
@@ -444,6 +477,7 @@ namespace DataModel
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("PMC_E.pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+                Builder::SpaceSaver(0),
                 Builder::SpaceSaver(0)
                 },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
@@ -463,6 +497,7 @@ namespace DataModel
                 Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("PMC_E.pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+                Builder::SpaceSaver(0),
                 Builder::SpaceSaver(0)
                 },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
@@ -483,6 +518,7 @@ namespace DataModel
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("PMC_E.pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+                Builder::SpaceSaver(0),
                 Builder::SpaceSaver(0)
                 },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
@@ -501,6 +537,7 @@ namespace DataModel
                 Builder::QParam("PMC_I.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("PMC_I.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
+                Builder::SpaceSaver(0),
                 Builder::SpaceSaver(0)
                     },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
@@ -801,8 +838,8 @@ namespace DataModel
                 Builder::QParam("K.kernel_id"),
                 Builder::QParam("K.id"),
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
                 Builder::QParam("L.level_for_stream", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack)
                 },
@@ -823,8 +860,8 @@ namespace DataModel
                 Builder::QParam("K.kernel_id"),
                 Builder::QParam("K.id"),
                 Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("K.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("K.stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
                 Builder::QParam("L.level_for_stream", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack)
                 },
@@ -845,8 +882,8 @@ namespace DataModel
                 Builder::QParam("E.category_id"),
                 Builder::QParam("M.id"),
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
                 Builder::QParam("L.level_for_stream", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack)
                 },
@@ -867,8 +904,8 @@ namespace DataModel
                 Builder::QParam("E.category_id"),
                 Builder::QParam("M.id"),
                 Builder::QParam("M.nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("M.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("M.stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
                 Builder::QParam("L.level_for_stream", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack)
                 },
@@ -889,8 +926,8 @@ namespace DataModel
                 Builder::QParam("M.name_id"),
                 Builder::QParam("M.id"),
                 Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
                 Builder::QParam("L.level_for_stream", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack)
                 },
@@ -911,8 +948,8 @@ namespace DataModel
                 Builder::QParam("M.name_id"),
                 Builder::QParam("M.id"),
                 Builder::QParam("M.nid", Builder::NODE_ID_SERVICE_NAME),
+                Builder::QParam("M.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("M.stream_id", Builder::STREAM_ID_SERVICE_NAME),
-                Builder::SpaceSaver(-1),
                 Builder::QParam("L.level_for_stream", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack)
                 },
@@ -1014,6 +1051,7 @@ namespace DataModel
                 Builder::QParam("K.private_segment_size", Builder::SCRATCH_SIZE_PUBLIC_NAME),
                 Builder::QParam("S.group_segment_size", Builder::STATIC_LDS_SIZE_PUBLIC_NAME),
                 Builder::QParam("S.private_segment_size", Builder::STATIC_SCRATCH_SIZE_PUBLIC_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
@@ -1056,6 +1094,7 @@ namespace DataModel
                 Builder::QParam("K.private_segment_size", Builder::SCRATCH_SIZE_PUBLIC_NAME),
                 Builder::QParam("S.group_segment_size", Builder::STATIC_LDS_SIZE_PUBLIC_NAME),
                 Builder::QParam("S.private_segment_size", Builder::STATIC_SCRATCH_SIZE_PUBLIC_NAME),
+                Builder::QParam("K.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("K.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                 Builder::QParam("K.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
@@ -1091,6 +1130,7 @@ namespace DataModel
                 Builder::QParam("M.size", Builder::SIZE_PUBLIC_NAME),
                 Builder::QParam("M.address", Builder::ADDRESS_PUBLIC_NAME),
                 Builder::QParam("M.level", Builder::LEVEL_REFERENCE),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
@@ -1125,11 +1165,55 @@ namespace DataModel
                 Builder::QParam("M.size", Builder::SIZE_PUBLIC_NAME),
                 Builder::QParam("M.address", Builder::ADDRESS_PUBLIC_NAME),
                 Builder::QParam("M.level", Builder::LEVEL_REFERENCE),
+                Builder::QParam("M.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                 Builder::QParam("M.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
                 { Builder::From("rocpd_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id") } }));
+        }
+    }
+
+    std::string QueryFactory::GetRocprofMemoryAllocActivityQuery() {
+        if (IsVersionGreaterOrEqual("4"))
+        {
+            return Builder::Select(rocprofvis_db_sqlite_memory_alloc_activity_query_format(
+                {{
+                Builder::QParam("M.id", Builder::ID_PUBLIC_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),             
+                Builder::QParam("M.type", Builder::M_TYPE_REFERENCE),
+                Builder::QParam("M.level", Builder::LEVEL_REFERENCE),
+                Builder::QParam("TS.value", Builder::START_SERVICE_NAME),
+                Builder::QParam("TE.value", Builder::END_SERVICE_NAME),
+                Builder::QParam("M.address", Builder::ADDRESS_PUBLIC_NAME),
+                Builder::QParam("M.size", Builder::SIZE_PUBLIC_NAME)
+                 },
+                { Builder::From("rocpd_memory_allocate", "M"),
+                Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
+                Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
+                Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = M.end_id"),
+                } }));
+        }
+        else
+        {
+            return Builder::Select(rocprofvis_db_sqlite_memory_alloc_activity_query_format(
+                {{
+                Builder::QParam("M.id", Builder::ID_PUBLIC_NAME),
+                Builder::QParam("M.pid", Builder::PROCESS_ID_SERVICE_NAME),
+                Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("M.stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                Builder::QParam("M.type", Builder::M_TYPE_REFERENCE),
+                Builder::QParam("M.level", Builder::LEVEL_REFERENCE),
+                Builder::QParam("M.start", Builder::START_SERVICE_NAME),
+                Builder::QParam("M.end", Builder::END_SERVICE_NAME),
+                Builder::QParam("M.address", Builder::ADDRESS_PUBLIC_NAME),
+                Builder::QParam("M.size", Builder::SIZE_PUBLIC_NAME)
+                 },
+                { Builder::From("rocpd_memory_allocate", "M") } }));
         }
     }
 
@@ -1162,6 +1246,7 @@ namespace DataModel
                 Builder::QParam("M.src_agent_id",Builder::AGENT_SRC_TYPE_INDEX_REFERENCE),
                 Builder::QParam("M.src_agent_id",Builder::AGENT_SRC_NAME_REFERENCE),
                 Builder::QParam("M.src_address", Builder::SRC_ADDRESS_PUBLIC_NAME),
+                Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
@@ -1200,6 +1285,7 @@ namespace DataModel
                 Builder::QParam("M.src_agent_id",Builder::AGENT_SRC_TYPE_INDEX_REFERENCE),
                 Builder::QParam("M.src_agent_id",Builder::AGENT_SRC_NAME_REFERENCE),
                 Builder::QParam("M.src_address", Builder::SRC_ADDRESS_PUBLIC_NAME),
+                Builder::QParam("M.pid", Builder::PROCESS_ID_SERVICE_NAME),
                 Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                 Builder::QParam("M.stream_id", Builder::STREAM_ID_SERVICE_NAME)},
@@ -1302,7 +1388,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("R2.id"),
-                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                             Builder::QParam("T.tid", Builder::THREAD_ID_SERVICE_NAME),
                             Builder::QParam("TS.value","start"),
@@ -1330,7 +1416,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("K.id"),
-                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("TS.start"),
@@ -1358,7 +1444,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("M.id"),
-                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("TS.start"),
@@ -1384,7 +1470,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("M.id"),
-                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("TS.start"),
@@ -1414,7 +1500,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("R2.id"),
-                            Builder::QParam("R2.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("R2.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("R2.pid", Builder::PROCESS_ID_SERVICE_NAME),
                             Builder::QParam("R2.tid", Builder::THREAD_ID_SERVICE_NAME),
                             Builder::QParam("R2.start"),
@@ -1438,7 +1524,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("K.id"),
-                            Builder::QParam("K.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("K.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("K.start"),
@@ -1463,7 +1549,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("M.id"),
-                            Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("M.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("M.start"),
@@ -1486,7 +1572,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("M.id"),
-                            Builder::QParam("M.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("M.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("M.start"),
@@ -1517,7 +1603,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("R.id"),
-                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                             Builder::QParam("T.tid", Builder::THREAD_ID_SERVICE_NAME),
                             Builder::QParam("TS.value", "start"),
@@ -1543,7 +1629,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("K2.id"),
-                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("TS.start"),
@@ -1574,7 +1660,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("R.id"),
-                            Builder::QParam("R.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
                             Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
                             Builder::QParam("R.start"),
@@ -1597,7 +1683,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationDispatch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("K2.id"),
-                            Builder::QParam("K2.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("K2.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("K2.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("K2.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("K2.start"),
@@ -1631,7 +1717,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("R.id"),
-                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                             Builder::QParam("T.tid", Builder::THREAD_ID_SERVICE_NAME),
                             Builder::QParam("TS.start"),
@@ -1658,7 +1744,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("M2.id"),
-                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("M2.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("TS.start"),
@@ -1689,7 +1775,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("R.id"),
-                            Builder::QParam("R.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
                             Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
                             Builder::QParam("R.start"),
@@ -1713,7 +1799,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("M2.id"),
-                            Builder::QParam("M2.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("M2.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("M2.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("M2.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                             Builder::QParam("M2.start"),
@@ -1746,7 +1832,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("R.id"),
-                            Builder::QParam("T.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                             Builder::QParam("T.tid", Builder::THREAD_ID_SERVICE_NAME),
                             Builder::QParam("TS.value","start"),
@@ -1776,7 +1862,7 @@ namespace DataModel
                             Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("R.id"),
-                            Builder::QParam("R.nid", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
                             Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
                             Builder::QParam("R.start"),
@@ -1980,6 +2066,85 @@ namespace DataModel
             { Builder::Where("M.id", "==", std::to_string(event_id)) } }));
     }
 
+
+    std::string QueryFactory::GetRocprofKernelDispatchStreamFlowQuery() {
+        if (IsVersionGreaterOrEqual("4"))
+        {
+            return Builder::Select(rocprofvis_db_sqlite_stream_to_hw_format(
+                { {
+                        Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                        Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
+                        Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                        Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                        Builder::QParamOperation(kRocProfVisDmOperationDispatch)},
+                { Builder::From("rocpd_kernel_dispatch","K"),
+                Builder::InnerJoin("rocpd_track", "T", "T.id = K.track_id")} }));
+        }
+        else
+        {
+            return Builder::Select(rocprofvis_db_sqlite_stream_to_hw_format(
+                { {
+                        Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                        Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+                        Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                        Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                        Builder::QParamOperation(kRocProfVisDmOperationDispatch) },
+                { Builder::From("rocpd_kernel_dispatch")} }));
+        }
+    }
+
+    std::string QueryFactory::GetRocprofMemoryAllocStreamFlowQuery() {
+        if (IsVersionGreaterOrEqual("4"))
+        {
+            return Builder::Select(rocprofvis_db_sqlite_stream_to_hw_format(
+                { {
+                        Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                        Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
+                        Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                        Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                        Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate)},
+                { Builder::From("rocpd_memory_allocate","M"),
+                Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id")} }));
+        }
+        else
+        {
+            return Builder::Select(rocprofvis_db_sqlite_stream_to_hw_format(
+                { {
+                        Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                        Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+                        Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                        Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                        Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate)},
+                { Builder::From("rocpd_memory_allocate")} }));
+        }
+    }
+
+
+    std::string QueryFactory::GetRocprofMemoryCopyStreamFlowQuery() {
+        if (IsVersionGreaterOrEqual("4"))
+        {
+            return Builder::Select(rocprofvis_db_sqlite_stream_to_hw_format(
+                { {
+                        Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                        Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
+                        Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                        Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                        Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy)},
+                { Builder::From("rocpd_memory_copy","M"),
+                Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id")} }));
+        }
+        else
+        {
+            return Builder::Select(rocprofvis_db_sqlite_stream_to_hw_format(
+                { {
+                        Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                        Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+                        Builder::QParam("dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                        Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                        Builder::QParamOperation(kRocProfVisDmOperationMemoryCopy)},
+                { Builder::From("rocpd_memory_copy")} }));
+        }
+    }
 
 }  // namespace DataModel
 }  // namespace RocProfVis

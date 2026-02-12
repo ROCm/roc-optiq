@@ -337,35 +337,14 @@ const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t cat
         case kRocProfVisDmKernelDispatchTrack:
         case kRocProfVisDmMemoryAllocationTrack:
         case kRocProfVisDmMemoryCopyTrack:
-            return "Queue:";
+            return "Queue ";
         case kRocProfVisDmRegionTrack:
         case kRocProfVisDmRegionMainTrack:
         case kRocProfVisDmRegionSampleTrack:
-            return "TID:";
+            return "Thread ";
     }
     return "";
 }
-
-rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(Database * db, uint32_t db_instance_id, const char* table_name, uint64_t process_id ){
-    rocprofvis_dm_track_params_t* track_properties = db->TrackPropertiesLast();
-    TableCache& table = tables[table_name];
-    uint32_t num_columns = table.NumColumns();
-    std::string str_id = std::to_string(process_id);
-    
-    for (int i = 0; i < num_columns; i++)
-    { 
-        rocprofvis_db_ext_data_t record;
-        record.name = table.GetColumn(i);
-        record.data     = str_id.c_str();
-        record.category = table_name;
-        record.type  = kRPVDataTypeString;
-        record.db_instance = db_instance_id;
-        rocprofvis_dm_result_t result = db->BindObject()->FuncAddExtDataRecord(track_properties->extdata, record);
-        if (result != kRocProfVisDmResultSuccess) return result;
-    }
-    return kRocProfVisDmResultSuccess;
-}
-
 
 rocprofvis_dm_result_t   Database::FindCachedTableValue(  
                                                         const rocprofvis_dm_database_t object, 
@@ -399,7 +378,7 @@ size_t Database::GetInfoTableNumRows(rocprofvis_dm_table_t object){
 const char* Database::GetInfoTableColumnName(rocprofvis_dm_table_t object, size_t column_index){
     TableCache* table = (TableCache*)object;
     ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, 0);
-    return table->GetColumn(column_index);
+    return table->GetColumnName(column_index);
 }
 rocprofvis_dm_table_row_t Database::GetInfoTableRowHandle(rocprofvis_dm_table_t object, size_t row_index){
     TableCache* table = (TableCache*)object;
@@ -442,10 +421,10 @@ Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it,
                                 rocprofvis_dm_charptr_t*      newqueries)
 {
 
-    int slice_query_category        = newprops.process.category == kRocProfVisDmStreamTrack
+    int slice_query_category        = newprops.track_indentifiers.category == kRocProfVisDmStreamTrack
                                           ? kRPVQuerySliceByStream
                                           : kRPVQuerySliceByQueue;
-    int slice_source_query_category = newprops.process.category == kRocProfVisDmStreamTrack
+    int slice_source_query_category = newprops.track_indentifiers.category == kRocProfVisDmStreamTrack
                                           ? kRPVSourceQuerySliceByStream
                                           : kRPVSourceQuerySliceByQueue;
     if (it != TrackPropertiesEnd()) {

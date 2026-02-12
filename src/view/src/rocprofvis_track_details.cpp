@@ -149,7 +149,8 @@ TrackDetails::Update()
 
                 const uint64_t& node_id    = metadata->topology.node_id;
                 const uint64_t& process_id = metadata->topology.process_id;
-                const uint64_t& type_id    = metadata->topology.id;
+                const uint64_t& processor_id = metadata->topology.device_id;
+                const uint64_t& type_id    = metadata->topology.id.value;
                 if(topology.node_lut.count(node_id) > 0)
                 {
                     NodeModel& node = *topology.node_lut.at(node_id);
@@ -160,14 +161,6 @@ TrackDetails::Update()
                         item.process          = &process;
                         switch(metadata->topology.type)
                         {
-                            case TrackInfo::TrackType::Queue:
-                            {
-                                if(process.queue_lut.count(type_id) > 0)
-                                {
-                                    item.queue = process.queue_lut.at(type_id);
-                                }
-                                break;
-                            }
                             case TrackInfo::TrackType::InstrumentedThread:
                             {
                                 if(process.instrumented_thread_lut.count(type_id) > 0)
@@ -186,19 +179,35 @@ TrackDetails::Update()
                                 }
                                 break;
                             }
-                            case TrackInfo::TrackType::Counter:
-                            {
-                                if(process.counter_lut.count(type_id) > 0)
-                                {
-                                    item.counter = process.counter_lut.at(type_id);
-                                }
-                                break;
-                            }
                             case TrackInfo::TrackType::Stream:
                             {
                                 if(process.stream_lut.count(type_id) > 0)
                                 {
                                     item.stream = process.stream_lut.at(type_id);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    if(node.processor_lut.count(processor_id) > 0)
+                    {
+                        ProcessorModel& processor = *node.processor_lut.at(processor_id);
+                        item.processor          = &processor;
+                        switch(metadata->topology.type)
+                        {
+                            case TrackInfo::TrackType::Queue:
+                            {
+                                if(processor.queue_lut.count(type_id) > 0)
+                                {
+                                    item.queue = processor.queue_lut.at(type_id);
+                                }
+                                break;
+                            }
+                            case TrackInfo::TrackType::Counter:
+                            {
+                                if(processor.counter_lut.count(type_id) > 0)
+                                {
+                                    item.counter = processor.counter_lut.at(type_id);
                                 }
                                 break;
                             }

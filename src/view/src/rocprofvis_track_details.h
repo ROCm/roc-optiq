@@ -15,6 +15,7 @@ class DataProvider;
 class TrackTopology;
 struct NodeModel;
 struct ProcessModel;
+struct ProcessorModel;
 struct IterableModel;
 class TimelineSelection;
 struct InfoTable;
@@ -38,6 +39,7 @@ private:
         const std::string* track_name;
         NodeModel*         node;
         ProcessModel*      process;
+        ProcessorModel*    processor;
         IterableModel*     queue;
         IterableModel*     instrumented_thread;
         IterableModel*     sampled_thread;

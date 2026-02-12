@@ -37,6 +37,7 @@ public:
     std::string GetRocprofMemoryAllocSliceQuery();
     std::string GetRocprofMemoryAllocSliceQueryForStream();
     std::string GetRocprofMemoryAllocTableQuery();
+    std::string GetRocprofMemoryAllocActivityQuery();
 
     std::string GetRocprofMemoryCopyTrackQuery();
     std::string GetRocprofMemoryCopyTrackQueryForStream();
@@ -69,6 +70,10 @@ public:
     std::string GetRocprofArgumentsInfoQueryForKernelDispatchEvent(uint64_t event_id);
     std::string GetRocprofArgumentsInfoQueryForMemoryAllocEvent(uint64_t event_id);
     std::string GetRocprofArgumentsInfoQueryForMemoryCopyEvent(uint64_t event_id);
+
+    std::string GetRocprofKernelDispatchStreamFlowQuery();
+    std::string GetRocprofMemoryAllocStreamFlowQuery();
+    std::string GetRocprofMemoryCopyStreamFlowQuery();
 
 private:
 

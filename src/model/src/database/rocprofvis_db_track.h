@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "rocprofvis_db_packed_storage.h"
+#include "rocprofvis_db_cache.h"
 #include <vector>
 #include <unordered_map>
 
@@ -56,23 +56,25 @@ public:
         uint32_t track;
     };
 
-    void AddTrack(rocprofvis_dm_process_identifiers_t& ids, uint32_t db_instance, uint32_t track);
+    void AddTrack(rocprofvis_dm_track_identifiers_t& ids, uint32_t db_instance, uint32_t track);
 
     bool FindTrack(const TrackKey& key, rocprofvis_dm_track_category_t category, uint32_t& out_track);
 
 
-    bool FindTrack(rocprofvis_dm_process_identifiers_t& ids, uint32_t db_instance, uint32_t& out_track);
+    bool FindTrack(rocprofvis_dm_track_identifiers_t& ids, uint32_t db_instance, uint32_t& out_track);
 
     bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track);
 
     bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, const char* id_subprocess, uint32_t db_instance, uint32_t& out_track);
 
-    rocprofvis_dm_track_params_it FindTrackParamsIterator(rocprofvis_dm_process_identifiers_t& track_indentifiers, uint32_t db_instance);
+    rocprofvis_dm_track_params_it FindTrackParamsIterator(rocprofvis_dm_track_identifiers_t& track_indentifiers, uint32_t db_instance);
+
+    uint32_t GetStringIdentifierIndex(const char* str_id) { return m_string_lookup.ToInt(str_id); }
 
 
 private:
 
-    TrackKey MakeKey(const rocprofvis_dm_process_identifiers_t& ids, uint32_t db_instance);
+    TrackKey MakeKey(const rocprofvis_dm_track_identifiers_t& ids, uint32_t db_instance);
 
     TrackKey MakeKey(uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance);
 

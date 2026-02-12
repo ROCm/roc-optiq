@@ -9,6 +9,7 @@ namespace RocProfVis
 {
 namespace DataModel
 {
+    const char* g_select_str = "SELECT ";
     std::string Builder::Select(rocprofvis_db_sqlite_track_query_format params)
     {
         return BuildTrackQuery(params.NUM_PARAMS, params.parameters,
@@ -21,66 +22,78 @@ namespace DataModel
     }
     std::string Builder::Select(rocprofvis_db_sqlite_level_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_slice_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_launch_table_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_dispatch_table_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
             "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_memory_alloc_table_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
+            "");
+    }
+    std::string Builder::Select(rocprofvis_db_sqlite_memory_alloc_activity_query_format params)
+    {
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
             "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_memory_copy_table_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
             "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_sample_table_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters,
                                    params.from,
                           "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_rocpd_sample_table_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters,
             params.from,
             "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_rocpd_table_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_dataflow_query_format params)
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           params.where, "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_essential_data_query_format params) 
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           params.where, "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_argument_data_query_format params) 
     {
-        return BuildQuery(params.NUM_PARAMS, params.parameters, params.from,
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
             params.where, "");
     }
+    std::string Builder::Select(rocprofvis_db_sqlite_stream_to_hw_format params) 
+    {
+        return BuildQuery("SELECT DISTINCT ", params.NUM_PARAMS, params.parameters, params.from,
+             "");
+    }
+    
+
     std::string Builder::SelectAll(std::string query)
     {
         return "SELECT * FROM(" + query + ")";
@@ -166,11 +179,11 @@ namespace DataModel
         return std::string("concat(") + result + ")";
     }
 
-    std::string Builder::BuildQuery(int num_params, std::string* params,
+    std::string Builder::BuildQuery(std::string start_with, int num_params, std::string* params,
                                   std::vector<std::string> from,
                                   std::string              finalize_with)
     {
-        std::string query = "SELECT ";
+        std::string query = start_with;
         for(int i = 0; i < num_params; i++)
         {
             if(i > 0)
@@ -270,10 +283,10 @@ namespace DataModel
     }
 
     std::string
-        Builder::BuildQuery(int num_params, std::string* params,
+        Builder::BuildQuery(std::string start_with, int num_params, std::string* params,
             std::vector<std::string> from, std::vector<std::string> where, std::string finalize_with)
     {
-        std::string query = "SELECT ";
+        std::string query = start_with;
         for(int i = 0; i < num_params; i++)
         {
             if(i > 0)

@@ -525,12 +525,51 @@ DataProvider::HandleLoadSystemTopology()
                     &processor_handle);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && processor_handle);
                 DeviceInfo device_info;
-                if(ParseDeviceData(processor_handle, device_info))
+                ProcessorChildCount device_child_count;
+                if(ParseDeviceData(processor_handle, device_info, device_child_count))
                 {
-                    m_model.GetTopology().AddDevice(device_info.id,
-                                                    std::move(device_info));
-                    node_info.device_ids[j] = device_info.id;
+
+                    // Query queues...
+                    for(size_t k = 0; k < device_child_count.queue_count; k++)
+                    {
+                        rocprofvis_handle_t* queue_handle = nullptr;
+
+                        result = rocprofvis_controller_get_object(
+                            processor_handle, kRPVControllerProcessorQueueIndexed, k,
+                            &queue_handle);
+                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
+                            queue_handle);
+                        QueueInfo queue_info;
+                        if(ParseQueueData(queue_handle, queue_info))
+                        {
+                            device_info.queue_ids.push_back(queue_info.id);
+                            m_model.GetTopology().AddQueue(queue_info.id,
+                                std::move(queue_info));
+                        }
+                    }
+
+                    // Query counters...
+                    for(size_t k = 0; k < device_child_count.counter_count; k++)
+                    {
+                        rocprofvis_handle_t* counter_handle = nullptr;
+
+                        result = rocprofvis_controller_get_object(
+                            processor_handle, kRPVControllerProcessorCounterIndexed, k,
+                            &counter_handle);
+                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
+                            counter_handle);
+                        CounterInfo counter_info;
+                        if(ParseCounterData(counter_handle, counter_info))
+                        {
+                            device_info.counter_ids.push_back(counter_info.id);
+                            m_model.GetTopology().AddCounter(counter_info.id,
+                                std::move(counter_info));
+                        }
+                    }
                 }
+                m_model.GetTopology().AddDevice(device_info.id.value,
+                    std::move(device_info));
+                node_info.device_ids[j] = device_info.id.value;
             }
             // Query processes...
             for(size_t j = 0; j < node_info.process_ids.size(); j++)
@@ -574,24 +613,7 @@ DataProvider::HandleLoadSystemTopology()
                             }
                         }
                     }
-                    // Query queues...
-                    for(size_t k = 0; k < process_child_count.queue_count; k++)
-                    {
-                        rocprofvis_handle_t* queue_handle = nullptr;
 
-                        result = rocprofvis_controller_get_object(
-                            process_handle, kRPVControllerProcessQueueIndexed, k,
-                            &queue_handle);
-                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                                          queue_handle);
-                        QueueInfo queue_info;
-                        if(ParseQueueData(queue_handle, queue_info))
-                        {
-                            process_info.queue_ids.push_back(queue_info.id);
-                            m_model.GetTopology().AddQueue(queue_info.id,
-                                                           std::move(queue_info));
-                        }
-                    }
                     // Query streams...
                     for(size_t k = 0; k < process_child_count.stream_count; k++)
                     {
@@ -608,24 +630,6 @@ DataProvider::HandleLoadSystemTopology()
                             process_info.stream_ids.push_back(stream_info.id);
                             m_model.GetTopology().AddStream(stream_info.id,
                                                             std::move(stream_info));
-                        }
-                    }
-                    // Query counters...
-                    for(size_t k = 0; k < process_child_count.counter_count; k++)
-                    {
-                        rocprofvis_handle_t* counter_handle = nullptr;
-
-                        result = rocprofvis_controller_get_object(
-                            process_handle, kRPVControllerProcessCounterIndexed, k,
-                            &counter_handle);
-                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                                          counter_handle);
-                        CounterInfo counter_info;
-                        if(ParseCounterData(counter_handle, counter_info))
-                        {
-                            process_info.counter_ids.push_back(counter_info.id);
-                            m_model.GetTopology().AddCounter(counter_info.id,
-                                                             std::move(counter_info));
                         }
                     }
                     m_model.GetTopology().AddProcess(process_info.id,
@@ -672,7 +676,8 @@ DataProvider::ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_inf
 
 bool
 DataProvider::ParseDeviceData(rocprofvis_handle_t* processor_handle,
-                              DeviceInfo&          device_info)
+                              DeviceInfo&          device_info,
+                              DataProvider::ProcessorChildCount& processor_child_count)
 {
     rocprofvis_result_t result = kRocProfVisResultSuccess;
     if(!processor_handle)
@@ -680,7 +685,7 @@ DataProvider::ParseDeviceData(rocprofvis_handle_t* processor_handle,
         return false;
     }
     result = rocprofvis_controller_get_uint64(processor_handle, kRPVControllerProcessorId,
-                                              0, &device_info.id);
+                                              0, &device_info.id.value);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     device_info.product_name =
         GetString(processor_handle, kRPVControllerProcessorProductName, 0);
@@ -693,6 +698,21 @@ DataProvider::ParseDeviceData(rocprofvis_handle_t* processor_handle,
     result = rocprofvis_controller_get_uint64(
         processor_handle, kRPVControllerProcessorTypeIndex, 0, &device_info.type_index);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+    uint64_t num_queues;
+    result = rocprofvis_controller_get_uint64(
+        processor_handle, kRPVControllerProcessorNumQueues, 0, &num_queues);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    device_info.queue_ids.reserve(num_queues);
+
+    uint64_t num_counters;
+    result = rocprofvis_controller_get_uint64(
+        processor_handle, kRPVControllerProcessorNumCounters, 0, &num_counters);
+    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    device_info.counter_ids.reserve(num_counters);
+
+    processor_child_count.queue_count   = num_queues;
+    processor_child_count.counter_count = num_counters;
     return true;
 }
 
@@ -726,28 +746,14 @@ DataProvider::ParseProcessData(rocprofvis_handle_t*             process_handle,
     process_info.instrumented_thread_ids.reserve(num_threads);
     process_info.sampled_thread_ids.reserve(num_threads);
 
-    uint64_t num_queues;
-    result = rocprofvis_controller_get_uint64(
-        process_handle, kRPVControllerProcessNumQueues, 0, &num_queues);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    process_info.queue_ids.reserve(num_queues);
-
     uint64_t num_streams;
     result = rocprofvis_controller_get_uint64(
         process_handle, kRPVControllerProcessNumStreams, 0, &num_streams);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     process_info.stream_ids.reserve(num_streams);
 
-    uint64_t num_counters;
-    result = rocprofvis_controller_get_uint64(
-        process_handle, kRPVControllerProcessNumCounters, 0, &num_counters);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    process_info.counter_ids.reserve(num_counters);
-
     process_child_count.thread_count  = num_threads;
-    process_child_count.queue_count   = num_queues;
     process_child_count.stream_count  = num_streams;
-    process_child_count.counter_count = num_counters;
     return true;
 }
 
@@ -988,7 +994,7 @@ DataProvider::HandleLoadTrackMetaData()
             if(queue)
             {
                 result = rocprofvis_controller_get_uint64(queue, kRPVControllerQueueId, 0,
-                                                          &track_info.topology.id);
+                                                          &track_info.topology.id.value);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 result = rocprofvis_controller_get_object(
                     queue, kRPVControllerQueueProcess, 0, &process);
@@ -1004,7 +1010,7 @@ DataProvider::HandleLoadTrackMetaData()
             else if(stream)
             {
                 result = rocprofvis_controller_get_uint64(stream, kRPVControllerStreamId,
-                                                          0, &track_info.topology.id);
+                                                          0, &track_info.topology.id.value);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 result = rocprofvis_controller_get_object(
                     stream, kRPVControllerStreamProcess, 0, &process);
@@ -1020,7 +1026,7 @@ DataProvider::HandleLoadTrackMetaData()
             else if(thread)
             {
                 result = rocprofvis_controller_get_uint64(thread, kRPVControllerThreadId,
-                                                          0, &track_info.topology.id);
+                                                          0, &track_info.topology.id.value);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 result = rocprofvis_controller_get_object(
                     thread, kRPVControllerThreadProcess, 0, &process);
@@ -1040,7 +1046,7 @@ DataProvider::HandleLoadTrackMetaData()
             else if(counter)
             {
                 result = rocprofvis_controller_get_uint64(
-                    counter, kRPVControllerCounterId, 0, &track_info.topology.id);
+                    counter, kRPVControllerCounterId, 0, &track_info.topology.id.value);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 result = rocprofvis_controller_get_object(
                     counter, kRPVControllerCounterProcess, 0, &process);
@@ -1049,7 +1055,7 @@ DataProvider::HandleLoadTrackMetaData()
                     counter, kRPVControllerCounterNode, 0, &node);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 result = rocprofvis_controller_get_object(
-                    queue, kRPVControllerCounterProcessor, 0, &processor);
+                    counter, kRPVControllerCounterProcessor, 0, &processor);
                 track_info.topology.type = TrackInfo::TrackType::Counter;
             }
             else

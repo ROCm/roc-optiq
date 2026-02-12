@@ -26,7 +26,9 @@ namespace Controller
 {
 
 ComputeTrace::ComputeTrace(const std::string& filename)
-: Trace(__kRPVControllerComputePropertiesFirst, __kRPVControllerComputePropertiesLast, filename)
+: Trace(__kRPVControllerComputePropertiesFirst, __kRPVControllerComputePropertiesLast,
+        filename)
+, m_kernel_metric_table(nullptr)
 {}
 
 ComputeTrace::~ComputeTrace()
@@ -34,6 +36,10 @@ ComputeTrace::~ComputeTrace()
     for(Workload* workload : m_workloads)
     {
         delete workload;
+    }
+    if(m_kernel_metric_table)
+    {
+        delete m_kernel_metric_table;
     }
 #pragma region Deprecated
     for (auto& it : m_tables)

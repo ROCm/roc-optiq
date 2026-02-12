@@ -489,9 +489,31 @@ namespace DataModel
 			m_query_factory.SetVersion(m_db_version.c_str());
 			TraceProperties()->metadata_loaded=true;
 			ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
-			return future->SetPromise(kRocProfVisDmResultSuccess);
+			
+			//add "kernel metrics" view to database
+			std::string create_view_query = "CREATE VIEW IF NOT EXISTS compute_kernel_metrics_view AS "
+			"SELECT "
+				"ckv.workload_id, "
+				"ckv.workload_name, "
+				"ckv.kernel_uuid, "
+				"ckv.kernel_name, "
+				"ckv.duration_ns_sum, "
+				"ckv.duration_ns_mean, "
+				"ckv.duration_ns_median, "
+				"ckv.duration_ns_min, "
+				"ckv.duration_ns_max, "
+				"ckv.dispatch_count, "
+				"cmv.metric_id, "
+				"cmv.metric_name, "
+				"cmv.value_name, "
+				"cmv.value "
+			"FROM compute_kernel_view ckv "
+			"LEFT JOIN compute_metric_view cmv ON ckv.kernel_uuid = cmv.kernel_uuid; ";
+			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, create_view_query.c_str(), nullptr)) break;
 
+			return future->SetPromise(kRocProfVisDmResultSuccess);
 		}
+		
 		ShowProgress(0, "Trace metadata not loaded!", kRPVDbError, future );
 		return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 	}

@@ -261,7 +261,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                          Builder::SpaceSaver(0),
                          Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                          Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
-                         Builder::SpaceSaver(0) },
+                         Builder::SpaceSaver(0), 
+                         Builder::SpaceSaver(0)},
                        { Builder::From("rocpd_api", MultiNode::No) } })),
                         // Slice query by queue
                      Builder::Select(rocprofvis_db_sqlite_slice_query_format(
@@ -305,6 +306,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                          Builder::SpaceSaver(0),
                          Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
                          Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME),
+                         Builder::SpaceSaver(0), 
                          Builder::SpaceSaver(0) },
                        { Builder::From("rocpd_op", MultiNode::No) } })),
                         // Slice query by queue
@@ -348,6 +350,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                          Builder::SpaceSaver(0),
                          Builder::QParam("deviceId", Builder::AGENT_ID_SERVICE_NAME),
                          Builder::QParam("monitorType", Builder::COUNTER_NAME_SERVICE_NAME),
+                         Builder::SpaceSaver(0), 
                          Builder::SpaceSaver(0) },
                        { Builder::From("rocpd_monitor", MultiNode::No) } })),
                         // Slice query by monitorType

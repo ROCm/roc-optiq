@@ -9,7 +9,9 @@ namespace RocProfVis
 {
 namespace View
 {
-constexpr float DROPDOWN_SCALE = 15.0f; 
+constexpr float DROPDOWN_SCALE = 15.0f;
+constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
+
 
 ComputeView::ComputeView()
 : m_view_created(false)
@@ -253,6 +255,11 @@ ComputeTester::RenderSelectedView(
         {
             RenderRoofLine(workload);
             break;
+        }
+        case 6:
+        {
+            RenderSummaryView(workload);
+            break;  
         }
     }
 }
@@ -951,6 +958,71 @@ ComputeTester::RenderRoofLine(const WorkloadInfo& workload)
         ImGui::EndTable();
     }
     ImGui::EndChild();
+}
+
+void
+ComputeTester::RenderSummaryView(const WorkloadInfo& workload)
+{
+    const char*              title = "Kernels";
+    std::vector<const char*> labels;
+    std::vector<double>      values;
+
+    double total = 0.0;
+    for(const auto& kv : workload.kernels)
+    {
+        labels.push_back(kv.second.name.c_str());
+        values.push_back(static_cast<double>(kv.second.invocation_count));
+        total += values.back();
+    }
+
+    if(values.empty() || total <= 0.0)
+    {
+        ImGui::TextDisabled("No kernel data.");
+        return;
+    }
+
+    std::vector<double> fractions(values.size());
+    for(size_t i = 0; i < values.size(); ++i)
+    {
+        fractions[i] = values[i] / total;
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
+    ImGui::Separator();
+    ImGui::PopStyleVar();
+
+    ImGui::PushID("Kernels Pie");
+    if(ImPlot::BeginPlot(title, ImVec2(-1, 0), ImPlotFlags_Equal | ImPlotFlags_NoInputs))
+    {
+        ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations,
+                          ImPlotAxisFlags_NoDecorations);
+        ImPlot::SetupAxesLimits(0, 1, 0, 1);
+
+        const ImVec2 plot_size = ImPlot::GetPlotSize();
+        const float margin_px = 8.0f; //TODO: move to constants
+        const float max_radius_px =
+            0.5f * (std::min(plot_size.x, plot_size.y)) -margin_px;
+        const double radius = 0.1; //TODO: Calculate radius
+            //std::max(0.0f, max_radius_px) /
+            //std::min(plot_size.x, plot_size.y);  // normalized 0..0.5-ish
+
+        const double cx     = 0.5;
+        const double cy     = 0.5;
+        const double angle0 = 90.0;
+
+        ImPlot::PlotPieChart(
+            labels.data(), fractions.data(), static_cast<int>(fractions.size()), cx, cy,
+            radius,
+            [](double value, char* buff, int size, void*) -> int {
+                if(value > 0.05) return snprintf(buff, size, "%.1f%%", value * 100.0);
+                buff[0] = '\0';
+                return 0;
+            },
+            nullptr, angle0, ImPlotPieChartFlags_None);
+
+        ImPlot::EndPlot();
+    }
+    ImGui::PopID();
 }
 
 }  // namespace View

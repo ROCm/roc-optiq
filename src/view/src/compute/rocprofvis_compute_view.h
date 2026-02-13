@@ -100,12 +100,14 @@ private:
     void RenderKernels(const WorkloadInfo& workload);
     void RenderFetcher(const WorkloadInfo& workload);
     void RenderRoofLine(const WorkloadInfo& workload);
+    void RenderSummaryView(const WorkloadInfo& workload);
 
     const std::vector<std::string_view> m_views = { "System Information",
-                                                    " Profiling Configuration", "Metrics",
+                                                    "Profiling Configuration", "Metrics",
                                                     "Kernels",
                                                     "Fetcher",
-                                                    "RoofLine" };
+                                                    "RoofLine",
+                                                    "Summary View" };
 
     DataProvider&  m_data_provider;
     SelectionState m_selections;

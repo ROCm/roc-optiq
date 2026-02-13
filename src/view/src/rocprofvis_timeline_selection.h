@@ -42,6 +42,11 @@ public:
     bool HasSelectedEvents() const;
     bool GetSelectedEventsTimeRange(double& start_ts_out, double& end_ts_out) const;
 
+    void SearchHighlightEvent(uint64_t track_id, uint64_t event_id);
+    void ClearSearchHighlights();
+    bool EventSearchHighlighted(uint64_t event_id) const;
+    bool HasSearchHighlightedEvents() const;
+
     static constexpr double INVALID_SELECTION_TIME =
         std::numeric_limits<double>::lowest();
     static constexpr uint64_t INVALID_SELECTION_ID = std::numeric_limits<uint64_t>::max();
@@ -61,6 +66,7 @@ private:
     double                       m_selected_range_end;
 
     std::unordered_set<uint64_t> m_selected_event_ids;
+    std::unordered_set<uint64_t> m_search_highlighted_event_ids;
 };
 
 }  // namespace View

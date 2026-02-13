@@ -198,6 +198,7 @@ FlameTrackItem::ExtractPointsFromData()
         const TraceEvent& event = events_data[i];
         m_chart_items[i].event                = event;
         m_chart_items[i].selected = m_timeline_selection->EventSelected(event.m_id.uuid);
+        m_chart_items[i].search_highlighted = m_timeline_selection->EventSearchHighlighted(event.m_id.uuid);
         if(m_chart_items[i].event.m_child_count > 1)
         {
             m_chart_items[i].name_hash =
@@ -294,6 +295,7 @@ FlameTrackItem::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
         for(ChartItem& item : m_chart_items)
         {
             item.selected = m_timeline_selection->EventSelected(item.event.m_id.uuid);
+            item.search_highlighted = m_timeline_selection->EventSearchHighlighted(item.event.m_id.uuid);
         }
     }
 }
@@ -364,6 +366,11 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
         {
             TimelineFocusManager::GetInstance().SetRightClickLayer(Layer::kGraphLayer);
+            m_timeline_selection->ClearSearchHighlights();
+            for(ChartItem& item : m_chart_items)
+            {
+                item.search_highlighted = false;
+            }
         }
 
         // Select on click
@@ -382,6 +389,11 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 true;  // Ensure only one click is handled per render cycle
             chart_item.selected = !chart_item.selected;
 
+            m_timeline_selection->ClearSearchHighlights();
+            for(ChartItem& item : m_chart_items)
+            {
+                item.search_highlighted = false;
+            }
 
             //Control to multiselect
             const ImGuiIO& io = ImGui::GetIO();
@@ -409,6 +421,10 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
     if(chart_item.selected)
     {
         m_selected_chart_items.push_back(chart_item);
+    }
+    if(chart_item.search_highlighted)
+    {
+        m_search_highlighted_chart_items.push_back(chart_item);
     }
 }
 
@@ -681,6 +697,37 @@ FlameTrackItem::RenderChart(float graph_width)
     }
 
     m_selected_chart_items.clear();
+
+    for(ChartItem& item : m_search_highlighted_chart_items)
+    {
+        ImVec2 container_pos = ImGui::GetWindowPos();
+        double normalized_start =
+            container_pos.x + m_tpt->RawTimeToPixel(item.event.m_start_ts);
+
+        double normalized_duration =
+            std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
+
+        ImVec2 start_position;
+        float  rounding = 2.0f;
+        start_position = ImVec2(static_cast<float>(normalized_start),
+                                item.event.m_level * m_level_height);
+
+        ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+        ImVec2 content_size    = ImGui::GetContentRegionAvail();
+
+        ImVec2 rectMin = ImVec2(start_position.x - HIGHLIGHT_THICKNESS_HALF,
+                                start_position.y + cursor_position.y +
+                                    HIGHLIGHT_THICKNESS_HALF - ANTI_ALIASING_WORKAROUND);
+        ImVec2 rectMax =
+            ImVec2(start_position.x + static_cast<float>(normalized_duration) +
+                       HIGHLIGHT_THICKNESS_HALF,
+                   start_position.y + m_level_height + cursor_position.y -
+                       HIGHLIGHT_THICKNESS_HALF + ANTI_ALIASING_WORKAROUND);
+        draw_list->AddRect(rectMin, rectMax, m_settings.GetColor(Colors::kSearchHighlight),
+                           rounding, 0, HIGHLIGHT_THICKNESS);
+    }
+
+    m_search_highlighted_chart_items.clear();
     m_deferred_click_handled = false;
 
     ImGui::EndChild();

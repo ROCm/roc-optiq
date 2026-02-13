@@ -80,6 +80,7 @@ private:
     {
         TraceEvent    event;
         bool                        selected;
+        bool                        search_highlighted;
         size_t                      name_hash;
         std::vector<ChildEventInfo> child_info;
     };
@@ -109,6 +110,7 @@ private:
     bool                            m_deferred_click_handled;
     bool                            m_has_drawn_tool_tip;
     std::vector<ChartItem>          m_selected_chart_items;
+    std::vector<ChartItem>          m_search_highlighted_chart_items;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
     ImVec2                          m_tooltip_size;
 

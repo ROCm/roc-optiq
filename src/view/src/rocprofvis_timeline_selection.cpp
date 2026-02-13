@@ -207,5 +207,35 @@ TimelineSelection::HasSelectedEvents() const
     return !m_selected_event_ids.empty();
 }
 
+void
+TimelineSelection::SearchHighlightEvent(uint64_t track_id, uint64_t event_id)
+{
+    m_search_highlighted_event_ids.clear();
+    m_search_highlighted_event_ids.insert(event_id);
+    SendEventSelectionChanged(event_id, track_id, true);
+}
+
+void
+TimelineSelection::ClearSearchHighlights()
+{
+    if(!m_search_highlighted_event_ids.empty())
+    {
+        m_search_highlighted_event_ids.clear();
+        SendEventSelectionChanged(INVALID_SELECTION_ID, INVALID_SELECTION_ID, false, true);
+    }
+}
+
+bool
+TimelineSelection::EventSearchHighlighted(uint64_t event_id) const
+{
+    return m_search_highlighted_event_ids.count(event_id) > 0;
+}
+
+bool
+TimelineSelection::HasSearchHighlightedEvents() const
+{
+    return !m_search_highlighted_event_ids.empty();
+}
+
 }  // namespace View
 }  // namespace RocProfVis

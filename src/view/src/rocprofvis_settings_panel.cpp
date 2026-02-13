@@ -33,7 +33,7 @@ SettingsPanel::SettingsPanel(SettingsManager& settings)
 {
     for(const ImFont* font : m_fonts.GetAvailableFonts())
     {
-        m_font_sizes.emplace_back(std::to_string(static_cast<int>(font->FontSize)));
+        m_font_sizes.emplace_back(std::to_string(static_cast<int>(font->LegacySize)));
         m_font_sizes_ptr.emplace_back(m_font_sizes.back().c_str());
     }
 }

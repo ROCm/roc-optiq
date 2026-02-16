@@ -204,13 +204,22 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
     memact.queue_id = db->Sqlite3ColumnInt(func, stmt, azColName, 3);
     std::string type_str = db->Sqlite3ColumnText(func, stmt, azColName, 5);
     std::string level_str = db->Sqlite3ColumnText(func, stmt, azColName, 6);
-    if (type_str == "ALLOC") memact.type = kRPVMemActivityAlloc; else
-        if (type_str == "FREE") memact.type = kRPVMemActivityFree; else
-            if (type_str == "REALLOC") memact.type = kRPVMemActivityRealloc; else
-                if (type_str == "RECLAIM") memact.type = kRPVMemActivityReclaim;
-    if (level_str == "REAL") memact.level = kRPVMemLevelReal; else
-        if (level_str == "VIRTUAL") memact.level = kRPVMemLevelVirtual; else
-            if (level_str == "SCRATCH") memact.level = kRPVMemLevelScratch;
+    for (int i=kRPVMemActivityAlloc; i < kRPVMemActivityNumTypes; i++)
+    {
+        if (type_str == Builder::mem_alloc_types[i])
+        {
+            memact.type = (rocprofvis_db_memalloc_type_t)i;
+            break;
+        }
+    }
+    for (int i=kRPVMemLevelReal; i < kRPVMemLevelNumLevels; i++)
+    {
+        if (level_str == Builder::mem_alloc_levels[i])
+        {
+            memact.level = (rocprofvis_db_memalloc_level_t)i;
+            break;
+        }
+    }
     auto& vec = db->m_memalloc_activity[callback_params->db_instance->GuidIndex()];
     if (memact.type == kRPVMemActivityFree)
     {
@@ -218,12 +227,179 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
         if (it != vec.rend())
         {
             memact.agent_id = it->agent_id;
+            memact.size = it->size;
             db->m_memfree_stream_to_agent[callback_params->db_instance->GuidIndex()][memact.stream_id] = it->agent_id;
         }
     }
     vec.push_back(memact);
     callback_params->future->CountThisRow();
     return 0;
+}
+
+rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future)
+{
+    SQLInsertParams params[] = { 
+        { "id", "INTEGER PRIMARY KEY" },
+        { "nid", "INTEGER" },
+        { "pid", "INTEGER" },
+        { "agent_id", "INTEGER" },
+        { "queue_id", "INTEGER" },
+        { "stream_id", "INTEGER" },
+        { "pmc_id", "INTEGER" },
+        { "type", "TEXT" },
+        { "level", "TEXT" },
+        { "start", "INTEGER" },
+        { "end", "INTEGER" },
+        { "address", "INTEGER" },
+        { "size", "INTEGER" }
+    };
+
+    typedef struct store_params {
+            uint32_t id;
+            uint64_t nid;
+            uint32_t pid;
+            uint32_t agent_id;
+            uint32_t queue_id;
+            uint32_t stream_id;
+            uint32_t pmc_id;
+            std::string type;
+            std::string level;
+            uint64_t start;
+            uint64_t end;
+            uint64_t address;
+            uint64_t size;
+    } store_params;
+
+    std::map<uint32_t, uint64_t> allocated_memory_per_agent;
+    std::map<uint32_t, uint64_t> pmc_id_per_agent;
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+
+    for (auto& guid_info : DbInstances())
+    {
+        TableCache* pmc_table = (TableCache*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle("PMC");
+        auto& mem_act_per_guid = m_memalloc_activity[guid_info.first.GuidIndex()];
+        std::vector<store_params> v;
+        v.reserve(mem_act_per_guid.size());
+        uint64_t node_id = std::atoll(CachedTables(guid_info.first.GuidIndex())->GetTableCellByIndex("Node", 0, "id"));
+        std::string table_name = "roc_optique_memory_activity_" + GuidAt(guid_info.first.GuidIndex());
+        bool table_exists = CheckTableExists(table_name, guid_info.first.FileIndex());
+        if (mem_act_per_guid.size() > 0)
+        {
+            for (auto& m : mem_act_per_guid)
+            {
+                auto it = pmc_id_per_agent.find(m.agent_id);
+                if (it == pmc_id_per_agent.end())
+                {
+                    uint32_t num = pmc_table->NumRows();
+                    uint32_t pmc_id = num ? std::atol(pmc_table->GetCellByIndex(num - 1, "id")) : 0;
+                    pmc_id++;
+                    pmc_table->AddRow(pmc_id);
+
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "id",
+                        kRPVDataTypeInt, std::to_string(pmc_id).c_str());
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "guid",
+                        kRPVDataTypeString, GuidSymAt(guid_info.first.GuidIndex()).c_str());
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "nid",
+                        kRPVDataTypeInt, std::to_string(node_id).c_str());
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "pid",
+                        kRPVDataTypeInt, std::to_string(pmc_id).c_str());
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "agent_id",
+                        kRPVDataTypeInt, std::to_string(m.agent_id).c_str());
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "target_arch",
+                        kRPVDataTypeString, "GPU");
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "event_code",
+                        kRPVDataTypeInt, "0");
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "instance_id",
+                        kRPVDataTypeInt, "0");
+                    std::string pmc_name = Builder::mem_alloc_levels[m.level] + " MEMORY";
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "name",
+                        kRPVDataTypeString, pmc_name.c_str());
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "symbol",
+                        kRPVDataTypeString, pmc_name.c_str());
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "description",
+                        kRPVDataTypeString, pmc_name.c_str());
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "long_description",
+                        kRPVDataTypeString, pmc_name.c_str());
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "component",
+                        kRPVDataTypeString, "");
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "units",
+                        kRPVDataTypeString, "bytes");
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "value_type",
+                        kRPVDataTypeString, "");
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "block",
+                        kRPVDataTypeString, "");
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "expression",
+                        kRPVDataTypeString, "");
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "is_constant",
+                        kRPVDataTypeInt, "0");
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "is_derived",
+                        kRPVDataTypeInt, "0");
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "extdata",
+                        kRPVDataTypeBlob, "{}");
+
+                    pmc_id_per_agent[m.agent_id] = pmc_id;
+                }
+                if (!table_exists)
+                {
+                    if (m.type == kRPVMemActivityAlloc)
+                    {
+                        allocated_memory_per_agent[m.agent_id] += m.size;
+                    }
+                    else
+                        if (m.type == kRPVMemActivityFree)
+                        {
+                            allocated_memory_per_agent[m.agent_id] -= m.size;
+                        }
+                    store_params r;
+                    r.id = m.id;
+                    r.nid = node_id;
+                    r.pid = m.pid;
+                    r.agent_id = m.agent_id;
+                    r.queue_id = m.queue_id;
+                    r.stream_id = m.stream_id;
+                    r.pmc_id = pmc_id_per_agent[m.agent_id];
+                    r.type = Builder::mem_alloc_types[m.type];
+                    r.level = Builder::mem_alloc_levels[m.level];
+                    r.start = m.start;
+                    r.end = m.end;
+                    r.address = m.address;
+                    r.size = allocated_memory_per_agent[m.agent_id];
+                    v.push_back(r);
+                }
+            }
+
+            if (!table_exists)
+            {
+                result = CreateSQLTable(
+                    table_name.c_str(),
+                    params,
+                    13,
+                    v.size(),
+                    [&](sqlite3_stmt* stmt, int index) {
+                        store_params& p = v[index];
+                        uint32_t column_index = 1;
+                        sqlite3_bind_int(stmt, column_index++, p.id);
+                        sqlite3_bind_int64(stmt, column_index++, p.nid);
+                        sqlite3_bind_int(stmt, column_index++, p.pid);
+                        sqlite3_bind_int(stmt, column_index++, p.agent_id);
+                        sqlite3_bind_int(stmt, column_index++, p.queue_id);
+                        sqlite3_bind_int(stmt, column_index++, p.stream_id);
+                        sqlite3_bind_int(stmt, column_index++, p.pmc_id);
+                        sqlite3_bind_text(stmt, column_index++, p.type.c_str(), -1, SQLITE_STATIC);
+                        sqlite3_bind_text(stmt, column_index++, p.level.c_str(), -1, SQLITE_STATIC);
+                        sqlite3_bind_int64(stmt, column_index++, p.start);
+                        sqlite3_bind_int64(stmt, column_index++, p.end);
+                        sqlite3_bind_int64(stmt, column_index++, p.address);
+                        sqlite3_bind_int64(stmt, column_index++, p.size);
+                    }, guid_info.first.GuidIndex());
+                if (result != kRocProfVisDmResultSuccess)
+                {
+                    break;
+                }
+            }
+        }
+    }
+    return result;
 }
 
 int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
@@ -636,6 +812,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(10, "Load Information Tables", kRPVDbBusy, future);
         LoadInformationTables(future);
+        CreateMemoryActivityTable(future);
 
         TraceProperties()->events_count[kRocProfVisDmOperationLaunch]   = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
@@ -657,7 +834,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             m_query_factory.GetRocprofMemoryCopyTrackQuery() +
             m_query_factory.GetRocprofMemoryCopyTrackQueryForStream() +
             m_query_factory.GetRocprofPerformanceCountersTrackQuery() +
-            m_query_factory.GetRocprofSMIPerformanceCountersTrackQuery();
+            m_query_factory.GetRocprofSMIPerformanceCountersTrackQuery() +
+            m_query_factory.GetRocprofMemoryActivityTrackQuery();
         size_t track_queries_hash_value = std::hash<std::string>{}(track_queries);
         uint32_t load_id = 0;
         m_add_track_mutex.Init(DbInstances());
@@ -866,6 +1044,35 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                         m_query_factory.GetRocprofSMIPerformanceCountersTableQuery(),
                     },
                     &CallBackAddTrack, &CallBackLoadTrack);
+                    future->DeleteSubFuture(sub_future);
+                    m_add_track_mutex.unlock();
+                };
+            for (auto& guid_info : DbInstances())
+            {
+                threads.emplace_back(task, &guid_info.first);
+            }
+            for (auto& t : threads)
+                t.join();
+            load_id++;
+        }
+
+        ShowProgress(5, "Adding memory allocation activity tracks", kRPVDbBusy, future );
+        {
+            std::vector<std::thread> threads;
+            m_add_track_mutex.reset();
+            auto task = [&](DbInstance* db_instance)
+                {
+                    Future* sub_future = future->AddSubFuture();
+                    result = ExecuteSQLQuery(sub_future, db_instance, track_queries_hash_value, load_id,
+                        { 
+                            m_query_factory.GetRocprofMemoryActivityTrackQuery(),
+                            "",
+                            m_query_factory.GetRocprofMemoryActivityLevelQuery(),
+                            m_query_factory.GetRocprofMemoryActivitySliceQuery(),
+                            "",
+                            m_query_factory.GetRocprofMemoryActivityTableQuery(),
+                        },
+                        &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock();
                 };

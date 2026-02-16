@@ -181,6 +181,21 @@ namespace DataModel
 
     }
 
+    std::string QueryFactory::GetRocprofMemoryActivityTrackQuery() {
+
+        return Builder::Select(rocprofvis_db_sqlite_track_query_format(
+            { { Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+            Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
+            Builder::QParam("pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+            Builder::QParam("pid", Builder::PROCESS_ID_PUBLIC_NAME),
+            Builder::QParamCategory(kRocProfVisDmPmcTrack),
+            Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+            Builder::StoreConfigVersion()
+                },
+            { Builder::From("roc_optique_memory_activity"),
+            } }));
+    }
+
     std::string QueryFactory::GetRocprofSMIPerformanceCountersTrackQuery() {
 
         if (IsVersionGreaterOrEqual("4"))
@@ -547,6 +562,24 @@ namespace DataModel
         }
     }
 
+
+    std::string QueryFactory::GetRocprofMemoryActivityLevelQuery() {
+
+        return Builder::Select(rocprofvis_db_sqlite_level_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+            Builder::QParam("start", Builder::START_SERVICE_NAME), 
+            Builder::QParam("end", Builder::END_SERVICE_NAME),
+            Builder::QParam("id"),
+            Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+            Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
+            Builder::QParam("pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+            Builder::SpaceSaver(0),
+            Builder::SpaceSaver(0)
+                },
+            { Builder::From("roc_optique_memory_activity"),
+            } }));
+    }
+
 /*************************************************************************************************
 *                               Time slice queries for CPU/GPU tracks
 **************************************************************************************************/
@@ -822,6 +855,24 @@ namespace DataModel
         }
     }
 
+    std::string QueryFactory::GetRocprofMemoryActivitySliceQuery() {
+
+        return  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+            Builder::QParam("start", Builder::START_SERVICE_NAME), 
+            Builder::QParam("size", Builder::COUNTER_VALUE_SERVICE_NAME),
+            Builder::QParam("end", Builder::END_SERVICE_NAME),
+            Builder::SpaceSaver(0),
+            Builder::SpaceSaver(0),
+            Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+            Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
+            Builder::QParam("pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+            Builder::QParam("size", Builder::EVENT_LEVEL_SERVICE_NAME),
+            Builder::QParamCategory(kRocProfVisDmPmcTrack)
+                },
+            { Builder::From("roc_optique_memory_activity"),
+            } }));
+    }
 
 /*************************************************************************************************
 *                               Time slice queries for stream tracks
@@ -1336,7 +1387,21 @@ namespace DataModel
         }
     }
 
+    std::string QueryFactory::GetRocprofMemoryActivityTableQuery() {
 
+        return  Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
+            {m_db,
+            { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+            Builder::QParam("start", Builder::START_SERVICE_NAME), 
+            Builder::QParam("end", Builder::END_SERVICE_NAME),
+            Builder::QParam("nid", Builder::NODE_ID_SERVICE_NAME),
+            Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
+            Builder::QParam("pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
+            Builder::QParam("size", Builder::COUNTER_VALUE_SERVICE_NAME)
+            },
+            { Builder::From("roc_optique_memory_activity"),
+            } }));
+    }
 
     std::string QueryFactory::GetRocprofSMIPerformanceCountersTableQuery() {
 

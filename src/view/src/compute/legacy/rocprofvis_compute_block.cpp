@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_block.h"
-#include "rocprofvis_navigation_manager.h"
+#include "compute/rocprofvis_navigation_manager.h"
 #include "rocprofvis_navigation_url.h"
 #include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_tab_container.h"
@@ -194,7 +194,7 @@ void ComputeBlockDiagramNavHelper::NotifyNavigationChanged()
     EventManager::GetInstance()->AddEvent(nav_event);
 }
 
-ComputeBlockView::ComputeBlockView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
+ComputeBlockViewLegacy::ComputeBlockViewLegacy(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
 : m_left_column(nullptr)
 , m_right_column(nullptr)
 , m_container(nullptr)
@@ -212,18 +212,18 @@ ComputeBlockView::ComputeBlockView(std::string owner_id, std::shared_ptr<Compute
     {
         for (const LabelDefinition& label_def : block.m_labels)
         {
-            m_block_metrics[block.m_id].push_back(std::make_unique<ComputeMetric>(data_provider, label_def.m_metric, label_def.m_name, label_def.m_unit));
+            m_block_metrics[block.m_id].push_back(std::make_unique<ComputeMetricLegacy>(data_provider, label_def.m_metric, label_def.m_name, label_def.m_unit));
         }
         for (const PlotDefinition& plot_def : block.m_plots)
         {
-            std::unique_ptr<ComputePlot> plot;
+            std::unique_ptr<ComputePlotLegacy> plot;
             if (plot_def.m_plot_type == PlotTypePie)
             {
-                plot = std::make_unique<ComputePlotPie>(data_provider, plot_def.m_type);
+                plot = std::make_unique<ComputePlotPieLegacy>(data_provider, plot_def.m_type);
             }
             else if (plot_def.m_plot_type == PlotTypeBar)
             {
-                plot = std::make_unique<ComputePlotBar>(data_provider, plot_def.m_type);
+                plot = std::make_unique<ComputePlotBarLegacy>(data_provider, plot_def.m_type);
             }
             m_plots[block.m_id].push_back(std::move(plot));
         }
@@ -231,7 +231,7 @@ ComputeBlockView::ComputeBlockView(std::string owner_id, std::shared_ptr<Compute
 
     for (const LinkDefinition& link : LINK_DEFINITIONS)
     {
-        m_link_metrics[link.m_id] = std::make_unique<ComputeMetric>(data_provider, link.m_label.m_metric, link.m_label.m_name, link.m_label.m_unit);
+        m_link_metrics[link.m_id] = std::make_unique<ComputeMetricLegacy>(data_provider, link.m_label.m_metric, link.m_label.m_name, link.m_label.m_unit);
     }
 
     m_left_column = std::make_shared<RocCustomWidget>([this]()
@@ -257,12 +257,12 @@ ComputeBlockView::ComputeBlockView(std::string owner_id, std::shared_ptr<Compute
     m_navigation_event_token = EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), navigation_changed_handler);
 }
 
-ComputeBlockView::~ComputeBlockView()
+ComputeBlockViewLegacy::~ComputeBlockViewLegacy()
 {
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), m_navigation_event_token);
 }
 
-void ComputeBlockView::Render()
+void ComputeBlockViewLegacy::Render()
 {
     RenderMenuBar();
     if(m_container)
@@ -272,7 +272,7 @@ void ComputeBlockView::Render()
     }
 }
 
-void ComputeBlockView::RenderMenuBar()
+void ComputeBlockViewLegacy::RenderMenuBar()
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_region = ImGui::GetContentRegionAvail();
@@ -298,11 +298,11 @@ void ComputeBlockView::RenderMenuBar()
     ImGui::EndDisabled();
 }
 
-void ComputeBlockView::Update()
+void ComputeBlockViewLegacy::Update()
 {
     for (auto& it : m_block_metrics)
     {
-        for (std::unique_ptr<ComputeMetric>& metric : it.second)
+        for (std::unique_ptr<ComputeMetricLegacy>& metric : it.second)
         {
             metric->Update();
         }
@@ -313,14 +313,14 @@ void ComputeBlockView::Update()
     }
     for (auto it = m_plots.begin(); it != m_plots.end(); it ++)
     {
-        for (std::unique_ptr<ComputePlot>& plot : it->second)
+        for (std::unique_ptr<ComputePlotLegacy>& plot : it->second)
         {
             plot->Update();
         }
     }
 }
 
-void ComputeBlockView::RenderBlockDiagram()
+void ComputeBlockViewLegacy::RenderBlockDiagram()
 {
     ImVec2 content_region = ImGui::GetContentRegionAvail();
     ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
@@ -348,7 +348,7 @@ void ComputeBlockView::RenderBlockDiagram()
     ImGui::PopStyleColor();
 }
 
-void ComputeBlockView::RenderBlockDiagramGPU()
+void ComputeBlockViewLegacy::RenderBlockDiagramGPU()
 {
     BlockButton(BlockIDGPU, ImVec2(0, 0), ImVec2(1, 1));
     BlockButton(BlockIDCP, ImVec2(0, -0.4f),ImVec2(0.9f, 0.1f));
@@ -376,7 +376,7 @@ void ComputeBlockView::RenderBlockDiagramGPU()
     }
 }
 
-void ComputeBlockView::RenderBlockDiagramShaderEngine()
+void ComputeBlockViewLegacy::RenderBlockDiagramShaderEngine()
 {
     BlockButton(BlockIDSE, ImVec2(0, 0), ImVec2(1, 1));
     BlockButton(BlockIDSPI, ImVec2(0.3325f, -0.25f), ImVec2(0.225f, 0.4f));
@@ -391,7 +391,7 @@ void ComputeBlockView::RenderBlockDiagramShaderEngine()
     for (int i = 0; i < 5; i ++)
     {
         ImGui::PushID(i);
-        if (BlockButton(BlockIDCU, ImVec2(-0.225f + i * 0.04f, -0.1 + i * 0.05f), ImVec2(0.45f, 0.7f), (i == 4 ? BlockOption_Navigation | BlockOption_LabelMetrics : BlockOption_Navigation)))
+        if (BlockButton(BlockIDCU, ImVec2(-0.225f + i * 0.04f, -0.1f + i * 0.05f), ImVec2(0.45f, 0.7f), (i == 4 ? BlockOption_Navigation | BlockOption_LabelMetrics : BlockOption_Navigation)))
         {
             m_navigation->Go(BlockLevelComputeUnit);
         }
@@ -402,7 +402,7 @@ void ComputeBlockView::RenderBlockDiagramShaderEngine()
     Link(LinkIDCU_L1I, ImVec2(0.16f, 0.35f), ImVec2(0.3f, 0.35f), ImGuiDir_Left);
 }
 
-void ComputeBlockView::RenderBlockDiagramComputeUnit()
+void ComputeBlockViewLegacy::RenderBlockDiagramComputeUnit()
 {
     BlockButton(BlockIDCU, ImVec2(0, 0), ImVec2(1, 1));
     BlockButton(BlockIDScheduler, ImVec2(-0.175f, -0.4f), ImVec2(0.55f, 0.1f));
@@ -428,7 +428,7 @@ void ComputeBlockView::RenderBlockDiagramComputeUnit()
     Link(LinkIDCU_LDS, ImVec2(0.16f, 0.2375f), ImVec2(0.3f, 0.2375f), ImGuiDir_Left);
 }
 
-void ComputeBlockView::RenderBlockDiagramCache()
+void ComputeBlockViewLegacy::RenderBlockDiagramCache()
 {
     BlockButton(BlockIDGPU, ImVec2(-0.06f, 0), ImVec2(0.9f, 1));
     BlockButton(BlockIDCP, ImVec2(-0.35f, -0.275f), ImVec2(0.2f, 0.35f));
@@ -471,7 +471,7 @@ void ComputeBlockView::RenderBlockDiagramCache()
     Link(LinkIDFabric_HBM_Write, ImVec2(0.325f, -0.1825f), ImVec2(0.45f, -0.1825f), ImGuiDir_Right);
 }
 
-void ComputeBlockView::RenderBlockDetails() 
+void ComputeBlockViewLegacy::RenderBlockDetails() 
 {
     for (int i = 0; i < BLOCK_DEFINITIONS.size(); i ++)
     {
@@ -501,7 +501,7 @@ void ComputeBlockView::RenderBlockDetails()
                     {
                         NavigationManager::GetInstance()->Go(m_owner_id + "/" + COMPUTE_TABLE_VIEW_URL + "/" + block.m_table_url);                 
                     }
-                    for (std::unique_ptr<ComputePlot>& plot : m_plots[block.m_id])
+                    for (std::unique_ptr<ComputePlotLegacy>& plot : m_plots[block.m_id])
                     {
                         plot->Render();
                     }
@@ -525,7 +525,7 @@ void ComputeBlockView::RenderBlockDetails()
     m_navigation_changed = false;
 }
 
-bool ComputeBlockView::BlockButton(BlockID id, ImVec2 rel_pos, ImVec2 rel_size, BlockOptionFlags options)
+bool ComputeBlockViewLegacy::BlockButton(BlockID id, ImVec2 rel_pos, ImVec2 rel_size, BlockOptionFlags options)
 {
     const ImVec2 abs_size(rel_size * m_block_diagram_region);
     const ImVec2 abs_pos(m_block_diagram_center + m_block_diagram_region * rel_pos - abs_size / 2);
@@ -581,7 +581,7 @@ bool ComputeBlockView::BlockButton(BlockID id, ImVec2 rel_pos, ImVec2 rel_size, 
     return pressed;
 }
 
-void ComputeBlockView::Link(LinkID id, ImVec2 rel_left, ImVec2 rel_right, ImGuiDir direction)
+void ComputeBlockViewLegacy::Link(LinkID id, ImVec2 rel_left, ImVec2 rel_right, ImGuiDir direction)
 {
     const ImVec2 abs_left(m_block_diagram_center + m_block_diagram_region * rel_left);
     const ImVec2 abs_right(m_block_diagram_center + m_block_diagram_region * rel_right);

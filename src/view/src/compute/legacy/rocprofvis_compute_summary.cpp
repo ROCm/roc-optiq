@@ -13,7 +13,7 @@ namespace View
 
 constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
 
-ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
+ComputeSummaryViewLegacy::ComputeSummaryViewLegacy(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
 : m_container(nullptr)
 , m_left_column(nullptr)
 , m_right_column(nullptr)
@@ -24,11 +24,11 @@ ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<Com
 , m_kernel_table(nullptr)
 , m_dispatch_table(nullptr)
 {
-    m_sysinfo_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeSysInfo);
-    m_kernel_pie = std::make_unique<ComputePlotPie>(data_provider, kRPVControllerComputePlotTypeKernelDurationPercentage);
-    m_kernel_bar = std::make_unique<ComputePlotBar>(data_provider, kRPVControllerComputePlotTypeKernelDuration);
-    m_kernel_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeKernelList);
-    m_dispatch_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeDispatchList);
+    m_sysinfo_table = std::make_unique<ComputeTableLegacy>(data_provider, kRPVControllerComputeTableTypeSysInfo);
+    m_kernel_pie = std::make_unique<ComputePlotPieLegacy>(data_provider, kRPVControllerComputePlotTypeKernelDurationPercentage);
+    m_kernel_bar = std::make_unique<ComputePlotBarLegacy>(data_provider, kRPVControllerComputePlotTypeKernelDuration);
+    m_kernel_table = std::make_unique<ComputeTableLegacy>(data_provider, kRPVControllerComputeTableTypeKernelList);
+    m_dispatch_table = std::make_unique<ComputeTableLegacy>(data_provider, kRPVControllerComputeTableTypeDispatchList);
 
     m_left_column = std::make_shared<RocCustomWidget>([this]()
     {
@@ -47,9 +47,9 @@ ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<Com
     m_container->SetSplit(0.5f);
 }
 
-ComputeSummaryView::~ComputeSummaryView() {}
+ComputeSummaryViewLegacy::~ComputeSummaryViewLegacy() {}
 
-void ComputeSummaryView::RenderMenuBar()
+void ComputeSummaryViewLegacy::RenderMenuBar()
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_region = ImGui::GetContentRegionAvail();
@@ -63,7 +63,7 @@ void ComputeSummaryView::RenderMenuBar()
     ImGui::Dummy(ImVec2(content_region.x, ImGui::GetFrameHeightWithSpacing()));
 }
 
-void ComputeSummaryView::RenderLeftColumn()
+void ComputeSummaryViewLegacy::RenderLeftColumn()
 {
     if (m_sysinfo_table)
     {
@@ -71,7 +71,7 @@ void ComputeSummaryView::RenderLeftColumn()
     }
 }
 
-void ComputeSummaryView::RenderRightColumn()
+void ComputeSummaryViewLegacy::RenderRightColumn()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
     ImGui::SeparatorText("Top Stats");
@@ -94,7 +94,7 @@ void ComputeSummaryView::RenderRightColumn()
     }
 }
 
-void ComputeSummaryView::Update()
+void ComputeSummaryViewLegacy::Update()
 {
     if (m_sysinfo_table)
     {
@@ -118,7 +118,7 @@ void ComputeSummaryView::Update()
     }
 }
 
-void ComputeSummaryView::Render()
+void ComputeSummaryViewLegacy::Render()
 {
     RenderMenuBar();
     if(m_container)

@@ -11,17 +11,17 @@ namespace View
 {
 
 class ComputeDataProvider;
-class ComputeTable;
-class ComputePlotBar;
-class ComputePlotPie;
+class ComputeTableLegacy;
+class ComputePlotBarLegacy;
+class ComputePlotPieLegacy;
 
-class ComputeSummaryView : public RocWidget
+class ComputeSummaryViewLegacy : public RocWidget
 {
 public:
     void Render();
     void Update();
-    ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
-    ~ComputeSummaryView(); 
+    ComputeSummaryViewLegacy(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
+    ~ComputeSummaryViewLegacy(); 
 
 private:
     void RenderMenuBar();
@@ -33,11 +33,11 @@ private:
     std::shared_ptr<RocCustomWidget> m_right_column;
     std::string m_owner_id;
 
-    std::unique_ptr<ComputeTable> m_sysinfo_table;
-    std::unique_ptr<ComputePlotPie> m_kernel_pie;
-    std::unique_ptr<ComputePlotBar> m_kernel_bar;
-    std::unique_ptr<ComputeTable> m_kernel_table;
-    std::unique_ptr<ComputeTable> m_dispatch_table;
+    std::unique_ptr<ComputeTableLegacy> m_sysinfo_table;
+    std::unique_ptr<ComputePlotPieLegacy> m_kernel_pie;
+    std::unique_ptr<ComputePlotBarLegacy> m_kernel_bar;
+    std::unique_ptr<ComputeTableLegacy> m_kernel_table;
+    std::unique_ptr<ComputeTableLegacy> m_dispatch_table;
 };
 
 }  // namespace View

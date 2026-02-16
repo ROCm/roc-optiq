@@ -22,7 +22,7 @@ constexpr ImU32 TABLE_COLOR_MID = IM_COL32(255, 169, 10, 255);
 constexpr ImU32 TABLE_COLOR_SEARCH = IM_COL32(0, 255, 0, 255);
 constexpr ImVec4 TABLE_COLOR_SEARCH_TEXT = ImVec4(0, 0, 0, 1);
 
-ComputeWidget::ComputeWidget(std::shared_ptr<ComputeDataProvider> data_provider) 
+ComputeWidgetLegacy::ComputeWidgetLegacy(std::shared_ptr<ComputeDataProvider> data_provider) 
 : m_data_provider(data_provider)
 , m_id("")
 {
@@ -30,33 +30,33 @@ ComputeWidget::ComputeWidget(std::shared_ptr<ComputeDataProvider> data_provider)
     m_id = GenUniqueName("");
 }
 
-ComputePlot::ComputePlot(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
-: ComputeWidget(data_provider)
+ComputePlotLegacy::ComputePlotLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
+: ComputeWidgetLegacy(data_provider)
 , m_type(type)
 , m_model(nullptr)
 {
 
 }
 
-void ComputePlot::Update()
+void ComputePlotLegacy::Update()
 {
     m_model = m_data_provider->GetPlotModel(m_type);
 }
 
-ComputeTable::ComputeTable(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_table_types_t type)
-: ComputeWidget(data_provider)
+ComputeTableLegacy::ComputeTableLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_table_types_t type)
+: ComputeWidgetLegacy(data_provider)
 , m_type(type)
 , m_model(nullptr)
 {
 
 }
 
-void ComputeTable::Update()
+void ComputeTableLegacy::Update()
 {
     m_model = m_data_provider->GetTableModel(m_type);
 }
 
-void ComputeTable::Render()
+void ComputeTableLegacy::Render()
 {
     if (m_model)
     {
@@ -113,7 +113,7 @@ void ComputeTable::Render()
     }
 }
 
-void ComputeTable::Search(const std::string& term)
+void ComputeTableLegacy::Search(const std::string& term)
 {
     if (m_model)
     {
@@ -129,13 +129,13 @@ void ComputeTable::Search(const std::string& term)
     }
 }
 
-ComputePlotPie::ComputePlotPie(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
-: ComputePlot(data_provider, type)
+ComputePlotPieLegacy::ComputePlotPieLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
+: ComputePlotLegacy(data_provider, type)
 {
 
 }
 
-void ComputePlotPie::Render()
+void ComputePlotPieLegacy::Render()
 {
     if (m_model)
     {
@@ -175,13 +175,13 @@ void ComputePlotPie::Render()
     }
 }
 
-ComputePlotBar::ComputePlotBar(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
-: ComputePlot(data_provider, type)
+ComputePlotBarLegacy::ComputePlotBarLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
+: ComputePlotLegacy(data_provider, type)
 {
 
 }
 
-void ComputePlotBar::Render()
+void ComputePlotBarLegacy::Render()
 {
     if (m_model)
     {
@@ -224,8 +224,8 @@ void ComputePlotBar::Render()
     }
 }
 
-ComputeMetric::ComputeMetric(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit)
-: ComputeWidget(data_provider)
+ComputeMetricLegacy::ComputeMetricLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit)
+: ComputeWidgetLegacy(data_provider)
 , m_type(type)
 , m_name(label)
 , m_unit(unit)
@@ -233,7 +233,7 @@ ComputeMetric::ComputeMetric(std::shared_ptr<ComputeDataProvider> data_provider,
 
 }
 
-void ComputeMetric::Update()
+void ComputeMetricLegacy::Update()
 {
     m_model = m_data_provider->GetMetricModel(m_type);
     if (m_model)
@@ -261,27 +261,27 @@ void ComputeMetric::Update()
     }
 }
 
-std::string ComputeMetric::GetFormattedString() const
+std::string ComputeMetricLegacy::GetFormattedString() const
 {
     return m_formatted_string;
 }
 
-ComputePlotRoofline::ComputePlotRoofline(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
-: ComputePlot(data_provider, type)
+ComputePlotRooflineLegacy::ComputePlotRooflineLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
+: ComputePlotLegacy(data_provider, type)
 , m_group_mode(GroupModeKernel)
 , m_group_dirty(false)
 {
 
 }
 
-void ComputePlotRoofline::Update()
+void ComputePlotRooflineLegacy::Update()
 {
-    ComputePlot::Update();
+    ComputePlotLegacy::Update();
     m_group_dirty = true;
     UpdateGroupMode();
 }
 
-void ComputePlotRoofline::Render()
+void ComputePlotRooflineLegacy::Render()
 {
     if (m_model && !m_group_dirty)
     {
@@ -324,7 +324,7 @@ void ComputePlotRoofline::Render()
     }
 }
 
-void ComputePlotRoofline::UpdateGroupMode()
+void ComputePlotRooflineLegacy::UpdateGroupMode()
 {
     if (m_group_dirty && m_model)
     {
@@ -361,7 +361,7 @@ void ComputePlotRoofline::UpdateGroupMode()
     }
 }
 
-void ComputePlotRoofline::SetGroupMode(const GroupMode& mode)
+void ComputePlotRooflineLegacy::SetGroupMode(const GroupMode& mode)
 {
     if (mode != m_group_mode)
     {

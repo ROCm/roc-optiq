@@ -3,12 +3,19 @@
 
 #include "rocprofvis_gui_helpers.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+
+namespace RocProfVis
+{
+
+namespace View
+{
 
 ImVec2
-RocProfVis::View::MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
+MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
                                               float spacing)
 {
     // Calculate total width needed
@@ -17,7 +24,7 @@ RocProfVis::View::MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
 }
 
 void
-RocProfVis::View::RenderLoadingIndicatorDots(float dot_radius, int num_dots,
+RenderLoadingIndicatorDots(float dot_radius, int num_dots,
                                              float spacing, ImU32 color, float speed)
 {
     // Calculate total width needed
@@ -55,10 +62,10 @@ RocProfVis::View::RenderLoadingIndicatorDots(float dot_radius, int num_dots,
 }
 
 bool
-RocProfVis::View::IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
-                             const char* tooltip, ImVec2 tooltip_padding, bool frameless,
-                             ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
-                             ImU32 bg_color_active, const char* id)
+IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
+           const char* tooltip, ImVec2 tooltip_padding, bool frameless,
+           ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
+           ImU32 bg_color_active, const char* id)
 {
     if(id && strlen(id) > 0)
     {
@@ -102,7 +109,7 @@ RocProfVis::View::IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
 }
 
 bool
-RocProfVis::View::IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold)
+IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold)
 {
     if(ImGui::IsMouseReleased(button))
     {
@@ -119,7 +126,7 @@ RocProfVis::View::IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float dr
 }
 
 std::pair<bool, bool>
-RocProfVis::View::InputTextWithClear(const char* id, const char* hint, char* buf,
+InputTextWithClear(const char* id, const char* hint, char* buf,
                                      size_t buf_size, ImFont* icon_font, ImU32 bg_color,
                                      const ImGuiStyle& style, float width)
 {
@@ -155,6 +162,26 @@ RocProfVis::View::InputTextWithClear(const char* id, const char* hint, char* buf
     ImGui::PopID();
     ImGui::EndGroup();
     return std::make_pair(input_changed, input_cleared);
+}
+
+void
+SetTooltipStyled(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::SetTooltipV(fmt, args);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+
+    va_end(args);
+
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
@@ -224,3 +251,6 @@ RocProfVis::View::DrawInternalBuildBanner(const char* text /*= "Internal Build"*
     }
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER
+
+}   // namespace View
+}   // namespace RocProfVis

@@ -35,6 +35,7 @@ private:
     void RowSelected(const ImGuiMouseButton mouse_button) override;
     void RenderContextMenu();
     bool XButton(const char* id) const;
+    void CopyCellToClipboard(bool use_formatted_data);
 
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     bool                               m_defer_track_selection_changed;

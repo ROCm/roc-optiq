@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_view.h"
+#include "rocprofvis_compute_kernel_details.h"
 #include "implot/implot.h"
 #include "rocprofvis_settings_manager.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
@@ -137,11 +138,6 @@ ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider)
 {}
 
 ComputeTableView::ComputeTableView(DataProvider& data_provider)
-: RocWidget()
-, m_data_provider(data_provider)
-{}
-
-ComputeKernelDetailsView::ComputeKernelDetailsView(DataProvider& data_provider)
 : RocWidget()
 , m_data_provider(data_provider)
 {}

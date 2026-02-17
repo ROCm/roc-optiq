@@ -15,6 +15,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(DataProvider& data_provider)
 , m_data_provider(data_provider)
 , m_memory_chart(data_provider)
 , m_memory_chart_fetched(false)
+, m_last_provider_state(ProviderState::kInit)
 {}
 
 ComputeKernelDetailsView::~ComputeKernelDetailsView() {}
@@ -22,6 +23,17 @@ ComputeKernelDetailsView::~ComputeKernelDetailsView() {}
 void
 ComputeKernelDetailsView::Update()
 {
+    ProviderState current_state = m_data_provider.GetState();
+    if(m_last_provider_state != current_state)
+    {
+        if(current_state == ProviderState::kLoading ||
+           current_state == ProviderState::kReady)
+        {
+            m_memory_chart_fetched = false;
+        }
+        m_last_provider_state = current_state;
+    }
+
     if(!m_memory_chart_fetched)
     {
         const std::unordered_map<uint32_t, WorkloadInfo>& workloads =

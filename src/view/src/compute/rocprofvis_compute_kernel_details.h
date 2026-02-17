@@ -11,6 +11,7 @@ namespace View
 {
 
 class DataProvider;
+enum class ProviderState;
 
 class ComputeKernelDetailsView : public RocWidget
 {
@@ -25,6 +26,7 @@ private:
     DataProvider&          m_data_provider;
     ComputeMemoryChartView m_memory_chart;
     bool                   m_memory_chart_fetched;
+    ProviderState          m_last_provider_state;
 };
 
 }  // namespace View

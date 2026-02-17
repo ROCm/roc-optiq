@@ -15,6 +15,7 @@ namespace RocProfVis
 namespace View
 {
 
+struct MetricValue;
 class DataProvider;
 
 // Simple rectangle used for block positioning.
@@ -129,6 +130,10 @@ private:
 
     DataProvider& m_data_provider;
     std::array<std::string, MEMCHART_METRIC_COUNT> m_values;
+
+    // Cache pointers to MetricValue objects to avoid linear search every frame
+    std::vector<const MetricValue*> m_metric_ptrs;
+    size_t                          m_last_metrics_count;
 
     // Block positions computed at the start of Render(), used by all Draw* methods
     ChartBlock m_instr_buff_block, m_instr_dispatch_block, m_active_cus_block;

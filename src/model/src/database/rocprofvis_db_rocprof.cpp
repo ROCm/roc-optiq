@@ -236,8 +236,25 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
     return 0;
 }
 
+/**
+ * @brief Create and populate the in-memory/SQLite table that stores memory activity records.
+ *
+ * This function defines the schema for the memory activity table (allocation/free events,
+ * agent/queue/stream identifiers, sizes, and time ranges) and configures how rows are
+ * stored while iterating over the underlying SQLite result set. It also reports progress
+ * for the asynchronous operation through the provided Future instance.
+ *
+ * @param future Pointer to a Future used to track and signal progress/completion while
+ *               building the memory activity table. Must remain valid for the duration
+ *               of this call.
+ *
+ * @return kRocProfVisDmResultSuccess on success, or an appropriate error code if table
+ *         creation or population fails.
+ */
 rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future)
 {
+    // Define the SQL schema for the memory activity table. Each entry corresponds to a
+    // column in the table that describes a memory allocation/free event and its metadata.
     SQLInsertParams params[] = { 
         { "id", "INTEGER PRIMARY KEY" },
         { "nid", "INTEGER" },
@@ -252,6 +269,8 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
         { "end", "INTEGER" },
         { "address", "INTEGER" },
         { "size", "INTEGER" }
+    // Local structure mirroring the memory activity table schema; used while extracting
+    // values from SQLite statements and inserting them into the database model.
     };
 
     typedef struct store_params {

@@ -270,12 +270,12 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
             uint64_t size;
     } store_params;
 
-    std::map<uint32_t, uint64_t> allocated_memory_per_agent;
-    std::map<uint32_t, uint64_t> pmc_id_per_agent;
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
 
     for (auto& guid_info : DbInstances())
     {
+        std::map<uint32_t, uint64_t> allocated_memory_per_agent;
+        std::map<uint32_t, uint64_t> pmc_id_per_agent;
         TableCache* pmc_table = (TableCache*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle("PMC");
         auto& mem_act_per_guid = m_memalloc_activity[guid_info.first.GuidIndex()];
         std::vector<store_params> v;
@@ -302,7 +302,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
                     CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "nid",
                         kRPVDataTypeInt, std::to_string(node_id).c_str());
                     CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "pid",
-                        kRPVDataTypeInt, std::to_string(pmc_id).c_str());
+                        kRPVDataTypeInt, std::to_string(m.pid).c_str());
                     CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "agent_id",
                         kRPVDataTypeInt, std::to_string(m.agent_id).c_str());
                     CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "target_arch",
@@ -391,7 +391,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
                         sqlite3_bind_int64(stmt, column_index++, p.end);
                         sqlite3_bind_int64(stmt, column_index++, p.address);
                         sqlite3_bind_int64(stmt, column_index++, p.size);
-                    }, guid_info.first.GuidIndex());
+                    }, guid_info.first.FileIndex());
                 if (result != kRocProfVisDmResultSuccess)
                 {
                     break;

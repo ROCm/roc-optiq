@@ -4,6 +4,7 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_root_view.h"
+#include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
 {
@@ -35,9 +36,52 @@ private:
 
     bool m_view_created;
 
+    std::shared_ptr<TabContainer> m_tab_container;
+
     DataProvider                     m_data_provider;
     std::shared_ptr<RocCustomWidget> m_tool_bar;
-    std::unique_ptr<ComputeTester>   m_tester;
+};
+
+
+//TODO: move these to separate files when they are implemented
+class ComputeSummaryView: public RocWidget
+{
+public:
+    ComputeSummaryView(DataProvider& data_provider);
+    ~ComputeSummaryView(){};
+
+protected:
+    DataProvider& m_data_provider;
+};
+
+class ComputeKernelDetailsView: public RocWidget
+{
+public:
+    ComputeKernelDetailsView(DataProvider& data_provider);
+    ~ComputeKernelDetailsView(){};
+
+protected:
+    DataProvider& m_data_provider;
+};
+
+class ComputeTableView: public RocWidget
+{
+public:
+    ComputeTableView(DataProvider& data_provider);
+    ~ComputeTableView(){};
+
+protected:
+    DataProvider& m_data_provider;
+};
+
+class ComputeWorkloadView: public RocWidget
+{
+public:
+    ComputeWorkloadView(DataProvider& data_provider);
+    ~ComputeWorkloadView(){};
+
+protected:
+    DataProvider& m_data_provider;
 };
 
 class ComputeTester : public RocWidget

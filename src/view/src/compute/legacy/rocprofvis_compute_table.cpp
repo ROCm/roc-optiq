@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_table.h"
-#include "rocprofvis_navigation_manager.h"
+#include "compute/rocprofvis_navigation_manager.h"
 #include "rocprofvis_navigation_url.h"
 #include "widgets/rocprofvis_compute_widget.h"
 #include <array>
@@ -91,7 +91,7 @@ ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> 
 {
     for (const rocprofvis_controller_compute_table_types_t& table : TAB_DEFINITIONS[category].m_table_types)
     {
-        m_tables.push_back(std::make_unique<ComputeTable>(data_provider, table));
+        m_tables.push_back(std::make_unique<ComputeTableLegacy>(data_provider, table));
     }
 
     auto search_event_handler = [this](std::shared_ptr<RocEvent> event) 
@@ -104,7 +104,7 @@ ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> 
 void ComputeTableCategory::OnSearchChanged(std::shared_ptr<RocEvent> event)
 {
     std::shared_ptr<ComputeTableSearchEvent> navigation_event = std::dynamic_pointer_cast<ComputeTableSearchEvent>(event);
-    for (std::unique_ptr<ComputeTable>& table : m_tables)
+    for (std::unique_ptr<ComputeTableLegacy>& table : m_tables)
     {
         table->Search(navigation_event->GetSearchTerm());
     }
@@ -113,7 +113,7 @@ void ComputeTableCategory::OnSearchChanged(std::shared_ptr<RocEvent> event)
 void ComputeTableCategory::Render()
 {
     ImGui::BeginChild("", ImVec2(-1, -1));
-    for (std::unique_ptr<ComputeTable>& table : m_tables)
+    for (std::unique_ptr<ComputeTableLegacy>& table : m_tables)
     {
         table->Render();
     }
@@ -122,13 +122,13 @@ void ComputeTableCategory::Render()
 
 void ComputeTableCategory::Update()
 {
-    for (std::unique_ptr<ComputeTable>& table : m_tables)
+    for (std::unique_ptr<ComputeTableLegacy>& table : m_tables)
     {
         table->Update();
     }
 }
 
-ComputeTableView::ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider) 
+ComputeTableViewLegacy::ComputeTableViewLegacy(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider) 
 : m_tab_container(nullptr)
 , m_search_term("")
 , m_search_edited(false)
@@ -143,11 +143,11 @@ ComputeTableView::ComputeTableView(std::string owner_id, std::shared_ptr<Compute
     NavigationManager::GetInstance()->RegisterContainer(m_tab_container, COMPUTE_TABLE_VIEW_URL, m_owner_id);
 }
 
-ComputeTableView::~ComputeTableView() {
+ComputeTableViewLegacy::~ComputeTableViewLegacy() {
     NavigationManager::GetInstance()->UnregisterContainer(m_tab_container, COMPUTE_TABLE_VIEW_URL, m_owner_id);
 }
 
-void ComputeTableView::Update()
+void ComputeTableViewLegacy::Update()
 {
     if (m_tab_container)
     {
@@ -155,7 +155,7 @@ void ComputeTableView::Update()
     }
 }
 
-void ComputeTableView::RenderMenuBar()
+void ComputeTableViewLegacy::RenderMenuBar()
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_region = ImGui::GetContentRegionAvail();
@@ -182,7 +182,7 @@ void ComputeTableView::RenderMenuBar()
                              });
 }
 
-void ComputeTableView::Render()
+void ComputeTableViewLegacy::Render()
 {
     RenderMenuBar();
 

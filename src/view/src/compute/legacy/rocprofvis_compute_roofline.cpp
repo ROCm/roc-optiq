@@ -9,23 +9,23 @@ namespace RocProfVis
 namespace View
 {
 
-ComputeRooflineView::ComputeRooflineView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider) 
+ComputeRooflineViewLegacy::ComputeRooflineViewLegacy(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider) 
 : m_roofline_fp64(nullptr)
 , m_roofline_fp32(nullptr)
 , m_roofline_fp16(nullptr)
 , m_roofline_i8(nullptr)
-, m_group_mode(ComputePlotRoofline::GroupModeKernel)
+, m_group_mode(ComputePlotRooflineLegacy::GroupModeKernel)
 , m_owner_id(owner_id)
 {
-    m_roofline_fp64 = std::make_unique<ComputePlotRoofline>(data_provider, kRPVControllerComputePlotTypeRooflineFP64);
-    m_roofline_fp32 = std::make_unique<ComputePlotRoofline>(data_provider, kRPVControllerComputePlotTypeRooflineFP32);
-    m_roofline_fp16 = std::make_unique<ComputePlotRoofline>(data_provider, kRPVControllerComputePlotTypeRooflineFP16);
-    m_roofline_i8 = std::make_unique<ComputePlotRoofline>(data_provider, kRPVControllerComputePlotTypeRooflineINT8);
+    m_roofline_fp64 = std::make_unique<ComputePlotRooflineLegacy>(data_provider, kRPVControllerComputePlotTypeRooflineFP64);
+    m_roofline_fp32 = std::make_unique<ComputePlotRooflineLegacy>(data_provider, kRPVControllerComputePlotTypeRooflineFP32);
+    m_roofline_fp16 = std::make_unique<ComputePlotRooflineLegacy>(data_provider, kRPVControllerComputePlotTypeRooflineFP16);
+    m_roofline_i8 = std::make_unique<ComputePlotRooflineLegacy>(data_provider, kRPVControllerComputePlotTypeRooflineINT8);
 }
 
-ComputeRooflineView::~ComputeRooflineView() {}
+ComputeRooflineViewLegacy::~ComputeRooflineViewLegacy() {}
 
-void ComputeRooflineView::Update()
+void ComputeRooflineViewLegacy::Update()
 {
     if (m_roofline_fp64)
     {
@@ -45,7 +45,7 @@ void ComputeRooflineView::Update()
     }
 }
 
-void ComputeRooflineView::RenderMenuBar()
+void ComputeRooflineViewLegacy::RenderMenuBar()
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_region = ImGui::GetContentRegionAvail();
@@ -67,21 +67,21 @@ void ComputeRooflineView::RenderMenuBar()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
     if (ImGui::BeginPopup("compute_view_menu"))
     {
-        if (ImGui::MenuItem("Group by Dispatch", "", m_group_mode == ComputePlotRoofline::GroupModeDispatch))
+        if (ImGui::MenuItem("Group by Dispatch", "", m_group_mode == ComputePlotRooflineLegacy::GroupModeDispatch))
         {
-            m_roofline_fp64->SetGroupMode(ComputePlotRoofline::GroupModeDispatch);
-            m_roofline_fp32->SetGroupMode(ComputePlotRoofline::GroupModeDispatch);
-            m_roofline_fp16->SetGroupMode(ComputePlotRoofline::GroupModeDispatch);
-            m_roofline_i8->SetGroupMode(ComputePlotRoofline::GroupModeDispatch);
-            m_group_mode = ComputePlotRoofline::GroupModeDispatch;
+            m_roofline_fp64->SetGroupMode(ComputePlotRooflineLegacy::GroupModeDispatch);
+            m_roofline_fp32->SetGroupMode(ComputePlotRooflineLegacy::GroupModeDispatch);
+            m_roofline_fp16->SetGroupMode(ComputePlotRooflineLegacy::GroupModeDispatch);
+            m_roofline_i8->SetGroupMode(ComputePlotRooflineLegacy::GroupModeDispatch);
+            m_group_mode = ComputePlotRooflineLegacy::GroupModeDispatch;
         }
-        if(ImGui::MenuItem("Group by Kernel", "", m_group_mode == ComputePlotRoofline::GroupModeKernel))
+        if(ImGui::MenuItem("Group by Kernel", "", m_group_mode == ComputePlotRooflineLegacy::GroupModeKernel))
         {
-            m_roofline_fp64->SetGroupMode(ComputePlotRoofline::GroupModeKernel);
-            m_roofline_fp32->SetGroupMode(ComputePlotRoofline::GroupModeKernel);
-            m_roofline_fp16->SetGroupMode(ComputePlotRoofline::GroupModeKernel);
-            m_roofline_i8->SetGroupMode(ComputePlotRoofline::GroupModeKernel);
-            m_group_mode = ComputePlotRoofline::GroupModeKernel;
+            m_roofline_fp64->SetGroupMode(ComputePlotRooflineLegacy::GroupModeKernel);
+            m_roofline_fp32->SetGroupMode(ComputePlotRooflineLegacy::GroupModeKernel);
+            m_roofline_fp16->SetGroupMode(ComputePlotRooflineLegacy::GroupModeKernel);
+            m_roofline_i8->SetGroupMode(ComputePlotRooflineLegacy::GroupModeKernel);
+            m_group_mode = ComputePlotRooflineLegacy::GroupModeKernel;
         }
 
         ImGui::EndPopup();
@@ -89,7 +89,7 @@ void ComputeRooflineView::RenderMenuBar()
     ImGui::PopStyleVar(2);
 }
 
-void ComputeRooflineView::Render()
+void ComputeRooflineViewLegacy::Render()
 {
     RenderMenuBar();
 

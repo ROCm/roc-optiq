@@ -15,7 +15,7 @@ namespace View
 
 ComputeView::ComputeView()
 : m_view_created(false)
-, m_tester(nullptr)
+, m_tab_container(nullptr)
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("ComputeView");
@@ -44,9 +44,9 @@ ComputeView::Update()
 
     if(new_state == ProviderState::kReady)
     {
-        if(m_tester)
+        if(m_tab_container)
         {
-            m_tester->Update();
+            m_tab_container->Update();
         }
     }
 }
@@ -54,7 +54,12 @@ ComputeView::Update()
 void
 ComputeView::CreateView()
 {
-    m_tester = std::make_unique<ComputeTester>(m_data_provider);
+    m_tab_container = std::make_shared<TabContainer>();
+    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider), false});
 }
 
 void
@@ -80,9 +85,9 @@ ComputeView::Render()
     }
     else
     {
-        if(m_tester)
+        if(m_tab_container)
         {
-            m_tester->Render();
+            m_tab_container->Render();
         }
     }
 }
@@ -124,6 +129,27 @@ ComputeView::RenderToolbar()
     // pop child window style
     ImGui::PopStyleVar(2);
 }
+
+//TODO: move these to their own files
+ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider)
+: RocWidget()
+, m_data_provider(data_provider)
+{}
+
+ComputeTableView::ComputeTableView(DataProvider& data_provider)
+: RocWidget()
+, m_data_provider(data_provider)
+{}
+
+ComputeKernelDetailsView::ComputeKernelDetailsView(DataProvider& data_provider)
+: RocWidget()
+, m_data_provider(data_provider)
+{}
+
+ComputeWorkloadView::ComputeWorkloadView(DataProvider& data_provider)
+: RocWidget()
+, m_data_provider(data_provider)
+{}
 
 ComputeTester::ComputeTester(DataProvider& data_provider)
 : m_data_provider(data_provider)

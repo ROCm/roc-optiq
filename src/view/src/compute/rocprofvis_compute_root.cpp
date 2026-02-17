@@ -3,11 +3,11 @@
 
 #include "rocprofvis_compute_root.h"
 #include "rocprofvis_compute_data_provider.h"
-#include "rocprofvis_compute_block.h"
-#include "rocprofvis_compute_roofline.h"
-#include "rocprofvis_compute_summary.h"
-#include "rocprofvis_compute_table.h"
-#include "rocprofvis_navigation_manager.h"
+#include "compute/legacy/rocprofvis_compute_block.h"
+#include "compute/legacy/rocprofvis_compute_roofline.h"
+#include "compute/legacy/rocprofvis_compute_summary.h"
+#include "compute/legacy/rocprofvis_compute_table.h"
+#include "compute/rocprofvis_navigation_manager.h"
 #include "rocprofvis_navigation_url.h"
 
 namespace RocProfVis
@@ -27,10 +27,10 @@ ComputeRoot::ComputeRoot()
     m_compute_data_provider = std::make_shared<ComputeDataProvider>();
 
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(TabItem{"Summary View", COMPUTE_SUMMARY_VIEW_URL, std::make_shared<ComputeSummaryView>(m_id, m_compute_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Roofline View", COMPUTE_ROOFLINE_VIEW_URL, std::make_shared<ComputeRooflineView>(m_id, m_compute_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Block View", COMPUTE_BLOCK_VIEW_URL, std::make_shared<ComputeBlockView>(m_id, m_compute_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Table View", COMPUTE_TABLE_VIEW_URL, std::make_shared<ComputeTableView>(m_id, m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Summary View", COMPUTE_SUMMARY_VIEW_URL, std::make_shared<ComputeSummaryViewLegacy>(m_id, m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Roofline View", COMPUTE_ROOFLINE_VIEW_URL, std::make_shared<ComputeRooflineViewLegacy>(m_id, m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Block View", COMPUTE_BLOCK_VIEW_URL, std::make_shared<ComputeBlockViewLegacy>(m_id, m_compute_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Table View", COMPUTE_TABLE_VIEW_URL, std::make_shared<ComputeTableViewLegacy>(m_id, m_compute_data_provider), false});
 
     NavigationManager::GetInstance()->RegisterContainer(m_tab_container, m_id, m_id);
 

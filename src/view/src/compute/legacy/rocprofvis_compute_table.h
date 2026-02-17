@@ -12,7 +12,7 @@ namespace View
 {
 
 class ComputeDataProvider;
-class ComputeTable;
+class ComputeTableLegacy;
 
 typedef enum table_view_category_t
 {
@@ -50,17 +50,17 @@ public:
 private:
     void OnSearchChanged(std::shared_ptr<RocEvent> event);
 
-    std::vector<std::unique_ptr<ComputeTable>> m_tables;
+    std::vector<std::unique_ptr<ComputeTableLegacy>> m_tables;
     EventManager::SubscriptionToken m_search_event_token;
 };
 
-class ComputeTableView : public RocWidget
+class ComputeTableViewLegacy : public RocWidget
 {
 public:
     void Render() override;
     void Update() override;
-    ComputeTableView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
-    ~ComputeTableView();
+    ComputeTableViewLegacy(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
+    ~ComputeTableViewLegacy();
 
 private:
     void RenderMenuBar();

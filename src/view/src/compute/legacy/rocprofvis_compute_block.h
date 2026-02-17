@@ -14,8 +14,8 @@ namespace View
 {
 
 class ComputeDataProvider;
-class ComputePlot;
-class ComputeMetric;
+class ComputePlotLegacy;
+class ComputeMetricLegacy;
 
 typedef enum LinkID
 {
@@ -155,13 +155,13 @@ private:
     std::list<BlockLevel> m_next_levels;
 };
 
-class ComputeBlockView : public RocWidget
+class ComputeBlockViewLegacy : public RocWidget
 {
 public:
     void Render();
     void Update();
-    ComputeBlockView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
-    ~ComputeBlockView();
+    ComputeBlockViewLegacy(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
+    ~ComputeBlockViewLegacy();
 
 private:
     void RenderMenuBar();
@@ -185,9 +185,9 @@ private:
     std::shared_ptr<HSplitContainer> m_container;
     std::string m_owner_id;
 
-    std::unordered_map<BlockID, std::vector<std::unique_ptr<ComputeMetric>>> m_block_metrics;
-    std::unordered_map<LinkID, std::unique_ptr<ComputeMetric>> m_link_metrics;
-    std::unordered_map<BlockID, std::vector<std::unique_ptr<ComputePlot>>> m_plots;
+    std::unordered_map<BlockID, std::vector<std::unique_ptr<ComputeMetricLegacy>>> m_block_metrics;
+    std::unordered_map<LinkID, std::unique_ptr<ComputeMetricLegacy>> m_link_metrics;
+    std::unordered_map<BlockID, std::vector<std::unique_ptr<ComputePlotLegacy>>> m_plots;
 
     ImDrawList* m_draw_list;
     ImVec2 m_block_diagram_region;

@@ -221,8 +221,16 @@ ComputeMemoryChartView::Render()
     // -----------------------------------------------------------------
     ComputeLayout();
 
+
+
     // -----------------------------------------------------------------
-    // 2. Draw every block
+    // 2. Draw connection arrows + labels (Done to render arrows below box's)
+    // -----------------------------------------------------------------
+    DrawConnections(draw_list, window_position);
+
+
+    // -----------------------------------------------------------------
+    // 3. Draw every block
     // -----------------------------------------------------------------
     DrawInstrBuff(draw_list, window_position);
     DrawInstrDispatch(draw_list, window_position);
@@ -239,11 +247,6 @@ ComputeMemoryChartView::Render()
     DrawFabric(draw_list, window_position);
     DrawGMI(draw_list, window_position);
     DrawHBM(draw_list, window_position);
-
-    // -----------------------------------------------------------------
-    // 3. Draw connection arrows + labels
-    // -----------------------------------------------------------------
-    DrawConnections(draw_list, window_position);
 
     // -----------------------------------------------------------------
     // 4. Set canvas size so scrollbars cover the entire diagram
@@ -264,10 +267,10 @@ ComputeMemoryChartView::ComputeLayout()
 {
     // Pipeline column
     m_instr_buff_block     = {CHART_PADDING, CHART_PADDING, 210, 480};
-    m_instr_dispatch_block = {m_instr_buff_block.Right() + BLOCK_GAP,
+    m_instr_dispatch_block = {m_instr_buff_block.Right() + BLOCK_GAP + 30,
                               CHART_PADDING, 360, 480};
-    m_active_cus_block     = {m_instr_dispatch_block.Right() + BLOCK_GAP,
-                              CHART_PADDING + 15, 250, 400};
+    m_active_cus_block     = {m_instr_dispatch_block.Right() - 60,
+                              CHART_PADDING + 15, 250, 450};
 
     // Cache column
     float cache_column_x = m_active_cus_block.Right() + ARROW_COLUMN_GAP;
@@ -303,6 +306,11 @@ ComputeMemoryChartView::DrawInstrBuff(ImDrawList* draw_list, ImVec2 origin)
     float       block_x = origin.x + block.x;
     float       block_y = origin.y + block.y;
 
+
+    DrawBlockRect(draw_list, { block_x + 20, block_y + 20 },
+                  { block_x + block.w + 20, block_y + block.h + 20 });
+    DrawBlockRect(draw_list, { block_x + 10, block_y + 10 },
+                  { block_x + block.w + 10, block_y + block.h + 10 });
     DrawBlockRect(draw_list, {block_x, block_y},
                   {block_x + block.w, block_y + block.h});
     float cursor_y = DrawBlockHeader(draw_list, "Instr Buff",
@@ -345,43 +353,32 @@ ComputeMemoryChartView::DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin)
     const float kTrapWidth  = 50.0f;
     const float kTrapHeight = block.h / static_cast<float>(kNumTraps);
 
-    // --- 8 small trapezoids (left column) ---
+    // --- Compute trapezoid positions (math only, no drawing yet) ---
     ImVec2 trap_midpoints[8];
+    ImVec2 small_trap_pts[8][4];
     for(int i = 0; i < kNumTraps; ++i)
     {
-        float  trap_y      = block_y + i * kTrapHeight;
-        float  narrow_side = kTrapHeight * (150.0f / 480.0f);
-        ImVec2 points[4]   = {
-            {block_x,              trap_y},
-            {block_x + kTrapWidth, trap_y + (kTrapHeight - narrow_side) * 0.5f},
-            {block_x + kTrapWidth, trap_y + (kTrapHeight + narrow_side) * 0.5f},
-            {block_x,              trap_y + kTrapHeight},
-        };
-        draw_list->AddConvexPolyFilled(points, 4,
-                                       Settings().GetColor(Colors::kBgPanel));
-        draw_list->AddPolyline(points, 4,
-                               Settings().GetColor(Colors::kBorderGray),
-                               ImDrawFlags_Closed, 1.0f);
-        trap_midpoints[i] = {block_x + kTrapWidth * 0.5f,
-                             trap_y + kTrapHeight * 0.5f};
+        float trap_y      = block_y + i * kTrapHeight;
+        float narrow_side = kTrapHeight * (150.0f / 480.0f);
+        small_trap_pts[i][0] = {block_x,              trap_y};
+        small_trap_pts[i][1] = {block_x + kTrapWidth, trap_y + (kTrapHeight - narrow_side) * 0.5f};
+        small_trap_pts[i][2] = {block_x + kTrapWidth, trap_y + (kTrapHeight + narrow_side) * 0.5f};
+        small_trap_pts[i][3] = {block_x,              trap_y + kTrapHeight};
+        trap_midpoints[i]    = {block_x + kTrapWidth * 0.5f,
+                                trap_y + kTrapHeight * 0.5f};
     }
 
-    // --- 1 large trapezoid (right column) ---
-    float big_trap_x     = block_x + kTrapWidth;
-    float big_narrow     = 400.0f;
-    ImVec2 big_points[4] = {
+    float  big_trap_x = block_x + kTrapWidth + 30;
+    float  big_narrow = 400.0f;
+
+    ImVec2 big_pts[4] = {
         {big_trap_x,              block_y},
         {big_trap_x + kTrapWidth, block_y + (block.h - big_narrow) * 0.5f},
         {big_trap_x + kTrapWidth, block_y + (block.h + big_narrow) * 0.5f},
         {big_trap_x,              block_y + block.h},
     };
-    draw_list->AddConvexPolyFilled(big_points, 4,
-                                   Settings().GetColor(Colors::kBgPanel));
-    draw_list->AddPolyline(big_points, 4,
-                           Settings().GetColor(Colors::kBorderGray),
-                           ImDrawFlags_Closed, 1.0f);
 
-    // --- Connecting arrows with label pills ---
+    // --- Draw arrows + pills FIRST (behind) ---
     const char* pill_labels[] = {
         "SALU", "SMEM", "VALU", "MFMA", "VMEM", "LDS", "GWS", "Br"
     };
@@ -411,7 +408,7 @@ ComputeMemoryChartView::DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin)
     }
     pill_width += kPillPadH * 2;
     float pill_height = ImGui::CalcTextSize("X").y + kPillPadV * 2;
-    float line_end_x  = block_x + 270.0f;
+    float line_end_x  = block_x + 300.0f;
 
     for(int i = 0; i < kNumTraps; ++i)
     {
@@ -453,6 +450,18 @@ ComputeMemoryChartView::DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin)
             {value_min.x + (pill_width - val_w) * 0.5f, value_min.y + kPillPadV},
             value_text_col, GetMetricText(pill_metrics[i]));
     }
+
+    // --- Draw trapezoids LAST (on top of arrows) ---
+    ImU32 fill_color   = Settings().GetColor(Colors::kBgPanel);
+    ImU32 border_color = Settings().GetColor(Colors::kBorderGray);
+    for(int i = 0; i < kNumTraps; ++i)
+    {
+        draw_list->AddConvexPolyFilled(small_trap_pts[i], 4, fill_color);
+        draw_list->AddPolyline(small_trap_pts[i], 4, border_color,
+                               ImDrawFlags_Closed, 1.0f);
+    }
+    draw_list->AddConvexPolyFilled(big_pts, 4, fill_color);
+    draw_list->AddPolyline(big_pts, 4, border_color, ImDrawFlags_Closed, 1.0f);
 }
 
 void
@@ -723,19 +732,31 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
                        m_scalar_l1d_block.x, arrow_y, text_buf);
     }
 
-    // Instr Dispatch -> Instr L1 (label centered between blocks)
+    // Instr Buff -> Instr L1 (L-shaped: down from Instr Buff, then right to Instr L1)
     {
-        float arrow_y = m_instr_l1_block.MidY();
-        float label_x = (m_instr_dispatch_block.Right() + m_instr_l1_block.x) * 0.5f;
-        DrawHorizontalArrow(draw_list,
-                            screen(m_instr_dispatch_block.Right(), arrow_y),
-                            screen(m_instr_l1_block.x, arrow_y));
+        float corner_x = m_instr_buff_block.MidX();
+        float start_y  = m_instr_buff_block.Bottom();
+        float end_y    = m_instr_l1_block.MidY() + 40;
+
+        ImVec2 top_point    = screen(corner_x, start_y);
+        ImVec2 corner_point = screen(corner_x, end_y);
+        ImVec2 end_point    = screen(m_instr_l1_block.x, end_y);
+
+        ImU32 arrow_color = Settings().GetColor(Colors::kArrowColor);
+        draw_list->AddLine(top_point, corner_point, arrow_color, ARROW_THICKNESS);
+        draw_list->AddLine(corner_point, end_point, arrow_color, ARROW_THICKNESS);
+
+        float head = ARROW_HEAD_SIZE;
+        draw_list->AddTriangleFilled(
+            end_point,
+            {end_point.x - head, end_point.y - head * 0.6f},
+            {end_point.x - head, end_point.y + head * 0.6f},
+            arrow_color);
+
         snprintf(text_buf, sizeof(text_buf), "Fetch: %s",
                  GetMetricText(IL1_FETCH));
-
-
-       
-        draw_list->AddText(screen(label_x, arrow_y - ARROW_LABEL_ABOVE),
+        float label_x = (corner_x + m_instr_l1_block.x) * 0.5f;
+        draw_list->AddText(screen(label_x, end_y - ARROW_LABEL_ABOVE),
                            label_color, text_buf);
     }
 

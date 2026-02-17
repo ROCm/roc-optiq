@@ -40,7 +40,6 @@ private:
 
     DataProvider                     m_data_provider;
     std::shared_ptr<RocCustomWidget> m_tool_bar;
-    std::unique_ptr<ComputeTester>   m_tester;
 };
 
 

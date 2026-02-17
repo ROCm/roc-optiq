@@ -16,7 +16,6 @@ namespace View
 ComputeView::ComputeView()
 : m_view_created(false)
 , m_tab_container(nullptr)
-, m_tester(nullptr)
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("ComputeView");
@@ -61,8 +60,6 @@ ComputeView::CreateView()
     m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider), false});
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider), false});
     m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider), false});
-
-    //m_tester = std::make_unique<ComputeTester>(m_data_provider);
 }
 
 void

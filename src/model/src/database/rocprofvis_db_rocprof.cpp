@@ -300,7 +300,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
         std::vector<store_params> v;
         v.reserve(mem_act_per_guid.size());
         uint64_t node_id = std::atoll(CachedTables(guid_info.first.GuidIndex())->GetTableCellByIndex("Node", 0, "id"));
-        std::string table_name = "roc_optique_memory_activity_" + GuidAt(guid_info.first.GuidIndex());
+        std::string table_name = "roc_optiq_memory_activity_" + GuidAt(guid_info.first.GuidIndex());
         bool table_exists = CheckTableExists(table_name, guid_info.first.FileIndex());
         if (mem_act_per_guid.size() > 0)
         {

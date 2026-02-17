@@ -223,14 +223,11 @@ ComputeMemoryChartView::Render()
 
 
 
-    // -----------------------------------------------------------------
-    // 2. Draw connection arrows + labels (Done to render arrows below box's)
-    // -----------------------------------------------------------------
-    DrawConnections(draw_list, window_position);
+   
 
 
     // -----------------------------------------------------------------
-    // 3. Draw every block
+    // 2. Draw every block
     // -----------------------------------------------------------------
     DrawInstrBuff(draw_list, window_position);
     DrawInstrDispatch(draw_list, window_position);
@@ -247,6 +244,11 @@ ComputeMemoryChartView::Render()
     DrawFabric(draw_list, window_position);
     DrawGMI(draw_list, window_position);
     DrawHBM(draw_list, window_position);
+
+    // -----------------------------------------------------------------
+    // 2. Draw connection arrows + labels (on top to allow stacks in instr buff to connect)
+    // -----------------------------------------------------------------
+    DrawConnections(draw_list, window_position);
 
     // -----------------------------------------------------------------
     // 4. Set canvas size so scrollbars cover the entire diagram
@@ -307,10 +309,10 @@ ComputeMemoryChartView::DrawInstrBuff(ImDrawList* draw_list, ImVec2 origin)
     float       block_y = origin.y + block.y;
 
 
-    DrawBlockRect(draw_list, { block_x + 20, block_y + 20 },
-                  { block_x + block.w + 20, block_y + block.h + 20 });
-    DrawBlockRect(draw_list, { block_x + 10, block_y + 10 },
-                  { block_x + block.w + 10, block_y + block.h + 10 });
+    DrawBlockRect(draw_list, { block_x + 16, block_y + 16 },
+                  { block_x + block.w + 16, block_y + block.h + 16 });
+    DrawBlockRect(draw_list, { block_x + 8, block_y + 8 },
+                  { block_x + block.w + 8, block_y + block.h + 8 });
     DrawBlockRect(draw_list, {block_x, block_y},
                   {block_x + block.w, block_y + block.h});
     float cursor_y = DrawBlockHeader(draw_list, "Instr Buff",
@@ -482,7 +484,7 @@ ComputeMemoryChartView::DrawActiveCUs(ImDrawList* draw_list, ImVec2 origin)
     draw_list->AddText({block_x + BLOCK_TEXT_PAD, cursor_y},
                        Settings().GetColor(Colors::kTextMain),
                        GetMetricText(NUM_CUS));
-    cursor_y += ROW_HEIGHT;
+    cursor_y += ROW_HEIGHT + 5;
 
     // Thin separator
     draw_list->AddLine({block_x + BLOCK_TEXT_PAD, cursor_y},
@@ -694,6 +696,43 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
         draw_list->AddText(screen(src_x + 5, src_y - ARROW_LABEL_ABOVE),
                            label_color, label_text);
     };
+
+    // --- Instr Buff stacks -> Trapezoids (3 horizontal lines per trap) ---
+    {
+        ImU32 wire_color = Settings().GetColor(Colors::kArrowColor);
+
+        const int   kNumStacks   = 3;
+        const int kStackStep   = 8;
+        const int   kNumTraps    = 8;
+        const float kLineSpacing = 7.0f;
+
+        float stack_right_x[3];
+        for(int stack_idx = 0; stack_idx < kNumStacks; ++stack_idx)
+        {
+            float stack_offset = static_cast<float>(kNumStacks - 1 - stack_idx)
+                                 * kStackStep;
+            stack_right_x[stack_idx] = m_instr_buff_block.Right() + stack_offset;
+        }
+
+        float trap_height       = m_instr_dispatch_block.h
+                                  / static_cast<float>(kNumTraps);
+        float trap_left_x       = m_instr_dispatch_block.x;
+        float line_offset_base  = -(kNumStacks - 1) * kLineSpacing * 0.5f;
+
+        for(int trap_idx = 0; trap_idx < kNumTraps; ++trap_idx)
+        {
+            float trap_center_y = m_instr_dispatch_block.y
+                                  + trap_idx * trap_height + trap_height * 0.5f;
+            for(int stack_idx = 0; stack_idx < kNumStacks; ++stack_idx)
+            {
+                float line_y = trap_center_y
+                               + line_offset_base + stack_idx * kLineSpacing;
+                draw_list->AddLine(screen(stack_right_x[stack_idx], line_y),
+                                   screen(trap_left_x, line_y),
+                                   wire_color, 1.0f);
+            }
+        }
+    }
 
     // --- Pipeline -> Caches ---
 

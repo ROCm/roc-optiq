@@ -7,6 +7,9 @@
 #include <vector>
 #include <cstdint>
 
+struct ImDrawList;
+struct ImVec2;
+
 namespace RocProfVis
 {
 namespace View
@@ -14,8 +17,8 @@ namespace View
 
 class DataProvider;
 
-// Simple rectangle returned by each block render function.
-// Position the next block relative to this one using Right(), Bottom(), MidY(), etc.
+// Simple rectangle used for block positioning.
+// Each block stores its local-space position (relative to the chart origin).
 struct ChartBlock
 {
     float x = 0, y = 0, w = 0, h = 0;
@@ -95,45 +98,44 @@ public:
     void Update();
 
     // Fetch all 3.1.x metrics for the given workload and kernels
-    void FetchMemChartMetrics(uint32_t workload_id, const std::vector<uint32_t>& kernel_ids);
+    void FetchMemChartMetrics(uint32_t workload_id,
+                              const std::vector<uint32_t>& kernel_ids);
 
 private:
-    // Each block render takes a position and returns its bounds.
-    // The next block is positioned relative to the previous one.
+    // Compute all block positions (called once at the start of Render)
+    void ComputeLayout();
 
-    // Pipeline stage blocks
-    ChartBlock RenderInstrBuff(float x, float y);
-    ChartBlock RenderInstrDispatch(float x, float y);
-    ChartBlock RenderActiveCUs(float x, float y);
+    // Each Draw* method reads its stored block and renders via the draw list.
+    // No child windows — everything is flat draw list primitives.
+    void DrawInstrBuff(ImDrawList* draw_list, ImVec2 origin);
+    void DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin);
+    void DrawActiveCUs(ImDrawList* draw_list, ImVec2 origin);
 
-    // Cache hierarchy blocks
-    ChartBlock RenderLDS(float x, float y);
-    ChartBlock RenderVectorL1Cache(float x, float y);
-    ChartBlock RenderScalarL1DCache(float x, float y);
-    ChartBlock RenderInstrL1Cache(float x, float y);
+    void DrawLDS(ImDrawList* draw_list, ImVec2 origin);
+    void DrawVectorL1(ImDrawList* draw_list, ImVec2 origin);
+    void DrawScalarL1D(ImDrawList* draw_list, ImVec2 origin);
+    void DrawInstrL1(ImDrawList* draw_list, ImVec2 origin);
 
-    // Memory subsystem blocks
-    ChartBlock RenderL2Cache(float x, float y, float h);
-    ChartBlock RenderXGMIPCIe(float x, float y);
-    ChartBlock RenderFabricBlock(float x, float y);
-    ChartBlock RenderGMI(float x, float y);
-    ChartBlock RenderHBM(float x, float y);
+    void DrawL2(ImDrawList* draw_list, ImVec2 origin);
+    void DrawXGMIPCIe(ImDrawList* draw_list, ImVec2 origin);
+    void DrawFabric(ImDrawList* draw_list, ImVec2 origin);
+    void DrawGMI(ImDrawList* draw_list, ImVec2 origin);
+    void DrawHBM(ImDrawList* draw_list, ImVec2 origin);
 
-    // Connection arrows and labels (uses stored block positions)
-    void RenderConnections();
+    void DrawConnections(ImDrawList* draw_list, ImVec2 origin);
 
     // Get the display string for a metric (returns "-" if not yet populated)
-    const char* Val(MemChartMetric m) const;
+    const char* GetMetricText(MemChartMetric metric) const;
 
     DataProvider& m_data_provider;
     std::array<std::string, MEMCHART_METRIC_COUNT> m_values;
 
-    // Block positions stored during Render() for use by RenderConnections()
-    ChartBlock m_instrBuff, m_instrDispatch, m_activeCUs;
-    ChartBlock m_lds, m_vectorL1, m_scalarL1D, m_instrL1;
-    ChartBlock m_l2;
-    ChartBlock m_xgmiPcie, m_fabric, m_gmi;
-    ChartBlock m_hbm;
+    // Block positions computed at the start of Render(), used by all Draw* methods
+    ChartBlock m_instr_buff_block, m_instr_dispatch_block, m_active_cus_block;
+    ChartBlock m_lds_block, m_vector_l1_block, m_scalar_l1d_block, m_instr_l1_block;
+    ChartBlock m_l2_block;
+    ChartBlock m_xgmi_pcie_block, m_fabric_block, m_gmi_block;
+    ChartBlock m_hbm_block;
 };
 
 }  // namespace View

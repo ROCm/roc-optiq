@@ -14,21 +14,24 @@ namespace View
 {
 
 // =============================================================================
-// Layout constants — tweak these to adjust the entire diagram
+// Layout constants
 // =============================================================================
-static constexpr float PAD       = 14.0f;  // padding from edges
-static constexpr float BLOCK_GAP = 12.0f;  // gap between adjacent blocks
-static constexpr float ARROW_GAP =
-    105.0f;  // gap between columns (room for arrows + labels)
+static constexpr float CHART_PADDING     = 18.0f;
+static constexpr float BLOCK_GAP         = 14.0f;
+static constexpr float ARROW_COLUMN_GAP  = 160.0f;
 
-// Category and table IDs for the memory chart metrics
 static constexpr uint32_t MEMCHART_CATEGORY_ID = 3;
 static constexpr uint32_t MEMCHART_TABLE_ID    = 1;
 
-// Visual styling constants
-static constexpr float BLOCK_ROUNDING  = 8.0f;
-static constexpr float ARROW_THICKNESS = 2.0f;
-static constexpr float ARROW_HEAD_SZ   = 5.0f;
+static constexpr float BLOCK_ROUNDING    = 8.0f;
+static constexpr float BLOCK_TEXT_PAD    = 10.0f;
+static constexpr float ROW_HEIGHT        = 20.0f;
+static constexpr float HEADER_SEP_GAP    = 6.0f;
+
+static constexpr float ARROW_THICKNESS   = 2.0f;
+static constexpr float ARROW_HEAD_SIZE   = 5.0f;
+static constexpr float ARROW_LABEL_ABOVE = 21.0f;
+static constexpr float ARROW_VERT_SPACE  = 22.0f;
 
 // =============================================================================
 // Helpers
@@ -43,100 +46,108 @@ Settings()
 static std::string
 FormatMetricValue(double value)
 {
-    if(value != value) return "-";  // NaN check
-    int64_t ival = static_cast<int64_t>(value);
-    if(value == static_cast<double>(ival))
-    {
-        return std::to_string(ival);
-    }
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%.1f", value);
-    return buf;
+    if(value != value) return "-";
+    int64_t int_val = static_cast<int64_t>(value);
+    if(value == static_cast<double>(int_val))
+        return std::to_string(int_val);
+    char text_buf[32];
+    snprintf(text_buf, sizeof(text_buf), "%.1f", value);
+    return text_buf;
 }
 
-// Styled metric row: dim label, bright value
+// Rounded-rect block with fill + border
 static void
-MetricRow(const char* label, const char* value, const char* unit = "")
+DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right)
 {
-    ImU32 dimCol  = Settings().GetColor(Colors::kTextDim);
-    ImU32 mainCol = Settings().GetColor(Colors::kTextMain);
+    draw_list->AddRectFilled(top_left, bottom_right,
+                             Settings().GetColor(Colors::kBgPanel), BLOCK_ROUNDING);
+    draw_list->AddRect(top_left, bottom_right,
+                       Settings().GetColor(Colors::kBorderGray), BLOCK_ROUNDING, 0, 1.0f);
+}
 
-    ImGui::TableNextRow();
-    ImGui::TableNextColumn();
-    ImGui::PushStyleColor(ImGuiCol_Text, dimCol);
-    ImGui::TextUnformatted(label);
-    ImGui::PopStyleColor();
+// Header text + thin separator line. Returns cursor_y below the separator.
+static float
+DrawBlockHeader(ImDrawList* draw_list, const char* title,
+                float block_x, float block_y, float block_w)
+{
+    float text_y = block_y + BLOCK_TEXT_PAD;
+    draw_list->AddText(ImVec2(block_x + BLOCK_TEXT_PAD, text_y),
+                       Settings().GetColor(Colors::kTextMain), title);
 
-    ImGui::TableNextColumn();
-    ImGui::PushStyleColor(ImGuiCol_Text, mainCol);
+    float line_y = text_y + ImGui::CalcTextSize(title).y + 3.0f;
+    draw_list->AddLine(ImVec2(block_x + BLOCK_TEXT_PAD, line_y),
+                       ImVec2(block_x + block_w - BLOCK_TEXT_PAD, line_y),
+                       Settings().GetColor(Colors::kBorderGray), 1.0f);
+    return line_y + HEADER_SEP_GAP;
+}
+
+// Dim label on left, bright value on right. Returns cursor_y for next row.
+static float
+DrawMetricRow(ImDrawList* draw_list, float block_x, float cursor_y, float block_w,
+              const char* label, const char* value, const char* unit = "")
+{
+    draw_list->AddText(ImVec2(block_x + BLOCK_TEXT_PAD, cursor_y),
+                       Settings().GetColor(Colors::kTextDim), label);
+
+    float value_x = block_x + block_w * 0.48f;
     if(unit[0] != '\0')
     {
-        ImGui::Text("%s %s", value, unit);
+        char text_buf[64];
+        snprintf(text_buf, sizeof(text_buf), "%s %s", value, unit);
+        draw_list->AddText(ImVec2(value_x, cursor_y),
+                           Settings().GetColor(Colors::kTextMain), text_buf);
     }
     else
     {
-        ImGui::TextUnformatted(value);
+        draw_list->AddText(ImVec2(value_x, cursor_y),
+                           Settings().GetColor(Colors::kTextMain), value);
     }
-    ImGui::PopStyleColor();
+    return cursor_y + ROW_HEIGHT;
 }
 
-// Push themed visual style for chart blocks
+// Horizontal arrow pointing right
 static void
-PushBlockStyle()
+DrawHorizontalArrow(ImDrawList* draw_list, ImVec2 from, ImVec2 to)
 {
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgPanel));
-    ImGui::PushStyleColor(ImGuiCol_Border, Settings().GetColor(Colors::kBorderGray));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, BLOCK_ROUNDING);
+    ImU32 color = Settings().GetColor(Colors::kArrowColor);
+    draw_list->AddLine(from, to, color, ARROW_THICKNESS);
+    float head = ARROW_HEAD_SIZE;
+    draw_list->AddTriangleFilled(to,
+                                 ImVec2(to.x - head, to.y - head * 0.6f),
+                                 ImVec2(to.x - head, to.y + head * 0.6f),
+                                 color);
 }
 
+// Horizontally centered text within [x, x+w]
 static void
-PopBlockStyle()
+DrawCenteredText(ImDrawList* draw_list, const char* text,
+                 float region_x, float text_y, float region_w, ImU32 color)
 {
-    ImGui::PopStyleVar(1);
-    ImGui::PopStyleColor(2);
+    float text_w = ImGui::CalcTextSize(text).x;
+    draw_list->AddText(ImVec2(region_x + (region_w - text_w) * 0.5f, text_y),
+                       color, text);
 }
 
-// Section header: bold title with a thin separator below
+// Small inset card (frame-colored rect + dim text)
 static void
-BlockHeader(const char* title)
+DrawInsetCard(ImDrawList* draw_list, float card_x, float card_y,
+              float card_w, float card_h, const char* text)
 {
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
-    ImGui::TextUnformatted(title);
-    ImGui::PopStyleColor();
+    ImVec2 top_left(card_x, card_y);
+    ImVec2 bottom_right(card_x + card_w, card_y + card_h);
+    draw_list->AddRectFilled(top_left, bottom_right,
+                             Settings().GetColor(Colors::kBgFrame), 4.0f);
+    draw_list->AddRect(top_left, bottom_right,
+                       Settings().GetColor(Colors::kBorderGray), 4.0f, 0, 1.0f);
 
-    ImDrawList* dl  = ImGui::GetWindowDrawList();
-    ImVec2      pos = ImGui::GetCursorScreenPos();
-    float       w   = ImGui::GetContentRegionAvail().x;
-    dl->AddLine(pos, ImVec2(pos.x + w, pos.y), Settings().GetColor(Colors::kBorderGray),
-                1.0f);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
-}
-
-// Centered text helper for simple label blocks
-static void
-CenteredText(const char* text)
-{
-    float avail = ImGui::GetContentRegionAvail().x;
-    float textW = ImGui::CalcTextSize(text).x;
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - textW) * 0.5f);
-    ImGui::TextUnformatted(text);
-}
-
-// Themed arrow drawn between blocks
-static void
-DrawArrow(ImDrawList* dl, float x1, float y1, float x2, float y2, ImVec2 origin)
-{
-    ImVec2 from(origin.x + x1, origin.y + y1);
-    ImVec2 to(origin.x + x2, origin.y + y2);
-    ImU32  color = Settings().GetColor(Colors::kArrowColor);
-    dl->AddLine(from, to, color, ARROW_THICKNESS);
-    float sz = ARROW_HEAD_SZ;
-    dl->AddTriangleFilled(to, ImVec2(to.x - sz, to.y - sz * 0.6f),
-                          ImVec2(to.x - sz, to.y + sz * 0.6f), color);
+    float text_h = ImGui::CalcTextSize(text).y;
+    draw_list->AddText(ImVec2(card_x + BLOCK_TEXT_PAD,
+                              card_y + (card_h - text_h) * 0.5f),
+                       Settings().GetColor(Colors::kTextDim), text);
 }
 
 // =============================================================================
-// Core
+// Core — data loading
 // =============================================================================
 
 ComputeMemoryChartView::ComputeMemoryChartView(DataProvider& data_provider)
@@ -148,12 +159,10 @@ ComputeMemoryChartView::ComputeMemoryChartView(DataProvider& data_provider)
 ComputeMemoryChartView::~ComputeMemoryChartView() {}
 
 const char*
-ComputeMemoryChartView::Val(MemChartMetric m) const
+ComputeMemoryChartView::GetMetricText(MemChartMetric metric) const
 {
-    if(m >= 0 && m < MEMCHART_METRIC_COUNT)
-    {
-        return m_values[m].c_str();
-    }
+    if(metric >= 0 && metric < MEMCHART_METRIC_COUNT)
+        return m_values[metric].c_str();
     return "-";
 }
 
@@ -165,7 +174,7 @@ ComputeMemoryChartView::FetchMemChartMetrics(uint32_t                     worklo
     m_data_provider.ComputeModel().ClearMetricValues();
 
     std::vector<MetricsRequestParams::MetricID> metric_ids;
-    metric_ids.push_back({ MEMCHART_CATEGORY_ID, MEMCHART_TABLE_ID, std::nullopt });
+    metric_ids.push_back({MEMCHART_CATEGORY_ID, MEMCHART_TABLE_ID, std::nullopt});
 
     m_data_provider.FetchMetrics(
         MetricsRequestParams(workload_id, kernel_ids, metric_ids));
@@ -185,694 +194,636 @@ ComputeMemoryChartView::Update()
 
         uint32_t id = metric->entry.id;
         if(id < MEMCHART_METRIC_COUNT)
-        {
             m_values[id] = FormatMetricValue(metric->value);
-        }
     }
 }
 
 // =============================================================================
-// Render — each block is positioned relative to the previous one
+// Render — single draw list, no child windows per block
 // =============================================================================
 
 void
 ComputeMemoryChartView::Render()
 {
-    // Outer container with themed background
+    // Outer scrollable container (the only child window in the whole chart)
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgMain));
     ImGui::PushStyleColor(ImGuiCol_Border, Settings().GetColor(Colors::kBorderGray));
-
-
-      ImVec2 avail   = ImGui::GetContentRegionAvail();
-    float  offsetX = std::max(0.0f, (avail.x - 1500.0f) * 0.5f);  // 1500 = diagram width
-    ImGui::SetCursorPosX(offsetX);
-
 
     ImGui::BeginChild("MemoryChart", ImVec2(0, 0), ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_HorizontalScrollbar);
     ImGui::PopStyleColor(2);
 
-    // --- Pipeline column ---
-    m_instrBuff     = RenderInstrBuff(PAD, PAD);
-    m_instrDispatch = RenderInstrDispatch(m_instrBuff.Right() + BLOCK_GAP, PAD);
-    m_activeCUs     = RenderActiveCUs(m_instrDispatch.Right() + BLOCK_GAP, PAD + 15);
+    ImDrawList* draw_list       = ImGui::GetWindowDrawList();
+    ImVec2      window_position = ImGui::GetCursorScreenPos();
 
-    // --- Cache column (stacked vertically) ---
-    float cacheX = m_activeCUs.Right() + ARROW_GAP;
-    m_lds        = RenderLDS(cacheX, PAD);
-    m_vectorL1   = RenderVectorL1Cache(cacheX, m_lds.Bottom() + BLOCK_GAP);
-    m_scalarL1D  = RenderScalarL1DCache(cacheX, m_vectorL1.Bottom() + BLOCK_GAP);
-    m_instrL1    = RenderInstrL1Cache(cacheX, m_scalarL1D.Bottom() + BLOCK_GAP);
+    // -----------------------------------------------------------------
+    // 1. Compute layout — assign positions to every block
+    // -----------------------------------------------------------------
+    ComputeLayout();
 
-    // --- L2 column (spans full cache height) ---
-    float l2H = m_instrL1.Bottom() - PAD;
-    m_l2      = RenderL2Cache(m_lds.Right() + ARROW_GAP, PAD, l2H);
+    // -----------------------------------------------------------------
+    // 2. Draw every block
+    // -----------------------------------------------------------------
+    DrawInstrBuff(draw_list, window_position);
+    DrawInstrDispatch(draw_list, window_position);
+    DrawActiveCUs(draw_list, window_position);
 
-    // --- Fabric column (stacked vertically) ---
-    float fabricX = m_l2.Right() + ARROW_GAP;
-    m_xgmiPcie    = RenderXGMIPCIe(fabricX, PAD);
-    m_fabric      = RenderFabricBlock(fabricX, m_xgmiPcie.Bottom() + BLOCK_GAP);
-    m_gmi         = RenderGMI(fabricX, m_fabric.Bottom() + BLOCK_GAP);
+    DrawLDS(draw_list, window_position);
+    DrawVectorL1(draw_list, window_position);
+    DrawScalarL1D(draw_list, window_position);
+    DrawInstrL1(draw_list, window_position);
 
-    // --- HBM (right of fabric) ---
-    m_hbm = RenderHBM(m_fabric.Right() + ARROW_GAP / 2, m_fabric.y);
+    DrawL2(draw_list, window_position);
 
-    // Arrows and labels between blocks
-    RenderConnections();
+    DrawXGMIPCIe(draw_list, window_position);
+    DrawFabric(draw_list, window_position);
+    DrawGMI(draw_list, window_position);
+    DrawHBM(draw_list, window_position);
 
-    // Ensure scroll region covers the entire diagram
-    float canvasW = m_hbm.Right() + PAD;
-    float canvasH = m_instrBuff.Bottom();
-    canvasH       = std::max(canvasH, m_instrDispatch.Bottom());
-    canvasH       = std::max(canvasH, m_instrL1.Bottom());
-    canvasH       = std::max(canvasH, m_gmi.Bottom());
-    canvasH += PAD;
-    ImGui::SetCursorPos(ImVec2(canvasW, canvasH));
+    // -----------------------------------------------------------------
+    // 3. Draw connection arrows + labels
+    // -----------------------------------------------------------------
+    DrawConnections(draw_list, window_position);
+
+    // -----------------------------------------------------------------
+    // 4. Set canvas size so scrollbars cover the entire diagram
+    // -----------------------------------------------------------------
+    float canvas_w = m_hbm_block.Right() + CHART_PADDING;
+    float canvas_h = std::max({m_instr_buff_block.Bottom(),
+                               m_instr_dispatch_block.Bottom(),
+                               m_instr_l1_block.Bottom(),
+                               m_gmi_block.Bottom()}) + CHART_PADDING;
+    ImGui::SetCursorPos(ImVec2(canvas_w, canvas_h));
     ImGui::Dummy(ImVec2(1, 1));
 
     ImGui::EndChild();
 }
 
-// =============================================================================
-// Pipeline blocks
-// =============================================================================
-
-ChartBlock
-ComputeMemoryChartView::RenderInstrBuff(float x, float y)
+void
+ComputeMemoryChartView::ComputeLayout()
 {
-    const float w = 195, h = 460;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("InstrBuff", ImVec2(w, h), ImGuiChildFlags_Borders);
+    // Pipeline column
+    m_instr_buff_block     = {CHART_PADDING, CHART_PADDING, 210, 480};
+    m_instr_dispatch_block = {m_instr_buff_block.Right() + BLOCK_GAP,
+                              CHART_PADDING, 360, 480};
+    m_active_cus_block     = {m_instr_dispatch_block.Right() + BLOCK_GAP,
+                              CHART_PADDING + 15, 250, 400};
 
-    BlockHeader("Instr Buff");
+    // Cache column
+    float cache_column_x = m_active_cus_block.Right() + ARROW_COLUMN_GAP;
+    m_lds_block        = {cache_column_x, CHART_PADDING, 220, 105};
+    m_vector_l1_block  = {cache_column_x, m_lds_block.Bottom() + BLOCK_GAP, 220, 160};
+    m_scalar_l1d_block = {cache_column_x, m_vector_l1_block.Bottom() + BLOCK_GAP, 220, 105};
+    m_instr_l1_block   = {cache_column_x, m_scalar_l1d_block.Bottom() + BLOCK_GAP, 220, 105};
 
-    // Wave buffers — subtle inset cards
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgFrame));
-    ImGui::PushStyleColor(ImGuiCol_Border, Settings().GetColor(Colors::kBorderGray));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+    // L2 column (spans full cache height)
+    float l2_height = m_instr_l1_block.Bottom() - CHART_PADDING;
+    m_l2_block      = {m_lds_block.Right() + ARROW_COLUMN_GAP,
+                       CHART_PADDING, 200, l2_height};
 
-    ImGui::BeginChild("Wave0", ImVec2(-1, 30), ImGuiChildFlags_Borders);
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted("Wave 0 Instr buff");
-    ImGui::PopStyleColor();
-    ImGui::EndChild();
+    // Fabric column
+    float fabric_column_x = m_l2_block.Right() + ARROW_COLUMN_GAP;
+    m_xgmi_pcie_block = {fabric_column_x, CHART_PADDING, 140, 95};
+    m_fabric_block    = {fabric_column_x, m_xgmi_pcie_block.Bottom() + BLOCK_GAP, 200, 280};
+    m_gmi_block       = {fabric_column_x, m_fabric_block.Bottom() + BLOCK_GAP, 140, 80};
 
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
-
-    ImGui::BeginChild("WaveN", ImVec2(-1, 30), ImGuiChildFlags_Borders);
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted("Wave N-1 Instr buff");
-    ImGui::PopStyleColor();
-    ImGui::EndChild();
-
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
-
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10);
-
-    // Metrics
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted("Wave Occupancy:");
-    ImGui::PopStyleColor();
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
-    ImGui::Text("%s per-GCD", Val(WAVEFRONT_OCCUPANCY));
-    ImGui::PopStyleColor();
-
-    ImGui::Spacing();
-
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted("Wave Life:");
-    ImGui::PopStyleColor();
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
-    ImGui::Text("%s cycles", Val(WAVE_LIFE));
-    ImGui::PopStyleColor();
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-ChartBlock
-ComputeMemoryChartView::RenderInstrDispatch(float x, float y)
-{
-    const float w = 335, h = 460, trap_w = 50;
-    const int   num_traps = 8;
-    const float trap_h    = h / static_cast<float>(num_traps);
-
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-
-    ImGui::BeginChild("InstrDispatch_Container", ImVec2(w, h), ImGuiChildFlags_None);
-
-    // Store screen-space positions for cross-child arrow drawing
-    ImVec2 trapTopPositions[8];
-    ImVec2 trapMainScreenPos;
-
-    // Lambda to draw a single trapezoid
-    auto drawTrapezoid = [&](int index) {
-        char id[64];
-        snprintf(id, sizeof(id), "Trap_%d", index);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-        ImGui::BeginChild(id, ImVec2(trap_w/2, trap_h));
-        {
-            ImDrawList* dl          = ImGui::GetWindowDrawList();
-            ImVec2      pos         = ImGui::GetCursorScreenPos();
-            float       narrow_side = trap_h * (150.0f / 460.0f);
-            ImVec2      pts[4]      = {
-                ImVec2(pos.x, pos.y),
-                ImVec2(pos.x + trap_w, pos.y + (trap_h - narrow_side) * 0.5f),
-                ImVec2(pos.x + trap_w, pos.y + (trap_h + narrow_side) * 0.5f),
-                ImVec2(pos.x, pos.y + trap_h)
-            };
-            dl->AddConvexPolyFilled(pts, 4, Settings().GetColor(Colors::kBgPanel));
-            dl->AddPolyline(pts, 4, Settings().GetColor(Colors::kBorderGray),
-                            ImDrawFlags_Closed, 1.0f);
-            // Store midpoint of the visible right edge for connecting arrows
-            // (child is trap_w/2 wide, so the shape is clipped there)
-            trapTopPositions[index] =
-                ImVec2(pos.x + trap_w / 2.0f, pos.y + trap_h * 0.5f);
-        }
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
-    };
-
-    // Trapezoid column — 8 trapezoids stacked vertically
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-    ImGui::BeginChild("TrapColumn", ImVec2(trap_w , h));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-    for(int i = 0; i < num_traps; ++i)
-        drawTrapezoid(i);
-    ImGui::PopStyleVar();
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-
-
-     // Trapezoid main — 1 trapezoid
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-    ImGui::BeginChild("TrapMain", ImVec2(trap_w, h));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-    ImDrawList* dl          = ImGui::GetWindowDrawList();
-    ImVec2      pos         = ImGui::GetCursorScreenPos();
-    float       narrow_side = 390.0f;  // right side (short)
-    ImVec2      pts[4]      = {
-        ImVec2(pos.x, pos.y),  // top-left  (wide side)
-        ImVec2(pos.x + trap_w,
-                         pos.y + (h - narrow_side) * 0.5f),  // top-right  (short side)
-        ImVec2(pos.x + trap_w,
-                         pos.y + (h + narrow_side) * 0.5f),  // bot-right  (short side)
-        ImVec2(pos.x, pos.y + h)                   // bot-left  (wide side)
-    };
-    dl->AddConvexPolyFilled(pts, 4, Settings().GetColor(Colors::kBgPanel));
-    dl->AddPolyline(pts, 4, Settings().GetColor(Colors::kBorderGray), ImDrawFlags_Closed,
-                    1.0f);
-    trapMainScreenPos = pos;
-    ImGui::PopStyleVar();
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-
-    // Draw connecting arrows from each small trapezoid to TrapMain at the container level
-    // so they aren't clipped by the individual child window boundaries
-    {
-        ImDrawList* containerDl = ImGui::GetWindowDrawList();
-        ImU32       arrowColor  = Settings().GetColor(Colors::kArrowColor);
-        ImU32       textColor   = Settings().GetColor(Colors::kTextMain);
-
-        // Labels and metrics matching the original dispatch table rows
-        const char*          labels[]  = { "SALU", "SMEM", "VALU", "MFMA",
-                                           "VMEM", "LDS",  "GWS",  "Br" };
-        const MemChartMetric metrics[] = { SALU, SMEM, VALU, MFMA, VMEM, LDS, GWS, BR };
-
-        const float pillPadX = 4.0f;   // horizontal padding inside pillbox
-        const float pillPadY = 1.0f;   // vertical padding inside pillbox
-        const float pillRound = 4.0f;  // corner rounding
-        const float pillGap   = 1.0f;  // gap between title and value pills
-
-        ImU32 borderCol   = IM_COL32(0, 0, 0, 255);
-        ImU32 titleBgCol  = Settings().GetColor(Colors::kBorderGray);
-        ImU32 valueBgCol  = IM_COL32(255, 255, 255, 255);
-        ImU32 titleTxtCol = Settings().GetColor(Colors::kTextMain);
-        ImU32 valueTxtCol = IM_COL32(0, 0, 0, 255);
-
-        // Pre-pass: find the widest pill across all entries so they're uniform
-        float uniformW = 0.0f;
-        float uniformH = 0.0f;
-        for(int i = 0; i < num_traps; ++i)
-        {
-            float tw = ImGui::CalcTextSize(labels[i]).x;
-            float vw = ImGui::CalcTextSize(Val(metrics[i])).x;
-            uniformW = std::max(uniformW, std::max(tw, vw));
-        }
-        uniformW += pillPadX * 2.0f;
-        uniformH  = ImGui::CalcTextSize("X").y + pillPadY * 2.0f;  // all rows same height
-
-
-
-        //Actual rendering of pills. 
-        for(int i = 0; i < num_traps; ++i)
-        {
-            ImVec2 lineStart = trapTopPositions[i];
-            ImVec2 lineEnd   = ImVec2(trapMainScreenPos.x + 250, trapTopPositions[i].y);
-
-            containerDl->AddLine(lineStart, lineEnd, arrowColor, 1.0f);
-
-            // Arrowhead at lineEnd pointing right
-            float sz = ARROW_HEAD_SZ;
-            containerDl->AddTriangleFilled(
-                lineEnd,
-                ImVec2(lineEnd.x - sz, lineEnd.y - sz * 0.6f),
-                ImVec2(lineEnd.x - sz, lineEnd.y + sz * 0.6f),
-                arrowColor);
-
-            // Place the pill stack right before the arrowhead
-            float pillRight = lineEnd.x - ARROW_HEAD_SZ - 20.0f;
-            float midY      = lineStart.y;  // arrow Y
-
-            ImVec2 titleSize = ImGui::CalcTextSize(labels[i]);
-            ImVec2 valSize   = ImGui::CalcTextSize(Val(metrics[i]));
-
-            // Title pill: above the arrow line
-            ImVec2 tMin(pillRight - uniformW, midY - uniformH - pillGap);
-            ImVec2 tMax(pillRight,            midY - pillGap);
-            containerDl->AddRectFilled(tMin, tMax, titleBgCol, pillRound);
-            containerDl->AddRect(tMin, tMax, borderCol, pillRound, 0, 1.0f);
-            containerDl->AddText(
-                ImVec2(tMin.x + (uniformW - titleSize.x) * 0.5f, tMin.y + pillPadY),
-                titleTxtCol, labels[i]);
-
-            // Value pill: below the arrow line
-            ImVec2 vMin(pillRight - uniformW, midY + pillGap);
-            ImVec2 vMax(pillRight,            midY + pillGap + uniformH);
-            containerDl->AddRectFilled(vMin, vMax, valueBgCol, pillRound);
-            containerDl->AddRect(vMin, vMax, borderCol, pillRound, 0, 1.0f);
-            containerDl->AddText(
-                ImVec2(vMin.x + (uniformW - valSize.x) * 0.5f, vMin.y + pillPadY),
-                valueTxtCol, Val(metrics[i]));
-        }
-    }
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-ChartBlock
-ComputeMemoryChartView::RenderActiveCUs(float x, float y)
-{
-    const float w = 170, h = 380;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("ActiveCUs", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    BlockHeader("Exec");
-
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted("Active CUs");
-    ImGui::PopStyleColor();
-
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
-    ImGui::Text("%s", Val(NUM_CUS));
-    ImGui::PopStyleColor();
-
-    ImDrawList* dl     = ImGui::GetWindowDrawList();
-    ImVec2      sepPos = ImGui::GetCursorScreenPos();
-    float       sepW   = ImGui::GetContentRegionAvail().x;
-    dl->AddLine(sepPos, ImVec2(sepPos.x + sepW, sepPos.y),
-                Settings().GetColor(Colors::kBorderGray), 1.0f);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5);
-
-    if(ImGui::BeginTable("##cus", 2))
-    {
-        MetricRow("VGPRs:", Val(VGPR));
-        MetricRow("SGPRs:", Val(SGPR));
-        MetricRow("LDS Alloc:", Val(LDS_ALLOCATION));
-        MetricRow("Scratch Alloc:", Val(SCRATCH_ALLOCATION));
-        MetricRow("Wavefronts:", Val(WAVEFRONTS));
-        MetricRow("Workgroups:", Val(WORKGROUPS));
-        ImGui::EndTable();
-    }
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
+    // HBM (right of fabric)
+    m_hbm_block = {m_fabric_block.Right() + ARROW_COLUMN_GAP,
+                   m_fabric_block.y, 160, 140};
 }
 
 // =============================================================================
-// Cache blocks
-// =============================================================================
-
-ChartBlock
-ComputeMemoryChartView::RenderLDS(float x, float y)
-{
-    const float w = 195, h = 100;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("LDS_Block", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    BlockHeader("LDS");
-
-    if(ImGui::BeginTable("##lds", 2))
-    {
-        MetricRow("Util:", Val(LDS_UTIL), "%");
-        MetricRow("Lat:", Val(LDS_LATENCY), "cycles");
-        ImGui::EndTable();
-    }
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-ChartBlock
-ComputeMemoryChartView::RenderVectorL1Cache(float x, float y)
-{
-    const float w = 195, h = 155;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("VectorL1", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    BlockHeader("Vector L1 Cache");
-
-    if(ImGui::BeginTable("##vl1", 2))
-    {
-        MetricRow("Hit:", Val(VL1_HIT), "%");
-        MetricRow("Coales:", Val(VL1_COALESCE), "%");
-        MetricRow("Stall:", Val(VL1_STALL), "%");
-        ImGui::EndTable();
-    }
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-ChartBlock
-ComputeMemoryChartView::RenderScalarL1DCache(float x, float y)
-{
-    const float w = 195, h = 100;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("ScalarL1D", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    BlockHeader("Scalar L1D Cache");
-
-    if(ImGui::BeginTable("##sl1d", 2))
-    {
-        MetricRow("Hit:", Val(SL1D_HIT), "%");
-        MetricRow("Lat:", Val(SL1D_LAT), "cycles");
-        ImGui::EndTable();
-    }
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-ChartBlock
-ComputeMemoryChartView::RenderInstrL1Cache(float x, float y)
-{
-    const float w = 195, h = 100;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("InstrL1", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    BlockHeader("Instr L1 Cache");
-
-    if(ImGui::BeginTable("##il1", 2))
-    {
-        MetricRow("Hit:", Val(IL1_HIT), "%");
-        MetricRow("Lat:", Val(IL1_LAT), "cycles");
-        ImGui::EndTable();
-    }
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-// =============================================================================
-// Memory subsystem blocks
-// =============================================================================
-
-ChartBlock
-ComputeMemoryChartView::RenderL2Cache(float x, float y, float h)
-{
-    const float w = 175;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("L2Cache", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    BlockHeader("L2 Cache");
-
-    if(ImGui::BeginTable("##l2", 2))
-    {
-        MetricRow("Rd:", Val(L2_RD));
-        MetricRow("Wr:", Val(L2_WR));
-        MetricRow("Atomic:", Val(L2_ATOMIC));
-        MetricRow("Hit:", Val(L2_HIT), "%");
-        ImGui::EndTable();
-    }
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-ChartBlock
-ComputeMemoryChartView::RenderXGMIPCIe(float x, float y)
-{
-    const float w = 115, h = 90;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("xGMI_PCIe", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
-    CenteredText("xGMI /");
-    CenteredText("PCIe");
-    ImGui::PopStyleColor();
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-ChartBlock
-ComputeMemoryChartView::RenderFabricBlock(float x, float y)
-{
-    const float w = 175, h = 270;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("Fabric", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    BlockHeader("Fabric");
-
-    if(ImGui::BeginTable("##fabric", 2))
-    {
-        MetricRow("Rd:", Val(FABRIC_RD_LAT), "cycles");
-        MetricRow("Wr:", Val(FABRIC_WR_LAT), "cycles");
-        MetricRow("Atomic:", Val(FABRIC_ATOMIC_LAT), "cycles");
-        ImGui::EndTable();
-    }
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-ChartBlock
-ComputeMemoryChartView::RenderGMI(float x, float y)
-{
-    const float w = 115, h = 75;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("GMI", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Text, Settings().GetColor(Colors::kTextMain));
-    CenteredText("GMI");
-    ImGui::PopStyleColor();
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-ChartBlock
-ComputeMemoryChartView::RenderHBM(float x, float y)
-{
-    const float w = 95, h = 130;
-    ImGui::SetCursorPos(ImVec2(x, y));
-    PushBlockStyle();
-    ImGui::BeginChild("HBM", ImVec2(w, h), ImGuiChildFlags_Borders);
-
-    BlockHeader("HBM");
-
-    if(ImGui::BeginTable("##hbm", 2))
-    {
-        MetricRow("Rd:", Val(HBM_RD));
-        MetricRow("Wr:", Val(HBM_WR));
-        ImGui::EndTable();
-    }
-
-    ImGui::EndChild();
-    PopBlockStyle();
-    return { x, y, w, h };
-}
-
-// =============================================================================
-// Connection arrows and labels — all positions derived from stored blocks
+// Block drawing — each reads its stored ChartBlock and draws via draw list
 // =============================================================================
 
 void
-ComputeMemoryChartView::RenderConnections()
+ComputeMemoryChartView::DrawInstrBuff(ImDrawList* draw_list, ImVec2 origin)
 {
-    ImGui::SetCursorPos(ImVec2(0, 0));
-    ImVec2      origin = ImGui::GetCursorScreenPos();
-    ImDrawList* dl     = ImGui::GetWindowDrawList();
+    const auto& block   = m_instr_buff_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
 
-    constexpr float SP    = 20.0f;  // vertical spacing between arrows in a group
-    constexpr float LBL_Y = 12.0f;  // label sits this far above the arrow line
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+    float cursor_y = DrawBlockHeader(draw_list, "Instr Buff",
+                                     block_x, block_y, block.w);
 
-    // Use dim text for connection labels
-    ImU32 labelCol = Settings().GetColor(Colors::kTextDim);
-    ImGui::PushStyleColor(ImGuiCol_Text, labelCol);
+    float card_w = block.w - BLOCK_TEXT_PAD * 2;
+    DrawInsetCard(draw_list, block_x + BLOCK_TEXT_PAD, cursor_y, card_w, 32,
+                  "Wave 0 Instr buff");
+    cursor_y += 38;
+    DrawInsetCard(draw_list, block_x + BLOCK_TEXT_PAD, cursor_y, card_w, 32,
+                  "Wave N-1 Instr buff");
+    cursor_y += 44;
+
+    ImU32 dim_color  = Settings().GetColor(Colors::kTextDim);
+    ImU32 main_color = Settings().GetColor(Colors::kTextMain);
+    char  text_buf[64];
+
+    draw_list->AddText({block_x + BLOCK_TEXT_PAD, cursor_y},
+                       dim_color, "Wave Occupancy:");
+    cursor_y += ROW_HEIGHT;
+    snprintf(text_buf, sizeof(text_buf), "%s per-GCD",
+             GetMetricText(WAVEFRONT_OCCUPANCY));
+    draw_list->AddText({block_x + BLOCK_TEXT_PAD, cursor_y}, main_color, text_buf);
+    cursor_y += ROW_HEIGHT + 8;
+
+    draw_list->AddText({block_x + BLOCK_TEXT_PAD, cursor_y},
+                       dim_color, "Wave Life:");
+    cursor_y += ROW_HEIGHT;
+    snprintf(text_buf, sizeof(text_buf), "%s cycles", GetMetricText(WAVE_LIFE));
+    draw_list->AddText({block_x + BLOCK_TEXT_PAD, cursor_y}, main_color, text_buf);
+}
+
+void
+ComputeMemoryChartView::DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block       = m_instr_dispatch_block;
+    float       block_x     = origin.x + block.x;
+    float       block_y     = origin.y + block.y;
+    const int   kNumTraps   = 8;
+    const float kTrapWidth  = 50.0f;
+    const float kTrapHeight = block.h / static_cast<float>(kNumTraps);
+
+    // --- 8 small trapezoids (left column) ---
+    ImVec2 trap_midpoints[8];
+    for(int i = 0; i < kNumTraps; ++i)
+    {
+        float  trap_y      = block_y + i * kTrapHeight;
+        float  narrow_side = kTrapHeight * (150.0f / 480.0f);
+        ImVec2 points[4]   = {
+            {block_x,              trap_y},
+            {block_x + kTrapWidth, trap_y + (kTrapHeight - narrow_side) * 0.5f},
+            {block_x + kTrapWidth, trap_y + (kTrapHeight + narrow_side) * 0.5f},
+            {block_x,              trap_y + kTrapHeight},
+        };
+        draw_list->AddConvexPolyFilled(points, 4,
+                                       Settings().GetColor(Colors::kBgPanel));
+        draw_list->AddPolyline(points, 4,
+                               Settings().GetColor(Colors::kBorderGray),
+                               ImDrawFlags_Closed, 1.0f);
+        trap_midpoints[i] = {block_x + kTrapWidth * 0.5f,
+                             trap_y + kTrapHeight * 0.5f};
+    }
+
+    // --- 1 large trapezoid (right column) ---
+    float big_trap_x     = block_x + kTrapWidth;
+    float big_narrow     = 400.0f;
+    ImVec2 big_points[4] = {
+        {big_trap_x,              block_y},
+        {big_trap_x + kTrapWidth, block_y + (block.h - big_narrow) * 0.5f},
+        {big_trap_x + kTrapWidth, block_y + (block.h + big_narrow) * 0.5f},
+        {big_trap_x,              block_y + block.h},
+    };
+    draw_list->AddConvexPolyFilled(big_points, 4,
+                                   Settings().GetColor(Colors::kBgPanel));
+    draw_list->AddPolyline(big_points, 4,
+                           Settings().GetColor(Colors::kBorderGray),
+                           ImDrawFlags_Closed, 1.0f);
+
+    // --- Connecting arrows with label pills ---
+    const char* pill_labels[] = {
+        "SALU", "SMEM", "VALU", "MFMA", "VMEM", "LDS", "GWS", "Br"
+    };
+    const MemChartMetric pill_metrics[] = {
+        SALU, SMEM, VALU, MFMA, VMEM, LDS, GWS, BR
+    };
+
+    ImU32 arrow_color     = Settings().GetColor(Colors::kArrowColor);
+    ImU32 pill_border_col = IM_COL32(0, 0, 0, 255);
+    ImU32 title_bg_col    = Settings().GetColor(Colors::kBorderGray);
+    ImU32 value_bg_col    = IM_COL32(255, 255, 255, 255);
+    ImU32 title_text_col  = Settings().GetColor(Colors::kTextMain);
+    ImU32 value_text_col  = IM_COL32(0, 0, 0, 255);
+
+    const float kPillPadH   = 5.0f;
+    const float kPillPadV   = 2.0f;
+    const float kPillRound  = 4.0f;
+    const float kPillGap    = 1.0f;
+
+    // Compute uniform pill width across all entries
+    float pill_width = 0.0f;
+    for(int i = 0; i < kNumTraps; ++i)
+    {
+        pill_width = std::max(pill_width, ImGui::CalcTextSize(pill_labels[i]).x);
+        pill_width = std::max(pill_width,
+                              ImGui::CalcTextSize(GetMetricText(pill_metrics[i])).x);
+    }
+    pill_width += kPillPadH * 2;
+    float pill_height = ImGui::CalcTextSize("X").y + kPillPadV * 2;
+    float line_end_x  = block_x + 270.0f;
+
+    for(int i = 0; i < kNumTraps; ++i)
+    {
+        ImVec2 arrow_from = trap_midpoints[i];
+        ImVec2 arrow_to   = {line_end_x, arrow_from.y};
+
+        // Arrow line + head
+        draw_list->AddLine(arrow_from, arrow_to, arrow_color, 1.0f);
+        float head = ARROW_HEAD_SIZE;
+        draw_list->AddTriangleFilled(
+            arrow_to,
+            {arrow_to.x - head, arrow_to.y - head * 0.6f},
+            {arrow_to.x - head, arrow_to.y + head * 0.6f},
+            arrow_color);
+
+        float pill_right_edge = arrow_to.x - head - 22.0f;
+        float mid_y           = arrow_from.y;
+
+        // Title pill (above arrow line)
+        ImVec2 title_min = {pill_right_edge - pill_width,
+                            mid_y - pill_height - kPillGap};
+        ImVec2 title_max = {pill_right_edge, mid_y - kPillGap};
+        draw_list->AddRectFilled(title_min, title_max, title_bg_col, kPillRound);
+        draw_list->AddRect(title_min, title_max, pill_border_col,
+                           kPillRound, 0, 1.0f);
+        float label_w = ImGui::CalcTextSize(pill_labels[i]).x;
+        draw_list->AddText(
+            {title_min.x + (pill_width - label_w) * 0.5f, title_min.y + kPillPadV},
+            title_text_col, pill_labels[i]);
+
+        // Value pill (below arrow line)
+        ImVec2 value_min = {pill_right_edge - pill_width, mid_y + kPillGap};
+        ImVec2 value_max = {pill_right_edge, mid_y + kPillGap + pill_height};
+        draw_list->AddRectFilled(value_min, value_max, value_bg_col, kPillRound);
+        draw_list->AddRect(value_min, value_max, pill_border_col,
+                           kPillRound, 0, 1.0f);
+        float val_w = ImGui::CalcTextSize(GetMetricText(pill_metrics[i])).x;
+        draw_list->AddText(
+            {value_min.x + (pill_width - val_w) * 0.5f, value_min.y + kPillPadV},
+            value_text_col, GetMetricText(pill_metrics[i]));
+    }
+}
+
+void
+ComputeMemoryChartView::DrawActiveCUs(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_active_cus_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+    float cursor_y = DrawBlockHeader(draw_list, "Exec",
+                                     block_x, block_y, block.w);
+
+    draw_list->AddText({block_x + BLOCK_TEXT_PAD, cursor_y},
+                       Settings().GetColor(Colors::kTextDim), "Active CUs");
+    cursor_y += ROW_HEIGHT;
+    draw_list->AddText({block_x + BLOCK_TEXT_PAD, cursor_y},
+                       Settings().GetColor(Colors::kTextMain),
+                       GetMetricText(NUM_CUS));
+    cursor_y += ROW_HEIGHT;
+
+    // Thin separator
+    draw_list->AddLine({block_x + BLOCK_TEXT_PAD, cursor_y},
+                       {block_x + block.w - BLOCK_TEXT_PAD, cursor_y},
+                       Settings().GetColor(Colors::kBorderGray), 1.0f);
+    cursor_y += 8;
+
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "VGPRs:",         GetMetricText(VGPR));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "SGPRs:",         GetMetricText(SGPR));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "LDS Alloc:",     GetMetricText(LDS_ALLOCATION));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Scratch Alloc:", GetMetricText(SCRATCH_ALLOCATION));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Wavefronts:",    GetMetricText(WAVEFRONTS));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Workgroups:",    GetMetricText(WORKGROUPS));
+}
+
+void
+ComputeMemoryChartView::DrawLDS(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_lds_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+    float cursor_y = DrawBlockHeader(draw_list, "LDS",
+                                     block_x, block_y, block.w);
+
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Util:", GetMetricText(LDS_UTIL),    "%");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Lat:",  GetMetricText(LDS_LATENCY), "cycles");
+}
+
+void
+ComputeMemoryChartView::DrawVectorL1(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_vector_l1_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+    float cursor_y = DrawBlockHeader(draw_list, "Vector L1 Cache",
+                                     block_x, block_y, block.w);
+
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Hit:",    GetMetricText(VL1_HIT),      "%");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Coales:", GetMetricText(VL1_COALESCE), "%");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Stall:",  GetMetricText(VL1_STALL),    "%");
+}
+
+void
+ComputeMemoryChartView::DrawScalarL1D(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_scalar_l1d_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+    float cursor_y = DrawBlockHeader(draw_list, "Scalar L1D Cache",
+                                     block_x, block_y, block.w);
+
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Hit:", GetMetricText(SL1D_HIT), "%");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Lat:", GetMetricText(SL1D_LAT), "cycles");
+}
+
+void
+ComputeMemoryChartView::DrawInstrL1(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_instr_l1_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+    float cursor_y = DrawBlockHeader(draw_list, "Instr L1 Cache",
+                                     block_x, block_y, block.w);
+
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Hit:", GetMetricText(IL1_HIT), "%");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Lat:", GetMetricText(IL1_LAT), "cycles");
+}
+
+void
+ComputeMemoryChartView::DrawL2(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_l2_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+    float cursor_y = DrawBlockHeader(draw_list, "L2 Cache",
+                                     block_x, block_y, block.w);
+
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Rd:",     GetMetricText(L2_RD));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Wr:",     GetMetricText(L2_WR));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Atomic:", GetMetricText(L2_ATOMIC));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Hit:",    GetMetricText(L2_HIT), "%");
+}
+
+void
+ComputeMemoryChartView::DrawXGMIPCIe(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_xgmi_pcie_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+
+    ImU32 text_color = Settings().GetColor(Colors::kTextMain);
+    float center_y   = block_y + block.h * 0.3f;
+    DrawCenteredText(draw_list, "xGMI /", block_x, center_y, block.w, text_color);
+    DrawCenteredText(draw_list, "PCIe", block_x, center_y + ROW_HEIGHT,
+                     block.w, text_color);
+}
+
+void
+ComputeMemoryChartView::DrawFabric(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_fabric_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+    float cursor_y = DrawBlockHeader(draw_list, "Fabric",
+                                     block_x, block_y, block.w);
+
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Rd:",     GetMetricText(FABRIC_RD_LAT),     "cycles");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Wr:",     GetMetricText(FABRIC_WR_LAT),     "cycles");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Atomic:", GetMetricText(FABRIC_ATOMIC_LAT), "cycles");
+}
+
+void
+ComputeMemoryChartView::DrawGMI(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_gmi_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+
+    float text_h = ImGui::CalcTextSize("GMI").y;
+    DrawCenteredText(draw_list, "GMI",
+                     block_x, block_y + (block.h - text_h) * 0.5f,
+                     block.w, Settings().GetColor(Colors::kTextMain));
+}
+
+void
+ComputeMemoryChartView::DrawHBM(ImDrawList* draw_list, ImVec2 origin)
+{
+    const auto& block   = m_hbm_block;
+    float       block_x = origin.x + block.x;
+    float       block_y = origin.y + block.y;
+
+    DrawBlockRect(draw_list, {block_x, block_y},
+                  {block_x + block.w, block_y + block.h});
+    float cursor_y = DrawBlockHeader(draw_list, "HBM",
+                                     block_x, block_y, block.w);
+
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Rd:", GetMetricText(HBM_RD));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Wr:", GetMetricText(HBM_WR));
+}
+
+// =============================================================================
+// Connection arrows + labels
+// =============================================================================
+
+void
+ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
+{
+    ImU32 label_color = Settings().GetColor(Colors::kTextDim);
+    char  text_buf[64];
+
+    // Local-to-screen coordinate helper
+    auto screen = [&](float local_x, float local_y) -> ImVec2 {
+        return {origin.x + local_x, origin.y + local_y};
+    };
+
+    // Draw horizontal arrow + label (label placed at source x + 5, above arrow)
+    auto ArrowWithLabel = [&](float src_x, float src_y,
+                              float dst_x, float dst_y,
+                              const char* label_text) {
+        DrawHorizontalArrow(draw_list, screen(src_x, src_y), screen(dst_x, dst_y));
+        draw_list->AddText(screen(src_x + 5, src_y - ARROW_LABEL_ABOVE),
+                           label_color, label_text);
+    };
 
     // --- Pipeline -> Caches ---
 
-    // Active CUs -> LDS (1 arrow)
+    // Active CUs -> LDS
     {
-        float ay = m_lds.MidY();
-        float lx = m_activeCUs.Right() + 5;
-        DrawArrow(dl, m_activeCUs.Right(), ay, m_lds.x, ay, origin);
-        ImGui::SetCursorPos(ImVec2(lx, ay - LBL_Y));
-        ImGui::Text("Req: %s", Val(LDS_REQ));
+        float arrow_y = m_lds_block.MidY();
+        snprintf(text_buf, sizeof(text_buf), "Req: %s", GetMetricText(LDS_REQ));
+        ArrowWithLabel(m_active_cus_block.Right(), arrow_y,
+                       m_lds_block.x, arrow_y, text_buf);
     }
 
-    // Active CUs -> Vector L1 (3 arrows)
+    // Active CUs -> Vector L1 (3 arrows: Rd, Wr, Atomic)
     {
-        float my = m_vectorL1.MidY();
-        float lx = m_activeCUs.Right() + 5;
-        float sx = m_activeCUs.Right(), dx = m_vectorL1.x;
+        float mid_y = m_vector_l1_block.MidY();
+        float src_x = m_active_cus_block.Right();
+        float dst_x = m_vector_l1_block.x;
 
-        DrawArrow(dl, sx, my - SP, dx, my - SP, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my - SP - LBL_Y));
-        ImGui::Text("Rd: %s", Val(VL1_RD));
+        snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(VL1_RD));
+        ArrowWithLabel(src_x, mid_y - ARROW_VERT_SPACE,
+                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf);
 
-        DrawArrow(dl, sx, my, dx, my, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my - LBL_Y));
-        ImGui::Text("Wr: %s", Val(VL1_WR));
+        snprintf(text_buf, sizeof(text_buf), "Wr: %s", GetMetricText(VL1_WR));
+        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf);
 
-        DrawArrow(dl, sx, my + SP, dx, my + SP, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my + SP - LBL_Y));
-        ImGui::Text("Atomic: %s", Val(VL1_ATOMIC));
+        snprintf(text_buf, sizeof(text_buf), "Atomic: %s",
+                 GetMetricText(VL1_ATOMIC));
+        ArrowWithLabel(src_x, mid_y + ARROW_VERT_SPACE,
+                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf);
     }
 
-    // Active CUs -> Scalar L1D (1 arrow)
+    // Active CUs -> Scalar L1D
     {
-        float ay = m_scalarL1D.MidY();
-        float lx = m_activeCUs.Right() + 5;
-        DrawArrow(dl, m_activeCUs.Right(), ay, m_scalarL1D.x, ay, origin);
-        ImGui::SetCursorPos(ImVec2(lx, ay - LBL_Y));
-        ImGui::Text("Rd: %s", Val(SL1D_RD));
+        float arrow_y = m_scalar_l1d_block.MidY();
+        snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(SL1D_RD));
+        ArrowWithLabel(m_active_cus_block.Right(), arrow_y,
+                       m_scalar_l1d_block.x, arrow_y, text_buf);
     }
 
-    // Instr Dispatch -> Instr L1 (1 arrow)
+    // Instr Dispatch -> Instr L1 (label centered between blocks)
     {
-        float ay = m_instrL1.MidY();
-        float lx = (m_instrDispatch.Right() + m_instrL1.x) * 0.5f;
-        DrawArrow(dl, m_instrDispatch.Right(), ay, m_instrL1.x, ay, origin);
-        ImGui::SetCursorPos(ImVec2(lx, ay - LBL_Y));
-        ImGui::Text("Fetch: %s", Val(IL1_FETCH));
+        float arrow_y = m_instr_l1_block.MidY();
+        float label_x = (m_instr_dispatch_block.Right() + m_instr_l1_block.x) * 0.5f;
+        DrawHorizontalArrow(draw_list,
+                            screen(m_instr_dispatch_block.Right(), arrow_y),
+                            screen(m_instr_l1_block.x, arrow_y));
+        snprintf(text_buf, sizeof(text_buf), "Fetch: %s",
+                 GetMetricText(IL1_FETCH));
+
+
+       
+        draw_list->AddText(screen(label_x, arrow_y - ARROW_LABEL_ABOVE),
+                           label_color, text_buf);
     }
 
     // --- Caches -> L2 ---
 
     // Vector L1 -> L2 (3 arrows)
     {
-        float my = m_vectorL1.MidY();
-        float lx = m_vectorL1.Right() + 5;
-        float sx = m_vectorL1.Right(), dx = m_l2.x;
+        float mid_y = m_vector_l1_block.MidY();
+        float src_x = m_vector_l1_block.Right();
+        float dst_x = m_l2_block.x;
 
-        DrawArrow(dl, sx, my - SP, dx, my - SP, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my - SP - LBL_Y));
-        ImGui::Text("Rd: %s", Val(VL1_L2_RD));
+        snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(VL1_L2_RD));
+        ArrowWithLabel(src_x, mid_y - ARROW_VERT_SPACE,
+                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf);
 
-        DrawArrow(dl, sx, my, dx, my, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my - LBL_Y));
-        ImGui::Text("Wr: %s", Val(VL1_L2_WR));
+        snprintf(text_buf, sizeof(text_buf), "Wr: %s", GetMetricText(VL1_L2_WR));
+        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf);
 
-        DrawArrow(dl, sx, my + SP, dx, my + SP, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my + SP - LBL_Y));
-        ImGui::Text("Atomic: %s", Val(VL1_L2_ATOMIC));
+        snprintf(text_buf, sizeof(text_buf), "Atomic: %s",
+                 GetMetricText(VL1_L2_ATOMIC));
+        ArrowWithLabel(src_x, mid_y + ARROW_VERT_SPACE,
+                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf);
     }
 
     // Scalar L1D -> L2 (3 arrows)
     {
-        float my = m_scalarL1D.MidY();
-        float lx = m_scalarL1D.Right() + 5;
-        float sx = m_scalarL1D.Right(), dx = m_l2.x;
+        float mid_y = m_scalar_l1d_block.MidY();
+        float src_x = m_scalar_l1d_block.Right();
+        float dst_x = m_l2_block.x;
 
-        DrawArrow(dl, sx, my - SP, dx, my - SP, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my - SP - LBL_Y));
-        ImGui::Text("Rd: %s", Val(SL1D_L2_RD));
+        snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(SL1D_L2_RD));
+        ArrowWithLabel(src_x, mid_y - ARROW_VERT_SPACE,
+                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf);
 
-        DrawArrow(dl, sx, my, dx, my, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my - LBL_Y));
-        ImGui::Text("Wr: %s", Val(SL1D_L2_WR));
+        snprintf(text_buf, sizeof(text_buf), "Wr: %s", GetMetricText(SL1D_L2_WR));
+        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf);
 
-        DrawArrow(dl, sx, my + SP, dx, my + SP, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my + SP - LBL_Y));
-        ImGui::Text("Atomic: %s", Val(SL1D_L2_ATOMIC));
+        snprintf(text_buf, sizeof(text_buf), "Atomic: %s",
+                 GetMetricText(SL1D_L2_ATOMIC));
+        ArrowWithLabel(src_x, mid_y + ARROW_VERT_SPACE,
+                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf);
     }
 
-    // Instr L1 -> L2 (1 arrow)
+    // Instr L1 -> L2
     {
-        float ay = m_instrL1.MidY();
-        float lx = m_instrL1.Right() + 5;
-        DrawArrow(dl, m_instrL1.Right(), ay, m_l2.x, ay, origin);
-        ImGui::SetCursorPos(ImVec2(lx, ay - LBL_Y));
-        ImGui::Text("Req: %s", Val(IL1_L2_RD));
+        float arrow_y = m_instr_l1_block.MidY();
+        snprintf(text_buf, sizeof(text_buf), "Req: %s",
+                 GetMetricText(IL1_L2_RD));
+        ArrowWithLabel(m_instr_l1_block.Right(), arrow_y,
+                       m_l2_block.x, arrow_y, text_buf);
     }
 
     // --- L2 -> Fabric ---
     {
-        float my = m_fabric.MidY();
-        float lx = m_l2.Right() + 5;
-        float sx = m_l2.Right(), dx = m_fabric.x;
+        float mid_y = m_fabric_block.MidY();
+        float src_x = m_l2_block.Right();
+        float dst_x = m_fabric_block.x;
 
-        DrawArrow(dl, sx, my - SP, dx, my - SP, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my - SP - LBL_Y));
-        ImGui::Text("Rd: %s", Val(FABRIC_L2_RD));
+        snprintf(text_buf, sizeof(text_buf), "Rd: %s",
+                 GetMetricText(FABRIC_L2_RD));
+        ArrowWithLabel(src_x, mid_y - ARROW_VERT_SPACE,
+                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf);
 
-        DrawArrow(dl, sx, my, dx, my, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my - LBL_Y));
-        ImGui::Text("Wr: %s", Val(FABRIC_L2_WR));
+        snprintf(text_buf, sizeof(text_buf), "Wr: %s",
+                 GetMetricText(FABRIC_L2_WR));
+        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf);
 
-        DrawArrow(dl, sx, my + SP, dx, my + SP, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my + SP - LBL_Y));
-        ImGui::Text("Atomic: %s", Val(FABRIC_L2_ATOMIC));
+        snprintf(text_buf, sizeof(text_buf), "Atomic: %s",
+                 GetMetricText(FABRIC_L2_ATOMIC));
+        ArrowWithLabel(src_x, mid_y + ARROW_VERT_SPACE,
+                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf);
     }
 
     // --- Fabric -> HBM ---
     {
-        float my = m_hbm.MidY();
-        float lx = m_fabric.Right() + 5;
-        float sx = m_fabric.Right(), dx = m_hbm.x;
-        float hs = SP * 0.5f;
+        float mid_y     = m_hbm_block.MidY();
+        float src_x     = m_fabric_block.Right();
+        float dst_x     = m_hbm_block.x;
+        float half_space = ARROW_VERT_SPACE * 0.5f;
 
-        DrawArrow(dl, sx, my - hs, dx, my - hs, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my - hs - LBL_Y));
-        ImGui::Text("Rd: %s", Val(HBM_RD));
+        snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(HBM_RD));
+        ArrowWithLabel(src_x, mid_y - half_space,
+                       dst_x, mid_y - half_space, text_buf);
 
-        DrawArrow(dl, sx, my + hs, dx, my + hs, origin);
-        ImGui::SetCursorPos(ImVec2(lx, my + hs - LBL_Y));
-        ImGui::Text("Wr: %s", Val(HBM_WR));
+        snprintf(text_buf, sizeof(text_buf), "Wr: %s", GetMetricText(HBM_WR));
+        ArrowWithLabel(src_x, mid_y + half_space,
+                       dst_x, mid_y + half_space, text_buf);
     }
-
-    ImGui::PopStyleColor();  // labelCol
 }
 
 }  // namespace View

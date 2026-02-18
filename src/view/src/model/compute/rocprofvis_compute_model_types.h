@@ -51,6 +51,17 @@ struct Point
     double y;
 };
 
+enum class KernelMetric : uint64_t
+{
+    InvocationCount,
+    DurationTotal,
+    DurationMin,
+    DurationMax,
+    DurationMean,
+    DurationMedian,
+    COUNT
+};
+
 struct KernelInfo
 {
     struct Roofline
@@ -73,6 +84,20 @@ struct KernelInfo
     uint32_t    duration_mean;
     uint32_t    duration_median;
     Roofline    roofline;
+
+    uint64_t get(KernelMetric metric) const 
+    {
+        switch(metric)
+        {
+            case KernelMetric::InvocationCount: return invocation_count;
+            case KernelMetric::DurationTotal: return duration_total;
+            case KernelMetric::DurationMin: return duration_min;
+            case KernelMetric::DurationMax: return duration_max;
+            case KernelMetric::DurationMean: return duration_mean;
+            case KernelMetric::DurationMedian: return duration_median;
+            default: return 0;
+        }
+    };
 };
 
 struct ChartData
@@ -117,14 +142,14 @@ struct WorkloadInfo
     AvailableMetrics                         available_metrics;
     std::unordered_map<uint32_t, KernelInfo> kernels;
     Roofline                                 roofline;
-    ChartData                                GenerateChartData() const
+    ChartData                                GenerateChartData(KernelMetric metric) const
     {
         ChartData data;
         double    total = 0.0;
         for(const auto& kernel : kernels)
         {
             data.m_labels.push_back(kernel.second.name.c_str());
-            data.m_x_values.push_back(static_cast<double>(kernel.second.duration_total));
+            data.m_x_values.push_back(static_cast<double>(kernel.second.get(metric)));
             data.m_y_values.push_back(static_cast<double>(data.m_y_values.size()));
             data.m_x_max = std::max(data.m_x_max, data.m_x_values.back());
             total += data.m_x_values.back();
@@ -139,7 +164,7 @@ struct WorkloadInfo
         }
 
         return data;
-    };  // TODO: generate diferent data depend by params
+    };
  
     };
 

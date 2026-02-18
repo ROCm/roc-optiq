@@ -337,6 +337,17 @@ InfiniteScrollTable::Render()
                         {
                             RenderCell(display_value, row_n, column);
                         }
+                        
+                        if(m_time_column_indices[kTimeEndNs] == column ||
+                           m_time_column_indices[kTimeStartNs] == column ||
+                           m_time_column_indices[kDurationNs] == column)
+                        {
+                            // show raw value as tooltip for time columns if hovered
+                            if(ImGui::IsItemHovered())
+                            {
+                                SetTooltipStyled("%s ns", col.c_str());
+                            }
+                        }
 
                         column++;
                     }

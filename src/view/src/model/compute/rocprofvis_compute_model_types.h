@@ -26,13 +26,14 @@ struct AvailableMetrics
         uint32_t    id;
         std::string name;
         std::string description;
-        std::string unit;
+        std::string unit; 
     };
     struct Table
     {
         uint32_t                             id;
         std::string                          name;
         std::unordered_map<uint32_t, Entry&> entries;
+        std::vector<std::string>             values_names; //TODO
     };
     struct Category
     {
@@ -109,14 +110,33 @@ struct WorkloadInfo
     Roofline                                 roofline;
 };
 
-struct MetricValue
+struct MetricValue 
 {
-    std::string              name;
-    double                   value;
     AvailableMetrics::Entry& entry;
     KernelInfo&              kernel;
+    std::unordered_map<std::string, double> values;
 };
 
+union MetricKey
+{
+    struct
+    {
+        uint64_t category_id : 16;
+        uint64_t table_id : 16;
+        uint64_t entry_id : 32;
+    } fields;
+    uint64_t id;
+};
+
+union TableKey
+{
+    struct
+    {
+        uint64_t category_id : 16;
+        uint64_t table_id : 48;
+    } fields;
+    uint64_t id;
+};
 
 struct ComputeTableInfo
 {

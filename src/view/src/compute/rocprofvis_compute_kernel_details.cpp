@@ -33,7 +33,11 @@ ComputeKernelDetailsView::Update()
         }
         m_last_provider_state = current_state;
     }
+}
 
+void
+ComputeKernelDetailsView::Render()
+{
     if(!m_memory_chart_fetched)
     {
         const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
@@ -52,11 +56,7 @@ ComputeKernelDetailsView::Update()
     }
 
     m_memory_chart.Update();
-}
 
-void
-ComputeKernelDetailsView::Render()
-{
     ImGui::Text("Kernel Details");
     m_memory_chart.Render();
 }

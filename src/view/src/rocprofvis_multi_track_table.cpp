@@ -446,9 +446,27 @@ MultiTrackTable::RenderContextMenu()
         {
             CopyCellToClipboard(true);
         }
-        else if(ImGui::MenuItem("Copy Raw Cell Data", nullptr, false))
+
+        // Only show option to copy unformatted cell data if 
+        // column has formatting applied to it. 
+        bool show_copy_unformatted = false;
+        if(m_selected_column >= 0 && m_selected_column < (int) m_data_provider.DataModel()
+                                                             .GetTables()
+                                                             .GetTableHeader(m_table_type)
+                                                             .size())
         {
-            CopyCellToClipboard(false);
+            const auto& table_model = m_data_provider.DataModel().GetTables();
+            const std::vector<FormattedColumnInfo>& formatted_table_data =
+                table_model.GetFormattedTableData(m_table_type);
+            const auto& col_format_info = formatted_table_data[m_selected_column];
+            show_copy_unformatted = col_format_info.needs_formatting;
+        }
+        if(show_copy_unformatted) 
+        {         
+            if(ImGui::MenuItem("Copy Unformatted Cell Data", nullptr, false))
+            {
+                CopyCellToClipboard(false);
+            }
         }
         ImGui::Separator();
         if(ImGui::MenuItem("Export To File", nullptr, false,

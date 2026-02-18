@@ -192,7 +192,7 @@ namespace DataModel
             Builder::QParamOperation(kRocProfVisDmOperationNoOp),
             Builder::StoreConfigVersion()
                 },
-            { Builder::From("roc_optique_memory_activity"),
+            { Builder::From("roc_optiq_memory_activity"),
             } }));
     }
 
@@ -576,7 +576,7 @@ namespace DataModel
             Builder::SpaceSaver(0),
             Builder::SpaceSaver(0)
                 },
-            { Builder::From("roc_optique_memory_activity"),
+            { Builder::From("roc_optiq_memory_activity"),
             } }));
     }
 
@@ -870,7 +870,7 @@ namespace DataModel
             Builder::QParam("size", Builder::EVENT_LEVEL_SERVICE_NAME),
             Builder::QParamCategory(kRocProfVisDmPmcTrack)
                 },
-            { Builder::From("roc_optique_memory_activity"),
+            { Builder::From("roc_optiq_memory_activity"),
             } }));
     }
 
@@ -1399,7 +1399,7 @@ namespace DataModel
             Builder::QParam("pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
             Builder::QParam("size", Builder::COUNTER_VALUE_SERVICE_NAME)
             },
-            { Builder::From("roc_optique_memory_activity"),
+            { Builder::From("roc_optiq_memory_activity"),
             } }));
     }
 

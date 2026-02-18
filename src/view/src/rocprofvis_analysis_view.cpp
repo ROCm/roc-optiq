@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_analysis_view.h"
+#include "rocprofvis_ai_analysis_view.h"
 #include "rocprofvis_annotation_view.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_controller_enums.h"
@@ -29,6 +30,7 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
 
 , m_annotation_view(std::make_shared<AnnotationView>(dp, annotation_manager))
 , m_track_details(std::make_shared<TrackDetails>(dp, topology, timeline_selection))
+, m_ai_analysis_view(std::make_shared<AiAnalysisView>())
 
 {
     m_widget_name = GenUniqueName("Analysis View");
@@ -66,6 +68,13 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     tab_item.m_id        = "annotation_view";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_annotation_view;
+    m_tab_container->AddTab(tab_item);
+
+    // Add AI Analysis Tab
+    tab_item.m_label     = "AI Analysis";
+    tab_item.m_id        = "ai_analysis";
+    tab_item.m_can_close = false;
+    tab_item.m_widget    = m_ai_analysis_view;
     m_tab_container->AddTab(tab_item);
 
     m_tab_container->SetAllowToolTips(false);

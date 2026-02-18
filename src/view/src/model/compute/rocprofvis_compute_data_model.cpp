@@ -99,14 +99,14 @@ ComputeDataModel::AddMetricValue(uint64_t store_id, uint32_t workload_id,
                 {
                     // Update existing metric value
                     ms.m_metrics_map[metric_id.id]->values[value_name] = value;
-                    ms.m_metrics_map[metric_id.id]->entry = entry;
-                    ms.m_metrics_map[metric_id.id]->kernel = kernel;
+                    ms.m_metrics_map[metric_id.id]->entry = &entry;
+                    ms.m_metrics_map[metric_id.id]->kernel = &kernel;
                 }
                 else
                 {
                     // Create new metric value and add to the map and vector
                     auto metric = std::make_shared<MetricValue>(
-                        MetricValue{ entry, kernel, { { value_name, value } } });
+                        MetricValue{ &entry, &kernel, { { value_name, value } } });
 
                     ms.m_metrics_data.push_back(metric);
                     ms.m_metrics_map[metric_id.id] = metric;

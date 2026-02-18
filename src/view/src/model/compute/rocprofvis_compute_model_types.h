@@ -112,8 +112,8 @@ struct WorkloadInfo
 
 struct MetricValue 
 {
-    AvailableMetrics::Entry& entry;
-    KernelInfo&              kernel;
+    AvailableMetrics::Entry* entry;
+    KernelInfo*              kernel;
     std::unordered_map<std::string, double> values;
 };
 

@@ -675,19 +675,19 @@ ComputeTester::Render()
                     }
                     for(const std::shared_ptr<MetricValue>& metric : *metrics)
                     {
-                        if(metric)
+                        if(metric && metric->entry && metric->kernel)
                         {
                             for(const std::pair<const std::string, double>& value :
                                 metric->values)
                             {
                                 ImGui::TableNextRow();
                                 ImGui::TableNextColumn();
-                                ImGui::Text("%u.%u.%u", metric->entry.category_id,
-                                            metric->entry.table_id, metric->entry.id);
+                                ImGui::Text("%u.%u.%u", metric->entry->category_id,
+                                            metric->entry->table_id, metric->entry->id);
                                 ImGui::TableNextColumn();
-                                ImGui::Text(metric->entry.name.c_str());
+                                ImGui::Text(metric->entry->name.c_str());
                                 ImGui::TableNextColumn();
-                                ImGui::Text("%u", metric->kernel.id);
+                                ImGui::Text("%u", metric->kernel->id);
                                 ImGui::TableNextColumn();
                                 ImGui::Text(value.first.c_str());
                                 ImGui::TableNextColumn();
@@ -729,19 +729,19 @@ ComputeTester::Render()
             for(auto it = sol_metrics->begin(); it != sol_metrics->end(); ++it)
             {
                 const std::shared_ptr<MetricValue>& metric = it->second;
-                if(metric)
+                if(metric && metric->entry && metric->kernel)
                 {
                     for(const std::pair<const std::string, double>& value :
                         metric->values)
                     {
                         ImGui::TableNextRow();
                         ImGui::TableNextColumn();
-                        ImGui::Text("%u.%u.%u", metric->entry.category_id,
-                                    metric->entry.table_id, metric->entry.id);
+                        ImGui::Text("%u.%u.%u", metric->entry->category_id,
+                                    metric->entry->table_id, metric->entry->id);
                         ImGui::TableNextColumn();
-                        ImGui::Text(metric->entry.name.c_str());
+                        ImGui::Text(metric->entry->name.c_str());
                         ImGui::TableNextColumn();
-                        ImGui::Text("%u", metric->kernel.id);
+                        ImGui::Text("%u", metric->kernel->id);
                         ImGui::TableNextColumn();
                         ImGui::Text(value.first.c_str());
                         ImGui::TableNextColumn();

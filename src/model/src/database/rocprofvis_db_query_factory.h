@@ -56,6 +56,11 @@ public:
     std::string GetRocprofSMIPerformanceCountersSliceQuery();
     std::string GetRocprofSMIPerformanceCountersTableQuery();
 
+    std::string GetRocprofMemoryActivityTrackQuery();
+    std::string GetRocprofMemoryActivityTableQuery();
+    std::string GetRocprofMemoryActivityLevelQuery();
+    std::string GetRocprofMemoryActivitySliceQuery();
+
     std::string GetRocprofDataFlowQueryForRegionEvent(uint64_t event_id);
     std::string GetRocprofDataFlowQueryForKernelDispatchEvent(uint64_t event_id);
     std::string GetRocprofDataFlowQueryForMemoryAllocEvent(uint64_t event_id);

@@ -31,14 +31,16 @@ typedef enum rocprofvis_db_memalloc_type_t : uint8_t
     kRPVMemActivityAlloc,
     kRPVMemActivityFree,
     kRPVMemActivityRealloc,
-    kRPVMemActivityReclaim
+    kRPVMemActivityReclaim,
+    kRPVMemActivityNumTypes
 }rocprofvis_db_memalloc_type_t;
 
 typedef enum rocprofvis_db_memalloc_level_t : uint8_t
 {
     kRPVMemLevelReal,
     kRPVMemLevelVirtual,
-    kRPVMemLevelScratch
+    kRPVMemLevelScratch,
+    kRPVMemLevelNumLevels
 }rocprofvis_db_memalloc_level_t;
 
 typedef struct rocprofvis_db_memalloc_activity_t
@@ -226,6 +228,7 @@ private:
         rocprofvis_dm_result_t LoadInformationTables(Future* future);
         rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance);
         rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
+        rocprofvis_dm_result_t CreateMemoryActivityTable(Future* future);
         
     private:
         QueryFactory m_query_factory;

@@ -251,6 +251,19 @@ rocprofvis_result_t Workload::GetString(rocprofvis_property_t property, uint64_t
                 }
                 break;
             }
+            case kRPVControllerWorkloadAvailableMetricValueNamesIndexed:
+            {
+                if(index < m_available_metrics.size())
+                {
+                    char const* str = StringTable::Get().GetString(m_available_metrics[index].value_names_idx);
+                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
             default:
             {
                 result = UnhandledProperty(property);
@@ -539,6 +552,19 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
             }
             break;
         }
+        case kRPVControllerWorkloadAvailableMetricValueNamesIndexed:
+        {
+            if(index < m_available_metrics.size())
+            {
+                m_available_metrics[index].value_names_idx = StringTable::Get().AddString(value, true);
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
+            break;
+        }
         default:
         {
             result = UnhandledProperty(property);
@@ -604,6 +630,12 @@ bool Workload::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocpr
         case kRPVComputeColumnMetricUnit:
         {
             property = kRPVControllerWorkloadAvailableMetricUnitIndexed;
+            type = kRPVControllerPrimitiveTypeString;
+            break;
+        }
+        case kRPVComputeColumnMetricValueNames:
+        {
+            property = kRPVControllerWorkloadAvailableMetricValueNamesIndexed;
             type = kRPVControllerPrimitiveTypeString;
             break;
         }

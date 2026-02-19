@@ -3855,6 +3855,24 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
                           kRPVControllerWorkloadAvailableMetricDescriptionIndexed, j);
             workload.available_metrics.list[j].unit = GetString(
                 workload_handle, kRPVControllerWorkloadAvailableMetricUnitIndexed, j);
+            {
+                std::string concat_names = GetString(
+                    workload_handle,
+                    kRPVControllerWorkloadAvailableMetricValueNamesIndexed, j);
+                std::vector<std::string>& vn =
+                    workload.available_metrics.list[j].value_names;
+                if(!concat_names.empty())
+                {
+                    size_t start = 0;
+                    size_t pos   = 0;
+                    while((pos = concat_names.find(',', start)) != std::string::npos)
+                    {
+                        vn.push_back(concat_names.substr(start, pos - start));
+                        start = pos + 1;
+                    }
+                    vn.push_back(concat_names.substr(start));
+                }
+            }
             AvailableMetrics::Category& category =
                 workload.available_metrics
                     .tree[workload.available_metrics.list[j].category_id];

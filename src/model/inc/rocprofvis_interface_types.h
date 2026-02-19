@@ -489,6 +489,7 @@ typedef enum rocprofvis_db_compute_column_enum_t
 
     kRPVComputeColumnMetricValueName,
     kRPVComputeColumnMetricValue,
+    kRPVComputeColumnMetricValueNames,
 
     kRPVComputeColumnDynamicMetricValue
 } rocprofvis_db_compute_column_enum_t;

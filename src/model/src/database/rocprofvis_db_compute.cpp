@@ -51,6 +51,7 @@ namespace DataModel
 		{"value_name", kRPVComputeColumnMetricValueName},
 		{"value", kRPVComputeColumnMetricValue},
 		{"unit", kRPVComputeColumnMetricUnit},
+		{"metric_value_names", kRPVComputeColumnMetricValueNames},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -141,9 +142,12 @@ namespace DataModel
 			query += "metric_id as sub_table_id, "; //parsed in callback method
 			query += "table_name, ";
 			query += "sub_table_name, ";
-			query += "unit ";
-			query += "FROM compute_metric_definition ";
-			query += "WHERE workload_id = ";
+			query += "unit, ";
+			query += "(SELECT GROUP_CONCAT(DISTINCT cmv.value_name) ";
+			query += "FROM compute_metric_view cmv ";
+			query += "WHERE cmv.metric_id = cmd.metric_id) as metric_value_names ";
+			query += "FROM compute_metric_definition cmd ";
+			query += "WHERE cmd.workload_id = ";
 			query += params[0].param_str;
 		}
 		return query;

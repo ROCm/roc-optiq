@@ -495,6 +495,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                             { kRPVComputeColumnMetricTableName, std::nullopt },
                                             { kRPVComputeColumnMetricSubTableName, std::nullopt },
                                             { kRPVComputeColumnMetricUnit, std::nullopt },
+                                            { kRPVComputeColumnMetricValueNames, std::nullopt },
                                         }, 
                                         {} 
                                     };

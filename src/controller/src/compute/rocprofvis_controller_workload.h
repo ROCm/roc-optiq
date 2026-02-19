@@ -49,6 +49,7 @@ private:
         size_t name_idx;
         size_t description_idx;
         size_t unit_idx;
+        size_t value_names_idx;
     };
 
     uint32_t m_id;

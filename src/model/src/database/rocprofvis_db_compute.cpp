@@ -152,16 +152,20 @@ namespace DataModel
 
 	std::string ComputeQueryFactory::GetComputeWorkloadMetricValueNames(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
 		std::string query;
-		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
+		if (num == 2 && params != nullptr &&
+			params[0].param_type == kRPVComputeParamWorkloadId &&
+			params[1].param_type == kRPVComputeParamMetricId)
 		{
-			query = "SELECT DISTINCT ";
-			query += "substr(cmv.metric_id, 0, instr(cmv.metric_id, '.')) as table_id, ";
-			query += "cmv.metric_id as sub_table_id, ";
-			query += "cmv.value_name ";
+			query = "SELECT DISTINCT cmv.value_name ";
 			query += "FROM compute_metric_view cmv ";
 			query += "INNER JOIN compute_metric_definition cmd ON cmv.metric_id = cmd.metric_id ";
 			query += "WHERE cmd.workload_id = ";
 			query += params[0].param_str;
+			query += " AND (cmv.metric_id = '";
+			query += params[1].param_str;
+			query += "' OR cmv.metric_id LIKE '";
+			query += params[1].param_str;
+			query += ".%')";
 		}
 		return query;
 	}

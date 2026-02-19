@@ -5,6 +5,8 @@
 
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface_types.h"
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -35,6 +37,9 @@ public:
 
     bool QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocprofvis_property_t& property, rocprofvis_controller_primitive_type_t& type) const;
 
+    void AddTableValueName(uint32_t category_id, uint32_t table_id, const char* value_name);
+    void FinalizeValueNames();
+
 private:
     struct JsonData {
         // Vector to preserve order
@@ -62,6 +67,7 @@ private:
     JsonData m_system_info;
     JsonData m_profiling_config;
     std::vector<MetricDefinition> m_available_metrics;
+    std::map<std::pair<uint32_t, uint32_t>, std::set<std::string>> m_table_value_names;
     std::vector<MetricValueName>  m_metric_value_names;
     std::vector<Kernel*> m_kernels;
     Roofline* m_roofline;

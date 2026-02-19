@@ -399,38 +399,6 @@ rocprofvis_result_t Workload::SetUInt64(rocprofvis_property_t property, uint64_t
             }
             break;
         }
-        case kRPVControllerWorkloadNumMetricValueNames:
-        {
-            m_metric_value_names.resize(value);
-            result = kRocProfVisResultSuccess;
-            break;
-        }
-        case kRPVControllerWorkloadMetricValueNameCategoryIdIndexed:
-        {
-            if(index < m_metric_value_names.size())
-            {
-                m_metric_value_names[index].category_id = (uint32_t)value;
-                result = kRocProfVisResultSuccess;
-            }
-            else
-            {
-                result = kRocProfVisResultOutOfRange;
-            }
-            break;
-        }
-        case kRPVControllerWorkloadMetricValueNameTableIdIndexed:
-        {
-            if(index < m_metric_value_names.size())
-            {
-                m_metric_value_names[index].table_id = (uint32_t)value;
-                result = kRocProfVisResultSuccess;
-            }
-            else
-            {
-                result = kRocProfVisResultOutOfRange;
-            }
-            break;
-        }
         case kRPVControllerWorkloadNumKernels:
         {
             m_kernels.resize(value);
@@ -615,19 +583,6 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
             }
             break;
         }
-        case kRPVControllerWorkloadMetricValueNameStringIndexed:
-        {
-            if(index < m_metric_value_names.size())
-            {
-                m_metric_value_names[index].value_name_idx = StringTable::Get().AddString(value, true);
-                result = kRocProfVisResultSuccess;
-            }
-            else
-            {
-                result = kRocProfVisResultOutOfRange;
-            }
-            break;
-        }
         default:
         {
             result = UnhandledProperty(property);
@@ -635,6 +590,27 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
         }
     }
     return result;
+}
+
+void Workload::AddTableValueName(uint32_t category_id, uint32_t table_id, const char* value_name)
+{
+    m_table_value_names[{category_id, table_id}].insert(value_name);
+}
+
+void Workload::FinalizeValueNames()
+{
+    m_metric_value_names.clear();
+    for(const auto& [table_key, names] : m_table_value_names)
+    {
+        for(const auto& name : names)
+        {
+            MetricValueName entry;
+            entry.category_id = table_key.first;
+            entry.table_id = table_key.second;
+            entry.value_name_idx = StringTable::Get().AddString(name.c_str(), true);
+            m_metric_value_names.push_back(entry);
+        }
+    }
 }
 
 bool Workload::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocprofvis_property_t& property, rocprofvis_controller_primitive_type_t& type) const

@@ -10,6 +10,8 @@ namespace RocProfVis
 namespace View
 {
 
+
+
 class ChartBase : public RocWidget
 {
 public:
@@ -29,6 +31,16 @@ public:
     PieChart();
     ~PieChart() = default;
     void Render() override;
+
+private:
+    struct PiePlacement
+    {
+        double x      = 0.0;
+        double y      = 0.0;
+        double radius = 0.0;
+    };
+    inline PiePlacement CalculatePiePlacement(float padding_px   = 10.0f,
+                                              float radius_scale = 0.95f);
 };
 
 class BarChart : public ChartBase

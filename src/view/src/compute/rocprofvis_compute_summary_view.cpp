@@ -10,6 +10,24 @@ namespace RocProfVis
 {
 namespace View
 {
+ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider)
+: RocWidget()
+, m_data_provider(data_provider)
+, m_workload_id(0) 
+{
+    CalculateCombosWidth();
+    auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        this->CalculateCombosWidth();
+    };
+    m_font_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+}
+ComputeSummaryView::~ComputeSummaryView() 
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), m_font_changed_token);
+};
+
 void
 ComputeSummaryView::Render()
 {
@@ -17,33 +35,33 @@ ComputeSummaryView::Render()
         m_data_provider.ComputeModel().GetWorkloads();
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * DROPDOWN_SCALE);
     if(ImGui::BeginCombo("Workloads",
-                         workloads.count(m_selected_workload_id) > 0
-                             ? workloads.at(m_selected_workload_id).name.c_str()
+                         workloads.count(m_workload_id) > 0
+                                          ? workloads.at(m_workload_id).name.c_str()
                              : "-"))
     {
-        if(ImGui::Selectable("-", m_selected_workload_id == 0))
+        if(ImGui::Selectable("-", m_workload_id == 0))
         {
-            m_selected_workload_id = 0;
+            m_workload_id = 0;
         }
         for(const std::pair<const uint32_t, WorkloadInfo>& workload : workloads)
         {
             if(ImGui::Selectable(workload.second.name.c_str(),
-                                 m_selected_workload_id == workload.second.id))
+                                 m_workload_id == workload.second.id))
             {
-                m_selected_workload_id = workload.second.id;
+                m_workload_id = workload.second.id;
             }
         }
         ImGui::EndCombo();
     }
 
-    if(workloads.count(m_selected_workload_id) > 0)
+    if(workloads.count(m_workload_id) > 0)
     {
-        const WorkloadInfo& workload = workloads.at(m_selected_workload_id);
+        const WorkloadInfo& workload = workloads.at(m_workload_id);
         RenderKernelsTable(workload);
 
         static uint32_t selected_chart_id = 0;
-        ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * DROPDOWN_SCALE);
-        if(ImGui::BeginCombo("ChartView", m_chart_views[selected_chart_id].data()))
+        ImGui::SetNextItemWidth(m_chart_combo_width);
+        if(ImGui::BeginCombo("##ChartView", m_chart_views[selected_chart_id].data()))
         {
             for(uint32_t index = 0; index < m_chart_views.size(); index++)
             {
@@ -60,9 +78,9 @@ ComputeSummaryView::Render()
 
         ImGui::SameLine();
 
-        static uint32_t selected_metric = 0;
-        ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * DROPDOWN_SCALE);
-        if(ImGui::BeginCombo("Metric", m_metric_views[selected_metric].data()))
+        static uint32_t selected_metric = 1; //Set as default metric "duration total"
+        ImGui::SetNextItemWidth(m_metric_combo_width);
+        if(ImGui::BeginCombo("##Metric", m_metric_views[selected_metric].data()))
         {
             for(uint32_t index = 0; index < m_metric_views.size(); index++)
             {
@@ -85,6 +103,48 @@ ComputeSummaryView::Render()
 
         ImGui::EndChild();  // Chart
     }
+}
+
+void
+ComputeSummaryView::CalculateCombosWidth()
+{
+    m_chart_combo_width  = 0.0f;
+    m_metric_combo_width = 0.0f;
+
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    const float frame_padding_lr = style.FramePadding.x * 2.0f;
+    const float inner_spacing    = style.ItemInnerSpacing.x;
+    const float arrow_area = ImGui::GetFrameHeight();  // approximate arrow / preview area
+    const float extra_margin_px = 8.0f;                // small visual margin
+    const float min_width_px    = 80.0f;               // sensible minimum
+
+    float max_chart_text_w = 0.0f;
+    for(const auto& chart : m_chart_views)
+    {
+        const ImVec2 ts = ImGui::CalcTextSize(chart.data());
+        if(ts.x > max_chart_text_w) max_chart_text_w = ts.x;
+    }
+
+    // Compute longest label width for metric views
+    float max_metric_text_w = 0.0f;
+    for(const auto& metric : m_metric_views)
+    {
+        const ImVec2 ts = ImGui::CalcTextSize(metric.data());
+        if(ts.x > max_metric_text_w) max_metric_text_w = ts.x;
+    }
+
+    // Final widths include padding, spacing, arrow area and a small margin.
+    float chart_total = max_chart_text_w + frame_padding_lr + inner_spacing + arrow_area +
+                        extra_margin_px;
+    float metric_total = max_metric_text_w + frame_padding_lr + inner_spacing +
+                         arrow_area + extra_margin_px;
+
+    if(chart_total < min_width_px) chart_total = min_width_px;
+    if(metric_total < min_width_px) metric_total = min_width_px;
+
+    m_chart_combo_width  = chart_total;
+    m_metric_combo_width = metric_total;
 }
 
 void

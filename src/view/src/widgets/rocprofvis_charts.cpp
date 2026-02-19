@@ -5,6 +5,7 @@
 
 #include "rocprofvis_charts.h"
 #include "implot/implot.h"
+#include <algorithm>
 
 constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
 
@@ -12,8 +13,38 @@ namespace RocProfVis
 {
 namespace View
 {
+PieChart::PiePlacement
+PieChart::CalculatePiePlacement(float padding_px, float radius_scale)
+{
+    const ImVec2 plot_pos  = ImPlot::GetPlotPos();
+    const ImVec2 plot_size = ImPlot::GetPlotSize();
 
-	PieChart::PieChart() { m_chart_title = "Kernels Pie"; }
+    const float width         = std::max(0.0f, plot_size.x - 2.0f * padding_px);
+    const float hight         = std::max(0.0f, plot_size.y - 2.0f * padding_px);
+    const float radius_px     = 0.5f * std::min(width, hight) * radius_scale;
+
+    const ImVec2 center_px =
+        ImVec2(plot_pos.x + plot_size.x * 0.5f, plot_pos.y + plot_size.y * 0.5f);
+
+    // Convert center pixel -> plot coordinates
+    const ImPlotPoint center = ImPlot::PixelsToPlot(center_px);
+
+    // Convert pixel radius -> plot units by measuring delta in plot space
+    const ImPlotPoint px =
+        ImPlot::PixelsToPlot(ImVec2(center_px.x + radius_px, center_px.y));
+    const ImPlotPoint py =
+        ImPlot::PixelsToPlot(ImVec2(center_px.x, center_px.y + radius_px));
+
+    const double rx = std::abs(px.x - center.x);
+    const double ry = std::abs(py.y - center.y);
+
+    const double r_plot = std::min(rx, ry);
+
+    return PiePlacement{ center.x, center.y, r_plot };
+};
+
+
+PieChart::PieChart() { m_chart_title = "Kernels Pie"; }
 
 void
 ChartBase::UpdateData(ChartData data)
@@ -29,35 +60,25 @@ PieChart::Render()
     ImGui::PopStyleVar();
 
     ImGui::PushID(m_chart_title);
-    if(ImPlot::BeginPlot(m_chart_title, ImVec2(-1, 0),
+    const float  avail_h = ImGui::GetContentRegionAvail().y;
+    const ImVec2 plot_size(-1, std::max(80.0f, avail_h));
+    if(ImPlot::BeginPlot(m_chart_title, plot_size,
                          ImPlotFlags_Equal | ImPlotFlags_NoInputs))
     {
         ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations,
                           ImPlotAxisFlags_NoDecorations);
         ImPlot::SetupAxesLimits(0, 1, 0, 1);
 
-        const ImVec2 plot_size = ImPlot::GetPlotSize();
-        const float  margin_px = 8.0f;  // TODO: move to constants
-        const float  max_radius_px =
-            0.5f * (std::min(plot_size.x, plot_size.y)) -margin_px;
-        const double radius =
-            0.08;  // TODO: Calculate radius
-                   // std::max(0.0f, max_radius_px) /
-                   // std::min(plot_size.x, plot_size.y);  // normalized 0..0.5-ish
-
-        const double cx     = 0.5;
-        const double cy     = 0.5;
-        const double angle0 = 90.0;
+        auto place = CalculatePiePlacement();
 
         ImPlot::PlotPieChart(
             m_data.m_labels.data(), m_data.m_fractions.data(),
-            static_cast<int>(m_data.m_fractions.size()), cx, cy, radius,
+            static_cast<int>(m_data.m_fractions.size()), place.x, place.y, place.radius,
             [](double value, char* buff, int size, void*) -> int {
                 if(value > 0.05) return snprintf(buff, size, "%.1f%%", value * 100.0);
                 buff[0] = '\0';
                 return 0;
-            },
-            nullptr, angle0, ImPlotPieChartFlags_None);
+            });
 
         ImPlot::EndPlot();
     }
@@ -88,7 +109,9 @@ BarChart::Render()
 
     ImPlot::PushColormap(ImPlotColormap_Plasma);
 
-    if(ImPlot::BeginPlot(title, ImVec2(-1, 0),
+    const float  avail_h = ImGui::GetContentRegionAvail().y;
+    const ImVec2 plot_size(-1, std::max(80.0f, avail_h));
+    if(ImPlot::BeginPlot(title, plot_size,
                          ImPlotFlags_NoInputs | ImPlotFlags_NoLegend))
     {
         ImPlot::SetupAxis(ImAxis_X1, "Invocations",

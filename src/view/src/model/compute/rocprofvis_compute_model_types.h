@@ -155,9 +155,7 @@ struct WorkloadInfo
             total += data.m_x_values.back();
         }
 
-        data.m_fractions.resize(
-            data.m_x_values
-                .size());  // TODO: It need only for PieChart thing how to read of there
+        data.m_fractions.resize(data.m_x_values.size());
         for(size_t i = 0; i < data.m_x_values.size(); ++i)
         {
             data.m_fractions[i] = data.m_x_values[i] / total;
@@ -166,7 +164,7 @@ struct WorkloadInfo
         return data;
     };
  
-    };
+};
 
 struct MetricValue 
 {

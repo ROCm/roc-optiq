@@ -253,9 +253,8 @@ AiAnalysisView::RenderOverview()
     // Overall assessment text
     if(summary.isObject() && summary["overall_assessment"].isString())
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.48f, 0.67f, 1.0f));  // #7a7aaa dim text
+        // Use default app text color (already light on dark background)
         ImGui::TextWrapped("%s", summary["overall_assessment"].getString().c_str());
-        ImGui::PopStyleColor();
         ImGui::Spacing();
         ImGui::Spacing();
         ImGui::Spacing();
@@ -270,22 +269,18 @@ AiAnalysisView::RenderOverview()
         double confidence =
             summary["confidence"].isNumber() ? summary["confidence"].getNumber() : 0.0;
 
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.48f, 0.67f, 1.0f));  // #7a7aaa dim
         ImGui::Text("Primary Bottleneck:");
-        ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.33f, 0.60f, 0.93f, 1.0f));  // #5599ee blue
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.33f, 0.60f, 0.93f, 1.0f));  // #5599ee blue - bright
         ImGui::TextUnformatted(bottleneck.c_str());
         ImGui::PopStyleColor();
 
         ImGui::SameLine(0.0f, 50.0f);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.48f, 0.67f, 1.0f));  // #7a7aaa dim
         ImGui::Text("Confidence:");
-        ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImVec4 conf_color = (confidence >= 0.75) ? ImVec4(0.27f, 0.87f, 0.40f, 1.0f)  // #44dd66 green
-                            : (confidence >= 0.50) ? ImVec4(1.0f, 0.55f, 0.0f, 1.0f)  // #ff8c00 orange
-                                                   : ImVec4(0.48f, 0.48f, 0.67f, 1.0f);  // #7a7aaa dim
+        ImVec4 conf_color = (confidence >= 0.75) ? ImVec4(0.27f, 0.87f, 0.40f, 1.0f)  // #44dd66 green - bright
+                            : (confidence >= 0.50) ? ImVec4(1.0f, 0.55f, 0.0f, 1.0f)  // #ff8c00 orange - bright
+                                                   : ImVec4(0.70f, 0.70f, 0.70f, 1.0f);  // light gray
         ImGui::PushStyleColor(ImGuiCol_Text, conf_color);
         ImGui::Text("%.0f%%", confidence * 100.0);
         ImGui::PopStyleColor();
@@ -298,17 +293,13 @@ AiAnalysisView::RenderOverview()
        !summary["key_findings"].getArray().empty())
     {
         ImGui::Spacing();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0 main text
         ImGui::TextUnformatted("Key Findings:");
-        ImGui::PopStyleColor();
         ImGui::Spacing();
         for(jt::Json& finding : summary["key_findings"].getArray())
         {
             if(finding.isString())
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.48f, 0.67f, 1.0f));  // #7a7aaa dim
                 ImGui::BulletText("%s", finding.getString().c_str());
-                ImGui::PopStyleColor();
             }
         }
     }
@@ -397,11 +388,9 @@ AiAnalysisView::RenderExecutionBreakdown()
 
     long long total_ns =
         bd["total_runtime_ns"].isNumber() ? bd["total_runtime_ns"].getLong() : 0LL;
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.48f, 0.67f, 1.0f));  // #7a7aaa dim
     ImGui::Text("Total Runtime:");
-    ImGui::PopStyleColor();
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.27f, 0.87f, 0.40f, 1.0f));  // #44dd66 green
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.27f, 0.87f, 0.40f, 1.0f));  // #44dd66 green - bright
     ImGui::Text("%s", FormatNs(total_ns).c_str());
     ImGui::PopStyleColor();
     ImGui::Spacing();
@@ -416,15 +405,15 @@ AiAnalysisView::RenderExecutionBreakdown()
         ImVec4      color;
     };
 
-    // Colors from HTML: blue #5599ee, orange #ff8c00, purple #9966cc
+    // Bright colors visible on dark background
     const BreakdownSection sections[] = {
         {"Kernel Execution", "kernel_time_pct", "kernel_time_ns",
-         {0.33f, 0.60f, 0.93f, 1.0f}},  // #5599ee blue
+         {0.33f, 0.60f, 0.93f, 1.0f}},  // #5599ee blue - bright
         {"Memory Copies", "memcpy_time_pct", "memcpy_time_ns",
-         {1.0f, 0.55f, 0.0f, 1.0f}},  // #ff8c00 orange
+         {1.0f, 0.55f, 0.0f, 1.0f}},  // #ff8c00 orange - bright
         {"API Overhead", "api_overhead_pct", "api_overhead_ns",
-         {0.60f, 0.40f, 0.80f, 1.0f}},  // #9966cc purple
-        {"GPU Idle", "idle_time_pct", "idle_time_ns", {0.23f, 0.23f, 0.33f, 1.0f}},  // #3a3a55 dark gray
+         {0.60f, 0.40f, 0.80f, 1.0f}},  // #9966cc purple - bright
+        {"GPU Idle", "idle_time_pct", "idle_time_ns", {0.50f, 0.50f, 0.50f, 1.0f}},  // light gray
     };
 
     for(const auto& s : sections)
@@ -432,9 +421,8 @@ AiAnalysisView::RenderExecutionBreakdown()
         double    pct = bd[s.pct_key].isNumber() ? bd[s.pct_key].getNumber() : 0.0;
         long long ns  = bd[s.ns_key].isNumber() ? bd[s.ns_key].getLong() : 0LL;
 
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0 main text
+        // Use default text color (already light)
         ImGui::Text("%-20s", s.label);
-        ImGui::PopStyleColor();
         ImGui::SameLine(350.0f);
 
         char overlay[64];
@@ -537,43 +525,31 @@ AiAnalysisView::RenderRecommendations()
             // Issue
             if(!issue.empty())
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0 main text
                 ImGui::TextUnformatted("Issue:");
-                ImGui::PopStyleColor();
                 ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.48f, 0.67f, 1.0f));  // #7a7aaa dim
                 ImGui::TextWrapped("%s", issue.c_str());
-                ImGui::PopStyleColor();
                 ImGui::Spacing();
             }
 
             // Suggestion
             if(!suggest.empty())
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0 main text
                 ImGui::TextUnformatted("What to do:");
-                ImGui::PopStyleColor();
                 ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.48f, 0.67f, 1.0f));  // #7a7aaa dim
                 ImGui::TextWrapped("%s", suggest.c_str());
-                ImGui::PopStyleColor();
                 ImGui::Spacing();
             }
 
             // Action steps
             if(rec["actions"].isArray() && !rec["actions"].getArray().empty())
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0 main text
                 ImGui::TextUnformatted("Steps:");
-                ImGui::PopStyleColor();
                 int step = 1;
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.48f, 0.67f, 1.0f));  // #7a7aaa dim
                 for(jt::Json& action : rec["actions"].getArray())
                 {
                     if(action.isString())
                         ImGui::Text("  %d. %s", step++, action.getString().c_str());
                 }
-                ImGui::PopStyleColor();
                 ImGui::Spacing();
             }
 
@@ -591,9 +567,7 @@ AiAnalysisView::RenderRecommendations()
             // Profiling commands
             if(rec["commands"].isArray() && !rec["commands"].getArray().empty())
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0 main text
                 ImGui::TextUnformatted("Profiling Commands:");
-                ImGui::PopStyleColor();
 
                 int ci = 0;
                 for(jt::Json& cmd : rec["commands"].getArray())
@@ -621,9 +595,7 @@ AiAnalysisView::RenderRecommendations()
 
                         if(!desc.empty())
                         {
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.48f, 0.67f, 1.0f));  // #7a7aaa dim
                             ImGui::TextWrapped("%s", desc.c_str());
-                            ImGui::PopStyleColor();
                         }
 
                         if(!full_cmd.empty())

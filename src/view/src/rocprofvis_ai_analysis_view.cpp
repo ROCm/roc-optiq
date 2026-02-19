@@ -436,12 +436,12 @@ AiAnalysisView::RenderExecutionBreakdown()
                            overlay);
         ImGui::PopStyleColor(3);
 
-        // Add tooltip with detailed information
+        // Add tooltip with detailed information and guidance
         if(ImGui::IsItemHovered())
         {
             ImGui::BeginTooltip();
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-            ImGui::Text("%s Details:", s.label);
+            ImGui::Text("%s", s.label);
             ImGui::Separator();
             ImGui::Text("Percentage: %.2f%%", pct);
             ImGui::Text("Time: %s", FormatNs(ns).c_str());
@@ -451,6 +451,38 @@ AiAnalysisView::RenderExecutionBreakdown()
                 double ratio = static_cast<double>(ns) / static_cast<double>(total_ns);
                 ImGui::Text("Ratio: %.4f", ratio);
             }
+            ImGui::Spacing();
+
+            // Add guidance based on the section type
+            if(strcmp(s.label, "Kernel Execution") == 0)
+            {
+                ImGui::TextWrapped("Time spent running GPU kernels (compute work).");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Target: 60-80%% for compute-heavy workloads.");
+                ImGui::TextWrapped("Low? Check for small kernels or launch overhead.");
+            }
+            else if(strcmp(s.label, "Memory Copies") == 0)
+            {
+                ImGui::TextWrapped("Time spent copying data between host and device.");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Target: <15%% for optimal performance.");
+                ImGui::TextWrapped("High? Use pinned memory, async copies, or reduce transfers.");
+            }
+            else if(strcmp(s.label, "API Overhead") == 0)
+            {
+                ImGui::TextWrapped("CPU time for HIP/ROCm API calls and kernel launches.");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Target: <10%% for GPU-bound work.");
+                ImGui::TextWrapped("High? Batch operations, use streams, or fuse kernels.");
+            }
+            else if(strcmp(s.label, "GPU Idle") == 0)
+            {
+                ImGui::TextWrapped("Time when GPU is idle waiting for work.");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Target: Close to 0%%.");
+                ImGui::TextWrapped("High? Overlap work with async operations or reduce sync points.");
+            }
+
             ImGui::PopStyleColor();
             ImGui::EndTooltip();
         }
@@ -915,6 +947,25 @@ AiAnalysisView::RenderHardwareCounters()
             double util = metrics["gpu_utilization_pct"].getNumber();
 
             ImGui::Text("GPU Utilization:");
+            if(ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                ImGui::Text("GPU Utilization");
+                ImGui::Separator();
+                ImGui::TextWrapped("Percentage of time the GPU was actively executing work.");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Why it matters:");
+                ImGui::BulletText("High utilization (>70%%) = GPU is kept busy");
+                ImGui::BulletText("Low utilization (<70%%) = GPU is waiting or underutilized");
+                ImGui::Spacing();
+                ImGui::TextWrapped("How to improve:");
+                ImGui::BulletText("Launch more work or larger kernels");
+                ImGui::BulletText("Reduce CPU-GPU synchronization");
+                ImGui::BulletText("Overlap compute with memory transfers");
+                ImGui::PopStyleColor();
+                ImGui::EndTooltip();
+            }
             ImGui::SameLine(190.0f);
 
             char overlay[32];
@@ -926,6 +977,19 @@ AiAnalysisView::RenderHardwareCounters()
             ImGui::ProgressBar(static_cast<float>(util / 100.0), ImVec2(-1.0f, 18.0f),
                                overlay);
             ImGui::PopStyleColor();
+
+            if(ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                ImGui::Text("Current: %.1f%%", util);
+                if(util >= 70.0)
+                    ImGui::TextWrapped("Good! GPU is well-utilized.");
+                else
+                    ImGui::TextWrapped("Low - GPU is underutilized. See recommendations below.");
+                ImGui::PopStyleColor();
+                ImGui::EndTooltip();
+            }
 
             if(util < 70.0)
             {
@@ -948,6 +1012,32 @@ AiAnalysisView::RenderHardwareCounters()
                 metrics["min_waves"].isNumber() ? metrics["min_waves"].getNumber() : avg_waves;
             ImGui::Text("Wave Count:  avg %.0f   max %.0f   min %.0f", avg_waves,
                         max_waves, min_waves);
+
+            if(ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                ImGui::Text("Wave Occupancy");
+                ImGui::Separator();
+                ImGui::TextWrapped("Number of wavefronts (groups of 64 threads) executing simultaneously per SIMD unit.");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Why it matters:");
+                ImGui::BulletText("Higher waves = better GPU utilization");
+                ImGui::BulletText("AMD GPUs can typically run 16-32 waves per CU");
+                ImGui::BulletText("Low waves (<16) = resources are limiting parallelism");
+                ImGui::Spacing();
+                ImGui::TextWrapped("Common limiters:");
+                ImGui::BulletText("Too many registers per thread");
+                ImGui::BulletText("Too much LDS (local shared memory) per workgroup");
+                ImGui::BulletText("Workgroup size too small");
+                ImGui::Spacing();
+                ImGui::TextWrapped("How to improve:");
+                ImGui::BulletText("Reduce register pressure (use fewer variables)");
+                ImGui::BulletText("Reduce LDS usage or increase workgroup size");
+                ImGui::BulletText("Use rocprof-compute to analyze occupancy limits");
+                ImGui::PopStyleColor();
+                ImGui::EndTooltip();
+            }
 
             if(avg_waves < 16.0)
             {

@@ -431,7 +431,7 @@ AiAnalysisView::RenderExecutionBreakdown()
 
         ImGui::PushStyleColor(ImGuiCol_PlotHistogram, s.color);
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.12f, 0.18f, 1.0f));  // #1e1e2d dark bg
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));  // White text on colored bar
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text on colored bar
         ImGui::ProgressBar(static_cast<float>(pct / 100.0), ImVec2(-1.0f, 50.0f),
                            overlay);
         ImGui::PopStyleColor(3);
@@ -546,9 +546,8 @@ AiAnalysisView::RenderRecommendations()
         if(!category.empty()) header += "  \xe2\x80\x93  " + category;  // "–" in UTF-8
         header += "###rec_" + std::to_string(idx);
 
-        ImGui::PushStyleColor(ImGuiCol_Text, PriorityColor(priority));
+        // Use default light text color for headers (good contrast on dark background)
         bool open = ImGui::CollapsingHeader(header.c_str());
-        ImGui::PopStyleColor();
 
         if(open)
         {
@@ -632,21 +631,25 @@ AiAnalysisView::RenderRecommendations()
 
                         if(!full_cmd.empty())
                         {
-                            // Command box - dark background with green monospace text (like HTML)
-                            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.06f, 0.06f, 0.08f, 1.0f));  // #0e0e14 dark bg
+                            // Command box - dark background with green monospace text (copyable)
+                            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.06f, 0.06f, 0.08f, 1.0f));  // #0e0e14 dark bg
                             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.66f, 0.91f, 0.47f, 1.0f));  // #a8e878 green
                             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.17f, 0.17f, 0.27f, 1.0f));  // #2c2c44 border
-                            std::string child_id = "cmd_" + std::to_string(idx) + "_" +
-                                                   std::to_string(ci);
-                            float cmd_h =
-                                ImGui::GetTextLineHeightWithSpacing() * 1.6f;
-                            ImGui::BeginChild(child_id.c_str(), ImVec2(-1.0f, cmd_h),
-                                              ImGuiChildFlags_Borders);
-                            ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
-                                                 (cmd_h - ImGui::GetTextLineHeight()) *
-                                                     0.5f);
-                            ImGui::TextUnformatted(full_cmd.c_str());
-                            ImGui::EndChild();
+
+                            // Use InputTextMultiline for copyable text
+                            float cmd_h = ImGui::GetTextLineHeightWithSpacing() * 1.8f;
+
+                            // Create a mutable buffer (ImGui requires non-const)
+                            static char cmd_buffer[4096];
+                            std::strncpy(cmd_buffer, full_cmd.c_str(), sizeof(cmd_buffer) - 1);
+                            cmd_buffer[sizeof(cmd_buffer) - 1] = '\0';
+
+                            ImGui::InputTextMultiline(
+                                ("##cmd_" + std::to_string(idx) + "_" + std::to_string(ci)).c_str(),
+                                cmd_buffer, sizeof(cmd_buffer),
+                                ImVec2(-1.0f, cmd_h),
+                                ImGuiInputTextFlags_ReadOnly);
+
                             ImGui::PopStyleColor(3);
                         }
 

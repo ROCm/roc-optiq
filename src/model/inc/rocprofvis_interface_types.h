@@ -489,7 +489,6 @@ typedef enum rocprofvis_db_compute_column_enum_t
 
     kRPVComputeColumnMetricValueName,
     kRPVComputeColumnMetricValue,
-    kRPVComputeColumnMetricValueNames,
 
     kRPVComputeColumnDynamicMetricValue
 } rocprofvis_db_compute_column_enum_t;
@@ -507,6 +506,7 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchMetricCategoryTablesList,
     kRPVComputeFetchMetricValues,
     kRPVComputeFetchKernelMetricsMatrix,
+    kRPVComputeFetchWorkloadMetricValueNames,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration

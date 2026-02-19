@@ -495,7 +495,6 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                             { kRPVComputeColumnMetricTableName, std::nullopt },
                                             { kRPVComputeColumnMetricSubTableName, std::nullopt },
                                             { kRPVComputeColumnMetricUnit, std::nullopt },
-                                            { kRPVComputeColumnMetricValueNames, std::nullopt },
                                         }, 
                                         {} 
                                     };
@@ -514,6 +513,29 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                             }
                                         }
                                     });
+                                    if(dm_result == kRocProfVisDmResultSuccess)
+                                    {
+                                        m_query_output = {
+                                            {
+                                                { kRPVComputeColumnTableId, std::nullopt },
+                                                { kRPVComputeColumnSubTableId, std::nullopt },
+                                                { kRPVComputeColumnMetricValueName, std::nullopt },
+                                            },
+                                            {}
+                                        };
+                                        dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadMetricValueNames, m_query_arguments, m_query_output, [this, &workload](const QueryDataStore& data_store){
+                                            workload->SetUInt64(kRPVControllerWorkloadNumMetricValueNames, 0, data_store.rows.size());
+                                            for(size_t i = 0; i < data_store.rows.size(); i++)
+                                            {
+                                                SetObjectProperty((rocprofvis_handle_t*)workload, kRPVControllerWorkloadMetricValueNameCategoryIdIndexed, i,
+                                                    data_store.rows[i][data_store.columns.at(kRPVComputeColumnTableId).value()], kRPVControllerPrimitiveTypeUInt64);
+                                                SetObjectProperty((rocprofvis_handle_t*)workload, kRPVControllerWorkloadMetricValueNameTableIdIndexed, i,
+                                                    data_store.rows[i][data_store.columns.at(kRPVComputeColumnSubTableId).value()], kRPVControllerPrimitiveTypeUInt64);
+                                                SetObjectProperty((rocprofvis_handle_t*)workload, kRPVControllerWorkloadMetricValueNameStringIndexed, i,
+                                                    data_store.rows[i][data_store.columns.at(kRPVComputeColumnMetricValueName).value()], kRPVControllerPrimitiveTypeString);
+                                            }
+                                        });
+                                    }
                                     std::vector<uint32_t> kernel_ids;
                                     if(dm_result == kRocProfVisDmResultSuccess)
                                     {

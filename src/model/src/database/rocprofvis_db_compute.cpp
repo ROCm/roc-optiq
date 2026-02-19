@@ -19,7 +19,8 @@ namespace DataModel
 		{kRPVComputeFetchKernelMetricCategoriesList, "Fetch list of metric categories in a kernel" },
 		{kRPVComputeFetchMetricCategoryTablesList, "Fetch list of tables in a category" },
 		{kRPVComputeFetchMetricValues, "Fetch values of metrics"},
-		{kRPVComputeFetchKernelMetricsMatrix, "Fetch kernel metrics matrix with pivoted metric columns"}
+		{kRPVComputeFetchKernelMetricsMatrix, "Fetch kernel metrics matrix with pivoted metric columns"},
+		{kRPVComputeFetchWorkloadMetricValueNames, "Fetch distinct value names per metric in a workload"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
@@ -51,7 +52,6 @@ namespace DataModel
 		{"value_name", kRPVComputeColumnMetricValueName},
 		{"value", kRPVComputeColumnMetricValue},
 		{"unit", kRPVComputeColumnMetricUnit},
-		{"metric_value_names", kRPVComputeColumnMetricValueNames},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -142,11 +142,24 @@ namespace DataModel
 			query += "metric_id as sub_table_id, "; //parsed in callback method
 			query += "table_name, ";
 			query += "sub_table_name, ";
-			query += "unit, ";
-			query += "(SELECT GROUP_CONCAT(DISTINCT cmv.value_name) ";
+			query += "unit ";
+			query += "FROM compute_metric_definition ";
+			query += "WHERE workload_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeWorkloadMetricValueNames(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
+		{
+			query = "SELECT DISTINCT ";
+			query += "substr(cmv.metric_id, 0, instr(cmv.metric_id, '.')) as table_id, ";
+			query += "cmv.metric_id as sub_table_id, ";
+			query += "cmv.value_name ";
 			query += "FROM compute_metric_view cmv ";
-			query += "WHERE cmv.metric_id = cmd.metric_id) as metric_value_names ";
-			query += "FROM compute_metric_definition cmd ";
+			query += "INNER JOIN compute_metric_definition cmd ON cmv.metric_id = cmd.metric_id ";
 			query += "WHERE cmd.workload_id = ";
 			query += params[0].param_str;
 		}
@@ -560,6 +573,9 @@ namespace DataModel
 			case kRPVComputeFetchKernelMetricsMatrix:
 				query = m_query_factory.GetComputeKernelMetricsMatrix(num, params);
 				break;
+			case kRPVComputeFetchWorkloadMetricValueNames:
+				query = m_query_factory.GetComputeWorkloadMetricValueNames(num, params);
+				break;
 			default:
 				return kRocProfVisDmResultInvalidParameter;
 			}
@@ -606,6 +622,7 @@ namespace DataModel
 				case kRPVComputeFetchKernelMetricCategoriesList:
 				case kRPVComputeFetchMetricCategoryTablesList:
 				case kRPVComputeFetchMetricValues:
+				case kRPVComputeFetchWorkloadMetricValueNames:
 					callback = CallbackGetComputeGeneric;
 					break;
 				case kRPVComputeFetchWorkloadRooflineCeiling:

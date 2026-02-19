@@ -131,6 +131,10 @@ private:
     DataProvider& m_data_provider;
     std::array<std::string, MEMCHART_METRIC_COUNT> m_values;
 
+    // Stored fetch context so Update() can query the right (store_id, kernel) slot
+    static constexpr uint64_t       kMemChartClientId = 100;
+    std::vector<uint32_t>           m_kernel_ids;
+
     // Cache pointers to MetricValue objects to avoid linear search every frame
     std::vector<const MetricValue*> m_metric_ptrs;
     size_t                          m_last_metrics_count;

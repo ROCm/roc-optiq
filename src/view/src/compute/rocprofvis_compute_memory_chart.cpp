@@ -175,53 +175,54 @@ ComputeMemoryChartView::FetchMemChartMetrics(uint32_t                     worklo
     m_values.fill("-");
     m_metric_ptrs.assign(MEMCHART_METRIC_COUNT, nullptr);
     m_last_metrics_count = 0;
-    m_data_provider.ComputeModel().ClearMetricValues();
+    m_kernel_ids         = kernel_ids;
+
+    for(const uint32_t& kid : kernel_ids)
+    {
+        m_data_provider.ComputeModel().ClearMetricValues(kMemChartClientId, kid);
+    }
 
     std::vector<MetricsRequestParams::MetricID> metric_ids;
     metric_ids.push_back({MEMCHART_CATEGORY_ID, MEMCHART_TABLE_ID, std::nullopt});
 
     m_data_provider.FetchMetrics(
-        MetricsRequestParams(workload_id, kernel_ids, metric_ids));
+        MetricsRequestParams(workload_id, kernel_ids, metric_ids, kMemChartClientId));
 }
 
 void
 ComputeMemoryChartView::Update()
 {
-    const std::vector<std::unique_ptr<MetricValue>>& metrics =
-        m_data_provider.ComputeModel().GetMetricsData();
+    m_metric_ptrs.assign(MEMCHART_METRIC_COUNT, nullptr);
 
-    // If metrics were cleared externally, reset cache
-    if(metrics.size() < m_last_metrics_count)
+    for(const uint32_t& kernel_id : m_kernel_ids)
     {
-        m_metric_ptrs.assign(MEMCHART_METRIC_COUNT, nullptr);
-        m_last_metrics_count = 0;
-    }
+        const std::vector<std::shared_ptr<MetricValue>>* metrics =
+            m_data_provider.ComputeModel().GetMetricsData(kMemChartClientId, kernel_id);
+        if(!metrics) continue;
 
-    // Scan only new metrics
-    if(metrics.size() > m_last_metrics_count)
-    {
-        for(size_t i = m_last_metrics_count; i < metrics.size(); ++i)
+        for(const std::shared_ptr<MetricValue>& metric : *metrics)
         {
-            const std::unique_ptr<MetricValue>& metric = metrics[i];
-            if(!metric) continue;
-            if(metric->entry.category_id != MEMCHART_CATEGORY_ID) continue;
-            if(metric->entry.table_id != MEMCHART_TABLE_ID) continue;
+            if(!metric || !metric->entry) continue;
+            if(metric->entry->category_id != MEMCHART_CATEGORY_ID) continue;
+            if(metric->entry->table_id != MEMCHART_TABLE_ID) continue;
 
-            uint32_t id = metric->entry.id;
+            uint32_t id = metric->entry->id;
             if(id < MEMCHART_METRIC_COUNT)
             {
                 m_metric_ptrs[id] = metric.get();
             }
         }
-        m_last_metrics_count = metrics.size();
     }
 
-    // Update display strings from cached pointers
     for(size_t i = 0; i < MEMCHART_METRIC_COUNT; ++i)
     {
-        if(m_metric_ptrs[i])
+        if(m_metric_ptrs[i] && !m_metric_ptrs[i]->values.empty())
         {
-            m_values[i] = FormatMetricValue(m_metric_ptrs[i]->value);
+            m_values[i] = FormatMetricValue(m_metric_ptrs[i]->values.begin()->second);
+        }
+        else
+        {
+            m_values[i] = "-";
         }
     }
 }

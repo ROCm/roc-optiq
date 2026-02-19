@@ -128,6 +128,13 @@ ComputeDataModel::AddMetricValue(uint64_t store_id, uint32_t workload_id,
 void
 ComputeDataModel::Clear()
 {
+    ClearAllMetricValues();
+    m_workloads.clear();
+}
+
+void
+ComputeDataModel::ClearAllMetricValues()
+{
     for (auto& store_pair : m_metrics) {
         for (auto& kernel_pair : store_pair.second) {
             kernel_pair.second.m_metrics_data.clear();
@@ -137,7 +144,6 @@ ComputeDataModel::Clear()
         store_pair.second.clear();
     }
     m_metrics.clear();
-    m_workloads.clear();
 }
 
 void
@@ -200,6 +206,20 @@ ComputeDataModel::GetMetricValuesByTable(uint64_t store_id, uint32_t kernel_id,
        m_metrics.at(store_id).at(kernel_id).m_metrics_by_table_id.count(table_key))
     {
         return &m_metrics.at(store_id).at(kernel_id).m_metrics_by_table_id.at(table_key);
+    }
+    return nullptr;
+}
+
+const KernelInfo*
+ComputeDataModel::GetKernelInfo(uint32_t workload_id, uint32_t kernel_id) const
+{
+    if(m_workloads.count(workload_id))
+    {
+        const WorkloadInfo& workload = m_workloads.at(workload_id);
+        if(workload.kernels.count(kernel_id))
+        {
+            return &workload.kernels.at(kernel_id);
+        }
     }
     return nullptr;
 }

@@ -60,9 +60,12 @@ public:
                                                   uint64_t table_key);
 
     void Clear();
+    void ClearAllMetricValues();
     void ClearMetricValues(uint64_t store_id, uint32_t kernel_id);
 
     ComputeKernelSelectionTable& GetKernelSelectionTable();
+    const KernelInfo* GetKernelInfo(uint32_t workload_id, uint32_t kernel_id) const;
+
 
 private:
     std::unordered_map<uint32_t, WorkloadInfo> m_workloads;

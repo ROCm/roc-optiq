@@ -4,6 +4,7 @@
 #include "rocprofvis_compute_view.h"
 #include "rocprofvis_compute_kernel_details.h"
 #include "implot/implot.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -35,8 +36,14 @@ ComputeView::ComputeView()
                 NotificationManager::GetInstance().Show(
                     "Successfully fetched metrics for client: " + std::to_string(client_id),
                     NotificationLevel::Success);
+
+                // trigger metrics fetched event to update the UI
+                EventManager::GetInstance()->AddEvent(
+                    std::make_shared<ComputeMetricsFetchedEvent>(client_id, trace_path));
             }
         });
+
+
 }
 
 ComputeView::~ComputeView() {}
@@ -72,11 +79,14 @@ ComputeView::Update()
 void
 ComputeView::CreateView()
 {
+    m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
+
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView2>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
+    
     m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider), false});
 }
 
@@ -139,7 +149,7 @@ ComputeView::RenderToolbar()
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, frame_rounding);
     ImGui::AlignTextToFramePadding();
 
-    ImGui::Button("Compute Toolbar", ImVec2(-1, 0));
+    RenderWorkloadSelection();
 
     // pop content style
     ImGui::PopStyleVar(2);
@@ -148,20 +158,77 @@ ComputeView::RenderToolbar()
     ImGui::PopStyleVar(2);
 }
 
+void
+ComputeView::RenderWorkloadSelection()
+{
+    if(!m_compute_selection)
+    {
+        return;
+    }
+
+    const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
+        m_data_provider.ComputeModel().GetWorkloads();
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    ImGui::Text("Workload:");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
+    if(ImGui::BeginCombo("##Workloads", workloads.count(workload_id) > 0
+                                          ? workloads.at(workload_id).name.c_str()
+                                          : "-"))
+    {
+        if(ImGui::Selectable("-", workload_id == ComputeSelection::INVALID_SELECTION_ID))
+        {
+            m_compute_selection->SelectWorkload(ComputeSelection::INVALID_SELECTION_ID);
+        }
+        for(const std::pair<const uint32_t, WorkloadInfo>& workload : workloads)
+        {
+            if(ImGui::Selectable(workload.second.name.c_str(),
+                                 workload_id == workload.second.id))
+            {
+                m_compute_selection->SelectWorkload(workload.second.id);
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::Text("Kernel:");
+    ImGui::SameLine();
+    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+    const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id);
+    if(kernel_info)
+    {
+        ImGui::Text("%s", kernel_info->name.c_str());
+    }
+    else
+    {
+        ImGui::Text("-");
+    }
+}
+
 //TODO: move these to their own files
-ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider)
+ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
 {}
 
-ComputeTableView::ComputeTableView(DataProvider& data_provider)
+ComputeTableView::ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
 {}
 
-ComputeWorkloadView::ComputeWorkloadView(DataProvider& data_provider)
+ComputeKernelDetailsView2::ComputeKernelDetailsView2(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
+{}
+
+ComputeWorkloadView::ComputeWorkloadView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
+: RocWidget()
+, m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
 {}
 
 ComputeTester::ComputeTester(DataProvider& data_provider)
@@ -555,9 +622,13 @@ ComputeTester::Render()
         }
         ImGui::NewLine();
         ImGui::BeginDisabled(m_selections.metric_ids.empty() ||
+                             m_selections.kernel_ids.empty());
 
-        m_selections.kernel_ids.empty());
-
+        if(ImGui::Button("Clear all clients"))
+        {
+            m_data_provider.ComputeModel().ClearAllMetricValues();
+        }
+        ImGui::SameLine();
         uint64_t client_id = 0;
         bool do_clear = false;
         if(ImGui::Button("Clear client 1"))

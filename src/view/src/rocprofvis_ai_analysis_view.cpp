@@ -231,26 +231,18 @@ AiAnalysisView::RenderOverview()
 {
     auto& settings = SettingsManager::GetInstance();
 
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.6f);  // Much larger headers
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.25f, 0.35f, 0.45f, 1.0f));  // Professional blue
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.30f, 0.40f, 0.50f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.35f, 0.45f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.30f, 0.50f, 1.0f));  // Darker blue, more visible
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.35f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.40f, 0.60f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
     if(!ImGui::CollapsingHeader("Overview", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::PopStyleColor(4);
-        ImGui::SetWindowFontScale(1.0f);
-        ImGui::PopFont();
         return;
     }
     ImGui::PopStyleColor(4);
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
 
     ImGui::Indent();
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.4f);  // Much larger text for content
 
     jt::Json& summary   = m_data["summary"];
     jt::Json& prof_info = m_data["profiling_info"];
@@ -259,7 +251,7 @@ AiAnalysisView::RenderOverview()
     // Overall assessment text
     if(summary.isObject() && summary["overall_assessment"].isString())
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));  // Dark text on light bg
         ImGui::TextWrapped("%s", summary["overall_assessment"].getString().c_str());
         ImGui::PopStyleColor();
         ImGui::Spacing();
@@ -276,28 +268,24 @@ AiAnalysisView::RenderOverview()
         double confidence =
             summary["confidence"].isNumber() ? summary["confidence"].getNumber() : 0.0;
 
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));  // Dark text
         ImGui::Text("Primary Bottleneck:");
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.75f, 1.0f, 1.0f));  // Professional blue
-        ImGui::SetWindowFontScale(1.5f);  // Much larger font for bottleneck
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.30f, 0.70f, 1.0f));  // Dark blue, readable
         ImGui::TextUnformatted(bottleneck.c_str());
-        ImGui::SetWindowFontScale(1.4f);
         ImGui::PopStyleColor();
 
-        ImGui::SameLine(0.0f, 40.0f);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
+        ImGui::SameLine(0.0f, 50.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
         ImGui::Text("Confidence:");
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImVec4 conf_color = (confidence >= 0.75) ? ImVec4(0.40f, 0.95f, 0.50f, 1.0f)  // Green
-                            : (confidence >= 0.50) ? ImVec4(1.0f, 0.80f, 0.20f, 1.0f)  // Yellow
-                                                   : ImVec4(0.80f, 0.80f, 0.80f, 1.0f);  // Gray
+        ImVec4 conf_color = (confidence >= 0.75) ? ImVec4(0.10f, 0.60f, 0.10f, 1.0f)  // Dark green
+                            : (confidence >= 0.50) ? ImVec4(0.70f, 0.50f, 0.10f, 1.0f)  // Dark orange
+                                                   : ImVec4(0.40f, 0.40f, 0.40f, 1.0f);  // Dark gray
         ImGui::PushStyleColor(ImGuiCol_Text, conf_color);
-        ImGui::SetWindowFontScale(1.5f);
         ImGui::Text("%.0f%%", confidence * 100.0);
-        ImGui::SetWindowFontScale(1.4f);
         ImGui::PopStyleColor();
         ImGui::Spacing();
         ImGui::Spacing();
@@ -308,17 +296,15 @@ AiAnalysisView::RenderOverview()
        !summary["key_findings"].getArray().empty())
     {
         ImGui::Spacing();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
-        ImGui::SetWindowFontScale(1.45f);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
         ImGui::TextUnformatted("Key Findings:");
-        ImGui::SetWindowFontScale(1.4f);
         ImGui::PopStyleColor();
         ImGui::Spacing();
         for(jt::Json& finding : summary["key_findings"].getArray())
         {
             if(finding.isString())
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
                 ImGui::BulletText("%s", finding.getString().c_str());
                 ImGui::PopStyleColor();
             }
@@ -376,8 +362,6 @@ AiAnalysisView::RenderOverview()
         }
     }
 
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
     ImGui::Unindent();
 }
 
@@ -386,22 +370,16 @@ AiAnalysisView::RenderOverview()
 void
 AiAnalysisView::RenderExecutionBreakdown()
 {
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.6f);
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.25f, 0.35f, 0.45f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.30f, 0.40f, 0.50f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.35f, 0.45f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.30f, 0.50f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.35f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.40f, 0.60f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
     if(!ImGui::CollapsingHeader("Execution Breakdown", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::PopStyleColor(4);
-        ImGui::SetWindowFontScale(1.0f);
-        ImGui::PopFont();
         return;
     }
     ImGui::PopStyleColor(4);
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
 
     jt::Json& bd = m_data["execution_breakdown"];
     if(!bd.isObject())
@@ -413,19 +391,15 @@ AiAnalysisView::RenderExecutionBreakdown()
     }
 
     ImGui::Indent();
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.4f);
 
     long long total_ns =
         bd["total_runtime_ns"].isNumber() ? bd["total_runtime_ns"].getLong() : 0LL;
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));  // Dark text
     ImGui::Text("Total Runtime:");
     ImGui::PopStyleColor();
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.95f, 0.50f, 1.0f));  // Bright green
-    ImGui::SetWindowFontScale(1.5f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.50f, 0.10f, 1.0f));  // Dark green, readable
     ImGui::Text("%s", FormatNs(total_ns).c_str());
-    ImGui::SetWindowFontScale(1.4f);
     ImGui::PopStyleColor();
     ImGui::Spacing();
     ImGui::Spacing();
@@ -454,7 +428,7 @@ AiAnalysisView::RenderExecutionBreakdown()
         double    pct = bd[s.pct_key].isNumber() ? bd[s.pct_key].getNumber() : 0.0;
         long long ns  = bd[s.ns_key].isNumber() ? bd[s.ns_key].getLong() : 0LL;
 
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));  // Dark text
         ImGui::Text("%-20s", s.label);
         ImGui::PopStyleColor();
         ImGui::SameLine(350.0f);
@@ -464,16 +438,35 @@ AiAnalysisView::RenderExecutionBreakdown()
                       FormatNs(ns).c_str());
 
         ImGui::PushStyleColor(ImGuiCol_PlotHistogram, s.color);
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
-        ImGui::ProgressBar(static_cast<float>(pct / 100.0), ImVec2(-1.0f, 35.0f),
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));  // Dark frame
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text on colored bar
+        ImGui::ProgressBar(static_cast<float>(pct / 100.0), ImVec2(-1.0f, 50.0f),
                            overlay);
-        ImGui::PopStyleColor(2);
+        ImGui::PopStyleColor(3);
+
+        // Add tooltip with detailed information
+        if(ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::Text("%s Details:", s.label);
+            ImGui::Separator();
+            ImGui::Text("Percentage: %.2f%%", pct);
+            ImGui::Text("Time: %s", FormatNs(ns).c_str());
+            ImGui::Text("Total Runtime: %s", FormatNs(total_ns).c_str());
+            if(total_ns > 0)
+            {
+                double ratio = static_cast<double>(ns) / static_cast<double>(total_ns);
+                ImGui::Text("Ratio: %.4f", ratio);
+            }
+            ImGui::PopStyleColor();
+            ImGui::EndTooltip();
+        }
+
         ImGui::Spacing();
         ImGui::Spacing();
     }
 
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
     ImGui::Unindent();
 }
 
@@ -484,23 +477,17 @@ AiAnalysisView::RenderRecommendations()
 {
     auto& settings = SettingsManager::GetInstance();
 
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.6f);
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.25f, 0.35f, 0.45f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.30f, 0.40f, 0.50f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.35f, 0.45f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.30f, 0.50f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.35f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.40f, 0.60f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
     if(!ImGui::CollapsingHeader("Optimization Recommendations",
                                 ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::PopStyleColor(4);
-        ImGui::SetWindowFontScale(1.0f);
-        ImGui::PopFont();
         return;
     }
     ImGui::PopStyleColor(4);
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
 
     jt::Json& recs = m_data["recommendations"];
     if(!recs.isArray() || recs.getArray().empty())
@@ -512,8 +499,6 @@ AiAnalysisView::RenderRecommendations()
     }
 
     ImGui::Indent();
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.35f);
 
     int idx = 0;
     for(jt::Json& rec : recs.getArray())
@@ -664,8 +649,6 @@ AiAnalysisView::RenderRecommendations()
         ++idx;
     }
 
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
     ImGui::Unindent();
 }
 
@@ -676,22 +659,16 @@ AiAnalysisView::RenderHotspots()
 {
     auto& settings = SettingsManager::GetInstance();
 
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.6f);
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.25f, 0.35f, 0.45f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.30f, 0.40f, 0.50f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.35f, 0.45f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.30f, 0.50f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.35f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.40f, 0.60f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
     if(!ImGui::CollapsingHeader("Top Kernel Hotspots", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::PopStyleColor(4);
-        ImGui::SetWindowFontScale(1.0f);
-        ImGui::PopFont();
         return;
     }
     ImGui::PopStyleColor(4);
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
 
     jt::Json& hotspots = m_data["hotspots"];
     if(!hotspots.isArray() || hotspots.getArray().empty())
@@ -704,20 +681,18 @@ AiAnalysisView::RenderHotspots()
         return;
     }
 
-    ImGui::Indent();
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.35f);  // Much larger font for table
+    ImGui::Indent();  // MUCH larger font for table to match UI
 
     constexpr ImGuiTableFlags kFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                                        ImGuiTableFlags_Resizable |
                                        ImGuiTableFlags_SizingStretchProp |
                                        ImGuiTableFlags_ScrollY;
 
-    const float row_h = ImGui::GetTextLineHeightWithSpacing() * 1.8f;  // Much taller rows
+    const float row_h = ImGui::GetTextLineHeightWithSpacing() * 2.2f;  // Even taller rows
     const size_t n    = hotspots.getArray().size();
-    // Make table very large - use available space or at least 500px
+    // Make table very large - use available space or at least 600px
     const float avail_h = ImGui::GetContentRegionAvail().y;
-    const float  tbl_h = std::max(std::min(static_cast<float>(n) * row_h + row_h * 2.5f, avail_h * 0.6f), 500.0f);
+    const float  tbl_h = std::max(std::min(static_cast<float>(n) * row_h + row_h * 2.5f, avail_h * 0.7f), 600.0f);
 
     if(ImGui::BeginTable("ai_hotspots", 7, kFlags, ImVec2(0, tbl_h)))
     {
@@ -763,7 +738,7 @@ AiAnalysisView::RenderHotspots()
 
             ImGui::TableNextRow(ImGuiTableRowFlags_None, row_h * 0.85f);
 
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));  // Dark text for table
 
             ImGui::TableSetColumnIndex(0);
             ImGui::Text("%d", rank);
@@ -781,7 +756,7 @@ AiAnalysisView::RenderHotspots()
             // Highlight high percentage
             if(pct >= 20.0)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.60f, 0.60f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.80f, 0.20f, 0.20f, 1.0f));  // Dark red
                 ImGui::Text("%.1f%%", pct);
                 ImGui::PopStyleColor();
             }
@@ -791,13 +766,28 @@ AiAnalysisView::RenderHotspots()
             }
 
             ImGui::PopStyleColor();
+
+            // Add tooltip when hovering on the kernel name
+            if(ImGui::TableGetColumnIndex() == 1 && ImGui::IsItemHovered())
+            {
+                ImGui::BeginTooltip();
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                ImGui::Text("Kernel: %s", name.c_str());
+                ImGui::Separator();
+                ImGui::Text("Rank: #%d", rank);
+                ImGui::Text("Calls: %lld", calls);
+                ImGui::Text("Total: %s", FormatNs(total).c_str());
+                ImGui::Text("Average: %s", FormatNs(static_cast<long long>(avg)).c_str());
+                ImGui::Text("Minimum: %s", FormatNs(min_d).c_str());
+                ImGui::Text("%% of Total: %.2f%%", pct);
+                ImGui::PopStyleColor();
+                ImGui::EndTooltip();
+            }
         }
 
         ImGui::EndTable();
     }
 
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
     ImGui::Unindent();
 }
 
@@ -806,23 +796,17 @@ AiAnalysisView::RenderHotspots()
 void
 AiAnalysisView::RenderMemoryAnalysis()
 {
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.6f);
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.25f, 0.35f, 0.45f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.30f, 0.40f, 0.50f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.35f, 0.45f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.30f, 0.50f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.35f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.40f, 0.60f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
     if(!ImGui::CollapsingHeader("Memory Transfer Analysis",
                                 ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::PopStyleColor(4);
-        ImGui::SetWindowFontScale(1.0f);
-        ImGui::PopFont();
         return;
     }
     ImGui::PopStyleColor(4);
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
 
     jt::Json& mem = m_data["memory_analysis"];
     if(!mem.isObject())
@@ -834,16 +818,14 @@ AiAnalysisView::RenderMemoryAnalysis()
     }
 
     ImGui::Indent();
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
-    ImGui::SetWindowFontScale(1.35f);
 
     constexpr ImGuiTableFlags kFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                                        ImGuiTableFlags_Resizable |
                                        ImGuiTableFlags_SizingStretchProp;
 
-    const float row_h = ImGui::GetTextLineHeightWithSpacing() * 1.7f;
+    const float row_h = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
 
-    if(ImGui::BeginTable("ai_mem", 6, kFlags, ImVec2(0, row_h * 7.0f)))
+    if(ImGui::BeginTable("ai_mem", 6, kFlags, ImVec2(0, row_h * 7.5f)))
     {
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("Direction", ImGuiTableColumnFlags_WidthStretch, 2.8f);
@@ -886,7 +868,7 @@ AiAnalysisView::RenderMemoryAnalysis()
 
             ImGui::TableNextRow(ImGuiTableRowFlags_None, row_h * 0.85f);
 
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));  // Dark text for table
 
             ImGui::TableSetColumnIndex(0);
             ImGui::TextUnformatted(dir);
@@ -907,8 +889,6 @@ AiAnalysisView::RenderMemoryAnalysis()
         ImGui::EndTable();
     }
 
-    ImGui::SetWindowFontScale(1.0f);
-    ImGui::PopFont();
     ImGui::Unindent();
 }
 

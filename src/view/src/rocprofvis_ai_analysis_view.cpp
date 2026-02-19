@@ -431,7 +431,7 @@ AiAnalysisView::RenderExecutionBreakdown()
 
         ImGui::PushStyleColor(ImGuiCol_PlotHistogram, s.color);
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.12f, 0.18f, 1.0f));  // #1e1e2d dark bg
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text on colored bar
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));  // White text on colored bar
         ImGui::ProgressBar(static_cast<float>(pct / 100.0), ImVec2(-1.0f, 50.0f),
                            overlay);
         ImGui::PopStyleColor(3);
@@ -440,7 +440,7 @@ AiAnalysisView::RenderExecutionBreakdown()
         if(ImGui::IsItemHovered())
         {
             ImGui::BeginTooltip();
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
             ImGui::Text("%s", s.label);
             ImGui::Separator();
             ImGui::Text("Percentage: %.2f%%", pct);
@@ -673,10 +673,11 @@ AiAnalysisView::RenderHotspots()
 {
     auto& settings = SettingsManager::GetInstance();
 
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.30f, 0.50f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.35f, 0.55f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.40f, 0.60f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    // Dark theme header
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.09f, 0.09f, 0.12f, 1.0f));  // #16161f
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.12f, 0.12f, 0.18f, 1.0f));  // #1e1e2d
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.14f, 0.14f, 0.21f, 1.0f));  // #242436
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0
     if(!ImGui::CollapsingHeader("Top Kernel Hotspots", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::PopStyleColor(4);
@@ -725,9 +726,7 @@ AiAnalysisView::RenderHotspots()
         {
             ImGui::TableSetColumnIndex(col);
             const char* column_name = ImGui::TableGetColumnName(col);
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
             ImGui::TableHeader(column_name);
-            ImGui::PopStyleColor();
         }
 
         for(jt::Json& k : hotspots.getArray())
@@ -752,8 +751,7 @@ AiAnalysisView::RenderHotspots()
 
             ImGui::TableNextRow(ImGuiTableRowFlags_None, row_h * 0.85f);
 
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));  // Dark text for table
-
+            // Use default light text color
             ImGui::TableSetColumnIndex(0);
             ImGui::Text("%d", rank);
             ImGui::TableSetColumnIndex(1);
@@ -770,7 +768,7 @@ AiAnalysisView::RenderHotspots()
             // Highlight high percentage
             if(pct >= 20.0)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.80f, 0.20f, 0.20f, 1.0f));  // Dark red
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.40f, 0.40f, 1.0f));  // Bright red for visibility
                 ImGui::Text("%.1f%%", pct);
                 ImGui::PopStyleColor();
             }
@@ -779,13 +777,11 @@ AiAnalysisView::RenderHotspots()
                 ImGui::Text("%.1f%%", pct);
             }
 
-            ImGui::PopStyleColor();
-
             // Add tooltip when hovering on the kernel name
             if(ImGui::TableGetColumnIndex() == 1 && ImGui::IsItemHovered())
             {
                 ImGui::BeginTooltip();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
                 ImGui::Text("Kernel: %s", name.c_str());
                 ImGui::Separator();
                 ImGui::Text("Rank: #%d", rank);
@@ -813,7 +809,7 @@ AiAnalysisView::RenderMemoryAnalysis()
     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.30f, 0.50f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.35f, 0.55f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.40f, 0.60f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
     if(!ImGui::CollapsingHeader("Memory Transfer Analysis",
                                 ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -855,9 +851,7 @@ AiAnalysisView::RenderMemoryAnalysis()
         {
             ImGui::TableSetColumnIndex(col);
             const char* column_name = ImGui::TableGetColumnName(col);
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
             ImGui::TableHeader(column_name);
-            ImGui::PopStyleColor();
         }
 
         const char* directions[] = {"Host-to-Device", "Device-to-Host", "Device-to-Device",
@@ -882,8 +876,7 @@ AiAnalysisView::RenderMemoryAnalysis()
 
             ImGui::TableNextRow(ImGuiTableRowFlags_None, row_h * 0.85f);
 
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));  // Dark text for table
-
+            // Use default light text color on dark table background
             ImGui::TableSetColumnIndex(0);
             ImGui::TextUnformatted(dir);
             ImGui::TableSetColumnIndex(1);
@@ -896,8 +889,6 @@ AiAnalysisView::RenderMemoryAnalysis()
             ImGui::TextUnformatted(FormatBytes(avg_b).c_str());
             ImGui::TableSetColumnIndex(5);
             ImGui::Text("%.2f GB/s", bw_gbs);
-
-            ImGui::PopStyleColor();
         }
 
         ImGui::EndTable();
@@ -950,7 +941,7 @@ AiAnalysisView::RenderHardwareCounters()
             if(ImGui::IsItemHovered())
             {
                 ImGui::BeginTooltip();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
                 ImGui::Text("GPU Utilization");
                 ImGui::Separator();
                 ImGui::TextWrapped("Percentage of time the GPU was actively executing work.");
@@ -981,7 +972,7 @@ AiAnalysisView::RenderHardwareCounters()
             if(ImGui::IsItemHovered())
             {
                 ImGui::BeginTooltip();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
                 ImGui::Text("Current: %.1f%%", util);
                 if(util >= 70.0)
                     ImGui::TextWrapped("Good! GPU is well-utilized.");
@@ -1016,7 +1007,7 @@ AiAnalysisView::RenderHardwareCounters()
             if(ImGui::IsItemHovered())
             {
                 ImGui::BeginTooltip();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
                 ImGui::Text("Wave Occupancy");
                 ImGui::Separator();
                 ImGui::TextWrapped("Number of wavefronts (groups of 64 threads) executing simultaneously per SIMD unit.");

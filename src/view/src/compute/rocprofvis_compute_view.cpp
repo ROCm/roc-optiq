@@ -945,24 +945,24 @@ ComputeTester::Render()
                         ImGui::Text("Metric: [%u.%u.%u] %s",
                                     entry.category_id, entry.table_id, entry.id,
                                     entry.name.c_str());
-                        if(entry.value_names.empty())
-                        {
-                            ImGui::TextDisabled("No value names found");
-                        }
-                        else
-                        {
-                            ImGui::Text("Value Names (%zu):", entry.value_names.size());
-                            for(const std::string& vn : entry.value_names)
-                            {
-                                ImGui::BulletText("%s", vn.c_str());
-                            }
-                        }
                     }
                     else
                     {
                         ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1),
                                            "Entry %u not found in table %u (table has %zu entries)",
                                            entry_id, tbl_id, tbl.entries.size());
+                    }
+                    if(tbl.value_names.empty())
+                    {
+                        ImGui::TextDisabled("No value names found for table %u", tbl_id);
+                    }
+                    else
+                    {
+                        ImGui::Text("Value Names (%zu):", tbl.value_names.size());
+                        for(const std::string& vn : tbl.value_names)
+                        {
+                            ImGui::BulletText("%s", vn.c_str());
+                        }
                     }
                 }
                 else

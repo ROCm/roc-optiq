@@ -24,16 +24,16 @@ struct AvailableMetrics
         uint32_t    category_id;
         uint32_t    table_id;
         uint32_t    id;
-        std::string              name;
-        std::string              description;
-        std::string              unit;
-        std::vector<std::string> value_names;
+        std::string name;
+        std::string description;
+        std::string unit;
     };
     struct Table
     {
         uint32_t                             id;
         std::string                          name;
         std::unordered_map<uint32_t, Entry&> entries;
+        std::vector<std::string>             value_names;
     };
     struct Category
     {

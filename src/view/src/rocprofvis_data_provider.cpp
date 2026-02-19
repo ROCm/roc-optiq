@@ -3855,24 +3855,6 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
                           kRPVControllerWorkloadAvailableMetricDescriptionIndexed, j);
             workload.available_metrics.list[j].unit = GetString(
                 workload_handle, kRPVControllerWorkloadAvailableMetricUnitIndexed, j);
-            {
-                std::string concat_names = GetString(
-                    workload_handle,
-                    kRPVControllerWorkloadAvailableMetricValueNamesIndexed, j);
-                std::vector<std::string>& vn =
-                    workload.available_metrics.list[j].value_names;
-                if(!concat_names.empty())
-                {
-                    size_t start = 0;
-                    size_t pos   = 0;
-                    while((pos = concat_names.find(',', start)) != std::string::npos)
-                    {
-                        vn.push_back(concat_names.substr(start, pos - start));
-                        start = pos + 1;
-                    }
-                    vn.push_back(concat_names.substr(start));
-                }
-            }
             AvailableMetrics::Category& category =
                 workload.available_metrics
                     .tree[workload.available_metrics.list[j].category_id];
@@ -3891,6 +3873,30 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
                 static_cast<uint32_t>(table.entries.size());
             table.entries.insert({ static_cast<uint32_t>(table.entries.size()),
                                    workload.available_metrics.list[j] });
+            {
+                std::string concat_names = GetString(
+                    workload_handle,
+                    kRPVControllerWorkloadAvailableMetricValueNamesIndexed, j);
+                if(!concat_names.empty())
+                {
+                    size_t start = 0;
+                    size_t pos   = 0;
+                    while((pos = concat_names.find(',', start)) != std::string::npos)
+                    {
+                        std::string name = concat_names.substr(start, pos - start);
+                        if(std::find(table.value_names.begin(),
+                                     table.value_names.end(),
+                                     name) == table.value_names.end())
+                            table.value_names.push_back(std::move(name));
+                        start = pos + 1;
+                    }
+                    std::string name = concat_names.substr(start);
+                    if(std::find(table.value_names.begin(),
+                                 table.value_names.end(),
+                                 name) == table.value_names.end())
+                        table.value_names.push_back(std::move(name));
+                }
+            }
         }
         num_entries = 0;
         result      = rocprofvis_controller_get_uint64(

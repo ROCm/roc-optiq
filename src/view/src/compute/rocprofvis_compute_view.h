@@ -49,16 +49,6 @@ private:
 
 
 //TODO: move these to separate files when they are implemented
-class ComputeSummaryView: public RocWidget
-{
-public:
-    ComputeSummaryView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
-    ~ComputeSummaryView(){};
-
-protected:
-    DataProvider& m_data_provider;
-    std::shared_ptr<ComputeSelection> m_compute_selection;
-};
 
 class ComputeTableView: public RocWidget
 {
@@ -160,9 +150,7 @@ private:
     SelectionState m_selections;
     DisplayStrings m_display_names;
 
-    NewComputeSummaryView m_summary_view;
-    PieChart m_pie_chart;
-    BarChart m_bar_chart;
+    ComputeSummaryView m_summary_view;
 };
 
 }  // namespace View

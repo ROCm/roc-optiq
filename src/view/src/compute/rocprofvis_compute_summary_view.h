@@ -4,6 +4,8 @@
 #pragma once
 #include "../model/compute/rocprofvis_compute_model_types.h"
 #include "../widgets/rocprofvis_charts.h"
+#include "rocprofvis_data_provider.h"
+
 #include <functional>
 
 namespace RocProfVis
@@ -11,18 +13,20 @@ namespace RocProfVis
 namespace View
 {
 
-class NewComputeSummaryView
+class ComputeSummaryView : public RocWidget
 {
 public:
-    NewComputeSummaryView(
-        std::function<void(const WorkloadInfo& workload)> kernel_table_renderer)
-    : m_kernel_table_renderer(kernel_table_renderer) {};
-    void RenderSummaryView(const WorkloadInfo& workload);
+    ComputeSummaryView(DataProvider& data_provider)
+    : RocWidget() 
+    , m_data_provider(data_provider)
+    , m_selected_workload_id(0)
+    {};
+    void Render() override;
 private:
+    void         RenderKernelsTable(const WorkloadInfo& workload);
     KernelMetric GetMetricNameByIndex(uint32_t metric) const;
     void RenderPieChart(const WorkloadInfo& workload, KernelMetric metric);
     void RenderBarChart(const WorkloadInfo& workload, KernelMetric metric);
-    std::function<void(const WorkloadInfo& workload)> m_kernel_table_renderer;
 
     const std::vector<std::string_view> m_chart_views = { "Pie Chart", "Bar Chart" };
     const std::vector<std::string_view> m_metric_views = {
@@ -32,6 +36,9 @@ private:
 
     PieChart m_pie_chart;
     BarChart m_bar_chart;
+
+    DataProvider& m_data_provider;
+    uint32_t m_selected_workload_id;
 };
 
 

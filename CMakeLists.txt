@@ -126,7 +126,10 @@ list(APPEND VIEW_FILES
     src/view/src/compute/rocprofvis_compute_data_provider.cpp
     src/view/src/compute/legacy/rocprofvis_compute_roofline.cpp
     src/view/src/compute/rocprofvis_navigation_manager.cpp
+    src/view/src/compute/rocprofvis_compute_kernel_details.cpp
+    src/view/src/compute/rocprofvis_compute_memory_chart.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
+ 
 )
 endif(COMPUTE_UI_SUPPORT)
 

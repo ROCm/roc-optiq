@@ -54,16 +54,6 @@ protected:
     DataProvider& m_data_provider;
 };
 
-class ComputeKernelDetailsView: public RocWidget
-{
-public:
-    ComputeKernelDetailsView(DataProvider& data_provider);
-    ~ComputeKernelDetailsView(){};
-
-protected:
-    DataProvider& m_data_provider;
-};
-
 class ComputeTableView: public RocWidget
 {
 public:

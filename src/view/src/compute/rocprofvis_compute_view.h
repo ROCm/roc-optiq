@@ -134,14 +134,12 @@ private:
     void RenderMetrics(const WorkloadInfo& workload);
     void RenderKernels(const WorkloadInfo& workload);
     void RenderFetcher(const WorkloadInfo& workload);
-    void RenderRoofLine(const WorkloadInfo& workload);
     void RenderSummaryView(const WorkloadInfo& workload);
 
     const std::vector<std::string_view> m_views = { "System Information",
                                                     "Profiling Configuration", "Metrics",
                                                     "Kernels",
                                                     "Fetcher",
-                                                    "RoofLine",
                                                     "Summary View" }; //TODO: figure out better way to store it
 
     

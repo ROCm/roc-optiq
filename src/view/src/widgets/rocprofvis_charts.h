@@ -10,7 +10,18 @@ namespace RocProfVis
 namespace View
 {
 
+struct ChartData
+{
+    std::vector<const char*> m_labels;
+    std::vector<double>      m_x_values;
+    std::vector<double>      m_y_values;
+    std::string              m_x_axis_name;
+    std::string              m_y_axis_name;
+    std::vector<double>      m_fractions;
+    double                   m_x_max;
 
+    static ChartData GenerateChartData(KernelMetric metric, const WorkloadInfo& workload);
+};
 
 class ChartBase : public RocWidget
 {
@@ -18,9 +29,7 @@ public:
     ChartBase()  = default;
     ~ChartBase() = default;
     void UpdateData(ChartData data);
-
 protected:
-    void        ClearData();
     const char* m_chart_title;
     ChartData   m_data;
 };
@@ -49,6 +58,8 @@ public:
     BarChart();
     ~BarChart() = default;
     void Render() override;
+private:
+    const double m_bar_height = 0.7;
 };
 
 }  // namespace View

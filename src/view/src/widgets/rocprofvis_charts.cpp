@@ -8,6 +8,7 @@
 #include <algorithm>
 
 constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
+constexpr float MINIMUM_CHART_SIZE = 250.0f;
 
 namespace RocProfVis
 {
@@ -43,13 +44,37 @@ PieChart::CalculatePiePlacement(float padding_px, float radius_scale)
     return PiePlacement{ center.x, center.y, r_plot };
 };
 
-
 PieChart::PieChart() { m_chart_title = "Kernels Pie"; }
 
 void
 ChartBase::UpdateData(ChartData data)
 {
     m_data = std::move(data);
+}
+
+ChartData
+ChartData::GenerateChartData(KernelMetric metric, const WorkloadInfo& workload)
+{
+    ChartData data;
+    data.m_y_axis_name = "Kernels";
+    data.m_x_axis_name = KernelInfo::GetMetricName(metric);
+    double total       = 0.0;
+    for(const auto& kernel : workload.kernels)
+    {
+        data.m_labels.push_back(kernel.second.name.c_str());
+        data.m_x_values.push_back(static_cast<double>(kernel.second.Get(metric)));
+        data.m_y_values.push_back(static_cast<double>(data.m_y_values.size()));
+        data.m_x_max = std::max(data.m_x_max, data.m_x_values.back());
+        total += data.m_x_values.back();
+    }
+
+    data.m_fractions.resize(data.m_x_values.size());
+    for(size_t i = 0; i < data.m_x_values.size(); ++i)
+    {
+        data.m_fractions[i] = data.m_x_values[i] / total;
+    }
+
+    return data;
 }
 
 void
@@ -61,7 +86,7 @@ PieChart::Render()
 
     ImGui::PushID(m_chart_title);
     const float  avail_h = ImGui::GetContentRegionAvail().y;
-    const ImVec2 plot_size(-1, std::max(80.0f, avail_h));
+    const ImVec2 plot_size(-1, std::max(MINIMUM_CHART_SIZE, avail_h));
     if(ImPlot::BeginPlot(m_chart_title, plot_size,
                          ImPlotFlags_Equal | ImPlotFlags_NoInputs))
     {
@@ -85,38 +110,25 @@ PieChart::Render()
     ImGui::PopID();
 }
 
-void
-ChartBase::ClearData()
-{
-    m_data.m_labels.clear();
-    m_data.m_x_values.clear();
-    m_data.m_y_values.clear();
-    m_data.m_fractions.clear();
-}
-
 BarChart::BarChart() { m_chart_title = "Kernels Bar"; }
 
 void
 BarChart::Render()
 {
-    const char* title = "Kernels Bar";
-
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
     ImGui::Separator();
     ImGui::PopStyleVar();
 
-    const double bar_height = 0.7;
-
     ImPlot::PushColormap(ImPlotColormap_Plasma);
 
     const float  avail_h = ImGui::GetContentRegionAvail().y;
-    const ImVec2 plot_size(-1, std::max(80.0f, avail_h));
-    if(ImPlot::BeginPlot(title, plot_size,
+    const ImVec2 plot_size(-1, std::max(MINIMUM_CHART_SIZE, avail_h));
+    if(ImPlot::BeginPlot(m_chart_title, plot_size,
                          ImPlotFlags_NoInputs | ImPlotFlags_NoLegend))
     {
-        ImPlot::SetupAxis(ImAxis_X1, "Invocations",
+        ImPlot::SetupAxis(ImAxis_X1, m_data.m_x_axis_name.c_str(),
                           ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
-        ImPlot::SetupAxis(ImAxis_Y1, "Kernels",
+        ImPlot::SetupAxis(ImAxis_Y1, m_data.m_y_axis_name.c_str(),
                           ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
 
         ImPlot::SetupAxisTicks(ImAxis_Y1, m_data.m_y_values.data(),
@@ -133,9 +145,9 @@ BarChart::Render()
         for(int i = 0; i < count; ++i)
         {
             const double color =
-                count > 1 ? static_cast<double>(i) / (count - 1) : 0.5;  // 0..1
+                count > 1 ? static_cast<double>(i) / (count - 1) : 0.5;
             ImPlot::SetNextFillStyle(ImPlot::SampleColormap(color));
-            ImPlot::PlotBars(m_data.m_labels[i], &m_data.m_x_values[i], 1, bar_height,
+            ImPlot::PlotBars(m_data.m_labels[i], &m_data.m_x_values[i], 1, m_bar_height,
                              static_cast<double>(i), ImPlotBarsFlags_Horizontal);
         }
 

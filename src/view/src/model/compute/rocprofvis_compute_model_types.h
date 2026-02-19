@@ -75,6 +75,7 @@ struct KernelInfo
                            Intensity>
             intensities;
     };
+
     uint32_t    id;
     std::string name;
     uint32_t    invocation_count;
@@ -85,7 +86,9 @@ struct KernelInfo
     uint32_t    duration_median;
     Roofline    roofline;
 
-    uint64_t get(KernelMetric metric) const 
+    //TODO: amokichev for future maybe we need more complicated universal class for metric
+    // that will be contain metric_id represented as enum, readable name and value
+    uint64_t Get(KernelMetric metric) const
     {
         switch(metric)
         {
@@ -98,15 +101,20 @@ struct KernelInfo
             default: return 0;
         }
     };
-};
 
-struct ChartData
-{
-    std::vector<const char*> m_labels;
-    std::vector<double>      m_x_values;
-    std::vector<double>      m_y_values;
-    std::vector<double>      m_fractions;  // TODO: needed only for Pie
-    double                   m_x_max;      // TODO: needed only for BAR
+    static std::string GetMetricName(KernelMetric metric)
+    {
+        switch(metric)
+        {
+            case KernelMetric::InvocationCount: return "Invocation Count";
+            case KernelMetric::DurationTotal: return "Duration Total";
+            case KernelMetric::DurationMin: return "Duration Min";
+            case KernelMetric::DurationMax: return "Duration Max";
+            case KernelMetric::DurationMean: return "Duration Mean";
+            case KernelMetric::DurationMedian: return "Duration Median";
+            default: return "";
+        }
+    }
 };
 
 struct WorkloadInfo
@@ -141,29 +149,7 @@ struct WorkloadInfo
     std::vector<std::vector<std::string>>    profiling_config;
     AvailableMetrics                         available_metrics;
     std::unordered_map<uint32_t, KernelInfo> kernels;
-    Roofline                                 roofline;
-    ChartData                                GenerateChartData(KernelMetric metric) const
-    {
-        ChartData data;
-        double    total = 0.0;
-        for(const auto& kernel : kernels)
-        {
-            data.m_labels.push_back(kernel.second.name.c_str());
-            data.m_x_values.push_back(static_cast<double>(kernel.second.get(metric)));
-            data.m_y_values.push_back(static_cast<double>(data.m_y_values.size()));
-            data.m_x_max = std::max(data.m_x_max, data.m_x_values.back());
-            total += data.m_x_values.back();
-        }
-
-        data.m_fractions.resize(data.m_x_values.size());
-        for(size_t i = 0; i < data.m_x_values.size(); ++i)
-        {
-            data.m_fractions[i] = data.m_x_values[i] / total;
-        }
-
-        return data;
-    };
- 
+    Roofline                                 roofline; 
 };
 
 struct MetricValue 

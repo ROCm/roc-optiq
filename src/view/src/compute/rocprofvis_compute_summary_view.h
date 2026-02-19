@@ -24,8 +24,7 @@ private:
     void         CalculateCombosWidth();
     void         RenderKernelsTable(const WorkloadInfo& workload);
     KernelMetric GetMetricNameByIndex(uint32_t metric) const;
-    void         RenderPieChart(const WorkloadInfo& workload, KernelMetric metric);
-    void         RenderBarChart(const WorkloadInfo& workload, KernelMetric metric);
+    void UpdataChartData(const WorkloadInfo& workload, uint32_t metric_id);
 
     const std::vector<std::string_view> m_chart_views = { "Pie Chart", "Bar Chart" };
     const std::vector<std::string_view> m_metric_views = {
@@ -40,7 +39,7 @@ private:
     uint32_t m_workload_id;
     float         m_chart_combo_width;
     float         m_metric_combo_width;
-
+    uint32_t      m_selected_metric;
     EventManager::SubscriptionToken m_font_changed_token;
 
 };

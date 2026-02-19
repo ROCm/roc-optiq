@@ -361,11 +361,6 @@ ComputeTester::RenderSelectedView(
         }
         case 5:
         {
-            RenderRoofLine(workload);
-            break;
-        }
-        case 6:
-        {
             RenderSummaryView(workload);
             break;  
         }

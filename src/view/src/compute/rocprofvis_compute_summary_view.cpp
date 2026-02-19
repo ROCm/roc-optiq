@@ -14,6 +14,7 @@ ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider)
 : RocWidget()
 , m_data_provider(data_provider)
 , m_workload_id(0) 
+, m_selected_metric(1) //default metric - duration total
 {
     CalculateCombosWidth();
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -21,6 +22,7 @@ ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider)
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+
 }
 ComputeSummaryView::~ComputeSummaryView() 
 {
@@ -49,6 +51,7 @@ ComputeSummaryView::Render()
                                  m_workload_id == workload.second.id))
             {
                 m_workload_id = workload.second.id;
+                UpdataChartData(workload.second, m_selected_metric);
             }
         }
         ImGui::EndCombo();
@@ -77,17 +80,16 @@ ComputeSummaryView::Render()
         }
 
         ImGui::SameLine();
-
-        static uint32_t selected_metric = 1; //Set as default metric "duration total"
         ImGui::SetNextItemWidth(m_metric_combo_width);
-        if(ImGui::BeginCombo("##Metric", m_metric_views[selected_metric].data()))
+        if(ImGui::BeginCombo("##Metric", m_metric_views[m_selected_metric].data()))
         {
             for(uint32_t index = 0; index < m_metric_views.size(); index++)
             {
-                const bool is_selected = (selected_metric == index);
+                const bool is_selected = (m_selected_metric == index);
                 if(ImGui::Selectable(m_metric_views[index].data(), is_selected))
                 {
-                    selected_metric = index;
+                    m_selected_metric = index;
+                    UpdataChartData(workload, m_selected_metric);
                 }
 
                 if(is_selected) ImGui::SetItemDefaultFocus();
@@ -97,9 +99,9 @@ ComputeSummaryView::Render()
 
         ImGui::BeginChild("Chart");
         if(selected_chart_id == 0)
-            RenderPieChart(workload, GetMetricNameByIndex(selected_metric));
+            m_pie_chart.Render();
         else if(selected_chart_id == 1)
-            RenderBarChart(workload, GetMetricNameByIndex(selected_metric));
+            m_bar_chart.Render();
 
         ImGui::EndChild();  // Chart
     }
@@ -212,21 +214,14 @@ ComputeSummaryView::GetMetricNameByIndex(uint32_t index) const
 }
 
 void
-ComputeSummaryView::RenderPieChart(const WorkloadInfo& workload, KernelMetric metric)
+ComputeSummaryView::UpdataChartData(const WorkloadInfo& workload, uint32_t metric_id)
 {
-    m_pie_chart.UpdateData(
-        workload.GenerateChartData(metric));  // TODO: Avoid updating each frames, think
-                                              // how to do it if it changes
-    m_pie_chart.Render();
-}
+    ChartData chart_data =
+        ChartData::GenerateChartData(GetMetricNameByIndex(metric_id), workload);
 
-void
-ComputeSummaryView::RenderBarChart(const WorkloadInfo& workload, KernelMetric metric)
-{
-    m_bar_chart.UpdateData(workload.GenerateChartData(metric));
-    m_bar_chart.Render();
+    m_pie_chart.UpdateData(chart_data);
+    m_bar_chart.UpdateData(chart_data);
 }
-
 
 } // namespace View
 }  // namespace RocProfVis

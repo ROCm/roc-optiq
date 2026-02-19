@@ -489,9 +489,6 @@ class Database
         // @return status of operation
         rocprofvis_dm_result_t          AddTrackProperties(
                                                                 rocprofvis_dm_track_params_t& props);
-        // finds and return iterator to track properties array
-        // @process track process identifiers structure
-        rocprofvis_dm_track_params_it   FindTrack( rocprofvis_dm_track_identifiers_t& track_indentifiers, DbInstance* db_instance);
         // adds a new query to the track queries collection 
         // multiple queries for single track are required to support data from multiple database tables on single track,
         // like Kernel Dispatch, Memory Copy and Memory Allocation

@@ -3772,6 +3772,12 @@ DataProvider::FetchMetricPivotTable(const ComputeTableRequestParams& params)
     return false;
 }
 
+void DataProvider::SetFetchMetricsCallback(
+    const std::function<void(const std::string&, uint64_t, bool)>& callback)
+{
+    m_metrics_fetch_callback = callback;
+}
+
 void
 DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
 {
@@ -4121,14 +4127,24 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
                     container, kRPVControllerMetricsContainerMetricValueValueIndexed, i,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                m_compute_model.AddMetricValue(request_params->m_workload_id, kernel_id,
+                m_compute_model.AddMetricValue(request_params->m_client_id, request_params->m_workload_id, kernel_id,
                                                category_id, table_id, entry_id,
                                                string_data, double_data);
+            }
+            //call callback
+            if(m_metrics_fetch_callback)
+            {
+                m_metrics_fetch_callback(m_model.GetTraceFilePath(), request_params->m_client_id, true);
             }
         }
         else
         {
             spdlog::debug("Metrics request failed with code {}", req.response_code);
+            //call callback
+            if(m_metrics_fetch_callback)
+            {
+                m_metrics_fetch_callback(m_model.GetTraceFilePath(), request_params->m_client_id, false);
+            }            
         }
         rocprofvis_controller_metrics_container_free(container);
         req.request_obj_handle = nullptr;

@@ -1128,6 +1128,9 @@ void ProfilingDialog::RenderComplete()
 
         if(ImGui::Button("View Results", ImVec2(button_width, 0)))
         {
+            // Hide dialog BEFORE calling callback to prevent modal conflicts
+            Hide();
+
             if(m_completion_callback)
             {
                 spdlog::info("View Results button clicked");
@@ -1135,7 +1138,6 @@ void ProfilingDialog::RenderComplete()
                 spdlog::info("  AI JSON path: {}", m_ai_analysis_json_path);
                 m_completion_callback(m_result_trace_path, m_ai_analysis_json_path);
             }
-            Hide();
         }
 
         ImGui::SameLine();

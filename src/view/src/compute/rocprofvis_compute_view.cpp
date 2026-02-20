@@ -43,8 +43,6 @@ ComputeView::ComputeView()
                     std::make_shared<ComputeMetricsFetchedEvent>(client_id, trace_path));
             }
         });
-
-
 }
 
 ComputeView::~ComputeView() {}
@@ -83,7 +81,7 @@ ComputeView::CreateView()
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
 
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider), false});
     m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});

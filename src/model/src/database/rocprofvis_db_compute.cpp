@@ -19,7 +19,8 @@ namespace DataModel
 		{kRPVComputeFetchKernelMetricCategoriesList, "Fetch list of metric categories in a kernel" },
 		{kRPVComputeFetchMetricCategoryTablesList, "Fetch list of tables in a category" },
 		{kRPVComputeFetchMetricValues, "Fetch values of metrics"},
-		{kRPVComputeFetchKernelMetricsMatrix, "Fetch kernel metrics matrix with pivoted metric columns"}
+		{kRPVComputeFetchKernelMetricsMatrix, "Fetch kernel metrics matrix with pivoted metric columns"},
+		{kRPVComputeFetchWorkloadMetricValueNames, "Fetch distinct value names per metric in a workload"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
@@ -147,6 +148,23 @@ namespace DataModel
 			query += "FROM compute_metric_definition ";
 			query += "WHERE workload_id = ";
 			query += params[0].param_str;
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeWorkloadMetricValueNames(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 2 && params != nullptr &&
+			params[0].param_type == kRPVComputeParamWorkloadId &&
+			params[1].param_type == kRPVComputeParamMetricId)
+		{
+			query = "SELECT DISTINCT value_name ";
+			query += "FROM compute_metric_view ";
+			query += "WHERE (metric_id = '";
+			query += params[1].param_str;
+			query += "' OR metric_id LIKE '";
+			query += params[1].param_str;
+			query += ".%')";
 		}
 		return query;
 	}
@@ -558,6 +576,9 @@ namespace DataModel
 			case kRPVComputeFetchKernelMetricsMatrix:
 				query = m_query_factory.GetComputeKernelMetricsMatrix(num, params);
 				break;
+			case kRPVComputeFetchWorkloadMetricValueNames:
+				query = m_query_factory.GetComputeWorkloadMetricValueNames(num, params);
+				break;
 			default:
 				return kRocProfVisDmResultInvalidParameter;
 			}
@@ -604,6 +625,7 @@ namespace DataModel
 				case kRPVComputeFetchKernelMetricCategoriesList:
 				case kRPVComputeFetchMetricCategoryTablesList:
 				case kRPVComputeFetchMetricValues:
+				case kRPVComputeFetchWorkloadMetricValueNames:
 					callback = CallbackGetComputeGeneric;
 					break;
 				case kRPVComputeFetchWorkloadRooflineCeiling:

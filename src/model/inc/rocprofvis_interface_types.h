@@ -508,6 +508,7 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchMetricCategoryTablesList,
     kRPVComputeFetchMetricValues,
     kRPVComputeFetchKernelMetricsMatrix,
+    kRPVComputeFetchWorkloadMetricValueNames,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration

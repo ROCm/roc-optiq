@@ -33,7 +33,7 @@ struct AvailableMetrics
         uint32_t                             id;
         std::string                          name;
         std::unordered_map<uint32_t, Entry&> entries;
-        std::vector<std::string>             values_names; //TODO
+        std::vector<std::string>             value_names;
     };
     struct Category
     {

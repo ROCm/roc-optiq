@@ -3880,6 +3880,38 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
             table.entries.insert({ static_cast<uint32_t>(table.entries.size()),
                                    workload.available_metrics.list[j] });
         }
+        uint64_t num_value_names = 0;
+        result = rocprofvis_controller_get_uint64(
+            workload_handle, kRPVControllerWorkloadNumMetricValueNames, 0,
+            &num_value_names);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        for(uint64_t k = 0; k < num_value_names; k++)
+        {
+            uint64_t cat_id = 0;
+            uint64_t tbl_id = 0;
+            result = rocprofvis_controller_get_uint64(
+                workload_handle,
+                kRPVControllerWorkloadMetricValueNameCategoryIdIndexed, k, &cat_id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_get_uint64(
+                workload_handle,
+                kRPVControllerWorkloadMetricValueNameTableIdIndexed, k, &tbl_id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            std::string name = GetString(
+                workload_handle,
+                kRPVControllerWorkloadMetricValueNameStringIndexed, k);
+            auto cat_it =
+                workload.available_metrics.tree.find(static_cast<uint32_t>(cat_id));
+            if(cat_it != workload.available_metrics.tree.end())
+            {
+                auto tbl_it =
+                    cat_it->second.tables.find(static_cast<uint32_t>(tbl_id));
+                if(tbl_it != cat_it->second.tables.end())
+                {
+                    tbl_it->second.value_names.push_back(std::move(name));
+                }
+            }
+        }
         num_entries = 0;
         result      = rocprofvis_controller_get_uint64(
             workload_handle, kRPVControllerWorkloadNumKernels, 0, &num_entries);

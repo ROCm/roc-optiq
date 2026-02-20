@@ -14,6 +14,7 @@ namespace View
 
 class RocWidget;
 class ProjectSetting;
+class TraceView;
 
 class Project
 {
@@ -50,6 +51,10 @@ public:
      * Returns the RocWidget that renders the project.
      */
     std::shared_ptr<RocWidget> GetView();
+    /*
+     * Returns the TraceView (system trace view) if this is a system trace project.
+     */
+    std::shared_ptr<TraceView> GetTraceView();
     /*
      * Returns the trace type of the project.
      */

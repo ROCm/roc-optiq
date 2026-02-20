@@ -16,13 +16,15 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_arguments.cpp
     src/rocprofvis_controller_array.cpp
     src/rocprofvis_controller_data.cpp
-    src/rocprofvis_controller_future.cpp    
-    src/rocprofvis_controller_handle.cpp    
-    src/rocprofvis_controller_string_table.cpp    
-    src/rocprofvis_controller_trace.cpp    
-    src/rocprofvis_controller_table.cpp    
-    src/rocprofvis_controller.cpp    
-    src/rocprofvis_controller_job_system.cpp	
+    src/rocprofvis_controller_future.cpp
+    src/rocprofvis_controller_handle.cpp
+    src/rocprofvis_controller_string_table.cpp
+    src/rocprofvis_controller_trace.cpp
+    src/rocprofvis_controller_table.cpp
+    src/rocprofvis_controller.cpp
+    src/rocprofvis_controller_job_system.cpp
+    src/rocprofvis_controller_process_executor.cpp
+    src/rocprofvis_controller_ai_analysis.cpp
     src/system/rocprofvis_controller_counter.cpp
     src/system/rocprofvis_controller_event.cpp
     src/system/rocprofvis_controller_graph.cpp

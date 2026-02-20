@@ -410,19 +410,9 @@ void
 SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
 {
     (void) old_settings;  // currently unused
-    if(m_usersettings.display_settings.use_dark_mode)
-    {
-        m_color_store = &DARK_THEME_COLORS;
-        ImGui::StyleColorsDark();
-        ImPlot::StyleColorsDark();
-    }
-    else
-    {
-        m_color_store = &LIGHT_THEME_COLORS;
-        ImGui::StyleColorsLight();
-        ImPlot::StyleColorsLight();
-    }
-    ApplyColorStyling();
+
+    // Apply color scheme
+    ApplyColorScheme(m_usersettings.display_settings.color_scheme);
 
     GetFontManager().SetFontSize((m_usersettings.display_settings.dpi_based_scaling)
                                      ? GetFontManager().GetDPIScaledFontIndex()
@@ -452,10 +442,107 @@ SettingsManager::GetColorWheel()
     return FLAME_COLORS;
 }
 
+void
+SettingsManager::ApplyColorScheme(ColorScheme scheme)
+{
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    switch(scheme)
+    {
+        case ColorScheme::Default:
+            if(m_usersettings.display_settings.use_dark_mode)
+            {
+                m_color_store = &DARK_THEME_COLORS;
+                ImGui::StyleColorsDark();
+                ImPlot::StyleColorsDark();
+            }
+            else
+            {
+                m_color_store = &LIGHT_THEME_COLORS;
+                ImGui::StyleColorsLight();
+                ImPlot::StyleColorsLight();
+            }
+            break;
+
+        case ColorScheme::HighContrast:
+            // High contrast black and white theme
+            ImGui::StyleColorsDark();
+            ImPlot::StyleColorsDark();
+            style.Colors[ImGuiCol_Text] = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            style.Colors[ImGuiCol_WindowBg] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+            style.Colors[ImGuiCol_Border] = ImVec4(1.0f, 1.0f, 1.0f, 0.8f);
+            style.Colors[ImGuiCol_FrameBg] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
+            style.Colors[ImGuiCol_Button] = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+            style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+            style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+            m_color_store = &DARK_THEME_COLORS;
+            break;
+
+        case ColorScheme::Solarized:
+            // Solarized Dark theme
+            ImGui::StyleColorsDark();
+            ImPlot::StyleColorsDark();
+            style.Colors[ImGuiCol_Text] = ImVec4(0.58f, 0.63f, 0.63f, 1.0f);  // base0
+            style.Colors[ImGuiCol_WindowBg] = ImVec4(0.0f, 0.17f, 0.21f, 1.0f);  // base03
+            style.Colors[ImGuiCol_Border] = ImVec4(0.07f, 0.21f, 0.26f, 1.0f);  // base02
+            style.Colors[ImGuiCol_Button] = ImVec4(0.16f, 0.47f, 0.55f, 1.0f);  // cyan
+            style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.21f, 0.54f, 0.41f, 1.0f);  // green
+            style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.13f, 0.55f, 0.52f, 1.0f);  // cyan
+            m_color_store = &DARK_THEME_COLORS;
+            break;
+
+        case ColorScheme::Nord:
+            // Nord theme
+            ImGui::StyleColorsDark();
+            ImPlot::StyleColorsDark();
+            style.Colors[ImGuiCol_Text] = ImVec4(0.85f, 0.87f, 0.91f, 1.0f);  // nord6
+            style.Colors[ImGuiCol_WindowBg] = ImVec4(0.18f, 0.20f, 0.25f, 1.0f);  // nord0
+            style.Colors[ImGuiCol_Border] = ImVec4(0.23f, 0.26f, 0.32f, 1.0f);  // nord1
+            style.Colors[ImGuiCol_Button] = ImVec4(0.36f, 0.51f, 0.71f, 1.0f);  // nord10
+            style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.51f, 0.63f, 0.76f, 1.0f);  // nord9
+            style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.56f, 0.74f, 0.73f, 1.0f);  // nord8
+            style.Colors[ImGuiCol_Header] = ImVec4(0.36f, 0.51f, 0.71f, 0.5f);
+            m_color_store = &DARK_THEME_COLORS;
+            break;
+
+        case ColorScheme::Monokai:
+            // Monokai theme
+            ImGui::StyleColorsDark();
+            ImPlot::StyleColorsDark();
+            style.Colors[ImGuiCol_Text] = ImVec4(0.97f, 0.97f, 0.95f, 1.0f);
+            style.Colors[ImGuiCol_WindowBg] = ImVec4(0.16f, 0.17f, 0.15f, 1.0f);
+            style.Colors[ImGuiCol_Border] = ImVec4(0.30f, 0.31f, 0.28f, 1.0f);
+            style.Colors[ImGuiCol_Button] = ImVec4(0.40f, 0.85f, 0.94f, 0.5f);
+            style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.64f, 0.20f, 0.68f, 0.7f);
+            style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.98f, 0.15f, 0.45f, 0.9f);
+            m_color_store = &DARK_THEME_COLORS;
+            break;
+
+        case ColorScheme::Dracula:
+            // Dracula theme
+            ImGui::StyleColorsDark();
+            ImPlot::StyleColorsDark();
+            style.Colors[ImGuiCol_Text] = ImVec4(0.95f, 0.96f, 0.98f, 1.0f);  // foreground
+            style.Colors[ImGuiCol_WindowBg] = ImVec4(0.16f, 0.16f, 0.21f, 1.0f);  // background
+            style.Colors[ImGuiCol_Border] = ImVec4(0.27f, 0.28f, 0.35f, 1.0f);  // current line
+            style.Colors[ImGuiCol_Button] = ImVec4(0.74f, 0.58f, 0.98f, 0.5f);  // purple
+            style.Colors[ImGuiCol_ButtonHovered] = ImVec4(1.0f, 0.47f, 0.78f, 0.7f);  // pink
+            style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.31f, 0.98f, 0.48f, 0.9f);  // green
+            style.Colors[ImGuiCol_Header] = ImVec4(0.27f, 0.28f, 0.35f, 1.0f);
+            m_color_store = &DARK_THEME_COLORS;
+            break;
+    }
+
+    ApplyColorStyling();
+}
+
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
-      { DisplaySettings{ false, true, 6 }, UnitSettings{ TimeFormat::kTimecode } })
+      { DisplaySettings{ false, true, 6, ColorScheme::Default },
+        UnitSettings{ TimeFormat::kTimecode },
+        KeyboardShortcuts{},
+        false, false, true, "", "" })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_display_dpi(1.5f)
@@ -579,13 +666,56 @@ SettingsManager::RemoveRecentFile(const std::string& file_path)
 }
 
 void
+SettingsManager::AddRecentConnection(const RecentConnection& connection)
+{
+    // Remove if already exists
+    RemoveRecentConnection(connection.name);
+
+    // Add to front
+    m_internalsettings.recent_connections.emplace_front(connection);
+
+    // Limit to 10 recent connections
+    if(m_internalsettings.recent_connections.size() > 10)
+    {
+        m_internalsettings.recent_connections.pop_back();
+    }
+}
+
+void
+SettingsManager::RemoveRecentConnection(const std::string& name)
+{
+    auto pos = std::find_if(m_internalsettings.recent_connections.begin(),
+                            m_internalsettings.recent_connections.end(),
+                            [&name](const RecentConnection& conn) { return conn.name == name; });
+    if(pos != m_internalsettings.recent_connections.end())
+    {
+        m_internalsettings.recent_connections.erase(pos);
+    }
+}
+
+void
 SettingsManager::SerializeInternalSettings(jt::Json& json)
 {
     jt::Json& is = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_INTERNAL];
-    int       i  = 0;
+
+    // Serialize recent files
+    int i = 0;
     for(const std::string& file : m_internalsettings.recent_files)
     {
         is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES][i++] = file;
+    }
+
+    // Serialize recent connections
+    int j = 0;
+    for(const RecentConnection& conn : m_internalsettings.recent_connections)
+    {
+        jt::Json& conn_json = is[JSON_KEY_SETTINGS_INTERNAL_RECENT_CONNECTIONS][j++];
+        conn_json["name"] = conn.name;
+        conn_json["ssh_host"] = conn.ssh_host;
+        conn_json["ssh_user"] = conn.ssh_user;
+        conn_json["ssh_port"] = conn.ssh_port;
+        conn_json["remote_app_path"] = conn.remote_app_path;
+        conn_json["remote_output_path"] = conn.remote_output_path;
     }
 }
 
@@ -593,6 +723,8 @@ void
 SettingsManager::DeserializeInternalSettings(jt::Json& json)
 {
     jt::Json& is = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_INTERNAL];
+
+    // Deserialize recent files
     if(is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES].isArray())
     {
         for(jt::Json& entry : is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES].getArray())
@@ -600,6 +732,32 @@ SettingsManager::DeserializeInternalSettings(jt::Json& json)
             if(entry.isString())
             {
                 m_internalsettings.recent_files.emplace_back(entry.getString());
+            }
+        }
+    }
+
+    // Deserialize recent connections
+    if(is[JSON_KEY_SETTINGS_INTERNAL_RECENT_CONNECTIONS].isArray())
+    {
+        for(jt::Json& entry : is[JSON_KEY_SETTINGS_INTERNAL_RECENT_CONNECTIONS].getArray())
+        {
+            if(entry.isObject())
+            {
+                RecentConnection conn;
+                if(entry["name"].isString())
+                    conn.name = entry["name"].getString();
+                if(entry["ssh_host"].isString())
+                    conn.ssh_host = entry["ssh_host"].getString();
+                if(entry["ssh_user"].isString())
+                    conn.ssh_user = entry["ssh_user"].getString();
+                if(entry["ssh_port"].isLong())
+                    conn.ssh_port = static_cast<int>(entry["ssh_port"].getLong());
+                if(entry["remote_app_path"].isString())
+                    conn.remote_app_path = entry["remote_app_path"].getString();
+                if(entry["remote_output_path"].isString())
+                    conn.remote_output_path = entry["remote_output_path"].getString();
+
+                m_internalsettings.recent_connections.emplace_back(conn);
             }
         }
     }
@@ -612,6 +770,9 @@ SettingsManager::SerializeOtherSettings(jt::Json& json)
 
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT] = m_usersettings.dont_ask_before_exit;
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE] = m_usersettings.dont_ask_before_tab_closing;
+    os[JSON_KEY_SETTINGS_AUTO_RUN_AI_ANALYSIS] = m_usersettings.auto_run_ai_analysis;
+    os[JSON_KEY_SETTINGS_ANTHROPIC_API_KEY] = m_usersettings.anthropic_api_key;
+    os[JSON_KEY_SETTINGS_OPENAI_API_KEY] = m_usersettings.openai_api_key;
 }
 
 void
@@ -627,6 +788,19 @@ SettingsManager::DeserializeOtherSettings(jt::Json& json)
     {
         m_usersettings.dont_ask_before_tab_closing =
             static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_AUTO_RUN_AI_ANALYSIS].isBool())
+    {
+        m_usersettings.auto_run_ai_analysis =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_AUTO_RUN_AI_ANALYSIS].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_ANTHROPIC_API_KEY].isString())
+    {
+        m_usersettings.anthropic_api_key = os[JSON_KEY_SETTINGS_ANTHROPIC_API_KEY].getString();
+    }
+    if(os[JSON_KEY_SETTINGS_OPENAI_API_KEY].isString())
+    {
+        m_usersettings.openai_api_key = os[JSON_KEY_SETTINGS_OPENAI_API_KEY].getString();
     }
 }
 

@@ -24,13 +24,18 @@
 #endif
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_trace_view.h"
+#include "rocprofvis_analysis_view.h"
+#include "rocprofvis_ai_analysis_view.h"
 #include "rocprofvis_view_module.h"
+#include "rocprofvis_welcome_view.h"
+#include "rocprofvis_profiling_dialog.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
 #include <sstream>
+#include <spdlog/spdlog.h>
 
 namespace RocProfVis
 {
@@ -97,6 +102,8 @@ AppWindow::AppWindow()
 #endif
 , m_disable_app_interaction(false)
 , m_restore_fullscreen_later(false)
+, m_welcome_tab_open(false)
+, m_welcome_tab_id("")
 {}
 
 AppWindow::~AppWindow()
@@ -171,6 +178,13 @@ AppWindow::Init()
 
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
+
+    // Add welcome tab if no traces are open
+    auto welcome_view = std::make_shared<WelcomeView>();
+    m_welcome_tab_id = "welcome_tab";
+    TabItem welcome_tab = TabItem{"Welcome", m_welcome_tab_id, welcome_view, false};
+    m_tab_container->AddTab(std::move(welcome_tab));
+    m_welcome_tab_open = true;
 
     return result;
 }
@@ -339,6 +353,7 @@ AppWindow::Render()
         RenderFileMenu(project);
         RenderEditMenu(project);
         RenderViewMenu(project);
+        RenderToolsMenu(project);
         RenderHelpMenu();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         RenderDeveloperMenu();
@@ -436,6 +451,13 @@ AppWindow::OpenFile(std::string file_path)
             m_tab_container->AddTab(std::move(tab));
             m_projects[project->GetID()] = std::move(project);
             SettingsManager::GetInstance().AddRecentFile(file_path);
+
+            // Close welcome tab when first trace is loaded
+            if(m_welcome_tab_open)
+            {
+                m_tab_container->RemoveTab(m_welcome_tab_id);
+                m_welcome_tab_open = false;
+            }
             break;
         }
         case Project::OpenResult::Duplicate:
@@ -450,6 +472,52 @@ AppWindow::OpenFile(std::string file_path)
             break;
         }
     }
+}
+
+void
+AppWindow::LoadAiAnalysis(const std::string& ai_json_path)
+{
+    spdlog::info("Loading AI analysis: {}", ai_json_path);
+
+    // Get the current project's trace view
+    Project* current_project = GetCurrentProject();
+    if(!current_project)
+    {
+        spdlog::warn("No current project to load AI analysis into");
+        return;
+    }
+
+    // Get the trace view from the project
+    auto trace_view = current_project->GetTraceView();
+    if(!trace_view)
+    {
+        spdlog::warn("Current project has no trace view");
+        return;
+    }
+
+    // Get the analysis view from the trace view
+    auto analysis_view = trace_view->GetAnalysisView();
+    if(!analysis_view)
+    {
+        spdlog::warn("Trace view has no analysis view");
+        return;
+    }
+
+    // Get the AI analysis view from the analysis view
+    auto ai_analysis_view = analysis_view->GetAiAnalysisView();
+    if(!ai_analysis_view)
+    {
+        spdlog::warn("Analysis view has no AI analysis view");
+        return;
+    }
+
+    // Load the JSON file
+    ai_analysis_view->LoadFile(ai_json_path);
+
+    // Switch to the AI Analysis tab
+    analysis_view->SetActiveTabByID("ai_analysis");
+
+    spdlog::info("AI analysis loaded successfully");
 }
 
 void
@@ -625,6 +693,25 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
 #endif
+        ImGui::EndMenu();
+    }
+}
+
+void
+AppWindow::RenderToolsMenu(Project* project)
+{
+    (void) project;
+
+    if(ImGui::BeginMenu("Tools"))
+    {
+        if(ImGui::MenuItem("Run Profiling..."))
+        {
+            // TODO: Show profiling dialog
+            ShowMessageDialog(
+                "Run Profiling",
+                "The profiling dialog is available from the Welcome tab.\n\n"
+                "You can access it by closing all tabs or clicking \"Start Profiling\" on the Welcome screen.");
+        }
         ImGui::EndMenu();
     }
 }
@@ -1198,6 +1285,94 @@ AppWindow::RenderDebugOuput()
     }
 }
 #endif  // ROCPROFVIS_DEVELOPER_MODE
+
+void AppWindow::ShowProfilingDialog()
+{
+    if(!m_profiling_dialog)
+    {
+        m_profiling_dialog = std::make_unique<ProfilingDialog>();
+        m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
+        {
+            // Store the profiling config for future use
+            StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
+
+            // Load the results
+            OpenFile(trace_path);
+            if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
+            {
+                LoadAiAnalysis(ai_json_path);
+            }
+        });
+    }
+    m_profiling_dialog->Show();
+}
+
+void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_args)
+{
+    // Get the current trace path from the current project
+    auto* project = GetCurrentProject();
+    if(!project)
+    {
+        spdlog::warn("No current project to get profiling config");
+        ShowMessageDialog("Error", "Cannot run recommendation: no current trace loaded");
+        return;
+    }
+
+    // Look up stored profiling config for this trace
+    auto* config = GetStoredProfilingConfig(project->GetID());
+    if(!config)
+    {
+        spdlog::warn("No stored profiling config for trace: {}", project->GetID());
+        ShowMessageDialog("Error", "Cannot run recommendation: original profiling configuration not found.\n\n"
+                                    "This feature requires traces to be profiled through ROCm Optiq's profiling workflow.");
+        return;
+    }
+
+    // Create a new config with updated tool args
+    ProfilingDialog::ProfilingConfig new_config = *config;
+    new_config.tool_args = tool_args;
+
+    // Create profiling dialog if needed
+    if(!m_profiling_dialog)
+    {
+        m_profiling_dialog = std::make_unique<ProfilingDialog>();
+        m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
+        {
+            // Store the profiling config for future use
+            StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
+
+            // Load the results
+            OpenFile(trace_path);
+            if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
+            {
+                LoadAiAnalysis(ai_json_path);
+            }
+        });
+    }
+
+    // Show dialog with pre-populated config
+    m_profiling_dialog->ShowWithConfig(new_config);
+}
+
+void AppWindow::StoreProfilingConfig(const std::string& trace_path, const ProfilingDialog::ProfilingConfig& config)
+{
+    // Normalize the path
+    std::string normalized_path = std::filesystem::path(trace_path).string();
+    m_profiling_configs[normalized_path] = config;
+    spdlog::info("Stored profiling config for trace: {}", normalized_path);
+}
+
+ProfilingDialog::ProfilingConfig* AppWindow::GetStoredProfilingConfig(const std::string& trace_path)
+{
+    // Normalize the path
+    std::string normalized_path = std::filesystem::path(trace_path).string();
+    auto it = m_profiling_configs.find(normalized_path);
+    if(it != m_profiling_configs.end())
+    {
+        return &it->second;
+    }
+    return nullptr;
+}
 
 }  // namespace View
 }  // namespace RocProfVis

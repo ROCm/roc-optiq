@@ -64,22 +64,28 @@ find_package(Vulkan REQUIRED)
 
 # View related src files
 set(VIEW_FILES
-    src/view/src/rocprofvis_appwindow.cpp 
-    src/view/src/rocprofvis_appwindow.h 
+    src/view/src/rocprofvis_appwindow.cpp
+    src/view/src/rocprofvis_appwindow.h
     src/view/src/rocprofvis_annotation_view.cpp
-    src/view/src/rocprofvis_track_item.cpp 
-    src/view/src/rocprofvis_flame_track_item.cpp 
-    src/view/src/rocprofvis_timeline_arrow.cpp 
-    src/view/src/rocprofvis_events_view.cpp 
+    src/view/src/rocprofvis_track_item.cpp
+    src/view/src/rocprofvis_flame_track_item.cpp
+    src/view/src/rocprofvis_timeline_arrow.cpp
+    src/view/src/rocprofvis_events_view.cpp
     src/view/src/rocprofvis_settings_manager.cpp
-    src/view/src/rocprofvis_font_manager.cpp 
+    src/view/src/rocprofvis_font_manager.cpp
     src/view/src/rocprofvis_annotations.cpp
-    src/view/src/rocprofvis_settings_panel.cpp 
+    src/view/src/rocprofvis_settings_panel.cpp
     src/view/src/rocprofvis_stickynote.cpp
     src/view/src/rocprofvis_click_manager.cpp
     src/view/src/rocprofvis_analysis_view.cpp
     src/view/src/rocprofvis_ai_analysis_view.cpp
-    src/view/src/rocprofvis_trace_view.cpp 
+    src/view/src/rocprofvis_trace_view.cpp
+    src/view/src/rocprofvis_welcome_view.cpp
+    src/view/src/rocprofvis_welcome_view.h
+    src/view/src/rocprofvis_profiling_dialog.cpp
+    src/view/src/rocprofvis_profiling_dialog.h
+    src/view/src/rocprofvis_command_execution_dialog.cpp
+    src/view/src/rocprofvis_command_execution_dialog.h
     src/view/src/rocprofvis_line_track_item.cpp 
     src/view/src/rocprofvis_timeline_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 

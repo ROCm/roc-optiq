@@ -95,6 +95,7 @@ public:
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
+    void           HandleHotkeys();
 
 private:
     void                            UpdateMaxMetaAreaSize(float new_size);

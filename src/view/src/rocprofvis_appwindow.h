@@ -7,8 +7,12 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
+#include "rocprofvis_profiling_dialog.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
+
+#include <map>
+#include <string>
 
 #ifdef USE_NATIVE_FILE_DIALOG
 #include <atomic>
@@ -65,8 +69,15 @@ public:
     Project* GetCurrentProject();
 
     void OpenFile(std::string file_path);
+    void LoadAiAnalysis(const std::string& ai_json_path);
 
     void ShowCloseConfirm();
+
+    // Profiling support - store config and show dialog
+    void ShowProfilingDialog();
+    void ShowProfilingDialogWithRecommendation(const std::string& tool_args);
+    void StoreProfilingConfig(const std::string& trace_path, const ProfilingDialog::ProfilingConfig& config);
+    ProfilingDialog::ProfilingConfig* GetStoredProfilingConfig(const std::string& trace_path);
     
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;
@@ -79,6 +90,7 @@ private:
     void RenderFileMenu(Project* project);
     void RenderEditMenu(Project* project);
     void RenderViewMenu(Project* project);
+    void RenderToolsMenu(Project* project);
     void RenderHelpMenu();
 
     void RenderFileDialog();
@@ -138,11 +150,18 @@ private:
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
+    std::unique_ptr<ProfilingDialog>    m_profiling_dialog;
+
+    // Store profiling configs associated with trace files
+    std::map<std::string, ProfilingDialog::ProfilingConfig> m_profiling_configs;
 
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
     bool                             m_is_fullscreen;
     bool                             m_restore_fullscreen_later;
+
+    bool                             m_welcome_tab_open;
+    std::string                      m_welcome_tab_id;
 };
 
 }  // namespace View

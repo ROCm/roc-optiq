@@ -58,6 +58,8 @@ public:
     void CreateView();
     void DestroyView();
 
+    std::shared_ptr<AnalysisView> GetAnalysisView() { return m_analysis_view; }
+
     bool HasTrimActiveTrimSelection() const;
     bool IsTrimSaveAllowed() const;
 
@@ -88,6 +90,7 @@ private:
     std::shared_ptr<EventSearch>       m_event_search;
     std::shared_ptr<SummaryView>       m_summary_view;
     std::shared_ptr<Minimap>           m_minimap;
+    std::shared_ptr<AnalysisView>      m_analysis_view;
 
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_analysis_item;

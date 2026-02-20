@@ -30,6 +30,9 @@ public:
     void Render() override;
     void Update() override;
 
+    std::shared_ptr<AiAnalysisView> GetAiAnalysisView() { return m_ai_analysis_view; }
+    void SetActiveTabByID(const std::string& tab_id) { m_tab_container->SetActiveTab(tab_id); }
+
 private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
 

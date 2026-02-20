@@ -286,6 +286,35 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
             ImGui::CloseCurrentPopup();
         }
 
+        ImGui::Separator();
+
+        if(ImGui::BeginMenu("Keyboard Shortcuts"))
+        {
+            ImGui::TextDisabled("Zoom:");
+            ImGui::Text("  +/=           Zoom in");
+            ImGui::Text("  -             Zoom out");
+            ImGui::Text("  Ctrl+0        Reset zoom");
+            ImGui::Separator();
+            ImGui::TextDisabled("Pan:");
+            ImGui::Text("  Left Arrow    Pan left");
+            ImGui::Text("  Right Arrow   Pan right");
+            ImGui::Text("  Shift+Arrow   Pan faster");
+            ImGui::Text("  Home          Jump to start");
+            ImGui::Text("  End           Jump to end");
+            ImGui::Separator();
+            ImGui::TextDisabled("Vertical Scroll:");
+            ImGui::Text("  Up Arrow      Scroll up");
+            ImGui::Text("  Down Arrow    Scroll down");
+            ImGui::Text("  Ctrl+Arrow    Scroll faster");
+            ImGui::Text("  Page Up/Down  Scroll by page");
+            ImGui::Separator();
+            ImGui::TextDisabled("Selection:");
+            ImGui::Text("  Ctrl+A        Select all");
+            ImGui::Text("  Escape        Clear selection");
+            ImGui::Text("  Ctrl+F        Frame selection");
+            ImGui::Text("  Ctrl+Shift+Z  Zoom to selection");
+            ImGui::EndMenu();
+        }
 
         ImGui::EndPopup();
     }
@@ -1730,6 +1759,9 @@ TimelineView::RenderTraceView()
     m_stop_user_interaction |= !ImGui::IsWindowHovered(
         ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
 
+    // Handle keyboard shortcuts
+    HandleHotkeys();
+
     RenderGrid();
 
     RenderGraphView();
@@ -2367,6 +2399,158 @@ TimelineViewProjectSettings::DisplayTrack(uint64_t track_id) const
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK][track_id]
                           [JSON_KEY_TIMELINE_TRACK_DISPLAY]
                               .getBool();
+}
+
+void
+TimelineView::HandleHotkeys()
+{
+    // Only process hotkeys when timeline window is focused
+    if(!ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows))
+    {
+        return;
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    bool ctrl = io.KeyCtrl;
+    bool shift = io.KeyShift;
+    bool alt = io.KeyAlt;
+
+    const auto& shortcuts = m_settings.GetUserSettings().keyboard_shortcuts;
+
+    // Zoom controls
+    if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.zoom_in_key)) ||
+       ImGui::IsKeyPressed(ImGuiKey_KeypadAdd))
+    {
+        // Zoom In: increase zoom level
+        float current_zoom = m_tpt->GetZoom();
+        m_tpt->SetZoom(current_zoom * 1.25f);  // Zoom in by 25%
+        m_recalculate_grid_interval = true;
+    }
+    else if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.zoom_out_key)) ||
+            ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract))
+    {
+        // Zoom Out: decrease zoom level
+        float current_zoom = m_tpt->GetZoom();
+        m_tpt->SetZoom(current_zoom * 0.8f);  // Zoom out by 20%
+        m_recalculate_grid_interval = true;
+    }
+    else if((shortcuts.reset_zoom_ctrl && ctrl || !shortcuts.reset_zoom_ctrl) &&
+            ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.reset_zoom_key)))
+    {
+        // Reset Zoom
+        ResetView();
+    }
+
+    // Pan controls
+    if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.pan_left_key)))
+    {
+        // Pan Left
+        double pan_amount = shift ? m_tpt->GetVWidth() * 0.25 : m_tpt->GetVWidth() * 0.1;
+        m_tpt->SetViewTimeOffsetNs(m_tpt->GetViewTimeOffsetNs() - pan_amount);
+    }
+    else if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.pan_right_key)))
+    {
+        // Pan Right
+        double pan_amount = shift ? m_tpt->GetVWidth() * 0.25 : m_tpt->GetVWidth() * 0.1;
+        m_tpt->SetViewTimeOffsetNs(m_tpt->GetViewTimeOffsetNs() + pan_amount);
+    }
+    else if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.jump_start_key)))
+    {
+        // Jump to Start
+        m_tpt->SetViewTimeOffsetNs(0);
+    }
+    else if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.jump_end_key)))
+    {
+        // Jump to End
+        const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
+        double end_time = tlm.GetEndTime();
+        m_tpt->SetViewTimeOffsetNs(end_time - m_tpt->GetVWidth());
+    }
+
+    // Vertical scroll controls
+    if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.scroll_up_key)) && !shift)
+    {
+        // Scroll Up
+        float scroll_amount = ctrl ? 100.0f : 20.0f;
+        m_scroll_position_y = std::max(0.0f, m_scroll_position_y - scroll_amount);
+    }
+    else if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.scroll_down_key)) && !shift)
+    {
+        // Scroll Down
+        float scroll_amount = ctrl ? 100.0f : 20.0f;
+        m_scroll_position_y = std::min(m_content_max_y_scroll, m_scroll_position_y + scroll_amount);
+    }
+    else if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.page_up_key)))
+    {
+        // Page Up
+        float page_height = GetTrackViewportHeight();
+        m_scroll_position_y = std::max(0.0f, m_scroll_position_y - page_height);
+    }
+    else if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.page_down_key)))
+    {
+        // Page Down
+        float page_height = GetTrackViewportHeight();
+        m_scroll_position_y = std::min(m_content_max_y_scroll, m_scroll_position_y + page_height);
+    }
+
+    // Selection controls
+    if((shortcuts.select_all_ctrl && ctrl || !shortcuts.select_all_ctrl) &&
+       ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.select_all_key)))
+    {
+        // Select All
+        const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
+        double end_time = tlm.GetEndTime();
+        m_timeline_selection->SelectTimeRange(0, end_time);
+    }
+    else if(ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.clear_selection_key)))
+    {
+        // Clear Selection
+        ClearTimeRangeSelection();
+    }
+
+    // Zoom to selection
+    if((shortcuts.zoom_to_selection_ctrl && ctrl || !shortcuts.zoom_to_selection_ctrl) &&
+       (shortcuts.zoom_to_selection_shift && shift || !shortcuts.zoom_to_selection_shift) &&
+       ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.zoom_to_selection_key)))
+    {
+        // Zoom to Selection: fit selection to fill the view
+        if(m_timeline_selection->HasValidTimeRangeSelection())
+        {
+            double start_ts = 0;
+            double end_ts = 0;
+            if(m_timeline_selection->GetSelectedTimeRange(start_ts, end_ts))
+            {
+                double range = end_ts - start_ts;
+
+                if(range > 0)
+                {
+                    // Calculate zoom needed to fit selection
+                    double total_range = m_tpt->GetRangeX();
+                    float new_zoom = static_cast<float>(total_range / range);
+                    m_tpt->SetZoom(new_zoom);
+                    m_tpt->SetViewTimeOffsetNs(start_ts);
+                    m_recalculate_grid_interval = true;
+                }
+            }
+        }
+    }
+
+    // Frame selection (fit selection in view without changing zoom)
+    if((shortcuts.frame_selection_ctrl && ctrl || !shortcuts.frame_selection_ctrl) &&
+       ImGui::IsKeyPressed(static_cast<ImGuiKey>(shortcuts.frame_selection_key)))
+    {
+        // Frame Selection: center selection without changing zoom
+        if(m_timeline_selection->HasValidTimeRangeSelection())
+        {
+            double start_ts = 0;
+            double end_ts = 0;
+            if(m_timeline_selection->GetSelectedTimeRange(start_ts, end_ts))
+            {
+                double center = (start_ts + end_ts) / 2.0;
+                m_tpt->SetViewTimeOffsetNs(center - m_tpt->GetVWidth() / 2.0);
+            }
+        }
+    }
 }
 
 }  // namespace View

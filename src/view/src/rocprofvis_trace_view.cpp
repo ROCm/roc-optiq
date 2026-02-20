@@ -242,14 +242,14 @@ TraceView::CreateView()
     auto sidebar =
         std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
                                   m_timeline_view->GetGraphs(), m_data_provider);
-    auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
-                                                   m_timeline_selection, m_annotations);
+    m_analysis_view = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+                                                     m_timeline_selection, m_annotations);
 
     m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible = m_settings_manager.GetAppWindowSettings().show_sidebar;
     m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
 
-    m_analysis_item = LayoutItem::CreateFromWidget(analysis);
+    m_analysis_item = LayoutItem::CreateFromWidget(m_analysis_view);
     m_analysis_item->m_visible =
         m_settings_manager.GetAppWindowSettings().show_details_panel;
 

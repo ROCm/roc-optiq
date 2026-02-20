@@ -199,6 +199,26 @@ SettingsPanel::RenderDisplayOptions()
     }
 
     ImGui::Spacing();
+
+    // Color scheme selection
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Color Scheme");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("High Contrast").x + 2 * style.FramePadding.x +
+                            ImGui::GetFrameHeightWithSpacing());
+    int color_scheme_index = static_cast<int>(m_usersettings.display_settings.color_scheme);
+    if(ImGui::Combo("##color_scheme", &color_scheme_index,
+                    "Default\0High Contrast\0Solarized\0Nord\0Monokai\0Dracula\0\0"))
+    {
+        m_usersettings.display_settings.color_scheme = static_cast<ColorScheme>(color_scheme_index);
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Choose a color scheme preset for the interface.");
+    }
+
+    ImGui::Spacing();
     ImGui::TextUnformatted("Fonts");
     ImGui::Separator();
 
@@ -302,6 +322,77 @@ SettingsPanel::RenderOtherSettings()
                     &m_usersettings.dont_ask_before_exit);
     ImGui::Checkbox("Don't ask before closing tabs",
                     &m_usersettings.dont_ask_before_tab_closing);
+
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Profiling options");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+    ImGui::Checkbox("Auto-run AI analysis after profiling",
+                    &m_usersettings.auto_run_ai_analysis);
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // API Keys section
+    ImGui::TextUnformatted("AI Analysis API Keys");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+
+    // Anthropic API Key
+    ImGui::TextUnformatted("Anthropic API Key:");
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("API key for Claude (Anthropic)\nGet yours at https://console.anthropic.com/");
+    }
+    ImGui::SameLine(200);
+
+    // Use a static buffer for editing
+    static char anthropic_buffer[256] = {0};
+    static bool anthropic_initialized = false;
+    if(!anthropic_initialized || std::strcmp(anthropic_buffer, m_usersettings.anthropic_api_key.c_str()) != 0)
+    {
+        std::strncpy(anthropic_buffer, m_usersettings.anthropic_api_key.c_str(), sizeof(anthropic_buffer) - 1);
+        anthropic_initialized = true;
+    }
+
+    ImGui::PushItemWidth(-1);
+    if(ImGui::InputText("##anthropic_key", anthropic_buffer, sizeof(anthropic_buffer), ImGuiInputTextFlags_Password))
+    {
+        m_usersettings.anthropic_api_key = anthropic_buffer;
+        m_settings_changed = true;
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::Spacing();
+
+    // OpenAI API Key
+    ImGui::TextUnformatted("OpenAI API Key:");
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("API key for GPT (OpenAI)\nGet yours at https://platform.openai.com/api-keys");
+    }
+    ImGui::SameLine(200);
+
+    // Use a static buffer for editing
+    static char openai_buffer[256] = {0};
+    static bool openai_initialized = false;
+    if(!openai_initialized || std::strcmp(openai_buffer, m_usersettings.openai_api_key.c_str()) != 0)
+    {
+        std::strncpy(openai_buffer, m_usersettings.openai_api_key.c_str(), sizeof(openai_buffer) - 1);
+        openai_initialized = true;
+    }
+
+    ImGui::PushItemWidth(-1);
+    if(ImGui::InputText("##openai_key", openai_buffer, sizeof(openai_buffer), ImGuiInputTextFlags_Password))
+    {
+        m_usersettings.openai_api_key = openai_buffer;
+        m_settings_changed = true;
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::Spacing();
+    ImGui::TextDisabled("Note: API keys are stored locally and used as defaults in profiling dialogs.");
+
     m_settings_changed = true;
 }
 

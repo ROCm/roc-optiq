@@ -3,7 +3,9 @@
 
 #include "rocprofvis_ai_analysis_view.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_command_execution_dialog.h"
 #include "rocprofvis_settings_manager.h"
+#include "widgets/rocprofvis_dialog.h"
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
@@ -100,6 +102,12 @@ AiAnalysisView::Render()
         RenderAnalysisContent();
 
     ImGui::EndChild();
+
+    // Render command execution dialog if it exists
+    if(m_command_execution_dialog)
+    {
+        m_command_execution_dialog->Render();
+    }
 }
 
 // ─── load screen ─────────────────────────────────────────────────────────────
@@ -651,6 +659,13 @@ AiAnalysisView::RenderRecommendations()
                                 ImGuiInputTextFlags_ReadOnly);
 
                             ImGui::PopStyleColor(3);
+
+                            // Add "Run This Command" button
+                            ImGui::Spacing();
+                            if(ImGui::Button(("Run This Command##run_" + std::to_string(idx) + "_" + std::to_string(ci)).c_str()))
+                            {
+                                ExecuteRecommendationCommand(full_cmd, idx);
+                            }
                         }
 
                         ImGui::Unindent();
@@ -1111,6 +1126,133 @@ AiAnalysisView::RenderWarnings()
     }
 
     ImGui::Unindent();
+}
+
+// ─── command execution ───────────────────────────────────────────────────────
+
+void
+AiAnalysisView::ExecuteRecommendationCommand(const std::string& command, int recommendation_index)
+{
+    // Parse tool arguments from the command
+    std::string tool_args = ParseToolArgsFromCommand(command);
+
+    if(tool_args.empty())
+    {
+        AppWindow::GetInstance()->ShowMessageDialog("Error",
+            "Could not parse profiling tool arguments from recommendation command:\n\n" + command);
+        return;
+    }
+
+    // Show confirmation dialog
+    std::string message = "This will open the profiling dialog pre-populated with your original configuration\n"
+                         "and the recommended tool arguments:\n\n" +
+                         tool_args +
+                         "\n\nYou can review and modify the configuration before running.";
+
+    AppWindow::GetInstance()->ShowConfirmationDialog(
+        "Run Recommended Profiling",
+        message,
+        [tool_args]()
+        {
+            // Show profiling dialog with the original config and new tool args
+            AppWindow::GetInstance()->ShowProfilingDialogWithRecommendation(tool_args);
+        }
+    );
+}
+
+std::string
+AiAnalysisView::ParseToolArgsFromCommand(const std::string& command)
+{
+    // The command format is typically:
+    // rocprofv3 [TOOL_ARGS] [APP_PATH] [APP_ARGS]
+    // or
+    // rocprofv3 [TOOL_ARGS] -d [OUTPUT_DIR] -o [OUTPUT_FILE] -- [APP_PATH] [APP_ARGS]
+    //
+    // We need to extract the tool arguments (flags between rocprofv3 and the application)
+
+    // Find "rocprofv3" or "rocprof-compute" or "rocprof-sys"
+    size_t tool_pos = command.find("rocprofv3");
+    if(tool_pos == std::string::npos)
+    {
+        tool_pos = command.find("rocprof-compute");
+    }
+    if(tool_pos == std::string::npos)
+    {
+        tool_pos = command.find("rocprof-sys");
+    }
+    if(tool_pos == std::string::npos)
+    {
+        return "";
+    }
+
+    // Find the end of the tool name
+    size_t args_start = command.find(' ', tool_pos);
+    if(args_start == std::string::npos)
+    {
+        return "";
+    }
+
+    // Skip whitespace
+    args_start = command.find_first_not_of(' ', args_start);
+    if(args_start == std::string::npos)
+    {
+        return "";
+    }
+
+    // Find where arguments end - look for common patterns:
+    // 1. " -- " (separator before app)
+    // 2. " /" (absolute path like /app or /path/to/app)
+    // 3. " -o " or " -d " (output options, extract up to and including these)
+
+    // First, check if there's a "--" separator
+    size_t separator_pos = command.find(" -- ", args_start);
+    if(separator_pos != std::string::npos)
+    {
+        // Arguments are everything from args_start to separator
+        return command.substr(args_start, separator_pos - args_start);
+    }
+
+    // Otherwise, try to find output options and include them
+    // Look for patterns like "-o output.rpd" or "-d /output/dir"
+    std::string args = command.substr(args_start);
+
+    // Simple heuristic: tool args are typically flags starting with - or --
+    // Stop when we hit something that looks like a path (starts with / or contains ./)
+    std::string result;
+    size_t pos = 0;
+    bool in_option = false;
+    std::string current_token;
+
+    std::istringstream iss(args);
+    std::string token;
+    while(iss >> token)
+    {
+        // If token starts with -, it's likely a tool option
+        if(token[0] == '-')
+        {
+            if(!result.empty()) result += " ";
+            result += token;
+            in_option = true;
+        }
+        // If we're after an option flag, include the next token (the option value)
+        else if(in_option)
+        {
+            result += " " + token;
+            in_option = false;
+        }
+        // If token looks like an absolute path or relative path, stop
+        else if(token[0] == '/' || token.find("./") != std::string::npos)
+        {
+            break;
+        }
+        // Otherwise might be end of args
+        else
+        {
+            break;
+        }
+    }
+
+    return result;
 }
 
 }  // namespace View

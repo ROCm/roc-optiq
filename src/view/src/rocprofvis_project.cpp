@@ -43,6 +43,16 @@ Project::GetView()
     return m_view;
 }
 
+std::shared_ptr<TraceView>
+Project::GetTraceView()
+{
+    if(m_trace_type == TraceType::System)
+    {
+        return std::dynamic_pointer_cast<TraceView>(m_view);
+    }
+    return nullptr;
+}
+
 Project::TraceType
 Project::GetTraceType() const
 {

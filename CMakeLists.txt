@@ -129,8 +129,9 @@ list(APPEND VIEW_FILES
     src/view/src/compute/rocprofvis_compute_kernel_details.cpp
     src/view/src/compute/rocprofvis_compute_memory_chart.cpp
     src/view/src/compute/rocprofvis_compute_selection.cpp
+    src/view/src/compute/rocprofvis_compute_summary.cpp
+    src/view/src/compute/rocprofvis_compute_roofline.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
- 
 )
 endif(COMPUTE_UI_SUPPORT)
 
@@ -205,6 +206,7 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)

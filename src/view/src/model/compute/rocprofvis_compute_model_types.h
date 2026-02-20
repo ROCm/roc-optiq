@@ -89,6 +89,7 @@ struct WorkloadInfo
             rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth_type;
             rocprofvis_controller_roofline_ceiling_compute_type_t   compute_type;
             Line                                                    position;
+            double                                                  throughput;
         };
         std::unordered_map<
             rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
@@ -99,7 +100,9 @@ struct WorkloadInfo
             rocprofvis_controller_roofline_ceiling_compute_type_t,
             std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
                                Ceiling>>
-            ceiling_compute;
+              ceiling_compute;
+        Point max;
+        Point min;
     };
     uint32_t                                 id;
     std::string                              name;

@@ -950,10 +950,12 @@ typedef enum rocprofvis_controller_roofline_properties_t : uint32_t
     kRPVControllerRooflineCeilingComputeTypeIndexed,
     kRPVControllerRooflineCeilingComputeXIndexed,
     kRPVControllerRooflineCeilingComputeYIndexed,
+    kRPVControllerRooflineCeilingComputeThroughputIndexed,
     kRPVControllerRooflineNumCeilingsBandwidth,
     kRPVControllerRooflineCeilingBandwidthTypeIndexed,
     kRPVControllerRooflineCeilingBandwidthXIndexed,
     kRPVControllerRooflineCeilingBandwidthYIndexed,
+    kRPVControllerRooflineCeilingBandwidthThroughputIndexed,
     kRPVControllerRooflineNumCeilingsRidge,
     kRPVControllerRooflineCeilingRidgeComputeTypeIndexed,
     kRPVControllerRooflineCeilingRidgeBandwidthTypeIndexed,
@@ -972,7 +974,8 @@ typedef enum rocprofvis_controller_roofline_properties_t : uint32_t
  */
 typedef enum rocprofvis_controller_roofline_ceiling_compute_type_t : uint32_t
 {
-    kRPVControllerRooflineCeilingComputeMFMAFP4,
+    __KRPVControllerRooflineCeilingComputeTypeFirst,
+    kRPVControllerRooflineCeilingComputeMFMAFP4 = __KRPVControllerRooflineCeilingComputeTypeFirst,
     kRPVControllerRooflineCeilingComputeMFMAFP6,
     kRPVControllerRooflineCeilingComputeMFMAFP8,
     kRPVControllerRooflineCeilingComputeVALUI8,
@@ -985,7 +988,8 @@ typedef enum rocprofvis_controller_roofline_ceiling_compute_type_t : uint32_t
     kRPVControllerRooflineCeilingComputeVALUI32,
     kRPVControllerRooflineCeilingComputeVALUFP64,
     kRPVControllerRooflineCeilingComputeMFMAFP64,
-    kRPVControllerRooflineCeilingComputeVALUI64
+    kRPVControllerRooflineCeilingComputeVALUI64,
+    __KRPVControllerRooflineCeilingComputeTypeLast
 } rocprofvis_controller_roofline_ceiling_compute_type_t;
 
 /*
@@ -993,10 +997,12 @@ typedef enum rocprofvis_controller_roofline_ceiling_compute_type_t : uint32_t
 */
 typedef enum rocprofvis_controller_roofline_ceiling_bandwidth_type_t : uint32_t
 {
-    kRPVControllerRooflineCeilingTypeBandwidthHBM,
+    __KRPVControllerRooflineCeilingBandwidthTypeFirst,
+    kRPVControllerRooflineCeilingTypeBandwidthHBM = __KRPVControllerRooflineCeilingBandwidthTypeFirst,
     kRPVControllerRooflineCeilingTypeBandwidthL2,
     kRPVControllerRooflineCeilingTypeBandwidthL1,
-    kRPVControllerRooflineCeilingTypeBandwidthLDS
+    kRPVControllerRooflineCeilingTypeBandwidthLDS,
+    __KRPVControllerRooflineCeilingBandwidthTypeLast
 } rocprofvis_controller_roofline_ceiling_bandwidth_type_t;
 
 /*

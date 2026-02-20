@@ -1320,16 +1320,55 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
 
     // Look up stored profiling config for this trace
     auto* config = GetStoredProfilingConfig(project->GetID());
+
+    ProfilingDialog::ProfilingConfig new_config;
+
     if(!config)
     {
-        spdlog::warn("No stored profiling config for trace: {}", project->GetID());
-        ShowMessageDialog("Error", "Cannot run recommendation: original profiling configuration not found.\n\n"
-                                    "This feature requires traces to be profiled through ROCm Optiq's profiling workflow.");
+        // No stored config - this trace was profiled externally
+        // Create a default local config with the recommended tool args
+        spdlog::info("No stored profiling config for trace: {} - using default local config", project->GetID());
+
+        new_config.mode = ProfilingDialog::ExecutionMode::Local;
+        new_config.tool = ProfilingDialog::ProfilingTool::RocProfV3;
+        new_config.tool_args = tool_args;
+        new_config.run_ai_analysis = true;
+
+        // Leave application_path and output_directory empty for user to fill in
+        ShowConfirmationDialog(
+            "Run Recommended Profiling",
+            "This trace was not profiled through ROCm Optiq.\n\n"
+            "The profiling dialog will open with the recommended tool arguments:\n" + tool_args + "\n\n"
+            "Please configure the application path and other settings manually.",
+            [this, new_config]() mutable
+            {
+                // Create profiling dialog if needed
+                if(!m_profiling_dialog)
+                {
+                    m_profiling_dialog = std::make_unique<ProfilingDialog>();
+                    m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
+                    {
+                        // Store the profiling config for future use
+                        StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
+
+                        // Load the results
+                        OpenFile(trace_path);
+                        if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
+                        {
+                            LoadAiAnalysis(ai_json_path);
+                        }
+                    });
+                }
+
+                // Show dialog with default config + recommended tool args
+                m_profiling_dialog->ShowWithConfig(new_config);
+            }
+        );
         return;
     }
 
-    // Create a new config with updated tool args
-    ProfilingDialog::ProfilingConfig new_config = *config;
+    // Use stored config with updated tool args
+    new_config = *config;
     new_config.tool_args = tool_args;
 
     // Create profiling dialog if needed
@@ -1351,26 +1390,68 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
     }
 
     // Show dialog with pre-populated config
-    m_profiling_dialog->ShowWithConfig(new_config);
+    std::string message = "This will open the profiling dialog with your original configuration\n"
+                         "and the recommended tool arguments:\n\n" +
+                         tool_args +
+                         "\n\nYou can review and modify before running.";
+
+    ShowConfirmationDialog(
+        "Run Recommended Profiling",
+        message,
+        [this, new_config]()
+        {
+            m_profiling_dialog->ShowWithConfig(new_config);
+        }
+    );
 }
 
 void AppWindow::StoreProfilingConfig(const std::string& trace_path, const ProfilingDialog::ProfilingConfig& config)
 {
-    // Normalize the path
-    std::string normalized_path = std::filesystem::path(trace_path).string();
+    // Normalize the path to absolute path with consistent separators
+    std::filesystem::path p(trace_path);
+    std::string normalized_path;
+    try
+    {
+        normalized_path = std::filesystem::absolute(p).lexically_normal().string();
+    }
+    catch(...)
+    {
+        normalized_path = p.lexically_normal().string();
+    }
+
     m_profiling_configs[normalized_path] = config;
     spdlog::info("Stored profiling config for trace: {}", normalized_path);
 }
 
 ProfilingDialog::ProfilingConfig* AppWindow::GetStoredProfilingConfig(const std::string& trace_path)
 {
-    // Normalize the path
-    std::string normalized_path = std::filesystem::path(trace_path).string();
+    // Normalize the path to absolute path with consistent separators
+    std::filesystem::path p(trace_path);
+    std::string normalized_path;
+    try
+    {
+        normalized_path = std::filesystem::absolute(p).lexically_normal().string();
+    }
+    catch(...)
+    {
+        normalized_path = p.lexically_normal().string();
+    }
+
+    spdlog::info("Looking for profiling config for trace: {}", normalized_path);
+
     auto it = m_profiling_configs.find(normalized_path);
     if(it != m_profiling_configs.end())
     {
+        spdlog::info("Found profiling config for trace");
         return &it->second;
     }
+
+    spdlog::warn("No profiling config found for trace. Available configs:");
+    for(const auto& pair : m_profiling_configs)
+    {
+        spdlog::warn("  - {}", pair.first);
+    }
+
     return nullptr;
 }
 

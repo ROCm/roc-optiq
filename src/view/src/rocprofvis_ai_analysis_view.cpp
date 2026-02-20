@@ -1143,21 +1143,9 @@ AiAnalysisView::ExecuteRecommendationCommand(const std::string& command, int rec
         return;
     }
 
-    // Show confirmation dialog
-    std::string message = "This will open the profiling dialog pre-populated with your original configuration\n"
-                         "and the recommended tool arguments:\n\n" +
-                         tool_args +
-                         "\n\nYou can review and modify the configuration before running.";
-
-    AppWindow::GetInstance()->ShowConfirmationDialog(
-        "Run Recommended Profiling",
-        message,
-        [tool_args]()
-        {
-            // Show profiling dialog with the original config and new tool args
-            AppWindow::GetInstance()->ShowProfilingDialogWithRecommendation(tool_args);
-        }
-    );
+    // Directly show profiling dialog with the tool args
+    // The AppWindow method will handle showing confirmation and checking for stored config
+    AppWindow::GetInstance()->ShowProfilingDialogWithRecommendation(tool_args);
 }
 
 std::string
@@ -1169,9 +1157,14 @@ AiAnalysisView::ParseToolArgsFromCommand(const std::string& command)
     // rocprofv3 [TOOL_ARGS] -d [OUTPUT_DIR] -o [OUTPUT_FILE] -- [APP_PATH] [APP_ARGS]
     //
     // We need to extract the tool arguments (flags between rocprofv3 and the application)
+    // EXCLUDING -d and -o flags which conflict with the profiling dialog's output settings
 
-    // Find "rocprofv3" or "rocprof-compute" or "rocprof-sys"
+    // Find "rocprofv3" or "rocprof-compute" or "rocprof-sys" or "rocprofsys"
     size_t tool_pos = command.find("rocprofv3");
+    if(tool_pos == std::string::npos)
+    {
+        tool_pos = command.find("rocprofsys");
+    }
     if(tool_pos == std::string::npos)
     {
         tool_pos = command.find("rocprof-compute");
@@ -1199,56 +1192,50 @@ AiAnalysisView::ParseToolArgsFromCommand(const std::string& command)
         return "";
     }
 
-    // Find where arguments end - look for common patterns:
-    // 1. " -- " (separator before app)
-    // 2. " /" (absolute path like /app or /path/to/app)
-    // 3. " -o " or " -d " (output options, extract up to and including these)
-
-    // First, check if there's a "--" separator
-    size_t separator_pos = command.find(" -- ", args_start);
-    if(separator_pos != std::string::npos)
-    {
-        // Arguments are everything from args_start to separator
-        return command.substr(args_start, separator_pos - args_start);
-    }
-
-    // Otherwise, try to find output options and include them
-    // Look for patterns like "-o output.rpd" or "-d /output/dir"
+    // Parse arguments, excluding -d, -o, --output-dir, --output-file
     std::string args = command.substr(args_start);
-
-    // Simple heuristic: tool args are typically flags starting with - or --
-    // Stop when we hit something that looks like a path (starts with / or contains ./)
     std::string result;
-    size_t pos = 0;
-    bool in_option = false;
-    std::string current_token;
 
     std::istringstream iss(args);
     std::string token;
+    bool skip_next = false;  // Skip the value after -d or -o
+
     while(iss >> token)
     {
-        // If token starts with -, it's likely a tool option
+        // If we need to skip this token (it's a value for -d or -o)
+        if(skip_next)
+        {
+            skip_next = false;
+            continue;
+        }
+
+        // Check if this is an option to exclude
+        if(token == "-d" || token == "-o" ||
+           token == "--output-dir" || token == "--output-file" ||
+           token == "--output")
+        {
+            // Skip this option and its value
+            skip_next = true;
+            continue;
+        }
+
+        // If token starts with -, it's an option flag
         if(token[0] == '-')
         {
+            // Add to result
             if(!result.empty()) result += " ";
             result += token;
-            in_option = true;
         }
-        // If we're after an option flag, include the next token (the option value)
-        else if(in_option)
+        // If token looks like a path (starts with / or ./ or contains /app), stop parsing
+        else if(token[0] == '/' || token.find("./") != std::string::npos ||
+                token.find("/app") != std::string::npos || token == "--")
+        {
+            break;
+        }
+        // Otherwise it might be an option value - include it
+        else if(!result.empty())
         {
             result += " " + token;
-            in_option = false;
-        }
-        // If token looks like an absolute path or relative path, stop
-        else if(token[0] == '/' || token.find("./") != std::string::npos)
-        {
-            break;
-        }
-        // Otherwise might be end of args
-        else
-        {
-            break;
         }
     }
 

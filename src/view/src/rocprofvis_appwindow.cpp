@@ -1351,7 +1351,8 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
     {
         // No stored config - this trace was profiled externally
         // Create a default local config with the recommended tool args
-        spdlog::info("No stored profiling config for trace: {} - using default local config", project->GetID());
+        spdlog::warn("No stored profiling config for trace: {} - using default local config", project->GetID());
+        spdlog::warn("Trace file path from project: {}", project->GetID());
 
         new_config.mode = ProfilingDialog::ExecutionMode::Local;
         new_config.tool = ProfilingDialog::ProfilingTool::RocProfV3;
@@ -1376,8 +1377,11 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
     }
 
     // Use stored config with updated tool args
+    spdlog::info("Found stored profiling config - mode: {}, ssh_host: {}, slurm_partition: {}",
+                 static_cast<int>(config->mode), config->ssh_host, config->slurm_partition);
     new_config = *config;
     new_config.tool_args = tool_args;
+    spdlog::info("Updated tool_args to: {}", tool_args);
 
     // Show dialog with pre-populated config
     std::string message = "This will open the profiling dialog with your original configuration\n"

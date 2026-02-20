@@ -127,6 +127,10 @@ void ProfilingDialog::ShowWithConfig(const ProfilingConfig& config)
     // Copy the provided config
     m_config = config;
 
+    // Debug logging
+    spdlog::info("ProfilingDialog::ShowWithConfig - mode: {}, tool_args: {}",
+                 static_cast<int>(m_config.mode), m_config.tool_args);
+
     // Populate UI buffers from config (ensuring null termination)
     std::strncpy(m_app_path_buffer, m_config.application_path.c_str(), sizeof(m_app_path_buffer) - 1);
     m_app_path_buffer[sizeof(m_app_path_buffer) - 1] = '\0';

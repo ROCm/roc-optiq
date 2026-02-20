@@ -4,6 +4,7 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_root_view.h"
+#include "widgets/rocprofvis_query_builder.h"
 #include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
@@ -143,6 +144,8 @@ private:
     DisplayStrings m_display_names;
 
     char m_value_names_input[64] = "3.1.2";
+
+    QueryBuilder m_query_builder;
 };
 
 }  // namespace View

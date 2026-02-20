@@ -196,6 +196,21 @@ ComputeTester::Render()
 {
     const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
         m_data_provider.ComputeModel().GetWorkloads();
+
+    m_query_builder.SetWorkloads(&workloads);
+
+    if(ImGui::Button("Open Query Builder"))
+    {
+        m_query_builder.Open();
+    }
+    if(!m_query_builder.GetQueryString().empty())
+    {
+        ImGui::SameLine();
+        ImGui::Text("Query: %s", m_query_builder.GetQueryString().c_str());
+    }
+    m_query_builder.Render();
+    ImGui::NewLine();
+
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 15.0f);
     if(ImGui::BeginCombo("Workloads",
                          workloads.count(m_selections.workload_id) > 0

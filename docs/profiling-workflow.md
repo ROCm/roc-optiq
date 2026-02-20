@@ -38,7 +38,13 @@ Configure and run profiling on your local machine:
 2. **Arguments**: Command-line arguments
 3. **Profiling Tool**: `rocprofv3` (currently supported)
 4. **Tool Arguments**: Profiling flags (default: `--sys-trace --kernel-trace --memory-copy-trace`)
-5. **Output Directory**: Where trace files will be saved
+5. **Output Directory**: Where trace files will be saved (e.g., `C:\profiling` or `/home/user/profiling`)
+
+**Note:** Each profiling run creates a unique timestamped subdirectory (format: `YYYYMMDD_HHMMSS_mmm`) to preserve results from multiple runs. For example:
+```
+C:\profiling\20260220_143052_847\merged.db
+C:\profiling\20260220_145123_456\merged.db
+```
 
 #### Container execution (optional)
 
@@ -79,8 +85,10 @@ Profile applications on remote servers:
 3. **Remote Application**:
    - **Application Path (on remote)**: Full path to executable on remote system
    - **Arguments**: Command-line arguments
-   - **Output Path**: Remote directory for trace files
+   - **Output Path**: Remote directory for trace files (e.g., `/tmp/rocprof_output`)
    - **Copy results back automatically**: Copy traces to local machine
+
+**Note:** Each profiling run creates a unique timestamped subdirectory (e.g., `20260220_143052_847`) within the output path. This prevents runs from overwriting each other and allows comparison of multiple profiling sessions.
 
 #### SSH Jump Host example
 
@@ -207,6 +215,51 @@ Save LLM API keys for reuse in **Settings** → **Other** → **AI Analysis API 
 - **OpenAI API Key**: For GPT models ([Get API key](https://platform.openai.com/api-keys))
 
 API keys are stored locally and auto-populated in profiling dialogs.
+
+## Output directory structure
+
+Each profiling run creates a unique timestamped subdirectory within the specified output path. This prevents different runs from overwriting each other and enables comparison of results.
+
+### Directory naming format
+
+```
+<output_path>/<run_id>/
+```
+
+Where `run_id` has the format: `YYYYMMDD_HHMMSS_mmm`
+- `YYYYMMDD`: Date (year, month, day)
+- `HHMMSS`: Time (hour, minute, second)
+- `mmm`: Milliseconds (3 digits)
+
+### Example structure
+
+**Local profiling:**
+```
+C:\profiling\
+├── 20260220_143052_847\
+│   ├── hostname\
+│   │   └── trace_files.db
+│   ├── merged.db
+│   └── merged_ai_analysis.json
+├── 20260220_145123_456\
+│   ├── hostname\
+│   │   └── trace_files.db
+│   ├── merged.db
+│   └── merged_ai_analysis.json
+```
+
+**Remote profiling with copy-back:**
+```
+Remote server: /tmp/rocprof_output/20260220_143052_847/merged.db
+Local copy:    C:\temp\rocprof_output\20260220_143052_847\merged.db
+```
+
+### Benefits
+
+- **No overwrites**: Each run preserves its results independently
+- **Easy identification**: Timestamp shows when profiling occurred
+- **Version comparison**: Compare performance across different runs
+- **Reproducibility**: Results remain accessible for future analysis
 
 ## AI recommendation execution
 

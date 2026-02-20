@@ -11,9 +11,11 @@
 #include "imgui.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <regex>
 #include <sstream>
 #include <thread>
@@ -1028,6 +1030,7 @@ void ProfilingDialog::RenderRemoteConfig()
         m_config.remote_app_path = m_remote_app_buffer;
         m_config.remote_args = m_remote_args_buffer;
         m_config.remote_output_path = m_remote_output_buffer;
+        m_config.tool_args = m_tool_args_buffer;  // CRITICAL: Copy tool args from UI buffer!
         m_config.llm_api_key = m_llm_api_key_buffer;
         m_config.pre_commands = m_pre_commands_buffer;
         ExecuteProfiling();
@@ -1191,7 +1194,27 @@ void ProfilingDialog::ExecuteProfiling()
     m_error_message.clear();
     m_current_stage = ProgressStage::Profiling;
 
+    // Generate unique run ID for this profiling session
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    std::tm tm_now;
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    std::ostringstream run_id_stream;
+    run_id_stream << std::put_time(&tm_now, "%Y%m%d_%H%M%S")
+                  << "_" << std::setfill('0') << std::setw(3) << ms.count();
+    m_current_run_id = run_id_stream.str();
+
+    spdlog::info("Starting profiling run with ID: {}", m_current_run_id);
+
     std::string command = GetToolCommand();
+
+    // Log the command for debugging
+    spdlog::info("Profiling command: {}", command);
 
     // Wrap command for container if needed (only for local mode)
     if(m_config.mode == ExecutionMode::Local && m_config.use_container)
@@ -1199,6 +1222,7 @@ void ProfilingDialog::ExecuteProfiling()
         // Store exec options from buffer to config before wrapping
         m_config.container_exec_options = std::string(m_container_exec_options_buffer);
         command = WrapCommandForContainer(command);
+        spdlog::info("Container-wrapped command: {}", command);
     }
 
     // Display the command being executed
@@ -1310,10 +1334,11 @@ void ProfilingDialog::MergeTraces()
     m_progress_output += "\n\n=== Merging Traces ===\n";
     m_execution_running = true;
 
-    // Determine output directory
-    std::string output_dir = m_config.mode == ExecutionMode::Local
+    // Determine output directory (with run ID)
+    std::string base_output_dir = m_config.mode == ExecutionMode::Local
         ? std::string(m_output_dir_buffer)
         : std::string(m_remote_output_buffer);
+    std::string output_dir = base_output_dir + "/" + m_current_run_id;
 
     // First, list the directory contents to see what files were created
     // rocprofv3 creates subdirectories by hostname, so we need to list recursively
@@ -1431,10 +1456,11 @@ void ProfilingDialog::OnMergeComplete(const Controller::ProcessExecutor::Executi
 
     if(result.exit_code == 0)
     {
-        // Set the merged trace file path
-        std::string output_dir = m_config.mode == ExecutionMode::Local
+        // Set the merged trace file path (with run ID directory)
+        std::string base_output_dir = m_config.mode == ExecutionMode::Local
             ? std::string(m_output_dir_buffer)
             : std::string(m_remote_output_buffer);
+        std::string output_dir = base_output_dir + "/" + m_current_run_id;
 
         m_result_trace_path = output_dir + "/merged.db";
         m_execution_success = true;
@@ -1600,16 +1626,19 @@ void ProfilingDialog::CopyRemoteFileBack()
     m_progress_output += "\n\n=== Copying Results from Remote Server ===\n";
     m_progress_output += "Remote trace path: " + m_result_trace_path + "\n";
 
-    // Build local destination path
-    std::string local_dir = std::string(m_output_dir_buffer);
-    if(local_dir.empty())
+    // Build local destination path with run ID
+    std::string base_local_dir = std::string(m_output_dir_buffer);
+    if(base_local_dir.empty())
     {
 #ifdef _WIN32
-        local_dir = "C:\\temp\\rocprof_output";
+        base_local_dir = "C:\\temp\\rocprof_output";
 #else
-        local_dir = "/tmp/rocprof_output";
+        base_local_dir = "/tmp/rocprof_output";
 #endif
     }
+
+    // Append run ID to create unique local directory
+    std::string local_dir = base_local_dir + "/" + m_current_run_id;
 
     // Create local directory if it doesn't exist
     std::filesystem::create_directories(local_dir);
@@ -1763,8 +1792,9 @@ void ProfilingDialog::RunAIAnalysis()
     // For remote mode, run rocpd analyze on the remote server
     if(m_config.mode == ExecutionMode::Remote)
     {
-        // Build rocpd analyze command
-        std::string output_dir = std::string(m_remote_output_buffer);
+        // Build rocpd analyze command (with run ID directory)
+        std::string base_output_dir = std::string(m_remote_output_buffer);
+        std::string output_dir = base_output_dir + "/" + m_current_run_id;
         std::string merged_db = output_dir + "/merged.db";
         std::string analysis_json = output_dir + "/merged_ai_analysis.json";
 
@@ -2051,6 +2081,12 @@ std::string ProfilingDialog::GetToolCommand() const
     // For remote mode, add pre-commands and environment variables
     if(m_config.mode == ExecutionMode::Remote)
     {
+        // Get output directory first (needed for mkdir)
+        std::string remote_output_dir = std::string(m_remote_output_buffer);
+
+        // Create output directory on remote server
+        cmd << "mkdir -p " << remote_output_dir << "; ";
+
         // Start with environment variables export
         for(const auto& [key, value] : m_config.environment_vars)
         {
@@ -2077,9 +2113,12 @@ std::string ProfilingDialog::GetToolCommand() const
     cmd << tool_name << " ";
 
     // Add output directory and filename flags (required for tools to create trace files)
-    std::string output_dir = m_config.mode == ExecutionMode::Local
+    std::string base_output_dir = m_config.mode == ExecutionMode::Local
         ? std::string(m_output_dir_buffer)
         : std::string(m_remote_output_buffer);
+
+    // Append run ID to create unique directory for this profiling run
+    std::string output_dir = base_output_dir + "/" + m_current_run_id;
 
     // Different tools use different flags for output directory and filename
     switch(m_config.tool)

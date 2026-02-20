@@ -276,6 +276,7 @@ private:
     std::string m_ai_analysis_json_path;
     bool m_execution_success;
     std::string m_error_message;
+    std::string m_current_run_id;  // Unique ID for current profiling run
 
     std::function<void(const std::string&, const std::string&)> m_completion_callback;
 };

@@ -305,6 +305,18 @@ TraceView::LoadTrace(rocprofvis_controller_t* controller, const std::string& fil
     return result;
 }
 
+bool
+TraceView::IsTraceReady()
+{
+    return m_data_provider.GetState() == ProviderState::kReady;
+}
+
+ProviderState
+TraceView::GetProviderState()
+{
+    return m_data_provider.GetState();
+}
+
 void 
 TraceView::Render()
 {

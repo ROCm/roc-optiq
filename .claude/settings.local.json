@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)",
+      "Bash(cmake --build:*)",
+      "Bash(where:*)",
+      "Bash(git submodule update:*)",
+      "Bash(git submodule:*)",
+      "Bash(git restore:*)",
+      "Bash(rocprofv3:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(taskkill:*)"
+    ]
+  }
+}

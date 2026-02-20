@@ -155,6 +155,12 @@ private:
     // Store profiling configs associated with trace files
     std::map<std::string, ProfilingDialog::ProfilingConfig> m_profiling_configs;
 
+    // Pending AI analysis path (to load after trace is ready)
+    std::string                      m_pending_ai_analysis_path;
+
+    // Pending trace file to open (deferred to next frame)
+    std::string                      m_pending_trace_file;
+
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
     bool                             m_is_fullscreen;

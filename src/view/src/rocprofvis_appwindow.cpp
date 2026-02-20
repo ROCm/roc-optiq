@@ -37,6 +37,7 @@
 #include <sstream>
 #include <thread>
 #include <chrono>
+#include <iostream>
 #include <spdlog/spdlog.h>
 
 namespace RocProfVis
@@ -366,6 +367,7 @@ AppWindow::Render()
 
     if(m_main_view)
     {
+        m_main_view->Update();
         m_main_view->Render();
     }
 
@@ -396,6 +398,30 @@ AppWindow::Render()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
+
+    // Check for pending trace file to open (deferred from profiling dialog)
+    if(!m_pending_trace_file.empty())
+    {
+        spdlog::info("Opening pending trace file: {}", m_pending_trace_file);
+        OpenFile(m_pending_trace_file);
+        m_pending_trace_file.clear();
+    }
+
+    // Check for pending AI analysis (needs to wait for trace to load)
+    if(!m_pending_ai_analysis_path.empty())
+    {
+        Project* current_project = GetCurrentProject();
+        if(current_project)
+        {
+            auto trace_view = current_project->GetTraceView();
+            if(trace_view && trace_view->IsTraceReady())
+            {
+                spdlog::info("Trace is ready, loading pending AI analysis: {}", m_pending_ai_analysis_path);
+                LoadAiAnalysis(m_pending_ai_analysis_path);
+                m_pending_ai_analysis_path.clear();
+            }
+        }
+    }
 
     // render notifications last
     NotificationManager::GetInstance().Render();
@@ -1307,15 +1333,22 @@ void AppWindow::ShowProfilingDialog()
         // Store the profiling config for future use
         StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
 
-        // Load the results
-        OpenFile(trace_path);
+        // Check if file exists
+        if(!std::filesystem::exists(trace_path))
+        {
+            ShowMessageDialog("Error", "Trace file does not exist:\n" + trace_path);
+            return;
+        }
 
-        // Load AI analysis if available
-        // Note: We load it directly after the trace - the trace view should be ready by now
+        // CRITICAL: Don't call OpenFile() immediately - the dialog modal state
+        // is still active and blocks the async loading. Schedule it for next frame.
+        m_pending_trace_file = trace_path;
+
+        // Schedule AI analysis for after the trace loads
         if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
         {
-            spdlog::info("Loading AI analysis from: {}", ai_json_path);
-            LoadAiAnalysis(ai_json_path);
+            spdlog::info("Scheduling AI analysis load: {}", ai_json_path);
+            m_pending_ai_analysis_path = ai_json_path;
         }
     });
 

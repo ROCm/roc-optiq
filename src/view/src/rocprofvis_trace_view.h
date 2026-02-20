@@ -60,6 +60,12 @@ public:
 
     std::shared_ptr<AnalysisView> GetAnalysisView() { return m_analysis_view; }
 
+    // Check if trace is fully loaded and ready
+    bool IsTraceReady();
+
+    // Get the provider state for debugging
+    ProviderState GetProviderState();
+
     bool HasTrimActiveTrimSelection() const;
     bool IsTrimSaveAllowed() const;
 

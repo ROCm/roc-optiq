@@ -1665,13 +1665,14 @@ void ProfilingDialog::CopyRemoteFileBack()
     scp_cmd << " -o BatchMode=yes";
     scp_cmd << " -o StrictHostKeyChecking=no";
 
-    // Copy merged.db first
-    std::string output_dir = std::string(m_remote_output_buffer);
-    scp_cmd << " " << m_config.ssh_host << ":\"" << output_dir << "/merged.db\"";
+    // Copy merged.db first - IMPORTANT: Include run ID in remote path!
+    std::string base_output_dir = std::string(m_remote_output_buffer);
+    std::string remote_output_dir_with_run_id = base_output_dir + "/" + m_current_run_id;
+    scp_cmd << " " << m_config.ssh_host << ":\"" << remote_output_dir_with_run_id << "/merged.db\"";
     scp_cmd << " \"" << local_dir << "/\"";
 
     std::string command = scp_cmd.str();
-    m_progress_output += "Copying merged.db...\n";
+    m_progress_output += "Copying merged.db from: " + remote_output_dir_with_run_id + "\n";
 
     Controller::ProcessExecutor::ExecutionOptions options;
     options.capture_output = true;
@@ -1687,7 +1688,7 @@ void ProfilingDialog::CopyRemoteFileBack()
     m_execution_context = Controller::ProcessExecutor::ExecuteAsync(
         command,
         options,
-        [this, local_trace_path, local_dir, output_dir](const Controller::ProcessExecutor::ExecutionResult& result)
+        [this, local_trace_path, local_dir, remote_output_dir_with_run_id](const Controller::ProcessExecutor::ExecutionResult& result)
         {
             m_execution_running = false;
 
@@ -1714,7 +1715,7 @@ void ProfilingDialog::CopyRemoteFileBack()
 
                     scp_json_cmd << " -o BatchMode=yes";
                     scp_json_cmd << " -o StrictHostKeyChecking=no";
-                    scp_json_cmd << " " << m_config.ssh_host << ":\"" << output_dir << "/merged_ai_analysis.json\"";
+                    scp_json_cmd << " " << m_config.ssh_host << ":\"" << remote_output_dir_with_run_id << "/merged_ai_analysis.json\"";
                     scp_json_cmd << " \"" << local_dir << "/\"";
 
                     std::string json_command = scp_json_cmd.str();

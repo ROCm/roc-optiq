@@ -3,6 +3,7 @@
 
 #include "rocprofvis_sidebar.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_font_manager.h"
@@ -144,11 +145,10 @@ SideBar::RenderTrackItem(const uint64_t& index)
     }
 
     ImGui::PopFont();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
-    if(ImGui::BeginItemTooltip())
+    if(BeginItemTooltipStyled())
     {
         ImGui::TextUnformatted("Toggle Track Visibility");
-        ImGui::EndTooltip();
+        EndTooltipStyled();
     }
     ImGui::SameLine();
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
@@ -159,12 +159,11 @@ SideBar::RenderTrackItem(const uint64_t& index)
             graph.chart->GetID(), m_data_provider.GetTraceFilePath()));
     }
     ImGui::PopFont();
-    if(ImGui::BeginItemTooltip())
+    if(BeginItemTooltipStyled())
     {
         ImGui::TextUnformatted("Scroll To Track");
-        ImGui::EndTooltip();
+        EndTooltipStyled();
     }
-    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     ImGui::SameLine();
     bool highlight = graph.selected;
@@ -721,13 +720,11 @@ SideBar::DrawEyeButton(EyeButtonState eye_button_state)
         }
     }
     ImGui::PopFont();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, DEFAULT_WINDOW_PADDING);
-    if(ImGui::BeginItemTooltip())
+    if(BeginItemTooltipStyled())
     {
         ImGui::TextUnformatted("Toggle All Track Visibility");
-        ImGui::EndTooltip();
+        EndTooltipStyled();
     }
-    ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
 
     return new_button_state;

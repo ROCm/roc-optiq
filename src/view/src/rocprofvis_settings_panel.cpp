@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 
 // Layout constants
@@ -195,7 +196,7 @@ SettingsPanel::RenderDisplayOptions()
     }
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Switch between dark and light UI themes.");
+        SetTooltipStyled("Switch between dark and light UI themes.");
     }
 
     ImGui::Spacing();
@@ -206,7 +207,7 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::Checkbox("DPI-based Font Scaling", &m_font_settings.dpi_scaling);
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Automatically scale font size based on display DPI.");
+        SetTooltipStyled("Automatically scale font size based on display DPI.");
     }
 
     // Font size section
@@ -236,7 +237,7 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::EndDisabled();
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Increase or decrease the font size for the UI.");
+        SetTooltipStyled("Increase or decrease the font size for the UI.");
     }
     ImGui::EndDisabled();
     // Font preview
@@ -341,14 +342,11 @@ SettingsPanel::ResetButton()
     clicked = ImGui::Button(ICON_ARROWS_CYCLE);
     ImGui::PopFont();
     ImGui::PopStyleColor(3);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        m_settings.GetDefaultStyle().WindowPadding);
-    if(ImGui::BeginItemTooltip())
+    if(BeginItemTooltipStyled())
     {
         ImGui::TextUnformatted("Restore defaults");
-        ImGui::EndTooltip();
+        EndTooltipStyled();
     }
-    ImGui::PopStyleVar();
     ImGui::EndChild();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();

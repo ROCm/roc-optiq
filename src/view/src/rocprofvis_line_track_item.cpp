@@ -3,6 +3,7 @@
 
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_click_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
@@ -173,16 +174,11 @@ LineTrackItem::BoxPlotRender(float graph_width)
         std::string dur_str = nanosecond_to_formatted_str(
             hovered_item.m_end_ts - hovered_item.m_start_ts, time_format, true);
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                            m_settings.GetDefaultStyle().WindowPadding);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                            m_settings.GetDefaultStyle().FrameRounding);
-        ImGui::BeginTooltip();
+        BeginTooltipStyled();
         ImGui::Text("Start: %s", start_str.c_str());
         ImGui::Text("Duration: %s", dur_str.c_str());
         ImGui::Text("Value: %.2f %s", hovered_item.m_value, m_units.c_str());
-        ImGui::EndTooltip();
-        ImGui::PopStyleVar(2);
+        EndTooltipStyled();
 
         // Map start and end points
         ImVec2 start_point = MapToUI(hovered_item.m_start_ts, hovered_item.m_value,

@@ -4,6 +4,7 @@
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_multi_track_table.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -401,14 +402,11 @@ MultiTrackTable::XButton(const char* id) const
     ImGui::PopFont();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        m_settings.GetDefaultIMGUIStyle().WindowPadding);
-    if(ImGui::BeginItemTooltip())
+    if(BeginItemTooltipStyled())
     {
         ImGui::TextUnformatted("Clear");
-        ImGui::EndTooltip();
+        EndTooltipStyled();
     }
-    ImGui::PopStyleVar();
     return clicked;
 }
 

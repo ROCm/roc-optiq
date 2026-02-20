@@ -311,12 +311,11 @@ TrackItem::RenderMetaArea()
             // Constrain tooltip window width (height auto-fits)
             ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
                                                 ImVec2(tooltip_max_width, FLT_MAX));
-            ImGui::BeginTooltip();
-            // Wrap text to the chosen width
+            BeginTooltipStyled();
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + tooltip_max_width);
             ImGui::TextUnformatted(m_meta_area_tooltip.c_str());
             ImGui::PopTextWrapPos();
-            ImGui::EndTooltip();
+            EndTooltipStyled();
         }
 
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
@@ -324,15 +323,15 @@ TrackItem::RenderMetaArea()
                                    m_metadata_padding.y));
         IconButton(ICON_GEAR,
                    m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        if(BeginItemTooltipStyled())
+        {
+            ImGui::TextUnformatted("Track Options");
+            EndTooltipStyled();
+        }
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             m_settings.GetDefaultStyle().WindowPadding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
                             m_settings.GetDefaultStyle().FrameRounding);
-        if(ImGui::BeginItemTooltip())
-        {
-            ImGui::TextUnformatted("Track Options");
-            ImGui::EndTooltip();
-        }
         ImGui::SetNextWindowPos(ImGui::GetCursorScreenPos() +
                                 ImVec2(content_size.x - m_meta_area_scale_width -
                                            menu_button_width -
@@ -943,10 +942,10 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     ImGui::TextUnformatted(m_pill_label.c_str());
     if(!m_tooltip_label.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     {
-        if(ImGui::BeginItemTooltip())
+        if(BeginItemTooltipStyled())
         {
             ImGui::TextUnformatted(m_tooltip_label.c_str());
-            ImGui::EndTooltip();
+            EndTooltipStyled();
         }
     }
     ImGui::PopStyleColor();

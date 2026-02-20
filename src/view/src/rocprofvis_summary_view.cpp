@@ -915,18 +915,13 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
                 hovered_idx = i;
                 if(elide)
                 {
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                        m_settings.GetDefaultIMGUIStyle().WindowPadding);
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                                        m_settings.GetDefaultStyle().FrameRounding);
-                    if(ImGui::BeginItemTooltip())
+                    if(BeginItemTooltipStyled())
                     {
                         ImGui::PushTextWrapPos(region.x * 0.5f);
                         ImGui::TextWrapped("%s", (*m_kernels)[i].name.c_str());
                         ImGui::PopTextWrapPos();
-                        ImGui::EndTooltip();
+                        EndTooltipStyled();
                     }
-                    ImGui::PopStyleVar(2);
                 }
                 if(row_clicked && m_selection_callback)
                 {
@@ -999,11 +994,7 @@ TopKernels::PlotInputHandler()
     {
         if(ImGui::IsItemHovered())
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                m_settings.GetDefaultIMGUIStyle().WindowPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                                m_settings.GetDefaultStyle().FrameRounding);
-            if(ImGui::BeginItemTooltip())
+            if(BeginItemTooltipStyled())
             {
                 if(m_hovered_idx != m_padded_idx)
                 {
@@ -1020,9 +1011,8 @@ TopKernels::PlotInputHandler()
                         (*m_kernels)[m_hovered_idx.value()].exec_time_sum,
                         m_settings.GetUserSettings().unit_settings.time_format, true)
                         .c_str());
-                ImGui::EndTooltip();
+                EndTooltipStyled();
             }
-            ImGui::PopStyleVar(2);
         }
         if(ImGui::IsItemClicked() && m_selection_callback)
         {

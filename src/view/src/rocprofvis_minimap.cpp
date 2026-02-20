@@ -3,6 +3,7 @@
 
 #include "rocprofvis_minimap.h"
 #include "imgui.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
@@ -539,17 +540,17 @@ Minimap::RenderLegend(float w, float h)
     float chk_y = bar_y + bar_h + gap + text_height + gap;
     ImGui::SetCursorScreenPos(ImVec2(bar_x1 - (checkbox_sz - bar_w) * 0.5f, chk_y));
     ImGui::Checkbox("##events", &m_show_events);
-    if(ImGui::BeginItemTooltip())
+    if(BeginItemTooltipStyled())
     {
         ImGui::Text("Show/Hide Event Tracks");
-        ImGui::EndTooltip();
+        EndTooltipStyled();
     }
     ImGui::SetCursorScreenPos(ImVec2(bar_x2 - (checkbox_sz - bar_w) * 0.5f, chk_y));
     ImGui::Checkbox("##counters", &m_show_counters);
-    if(ImGui::BeginItemTooltip())
+    if(BeginItemTooltipStyled())
     {
         ImGui::Text("Show/Hide Counter Tracks");
-        ImGui::EndTooltip();
+        EndTooltipStyled();
     }
 
     // Helper to draw rotated text

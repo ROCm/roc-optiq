@@ -594,7 +594,7 @@ TraceView::RenderToolbar()
 
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Show Minimap");
+        SetTooltipStyled("Show Minimap");
     }
     RenderSeparator();
 
@@ -609,7 +609,7 @@ TraceView::RenderToolbar()
     }
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Reset view to default zoom and pan");
+        SetTooltipStyled("Reset view to default zoom and pan");
     }
     ImGui::EndGroup();
     float available_width = ImGui::GetContentRegionAvail().x - ImGui::GetItemRectSize().x;
@@ -680,7 +680,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Show Annotation Layer");
+        SetTooltipStyled("Show Annotation Layer");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -705,7 +705,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Hide Annotation Layer");
+        SetTooltipStyled("Hide Annotation Layer");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -731,7 +731,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Add New Annotation");
+        SetTooltipStyled("Add New Annotation");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -883,7 +883,7 @@ TraceView::RenderFlowControls()
         if(ImGui::IsItemHovered())
         {
             ImGui::PopFont();
-            ImGui::SetTooltip("%s", flow_tool_tips[i]);
+            SetTooltipStyled("%s", flow_tool_tips[i]);
             ImGui::PushFont(icon_font);
         }
 
@@ -912,7 +912,7 @@ TraceView::RenderFlowControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Flow Render Style");
+        SetTooltipStyled("Flow Render Style");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopFont();

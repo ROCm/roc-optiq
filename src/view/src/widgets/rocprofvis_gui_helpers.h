@@ -36,7 +36,16 @@ InputTextWithClear(const char* id, const char* hint, char* buf, size_t buf_size,
 
 void
 SetTooltipStyled(const char* fmt, ...);
-                   
+
+void
+BeginTooltipStyled();
+
+bool
+BeginItemTooltipStyled();
+
+void
+EndTooltipStyled();
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void
 DrawInternalBuildBanner(const char* text = "Internal Build");

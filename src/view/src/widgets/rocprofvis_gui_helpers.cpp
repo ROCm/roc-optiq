@@ -94,13 +94,11 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
     ImGui::PopFont();
     if(tooltip && strlen(tooltip) > 0)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
-        if(ImGui::BeginItemTooltip())
+        if(BeginItemTooltipStyled())
         {
             ImGui::TextUnformatted(tooltip);
-            ImGui::EndTooltip();
+            EndTooltipStyled();
         }
-        ImGui::PopStyleVar();
     }
     ImGui::PopStyleColor(3);
     ImGui::PopStyleVar();
@@ -181,7 +179,44 @@ SetTooltipStyled(const char* fmt, ...)
     ImGui::PopStyleColor();
 
     va_end(args);
+}
 
+void
+BeginTooltipStyled()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::BeginTooltip();
+}
+
+bool
+BeginItemTooltipStyled()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    if(ImGui::BeginItemTooltip())
+    {
+        return true;
+    }
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    return false;
+}
+
+void
+EndTooltipStyled()
+{
+    ImGui::EndTooltip();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER

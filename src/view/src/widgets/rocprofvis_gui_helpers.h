@@ -44,6 +44,9 @@ bool
 BeginItemTooltipStyled();
 
 void
+SetItemTooltipStyled(const char* fmt, ...);
+
+void
 EndTooltipStyled();
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER

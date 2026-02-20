@@ -94,11 +94,13 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
     ImGui::PopFont();
     if(tooltip && strlen(tooltip) > 0)
     {
-        if(BeginItemTooltipStyled())
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
+        if(ImGui::BeginItemTooltip())
         {
             ImGui::TextUnformatted(tooltip);
-            EndTooltipStyled();
+            ImGui::EndTooltip();
         }
+        ImGui::PopStyleVar();
     }
     ImGui::PopStyleColor(3);
     ImGui::PopStyleVar();
@@ -209,6 +211,19 @@ BeginItemTooltipStyled()
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();
     return false;
+}
+
+void
+SetItemTooltipStyled(const char* fmt, ...)
+{
+    if(BeginItemTooltipStyled())
+    {
+        va_list args;
+        va_start(args, fmt);
+        ImGui::TextV(fmt, args);
+        va_end(args);
+        EndTooltipStyled();
+    }
 }
 
 void

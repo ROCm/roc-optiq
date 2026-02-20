@@ -449,11 +449,7 @@ EventsView::XButton()
     ImGui::PopFont();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
-    if(BeginItemTooltipStyled())
-    {
-        ImGui::TextUnformatted("Unselect Event");
-        EndTooltipStyled();
-    }
+    SetItemTooltipStyled("Unselect Event");
     return clicked;
 }
 

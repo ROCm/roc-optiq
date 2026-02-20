@@ -402,11 +402,7 @@ MultiTrackTable::XButton(const char* id) const
     ImGui::PopFont();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
-    if(BeginItemTooltipStyled())
-    {
-        ImGui::TextUnformatted("Clear");
-        EndTooltipStyled();
-    }
+    SetItemTooltipStyled("Clear");
     return clicked;
 }
 

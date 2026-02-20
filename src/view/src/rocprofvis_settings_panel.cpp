@@ -342,11 +342,7 @@ SettingsPanel::ResetButton()
     clicked = ImGui::Button(ICON_ARROWS_CYCLE);
     ImGui::PopFont();
     ImGui::PopStyleColor(3);
-    if(BeginItemTooltipStyled())
-    {
-        ImGui::TextUnformatted("Restore defaults");
-        EndTooltipStyled();
-    }
+    SetItemTooltipStyled("Restore defaults");
     ImGui::EndChild();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();

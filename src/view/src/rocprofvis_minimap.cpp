@@ -540,18 +540,10 @@ Minimap::RenderLegend(float w, float h)
     float chk_y = bar_y + bar_h + gap + text_height + gap;
     ImGui::SetCursorScreenPos(ImVec2(bar_x1 - (checkbox_sz - bar_w) * 0.5f, chk_y));
     ImGui::Checkbox("##events", &m_show_events);
-    if(BeginItemTooltipStyled())
-    {
-        ImGui::Text("Show/Hide Event Tracks");
-        EndTooltipStyled();
-    }
+    SetItemTooltipStyled("Show/Hide Event Tracks");
     ImGui::SetCursorScreenPos(ImVec2(bar_x2 - (checkbox_sz - bar_w) * 0.5f, chk_y));
     ImGui::Checkbox("##counters", &m_show_counters);
-    if(BeginItemTooltipStyled())
-    {
-        ImGui::Text("Show/Hide Counter Tracks");
-        EndTooltipStyled();
-    }
+    SetItemTooltipStyled("Show/Hide Counter Tracks");
 
     // Helper to draw rotated text
     auto DrawRotatedText = [&](const char* text, ImVec2 center, bool disabled) {

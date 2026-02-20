@@ -71,17 +71,23 @@ target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_executable(${PROJECT_NAME}-basic-tests tests/basic_tests.cpp)
-target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE ${PROJECT_NAME})
-target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE Catch2::Catch2WithMain)
-
 if(COMPUTE_UI_SUPPORT)
     target_link_libraries(${TARGET_NAME} PUBLIC csv)
-    # Csv parser enables coverage in debug builds so we need to enable it too
-    if((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang") AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE))
-        target_link_options(${PROJECT_NAME}-basic-tests PRIVATE --coverage)
-    endif()
 endif()
 
-add_test(NAME ${PROJECT_NAME}-basic-tests COMMAND ${PROJECT_NAME}-basic-tests)
-set_tests_properties(${PROJECT_NAME}-basic-tests PROPERTIES RUN_SERIAL ON)
+if(BUILD_TESTING)
+    add_executable(${PROJECT_NAME}-basic-tests tests/basic_tests.cpp)
+    target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE ${PROJECT_NAME})
+    target_link_libraries(${PROJECT_NAME}-basic-tests PRIVATE Catch2::Catch2WithMain)
+
+    if(COMPUTE_UI_SUPPORT)
+        # Csv parser enables coverage in debug builds so we need to enable it too
+        if((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang") AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE))
+            target_link_options(${PROJECT_NAME}-basic-tests PRIVATE --coverage)
+        endif()
+    endif()
+
+    add_test(NAME ${PROJECT_NAME}-basic-tests COMMAND ${PROJECT_NAME}-basic-tests)
+    set_tests_properties(${PROJECT_NAME}-basic-tests PROPERTIES RUN_SERIAL ON)
+    set_tests_properties(${PROJECT_NAME}-basic-tests PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endif()

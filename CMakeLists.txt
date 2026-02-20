@@ -294,15 +294,20 @@ include(GNUInstallDirs)
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 
-set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
-# Detect Linux distro for additional package types
-if(UNIX AND NOT APPLE)
-  # Add DEB for Debian based distros
-  if(EXISTS "/etc/debian_version")
-    list(APPEND CPACK_GENERATOR "DEB")
-  # Make RPM the default for RedHat based distros  
-  elseif(EXISTS "/etc/redhat-release" OR EXISTS "/etc/oracle-release" OR EXISTS "/etc/system-release")
-    list(APPEND CPACK_GENERATOR "RPM")
+if(WIN32)
+  # Use ZIP for Windows (TGZ has path issues on Windows)
+  set(CPACK_GENERATOR "ZIP" CACHE STRING "package types to be produced")
+else()
+  set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
+  # Detect Linux distro for additional package types
+  if(UNIX AND NOT APPLE)
+    # Add DEB for Debian based distros
+    if(EXISTS "/etc/debian_version")
+      list(APPEND CPACK_GENERATOR "DEB")
+    # Make RPM the default for RedHat based distros
+    elseif(EXISTS "/etc/redhat-release" OR EXISTS "/etc/oracle-release" OR EXISTS "/etc/system-release")
+      list(APPEND CPACK_GENERATOR "RPM")
+    endif()
   endif()
 endif()
 

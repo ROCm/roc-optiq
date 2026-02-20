@@ -35,6 +35,8 @@
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
 #include <sstream>
+#include <thread>
+#include <chrono>
 #include <spdlog/spdlog.h>
 
 namespace RocProfVis
@@ -712,11 +714,7 @@ AppWindow::RenderToolsMenu(Project* project)
     {
         if(ImGui::MenuItem("Run Profiling..."))
         {
-            // TODO: Show profiling dialog
-            ShowMessageDialog(
-                "Run Profiling",
-                "The profiling dialog is available from the Welcome tab.\n\n"
-                "You can access it by closing all tabs or clicking \"Start Profiling\" on the Welcome screen.");
+            ShowProfilingDialog();
         }
         ImGui::EndMenu();
     }
@@ -1297,19 +1295,60 @@ void AppWindow::ShowProfilingDialog()
     if(!m_profiling_dialog)
     {
         m_profiling_dialog = std::make_unique<ProfilingDialog>();
-        m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
-        {
-            // Store the profiling config for future use
-            StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
-
-            // Load the results
-            OpenFile(trace_path);
-            if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
-            {
-                LoadAiAnalysis(ai_json_path);
-            }
-        });
     }
+
+    // ALWAYS set the callback (not just when dialog is created)
+    m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
+    {
+        spdlog::info("Profiling completion callback invoked");
+        spdlog::info("  trace_path: {}", trace_path);
+        spdlog::info("  ai_json_path: {}", ai_json_path);
+
+        // Store the profiling config for future use
+        StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
+
+        // Load the results
+        OpenFile(trace_path);
+
+        // Load AI analysis if available (defer to next frame to ensure trace is loaded)
+        if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
+        {
+            spdlog::info("Scheduling AI analysis auto-load from: {}", ai_json_path);
+
+            // Defer loading to allow trace to initialize
+            auto load_task = [ai_json_path]() {
+                // Try loading a few times with delays in case the view isn't ready
+                for(int attempt = 0; attempt < 5; ++attempt)
+                {
+                    spdlog::info("AI Analysis auto-load attempt {}", attempt + 1);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100 * (attempt + 1)));
+
+                    auto* app = AppWindow::GetInstance();
+                    if(app)
+                    {
+                        app->LoadAiAnalysis(ai_json_path);
+
+                        // Check if loading was successful
+                        auto* project = app->GetCurrentProject();
+                        if(project && project->GetTraceView())
+                        {
+                            auto trace_view = project->GetTraceView();
+                            auto analysis_view = trace_view ? trace_view->GetAnalysisView() : nullptr;
+                            if(analysis_view)
+                            {
+                                spdlog::info("AI Analysis auto-load successful on attempt {}", attempt + 1);
+                                break;
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Launch in a separate thread to avoid blocking the UI
+            std::thread(load_task).detach();
+        }
+    });
+
     m_profiling_dialog->Show();
 }
 
@@ -1328,19 +1367,63 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
     if(!m_profiling_dialog)
     {
         m_profiling_dialog = std::make_unique<ProfilingDialog>();
-        m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
-        {
-            // Store the profiling config for future use
-            StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
-
-            // Load the results
-            OpenFile(trace_path);
-            if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
-            {
-                LoadAiAnalysis(ai_json_path);
-            }
-        });
     }
+
+    // ALWAYS set the callback (not just when dialog is created)
+    m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
+    {
+        spdlog::info("DEBUG: Completion callback invoked from ShowProfilingDialogWithRecommendation");
+        spdlog::info("  trace_path: {}", trace_path);
+        spdlog::info("  ai_json_path: {}", ai_json_path);
+
+        // DEBUG: Show visual confirmation
+        ShowMessageDialog("DEBUG: Callback Invoked",
+            std::string("Completion callback called!\n\nTrace: ") + trace_path + "\nAI JSON: " + ai_json_path);
+
+        // Store the profiling config for future use
+        StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
+
+        // Load the results
+        OpenFile(trace_path);
+
+        // Load AI analysis if available (defer to next frame to ensure trace is loaded)
+        if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
+        {
+            spdlog::info("Scheduling AI analysis auto-load from: {}", ai_json_path);
+
+            // Defer loading to allow trace to initialize
+            auto load_task = [ai_json_path]() {
+                // Try loading a few times with delays in case the view isn't ready
+                for(int attempt = 0; attempt < 5; ++attempt)
+                {
+                    spdlog::info("AI Analysis auto-load attempt {}", attempt + 1);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100 * (attempt + 1)));
+
+                    auto* app = AppWindow::GetInstance();
+                    if(app)
+                    {
+                        app->LoadAiAnalysis(ai_json_path);
+
+                        // Check if loading was successful
+                        auto* project = app->GetCurrentProject();
+                        if(project && project->GetTraceView())
+                        {
+                            auto trace_view = project->GetTraceView();
+                            auto analysis_view = trace_view ? trace_view->GetAnalysisView() : nullptr;
+                            if(analysis_view)
+                            {
+                                spdlog::info("AI Analysis auto-load successful on attempt {}", attempt + 1);
+                                break;
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Launch in a separate thread to avoid blocking the UI
+            std::thread(load_task).detach();
+        }
+    });
 
     // Look up stored profiling config for this trace
     auto* config = GetStoredProfilingConfig(project->GetID());
@@ -1360,8 +1443,8 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
         new_config.run_ai_analysis = true;
 
         // Leave application_path and output_directory empty for user to fill in
-        std::string message = "This trace was not profiled through ROCm Optiq.\n\n"
-                             "The profiling dialog will open with the recommended tool arguments:\n" + tool_args + "\n\n"
+        std::string message = std::string("This trace was not profiled through ROCm Optiq.\n\n") +
+                             "The profiling dialog will open with the recommended tool arguments:\n" + tool_args + "\n\n" +
                              "Please configure the application path and other settings manually.";
 
         ShowConfirmationDialog(
@@ -1384,7 +1467,7 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
     spdlog::info("Updated tool_args to: {}", tool_args);
 
     // Show dialog with pre-populated config
-    std::string message = "This will open the profiling dialog with your original configuration\n"
+    std::string message = std::string("This will open the profiling dialog with your original configuration\n") +
                          "and the recommended tool arguments:\n\n" +
                          tool_args +
                          "\n\nYou can review and modify before running.";
@@ -1414,7 +1497,8 @@ void AppWindow::StoreProfilingConfig(const std::string& trace_path, const Profil
     }
 
     m_profiling_configs[normalized_path] = config;
-    spdlog::info("Stored profiling config for trace: {}", normalized_path);
+    spdlog::info("Stored profiling config for trace: {} - mode: {}, ssh_host: {}",
+                 normalized_path, static_cast<int>(config.mode), config.ssh_host);
 }
 
 ProfilingDialog::ProfilingConfig* AppWindow::GetStoredProfilingConfig(const std::string& trace_path)
@@ -1436,7 +1520,8 @@ ProfilingDialog::ProfilingConfig* AppWindow::GetStoredProfilingConfig(const std:
     auto it = m_profiling_configs.find(normalized_path);
     if(it != m_profiling_configs.end())
     {
-        spdlog::info("Found profiling config for trace");
+        spdlog::info("Found profiling config for trace - mode: {}, ssh_host: {}",
+                     static_cast<int>(it->second.mode), it->second.ssh_host);
         return &it->second;
     }
 

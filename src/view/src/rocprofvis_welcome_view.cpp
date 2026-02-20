@@ -266,76 +266,13 @@ void WelcomeView::RenderRunProfilingCard()
 
 void WelcomeView::ShowProfilingDialog()
 {
-    static std::shared_ptr<ProfilingDialog> dialog;
-
-    if(!dialog)
-    {
-        dialog = std::make_shared<ProfilingDialog>();
-        dialog->SetCompletionCallback([](const std::string& trace_path, const std::string& ai_json_path)
-        {
-            spdlog::info("ProfilingDialog completion callback triggered");
-            spdlog::info("  Trace path: {}", trace_path);
-            spdlog::info("  AI JSON path: {}", ai_json_path);
-
-            // Open the trace file
-            AppWindow::GetInstance()->OpenFile(trace_path);
-
-            // Load AI analysis JSON if available (defer to next frame to ensure trace is loaded)
-            if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
-            {
-                spdlog::info("AI JSON file exists, scheduling auto-load...");
-
-                // Schedule loading on the next frame to ensure trace view is fully initialized
-                // We need to capture ai_json_path by value
-                auto load_task = [ai_json_path]() {
-                    // Try loading a few times with delays in case the view isn't ready
-                    for(int attempt = 0; attempt < 5; ++attempt)
-                    {
-                        spdlog::info("AI Analysis auto-load attempt {}", attempt + 1);
-
-                        // Small delay to let the UI update
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100 * (attempt + 1)));
-
-                        auto* app = AppWindow::GetInstance();
-                        if(app)
-                        {
-                            app->LoadAiAnalysis(ai_json_path);
-
-                            // Check if loading was successful by verifying current project
-                            auto* project = app->GetCurrentProject();
-                            if(project && project->GetTraceView())
-                            {
-                                spdlog::info("AI Analysis auto-load successful on attempt {}", attempt + 1);
-                                break;
-                            }
-                        }
-                    }
-                };
-
-                // Launch in a separate thread to avoid blocking the UI
-                std::thread(load_task).detach();
-            }
-            else
-            {
-                if(ai_json_path.empty())
-                {
-                    spdlog::info("AI JSON path is empty, skipping auto-load");
-                }
-                else
-                {
-                    spdlog::error("AI JSON file does not exist: {}", ai_json_path);
-                }
-            }
-        });
-    }
-
+    // Use AppWindow's centralized profiling dialog instead of creating our own
+    // This ensures all profiling uses the same dialog instance and callbacks
     if(m_show_profiling_dialog)
     {
-        dialog->Show();
+        AppWindow::GetInstance()->ShowProfilingDialog();
         m_show_profiling_dialog = false;
     }
-
-    dialog->Render();
 }
 
 void WelcomeView::RenderRecentFiles()

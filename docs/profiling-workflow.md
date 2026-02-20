@@ -208,6 +208,36 @@ Save LLM API keys for reuse in **Settings** → **Other** → **AI Analysis API 
 
 API keys are stored locally and auto-populated in profiling dialogs.
 
+## AI recommendation execution
+
+When AI analysis generates profiling recommendations, you can execute them directly from the AI Analysis view:
+
+1. **Navigate to AI Analysis tab** after loading an analyzed trace
+2. **Expand a recommendation** to view suggested profiling commands
+3. **Click "▶ Run This Command"** next to the recommendation
+4. **Review the configuration**:
+   - If the trace was profiled through ROCm Optiq, your original configuration (Local/Remote SSH/SLURM) is restored
+   - The recommended tool arguments are automatically applied
+   - All other settings (application path, SSH host, etc.) are preserved
+5. **Modify if needed** and click **Run** to profile with the new settings
+
+### Benefits
+
+- **Preserves execution context**: Remote profiling recommendations run remotely, SLURM recommendations submit to SLURM
+- **One-click re-profiling**: No need to manually reconfigure settings
+- **Iterative optimization**: Quickly test different profiling flags based on AI suggestions
+
+### Example workflow
+
+1. Profile your application with basic flags: `--sys-trace`
+2. AI analysis suggests: "Use `--kernel-trace --hip-api` for GPU kernel insights"
+3. Click "▶ Run This Command" on the recommendation
+4. ROCm Optiq opens profiling dialog with:
+   - Same application path
+   - Same execution mode (e.g., Remote SSH to `gpu-server.example.com`)
+   - Updated tool args: `--kernel-trace --hip-api`
+5. Click Run to re-profile with enhanced tracing
+
 ## Troubleshooting
 
 ### SSH connection issues

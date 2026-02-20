@@ -7,8 +7,6 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 
-#include <functional>
-
 namespace RocProfVis
 {
 namespace View
@@ -20,30 +18,27 @@ public:
     ComputeSummaryView(DataProvider& data_provider);
     ~ComputeSummaryView();
     void Render() override;
+
 private:
-    void         CalculateCombosWidth();
-    void         RenderKernelsTable(const WorkloadInfo& workload);
-    KernelMetric GetMetricNameByIndex(uint32_t metric) const;
-    void UpdataChartData(const WorkloadInfo& workload, uint32_t metric_id);
+    void CalculateCombosWidth();
+    void RenderKernelsTable(const WorkloadInfo& workload);
+    void UpdataChartData(const WorkloadInfo& workload, uint8_t metric_id);
+    void UpdateKernelMetrics();
 
     const std::vector<std::string_view> m_chart_views = { "Pie Chart", "Bar Chart" };
-    const std::vector<std::string_view> m_metric_views = {
-        "Invocation Count", "Duration Total", "Duration Min",
-        "Duration Max",     "Duration Mean",  "Duration Median"
-    };
+    std::vector<std::string_view>       m_metric_views;
 
     PieChart m_pie_chart;
     BarChart m_bar_chart;
 
-    DataProvider& m_data_provider;
-    uint32_t m_workload_id;
-    float         m_chart_combo_width;
-    float         m_metric_combo_width;
-    uint32_t      m_selected_metric;
+    DataProvider&                   m_data_provider;
+    uint32_t                        m_workload_id;
+    float                           m_chart_combo_width;
+    float                           m_metric_combo_width;
+    uint8_t                         m_selected_metric;
+    uint8_t                         m_selected_chart_id;
     EventManager::SubscriptionToken m_font_changed_token;
-
 };
-
 
 } // namespace View
 } // namespace RocProfVis

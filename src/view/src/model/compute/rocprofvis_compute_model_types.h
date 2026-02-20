@@ -33,7 +33,7 @@ struct AvailableMetrics
         uint32_t                             id;
         std::string                          name;
         std::unordered_map<uint32_t, Entry&> entries;
-        std::vector<std::string>             values_names; //TODO
+        std::vector<std::string>             values_names;
     };
     struct Category
     {
@@ -51,15 +51,15 @@ struct Point
     double y;
 };
 
-enum class KernelMetric : uint64_t
+enum class KernelMetric : uint8_t
 {
-    InvocationCount,
-    DurationTotal,
-    DurationMin,
-    DurationMax,
-    DurationMean,
-    DurationMedian,
-    COUNT
+    InvocationCount = 0,
+    DurationTotal   = 1,
+    DurationMin     = 2,
+    DurationMax     = 3,
+    DurationMean    = 4,
+    DurationMedian  = 5,
+    COUNT           = 6
 };
 
 struct KernelInfo
@@ -102,7 +102,7 @@ struct KernelInfo
         }
     };
 
-    static std::string GetMetricName(KernelMetric metric)
+    static std::string_view GetMetricName(KernelMetric metric)
     {
         switch(metric)
         {
@@ -115,6 +115,8 @@ struct KernelInfo
             default: return "";
         }
     }
+
+    static uint8_t ToIndex(KernelMetric m) { return static_cast<uint8_t>(m); }
 };
 
 struct WorkloadInfo

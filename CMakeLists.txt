@@ -105,7 +105,6 @@ set(VIEW_FILES
     src/view/src/rocprofvis_time_to_pixel.cpp
     src/view/src/rocprofvis_minimap.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
-    src/view/src/widgets/rocprofvis_charts.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
     src/view/src/widgets/rocprofvis_tab_container.cpp
     src/view/src/widgets/rocprofvis_editable_textfield.cpp
@@ -132,6 +131,8 @@ list(APPEND VIEW_FILES
     src/view/src/compute/rocprofvis_compute_memory_chart.cpp
     src/view/src/compute/rocprofvis_compute_selection.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
+    src/view/src/widgets/rocprofvis_charts.cpp
+
  
 )
 endif(COMPUTE_UI_SUPPORT)

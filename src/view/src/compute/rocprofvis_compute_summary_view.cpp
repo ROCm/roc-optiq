@@ -14,15 +14,17 @@ ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider)
 : RocWidget()
 , m_data_provider(data_provider)
 , m_workload_id(0) 
-, m_selected_metric(1) //default metric - duration total
+, m_selected_metric(KernelInfo::ToIndex(KernelMetric::DurationTotal))
+, m_selected_chart_id(0)
 {
-    CalculateCombosWidth();
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->CalculateCombosWidth();
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
 
+    UpdateKernelMetrics();
+    CalculateCombosWidth();
 }
 ComputeSummaryView::~ComputeSummaryView() 
 {
@@ -62,16 +64,15 @@ ComputeSummaryView::Render()
         const WorkloadInfo& workload = workloads.at(m_workload_id);
         RenderKernelsTable(workload);
 
-        static uint32_t selected_chart_id = 0;
         ImGui::SetNextItemWidth(m_chart_combo_width);
-        if(ImGui::BeginCombo("##ChartView", m_chart_views[selected_chart_id].data()))
+        if(ImGui::BeginCombo("##ChartView", m_chart_views[m_selected_chart_id].data()))
         {
-            for(uint32_t index = 0; index < m_chart_views.size(); index++)
+            for(uint8_t index = 0; index < m_chart_views.size(); index++)
             {
-                const bool is_selected = (selected_chart_id == index);
+                const bool is_selected = (m_selected_chart_id == index);
                 if(ImGui::Selectable(m_chart_views[index].data(), is_selected))
                 {
-                    selected_chart_id = index;
+                    m_selected_chart_id = index;
                 }
 
                 if(is_selected) ImGui::SetItemDefaultFocus();
@@ -83,7 +84,7 @@ ComputeSummaryView::Render()
         ImGui::SetNextItemWidth(m_metric_combo_width);
         if(ImGui::BeginCombo("##Metric", m_metric_views[m_selected_metric].data()))
         {
-            for(uint32_t index = 0; index < m_metric_views.size(); index++)
+            for(uint8_t index = 0; index < m_metric_views.size(); index++)
             {
                 const bool is_selected = (m_selected_metric == index);
                 if(ImGui::Selectable(m_metric_views[index].data(), is_selected))
@@ -98,9 +99,9 @@ ComputeSummaryView::Render()
         }
 
         ImGui::BeginChild("Chart");
-        if(selected_chart_id == 0)
+        if(m_selected_chart_id == 0)
             m_pie_chart.Render();
-        else if(selected_chart_id == 1)
+        else if(m_selected_chart_id == 1)
             m_bar_chart.Render();
 
         ImGui::EndChild();  // Chart
@@ -193,34 +194,26 @@ ComputeSummaryView::RenderKernelsTable(const WorkloadInfo& workload)
         ImGui::EndTable();
     }
     ImGui::EndChild();
-    
-}
-
-KernelMetric
-ComputeSummaryView::GetMetricNameByIndex(uint32_t index) const
-{
-    switch (index)
-    {
-        case 0: return KernelMetric::InvocationCount;
-        case 1: return KernelMetric::DurationTotal;
-        case 2: return KernelMetric::DurationMin;
-        case 3: return KernelMetric::DurationMax;
-        case 4: return KernelMetric::DurationMean;
-        case 5: return KernelMetric::DurationMedian;
-        default:
-            assert(false && "Invalid metric index");
-            return KernelMetric::DurationTotal;
-    }
 }
 
 void
-ComputeSummaryView::UpdataChartData(const WorkloadInfo& workload, uint32_t metric_id)
+ComputeSummaryView::UpdataChartData(const WorkloadInfo& workload, uint8_t metric_id)
 {
     ChartData chart_data =
-        ChartData::GenerateChartData(GetMetricNameByIndex(metric_id), workload);
+        ChartData::GenerateChartData(static_cast<KernelMetric>(metric_id), workload);
 
     m_pie_chart.UpdateData(chart_data);
     m_bar_chart.UpdateData(chart_data);
+}
+
+void
+ComputeSummaryView::UpdateKernelMetrics()
+{
+    for(uint8_t metric_index = 0; metric_index < KernelInfo::ToIndex(KernelMetric::COUNT); metric_index++)
+    {
+        m_metric_views.push_back(
+            KernelInfo::GetMetricName(static_cast<KernelMetric> (metric_index)));
+    }
 }
 
 } // namespace View

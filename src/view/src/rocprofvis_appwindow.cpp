@@ -1318,6 +1318,24 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
         return;
     }
 
+    // Create profiling dialog if needed (do this BEFORE confirmation dialog)
+    if(!m_profiling_dialog)
+    {
+        m_profiling_dialog = std::make_unique<ProfilingDialog>();
+        m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
+        {
+            // Store the profiling config for future use
+            StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
+
+            // Load the results
+            OpenFile(trace_path);
+            if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
+            {
+                LoadAiAnalysis(ai_json_path);
+            }
+        });
+    }
+
     // Look up stored profiling config for this trace
     auto* config = GetStoredProfilingConfig(project->GetID());
 
@@ -1335,31 +1353,15 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
         new_config.run_ai_analysis = true;
 
         // Leave application_path and output_directory empty for user to fill in
+        std::string message = "This trace was not profiled through ROCm Optiq.\n\n"
+                             "The profiling dialog will open with the recommended tool arguments:\n" + tool_args + "\n\n"
+                             "Please configure the application path and other settings manually.";
+
         ShowConfirmationDialog(
             "Run Recommended Profiling",
-            "This trace was not profiled through ROCm Optiq.\n\n"
-            "The profiling dialog will open with the recommended tool arguments:\n" + tool_args + "\n\n"
-            "Please configure the application path and other settings manually.",
-            [this, new_config]() mutable
+            message,
+            [this, new_config]()
             {
-                // Create profiling dialog if needed
-                if(!m_profiling_dialog)
-                {
-                    m_profiling_dialog = std::make_unique<ProfilingDialog>();
-                    m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
-                    {
-                        // Store the profiling config for future use
-                        StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
-
-                        // Load the results
-                        OpenFile(trace_path);
-                        if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
-                        {
-                            LoadAiAnalysis(ai_json_path);
-                        }
-                    });
-                }
-
                 // Show dialog with default config + recommended tool args
                 m_profiling_dialog->ShowWithConfig(new_config);
             }
@@ -1370,24 +1372,6 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
     // Use stored config with updated tool args
     new_config = *config;
     new_config.tool_args = tool_args;
-
-    // Create profiling dialog if needed
-    if(!m_profiling_dialog)
-    {
-        m_profiling_dialog = std::make_unique<ProfilingDialog>();
-        m_profiling_dialog->SetCompletionCallback([this](const std::string& trace_path, const std::string& ai_json_path)
-        {
-            // Store the profiling config for future use
-            StoreProfilingConfig(trace_path, m_profiling_dialog->GetConfig());
-
-            // Load the results
-            OpenFile(trace_path);
-            if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
-            {
-                LoadAiAnalysis(ai_json_path);
-            }
-        });
-    }
 
     // Show dialog with pre-populated config
     std::string message = "This will open the profiling dialog with your original configuration\n"

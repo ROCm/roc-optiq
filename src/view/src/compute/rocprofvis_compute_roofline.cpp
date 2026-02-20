@@ -211,7 +211,7 @@ Roofline::Update()
                 }
             }
             // Discover kernels...
-            uint64_t kernel_duration_scale = 0.0;
+            uint64_t kernel_duration_scale = 0;
             for(const std::pair<const uint32_t, KernelInfo>& kernel : m_workload->kernels)
             {
                 kernel_duration_scale =

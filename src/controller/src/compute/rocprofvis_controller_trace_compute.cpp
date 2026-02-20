@@ -524,7 +524,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                     });
                                     if(dm_result == kRocProfVisDmResultSuccess)
                                     {
-                                        std::string workload_id_str = std::to_string(uint_data);
+                                        std::string workload_id_str = std::to_string(id);
                                         uint64_t value_names_count = 0;
                                         for(const auto& [cat_id, tbl_id] : unique_tables)
                                         {

@@ -1310,42 +1310,12 @@ void AppWindow::ShowProfilingDialog()
         // Load the results
         OpenFile(trace_path);
 
-        // Load AI analysis if available (defer to next frame to ensure trace is loaded)
+        // Load AI analysis if available
+        // Note: We load it directly after the trace - the trace view should be ready by now
         if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
         {
-            spdlog::info("Scheduling AI analysis auto-load from: {}", ai_json_path);
-
-            // Defer loading to allow trace to initialize
-            auto load_task = [ai_json_path]() {
-                // Try loading a few times with delays in case the view isn't ready
-                for(int attempt = 0; attempt < 5; ++attempt)
-                {
-                    spdlog::info("AI Analysis auto-load attempt {}", attempt + 1);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100 * (attempt + 1)));
-
-                    auto* app = AppWindow::GetInstance();
-                    if(app)
-                    {
-                        app->LoadAiAnalysis(ai_json_path);
-
-                        // Check if loading was successful
-                        auto* project = app->GetCurrentProject();
-                        if(project && project->GetTraceView())
-                        {
-                            auto trace_view = project->GetTraceView();
-                            auto analysis_view = trace_view ? trace_view->GetAnalysisView() : nullptr;
-                            if(analysis_view)
-                            {
-                                spdlog::info("AI Analysis auto-load successful on attempt {}", attempt + 1);
-                                break;
-                            }
-                        }
-                    }
-                }
-            };
-
-            // Launch in a separate thread to avoid blocking the UI
-            std::thread(load_task).detach();
+            spdlog::info("Loading AI analysis from: {}", ai_json_path);
+            LoadAiAnalysis(ai_json_path);
         }
     });
 
@@ -1386,42 +1356,12 @@ void AppWindow::ShowProfilingDialogWithRecommendation(const std::string& tool_ar
         // Load the results
         OpenFile(trace_path);
 
-        // Load AI analysis if available (defer to next frame to ensure trace is loaded)
+        // Load AI analysis if available
+        // Note: We load it directly after the trace - the trace view should be ready by now
         if(!ai_json_path.empty() && std::filesystem::exists(ai_json_path))
         {
-            spdlog::info("Scheduling AI analysis auto-load from: {}", ai_json_path);
-
-            // Defer loading to allow trace to initialize
-            auto load_task = [ai_json_path]() {
-                // Try loading a few times with delays in case the view isn't ready
-                for(int attempt = 0; attempt < 5; ++attempt)
-                {
-                    spdlog::info("AI Analysis auto-load attempt {}", attempt + 1);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100 * (attempt + 1)));
-
-                    auto* app = AppWindow::GetInstance();
-                    if(app)
-                    {
-                        app->LoadAiAnalysis(ai_json_path);
-
-                        // Check if loading was successful
-                        auto* project = app->GetCurrentProject();
-                        if(project && project->GetTraceView())
-                        {
-                            auto trace_view = project->GetTraceView();
-                            auto analysis_view = trace_view ? trace_view->GetAnalysisView() : nullptr;
-                            if(analysis_view)
-                            {
-                                spdlog::info("AI Analysis auto-load successful on attempt {}", attempt + 1);
-                                break;
-                            }
-                        }
-                    }
-                }
-            };
-
-            // Launch in a separate thread to avoid blocking the UI
-            std::thread(load_task).detach();
+            spdlog::info("Loading AI analysis from: {}", ai_json_path);
+            LoadAiAnalysis(ai_json_path);
         }
     });
 

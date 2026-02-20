@@ -13,6 +13,9 @@
 
 #include "json.h"
 
+#include <map>
+#include <set>
+
 #pragma region Deprecated
 #include "rocprofvis_controller_compute_metrics.h"
 #include "rocprofvis_controller_plot_compute.h"
@@ -526,6 +529,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                             unique_tables.insert({static_cast<uint32_t>(cat), static_cast<uint32_t>(tbl)});
                                         }
                                         std::string workload_id_str = std::to_string(uint_data);
+                                        std::map<std::pair<uint32_t, uint32_t>, std::set<std::string>> table_value_names;
                                         for(const auto& [cat_id, tbl_id] : unique_tables)
                                         {
                                             std::string prefix = std::to_string(cat_id) + "." + std::to_string(tbl_id);
@@ -538,16 +542,30 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                 {}
                                             };
                                             dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadMetricValueNames, m_query_arguments, m_query_output,
-                                                [&workload, cat_id, tbl_id](const QueryDataStore& data_store){
+                                                [&table_value_names, cat_id, tbl_id](const QueryDataStore& data_store){
                                                     for(size_t i = 0; i < data_store.rows.size(); i++)
                                                     {
-                                                        workload->AddTableValueName(cat_id, tbl_id,
+                                                        table_value_names[{cat_id, tbl_id}].insert(
                                                             data_store.rows[i][data_store.columns.at(kRPVComputeColumnMetricValueName).value()]);
                                                     }
                                                 });
                                             if(dm_result != kRocProfVisDmResultSuccess) break;
                                         }
-                                        workload->FinalizeValueNames();
+                                        uint64_t total = 0;
+                                        for(const auto& [key, names] : table_value_names)
+                                            total += names.size();
+                                        workload->SetUInt64(kRPVControllerWorkloadNumMetricValueNames, 0, total);
+                                        uint64_t idx = 0;
+                                        for(const auto& [key, names] : table_value_names)
+                                        {
+                                            for(const auto& name : names)
+                                            {
+                                                workload->SetUInt64(kRPVControllerWorkloadMetricValueNameCategoryIdIndexed, idx, key.first);
+                                                workload->SetUInt64(kRPVControllerWorkloadMetricValueNameTableIdIndexed, idx, key.second);
+                                                workload->SetString(kRPVControllerWorkloadMetricValueNameStringIndexed, idx, name.c_str());
+                                                idx++;
+                                            }
+                                        }
                                         m_query_arguments = { {kRPVComputeParamWorkloadId, workload_id_str} };
                                     }
                                     std::vector<uint32_t> kernel_ids;

@@ -156,14 +156,11 @@ namespace DataModel
 			params[0].param_type == kRPVComputeParamWorkloadId &&
 			params[1].param_type == kRPVComputeParamMetricId)
 		{
-			query = "SELECT DISTINCT cmv.value_name ";
-			query += "FROM compute_metric_view cmv ";
-			query += "INNER JOIN compute_metric_definition cmd ON cmv.metric_id = cmd.metric_id ";
-			query += "WHERE cmd.workload_id = ";
-			query += params[0].param_str;
-			query += " AND (cmv.metric_id = '";
+			query = "SELECT DISTINCT value_name ";
+			query += "FROM compute_metric_view ";
+			query += "WHERE (metric_id = '";
 			query += params[1].param_str;
-			query += "' OR cmv.metric_id LIKE '";
+			query += "' OR metric_id LIKE '";
 			query += params[1].param_str;
 			query += ".%')";
 		}

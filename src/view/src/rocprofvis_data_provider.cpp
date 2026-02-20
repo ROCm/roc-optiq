@@ -3902,9 +3902,7 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
                     cat_it->second.tables.find(static_cast<uint32_t>(tbl_id));
                 if(tbl_it != cat_it->second.tables.end())
                 {
-                    auto& vn = tbl_it->second.value_names;
-                    if(std::find(vn.begin(), vn.end(), name) == vn.end())
-                        vn.push_back(std::move(name));
+                    tbl_it->second.value_names.push_back(std::move(name));
                 }
             }
         }

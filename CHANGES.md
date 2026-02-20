@@ -40,6 +40,15 @@
   - New multi-database yaml file format supported.
   - Improved data processing logic.
 
+**Integrated Profiling Workflow**
+  - New profiling dialog accessible from Welcome tab or Tools menu
+  - Support for local, remote (SSH), and SLURM cluster profiling
+  - Container execution support (Docker, Podman, Singularity)
+  - Automated AI analysis with rocpd integration
+  - Unique timestamped run IDs prevent profiling runs from overwriting each other
+  - One-click re-profiling from AI analysis recommendations
+  - Job queue monitor for tracking SLURM jobs
+
 **Misc**
   - Project now builds on Mac OS. 
 
@@ -51,6 +60,8 @@ Fix: Log spam in release builds.
 Fix: Crash when same event was repeatedly selected/deselected.
 Fix: Misc application crashes.
 Fix: Build on linux systems that have libtbb-dev installed.
+Fix: Profiling dialog "View Results" hang - trace loading now completes properly.
+Fix: Remote profiling file copy using correct run ID subdirectory paths.
 
 
 ## Optiq Beta 0.1.0

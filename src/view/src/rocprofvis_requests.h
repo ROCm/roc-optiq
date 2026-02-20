@@ -18,6 +18,26 @@ namespace RocProfVis
 namespace View
 {
 
+// Singleton class for creating unique IDs
+class IdGenerator
+{
+public:
+    static IdGenerator& GetInstance()
+    {
+        static IdGenerator instance;
+        return instance;
+    }
+
+    uint64_t GenerateId()
+    {
+        return ++m_current_id;
+    }
+
+private:
+    IdGenerator() : m_current_id(0) {}
+    uint64_t m_current_id;
+};
+
 enum class RequestType
 {
     kFetchTrack,

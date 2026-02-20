@@ -128,6 +128,14 @@ ComputeDataModel::AddMetricValue(uint64_t store_id, uint32_t workload_id,
 void
 ComputeDataModel::Clear()
 {
+    ClearAllMetricValues();
+    m_workloads.clear();
+    m_kernel_selection_table.Clear();
+}
+
+void
+ComputeDataModel::ClearAllMetricValues()
+{
     for (auto& store_pair : m_metrics) {
         for (auto& kernel_pair : store_pair.second) {
             kernel_pair.second.m_metrics_data.clear();
@@ -137,7 +145,19 @@ ComputeDataModel::Clear()
         store_pair.second.clear();
     }
     m_metrics.clear();
-    m_workloads.clear();
+}
+
+void
+ComputeDataModel::ClearMetricValues(uint64_t store_id)
+{
+    if (m_metrics.count(store_id)){
+        for (auto& kernel_pair : m_metrics.at(store_id)) {
+            kernel_pair.second.m_metrics_data.clear();
+            kernel_pair.second.m_metrics_map.clear();
+            kernel_pair.second.m_metrics_by_table_id.clear();
+        }
+        m_metrics.at(store_id).clear();
+    }
 }
 
 void
@@ -200,6 +220,35 @@ ComputeDataModel::GetMetricValuesByTable(uint64_t store_id, uint32_t kernel_id,
        m_metrics.at(store_id).at(kernel_id).m_metrics_by_table_id.count(table_key))
     {
         return &m_metrics.at(store_id).at(kernel_id).m_metrics_by_table_id.at(table_key);
+    }
+    return nullptr;
+}
+
+std::vector<const KernelInfo*>
+ComputeDataModel::GetKernelInfoList(uint32_t workload_id) const
+{
+    std::vector<const KernelInfo*> kernel_info_list;
+    if(m_workloads.count(workload_id))
+    {
+        const WorkloadInfo& workload = m_workloads.at(workload_id);
+        for(const auto& kernel_pair : workload.kernels)
+        {
+            kernel_info_list.push_back(&kernel_pair.second);
+        }
+    }
+    return kernel_info_list;
+}
+
+const KernelInfo*
+ComputeDataModel::GetKernelInfo(uint32_t workload_id, uint32_t kernel_id) const
+{
+    if(m_workloads.count(workload_id))
+    {
+        const WorkloadInfo& workload = m_workloads.at(workload_id);
+        if(workload.kernels.count(kernel_id))
+        {
+            return &workload.kernels.at(kernel_id);
+        }
     }
     return nullptr;
 }

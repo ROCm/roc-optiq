@@ -2,62 +2,103 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_kernel_details.h"
+#include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
-#include <imgui.h>
+#include "rocprofvis_event_manager.h"
+
+#include "imgui.h"
 
 namespace RocProfVis
 {
 namespace View
 {
 
-ComputeKernelDetailsView::ComputeKernelDetailsView(DataProvider& data_provider)
+ComputeKernelDetailsView::ComputeKernelDetailsView(
+    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
-, m_memory_chart(data_provider)
-, m_memory_chart_fetched(false)
-, m_last_provider_state(ProviderState::kInit)
-{}
+, m_memory_chart(data_provider, compute_selection)
+, m_compute_selection(compute_selection)
+, m_client_id(IdGenerator::GetInstance().GenerateId())
+{
+    // Add event listener for selection changes to trigger metric fetch for the newly
+    // selected kernel
+    auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        if(auto selection_changed_event =
+               std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e))
+        {
+            if(m_data_provider.GetTraceFilePath() !=
+               selection_changed_event->GetSourceId())
+            {
+                return;
+            }
+            // TODO: fetch pivot table data
+        }
+    };
 
-ComputeKernelDetailsView::~ComputeKernelDetailsView() {}
+    m_workload_selection_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
+        workload_changed_handler);
+
+    auto kernel_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        if(auto selection_changed_event =
+               std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e))
+        {
+            if(m_data_provider.GetTraceFilePath() !=
+               selection_changed_event->GetSourceId())
+            {
+                return;
+            }
+
+            m_memory_chart.FetchMemChartMetrics();
+        }
+    };
+
+    m_kernel_selection_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
+        kernel_changed_handler);
+
+    // subscribe to fetch metrics event
+    auto metrics_fetched_handler = [this](std::shared_ptr<RocEvent> e) {
+        if(auto metrics_fetched_event =
+               std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e))
+        {
+            if(m_data_provider.GetTraceFilePath() != metrics_fetched_event->GetSourceId())
+            {
+                return;
+            }
+
+            if(m_memory_chart.GetClientId() == metrics_fetched_event->GetClientId())
+            {
+                m_memory_chart.UpdateMetrics();
+            }
+        }
+    };
+
+    m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
+}
+
+ComputeKernelDetailsView::~ComputeKernelDetailsView()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
+        m_workload_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
+        m_kernel_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeMetricsFetched), m_metrics_fetched_token);
+}
 
 void
 ComputeKernelDetailsView::Update()
-{
-    ProviderState current_state = m_data_provider.GetState();
-    if(m_last_provider_state != current_state)
-    {
-        if(current_state == ProviderState::kLoading ||
-           current_state == ProviderState::kReady)
-        {
-            m_memory_chart_fetched = false;
-        }
-        m_last_provider_state = current_state;
-    }
-}
+{}
 
 void
 ComputeKernelDetailsView::Render()
 {
-    if(!m_memory_chart_fetched)
-    {
-        const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
-            m_data_provider.ComputeModel().GetWorkloads();
-        if(!workloads.empty())
-        {
-            const WorkloadInfo& workload = workloads.begin()->second;
-            std::vector<uint32_t> kernel_ids;
-            for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
-            {
-                kernel_ids.push_back(kernel.second.id);
-            }
-            m_memory_chart.FetchMemChartMetrics(workload.id, kernel_ids);
-            m_memory_chart_fetched = true;
-        }
-    }
-
-    m_memory_chart.Update();
-
-    ImGui::Text("Kernel Details");
+    ImGui::Text("Memory Chart");
     m_memory_chart.Render();
 }
 

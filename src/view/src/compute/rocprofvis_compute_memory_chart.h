@@ -3,6 +3,7 @@
 
 #pragma once
 #include <array>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -17,6 +18,7 @@ namespace View
 
 struct MetricValue;
 class DataProvider;
+class ComputeSelection;
 
 // Simple rectangle used for block positioning.
 // Each block stores its local-space position (relative to the chart origin).
@@ -92,15 +94,17 @@ enum MemChartMetric
 class ComputeMemoryChartView
 {
 public:
-    ComputeMemoryChartView(DataProvider& data_provider);
+    ComputeMemoryChartView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeMemoryChartView();
 
     void Render();
-    void Update();
 
     // Fetch all 3.1.x metrics for the given workload and kernels
-    void FetchMemChartMetrics(uint32_t workload_id,
-                              const std::vector<uint32_t>& kernel_ids);
+    void FetchMemChartMetrics();
+
+    void UpdateMetrics();
+
+    uint64_t GetClientId() const { return m_client_id; }
 
 private:
     // Compute all block positions (called once at the start of Render)
@@ -129,11 +133,11 @@ private:
     const char* GetMetricText(MemChartMetric metric) const;
 
     DataProvider& m_data_provider;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+
     std::array<std::string, MEMCHART_METRIC_COUNT> m_values;
 
-    // Stored fetch context so Update() can query the right (store_id, kernel) slot
-    static constexpr uint64_t       kMemChartClientId = 100;
-    std::vector<uint32_t>           m_kernel_ids;
+    uint64_t m_client_id;
 
     // Cache pointers to MetricValue objects to avoid linear search every frame
     std::vector<const MetricValue*> m_metric_ptrs;

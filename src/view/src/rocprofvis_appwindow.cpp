@@ -377,6 +377,12 @@ AppWindow::Render()
     m_message_dialog->Render();
     m_settings_panel->Render();
 
+    // Render profiling dialog if it exists
+    if(m_profiling_dialog)
+    {
+        m_profiling_dialog->Render();
+    }
+
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
     // ImGuiStyleVar_WindowRounding

@@ -525,7 +525,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                     if(dm_result == kRocProfVisDmResultSuccess)
                                     {
                                         std::string workload_id_str = std::to_string(uint_data);
-                                        uint64_t my_counter = 0;
+                                        uint64_t value_names_count = 0;
                                         for(const auto& [cat_id, tbl_id] : unique_tables)
                                         {
                                             std::string prefix = std::to_string(cat_id) + "." + std::to_string(tbl_id);
@@ -538,14 +538,14 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                 {}
                                             };
                                             dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadMetricValueNames, m_query_arguments, m_query_output,
-                                                [&workload, &my_counter, cat_id, tbl_id](const QueryDataStore& data_store){
+                                                [&workload, &value_names_count, cat_id, tbl_id](const QueryDataStore& data_store){
                                                     for(size_t i = 0; i < data_store.rows.size(); i++)
                                                     {
-                                                        workload->SetUInt64(kRPVControllerWorkloadNumMetricValueNames, 0, my_counter + 1);
-                                                        workload->SetUInt64(kRPVControllerWorkloadMetricValueNameCategoryIdIndexed, my_counter, cat_id);
-                                                        workload->SetUInt64(kRPVControllerWorkloadMetricValueNameTableIdIndexed, my_counter, tbl_id);
-                                                        workload->SetString(kRPVControllerWorkloadMetricValueNameStringIndexed, my_counter, data_store.rows[i][data_store.columns.at(kRPVComputeColumnMetricValueName).value()]);
-                                                        my_counter++;
+                                                        workload->SetUInt64(kRPVControllerWorkloadNumMetricValueNames, 0, value_names_count + 1);
+                                                        workload->SetUInt64(kRPVControllerWorkloadMetricValueNameCategoryIdIndexed, value_names_count, cat_id);
+                                                        workload->SetUInt64(kRPVControllerWorkloadMetricValueNameTableIdIndexed, value_names_count, tbl_id);
+                                                        workload->SetString(kRPVControllerWorkloadMetricValueNameStringIndexed, value_names_count, data_store.rows[i][data_store.columns.at(kRPVComputeColumnMetricValueName).value()]);
+                                                        value_names_count++;
                                                     }
                                                 });
                                             if(dm_result != kRocProfVisDmResultSuccess) break;

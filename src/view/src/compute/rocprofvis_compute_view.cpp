@@ -83,7 +83,7 @@ ComputeView::CreateView()
 
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView2>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
     
@@ -196,13 +196,24 @@ ComputeView::RenderWorkloadSelection()
     ImGui::SameLine();
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id);
-    if(kernel_info)
+
+    std::vector<const KernelInfo*> kernel_info_list =
+        m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
+    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
+    if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str() : "-"))
     {
-        ImGui::Text("%s", kernel_info->name.c_str());
-    }
-    else
-    {
-        ImGui::Text("-");
+        if(ImGui::Selectable("-", kernel_id == ComputeSelection::INVALID_SELECTION_ID))
+        {
+            m_compute_selection->SelectKernel(ComputeSelection::INVALID_SELECTION_ID);
+        }
+        for(const KernelInfo* info : kernel_info_list)
+        {
+            if(ImGui::Selectable(info->name.c_str(), kernel_id == info->id))
+            {
+                m_compute_selection->SelectKernel(info->id);
+            }
+        }
+        ImGui::EndCombo();
     }
 }
 
@@ -214,12 +225,6 @@ ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider, std::shared_
 {}
 
 ComputeTableView::ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
-: RocWidget()
-, m_data_provider(data_provider)
-, m_compute_selection(compute_selection)
-{}
-
-ComputeKernelDetailsView2::ComputeKernelDetailsView2(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)

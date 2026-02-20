@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_memory_chart.h"
+#include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
+
 #include <algorithm>
 #include <cstdio>
 #include <imgui.h>
@@ -150,9 +153,10 @@ DrawInsetCard(ImDrawList* draw_list, float card_x, float card_y,
 // Core — data loading
 // =============================================================================
 
-ComputeMemoryChartView::ComputeMemoryChartView(DataProvider& data_provider)
+ComputeMemoryChartView::ComputeMemoryChartView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : m_data_provider(data_provider)
-, m_last_metrics_count(0)
+, m_compute_selection(compute_selection)
+, m_client_id(IdGenerator::GetInstance().GenerateId())
 {
     m_values.fill("-");
     m_metric_ptrs.resize(MEMCHART_METRIC_COUNT, nullptr);
@@ -169,48 +173,52 @@ ComputeMemoryChartView::GetMetricText(MemChartMetric metric) const
 }
 
 void
-ComputeMemoryChartView::FetchMemChartMetrics(uint32_t                     workload_id,
-                                             const std::vector<uint32_t>& kernel_ids)
+ComputeMemoryChartView::FetchMemChartMetrics()
 {
     m_values.fill("-");
     m_metric_ptrs.assign(MEMCHART_METRIC_COUNT, nullptr);
-    m_last_metrics_count = 0;
-    m_kernel_ids         = kernel_ids;
 
-    for(const uint32_t& kid : kernel_ids)
+    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+
+    if(m_compute_selection)
     {
-        m_data_provider.ComputeModel().ClearMetricValues(kMemChartClientId, kid);
+        uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+        uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+
+        std::vector<uint32_t> kernel_ids = {kernel_id};
+        std::vector<MetricsRequestParams::MetricID> metric_ids;
+        metric_ids.push_back({MEMCHART_CATEGORY_ID, MEMCHART_TABLE_ID, std::nullopt});
+
+        m_data_provider.FetchMetrics(
+            MetricsRequestParams(workload_id, kernel_ids, metric_ids, m_client_id));
     }
-
-    std::vector<MetricsRequestParams::MetricID> metric_ids;
-    metric_ids.push_back({MEMCHART_CATEGORY_ID, MEMCHART_TABLE_ID, std::nullopt});
-
-    m_data_provider.FetchMetrics(
-        MetricsRequestParams(workload_id, kernel_ids, metric_ids, kMemChartClientId));
 }
 
-void
-ComputeMemoryChartView::Update()
+void 
+ComputeMemoryChartView::UpdateMetrics()
 {
     m_metric_ptrs.assign(MEMCHART_METRIC_COUNT, nullptr);
 
-    for(const uint32_t& kernel_id : m_kernel_ids)
+    if(!m_compute_selection) return;
+
+    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+    if(kernel_id == ComputeSelection::INVALID_SELECTION_ID) return;
+
+    const std::vector<std::shared_ptr<MetricValue>>* metrics =
+        m_data_provider.ComputeModel().GetMetricsData(m_client_id, kernel_id);
+    
+    if(!metrics) return;
+
+    for(const std::shared_ptr<MetricValue>& metric : *metrics)
     {
-        const std::vector<std::shared_ptr<MetricValue>>* metrics =
-            m_data_provider.ComputeModel().GetMetricsData(kMemChartClientId, kernel_id);
-        if(!metrics) continue;
+        if(!metric || !metric->entry) continue;
+        if(metric->entry->category_id != MEMCHART_CATEGORY_ID) continue;
+        if(metric->entry->table_id != MEMCHART_TABLE_ID) continue;
 
-        for(const std::shared_ptr<MetricValue>& metric : *metrics)
+        uint32_t id = metric->entry->id;
+        if(id < MEMCHART_METRIC_COUNT)
         {
-            if(!metric || !metric->entry) continue;
-            if(metric->entry->category_id != MEMCHART_CATEGORY_ID) continue;
-            if(metric->entry->table_id != MEMCHART_TABLE_ID) continue;
-
-            uint32_t id = metric->entry->id;
-            if(id < MEMCHART_METRIC_COUNT)
-            {
-                m_metric_ptrs[id] = metric.get();
-            }
+            m_metric_ptrs[id] = metric.get();
         }
     }
 

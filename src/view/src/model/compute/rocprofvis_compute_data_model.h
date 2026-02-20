@@ -59,13 +59,20 @@ public:
     MetricValuesByEntryId* GetMetricValuesByTable(uint64_t store_id, uint32_t kernel_id,
                                                   uint64_t table_key);
 
+    // Clear entire model (workloads, metrics, tables, etc)
     void Clear();
+    // Clear metric values for all stores (clients) and kernels
     void ClearAllMetricValues();
+    // Clear metric values for a specific store (client)
+    void ClearMetricValues(uint64_t store_id);
+    // Clear metric values for a specific store and kernel
     void ClearMetricValues(uint64_t store_id, uint32_t kernel_id);
 
     ComputeKernelSelectionTable& GetKernelSelectionTable();
-    const KernelInfo* GetKernelInfo(uint32_t workload_id, uint32_t kernel_id) const;
 
+    std::vector<const KernelInfo*> GetKernelInfoList(uint32_t workload_id) const;
+
+    const KernelInfo* GetKernelInfo(uint32_t workload_id, uint32_t kernel_id) const;
 
 private:
     std::unordered_map<uint32_t, WorkloadInfo> m_workloads;

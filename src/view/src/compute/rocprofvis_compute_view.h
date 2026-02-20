@@ -59,16 +59,6 @@ protected:
     std::shared_ptr<ComputeSelection> m_compute_selection;
 };
 
-class ComputeKernelDetailsView2: public RocWidget
-{
-public:
-    ComputeKernelDetailsView2(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
-    ~ComputeKernelDetailsView2(){};
-protected:
-    DataProvider& m_data_provider;
-    std::shared_ptr<ComputeSelection> m_compute_selection;
-};
-
 class ComputeTableView: public RocWidget
 {
 public:

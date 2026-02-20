@@ -140,6 +140,34 @@ RocProfVis::View::ComputeTableSearchEvent::GetSearchTerm()
 {
     return m_search_term;
 }
+
+ComputeSelectionChangedEvent::ComputeSelectionChangedEvent(int event_id, uint32_t id, const std::string& source_id)
+: RocEvent(event_id, source_id)
+, m_id(id)
+{
+    m_event_type = RocEventType::kComputeSelectionChangedEvent;
+}
+
+uint32_t
+ComputeSelectionChangedEvent::GetId() const
+{
+    return m_id;
+}
+
+ComputeMetricsFetchedEvent::ComputeMetricsFetchedEvent(const uint64_t     client_id,
+                                                       const std::string& source_id)
+: RocEvent(static_cast<int>(RocEvents::kComputeMetricsFetched), source_id)
+, m_client_id(client_id)
+{
+    m_event_type = RocEventType::kComputeMetricsFetchedEvent;
+}
+
+uint64_t
+ComputeMetricsFetchedEvent::GetClientId() const
+{
+    return m_client_id;
+}
+
 #endif
 
 TabEvent::TabEvent(int event_id, const std::string& tab_id, const std::string& source_id)

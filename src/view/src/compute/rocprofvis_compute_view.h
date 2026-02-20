@@ -5,6 +5,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_tab_container.h"
+#include "rocprofvis_compute_selection.h"
 
 namespace RocProfVis
 {
@@ -13,6 +14,7 @@ namespace View
 
 class SettingsManager;
 class ComputeTester;
+class Roofline;
 
 class ComputeView : public RootView
 {
@@ -33,8 +35,11 @@ public:
 
 private:
     void RenderToolbar();
+    void RenderWorkloadSelection();
 
     bool m_view_created;
+
+    std::shared_ptr<ComputeSelection> m_compute_selection;
 
     std::shared_ptr<TabContainer> m_tab_container;
 
@@ -42,46 +47,27 @@ private:
     std::shared_ptr<RocCustomWidget> m_tool_bar;
 };
 
-
-//TODO: move these to separate files when they are implemented
-class ComputeSummaryView: public RocWidget
+// TODO: move these to separate files when they are implemented
+class ComputeTableView : public RocWidget
 {
 public:
-    ComputeSummaryView(DataProvider& data_provider);
-    ~ComputeSummaryView(){};
-
-protected:
-    DataProvider& m_data_provider;
-};
-
-class ComputeKernelDetailsView: public RocWidget
-{
-public:
-    ComputeKernelDetailsView(DataProvider& data_provider);
-    ~ComputeKernelDetailsView(){};
-
-protected:
-    DataProvider& m_data_provider;
-};
-
-class ComputeTableView: public RocWidget
-{
-public:
-    ComputeTableView(DataProvider& data_provider);
+    ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTableView(){};
 
 protected:
     DataProvider& m_data_provider;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
 };
 
 class ComputeWorkloadView: public RocWidget
 {
 public:
-    ComputeWorkloadView(DataProvider& data_provider);
+    ComputeWorkloadView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeWorkloadView(){};
 
 protected:
     DataProvider& m_data_provider;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
 };
 
 class ComputeTester : public RocWidget

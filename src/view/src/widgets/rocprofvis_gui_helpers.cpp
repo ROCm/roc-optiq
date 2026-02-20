@@ -181,7 +181,70 @@ SetTooltipStyled(const char* fmt, ...)
     ImGui::PopStyleColor();
 
     va_end(args);
+}
 
+void
+ElidedText(const char* text, float available_width, float tooltip_width,
+           bool imgui_AlignTextToFramePadding)
+{
+    ImGuiStyle       style      = ImGui::GetStyle();
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    float            text_width = ImGui::CalcTextSize(text).x;
+    ImVec2           elide_size = ImGui::CalcTextSize(" [...]");
+    float  scroll_bar_width     = (ImGui::GetScrollMaxY() != 0.0f) ? style.ScrollbarSize : 0.0f;
+    bool   elide                = text_width + scroll_bar_width > available_width;
+    ImVec2 elide_pos;
+    // Dynamically sized containers do not adapt to clip rect...
+    // Use a window to restrict our size and provide sizing hint to client.
+    // Do not take input to avoid interfering with client.
+    ImGui::BeginChild("elided",
+                      ImVec2(available_width, imgui_AlignTextToFramePadding
+                                                  ? ImGui::GetFrameHeightWithSpacing()
+                                                  : ImGui::GetFontSize()),
+                      ImGuiChildFlags_None,
+                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
+
+    if(imgui_AlignTextToFramePadding)
+    {
+        ImGui::AlignTextToFramePadding();
+    }
+    if(elide)
+    {
+        ImGui::PushClipRect(ImGui::GetCursorScreenPos(),
+                            ImGui::GetCursorScreenPos() +
+                                ImVec2(available_width - scroll_bar_width - elide_size.x,
+                                       ImGui::GetFrameHeightWithSpacing()),
+                            true);
+    }
+    ImGui::TextUnformatted(text);
+    if(elide)
+    {
+        ImGui::PopClipRect();
+        ImGui::SameLine(available_width - scroll_bar_width - elide_size.x);
+        elide_pos = ImGui::GetCursorScreenPos();
+        ImGui::TextUnformatted(" [...]");
+    }
+    ImGui::EndChild();
+    if(elide)
+    {
+        ImGui::SetCursorScreenPos(elide_pos);
+        ImGui::InvisibleButton("elide_hover", elide_size);
+        if(tooltip_width > 0.0f)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                settings.GetDefaultIMGUIStyle().WindowPadding);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                                settings.GetDefaultStyle().FrameRounding);
+            if(ImGui::BeginItemTooltip())
+            {
+                ImGui::PushTextWrapPos(tooltip_width);
+                ImGui::TextWrapped("%s", text);
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+            ImGui::PopStyleVar(2);
+        }
+    }
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER

@@ -450,6 +450,8 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnWorkloadRooflineBenchL2Bw,
     kRPVComputeColumnWorkloadRooflineBenchL1Bw,
     kRPVComputeColumnWorkloadRooflineBenchLDSBw,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF4Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF6Flops,
     kRPVComputeColumnWorkloadRooflineBenchMFMAF8Flops,
     kRPVComputeColumnWorkloadRooflineBenchFP16Flops,
     kRPVComputeColumnWorkloadRooflineBenchMFMAF16Flops,

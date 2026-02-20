@@ -59,6 +59,8 @@ namespace DataModel
 		{"L2Bw", kRPVComputeColumnWorkloadRooflineBenchL2Bw},
 		{"L1Bw", kRPVComputeColumnWorkloadRooflineBenchL1Bw},
 		{"LDSBw", kRPVComputeColumnWorkloadRooflineBenchLDSBw},
+		{"MFMAF4Flops", kRPVComputeColumnWorkloadRooflineBenchMFMAF4Flops},
+		{"MFMAF6Flops", kRPVComputeColumnWorkloadRooflineBenchMFMAF6Flops},
 		{"MFMAF8Flops", kRPVComputeColumnWorkloadRooflineBenchMFMAF8Flops},
 		{"FP16Flops", kRPVComputeColumnWorkloadRooflineBenchFP16Flops},
 		{"MFMAF16Flops", kRPVComputeColumnWorkloadRooflineBenchMFMAF16Flops},

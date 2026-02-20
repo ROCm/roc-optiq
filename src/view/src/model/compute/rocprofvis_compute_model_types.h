@@ -51,6 +51,7 @@ struct Point
     double y;
 };
 
+
 struct KernelInfo
 {
     struct Roofline

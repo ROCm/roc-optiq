@@ -3,8 +3,10 @@
 
 #include "rocprofvis_compute_view.h"
 #include "rocprofvis_compute_kernel_details.h"
+#include "rocprofvis_compute_summary.h"
 #include "implot/implot.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_settings_manager.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -218,12 +220,6 @@ ComputeView::RenderWorkloadSelection()
 }
 
 //TODO: move these to their own files
-ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
-: RocWidget()
-, m_data_provider(data_provider)
-, m_compute_selection(compute_selection)
-{}
-
 ComputeTableView::ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)

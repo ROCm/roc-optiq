@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_kernel_details.h"
+#include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
@@ -18,6 +19,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 : RocWidget()
 , m_data_provider(data_provider)
 , m_memory_chart(data_provider, compute_selection)
+, m_roofline(nullptr)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
 {
@@ -49,8 +51,12 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
             {
                 return;
             }
-
             m_memory_chart.FetchMemChartMetrics();
+            if(m_roofline)
+            {
+                m_roofline->SetWorkload(m_compute_selection->GetSelectedWorkload());
+                m_roofline->SetKernel(selection_changed_event->GetId());
+            }
         }
     };
 
@@ -77,6 +83,10 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
+
+    m_roofline = std::make_unique<RocProfVis::View::Roofline>(data_provider);
+
+    m_widget_name = GenUniqueName("ComputeKernelDetailsView");
 }
 
 ComputeKernelDetailsView::~ComputeKernelDetailsView()
@@ -93,13 +103,24 @@ ComputeKernelDetailsView::~ComputeKernelDetailsView()
 
 void
 ComputeKernelDetailsView::Update()
-{}
+{
+    if(m_roofline)
+    {
+        m_roofline->Update();
+    }
+}
 
 void
 ComputeKernelDetailsView::Render()
 {
+    ImGui::BeginChild("kernel_details");
     ImGui::Text("Memory Chart");
     m_memory_chart.Render();
+    if(m_roofline)
+    {
+        m_roofline->Render();
+    }
+    ImGui::EndChild();
 }
 
 }  // namespace View

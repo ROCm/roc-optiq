@@ -492,7 +492,8 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnMetricValueName,
     kRPVComputeColumnMetricValue,
 
-    kRPVComputeColumnDynamicMetricValue
+    kRPVComputeColumnDynamicMetricValue,
+    kRPVComputeColumnDynamicKernelUUID,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations

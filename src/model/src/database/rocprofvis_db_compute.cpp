@@ -52,6 +52,7 @@ namespace DataModel
 		{"value_name", kRPVComputeColumnMetricValueName},
 		{"value", kRPVComputeColumnMetricValue},
 		{"unit", kRPVComputeColumnMetricUnit},
+		{"__id", kRPVComputeColumnDynamicKernelUUID},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -271,7 +272,7 @@ namespace DataModel
 	std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
         std::string query;
         std::string workload_id;
-        int         sort_column_index = 1;       // default to duration_ns_sum (index 1)
+        int         sort_column_index = 2;       // default to duration_ns_sum (index 2)
         std::string sort_order        = "DESC";  // default to descending
         
 		// (metric_id, value_name) pairs
@@ -327,15 +328,19 @@ namespace DataModel
             return query;  // Return empty on invalid input
         }
 
-        // Build column name list (index 0 = kernel_name, index 1 = duration_ns_sum, index
-        // 2+ = metrics)
+        // Build column name list (index 0 = kernel_uuid, index 1 = kernel_name, index 2 = duration_ns_sum, index 3 = dispatch_count, index
+        // 4+ = metrics)
+        column_names.push_back("kernel_uuid");
         column_names.push_back("kernel_name");
         column_names.push_back("duration_ns_sum");
+        column_names.push_back("dispatch_count");
 
         // Build the SELECT clause
         query = "SELECT \n";
+        query += "    kernel_uuid AS __id,\n";
         query += "    kernel_name,\n";
-        query += "    duration_ns_sum";
+        query += "    duration_ns_sum,\n";
+        query += "    dispatch_count";
 
         // Add CASE statements for each metric selector
         for(const auto& [metric_id, value_name] : metric_selectors)
@@ -367,7 +372,7 @@ namespace DataModel
         query += "\n";
 
         // Add GROUP BY clause
-        query += "GROUP BY kernel_name, duration_ns_sum\n";
+        query += "GROUP BY kernel_uuid\n";
 
         // Add ORDER BY clause with validated index
         query += "ORDER BY ";

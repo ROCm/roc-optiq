@@ -74,7 +74,7 @@ protected:
 class ComputeTester : public RocWidget
 {
 public:
-    ComputeTester(DataProvider& data_provider);
+    ComputeTester(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTester();
 
     void Update();
@@ -125,10 +125,11 @@ private:
             intensity;
     };
 
-    DataProvider&  m_data_provider;
-    SelectionState m_selections;
-    DisplayStrings m_display_names;
-    QueryBuilder   m_query_builder;
+    DataProvider&                     m_data_provider;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+    SelectionState                    m_selections;
+    DisplayStrings                    m_display_names;
+    QueryBuilder                      m_query_builder;
 
     char m_value_names_input[64] = "3.1.2";
 };

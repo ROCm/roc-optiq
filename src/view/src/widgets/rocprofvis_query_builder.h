@@ -8,7 +8,6 @@
 
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace RocProfVis
@@ -24,19 +23,16 @@ public:
     void Render() override;
     void Open();
 
-    void SetWorkloads(const std::unordered_map<uint32_t, WorkloadInfo>* workloads);
+    void SetWorkload(const WorkloadInfo* workload);
 
     std::string GetQueryString() const;
 
-    std::optional<uint32_t> GetSelectedWorkloadId() const;
-
 private:
-    static constexpr int LEVEL_WORKLOAD   = 0;
-    static constexpr int LEVEL_CATEGORY   = 1;
-    static constexpr int LEVEL_TABLE      = 2;
-    static constexpr int LEVEL_ENTRY      = 3;
-    static constexpr int LEVEL_VALUE_NAME = 4;
-    static constexpr int LEVEL_COUNT      = 5;
+    static constexpr int LEVEL_CATEGORY   = 0;
+    static constexpr int LEVEL_TABLE      = 1;
+    static constexpr int LEVEL_ENTRY      = 2;
+    static constexpr int LEVEL_VALUE_NAME = 3;
+    static constexpr int LEVEL_COUNT      = 4;
 
     struct LevelItem
     {
@@ -51,7 +47,7 @@ private:
     void                   ClearFrom(int level);
     const char*            GetLevelLabel(int level) const;
 
-    const std::unordered_map<uint32_t, WorkloadInfo>* m_workloads = nullptr;
+    const WorkloadInfo* m_workload = nullptr;
 
     int                                    m_level           = 0;
     bool                                   m_should_open     = false;

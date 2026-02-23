@@ -17,9 +17,13 @@ QueryBuilder::QueryBuilder()
 }
 
 void
-QueryBuilder::SetWorkloads(const std::unordered_map<uint32_t, WorkloadInfo>* workloads)
+QueryBuilder::SetWorkload(const WorkloadInfo* workload)
 {
-    m_workloads = workloads;
+    if(m_workload != workload)
+    {
+        m_workload = workload;
+        ClearFrom(LEVEL_CATEGORY);
+    }
 }
 
 void
@@ -45,15 +49,22 @@ QueryBuilder::Render()
     popup_style.PushTitlebarColors();
     popup_style.CenterPopup();
 
-    ImGui::SetNextWindowSizeConstraints(ImVec2(400, 200), ImVec2(400, 600));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(800, 200), ImVec2(800, 600));
     if(ImGui::BeginPopupModal("Query Builder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::Text("%s", GetLevelLabel(m_level));
         ImGui::Separator();
         RenderTags();
         RenderList();
-        if(ImGui::Button("Search", ImVec2(-1, 0)))
+        float button_width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if(ImGui::Button("Add", ImVec2(button_width, 0)))
             ImGui::CloseCurrentPopup();
+        ImGui::SameLine();
+        if(ImGui::Button("Cancel", ImVec2(button_width, 0)))
+        {
+            ClearFrom(LEVEL_CATEGORY);
+            ImGui::CloseCurrentPopup();
+        }
         ImGui::EndPopup();
     }
 }
@@ -71,7 +82,7 @@ QueryBuilder::RenderTags()
     {
         if(!m_selections[i])
             continue;
-        if(i > 0)
+        if(clear >= 0 || i > 0)
             ImGui::SameLine();
 
         ImGui::PushID(i);
@@ -115,8 +126,7 @@ QueryBuilder::RenderList()
         ImGui::PopID();
     }
     if(items.empty())
-        ImGui::TextDisabled((!m_workloads || m_workloads->empty()) ? "No workloads loaded"
-                                                                    : "No items at this level");
+        ImGui::TextDisabled(!m_workload ? "No workload selected" : "No items at this level");
     ImGui::EndChild();
 }
 
@@ -124,22 +134,10 @@ std::vector<QueryBuilder::LevelItem>
 QueryBuilder::GetItems() const
 {
     std::vector<LevelItem> items;
-    if(!m_workloads)
+    if(!m_workload)
         return items;
 
-    if(m_level == LEVEL_WORKLOAD)
-    {
-        for(const auto& [id, wl] : *m_workloads)
-            items.push_back({ id, wl.name });
-        return items;
-    }
-
-    if(!m_selections[LEVEL_WORKLOAD])
-        return items;
-    auto wl_it = m_workloads->find(m_selections[LEVEL_WORKLOAD]->id);
-    if(wl_it == m_workloads->end())
-        return items;
-    const WorkloadInfo& workload = wl_it->second;
+    const WorkloadInfo& workload = *m_workload;
 
     if(m_level == LEVEL_CATEGORY)
     {
@@ -216,11 +214,10 @@ const char*
 QueryBuilder::GetLevelLabel(int level) const
 {
     static const char* labels[] = {
-        "Level 1 - Workload",
-        "Level 2 - Category",
-        "Level 3 - Table",
-        "Level 4 - Entry",
-        "Level 5 - Value Name"
+        "Level 1 - Category",
+        "Level 2 - Table",
+        "Level 3 - Entry",
+        "Level 4 - Value Name"
     };
     return (level >= 0 && level < LEVEL_COUNT) ? labels[level] : "Unknown";
 }
@@ -238,14 +235,6 @@ QueryBuilder::GetQueryString() const
     if(!m_value_name.empty())
         result += ":" + m_value_name;
     return result;
-}
-
-std::optional<uint32_t>
-QueryBuilder::GetSelectedWorkloadId() const
-{
-    if(m_selections[LEVEL_WORKLOAD])
-        return m_selections[LEVEL_WORKLOAD]->id;
-    return std::nullopt;
 }
 
 }  // namespace View

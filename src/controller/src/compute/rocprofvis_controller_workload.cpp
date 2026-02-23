@@ -19,6 +19,7 @@ typedef Reference<rocprofvis_controller_kernel_t, Roofline, kRPVControllerObject
 Workload::Workload()
 : Handle(__kRPVControllerWorkloadPropertiesFirst, __kRPVControllerWorkloadPropertiesLast)
 , m_id(0)
+, m_roofline(nullptr)
 {}
 
 Workload::~Workload()
@@ -27,7 +28,10 @@ Workload::~Workload()
     {
         delete kernel;
     }
-    delete m_roofline;
+    if(m_roofline)
+    {
+        delete m_roofline;
+    }
 }
 
 rocprofvis_controller_object_type_t Workload::GetType(void) 
@@ -397,6 +401,11 @@ rocprofvis_result_t Workload::SetObject(rocprofvis_property_t property, uint64_t
             RooflineRef ref(value);
             if(ref.IsValid())
             {
+                // delete previous roofline (work load only owns one roofline at a time)
+                if(m_roofline)
+                {
+                    delete m_roofline;
+                }                
                 m_roofline = ref.Get();
                 result = kRocProfVisResultSuccess;
             }

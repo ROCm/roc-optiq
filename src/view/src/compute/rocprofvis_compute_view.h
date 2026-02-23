@@ -6,6 +6,7 @@
 #include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_compute_selection.h"
+#include "rocprofvis_compute_workload_view.h"
 
 namespace RocProfVis
 {
@@ -53,17 +54,6 @@ class ComputeTableView : public RocWidget
 public:
     ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTableView(){};
-
-protected:
-    DataProvider& m_data_provider;
-    std::shared_ptr<ComputeSelection> m_compute_selection;
-};
-
-class ComputeWorkloadView: public RocWidget
-{
-public:
-    ComputeWorkloadView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
-    ~ComputeWorkloadView(){};
 
 protected:
     DataProvider& m_data_provider;

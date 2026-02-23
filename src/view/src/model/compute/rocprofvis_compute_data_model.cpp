@@ -50,6 +50,16 @@ ComputeDataModel::GetWorkloads() const
     return m_workloads;
 }
 
+const WorkloadInfo*
+ComputeDataModel::GetWorkload(uint32_t workload_id) const
+{
+    if(m_workloads.count(workload_id))
+    {
+        return &m_workloads.at(workload_id);
+    }
+    return nullptr;
+}
+
 const std::vector<std::shared_ptr<MetricValue>>*
 ComputeDataModel::GetMetricsData(uint64_t store_id, uint32_t kernel_id) const
 {

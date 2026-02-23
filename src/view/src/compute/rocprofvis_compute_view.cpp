@@ -226,12 +226,6 @@ ComputeTableView::ComputeTableView(DataProvider& data_provider, std::shared_ptr<
 , m_compute_selection(compute_selection)
 {}
 
-ComputeWorkloadView::ComputeWorkloadView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
-: RocWidget()
-, m_data_provider(data_provider)
-, m_compute_selection(compute_selection)
-{}
-
 ComputeTester::ComputeTester(DataProvider& data_provider)
 : m_data_provider(data_provider)
 , m_selections({ true, 0, {}, {}, SelectionState::FP32, {}, {}, {} })

@@ -247,6 +247,16 @@ ElidedText(const char* text, float available_width, float tooltip_width,
     }
 }
 
+void
+CenterNextTextItem(const char* text)
+{
+    ImVec2 avail  = ImGui::GetContentRegionAvail();
+    ImVec2 size   = ImGui::CalcTextSize(text);
+    ImVec2 cursor = ImGui::GetCursorPos();
+    ImVec2 pos((avail.x - size.x) * 0.5f, cursor.y);
+    ImGui::SetCursorPos(pos);
+}
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
 void

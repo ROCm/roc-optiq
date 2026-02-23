@@ -186,8 +186,8 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
         uint32_t    tbl_id = tbl_pair.first;
         const auto& tbl    = tbl_pair.second;
 
-        int num_columns = 1 + static_cast<int>(tbl.value_names.size());
-        if(num_columns < 2) num_columns = 2;
+        int value_columns = std::max(1, static_cast<int>(tbl.value_names.size()));
+        int num_columns   = 1 + value_columns + 1;  // Metric + values + Unit
 
         ImGui::SeparatorText(tbl.name.c_str());
         if(ImGui::BeginTable("##t", num_columns, ImGuiTableFlags_Borders))
@@ -202,6 +202,7 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
                 for(const auto& vn : tbl.value_names)
                     ImGui::TableSetupColumn(vn.c_str());
             }
+            ImGui::TableSetupColumn("Unit");
             ImGui::TableHeadersRow();
 
             for(const auto& entry_pair : tbl.entries)
@@ -222,6 +223,10 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
                     {
                         ImGui::Text("%.2f", mv->values.begin()->second);
                     }
+                    else
+                    {
+                        ImGui::TextDisabled("N/A");
+                    }
                 }
                 else
                 {
@@ -234,7 +239,21 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
                         {
                             ImGui::Text("%.2f", mv->values.at(vn));
                         }
+                        else
+                        {
+                            ImGui::TextDisabled("N/A");
+                        }
                     }
+                }
+
+                ImGui::TableNextColumn();
+                if(!entry.unit.empty())
+                {
+                    ImGui::TextUnformatted(entry.unit.c_str());
+                }
+                else
+                {
+                    ImGui::TextDisabled("N/A");
                 }
             }
             ImGui::EndTable();

@@ -128,6 +128,7 @@ private:
     DataProvider&  m_data_provider;
     SelectionState m_selections;
     DisplayStrings m_display_names;
+    QueryBuilder   m_query_builder;
 
     char m_value_names_input[64] = "3.1.2";
 };

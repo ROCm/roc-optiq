@@ -52,7 +52,7 @@ QueryBuilder::Render()
         ImGui::Separator();
         RenderTags();
         RenderList();
-        if(ImGui::Button("Close", ImVec2(-1, 0)))
+        if(ImGui::Button("Search", ImVec2(-1, 0)))
             ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }

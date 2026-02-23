@@ -83,7 +83,7 @@ ComputeView::CreateView()
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
 
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
@@ -234,7 +234,6 @@ ComputeWorkloadView::ComputeWorkloadView(DataProvider& data_provider, std::share
 ComputeTester::ComputeTester(DataProvider& data_provider)
 : m_data_provider(data_provider)
 , m_selections({ true, 0, {}, {}, SelectionState::FP32, {}, {}, {} })
-, m_summary_view(data_provider)
 , m_display_names({
       {
           { kRPVControllerRooflineCeilingComputeVALUI8, "VALU I8" },
@@ -277,7 +276,7 @@ ComputeTester::Render()
 {
     const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
         m_data_provider.ComputeModel().GetWorkloads();
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * DROPDOWN_SCALE);
+    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 15.0f);
     if(ImGui::BeginCombo("Workloads",
                          workloads.count(m_selections.workload_id) > 0
                              ? workloads.at(m_selections.workload_id).name.c_str()
@@ -299,376 +298,301 @@ ComputeTester::Render()
         }
         ImGui::EndCombo();
     }
-
-    static uint32_t selected_view_id = 0;
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * DROPDOWN_SCALE);
-    if(ImGui::BeginCombo("View", m_views[selected_view_id].data()))
-    {
-        for(uint32_t index = 0; index < m_views.size(); index++)
-        {
-            const bool is_selected = (selected_view_id == index);
-            if(ImGui::Selectable(m_views[index].data(), is_selected))
-                selected_view_id = index;
-
-            if(is_selected)
-                ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
-
     if(workloads.count(m_selections.workload_id) > 0)
     {
-        ImGui::BeginChild("sv"); //What is sv? 
-        RenderSelectedView(workloads, selected_view_id);
-        ImGui::EndChild(); //Sv
-        m_selections.init = false;
-    }
-}
-
-void
-ComputeTester::RenderSelectedView(
-    const std::unordered_map<uint32_t, WorkloadInfo>& workloads, uint32_t view_index)
-{
-    const WorkloadInfo& workload = workloads.at(m_selections.workload_id);
-    switch(view_index)  // TODO: Replace index to something readable
-    {
-        case 0:
+        ImGui::BeginChild("sv");
+        ImGui::BeginChild("info", ImVec2(0, 0),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        const WorkloadInfo& workload = workloads.at(m_selections.workload_id);
+        if(workload.system_info.size() == 2 &&
+           workload.system_info[0].size() == workload.system_info[1].size())
         {
-            RenderSystemAndConfig(workload);
-            break;
-        }
-        case 1:
-        {
-            RenderProfilingConfig(workload);
-            break;
-        }
-        case 2:
-        {
-            RenderMetrics(workload);
-            break;
-        }
-        case 3:
-        {
-            RenderKernels(workload);
-            break;
-        }
-        case 4:
-        {
-            RenderFetcher(workload);
-            break;
-        }
-        case 5:
-        {
-            RenderSummaryView(workload);
-            break;  
-        }
-    }
-}
-
-void
-ComputeTester::RenderSystemAndConfig(const WorkloadInfo& workload)
-{
-    ImGui::BeginChild("info", ImVec2(0, 0),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-    if(workload.system_info.size() == 2 &&
-       workload.system_info[0].size() == workload.system_info[1].size())
-    {
-        ImGui::BeginChild("sys_info",
-                          ImVec2(ImGui::GetContentRegionAvail().x / 2.0f, 0.0f),
-                          ImGuiChildFlags_AutoResizeY);
-        ImGui::Text("System Information");
-        if(ImGui::BeginTable("", static_cast<int>(workload.system_info.size()),
-                             ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders))
-        {
-            for(size_t i = 0; i < workload.system_info[0].size(); i++)
+            ImGui::BeginChild("sys_info",
+                              ImVec2(ImGui::GetContentRegionAvail().x / 2.0f, 0.0f),
+                              ImGuiChildFlags_AutoResizeY);
+            ImGui::Text("System Information");
+            if(ImGui::BeginTable("", static_cast<int>(workload.system_info.size()),
+                                 ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders))
             {
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                ImGui::Text(workload.system_info[0][i].c_str());
-                ImGui::TableNextColumn();
-                ImGui::Text(workload.system_info[1][i].c_str());
-            }
-            ImGui::EndTable();
-        }
-        ImGui::EndChild();
-    }
-    ImGui::EndChild();
-}
-
-void
-ComputeTester::RenderProfilingConfig(const WorkloadInfo& workload)
-{
-    if(workload.profiling_config.size() == 2 &&
-       workload.profiling_config[0].size() == workload.profiling_config[1].size())
-    {
-        ImGui::BeginChild("config", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY);
-        ImGui::Text("Profiling Configuration");
-        if(ImGui::BeginTable("", static_cast<int>(workload.profiling_config.size()),
-                             ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders))
-        {
-            for(size_t i = 0; i < workload.profiling_config[0].size(); i++)
-            {
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                ImGui::Text(workload.profiling_config[0][i].c_str());
-                ImGui::TableNextColumn();
-                ImGui::Text(workload.profiling_config[1][i].c_str());
-            }
-            ImGui::EndTable();
-        }
-        ImGui::EndChild();
-    }
-}
-
-void
-ComputeTester::RenderMetrics(const WorkloadInfo& workload)
-{
-    ImGui::BeginChild("metrics", ImVec2(0, 0),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-    ImGui::Text("Available Metrics");
-    for(const std::pair<const uint32_t, AvailableMetrics::Category>& category :
-        workload.available_metrics.tree)
-    {
-        ImGui::PushID(static_cast<int>(category.first));
-        if(ImGui::TreeNodeEx(std::string("[" + std::to_string(category.second.id) + "] " +
-                                         category.second.name)
-                                 .c_str()))
-        {
-            for(const std::pair<const uint32_t, AvailableMetrics::Table>& table :
-                category.second.tables)
-            {
-                ImGui::PushID(static_cast<int>(table.first));
-                std::string partial_metric_id = std::to_string(category.second.id) + "." +
-                                                std::to_string(table.second.id);
-                bool table_selected =
-                    m_selections.metric_ids.count(category.first) > 0 &&
-                    m_selections.metric_ids.at(category.first).count(table.first) > 0 &&
-                    m_selections.metric_ids.at(category.first).at(table.first).first;
-                bool table_selected_changed = ImGui::Selectable("", table_selected);
-                if(table_selected_changed)
+                for(size_t i = 0; i < workload.system_info[0].size(); i++)
                 {
-                    if(table_selected)
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::Text(workload.system_info[0][i].c_str());
+                    ImGui::TableNextColumn();
+                    ImGui::Text(workload.system_info[1][i].c_str());
+                }
+                ImGui::EndTable();
+            }
+            ImGui::EndChild();
+        }
+        if(workload.profiling_config.size() == 2 &&
+           workload.profiling_config[0].size() == workload.profiling_config[1].size())
+        {
+            ImGui::SameLine();
+            ImGui::BeginChild("config", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY);
+            ImGui::Text("Profiling Configuration");
+            if(ImGui::BeginTable("", static_cast<int>(workload.profiling_config.size()),
+                                 ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders))
+            {
+                for(size_t i = 0; i < workload.profiling_config[0].size(); i++)
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::Text(workload.profiling_config[0][i].c_str());
+                    ImGui::TableNextColumn();
+                    ImGui::Text(workload.profiling_config[1][i].c_str());
+                }
+                ImGui::EndTable();
+            }
+            ImGui::EndChild();
+        }
+        ImGui::EndChild();
+        ImGui::NewLine();
+        ImGui::BeginChild("metrics", ImVec2(0, 0),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        ImGui::Text("Available Metrics");
+        for(const std::pair<const uint32_t, AvailableMetrics::Category>& category :
+            workload.available_metrics.tree)
+        {
+            ImGui::PushID(static_cast<int>(category.first));
+            if(ImGui::TreeNodeEx(std::string("[" + std::to_string(category.second.id) +
+                                             "] " + category.second.name)
+                                     .c_str()))
+            {
+                for(const std::pair<const uint32_t, AvailableMetrics::Table>& table :
+                    category.second.tables)
+                {
+                    ImGui::PushID(static_cast<int>(table.first));
+                    std::string partial_metric_id = std::to_string(category.second.id) +
+                                                    "." + std::to_string(table.second.id);
+                    bool table_selected =
+                        m_selections.metric_ids.count(category.first) > 0 &&
+                        m_selections.metric_ids.at(category.first).count(table.first) >
+                            0 &&
+                        m_selections.metric_ids.at(category.first).at(table.first).first;
+                    bool table_selected_changed = ImGui::Selectable("", table_selected);
+                    if(table_selected_changed)
                     {
-                        if(m_selections.metric_ids.at(category.first).size() == 1)
+                        if(table_selected)
                         {
-                            m_selections.metric_ids.erase(category.first);
+                            if(m_selections.metric_ids.at(category.first).size() == 1)
+                            {
+                                m_selections.metric_ids.erase(category.first);
+                            }
+                            else
+                            {
+                                m_selections.metric_ids.at(category.first)
+                                    .erase(table.first);
+                            }
                         }
                         else
                         {
-                            m_selections.metric_ids.at(category.first).erase(table.first);
+                            m_selections.metric_ids[category.first][table.first] = { true,
+                                                                                     {} };
                         }
                     }
-                    else
+                    ImGui::SameLine(0.0f);
+                    ImGui::BeginDisabled(table_selected);
+                    if(ImGui::TreeNodeEx(
+                           std::string("[" + partial_metric_id + "] " + table.second.name)
+                               .c_str(),
+                           ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet))
                     {
-                        m_selections.metric_ids[category.first][table.first] = { true,
-                                                                                 {} };
-                    }
-                }
-                ImGui::SameLine(0.0f);
-                ImGui::BeginDisabled(table_selected);
-                if(ImGui::TreeNodeEx(
-                       std::string("[" + partial_metric_id + "] " + table.second.name)
-                           .c_str(),
-                       ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet))
-                {
-                    if(ImGui::BeginTable("", 5,
-                                         ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
-                                             ImGuiTableFlags_SizingStretchSame))
-                    {
-                        int col = 0;
-                        for(const std::pair<const uint32_t, AvailableMetrics::Entry&>&
-                                entry : table.second.entries)
+                        if(ImGui::BeginTable("", 5,
+                                             ImGuiTableFlags_RowBg |
+                                                 ImGuiTableFlags_Borders |
+                                                 ImGuiTableFlags_SizingStretchSame))
                         {
-                            if(col % 5 == 0)
+                            int col = 0;
+                            for(const std::pair<const uint32_t, AvailableMetrics::Entry&>&
+                                    entry : table.second.entries)
                             {
-                                ImGui::TableNextRow();
-                            }
-                            ImGui::TableNextColumn();
-                            bool entry_selected =
-                                m_selections.metric_ids.count(category.first) > 0 &&
-                                m_selections.metric_ids.at(category.first)
-                                        .count(table.first) > 0 &&
-                                m_selections.metric_ids.at(category.first)
-                                        .at(table.first)
-                                        .second.count(entry.first) > 0;
-                            if(ImGui::Selectable(
-                                   std::string("[" + partial_metric_id + "." +
-                                               std::to_string(entry.second.id) + "] " +
-                                               entry.second.name)
-                                       .c_str(),
-                                   entry_selected))
-                            {
-                                if(entry_selected)
+                                if(col % 5 == 0)
                                 {
-                                    if(m_selections.metric_ids.at(category.first)
-                                           .at(table.first)
-                                           .second.size() == 1)
+                                    ImGui::TableNextRow();
+                                }
+                                ImGui::TableNextColumn();
+                                bool entry_selected =
+                                    m_selections.metric_ids.count(category.first) > 0 &&
+                                    m_selections.metric_ids.at(category.first)
+                                            .count(table.first) > 0 &&
+                                    m_selections.metric_ids.at(category.first)
+                                            .at(table.first)
+                                            .second.count(entry.first) > 0;
+                                if(ImGui::Selectable(
+                                       std::string("[" + partial_metric_id + "." +
+                                                   std::to_string(entry.second.id) +
+                                                   "] " + entry.second.name)
+                                           .c_str(),
+                                       entry_selected))
+                                {
+                                    if(entry_selected)
                                     {
                                         if(m_selections.metric_ids.at(category.first)
-                                               .size() == 1)
+                                               .at(table.first)
+                                               .second.size() == 1)
                                         {
-                                            m_selections.metric_ids.erase(category.first);
+                                            if(m_selections.metric_ids.at(category.first)
+                                                   .size() == 1)
+                                            {
+                                                m_selections.metric_ids.erase(
+                                                    category.first);
+                                            }
+                                            else
+                                            {
+                                                m_selections.metric_ids.at(category.first)
+                                                    .erase(table.first);
+                                            }
                                         }
                                         else
                                         {
                                             m_selections.metric_ids.at(category.first)
-                                                .erase(table.first);
+                                                .at(table.first)
+                                                .second.erase(entry.first);
                                         }
                                     }
                                     else
                                     {
-                                        m_selections.metric_ids.at(category.first)
-                                            .at(table.first)
-                                            .second.erase(entry.first);
+                                        m_selections
+                                            .metric_ids[category.first][table.first]
+                                            .second.insert(entry.first);
                                     }
                                 }
-                                else
+                                if(ImGui::BeginItemTooltip())
                                 {
-                                    m_selections.metric_ids[category.first][table.first]
-                                        .second.insert(entry.first);
+                                    ImGui::PushTextWrapPos(500.0f);
+                                    ImGui::Text("Description: ");
+                                    ImGui::SameLine();
+                                    ImGui::Text(entry.second.description.c_str());
+                                    ImGui::Text("Unit: ");
+                                    ImGui::SameLine();
+                                    ImGui::Text(entry.second.unit.c_str());
+                                    ImGui::PopTextWrapPos();
+                                    ImGui::EndTooltip();
                                 }
+                                col++;
                             }
-                            if(ImGui::BeginItemTooltip())
-                            {
-                                ImGui::PushTextWrapPos(500.0f);
-                                ImGui::Text("Description: ");
-                                ImGui::SameLine();
-                                ImGui::Text(entry.second.description.c_str());
-                                ImGui::Text("Unit: ");
-                                ImGui::SameLine();
-                                ImGui::Text(entry.second.unit.c_str());
-                                ImGui::PopTextWrapPos();
-                                ImGui::EndTooltip();
-                            }
-                            col++;
+                            ImGui::EndTable();
                         }
-                        ImGui::EndTable();
+                        ImGui::TreePop();
                     }
-                    ImGui::TreePop();
+                    ImGui::EndDisabled();
+                    ImGui::PopID();
                 }
-                ImGui::EndDisabled();
-                ImGui::PopID();
+                ImGui::TreePop();
             }
-            ImGui::TreePop();
-        }
-        ImGui::PopID();
-    }
-    ImGui::EndChild();
-}
-
-void
-ComputeTester::RenderKernels(const WorkloadInfo& workload)
-{
-    ImGui::BeginChild("kernels", ImVec2(0, 0),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-    ImGui::Text("Kernels");
-    if(ImGui::BeginTable("", 8,
-                         ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
-                             ImGuiTableFlags_SizingStretchSame))
-    {
-        ImGui::TableSetupColumn("ID");
-        ImGui::TableSetupColumn("Name");
-        ImGui::TableSetupColumn("Invocation Count");
-        ImGui::TableSetupColumn("Total Duration");
-        ImGui::TableSetupColumn("Min Duration");
-        ImGui::TableSetupColumn("Max Duration");
-        ImGui::TableSetupColumn("Mean Duration");
-        ImGui::TableSetupColumn("Median Duration");
-        ImGui::TableHeadersRow();
-        for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
-        {
-            ImGui::PushID(static_cast<int>(kernel.second.id));
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::Text("%u", kernel.second.id);
-            ImGui::SameLine();
-            bool kernel_selected = m_selections.kernel_ids.count(kernel.second.id) > 0;
-            if(ImGui::Selectable("", kernel_selected,
-                                 ImGuiSelectableFlags_SpanAllColumns))
-            {
-                if(kernel_selected)
-                {
-                    m_selections.kernel_ids.erase(kernel.second.id);
-                }
-                else
-                {
-                    m_selections.kernel_ids.insert(kernel.second.id);
-                }
-            }
-            ImGui::TableNextColumn();
-            ImGui::Text(kernel.second.name.c_str());
-            ImGui::TableNextColumn();
-            ImGui::Text("%u", kernel.second.invocation_count);
-            ImGui::TableNextColumn();
-            ImGui::Text("%llu", kernel.second.duration_total);
-            ImGui::TableNextColumn();
-            ImGui::Text("%u", kernel.second.duration_min);
-            ImGui::TableNextColumn();
-            ImGui::Text("%u", kernel.second.duration_max);
-            ImGui::TableNextColumn();
-            ImGui::Text("%u", kernel.second.duration_mean);
-            ImGui::TableNextColumn();
-            ImGui::Text("%u", kernel.second.duration_median);
             ImGui::PopID();
         }
-        ImGui::EndTable();
-    }
-    ImGui::EndChild();
-}
-
-void
-ComputeTester::RenderFetcher(const WorkloadInfo& workload)
-{
-    ImGui::BeginChild("fetcher", ImVec2(0, 0),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-    ImGui::Text("Fetcher");
-    if(ImGui::BeginTable(
-           "selected_metrics", 1,
-           ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
-               ImGuiTableFlags_SizingStretchSame,
-           ImVec2((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("for").x) /
-                      2.0f,
-                  0.0f)))
-    {
-        ImGui::TableSetupColumn("Metric ID(s)");
-        ImGui::TableHeadersRow();
-        if(m_selections.metric_ids.empty())
+        ImGui::EndChild();
+        ImGui::NewLine();
+        ImGui::BeginChild("kernels", ImVec2(0, 0),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        ImGui::Text("Kernels");
+        if(ImGui::BeginTable("", 8,
+                             ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                                 ImGuiTableFlags_SizingStretchSame))
         {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::TextDisabled("None");
-        }
-        else
-        {
-            for(const std::pair<
-                    const uint32_t,
-                    std::unordered_map<uint32_t,
-                                       std::pair<bool, std::unordered_set<uint32_t>>>>&
-                    category : m_selections.metric_ids)
+            ImGui::TableSetupColumn("ID");
+            ImGui::TableSetupColumn("Name");
+            ImGui::TableSetupColumn("Invocation Count");
+            ImGui::TableSetupColumn("Total Duration");
+            ImGui::TableSetupColumn("Min Duration");
+            ImGui::TableSetupColumn("Max Duration");
+            ImGui::TableSetupColumn("Mean Duration");
+            ImGui::TableSetupColumn("Median Duration");
+            ImGui::TableHeadersRow();
+            for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
             {
-                for(const std::pair<const uint32_t,
-                                    std::pair<bool, std::unordered_set<uint32_t>>>&
-                        table : category.second)
+                ImGui::PushID(static_cast<int>(kernel.second.id));
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("%u", kernel.second.id);
+                ImGui::SameLine();
+                bool kernel_selected =
+                    m_selections.kernel_ids.count(kernel.second.id) > 0;
+                if(ImGui::Selectable("", kernel_selected,
+                                     ImGuiSelectableFlags_SpanAllColumns))
                 {
-                    if(table.second.second.empty())
+                    if(kernel_selected)
                     {
-                        ImGui::TableNextRow();
-                        ImGui::TableNextColumn();
-                        ImGui::Text("%u.%u", category.first, table.first);
+                        m_selections.kernel_ids.erase(kernel.second.id);
                     }
                     else
                     {
-                        for(const uint32_t& entry : table.second.second)
+                        m_selections.kernel_ids.insert(kernel.second.id);
+                    }
+                }
+                ImGui::TableNextColumn();
+                ImGui::Text(kernel.second.name.c_str());
+                ImGui::TableNextColumn();
+                ImGui::Text("%u", kernel.second.invocation_count);
+                ImGui::TableNextColumn();
+                ImGui::Text("%llu", kernel.second.duration_total);
+                ImGui::TableNextColumn();
+                ImGui::Text("%u", kernel.second.duration_min);
+                ImGui::TableNextColumn();
+                ImGui::Text("%u", kernel.second.duration_max);
+                ImGui::TableNextColumn();
+                ImGui::Text("%u", kernel.second.duration_mean);
+                ImGui::TableNextColumn();
+                ImGui::Text("%u", kernel.second.duration_median);
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+        ImGui::EndChild();
+        ImGui::NewLine();
+        ImGui::BeginChild("fetcher", ImVec2(0, 0),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        ImGui::Text("Fetcher");
+        if(ImGui::BeginTable(
+               "selected_metrics", 1,
+               ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                   ImGuiTableFlags_SizingStretchSame,
+               ImVec2((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("for").x) /
+                          2.0f,
+                      0.0f)))
+        {
+            ImGui::TableSetupColumn("Metric ID(s)");
+            ImGui::TableHeadersRow();
+            if(m_selections.metric_ids.empty())
+            {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextDisabled("None");
+            }
+            else
+            {
+                for(const std::pair<
+                        const uint32_t,
+                        std::unordered_map<
+                            uint32_t, std::pair<bool, std::unordered_set<uint32_t>>>>&
+                        category : m_selections.metric_ids)
+                {
+                    for(const std::pair<const uint32_t,
+                                        std::pair<bool, std::unordered_set<uint32_t>>>&
+                            table : category.second)
+                    {
+                        if(table.second.second.empty())
                         {
                             ImGui::TableNextRow();
                             ImGui::TableNextColumn();
-                            ImGui::Text("%u.%u.%u", category.first, table.first, entry);
+                            ImGui::Text("%u.%u", category.first, table.first);
+                        }
+                        else
+                        {
+                            for(const uint32_t& entry : table.second.second)
+                            {
+                                ImGui::TableNextRow();
+                                ImGui::TableNextColumn();
+                                ImGui::Text("%u.%u.%u", category.first, table.first,
+                                            entry);
+                            }
                         }
                     }
                 }
             }
-        }
 
             ImGui::EndTable();
         }
@@ -907,97 +831,277 @@ ComputeTester::RenderFetcher(const WorkloadInfo& workload)
             ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
             ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
 
-        for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
-        {
-            for(const std::pair<
-                    const rocprofvis_controller_roofline_kernel_intensity_type_t,
-                    KernelInfo::Roofline::Intensity>& intensity :
-                kernel.second.roofline.intensities)
+            for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
             {
-                if(m_selections.intensities.count(kernel.second.id) > 0 &&
-                   m_selections.intensities.at(kernel.second.id)
-                           .count(intensity.second.type) > 0)
+                for(const std::pair<
+                        const rocprofvis_controller_roofline_kernel_intensity_type_t,
+                        KernelInfo::Roofline::Intensity>& intensity :
+                    kernel.second.roofline.intensities)
                 {
-                    ImGui::PushID(i++);
-                    ImPlot::PlotScatter("", &intensity.second.position.x,
-                                        &intensity.second.position.y, 1);
-                    ImGui::PopID();
+                    if(m_selections.intensities.count(kernel.second.id) > 0 &&
+                       m_selections.intensities.at(kernel.second.id)
+                               .count(intensity.second.type) > 0)
+                    {
+                        ImGui::PushID(i++);
+                        ImPlot::PlotScatter("", &intensity.second.position.x,
+                                            &intensity.second.position.y, 1);
+                        ImGui::PopID();
+                    }
+                }
+            }
+            for(const auto& compute_it : workload.roofline.ceiling_compute)
+            {
+                for(const auto& bandwidth_it : compute_it.second)
+                {
+                    if(m_selections.ceilings_compute.count(compute_it.first) > 0 &&
+                       m_selections.ceilings_compute.at(compute_it.first)
+                               .count(bandwidth_it.first) > 0)
+                    {
+                        ImGui::PushID(i++);
+                        ImPlot::PlotLineG(
+                            "",
+                            [](int idx, void* user_data) -> ImPlotPoint {
+                                const WorkloadInfo::Roofline::Line* line =
+                                    static_cast<const WorkloadInfo::Roofline::Line*>(
+                                        user_data);
+                                ImPlotPoint point(-1.0, -1.0);
+                                if(line)
+                                {
+                                    if(idx == 0)
+                                    {
+                                        point.x = line->p1.x;
+                                        point.y = line->p1.y;
+                                    }
+                                    else
+                                    {
+                                        point.x = line->p2.x;
+                                        point.y = line->p2.y;
+                                    }
+                                }
+                                return point;
+                            },
+                            (void*) &bandwidth_it.second.position, 2);
+                        ImGui::PopID();
+                    }
+                }
+            }
+            for(const auto& bandwidth_it : workload.roofline.ceiling_bandwidth)
+            {
+                for(const auto& compute_it : bandwidth_it.second)
+                {
+                    if(m_selections.ceilings_bandwidth.count(bandwidth_it.first) > 0 &&
+                       m_selections.ceilings_bandwidth.at(bandwidth_it.first)
+                               .count(compute_it.first) > 0)
+                    {
+                        ImGui::PushID(i++);
+                        ImPlot::PlotLineG(
+                            "",
+                            [](int idx, void* user_data) -> ImPlotPoint {
+                                const WorkloadInfo::Roofline::Line* line =
+                                    static_cast<const WorkloadInfo::Roofline::Line*>(
+                                        user_data);
+                                ImPlotPoint point(-1.0, -1.0);
+                                if(line)
+                                {
+                                    if(idx == 0)
+                                    {
+                                        point.x = line->p1.x;
+                                        point.y = line->p1.y;
+                                    }
+                                    else
+                                    {
+                                        point.x = line->p2.x;
+                                        point.y = line->p2.y;
+                                    }
+                                }
+                                return point;
+                            },
+                            (void*) &compute_it.second.position, 2);
+                        ImGui::PopID();
+                    }
+                }
+            }
+            ImPlot::EndPlot();
+        }
+        int preset_idx = static_cast<int>(m_selections.roofline_preset);
+        if(m_selections.init ||
+           ImGui::Combo("Presets", &preset_idx, "FP32\0FP64\0Custom\0\0"))
+        {
+            m_selections.roofline_preset =
+                static_cast<SelectionState::RooflinePreset>(preset_idx);
+            if(m_selections.roofline_preset == SelectionState::FP32)
+            {
+                m_selections.ceilings_compute = {
+                    { kRPVControllerRooflineCeilingComputeMFMAFP32,
+                      { kRPVControllerRooflineCeilingTypeBandwidthLDS } },
+                    { kRPVControllerRooflineCeilingComputeVALUFP32,
+                      { kRPVControllerRooflineCeilingTypeBandwidthLDS } }
+                };
+                m_selections.ceilings_bandwidth = {
+                    { kRPVControllerRooflineCeilingTypeBandwidthHBM,
+                      { kRPVControllerRooflineCeilingComputeMFMAFP32 } },
+                    { kRPVControllerRooflineCeilingTypeBandwidthL2,
+                      { kRPVControllerRooflineCeilingComputeMFMAFP32 } },
+                    { kRPVControllerRooflineCeilingTypeBandwidthL1,
+                      { kRPVControllerRooflineCeilingComputeMFMAFP32 } },
+                    { kRPVControllerRooflineCeilingTypeBandwidthLDS,
+                      { kRPVControllerRooflineCeilingComputeMFMAFP32 } },
+                };
+                for(const std::pair<const uint32_t, KernelInfo>& kernel :
+                    workload.kernels)
+                {
+                    for(const std::pair<
+                            const rocprofvis_controller_roofline_kernel_intensity_type_t,
+                            KernelInfo::Roofline::Intensity>& intensity :
+                        kernel.second.roofline.intensities)
+                    {
+                        m_selections.intensities[kernel.second.id].insert(
+                            intensity.second.type);
+                    }
+                }
+            }
+            else if(m_selections.roofline_preset == SelectionState::FP64)
+            {
+                m_selections.ceilings_compute = {
+                    { kRPVControllerRooflineCeilingComputeMFMAFP64,
+                      { kRPVControllerRooflineCeilingTypeBandwidthLDS } },
+                    { kRPVControllerRooflineCeilingComputeVALUFP64,
+                      { kRPVControllerRooflineCeilingTypeBandwidthLDS } }
+                };
+                m_selections.ceilings_bandwidth = {
+                    { kRPVControllerRooflineCeilingTypeBandwidthHBM,
+                      { kRPVControllerRooflineCeilingComputeMFMAFP64 } },
+                    { kRPVControllerRooflineCeilingTypeBandwidthL2,
+                      { kRPVControllerRooflineCeilingComputeMFMAFP64 } },
+                    { kRPVControllerRooflineCeilingTypeBandwidthL1,
+                      { kRPVControllerRooflineCeilingComputeMFMAFP64 } },
+                    { kRPVControllerRooflineCeilingTypeBandwidthLDS,
+                      { kRPVControllerRooflineCeilingComputeMFMAFP64 } },
+                };
+                for(const std::pair<const uint32_t, KernelInfo>& kernel :
+                    workload.kernels)
+                {
+                    for(const std::pair<
+                            const rocprofvis_controller_roofline_kernel_intensity_type_t,
+                            KernelInfo::Roofline::Intensity>& intensity :
+                        kernel.second.roofline.intensities)
+                    {
+                        m_selections.intensities[kernel.second.id].insert(
+                            intensity.second.type);
+                    }
                 }
             }
         }
-        for(const auto& compute_it : workload.roofline.ceiling_compute)
+        if(m_selections.roofline_preset == SelectionState::Custom &&
+           ImGui::BeginTable("customizer", 2,
+                             ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                                 ImGuiTableFlags_SizingStretchSame))
         {
-            for(const auto& bandwidth_it : compute_it.second)
+            ImGui::TableSetupColumn("Type");
+            ImGui::TableSetupColumn("Element");
+            ImGui::TableHeadersRow();
+            for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
             {
-                if(m_selections.ceilings_compute.count(compute_it.first) > 0 &&
-                   m_selections.ceilings_compute.at(compute_it.first)
-                           .count(bandwidth_it.first) > 0)
+                for(const std::pair<
+                        const rocprofvis_controller_roofline_kernel_intensity_type_t,
+                        KernelInfo::Roofline::Intensity>& intensity :
+                    kernel.second.roofline.intensities)
                 {
                     ImGui::PushID(i++);
-                    ImPlot::PlotLineG(
-                        "",
-                        [](int idx, void* user_data) -> ImPlotPoint {
-                            const WorkloadInfo::Roofline::Line* line =
-                                static_cast<const WorkloadInfo::Roofline::Line*>(
-                                    user_data);
-                            ImPlotPoint point(-1.0, -1.0);
-                            if(line)
-                            {
-                                if(idx == 0)
-                                {
-                                    point.x = line->p1.x;
-                                    point.y = line->p1.y;
-                                }
-                                else
-                                {
-                                    point.x = line->p2.x;
-                                    point.y = line->p2.y;
-                                }
-                            }
-                            return point;
-                        },
-                        (void*) &bandwidth_it.second.position, 2);
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::Text("Kernel Intensity");
+                    ImGui::SameLine();
+                    bool show = m_selections.intensities.count(kernel.second.id) > 0 &&
+                                m_selections.intensities.at(kernel.second.id)
+                                        .count(intensity.second.type) > 0;
+                    if(ImGui::Selectable("", show, ImGuiSelectableFlags_SpanAllColumns))
+                    {
+                        if(show)
+                        {
+                            m_selections.intensities.at(kernel.second.id)
+                                .erase(intensity.second.type);
+                        }
+                        else
+                        {
+                            m_selections.intensities[kernel.second.id].insert(
+                                intensity.second.type);
+                        }
+                    }
+                    ImGui::TableNextColumn();
+                    ImGui::Text("ID:%u - %s", kernel.second.id,
+                                m_display_names.intensity.at(intensity.second.type));
                     ImGui::PopID();
                 }
             }
-        }
-        for(const auto& bandwidth_it : workload.roofline.ceiling_bandwidth)
-        {
-            for(const auto& compute_it : bandwidth_it.second)
+            for(const auto& compute_it : workload.roofline.ceiling_compute)
             {
-                if(m_selections.ceilings_bandwidth.count(bandwidth_it.first) > 0 &&
-                   m_selections.ceilings_bandwidth.at(bandwidth_it.first)
-                           .count(compute_it.first) > 0)
+                for(const auto& bandwidth_it : compute_it.second)
                 {
                     ImGui::PushID(i++);
-                    ImPlot::PlotLineG(
-                        "",
-                        [](int idx, void* user_data) -> ImPlotPoint {
-                            const WorkloadInfo::Roofline::Line* line =
-                                static_cast<const WorkloadInfo::Roofline::Line*>(
-                                    user_data);
-                            ImPlotPoint point(-1.0, -1.0);
-                            if(line)
-                            {
-                                if(idx == 0)
-                                {
-                                    point.x = line->p1.x;
-                                    point.y = line->p1.y;
-                                }
-                                else
-                                {
-                                    point.x = line->p2.x;
-                                    point.y = line->p2.y;
-                                }
-                            }
-                            return point;
-                        },
-                        (void*) &compute_it.second.position, 2);
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::Text("Compute Ceiling");
+                    ImGui::SameLine();
+                    bool show =
+                        m_selections.ceilings_compute.count(compute_it.first) > 0 &&
+                        m_selections.ceilings_compute.at(compute_it.first)
+                                .count(bandwidth_it.first) > 0;
+                    if(ImGui::Selectable("", show, ImGuiSelectableFlags_SpanAllColumns))
+                    {
+                        if(show)
+                        {
+                            m_selections.ceilings_compute.at(compute_it.first)
+                                .erase(bandwidth_it.first);
+                        }
+                        else
+                        {
+                            m_selections.ceilings_compute[compute_it.first].insert(
+                                bandwidth_it.first);
+                        }
+                    }
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%s-%s",
+                                m_display_names.ceiling_compute.at(compute_it.first),
+                                m_display_names.ceiling_bandwidth.at(bandwidth_it.first));
                     ImGui::PopID();
                 }
             }
+            for(const auto& bandwidth_it : workload.roofline.ceiling_bandwidth)
+            {
+                for(const auto& compute_it : bandwidth_it.second)
+                {
+                    ImGui::PushID(i++);
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::Text("Bandwidth Ceiling");
+                    ImGui::SameLine();
+                    bool show =
+                        m_selections.ceilings_bandwidth.count(bandwidth_it.first) > 0 &&
+                        m_selections.ceilings_bandwidth.at(bandwidth_it.first)
+                                .count(compute_it.first) > 0;
+                    if(ImGui::Selectable("", show, ImGuiSelectableFlags_SpanAllColumns))
+                    {
+                        if(show)
+                        {
+                            m_selections.ceilings_bandwidth.at(bandwidth_it.first)
+                                .erase(compute_it.first);
+                        }
+                        else
+                        {
+                            m_selections.ceilings_bandwidth[bandwidth_it.first].insert(
+                                compute_it.first);
+                        }
+                    }
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%s-%s",
+                                m_display_names.ceiling_bandwidth.at(bandwidth_it.first),
+                                m_display_names.ceiling_compute.at(compute_it.first));
+                    ImGui::PopID();
+                }
+            }
+            ImGui::EndTable();
         }
-        ImPlot::EndPlot();
         ImGui::EndChild();
         ImGui::NewLine();
         ImGui::BeginChild("value_names_lookup", ImVec2(0, 0),
@@ -1075,186 +1179,6 @@ ComputeTester::RenderFetcher(const WorkloadInfo& workload)
         ImGui::EndChild();
         m_selections.init = false;
     }
-
-    int preset_idx = static_cast<int>(m_selections.roofline_preset);
-    if(m_selections.init ||
-       ImGui::Combo("Presets", &preset_idx, "FP32\0FP64\0Custom\0\0"))
-    {
-        m_selections.roofline_preset =
-            static_cast<SelectionState::RooflinePreset>(preset_idx);
-        if(m_selections.roofline_preset == SelectionState::FP32)
-        {
-            m_selections.ceilings_compute = {
-                { kRPVControllerRooflineCeilingComputeMFMAFP32,
-                  { kRPVControllerRooflineCeilingTypeBandwidthLDS } },
-                { kRPVControllerRooflineCeilingComputeVALUFP32,
-                  { kRPVControllerRooflineCeilingTypeBandwidthLDS } }
-            };
-            m_selections.ceilings_bandwidth = {
-                { kRPVControllerRooflineCeilingTypeBandwidthHBM,
-                  { kRPVControllerRooflineCeilingComputeMFMAFP32 } },
-                { kRPVControllerRooflineCeilingTypeBandwidthL2,
-                  { kRPVControllerRooflineCeilingComputeMFMAFP32 } },
-                { kRPVControllerRooflineCeilingTypeBandwidthL1,
-                  { kRPVControllerRooflineCeilingComputeMFMAFP32 } },
-                { kRPVControllerRooflineCeilingTypeBandwidthLDS,
-                  { kRPVControllerRooflineCeilingComputeMFMAFP32 } },
-            };
-            for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
-            {
-                for(const std::pair<
-                        const rocprofvis_controller_roofline_kernel_intensity_type_t,
-                        KernelInfo::Roofline::Intensity>& intensity :
-                    kernel.second.roofline.intensities)
-                {
-                    m_selections.intensities[kernel.second.id].insert(
-                        intensity.second.type);
-                }
-            }
-        }
-        else if(m_selections.roofline_preset == SelectionState::FP64)
-        {
-            m_selections.ceilings_compute = {
-                { kRPVControllerRooflineCeilingComputeMFMAFP64,
-                  { kRPVControllerRooflineCeilingTypeBandwidthLDS } },
-                { kRPVControllerRooflineCeilingComputeVALUFP64,
-                  { kRPVControllerRooflineCeilingTypeBandwidthLDS } }
-            };
-            m_selections.ceilings_bandwidth = {
-                { kRPVControllerRooflineCeilingTypeBandwidthHBM,
-                  { kRPVControllerRooflineCeilingComputeMFMAFP64 } },
-                { kRPVControllerRooflineCeilingTypeBandwidthL2,
-                  { kRPVControllerRooflineCeilingComputeMFMAFP64 } },
-                { kRPVControllerRooflineCeilingTypeBandwidthL1,
-                  { kRPVControllerRooflineCeilingComputeMFMAFP64 } },
-                { kRPVControllerRooflineCeilingTypeBandwidthLDS,
-                  { kRPVControllerRooflineCeilingComputeMFMAFP64 } },
-            };
-            for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
-            {
-                for(const std::pair<
-                        const rocprofvis_controller_roofline_kernel_intensity_type_t,
-                        KernelInfo::Roofline::Intensity>& intensity :
-                    kernel.second.roofline.intensities)
-                {
-                    m_selections.intensities[kernel.second.id].insert(
-                        intensity.second.type);
-                }
-            }
-        }
-    }
-
-    if(m_selections.roofline_preset == SelectionState::Custom &&
-       ImGui::BeginTable("customizer", 2,
-                         ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
-                             ImGuiTableFlags_SizingStretchSame))
-    {
-        ImGui::TableSetupColumn("Type");
-        ImGui::TableSetupColumn("Element");
-        ImGui::TableHeadersRow();
-        for(const std::pair<const uint32_t, KernelInfo>& kernel : workload.kernels)
-        {
-            for(const std::pair<
-                    const rocprofvis_controller_roofline_kernel_intensity_type_t,
-                    KernelInfo::Roofline::Intensity>& intensity :
-                kernel.second.roofline.intensities)
-            {
-                ImGui::PushID(i++);
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                ImGui::Text("Kernel Intensity");
-                ImGui::SameLine();
-                bool show = m_selections.intensities.count(kernel.second.id) > 0 &&
-                            m_selections.intensities.at(kernel.second.id)
-                                    .count(intensity.second.type) > 0;
-                if(ImGui::Selectable("", show, ImGuiSelectableFlags_SpanAllColumns))
-                {
-                    if(show)
-                    {
-                        m_selections.intensities.at(kernel.second.id)
-                            .erase(intensity.second.type);
-                    }
-                    else
-                    {
-                        m_selections.intensities[kernel.second.id].insert(
-                            intensity.second.type);
-                    }
-                }
-                ImGui::TableNextColumn();
-                ImGui::Text("ID:%u - %s", kernel.second.id,
-                            m_display_names.intensity.at(intensity.second.type));
-                ImGui::PopID();
-            }
-        }
-        for(const auto& compute_it : workload.roofline.ceiling_compute)
-        {
-            for(const auto& bandwidth_it : compute_it.second)
-            {
-                ImGui::PushID(i++);
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                ImGui::Text("Compute Ceiling");
-                ImGui::SameLine();
-                bool show = m_selections.ceilings_compute.count(compute_it.first) > 0 &&
-                            m_selections.ceilings_compute.at(compute_it.first)
-                                    .count(bandwidth_it.first) > 0;
-                if(ImGui::Selectable("", show, ImGuiSelectableFlags_SpanAllColumns))
-                {
-                    if(show)
-                    {
-                        m_selections.ceilings_compute.at(compute_it.first)
-                            .erase(bandwidth_it.first);
-                    }
-                    else
-                    {
-                        m_selections.ceilings_compute[compute_it.first].insert(
-                            bandwidth_it.first);
-                    }
-                }
-                ImGui::TableNextColumn();
-                ImGui::Text("%s-%s", m_display_names.ceiling_compute.at(compute_it.first),
-                            m_display_names.ceiling_bandwidth.at(bandwidth_it.first));
-                ImGui::PopID();
-            }
-        }
-        for(const auto& bandwidth_it : workload.roofline.ceiling_bandwidth)
-        {
-            for(const auto& compute_it : bandwidth_it.second)
-            {
-                ImGui::PushID(i++);
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                ImGui::Text("Bandwidth Ceiling");
-                ImGui::SameLine();
-                bool show =
-                    m_selections.ceilings_bandwidth.count(bandwidth_it.first) > 0 &&
-                    m_selections.ceilings_bandwidth.at(bandwidth_it.first)
-                            .count(compute_it.first) > 0;
-                if(ImGui::Selectable("", show, ImGuiSelectableFlags_SpanAllColumns))
-                {
-                    if(show)
-                    {
-                        m_selections.ceilings_bandwidth.at(bandwidth_it.first)
-                            .erase(compute_it.first);
-                    }
-                    else
-                    {
-                        m_selections.ceilings_bandwidth[bandwidth_it.first].insert(
-                            compute_it.first);
-                    }
-                }
-                ImGui::TableNextColumn();
-                ImGui::Text("%s-%s",
-                            m_display_names.ceiling_bandwidth.at(bandwidth_it.first),
-                            m_display_names.ceiling_compute.at(compute_it.first));
-                ImGui::PopID();
-            }
-        }
-        ImGui::EndTable();
-    }
-
-    ImGui::EndChild();
-    m_selections.init = false;
 
     RenderKernelSelectionTable();
 }
@@ -1376,12 +1300,6 @@ ComputeTester::RenderKernelSelectionTable()
         fetch_requested = false;
         sort_requested  = false;
     }
-}
-
-void
-ComputeTester::RenderSummaryView(const WorkloadInfo& workload)
-{
-    m_summary_view.Render();
 }
 
 }  // namespace View

@@ -6,7 +6,6 @@
 #include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_compute_selection.h"
-#include "rocprofvis_compute_summary_view.h"
 
 namespace RocProfVis
 {
@@ -124,30 +123,12 @@ private:
         std::unordered_map<rocprofvis_controller_roofline_kernel_intensity_type_t,
                            const char*>
             intensity;
-    };
-
-    void RenderSelectedView(const std::unordered_map<uint32_t, WorkloadInfo>& workloads,
-                            uint32_t                                          view_index);
-    void RenderSystemAndConfig(const WorkloadInfo& workload);
-    void RenderProfilingConfig(const WorkloadInfo& workload);
-    void RenderMetrics(const WorkloadInfo& workload);
-    void RenderKernels(const WorkloadInfo& workload);
-    void RenderFetcher(const WorkloadInfo& workload);
-    void RenderSummaryView(const WorkloadInfo& workload);
-
-    const std::vector<std::string_view> m_views = { "System Information",
-                                                    "Profiling Configuration", "Metrics",
-                                                    "Kernels",
-                                                    "Fetcher",
-                                                    "Summary View" }; //TODO: figure out better way to store it
-
-    
+    };    
 
     DataProvider&  m_data_provider;
     SelectionState m_selections;
     DisplayStrings m_display_names;
 
-    ComputeSummaryView m_summary_view;
     char m_value_names_input[64] = "3.1.2";
 };
 

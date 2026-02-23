@@ -121,7 +121,6 @@ list(APPEND VIEW_FILES
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/compute/rocprofvis_compute_root.cpp
     src/view/src/compute/legacy/rocprofvis_compute_summary.cpp
-    src/view/src/compute/rocprofvis_compute_summary_view.cpp
     src/view/src/compute/legacy/rocprofvis_compute_block.cpp
     src/view/src/compute/legacy/rocprofvis_compute_table.cpp
     src/view/src/compute/rocprofvis_compute_data_provider.cpp

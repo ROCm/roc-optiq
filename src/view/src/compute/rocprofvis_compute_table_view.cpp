@@ -62,6 +62,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
             {
                 FetchAllMetrics();
             }
+            RebuildTableDataCache();
         }
     };
 
@@ -97,6 +98,7 @@ void
 ComputeTableView::RebuildTabs()
 {
     m_tabs.reset();
+    m_non_empty_tables.clear();
     m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
@@ -120,6 +122,7 @@ void
 ComputeTableView::FetchAllMetrics()
 {
     m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+    m_non_empty_tables.clear();
     m_fetch_pending = false;
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
@@ -175,16 +178,60 @@ ComputeTableView::Render()
 }
 
 void
+ComputeTableView::RebuildTableDataCache()
+{
+    m_non_empty_tables.clear();
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();
+    if(!workloads.count(workload_id)) return;
+
+    const auto& workload = workloads.at(workload_id);
+    for(const auto& cp : workload.available_metrics.tree)
+    {
+        for(const auto& tp : cp.second.tables)
+        {
+            auto* entries = m_data_provider.ComputeModel().GetMetricValuesByTable(
+                m_client_id, kernel_id, cp.first, tp.first);
+            if(entries && !entries->empty())
+            {
+                TableKey key{};
+                key.fields.category_id = cp.first;
+                key.fields.table_id    = tp.first;
+                m_non_empty_tables.insert(key.id);
+            }
+        }
+    }
+}
+
+void
 ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
 {
     auto&    model     = m_data_provider.ComputeModel();
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+
+    bool category_has_data = false;
 
     ImGui::BeginChild("scroll", ImVec2(-1, -1));
     for(const auto& tbl_pair : cat.tables)
     {
         uint32_t    tbl_id = tbl_pair.first;
         const auto& tbl    = tbl_pair.second;
+
+        TableKey key{};
+        key.fields.category_id = cat.id;
+        key.fields.table_id    = tbl_id;
+        if(m_non_empty_tables.find(key.id) == m_non_empty_tables.end())
+            continue;
+
+        category_has_data = true;
 
         int value_columns = std::max(1, static_cast<int>(tbl.value_names.size()));
         int num_columns   = 1 + value_columns + 1;  // Metric + values + Unit
@@ -259,6 +306,12 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
             ImGui::EndTable();
         }
     }
+
+    if(!category_has_data)
+    {
+        ImGui::TextDisabled("No data available for this category.");
+    }
+
     ImGui::EndChild();
 }
 

@@ -5,6 +5,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_tab_container.h"
+#include <unordered_set>
 
 namespace RocProfVis
 {
@@ -26,12 +27,14 @@ private:
     void RenderCategory(const AvailableMetrics::Category& cat);
     void RebuildTabs();
     void FetchAllMetrics();
+    void RebuildTableDataCache();
 
     DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
     uint64_t                          m_client_id;
     bool                              m_fetch_pending = false;
     std::shared_ptr<TabContainer>     m_tabs;
+    std::unordered_set<uint64_t>      m_non_empty_tables;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

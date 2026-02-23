@@ -41,6 +41,14 @@ void
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            bool imgui_AlignTextToFramePadding = false);
 
+/* 
+ * Center the next text item horizontally with respect to the available 
+ * content region.
+ * @param text The text to be rendered next.
+ */
+void
+CenterNextTextItem(const char* text);
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void
 DrawInternalBuildBanner(const char* text = "Internal Build");

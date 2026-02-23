@@ -226,6 +226,271 @@ docker exec rocm_container rocm-smi
 
 Should display GPU information. If not, check device flags.
 
+## Remote container profiling
+
+ROCm Optiq supports profiling applications running in containers on **remote servers** via SSH. This combines SSH remote execution with container exec commands.
+
+### How it works
+
+When you enable both **Remote Execution** and **Run in Container**, ROCm Optiq:
+
+1. Connects to remote server via SSH
+2. Wraps the profiling command with container exec (docker/podman/singularity)
+3. Executes inside the container on the remote server
+4. Copies results back to local machine
+
+**Command chain:**
+```bash
+# Local machine -> SSH -> Remote server -> Container exec
+ssh user@remote "docker exec container_name bash -c 'rocprofv3 --sys-trace /app/binary'"
+```
+
+### Setup instructions
+
+#### Step 1: Ensure container is running on remote server
+
+**On your remote server:**
+
+```bash
+# Verify Docker/Podman is installed and running
+docker ps  # or: podman ps
+
+# Start your container if not running
+docker run -d --name my_app_container \
+  --device=/dev/kfd --device=/dev/dri \
+  --group-add video \
+  -v /data:/data \
+  rocm/dev-ubuntu-22.04:6.0
+
+# Verify rocprofv3 is available inside container
+docker exec my_app_container which rocprofv3
+```
+
+#### Step 2: Configure ROCm Optiq profiling dialog
+
+**In ROCm Optiq profiling dialog:**
+
+1. **Execution Mode**: Select **Remote (SSH)**
+2. **SSH Connection**:
+   - Host: `user@remote-server.example.com`
+   - Port: `22` (or custom port)
+   - SSH Key: Path to your SSH private key
+   - Proxy Jump: (optional) `bastion.example.com`
+
+3. **Enable "Run in Container"** checkbox
+
+4. **Container Configuration**:
+   - Runtime: **Docker** (or Podman/Singularity)
+   - Container ID: `my_app_container`
+   - Exec Options: `--user root` (optional)
+
+5. **Application & Tool Arguments**:
+   - Remote App Path: `/app/my_application`
+   - Remote Args: `--input data.bin`
+   - Tool Args: `--sys-trace --kernel-trace`
+
+6. **Output**:
+   - Remote Output Path: `/data/profiling_output`
+   - Copy Results Back: **Enabled**
+
+7. Click **Run**
+
+#### Step 3: What happens during execution
+
+**ROCm Optiq executes:**
+
+```bash
+# 1. SSH connection
+ssh -i ~/.ssh/id_rsa user@remote-server.example.com
+
+# 2. Container exec wrapped command
+"docker exec my_app_container bash -c 'rocprofv3 --sys-trace --kernel-trace -d /data/profiling_output/20260220_120530_123 -- /app/my_application --input data.bin'"
+
+# 3. File copy back via SCP
+scp user@remote-server:/data/profiling_output/20260220_120530_123/merged.db /local/path/
+```
+
+### Container runtime specific examples
+
+#### Docker on remote server
+
+```
+Execution Mode: Remote (SSH)
+SSH Host: user@gpu-server.example.com
+Run in Container: ✓ Enabled
+  Runtime: Docker
+  Container ID: rocm_dev
+  Exec Options: --env HSA_ENABLE_SDMA=0
+Remote App Path: /workspace/gpu_app
+Remote Output Path: /workspace/traces
+```
+
+**Resulting command:**
+```bash
+ssh user@gpu-server.example.com "docker exec --env HSA_ENABLE_SDMA=0 rocm_dev bash -c 'rocprofv3 -d /workspace/traces/20260220_120530_123 -- /workspace/gpu_app'"
+```
+
+#### Podman on remote server (rootless)
+
+```
+Execution Mode: Remote (SSH)
+SSH Host: user@hpc-node.example.com
+Run in Container: ✓ Enabled
+  Runtime: Podman
+  Container ID: my_podman_container
+  Exec Options: (empty for rootless)
+Remote App Path: /home/user/app
+```
+
+**Resulting command:**
+```bash
+ssh user@hpc-node.example.com "podman exec my_podman_container bash -c 'rocprofv3 -d /output -- /home/user/app'"
+```
+
+#### Singularity on HPC cluster
+
+```
+Execution Mode: Remote (SSH)
+SSH Host: user@cluster.hpc.edu
+Run in Container: ✓ Enabled
+  Runtime: Singularity
+  Container ID: /scratch/containers/rocm_app.sif
+  Exec Options: --nv --bind /scratch
+Remote App Path: /app/simulation
+```
+
+**Resulting command:**
+```bash
+ssh user@cluster.hpc.edu "singularity exec --nv --bind /scratch /scratch/containers/rocm_app.sif bash -c 'rocprofv3 -d /scratch/output -- /app/simulation'"
+```
+
+### Container detection on remote servers
+
+**Currently not supported:** Automatic container detection only works for local containers.
+
+**Workaround:** Manually find container ID on remote server:
+
+```bash
+# SSH into remote server
+ssh user@remote-server
+
+# List running containers
+docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}"
+
+# Or for Podman
+podman ps --format "table {{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}"
+
+# Copy the container ID or name to use in ROCm Optiq
+```
+
+### Volume mounting considerations
+
+**For remote container profiling, ensure:**
+
+1. **Output directory is accessible** to both container and SSH user:
+   ```bash
+   # On remote server, when starting container
+   docker run -v /shared/profiling:/output ... rocm/dev
+   ```
+
+2. **Remote output path matches** container mount:
+   ```
+   Remote Output Path: /output  # (container path)
+   ```
+
+3. **SCP can access** the files:
+   - Container writes to `/output/20260220_HHMMSS_mmm/merged.db`
+   - This maps to `/shared/profiling/20260220_HHMMSS_mmm/merged.db` on host
+   - SCP copies from host path to local machine
+
+**Example setup:**
+
+```bash
+# Remote server: Start container with volume mount
+docker run -d --name profiling_container \
+  --device=/dev/kfd --device=/dev/dri \
+  -v /home/user/traces:/traces \
+  rocm/dev-ubuntu-22.04:6.0
+
+# ROCm Optiq configuration:
+Remote Output Path: /traces
+Container ID: profiling_container
+
+# Results flow:
+# 1. rocprofv3 writes to: /traces/20260220_HHMMSS/merged.db (inside container)
+# 2. Host sees file at: /home/user/traces/20260220_HHMMSS/merged.db
+# 3. SCP copies from: user@remote:/home/user/traces/20260220_HHMMSS/merged.db
+```
+
+### Troubleshooting remote container profiling
+
+#### Container not found
+
+**Error:** `Error response from daemon: No such container: my_container`
+
+**Solution:**
+```bash
+# On remote server, verify container is running
+ssh user@remote docker ps -a
+
+# If stopped, start it
+ssh user@remote docker start my_container
+```
+
+#### Permission denied in container
+
+**Error:** `Permission denied: /output/trace.db`
+
+**Solution:** Use exec options to run as root or specific user:
+```
+Exec Options: --user root
+```
+
+#### rocprofv3 not found in container
+
+**Error:** `rocprofv3: command not found`
+
+**Solution:** Ensure ROCm tools are installed in container:
+```bash
+# Check on remote
+ssh user@remote docker exec container_name which rocprofv3
+
+# If not found, install in container or use different image
+```
+
+#### File copy fails
+
+**Error:** `scp: /remote/path/merged.db: No such file`
+
+**Solution:** Verify volume mount paths align:
+```bash
+# Inside container, rocprofv3 writes to: /output/merged.db
+# On host, this should appear at: /actual/host/path/merged.db
+# SCP must use: user@remote:/actual/host/path/merged.db
+```
+
+**Check paths:**
+```bash
+# Find container's volume mounts
+ssh user@remote docker inspect container_name | grep -A 10 Mounts
+
+# Adjust Remote Output Path to match container's mount point
+```
+
+### Best practices
+
+1. **Pre-start containers:** Don't start/stop containers for each profiling run
+2. **Use persistent volumes:** Mount host directory for easy file access
+3. **Set ROCR_VISIBLE_DEVICES:** In exec options for multi-GPU setups
+4. **Test container exec locally first:** Verify command works before adding SSH
+5. **Use container names:** More readable than IDs (`my_app` vs `a1b2c3d4`)
+
+### See also
+
+- [Profiling workflow](profiling-workflow.md) - Main profiling documentation
+- [Remote profiling](profiling-workflow.md#remote-ssh-profiling) - SSH configuration
+- Local container profiling sections below for runtime-specific details
+
 ## Podman profiling
 
 ### Prerequisites

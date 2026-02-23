@@ -12,7 +12,9 @@
       "Bash(git restore:*)",
       "Bash(rocprofv3:*)",
       "Bash(powershell -Command:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(grep:*)",
+      "Bash(cmd /c \"cmake --build build/x64-release-symbols --preset \"\"Windows Release Build with Symbols\"\" --parallel 4 2>&1 | tail -20\")"
     ]
   }
 }

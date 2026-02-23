@@ -1003,6 +1003,73 @@ void ProfilingDialog::RenderRemoteConfig()
     ImGui::Separator();
     ImGui::Spacing();
 
+    // Container options (for remote containers)
+    ImGui::TextUnformatted("Container Options:");
+    ImGui::Spacing();
+
+    ImGui::Checkbox("Run in Container (on remote server)", &m_config.use_container);
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Execute profiling inside a Docker/Podman/Singularity container on the remote server");
+    }
+
+    if(m_config.use_container)
+    {
+        ImGui::Indent(20.0f);
+
+        ImGui::TextDisabled("Note: Container detection not available for remote servers.");
+        ImGui::TextDisabled("Manually specify container details:");
+
+        ImGui::Spacing();
+
+        // Runtime selection
+        ImGui::TextUnformatted("Runtime:");
+        ImGui::SameLine(150);
+        const char* runtimes[] = {"Docker", "Podman", "Singularity"};
+        int runtime_idx = static_cast<int>(m_config.container_runtime) - 1; // -1 because None is 0
+        if(runtime_idx < 0) runtime_idx = 0;
+        if(ImGui::Combo("##remote_manual_runtime", &runtime_idx, runtimes, IM_ARRAYSIZE(runtimes)))
+        {
+            m_config.container_runtime = static_cast<ContainerRuntime>(runtime_idx + 1);
+        }
+
+        // Container ID/Name
+        ImGui::TextUnformatted("Container ID/Name:");
+        ImGui::SameLine(150);
+        char manual_container_id[256] = {0};
+        std::strncpy(manual_container_id, m_config.container_id.c_str(), sizeof(manual_container_id) - 1);
+        ImGui::PushItemWidth(-1);
+        if(ImGui::InputText("##remote_manual_container_id", manual_container_id, sizeof(manual_container_id)))
+        {
+            m_config.container_id = manual_container_id;
+        }
+        ImGui::PopItemWidth();
+        if(ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Container ID, name, or .sif file path for Singularity\nExample: my_rocm_container or /path/to/container.sif");
+        }
+
+        // Exec options
+        ImGui::TextUnformatted("Exec Options:");
+        ImGui::SameLine(150);
+        ImGui::PushItemWidth(-1);
+        ImGui::InputText("##remote_container_exec_opts", m_container_exec_options_buffer, sizeof(m_container_exec_options_buffer));
+        ImGui::PopItemWidth();
+        if(ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Additional flags for container exec command\nExamples:\n  --user root\n  --env ROCR_VISIBLE_DEVICES=0\n  --workdir /workspace");
+        }
+
+        // Update config
+        m_config.container_exec_options = m_container_exec_options_buffer;
+
+        ImGui::Unindent(20.0f);
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
     // Buttons
     float button_width = 100.0f;
     float spacing = ImGui::GetStyle().ItemSpacing.x;

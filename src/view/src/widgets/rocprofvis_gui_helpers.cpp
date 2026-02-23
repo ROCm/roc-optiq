@@ -214,19 +214,6 @@ BeginItemTooltipStyled()
 }
 
 void
-SetItemTooltipStyled(const char* fmt, ...)
-{
-    if(BeginItemTooltipStyled())
-    {
-        va_list args;
-        va_start(args, fmt);
-        ImGui::TextV(fmt, args);
-        va_end(args);
-        EndTooltipStyled();
-    }
-}
-
-void
 EndTooltipStyled()
 {
     ImGui::EndTooltip();

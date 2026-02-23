@@ -145,7 +145,8 @@ SideBar::RenderTrackItem(const uint64_t& index)
     }
 
     ImGui::PopFont();
-    SetItemTooltipStyled("Toggle Track Visibility");
+    if(ImGui::IsItemHovered())
+        SetTooltipStyled("Toggle Track Visibility");
     ImGui::SameLine();
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
     if(ImGui::Button(ICON_ARROWS_SHRINK))
@@ -155,7 +156,8 @@ SideBar::RenderTrackItem(const uint64_t& index)
             graph.chart->GetID(), m_data_provider.GetTraceFilePath()));
     }
     ImGui::PopFont();
-    SetItemTooltipStyled("Scroll To Track");
+    if(ImGui::IsItemHovered())
+        SetTooltipStyled("Scroll To Track");
     ImGui::PopStyleColor(3);
     ImGui::SameLine();
     bool highlight = graph.selected;
@@ -712,7 +714,8 @@ SideBar::DrawEyeButton(EyeButtonState eye_button_state)
         }
     }
     ImGui::PopFont();
-    SetItemTooltipStyled("Toggle All Track Visibility");
+    if(ImGui::IsItemHovered())
+        SetTooltipStyled("Toggle All Track Visibility");
     ImGui::PopStyleColor(3);
 
     return new_button_state;

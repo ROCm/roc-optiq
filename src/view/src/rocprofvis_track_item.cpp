@@ -323,7 +323,8 @@ TrackItem::RenderMetaArea()
                                    m_metadata_padding.y));
         IconButton(ICON_GEAR,
                    m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-        SetItemTooltipStyled("Track Options");
+        if(ImGui::IsItemHovered())
+            SetTooltipStyled("Track Options");
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             m_settings.GetDefaultStyle().WindowPadding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
@@ -938,7 +939,7 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     ImGui::TextUnformatted(m_pill_label.c_str());
     if(!m_tooltip_label.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     {
-        SetItemTooltipStyled("%s", m_tooltip_label.c_str());
+        SetTooltipStyled("%s", m_tooltip_label.c_str());
     }
     ImGui::PopStyleColor();
 

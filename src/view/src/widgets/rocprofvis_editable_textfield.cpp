@@ -59,7 +59,8 @@ EditableTextField::DrawPlainText()
         {
             RevertToDefault();
         }
-        SetItemTooltipStyled("Revert To Default\n%s", m_reset_tooltip.c_str());
+        if(ImGui::IsItemHovered())
+            SetTooltipStyled("Revert To Default\n%s", m_reset_tooltip.c_str());
         ImGui::SameLine();
     }
     // Draw the text as a button to avoid the background
@@ -79,9 +80,9 @@ EditableTextField::DrawPlainText()
     }
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
-    SetItemTooltipStyled("%s", m_tooltip_text.c_str());
     if(ImGui::IsItemHovered())
     {
+        SetTooltipStyled("%s", m_tooltip_text.c_str());
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     }
 }

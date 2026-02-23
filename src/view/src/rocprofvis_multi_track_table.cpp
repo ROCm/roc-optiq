@@ -402,7 +402,8 @@ MultiTrackTable::XButton(const char* id) const
     ImGui::PopFont();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
-    SetItemTooltipStyled("Clear");
+    if(ImGui::IsItemHovered())
+        SetTooltipStyled("Clear");
     return clicked;
 }
 

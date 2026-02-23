@@ -24,6 +24,7 @@ private:
     void RenderCategory(const AvailableMetrics::Category& cat);
 
     DataProvider&                         m_data_provider;
+    uint64_t                              m_client_id;
     uint32_t                              m_workload_id = 0;
     uint32_t                              m_last_workload_id = 0;
     std::unordered_set<uint32_t>          m_kernel_ids;

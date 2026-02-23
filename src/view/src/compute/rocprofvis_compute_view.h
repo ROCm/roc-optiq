@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "rocprofvis_compute_table_view.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_tab_container.h"
@@ -46,18 +45,6 @@ private:
 
     DataProvider                     m_data_provider;
     std::shared_ptr<RocCustomWidget> m_tool_bar;
-};
-
-// TODO: move these to separate files when they are implemented
-class ComputeTableView : public RocWidget
-{
-public:
-    ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
-    ~ComputeTableView(){};
-
-protected:
-    DataProvider& m_data_provider;
-    std::shared_ptr<ComputeSelection> m_compute_selection;
 };
 
 class ComputeWorkloadView: public RocWidget

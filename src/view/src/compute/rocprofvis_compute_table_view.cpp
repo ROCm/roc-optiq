@@ -3,6 +3,7 @@
 
 #include "rocprofvis_compute_table_view.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
+#include "rocprofvis_requests.h"
 
 namespace RocProfVis
 {
@@ -12,6 +13,7 @@ namespace View
 ComputeTableView::ComputeTableView(DataProvider& data_provider)
 : RocWidget()
 , m_data_provider(data_provider)
+, m_client_id(IdGenerator::GetInstance().GenerateId())
 {}
 
 void
@@ -72,13 +74,13 @@ ComputeTableView::Render()
     ImGui::BeginDisabled(m_kernel_ids.empty());
     if(ImGui::Button("Fetch All Metrics"))
     {
-        m_data_provider.ComputeModel().ClearMetricValues();
+        m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
         std::vector<uint32_t> kernel_ids(m_kernel_ids.begin(), m_kernel_ids.end());
         std::vector<MetricsRequestParams::MetricID> metric_ids;
         for(const auto& cp : workload.available_metrics.tree)
             for(const auto& tp : cp.second.tables)
                 metric_ids.push_back({cp.first, tp.first, std::nullopt});
-        m_data_provider.FetchMetrics(MetricsRequestParams(workload.id, kernel_ids, metric_ids));
+        m_data_provider.FetchMetrics(MetricsRequestParams(workload.id, kernel_ids, metric_ids, m_client_id));
     }
     ImGui::EndDisabled();
 
@@ -101,7 +103,7 @@ ComputeTableView::Render()
 void
 ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
 {
-    const auto& metrics = m_data_provider.ComputeModel().GetMetricsData();
+    auto& model = m_data_provider.ComputeModel();
 
     ImGui::BeginChild("scroll", ImVec2(-1, -1));
     for(const auto& tbl_pair : cat.tables)
@@ -139,27 +141,30 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
                 if(tbl.value_names.empty())
                 {
                     ImGui::TableNextColumn();
-                    for(const auto& mv : metrics)
-                        if(mv && mv->entry.category_id == cat.id &&
-                           mv->entry.table_id == tbl_id && mv->entry.id == eid)
+                    for(uint32_t kid : m_kernel_ids)
+                    {
+                        auto mv = model.GetMetricValue(m_client_id, kid, cat.id, tbl_id, eid);
+                        if(mv && mv->entry && !mv->values.empty())
                         {
-                            ImGui::Text("%.2f", mv->value);
+                            ImGui::Text("%.2f", mv->values.begin()->second);
                             break;
                         }
+                    }
                 }
                 else
                 {
                     for(const auto& vn : tbl.value_names)
                     {
                         ImGui::TableNextColumn();
-                        for(const auto& mv : metrics)
-                            if(mv && mv->entry.category_id == cat.id &&
-                               mv->entry.table_id == tbl_id && mv->entry.id == eid &&
-                               mv->name == vn)
+                        for(uint32_t kid : m_kernel_ids)
+                        {
+                            auto mv = model.GetMetricValue(m_client_id, kid, cat.id, tbl_id, eid);
+                            if(mv && mv->entry && mv->values.count(vn))
                             {
-                                ImGui::Text("%.2f", mv->value);
+                                ImGui::Text("%.2f", mv->values.at(vn));
                                 break;
                             }
+                        }
                     }
                 }
             }

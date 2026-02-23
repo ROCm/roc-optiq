@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_view.h"
+#include "rocprofvis_compute_table_view.h"
 #include "rocprofvis_compute_kernel_details.h"
 #include "rocprofvis_compute_summary.h"
 #include "implot/implot.h"
@@ -86,7 +87,7 @@ ComputeView::CreateView()
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider), false});
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
     
     m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider), false});
@@ -218,13 +219,6 @@ ComputeView::RenderWorkloadSelection()
         ImGui::EndCombo();
     }
 }
-
-//TODO: move these to their own files
-ComputeTableView::ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
-: RocWidget()
-, m_data_provider(data_provider)
-, m_compute_selection(compute_selection)
-{}
 
 ComputeWorkloadView::ComputeWorkloadView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()

@@ -61,11 +61,6 @@ ComputeWorkloadView::CreateLayout()
 void
 ComputeWorkloadView::Render()
 {
-    if(!m_compute_selection->GetSelectedWorkload())
-    {
-        return;
-    }
-
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     m_workload_info      = m_data_provider.ComputeModel().GetWorkload(workload_id);
 

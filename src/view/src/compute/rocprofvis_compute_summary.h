@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "rocprofvis_compute_memory_chart.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
 
@@ -15,19 +14,18 @@ class DataProvider;
 class ComputeSelection;
 class Roofline;
 
-class ComputeKernelDetailsView : public RocWidget
+class ComputeSummaryView : public RocWidget
 {
 public:
-    ComputeKernelDetailsView(DataProvider&                     data_provider,
-                             std::shared_ptr<ComputeSelection> compute_selection);
-    ~ComputeKernelDetailsView();
+    ComputeSummaryView(DataProvider&                     data_provider,
+                       std::shared_ptr<ComputeSelection> compute_selection);
+    ~ComputeSummaryView();
 
-    void Render() override;
     void Update() override;
+    void Render() override;
 
 private:
-    DataProvider&          m_data_provider;
-    ComputeMemoryChartView m_memory_chart;
+    DataProvider& m_data_provider;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<Roofline>         m_roofline;
@@ -35,7 +33,6 @@ private:
     uint64_t m_client_id;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
-    EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_metrics_fetched_token;
 };
 

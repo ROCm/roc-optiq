@@ -15,6 +15,7 @@ namespace View
 
 class SettingsManager;
 class ComputeTester;
+class Roofline;
 
 class ComputeView : public RootView
 {
@@ -47,10 +48,8 @@ private:
     std::shared_ptr<RocCustomWidget> m_tool_bar;
 };
 
-
-//TODO: move these to separate files when they are implemented
-
-class ComputeTableView: public RocWidget
+// TODO: move these to separate files when they are implemented
+class ComputeTableView : public RocWidget
 {
 public:
     ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
@@ -149,6 +148,7 @@ private:
     DisplayStrings m_display_names;
 
     ComputeSummaryView m_summary_view;
+    char m_value_names_input[64] = "3.1.2";
 };
 
 }  // namespace View

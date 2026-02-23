@@ -3,8 +3,10 @@
 
 #include "rocprofvis_compute_view.h"
 #include "rocprofvis_compute_kernel_details.h"
+#include "rocprofvis_compute_summary.h"
 #include "implot/implot.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_settings_manager.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -217,7 +219,6 @@ ComputeView::RenderWorkloadSelection()
 }
 
 //TODO: move these to their own files
-
 ComputeTableView::ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
@@ -997,6 +998,82 @@ ComputeTester::RenderFetcher(const WorkloadInfo& workload)
             }
         }
         ImPlot::EndPlot();
+        ImGui::EndChild();
+        ImGui::NewLine();
+        ImGui::BeginChild("value_names_lookup", ImVec2(0, 0),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        ImGui::Text("Value Names Lookup");
+        ImGui::InputText("Metric ID (e.g. 3.1.2)", m_value_names_input,
+                         sizeof(m_value_names_input));
+
+        const WorkloadInfo& wl = workloads.at(m_selections.workload_id);
+        ImGui::Text("Workload: %s (metrics: %zu, categories: %zu)",
+                    wl.name.c_str(),
+                    wl.available_metrics.list.size(),
+                    wl.available_metrics.tree.size());
+
+        std::string input(m_value_names_input);
+        auto        dot1 = input.find('.');
+        auto        dot2 = (dot1 != std::string::npos) ? input.find('.', dot1 + 1)
+                                                        : std::string::npos;
+        if(dot1 != std::string::npos && dot2 != std::string::npos &&
+           dot2 + 1 < input.size())
+        {
+            uint32_t cat_id   = static_cast<uint32_t>(std::stoul(input.substr(0, dot1)));
+            uint32_t tbl_id   = static_cast<uint32_t>(
+                std::stoul(input.substr(dot1 + 1, dot2 - dot1 - 1)));
+            uint32_t entry_id = static_cast<uint32_t>(
+                std::stoul(input.substr(dot2 + 1)));
+
+            ImGui::Text("Looking up: cat=%u, table=%u, entry=%u", cat_id, tbl_id, entry_id);
+
+            if(wl.available_metrics.tree.count(cat_id))
+            {
+                const auto& cat = wl.available_metrics.tree.at(cat_id);
+                if(cat.tables.count(tbl_id))
+                {
+                    const auto& tbl = cat.tables.at(tbl_id);
+                    if(tbl.entries.count(entry_id))
+                    {
+                        const AvailableMetrics::Entry& entry = tbl.entries.at(entry_id);
+                        ImGui::Text("Metric: [%u.%u.%u] %s",
+                                    entry.category_id, entry.table_id, entry.id,
+                                    entry.name.c_str());
+                    }
+                    else
+                    {
+                        ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1),
+                                           "Entry %u not found in table %u (table has %zu entries)",
+                                           entry_id, tbl_id, tbl.entries.size());
+                    }
+                    if(tbl.value_names.empty())
+                    {
+                        ImGui::TextDisabled("No value names found for table %u", tbl_id);
+                    }
+                    else
+                    {
+                        ImGui::Text("Value Names (%zu):", tbl.value_names.size());
+                        for(const std::string& vn : tbl.value_names)
+                        {
+                            ImGui::BulletText("%s", vn.c_str());
+                        }
+                    }
+                }
+                else
+                {
+                    ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1),
+                                       "Table %u not found in category %u", tbl_id, cat_id);
+                }
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1),
+                                   "Category %u not found", cat_id);
+            }
+        }
+        ImGui::EndChild();
+        ImGui::EndChild();
+        m_selections.init = false;
     }
 
     int preset_idx = static_cast<int>(m_selections.roofline_preset);

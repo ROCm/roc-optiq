@@ -450,6 +450,8 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnWorkloadRooflineBenchL2Bw,
     kRPVComputeColumnWorkloadRooflineBenchL1Bw,
     kRPVComputeColumnWorkloadRooflineBenchLDSBw,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF4Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF6Flops,
     kRPVComputeColumnWorkloadRooflineBenchMFMAF8Flops,
     kRPVComputeColumnWorkloadRooflineBenchFP16Flops,
     kRPVComputeColumnWorkloadRooflineBenchMFMAF16Flops,
@@ -490,7 +492,8 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnMetricValueName,
     kRPVComputeColumnMetricValue,
 
-    kRPVComputeColumnDynamicMetricValue
+    kRPVComputeColumnDynamicMetricValue,
+    kRPVComputeColumnDynamicKernelUUID,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations
@@ -506,6 +509,7 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchMetricCategoryTablesList,
     kRPVComputeFetchMetricValues,
     kRPVComputeFetchKernelMetricsMatrix,
+    kRPVComputeFetchWorkloadMetricValueNames,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration

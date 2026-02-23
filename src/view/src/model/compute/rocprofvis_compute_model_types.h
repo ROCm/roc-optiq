@@ -33,7 +33,7 @@ struct AvailableMetrics
         uint32_t                             id;
         std::string                          name;
         std::unordered_map<uint32_t, Entry&> entries;
-        std::vector<std::string>             values_names;
+        std::vector<std::string>             value_names;
     };
     struct Category
     {
@@ -133,6 +133,7 @@ struct WorkloadInfo
             rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth_type;
             rocprofvis_controller_roofline_ceiling_compute_type_t   compute_type;
             Line                                                    position;
+            double                                                  throughput;
         };
         std::unordered_map<
             rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
@@ -143,7 +144,9 @@ struct WorkloadInfo
             rocprofvis_controller_roofline_ceiling_compute_type_t,
             std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
                                Ceiling>>
-            ceiling_compute;
+              ceiling_compute;
+        Point max;
+        Point min;
     };
     uint32_t                                 id;
     std::string                              name;

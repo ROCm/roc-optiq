@@ -26,7 +26,7 @@ struct AvailableMetrics
         uint32_t    id;
         std::string name;
         std::string description;
-        std::string unit;
+        std::string unit; 
     };
     struct Table
     {
@@ -89,6 +89,7 @@ struct WorkloadInfo
             rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth_type;
             rocprofvis_controller_roofline_ceiling_compute_type_t   compute_type;
             Line                                                    position;
+            double                                                  throughput;
         };
         std::unordered_map<
             rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
@@ -99,7 +100,9 @@ struct WorkloadInfo
             rocprofvis_controller_roofline_ceiling_compute_type_t,
             std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
                                Ceiling>>
-            ceiling_compute;
+              ceiling_compute;
+        Point max;
+        Point min;
     };
     uint32_t                                 id;
     std::string                              name;
@@ -110,14 +113,33 @@ struct WorkloadInfo
     Roofline                                 roofline;
 };
 
-struct MetricValue
+struct MetricValue 
 {
-    std::string              name;
-    double                   value;
-    AvailableMetrics::Entry& entry;
-    KernelInfo&              kernel;
+    AvailableMetrics::Entry* entry;
+    KernelInfo*              kernel;
+    std::unordered_map<std::string, double> values;
 };
 
+union MetricKey
+{
+    struct
+    {
+        uint64_t category_id : 16;
+        uint64_t table_id : 16;
+        uint64_t entry_id : 32;
+    } fields;
+    uint64_t id;
+};
+
+union TableKey
+{
+    struct
+    {
+        uint64_t category_id : 16;
+        uint64_t table_id : 48;
+    } fields;
+    uint64_t id;
+};
 
 struct ComputeTableInfo
 {

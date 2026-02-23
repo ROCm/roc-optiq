@@ -13,7 +13,6 @@
 
 #include "json.h"
 
-#include <map>
 #include <set>
 
 #pragma region Deprecated
@@ -483,11 +482,11 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                         {
                             for(Workload* workload : m_workloads)
                             {                                
-                                uint64_t uint_data = 0;
-                                result = workload->GetUInt64(kRPVControllerWorkloadId, 0, &uint_data);
+                                uint64_t id = 0;
+                                result = workload->GetUInt64(kRPVControllerWorkloadId, 0, &id);
                                 if(result == kRocProfVisResultSuccess)
                                 {
-                                    m_query_arguments = { {kRPVComputeParamWorkloadId, std::to_string(uint_data)} };
+                                    m_query_arguments = { {kRPVComputeParamWorkloadId, std::to_string(id)} };
                                     m_query_output = { 
                                         { 
                                             { kRPVComputeColumnWorkloadId, std::nullopt },
@@ -501,7 +500,8 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                         }, 
                                         {} 
                                     };
-                                    dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadMetricsDefinition, m_query_arguments, m_query_output, [this, &workload](const QueryDataStore& data_store){
+                                    std::set<std::pair<uint32_t, uint32_t>> unique_tables;
+                                    dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadMetricsDefinition, m_query_arguments, m_query_output, [this, &workload, &unique_tables](const QueryDataStore& data_store){
                                         workload->SetUInt64(kRPVControllerWorkloadNumAvailableMetrics, 0, data_store.rows.size());
                                         rocprofvis_property_t property;
                                         rocprofvis_controller_primitive_type_t type;
@@ -514,22 +514,18 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                     SetObjectProperty((rocprofvis_handle_t*)workload, property, i, data_store.rows[i][column.second.value()], type);
                                                 }
                                             }
+                                            const char* cat_str = data_store.rows[i][data_store.columns.at(kRPVComputeColumnTableId).value()];
+                                            const char* tbl_str = data_store.rows[i][data_store.columns.at(kRPVComputeColumnSubTableId).value()];
+                                            if(strlen(cat_str) && strlen(tbl_str))
+                                            {
+                                                unique_tables.insert({static_cast<uint32_t>(std::stoul(cat_str)), static_cast<uint32_t>(std::stoul(tbl_str))});
+                                            }
                                         }
                                     });
                                     if(dm_result == kRocProfVisDmResultSuccess)
                                     {
-                                        uint64_t num_metrics = 0;
-                                        workload->GetUInt64(kRPVControllerWorkloadNumAvailableMetrics, 0, &num_metrics);
-                                        std::set<std::pair<uint32_t, uint32_t>> unique_tables;
-                                        for(uint64_t mi = 0; mi < num_metrics; mi++)
-                                        {
-                                            uint64_t cat = 0, tbl = 0;
-                                            workload->GetUInt64(kRPVControllerWorkloadAvailableMetricCategoryIdIndexed, mi, &cat);
-                                            workload->GetUInt64(kRPVControllerWorkloadAvailableMetricTableIdIndexed, mi, &tbl);
-                                            unique_tables.insert({static_cast<uint32_t>(cat), static_cast<uint32_t>(tbl)});
-                                        }
-                                        std::string workload_id_str = std::to_string(uint_data);
-                                        std::map<std::pair<uint32_t, uint32_t>, std::set<std::string>> table_value_names;
+                                        std::string workload_id_str = std::to_string(id);
+                                        uint64_t value_names_count = 0;
                                         for(const auto& [cat_id, tbl_id] : unique_tables)
                                         {
                                             std::string prefix = std::to_string(cat_id) + "." + std::to_string(tbl_id);
@@ -542,29 +538,17 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                 {}
                                             };
                                             dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadMetricValueNames, m_query_arguments, m_query_output,
-                                                [&table_value_names, cat_id, tbl_id](const QueryDataStore& data_store){
+                                                [&workload, &value_names_count, cat_id, tbl_id](const QueryDataStore& data_store){
                                                     for(size_t i = 0; i < data_store.rows.size(); i++)
                                                     {
-                                                        table_value_names[{cat_id, tbl_id}].insert(
-                                                            data_store.rows[i][data_store.columns.at(kRPVComputeColumnMetricValueName).value()]);
+                                                        workload->SetUInt64(kRPVControllerWorkloadNumMetricValueNames, 0, value_names_count + 1);
+                                                        workload->SetUInt64(kRPVControllerWorkloadMetricValueNameCategoryIdIndexed, value_names_count, cat_id);
+                                                        workload->SetUInt64(kRPVControllerWorkloadMetricValueNameTableIdIndexed, value_names_count, tbl_id);
+                                                        workload->SetString(kRPVControllerWorkloadMetricValueNameStringIndexed, value_names_count, data_store.rows[i][data_store.columns.at(kRPVComputeColumnMetricValueName).value()]);
+                                                        value_names_count++;
                                                     }
                                                 });
                                             if(dm_result != kRocProfVisDmResultSuccess) break;
-                                        }
-                                        uint64_t total = 0;
-                                        for(const auto& [key, names] : table_value_names)
-                                            total += names.size();
-                                        workload->SetUInt64(kRPVControllerWorkloadNumMetricValueNames, 0, total);
-                                        uint64_t idx = 0;
-                                        for(const auto& [key, names] : table_value_names)
-                                        {
-                                            for(const auto& name : names)
-                                            {
-                                                workload->SetUInt64(kRPVControllerWorkloadMetricValueNameCategoryIdIndexed, idx, key.first);
-                                                workload->SetUInt64(kRPVControllerWorkloadMetricValueNameTableIdIndexed, idx, key.second);
-                                                workload->SetString(kRPVControllerWorkloadMetricValueNameStringIndexed, idx, name.c_str());
-                                                idx++;
-                                            }
                                         }
                                         m_query_arguments = { {kRPVComputeParamWorkloadId, workload_id_str} };
                                     }
@@ -607,78 +591,11 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                     if(dm_result == kRocProfVisDmResultSuccess)
                                     {
                                         Roofline* roofline = new Roofline();
-                                        m_query_output = { 
-                                            { 
-                                                { kRPVComputeColumnWorkloadRooflineBenchHBMBw, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchL2Bw, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchL1Bw, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchLDSBw, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchMFMAF8Flops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchFP16Flops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchMFMAF16Flops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchMFMABF16Flops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchFP32Flops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchMFMAF32Flops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchFP64Flops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchMFMAF64Flops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchI8Ops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchMFMAI8Ops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchI32Ops, std::nullopt },
-                                                { kRPVComputeColumnWorkloadRooflineBenchI64Ops, std::nullopt },
-                                            }, 
-                                            {} 
-                                        };
-                                        dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadRooflineCeiling, m_query_arguments, m_query_output, [&roofline, &uint_data](const QueryDataStore& data_store){
-                                            if(data_store.rows.size() == 1)
-                                            {
-                                                std::unordered_map<rocprofvis_controller_roofline_ceiling_compute_type_t, double> compute_ceilings;
-                                                std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t, double> bandwidth_ceilings;
-                                                rocprofvis_controller_roofline_ceiling_compute_type_t compute_type;
-                                                rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth_type;
-                                                for(const std::pair<const rocprofvis_db_compute_column_enum_t, std::optional<int>>& column : data_store.columns)
-                                                {
-                                                    const char* data = data_store.rows[0][column.second.value()];
-                                                    if(strlen(data))
-                                                    {
-                                                        double value = std::stod(data);
-                                                        if(value > 0.0)
-                                                        {                                                           
-                                                            if(roofline->QueryToPropertyEnum(column.first, compute_type))
-                                                            {
-                                                                roofline->SetUInt64(kRPVControllerRooflineNumCeilingsCompute, 0, compute_ceilings.size() + 1);
-                                                                roofline->SetUInt64(kRPVControllerRooflineCeilingComputeTypeIndexed, compute_ceilings.size(), (uint64_t)compute_type);
-                                                                roofline->SetDouble(kRPVControllerRooflineCeilingComputeXIndexed, compute_ceilings.size(), roofline->MaxX());
-                                                                roofline->SetDouble(kRPVControllerRooflineCeilingComputeYIndexed, compute_ceilings.size(), value);
-                                                                compute_ceilings[compute_type] = value;
-                                                            }
-                                                            else if(roofline->QueryToPropertyEnum(column.first, bandwidth_type))
-                                                            {
-                                                                roofline->SetUInt64(kRPVControllerRooflineNumCeilingsBandwidth, 0, bandwidth_ceilings.size() + 1);
-                                                                roofline->SetUInt64(kRPVControllerRooflineCeilingBandwidthTypeIndexed, bandwidth_ceilings.size(), (uint64_t)bandwidth_type);
-                                                                roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthXIndexed, bandwidth_ceilings.size(), roofline->MinX());
-                                                                roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthYIndexed, bandwidth_ceilings.size(), value * roofline->MinX());
-                                                                bandwidth_ceilings[bandwidth_type] = value;
-                                                            }  
-                                                        }
-                                                    } 
-                                                }
-                                                uint_data = 0;
-                                                roofline->SetUInt64(kRPVControllerRooflineNumCeilingsRidge, 0, compute_ceilings.size() * bandwidth_ceilings.size());
-                                                for(const std::pair<const rocprofvis_controller_roofline_ceiling_compute_type_t, double>& compute_ceiling : compute_ceilings)
-                                                {
-                                                    for(const std::pair<const rocprofvis_controller_roofline_ceiling_bandwidth_type_t, double>& bandwidth_ceiling : bandwidth_ceilings)
-                                                    {
-                                                        roofline->SetUInt64(kRPVControllerRooflineCeilingRidgeComputeTypeIndexed, uint_data, (uint64_t)compute_ceiling.first);
-                                                        roofline->SetUInt64(kRPVControllerRooflineCeilingRidgeBandwidthTypeIndexed, uint_data, (uint64_t)bandwidth_ceiling.first);
-                                                        roofline->SetDouble(kRPVControllerRooflineCeilingRidgeXIndexed, uint_data, compute_ceiling.second / bandwidth_ceiling.second);
-                                                        roofline->SetDouble(kRPVControllerRooflineCeilingRidgeYIndexed, uint_data, compute_ceiling.second);
-                                                        uint_data++;
-                                                    }
-                                                }
-                                            }
-                                        });
-                                        uint_data = 0;
-                                        double max_data = 0.0;
+                                        std::optional<double> max_intensity_x;
+                                        std::optional<double> min_intensity_x;
+                                        std::optional<double> max_intensity_y;
+                                        std::optional<double> min_intensity_y;
+                                        double uint_data = 0;
                                         for(const uint32_t& id : kernel_ids)
                                         {
                                             m_query_arguments = { {kRPVComputeParamKernelId, std::to_string(id)} };
@@ -693,7 +610,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                 }, 
                                                 {} 
                                             };
-                                            dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelRooflineIntensities, m_query_arguments, m_query_output, [&roofline, &id, &uint_data, &max_data](const QueryDataStore& data_store){
+                                            dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelRooflineIntensities, m_query_arguments, m_query_output, [&roofline, &id, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
                                                 if(data_store.rows.size() == 1)
                                                 {
                                                     const char* data = data_store.rows[0][data_store.columns.at(kRPVComputeColumnRooflineTotalFlops).value()];
@@ -718,7 +635,10 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                                             roofline->SetUInt64(kRPVControllerRooflineKernelIntensityTypeIndexed, uint_data, type);
                                                                             roofline->SetDouble(kRPVControllerRooflineKernelIntensityXIndexed, uint_data, value);
                                                                             roofline->SetDouble(kRPVControllerRooflineKernelIntensityYIndexed, uint_data, flops);
-                                                                            max_data = std::max(max_data, value);
+                                                                            max_intensity_x = max_intensity_x ? std::max(max_intensity_x.value(), value) : value;
+                                                                            min_intensity_x = min_intensity_x ? std::min(min_intensity_x.value(), value) : value;
+                                                                            max_intensity_y = max_intensity_y ? std::max(max_intensity_y.value(), flops) : flops;
+                                                                            min_intensity_y = min_intensity_y ? std::min(min_intensity_y.value(), flops) : flops;
                                                                             uint_data++;
                                                                         }
                                                                     } 
@@ -729,15 +649,66 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                 }
                                             });                                         
                                         }
-                                        if(max_data > roofline->MaxX())
-                                        {
-                                            uint_data = 0;
-                                            roofline->GetUInt64(kRPVControllerRooflineNumCeilingsCompute, 0, &uint_data);
-                                            for(uint64_t j = 0; j < uint_data; j++)
+                                        max_intensity_x = max_intensity_x ? max_intensity_x.value() * 10 : max_intensity_x;
+                                        min_intensity_x = min_intensity_x ? min_intensity_x.value() / 10 : min_intensity_x;
+                                        max_intensity_y = max_intensity_y ? max_intensity_y.value() * 10 : max_intensity_y;
+                                        min_intensity_y = min_intensity_y ? min_intensity_y.value() / 10 : min_intensity_y;
+                                        m_query_arguments = { {kRPVComputeParamWorkloadId, std::to_string(id)} };
+                                        m_query_output = { {}, {} };
+                                        dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadRooflineCeiling, m_query_arguments, m_query_output, [&roofline, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
+                                            if(data_store.rows.size() == 1)
                                             {
-                                                roofline->SetDouble(kRPVControllerRooflineCeilingComputeXIndexed, j, max_data * roofline->DynamicMaxXFactor());
+                                                std::unordered_map<rocprofvis_controller_roofline_ceiling_compute_type_t, double> compute_ceilings;
+                                                std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t, double> bandwidth_ceilings;
+                                                rocprofvis_controller_roofline_ceiling_compute_type_t compute_type;
+                                                rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth_type;
+                                                for(const std::pair<const rocprofvis_db_compute_column_enum_t, std::optional<int>>& column : data_store.columns)
+                                                {
+                                                    if(column.second)
+                                                    {
+                                                        const char* data = data_store.rows[0][column.second.value()];
+                                                        if(strlen(data))
+                                                        {
+                                                            double value = std::stod(data);
+                                                            if(value > 0.0)
+                                                            {                                                           
+                                                                if(roofline->QueryToPropertyEnum(column.first, compute_type))
+                                                                {
+                                                                    roofline->SetUInt64(kRPVControllerRooflineNumCeilingsCompute, 0, compute_ceilings.size() + 1);
+                                                                    roofline->SetUInt64(kRPVControllerRooflineCeilingComputeTypeIndexed, compute_ceilings.size(), (uint64_t)compute_type);
+                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingComputeXIndexed, compute_ceilings.size(), max_intensity_x ? std::max(max_intensity_x.value(), roofline->MaxX()) : roofline->MaxX());
+                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingComputeYIndexed, compute_ceilings.size(), value);
+                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingComputeThroughputIndexed, compute_ceilings.size(), value);
+                                                                    compute_ceilings[compute_type] = value;
+                                                                }
+                                                                else if(roofline->QueryToPropertyEnum(column.first, bandwidth_type))
+                                                                {
+                                                                    roofline->SetUInt64(kRPVControllerRooflineNumCeilingsBandwidth, 0, bandwidth_ceilings.size() + 1);
+                                                                    roofline->SetUInt64(kRPVControllerRooflineCeilingBandwidthTypeIndexed, bandwidth_ceilings.size(), (uint64_t)bandwidth_type);
+                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthXIndexed, bandwidth_ceilings.size(), min_intensity_x ? std::min(min_intensity_x.value(), roofline->MinX()) : roofline->MinX());
+                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthYIndexed, bandwidth_ceilings.size(), value * (min_intensity_x ? std::min(min_intensity_x.value(), roofline->MinX()) : roofline->MinX()));
+                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthThroughputIndexed, bandwidth_ceilings.size(), value);
+                                                                    bandwidth_ceilings[bandwidth_type] = value;
+                                                                }  
+                                                            }
+                                                        } 
+                                                    }
+                                                }
+                                                uint_data = 0;
+                                                roofline->SetUInt64(kRPVControllerRooflineNumCeilingsRidge, 0, compute_ceilings.size() * bandwidth_ceilings.size());
+                                                for(const std::pair<const rocprofvis_controller_roofline_ceiling_compute_type_t, double>& compute_ceiling : compute_ceilings)
+                                                {                                                   
+                                                    for(const std::pair<const rocprofvis_controller_roofline_ceiling_bandwidth_type_t, double>& bandwidth_ceiling : bandwidth_ceilings)
+                                                    {
+                                                        roofline->SetUInt64(kRPVControllerRooflineCeilingRidgeComputeTypeIndexed, uint_data, (uint64_t)compute_ceiling.first);
+                                                        roofline->SetUInt64(kRPVControllerRooflineCeilingRidgeBandwidthTypeIndexed, uint_data, (uint64_t)bandwidth_ceiling.first);
+                                                        roofline->SetDouble(kRPVControllerRooflineCeilingRidgeXIndexed, uint_data, compute_ceiling.second / bandwidth_ceiling.second);
+                                                        roofline->SetDouble(kRPVControllerRooflineCeilingRidgeYIndexed, uint_data, compute_ceiling.second);
+                                                        uint_data++;
+                                                    }
+                                                }
                                             }
-                                        }
+                                        });
                                         workload->SetObject(kRPVControllerWorkloadRoofline, 0, (rocprofvis_handle_t*)roofline);
                                     }
                                 }
@@ -804,7 +775,7 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t db, r
                                 {                               
                                     uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMNumberOfTableColumnsUInt64, 0);
                                     uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMNumberOfTableRowsUInt64, 0);
-                                    if(num_columns == data_store.columns.size() && num_rows > 0)
+                                    if((num_columns == data_store.columns.size() || data_store.columns.empty()) && num_rows > 0)
                                     {
                                         for(uint64_t i = 0; i < num_columns; i++)
                                         {

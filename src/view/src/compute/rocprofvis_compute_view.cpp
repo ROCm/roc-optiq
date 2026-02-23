@@ -2,9 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_view.h"
+#include "rocprofvis_compute_kernel_details.h"
+#include "rocprofvis_compute_summary.h"
 #include "implot/implot.h"
+#include "rocprofvis_event_manager.h"
+#include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_settings_manager.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 #include "spdlog/spdlog.h"
 
@@ -19,6 +24,28 @@ ComputeView::ComputeView()
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("ComputeView");
+
+    m_data_provider.SetFetchMetricsCallback(
+        [this](const std::string& trace_path, uint64_t client_id, bool success) {
+            if(!success)
+            {
+                NotificationManager::GetInstance().Show(
+                    "Failed to fetch metrics for trace: " + trace_path,
+                    NotificationLevel::Error);
+            }
+            else
+            {
+                NotificationManager::GetInstance().Show(
+                    "Successfully fetched metrics for client: " + std::to_string(client_id),
+                    NotificationLevel::Success);
+
+                // trigger metrics fetched event to update the UI
+                EventManager::GetInstance()->AddEvent(
+                    std::make_shared<ComputeMetricsFetchedEvent>(client_id, trace_path));
+            }
+        });
+
+
 }
 
 ComputeView::~ComputeView() {}
@@ -54,11 +81,14 @@ ComputeView::Update()
 void
 ComputeView::CreateView()
 {
+    m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
+
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider), false});
-    m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
+    
     m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider), false});
 }
 
@@ -121,7 +151,7 @@ ComputeView::RenderToolbar()
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, frame_rounding);
     ImGui::AlignTextToFramePadding();
 
-    ImGui::Button("Compute Toolbar", ImVec2(-1, 0));
+    RenderWorkloadSelection();
 
     // pop content style
     ImGui::PopStyleVar(2);
@@ -130,20 +160,76 @@ ComputeView::RenderToolbar()
     ImGui::PopStyleVar(2);
 }
 
+void
+ComputeView::RenderWorkloadSelection()
+{
+    if(!m_compute_selection)
+    {
+        return;
+    }
+
+    const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
+        m_data_provider.ComputeModel().GetWorkloads();
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    ImGui::Text("Workload:");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
+    if(ImGui::BeginCombo("##Workloads", workloads.count(workload_id) > 0
+                                          ? workloads.at(workload_id).name.c_str()
+                                          : "-"))
+    {
+        if(ImGui::Selectable("-", workload_id == ComputeSelection::INVALID_SELECTION_ID))
+        {
+            m_compute_selection->SelectWorkload(ComputeSelection::INVALID_SELECTION_ID);
+        }
+        for(const std::pair<const uint32_t, WorkloadInfo>& workload : workloads)
+        {
+            if(ImGui::Selectable(workload.second.name.c_str(),
+                                 workload_id == workload.second.id))
+            {
+                m_compute_selection->SelectWorkload(workload.second.id);
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::Text("Kernel:");
+    ImGui::SameLine();
+    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+    const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id);
+
+    std::vector<const KernelInfo*> kernel_info_list =
+        m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
+    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
+    if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str() : "-"))
+    {
+        if(ImGui::Selectable("-", kernel_id == ComputeSelection::INVALID_SELECTION_ID))
+        {
+            m_compute_selection->SelectKernel(ComputeSelection::INVALID_SELECTION_ID);
+        }
+        for(const KernelInfo* info : kernel_info_list)
+        {
+            if(ImGui::Selectable(info->name.c_str(), kernel_id == info->id))
+            {
+                m_compute_selection->SelectKernel(info->id);
+            }
+        }
+        ImGui::EndCombo();
+    }
+}
+
 //TODO: move these to their own files
-ComputeSummaryView::ComputeSummaryView(DataProvider& data_provider)
+ComputeTableView::ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
 {}
 
-ComputeKernelDetailsView::ComputeKernelDetailsView(DataProvider& data_provider)
+ComputeWorkloadView::ComputeWorkloadView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
-{}
-
-ComputeWorkloadView::ComputeWorkloadView(DataProvider& data_provider)
-: RocWidget()
-, m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
 {}
 
 ComputeTester::ComputeTester(DataProvider& data_provider)
@@ -538,9 +624,48 @@ ComputeTester::Render()
         ImGui::NewLine();
         ImGui::BeginDisabled(m_selections.metric_ids.empty() ||
                              m_selections.kernel_ids.empty());
-        if(ImGui::Button("Fetch", ImVec2(-1.0f, 0.0f)))
+
+        if(ImGui::Button("Clear all clients"))
         {
-            m_data_provider.ComputeModel().ClearMetricValues();
+            m_data_provider.ComputeModel().ClearAllMetricValues();
+        }
+        ImGui::SameLine();
+        uint64_t client_id = 0;
+        bool do_clear = false;
+        if(ImGui::Button("Clear client 1"))
+        {
+            client_id = 1;
+            do_clear = true;
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("Clear client 2"))
+        {
+            client_id = 2;
+            do_clear = true;
+        }
+        ImGui::SameLine();
+        bool do_fetch = false;
+        if(ImGui::Button("Fetch client 1"))
+        {
+            do_fetch = true;
+            client_id = 1;
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("Fetch client 2"))
+        {
+            do_fetch = true;
+            client_id = 2;
+        }
+
+        if(do_clear)
+        {
+            for(const uint32_t& kernel_id : m_selections.kernel_ids)
+            {
+                m_data_provider.ComputeModel().ClearMetricValues(client_id, kernel_id);
+            }
+        }
+        if(do_fetch)
+        {
             std::vector<uint32_t> kernel_ids;
             kernel_ids.insert(kernel_ids.end(), m_selections.kernel_ids.begin(),
                               m_selections.kernel_ids.end());
@@ -570,55 +695,134 @@ ComputeTester::Render()
                     }
                 }
             }
+
             m_data_provider.FetchMetrics(
-                MetricsRequestParams(workload.id, kernel_ids, metric_ids));
+                MetricsRequestParams(workload.id, kernel_ids, metric_ids, client_id));
         }
         ImGui::EndDisabled();
         ImGui::NewLine();
-        const std::vector<std::unique_ptr<MetricValue>>& metrics =
-            m_data_provider.ComputeModel().GetMetricsData();
-        if(ImGui::BeginTable(
-               "results", 5,
-               ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
-                   ImGuiTableFlags_SizingStretchSame,
-               ImVec2(0.0f, metrics.empty()
-                                ? ImGui::GetTextLineHeightWithSpacing()
-                                : ImGui::GetTextLineHeightWithSpacing() *
-                                      (1.0f + static_cast<float>(metrics.size())))))
+
+        // loop through clients (mock client ids 1 and 2)
+        for(uint64_t c_id : { 1, 2 })
         {
+            ImGui::Separator();
+            ImGui::Text("Client ID: %llu", c_id);
+            // Display fetched metrics for selected kernels
+            for(const uint32_t& kernel_id : m_selections.kernel_ids)
+            {
+
+                ImGui::Text("Metrics for Kernel ID: %u", kernel_id);
+                const std::vector<std::shared_ptr<MetricValue>>* metrics =
+                    m_data_provider.ComputeModel().GetMetricsData(c_id, kernel_id);
+                
+                if(metrics == nullptr)
+                {
+                    ImGui::TextDisabled("No metrics fetched for this kernel.");
+                    continue;
+                }
+                if(ImGui::BeginTable(
+                    "results", 5,
+                    ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                        ImGuiTableFlags_SizingStretchSame,
+                    ImVec2(0.0f, metrics->empty()
+                                        ? ImGui::GetTextLineHeightWithSpacing()
+                                        : ImGui::GetTextLineHeightWithSpacing() *
+                                            (1.0f + static_cast<float>(metrics->size())))))
+                {
+                    ImGui::TableSetupColumn("Metric ID");
+                    ImGui::TableSetupColumn("Metric Name");
+                    ImGui::TableSetupColumn("Kernel ID");
+                    ImGui::TableSetupColumn("Value Name");
+                    ImGui::TableSetupColumn("Value");
+                    ImGui::TableHeadersRow();
+                    if(metrics->empty())
+                    {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextDisabled("None");
+                    }
+                    for(const std::shared_ptr<MetricValue>& metric : *metrics)
+                    {
+                        if(metric && metric->entry && metric->kernel)
+                        {
+                            for(const std::pair<const std::string, double>& value :
+                                metric->values)
+                            {
+                                ImGui::TableNextRow();
+                                ImGui::TableNextColumn();
+                                ImGui::Text("%u.%u.%u", metric->entry->category_id,
+                                            metric->entry->table_id, metric->entry->id);
+                                ImGui::TableNextColumn();
+                                ImGui::Text(metric->entry->name.c_str());
+                                ImGui::TableNextColumn();
+                                ImGui::Text("%u", metric->kernel->id);
+                                ImGui::TableNextColumn();
+                                ImGui::Text(value.first.c_str());
+                                ImGui::TableNextColumn();
+                                ImGui::Text("%f", value.second);
+                            }
+                        }
+                    }
+                    ImGui::EndTable();
+                }
+            }
+        }
+        ImGui::EndChild();
+        
+        ImGui::NewLine();
+        ImGui::BeginChild("SOL", ImVec2(0, 0),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        ImGui::Text("Speed of light (SOL)");
+
+        TableKey table_key = { 2, 1 }; // SOL
+        //assume client id 1 and kernel id 1 for test
+        ComputeDataModel::MetricValuesByEntryId* sol_metrics =
+            m_data_provider.ComputeModel().GetMetricValuesByTable(1, 1, table_key.id);
+        if(!sol_metrics || sol_metrics->empty())
+        {
+            ImGui::TextDisabled("No SOL metrics available for client 1.");
+        }
+        else
+        {
+            if(ImGui::BeginTable("sol_table", 5,
+                              ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                                  ImGuiTableFlags_SizingStretchSame,
+                              ImVec2(0.0f, 0.0f))) {
             ImGui::TableSetupColumn("Metric ID");
             ImGui::TableSetupColumn("Metric Name");
             ImGui::TableSetupColumn("Kernel ID");
             ImGui::TableSetupColumn("Value Name");
             ImGui::TableSetupColumn("Value");
             ImGui::TableHeadersRow();
-            if(metrics.empty())
+            for(auto it = sol_metrics->begin(); it != sol_metrics->end(); ++it)
             {
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                ImGui::TextDisabled("None");
-            }
-            for(const std::unique_ptr<MetricValue>& metric : metrics)
-            {
-                if(metric)
+                const std::shared_ptr<MetricValue>& metric = it->second;
+                if(metric && metric->entry && metric->kernel)
                 {
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-                    ImGui::Text("%u.%u.%u", metric->entry.category_id,
-                                metric->entry.table_id, metric->entry.id);
-                    ImGui::TableNextColumn();
-                    ImGui::Text(metric->entry.name.c_str());
-                    ImGui::TableNextColumn();
-                    ImGui::Text("%u", metric->kernel.id);
-                    ImGui::TableNextColumn();
-                    ImGui::Text(metric->name.c_str());
-                    ImGui::TableNextColumn();
-                    ImGui::Text("%f", metric->value);
+                    for(const std::pair<const std::string, double>& value :
+                        metric->values)
+                    {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%u.%u.%u", metric->entry->category_id,
+                                    metric->entry->table_id, metric->entry->id);
+                        ImGui::TableNextColumn();
+                        ImGui::Text(metric->entry->name.c_str());
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%u", metric->kernel->id);
+                        ImGui::TableNextColumn();
+                        ImGui::Text(value.first.c_str());
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%f", value.second);
+                    }
                 }
             }
+
             ImGui::EndTable();
+            }
         }
         ImGui::EndChild();
+
         ImGui::NewLine();
         ImGui::BeginChild("roofline", ImVec2(0, 0),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);

@@ -34,7 +34,6 @@ public:
     bool QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocprofvis_controller_roofline_kernel_intensity_type_t& out) const;
     double MinX() const;
     double MaxX() const;
-    double DynamicMaxXFactor() const;
 
 private:
     struct Point {
@@ -45,11 +44,13 @@ private:
     {
         rocprofvis_controller_roofline_ceiling_bandwidth_type_t type;
         Point position;
+        double throughput;
     };
     struct CeilingCompute
     {
         rocprofvis_controller_roofline_ceiling_compute_type_t type;
         Point position;
+        double throughput;
     };
     struct CeilingRidge
     {
@@ -68,7 +69,6 @@ private:
     std::vector<CeilingCompute> m_ceilings_compute;
     std::vector<CeilingRidge> m_ceilings_ridge;
     std::vector<Intensity> m_intensities;
-    
 };
 
 }

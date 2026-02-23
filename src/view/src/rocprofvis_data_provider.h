@@ -334,12 +334,18 @@ public:
     bool FetchMetrics(const MetricsRequestParams& metrics_params);
     bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
 
+    void SetFetchMetricsCallback(
+        const std::function<void(const std::string&, uint64_t, bool)>& callback);
+
 private:
     void ProcessLoadComputeTrace(RequestInfo& req);
     void ProcessMetricsRequest(RequestInfo& req);
     void ProcessMetricPivotTable(RequestInfo& req);
 
     ComputeDataModel m_compute_model;
+
+    std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
+
 #endif
 };
 

@@ -11,10 +11,9 @@ namespace Controller
 // roofline_calc.py constants
 constexpr double kMinX = 0.01;
 constexpr double kMaxX = 1000.00;
-constexpr double KDynamicMaxXFactor = 1.2;
 
 Roofline::Roofline()
-: Handle(__kRPVControllerRooflinePropertiesFirst, __kRPVControllerRooflinePropertiesLast) 
+: Handle(__kRPVControllerRooflinePropertiesFirst, __kRPVControllerRooflinePropertiesLast)
 {}
 
 Roofline::~Roofline()
@@ -184,6 +183,19 @@ rocprofvis_result_t Roofline::GetDouble(rocprofvis_property_t property, uint64_t
                 }
                 break;
             }
+            case kRPVControllerRooflineCeilingComputeThroughputIndexed:
+            {
+                if(index < m_ceilings_compute.size())
+                {
+                    *value = m_ceilings_compute[index].throughput;
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
             case kRPVControllerRooflineCeilingBandwidthXIndexed:
             {
                 if(index < m_ceilings_bandwidth.size())
@@ -202,6 +214,19 @@ rocprofvis_result_t Roofline::GetDouble(rocprofvis_property_t property, uint64_t
                 if(index < m_ceilings_bandwidth.size())
                 {
                     *value = m_ceilings_bandwidth[index].position.y;
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerRooflineCeilingBandwidthThroughputIndexed:
+            {
+                if(index < m_ceilings_bandwidth.size())
+                {
+                    *value = m_ceilings_bandwidth[index].throughput;
                     result = kRocProfVisResultSuccess;
                 }
                 else
@@ -419,6 +444,19 @@ rocprofvis_result_t Roofline::SetDouble(rocprofvis_property_t property, uint64_t
             }
             break;
         }
+        case kRPVControllerRooflineCeilingComputeThroughputIndexed:
+        {
+            if(index < m_ceilings_compute.size())
+            {
+                m_ceilings_compute[index].throughput = value;
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
+            break;        
+        }
         case kRPVControllerRooflineCeilingBandwidthXIndexed:
         {
             if(index < m_ceilings_bandwidth.size())
@@ -444,6 +482,19 @@ rocprofvis_result_t Roofline::SetDouble(rocprofvis_property_t property, uint64_t
                 result = kRocProfVisResultOutOfRange;
             }
             break;
+        }
+        case kRPVControllerRooflineCeilingBandwidthThroughputIndexed:
+        {
+            if(index < m_ceilings_bandwidth.size())
+            {
+                m_ceilings_bandwidth[index].throughput = value;
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
+            break;        
         }
         case kRPVControllerRooflineCeilingRidgeXIndexed:
         {
@@ -511,6 +562,16 @@ bool Roofline::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocpr
     bool valid = true;
     switch(in)
     {
+        case kRPVComputeColumnWorkloadRooflineBenchMFMAF4Flops:
+        {
+            out = kRPVControllerRooflineCeilingComputeMFMAFP4;
+            break;
+        }
+        case kRPVComputeColumnWorkloadRooflineBenchMFMAF6Flops:
+        {
+            out = kRPVControllerRooflineCeilingComputeMFMAFP6;
+            break;
+        }
         case kRPVComputeColumnWorkloadRooflineBenchMFMAF8Flops:
         {
             out = kRPVControllerRooflineCeilingComputeMFMAFP8;
@@ -549,26 +610,6 @@ bool Roofline::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocpr
         case kRPVComputeColumnWorkloadRooflineBenchMFMAF64Flops:
         {
             out = kRPVControllerRooflineCeilingComputeMFMAFP64;
-            break;
-        }
-        case kRPVComputeColumnWorkloadRooflineBenchI8Ops:
-        {
-            out = kRPVControllerRooflineCeilingComputeVALUI8;
-            break;
-        }
-        case kRPVComputeColumnWorkloadRooflineBenchMFMAI8Ops:
-        {
-            out = kRPVControllerRooflineCeilingComputeMFMAI8;
-            break;
-        }
-        case kRPVComputeColumnWorkloadRooflineBenchI32Ops:
-        {
-            out = kRPVControllerRooflineCeilingComputeVALUI32;
-            break;
-        }
-        case kRPVComputeColumnWorkloadRooflineBenchI64Ops:
-        {
-            out = kRPVControllerRooflineCeilingComputeVALUI64;
             break;
         }
         default:
@@ -651,11 +692,6 @@ double Roofline::MinX() const
 double Roofline::MaxX() const
 {
     return kMaxX;
-}
-
-double Roofline::DynamicMaxXFactor() const
-{
-    return KDynamicMaxXFactor;
 }
 
 }

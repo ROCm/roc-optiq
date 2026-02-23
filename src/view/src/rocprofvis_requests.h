@@ -18,6 +18,26 @@ namespace RocProfVis
 namespace View
 {
 
+// Singleton class for creating unique IDs
+class IdGenerator
+{
+public:
+    static IdGenerator& GetInstance()
+    {
+        static IdGenerator instance;
+        return instance;
+    }
+
+    uint64_t GenerateId()
+    {
+        return ++m_current_id;
+    }
+
+private:
+    IdGenerator() : m_current_id(0) {}
+    uint64_t m_current_id;
+};
+
 enum class RequestType
 {
     kFetchTrack,
@@ -163,15 +183,17 @@ public:
     uint32_t              m_workload_id;
     std::vector<uint32_t> m_kernel_ids;
     std::vector<MetricID> m_metric_ids;
+    uint64_t              m_client_id;  // ID to identify the requester for the response
 
     MetricsRequestParams(const MetricsRequestParams& metrics_params)            = default;
     MetricsRequestParams& operator=(const MetricsRequestParams& metrics_params) = default;
 
     MetricsRequestParams(uint32_t workload_id, const std::vector<uint32_t>& kernel_ids,
-                         const std::vector<MetricID>& metric_ids)
+                         const std::vector<MetricID>& metric_ids, uint64_t client_id)
     : m_workload_id(workload_id)
     , m_kernel_ids(kernel_ids)
     , m_metric_ids(metric_ids)
+    , m_client_id(client_id)
     {}
 };
 

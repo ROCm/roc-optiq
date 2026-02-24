@@ -6,6 +6,7 @@
 #include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_compute_selection.h"
+#include "rocprofvis_compute_workload_view.h"
 
 namespace RocProfVis
 {

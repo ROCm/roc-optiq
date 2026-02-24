@@ -70,12 +70,8 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     tab_item.m_widget    = m_annotation_view;
     m_tab_container->AddTab(tab_item);
 
-    // Add AI Analysis Tab
-    tab_item.m_label     = "AI Analysis";
-    tab_item.m_id        = "ai_analysis";
-    tab_item.m_can_close = false;
-    tab_item.m_widget    = m_ai_analysis_view;
-    m_tab_container->AddTab(tab_item);
+    // NOTE: AI Analysis is now a standalone window, not a tab
+    // Access it via Tools -> AI Performance Insights or the "AI Insights" button
 
     m_tab_container->SetAllowToolTips(false);
     m_tab_container->SetActiveTab(0);

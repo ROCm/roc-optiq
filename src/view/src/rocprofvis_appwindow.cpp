@@ -361,6 +361,51 @@ AppWindow::Render()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         RenderDeveloperMenu();
 #endif
+
+        // AI Insights button (right-aligned, highlighted with gradient effect)
+        float button_width = 130.0f;
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - button_width);
+
+        // Gradient-style button (purple/blue for AI theme)
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.45f, 0.30f, 0.75f, 1.0f));        // Purple
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.55f, 0.40f, 0.85f, 1.0f)); // Lighter purple
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.40f, 0.25f, 0.65f, 1.0f));  // Darker purple
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 6.0f));
+
+        // AI Insights button - clean text, distinctive style
+        if(ImGui::Button("AI Insights", ImVec2(button_width - 10.0f, 0)))
+        {
+            if(project)
+            {
+                auto trace_view = project->GetTraceView();
+                if(trace_view)
+                {
+                    auto analysis_view = trace_view->GetAnalysisView();
+                    if(analysis_view)
+                    {
+                        auto ai_view = analysis_view->GetAiAnalysisView();
+                        if(ai_view)
+                        {
+                            ai_view->Show();
+                        }
+                    }
+                }
+            }
+        }
+
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(4);
+
+        // Tooltip
+        if(ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            ImGui::Text("Open AI Performance Insights (Ctrl+I)");
+            ImGui::EndTooltip();
+        }
+
         ImGui::EndMenuBar();
     }
     ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
@@ -385,6 +430,25 @@ AppWindow::Render()
     if(m_profiling_dialog)
     {
         m_profiling_dialog->Render();
+    }
+
+    // Render AI Analysis window if a project is open
+    Project* project = GetCurrentProject();
+    if(project)
+    {
+        auto trace_view = project->GetTraceView();
+        if(trace_view)
+        {
+            auto analysis_view = trace_view->GetAnalysisView();
+            if(analysis_view)
+            {
+                auto ai_view = analysis_view->GetAiAnalysisView();
+                if(ai_view)
+                {
+                    ai_view->Render();
+                }
+            }
+        }
     }
 
     ImGui::End();
@@ -734,14 +798,37 @@ AppWindow::RenderViewMenu(Project* project)
 void
 AppWindow::RenderToolsMenu(Project* project)
 {
-    (void) project;
-
     if(ImGui::BeginMenu("Tools"))
     {
+        // AI Performance Insights menu item
+        if(ImGui::MenuItem("AI Performance Insights...", "Ctrl+I"))
+        {
+            // Get current project's AI analysis view
+            if(project)
+            {
+                auto trace_view = project->GetTraceView();
+                if(trace_view)
+                {
+                    auto analysis_view = trace_view->GetAnalysisView();
+                    if(analysis_view)
+                    {
+                        auto ai_view = analysis_view->GetAiAnalysisView();
+                        if(ai_view)
+                        {
+                            ai_view->Show();
+                        }
+                    }
+                }
+            }
+        }
+
+        ImGui::Separator();
+
         if(ImGui::MenuItem("Run Profiling..."))
         {
             ShowProfilingDialog();
         }
+
         ImGui::EndMenu();
     }
 }

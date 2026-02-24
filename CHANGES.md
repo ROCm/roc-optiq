@@ -49,6 +49,15 @@
   - One-click re-profiling from AI analysis recommendations
   - Job queue monitor for tracking SLURM jobs
 
+**AI Analysis View**
+  - Redesigned dashboard-style UI with KPI cards for key metrics
+  - Visual summary showing bottleneck, confidence, kernel time, and runtime
+  - Stacked bar chart for execution time breakdown
+  - Card-based recommendations with priority badges and impact indicators
+  - Terminal-style command boxes with Copy and Run buttons
+  - Improved color contrast and readability for light/dark themes
+  - Standalone window accessible via purple "AI Insights" button in toolbar
+
 **Misc**
   - Project now builds on Mac OS. 
 

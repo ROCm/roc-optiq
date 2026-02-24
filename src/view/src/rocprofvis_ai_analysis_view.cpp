@@ -16,45 +16,68 @@ namespace RocProfVis
 namespace View
 {
 
-// ─── formatting helpers ──────────────────────────────────────────────────────
-
-std::string
-AiAnalysisView::FormatNs(long long ns)
-{
-    if(ns < 0) ns = 0;
-    if(ns < 1000LL) return std::to_string(ns) + " ns";
-    if(ns < 1000000LL) return std::to_string(ns / 1000) + " µs";
-    if(ns < 1000000000LL) return std::to_string(ns / 1000000) + " ms";
-    return std::to_string(ns / 1000000000LL) + " s";
-}
-
-std::string
-AiAnalysisView::FormatBytes(double bytes)
-{
-    if(bytes < 1024.0) return std::to_string((int)bytes) + " B";
-    if(bytes < 1024.0 * 1024.0) return std::to_string((int)(bytes / 1024.0)) + " KB";
-    if(bytes < 1024.0 * 1024.0 * 1024.0)
-        return std::to_string((int)(bytes / 1048576.0)) + " MB";
-    return std::to_string((int)(bytes / 1073741824.0)) + " GB";
-}
-
-ImVec4
-AiAnalysisView::PriorityColor(const std::string& priority)
-{
-    // Match HTML theme colors
-    if(priority == "HIGH") return ImVec4(1.0f, 0.27f, 0.27f, 1.0f);  // #ff4444 bright red
-    if(priority == "MEDIUM") return ImVec4(1.0f, 0.55f, 0.0f, 1.0f);  // #ff8c00 orange
-    if(priority == "LOW") return ImVec4(1.0f, 0.95f, 0.25f, 1.0f);  // yellow
-    return ImVec4(0.33f, 0.60f, 0.93f, 1.0f);  // #5599ee blue
-}
-
-// ─── AiAnalysisView ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTRUCTOR & THEME
+// ═══════════════════════════════════════════════════════════════════════════
 
 AiAnalysisView::AiAnalysisView()
 : m_loaded(false)
+, m_use_dark_theme(true)  // Kept for compatibility, but GetCurrentTheme() uses SettingsManager
+, m_show_window(false)
 {
-    m_widget_name = GenUniqueName("AI Analysis");
+    m_widget_name = GenUniqueName("AI Performance Insights");
+
+    // Initialize all sections - use actual card titles
+    m_section_expanded["Analysis Summary"] = true;  // Open by default
+    m_section_expanded["Execution Time Breakdown"] = false;
+    m_section_expanded["Optimization Recommendations"] = false;
+    m_section_expanded["Top Kernel Hotspots"] = false;
+    m_section_expanded["Memory Transfer Analysis"] = false;
+    m_section_expanded["Hardware Performance Metrics"] = false;
+    m_section_expanded["Warnings & Errors"] = false;
 }
+
+AiAnalysisView::ThemeColors
+AiAnalysisView::GetCurrentTheme() const
+{
+    ThemeColors theme;
+
+    // Sync with SettingsManager theme
+    bool use_dark = SettingsManager::GetInstance().GetUserSettings().display_settings.use_dark_mode;
+
+    if(use_dark)
+    {
+        // Dark theme - NVIDIA Nsight inspired with excellent readability
+        theme.background     = ImVec4(0.11f, 0.11f, 0.13f, 1.0f);  // Dark charcoal
+        theme.card_bg        = ImVec4(0.16f, 0.16f, 0.19f, 1.0f);  // Lighter card background
+        theme.text_primary   = ImVec4(0.95f, 0.95f, 0.96f, 1.0f);  // High contrast white
+        theme.text_secondary = ImVec4(0.70f, 0.70f, 0.73f, 1.0f);  // Medium gray
+        theme.border         = ImVec4(0.30f, 0.30f, 0.35f, 1.0f);  // Subtle borders
+        theme.success        = ImVec4(0.20f, 0.80f, 0.40f, 1.0f);  // Green
+        theme.warning        = ImVec4(1.00f, 0.70f, 0.00f, 1.0f);  // Orange
+        theme.critical       = ImVec4(0.95f, 0.30f, 0.30f, 1.0f);  // Red
+        theme.info           = ImVec4(0.30f, 0.70f, 1.00f, 1.0f);  // Blue
+    }
+    else
+    {
+        // Light theme - Intel VTune inspired with clean presentation
+        theme.background     = ImVec4(0.95f, 0.95f, 0.96f, 1.0f);  // Light gray background
+        theme.card_bg        = ImVec4(1.00f, 1.00f, 1.00f, 1.0f);  // Pure white cards
+        theme.text_primary   = ImVec4(0.13f, 0.13f, 0.13f, 1.0f);  // Dark text
+        theme.text_secondary = ImVec4(0.40f, 0.40f, 0.40f, 1.0f);  // Medium gray
+        theme.border         = ImVec4(0.82f, 0.82f, 0.82f, 1.0f);  // Light borders
+        theme.success        = ImVec4(0.13f, 0.59f, 0.25f, 1.0f);  // Green
+        theme.warning        = ImVec4(0.95f, 0.55f, 0.00f, 1.0f);  // Orange
+        theme.critical       = ImVec4(0.85f, 0.13f, 0.13f, 1.0f);  // Red
+        theme.info           = ImVec4(0.13f, 0.50f, 0.85f, 1.0f);  // Blue
+    }
+
+    return theme;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FILE LOADING
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::LoadFile(const std::string& path)
@@ -91,74 +114,118 @@ AiAnalysisView::LoadFile(const std::string& path)
     m_loaded    = true;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FORMATTING HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+std::string
+AiAnalysisView::FormatNs(long long ns)
+{
+    if(ns < 0) ns = 0;
+    if(ns < 1000LL) return std::to_string(ns) + " ns";
+    if(ns < 1000000LL) return std::to_string(ns / 1000) + " us";
+    if(ns < 1000000000LL) return std::to_string(ns / 1000000) + " ms";
+    return std::to_string(ns / 1000000000LL) + " s";
+}
+
+std::string
+AiAnalysisView::FormatBytes(double bytes)
+{
+    if(bytes < 1024.0) return std::to_string((int)bytes) + " B";
+    if(bytes < 1024.0 * 1024.0) return std::to_string((int)(bytes / 1024.0)) + " KB";
+    if(bytes < 1024.0 * 1024.0 * 1024.0)
+        return std::to_string((int)(bytes / 1048576.0)) + " MB";
+    return std::to_string((int)(bytes / 1073741824.0)) + " GB";
+}
+
+ImVec4
+AiAnalysisView::PriorityColor(const std::string& priority)
+{
+    auto theme = GetCurrentTheme();
+    if(priority == "HIGH") return theme.critical;
+    if(priority == "MEDIUM") return theme.warning;
+    if(priority == "LOW") return theme.info;
+    return theme.text_secondary;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════════════════════════════════════
+
 void
 AiAnalysisView::Render()
 {
-    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
+    if(!m_show_window) return;
 
-    if(!m_loaded)
-        RenderLoadScreen();
-    else
-        RenderAnalysisContent();
+    // Standard window size
+    ImGui::SetNextWindowSize(ImVec2(900, 700), ImGuiCond_FirstUseEver);
 
-    ImGui::EndChild();
+    // Center the window on first appearance
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
-    // Render command execution dialog if it exists
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_None;
+
+    if(ImGui::Begin("AI Performance Insights", &m_show_window, window_flags))
+    {
+        if(!m_loaded)
+            RenderLoadScreen();
+        else
+            RenderAnalysisContent();
+    }
+    ImGui::End();
+
+    // Command execution dialog
     if(m_command_execution_dialog)
     {
         m_command_execution_dialog->Render();
     }
 }
 
-// ─── load screen ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// LOAD SCREEN
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::RenderLoadScreen()
 {
-    auto& settings = SettingsManager::GetInstance();
+    auto theme = GetCurrentTheme();
 
     const float avail_w = ImGui::GetContentRegionAvail().x;
     const float avail_h = ImGui::GetContentRegionAvail().y;
 
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + avail_h * 0.35f);
+    // Center content vertically
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + avail_h * 0.3f);
 
-    // Title
-    const char* title = "GPU Performance Analysis";
-    ImGui::SetCursorPosX((avail_w - ImGui::CalcTextSize(title).x) * 0.5f);
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.72f, 0.92f, 1.0f));
-    ImGui::TextUnformatted(title);
-    ImGui::PopStyleColor();
+    // Title - centered
+    ImGui::SetCursorPosX((avail_w - ImGui::CalcTextSize("AI Performance Insights").x * 1.3f) * 0.5f);
+    ImGui::SetWindowFontScale(1.3f);
+    ImGui::TextUnformatted("AI Performance Insights");
+    ImGui::SetWindowFontScale(1.0f);
 
     ImGui::Spacing();
 
-    // Subtitle
-    const char* sub = "Load a rocpd analysis JSON to view insights and recommendations";
+    // Subtitle - centered
+    const char* sub = "Load analysis JSON to view insights";
     ImGui::SetCursorPosX((avail_w - ImGui::CalcTextSize(sub).x) * 0.5f);
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted(sub);
-    ImGui::PopStyleColor();
+    ImGui::TextDisabled("%s", sub);
 
-    // Error message (if any)
+    // Error message
     if(!m_load_error.empty())
     {
         ImGui::Spacing();
         ImGui::SetCursorPosX((avail_w - ImGui::CalcTextSize(m_load_error.c_str()).x) * 0.5f);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
-        ImGui::TextUnformatted(m_load_error.c_str());
-        ImGui::PopStyleColor();
+        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", m_load_error.c_str());
     }
 
     ImGui::Spacing();
     ImGui::Spacing();
 
-    // Browse button
-    const char* btn_label = "  Browse for JSON File...  ";
-    const float btn_w     = ImGui::CalcTextSize(btn_label).x + 24.0f;
+    // Browse button - centered
+    const float btn_w = 200.0f;
     ImGui::SetCursorPosX((avail_w - btn_w) * 0.5f);
-    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kButton));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kButtonHovered));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kButtonActive));
-    if(ImGui::Button(btn_label))
+
+    if(ImGui::Button("Open Analysis JSON", ImVec2(btn_w, 0)))
     {
         FileFilter filter;
         filter.m_name       = "JSON Analysis Files";
@@ -169,35 +236,32 @@ AiAnalysisView::RenderLoadScreen()
                 if(!path.empty()) LoadFile(path);
             });
     }
-    ImGui::PopStyleColor(3);
 
     // Hint
     ImGui::Spacing();
     ImGui::Spacing();
-    const char* hint = "Generate a JSON file with:   rocpd analyze -i trace.db --format json";
+
+    const char* hint = "Generate with: rocpd analyze -i trace.db --format json -o analysis.json";
     ImGui::SetCursorPosX((avail_w - ImGui::CalcTextSize(hint).x) * 0.5f);
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted(hint);
-    ImGui::PopStyleColor();
+    ImGui::TextDisabled("%s", hint);
 }
 
-// ─── analysis content ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN CONTENT
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::RenderAnalysisContent()
 {
-    auto& settings = SettingsManager::GetInstance();
-
-    // Top bar: file path + reload button
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted(m_file_path.c_str());
-    ImGui::PopStyleColor();
+    // ===== TOOLBAR =====
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextDisabled("File:");
     ImGui::SameLine();
-    ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - 152.0f);
-    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kButton));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kButtonHovered));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kButtonActive));
-    if(ImGui::SmallButton("  Load Different File  "))
+    ImGui::TextUnformatted(m_file_path.c_str());
+
+    // Right-aligned load button
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80.0f);
+    if(ImGui::Button("Load...", ImVec2(80.0f, 0)))
     {
         FileFilter filter;
         filter.m_name       = "JSON Analysis Files";
@@ -208,101 +272,281 @@ AiAnalysisView::RenderAnalysisContent()
                 if(!path.empty()) LoadFile(path);
             });
     }
-    ImGui::PopStyleColor(3);
 
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Scrollable analysis panels
-    ImGui::BeginChild("ai_analysis_scroll", ImVec2(0, 0), ImGuiChildFlags_None);
+    // ===== SCROLLABLE CONTENT =====
+    ImGui::BeginChild("##content", ImVec2(0, 0), ImGuiChildFlags_None);
 
     RenderOverview();
-    ImGui::Spacing();
     RenderExecutionBreakdown();
-    ImGui::Spacing();
     RenderRecommendations();
-    ImGui::Spacing();
     RenderHotspots();
-    ImGui::Spacing();
     RenderMemoryAnalysis();
-    ImGui::Spacing();
     RenderHardwareCounters();
-    ImGui::Spacing();
     RenderWarnings();
 
     ImGui::EndChild();
 }
 
-// ─── overview ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION HELPERS (using CollapsingHeader - standard ImGui pattern)
+// ═══════════════════════════════════════════════════════════════════════════
+
+void
+AiAnalysisView::BeginCard(const char* title, CardStatus status, const char* icon)
+{
+    auto theme = GetCurrentTheme();
+    m_current_card_title = title;
+
+    // Status color for the header
+    ImVec4 status_color;
+    switch(status)
+    {
+        case CardStatus::Success: status_color = theme.success; break;
+        case CardStatus::Warning: status_color = theme.warning; break;
+        case CardStatus::Critical: status_color = theme.critical; break;
+        case CardStatus::Info:
+        default: status_color = theme.info; break;
+    }
+
+    // Style the collapsing header
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(status_color.x * 0.3f, status_color.y * 0.3f, status_color.z * 0.3f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(status_color.x * 0.4f, status_color.y * 0.4f, status_color.z * 0.4f, 0.6f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(status_color.x * 0.5f, status_color.y * 0.5f, status_color.z * 0.5f, 0.7f));
+
+    // Use CollapsingHeader - the standard ImGui collapsible section
+    bool& is_open = m_section_expanded[title];
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None;
+    if(is_open)
+        flags |= ImGuiTreeNodeFlags_DefaultOpen;
+
+    is_open = ImGui::CollapsingHeader(title, flags);
+
+    ImGui::PopStyleColor(3);
+
+    if(is_open)
+    {
+        ImGui::Indent();
+    }
+}
+
+void
+AiAnalysisView::EndCard()
+{
+    if(m_section_expanded[m_current_card_title])
+    {
+        ImGui::Unindent();
+    }
+    ImGui::Spacing();
+}
+
+void
+AiAnalysisView::RenderMetricPill(const char* label, const char* value, ImVec4 color)
+{
+    auto theme = GetCurrentTheme();
+
+    // Simple inline metric display
+    ImGui::PushStyleColor(ImGuiCol_Text, theme.text_secondary);
+    ImGui::Text("%s:", label);
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
+    ImGui::Text("%s", value);
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    ImGui::Text(" "); // Spacer
+    ImGui::SameLine();
+}
+
+void
+AiAnalysisView::RenderProgressChart(const char* label, float percentage, ImVec4 color, const char* tooltip)
+{
+    auto theme = GetCurrentTheme();
+
+    // Compact label
+    ImGui::AlignTextToFramePadding();
+    ImGui::PushStyleColor(ImGuiCol_Text, theme.text_primary);
+    ImGui::Text("%s", label);
+    ImGui::PopStyleColor();
+
+    if(tooltip && ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("%s", tooltip);
+    }
+
+    ImGui::SameLine(200.0f);
+
+    char overlay[64];
+    std::snprintf(overlay, sizeof(overlay), "%.1f%%", percentage);
+
+    // Check global theme preference
+    bool use_dark = SettingsManager::GetInstance().GetUserSettings().display_settings.use_dark_mode;
+    ImVec4 bar_bg = use_dark ? ImVec4(0.18f, 0.18f, 0.22f, 1.0f)
+                             : ImVec4(0.87f, 0.87f, 0.87f, 1.0f);
+
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, bar_bg);
+    ImGui::ProgressBar(percentage / 100.0f, ImVec2(-1.0f, 0.0f), overlay);
+    ImGui::PopStyleColor(2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION: OVERVIEW - Dashboard-style KPI Cards
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::RenderOverview()
 {
-    auto& settings = SettingsManager::GetInstance();
-
-    // Dark theme header matching HTML --bg2: #16161f
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.09f, 0.09f, 0.12f, 1.0f));  // #16161f
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.12f, 0.12f, 0.18f, 1.0f));  // #1e1e2d
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.14f, 0.14f, 0.21f, 1.0f));  // #242436
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0 light text
-    if(!ImGui::CollapsingHeader("Overview", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::PopStyleColor(4);
-        return;
-    }
-    ImGui::PopStyleColor(4);
-
-    ImGui::Indent();
+    auto theme = GetCurrentTheme();
 
     jt::Json& summary   = m_data["summary"];
     jt::Json& prof_info = m_data["profiling_info"];
     jt::Json& meta      = m_data["metadata"];
+    jt::Json& exec_bd   = m_data["execution_breakdown"];
 
-    // Overall assessment text
-    if(summary.isObject() && summary["overall_assessment"].isString())
+    // Card status from confidence
+    CardStatus card_status = CardStatus::Info;
+    double confidence = summary.isObject() && summary["confidence"].isNumber()
+                        ? summary["confidence"].getNumber() : 0.0;
+
+    if(confidence >= 0.75)
+        card_status = CardStatus::Success;
+    else if(confidence >= 0.50)
+        card_status = CardStatus::Warning;
+    else
+        card_status = CardStatus::Info;
+
+    BeginCard("Analysis Summary", card_status, nullptr);
+
+    if(!m_section_expanded["Analysis Summary"])
     {
-        // Use default app text color (already light on dark background)
-        ImGui::TextWrapped("%s", summary["overall_assessment"].getString().c_str());
-        ImGui::Spacing();
-        ImGui::Spacing();
-        ImGui::Spacing();
+        EndCard();
+        return;
     }
 
-    // Bottleneck + confidence badges
-    if(summary.isObject())
+    // ═══ KPI GRID - Visual metrics ═══
+    // Get values from JSON
+    std::string bottleneck = summary.isObject() && summary["primary_bottleneck"].isString()
+                                 ? summary["primary_bottleneck"].getString()
+                                 : "Unknown";
+
+    double kernel_pct = exec_bd.isObject() && exec_bd["kernel_time_pct"].isNumber()
+                            ? exec_bd["kernel_time_pct"].getNumber() : 0.0;
+    long long total_ns = exec_bd.isObject() && exec_bd["total_runtime_ns"].isNumber()
+                             ? exec_bd["total_runtime_ns"].getLong() : 0LL;
+    int analysis_tier = prof_info.isObject() && prof_info["analysis_tier"].isNumber()
+                            ? (int)prof_info["analysis_tier"].getLong() : 1;
+
+    bool use_dark = SettingsManager::GetInstance().GetUserSettings().display_settings.use_dark_mode;
+
+    // KPI Cards in a 2x2 grid
+    const float avail_width = ImGui::GetContentRegionAvail().x;
+    const float kpi_width = (avail_width - ImGui::GetStyle().ItemSpacing.x) / 2.0f;
+    const float kpi_height = 75.0f;  // Taller for centered content
+
+    // Helper lambda for rendering KPI card - centered text, larger value
+    auto RenderKpiCard = [&](const char* id, const char* label, const char* value,
+                             const char* sublabel, ImVec4 accent_color) {
+        // Card background - subtle tint based on accent
+        ImVec4 card_bg = use_dark
+            ? ImVec4(accent_color.x * 0.12f, accent_color.y * 0.12f, accent_color.z * 0.12f, 0.6f)
+            : ImVec4(accent_color.x * 0.1f, accent_color.y * 0.1f, accent_color.z * 0.1f, 0.4f);
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, card_bg);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+
+        ImGui::BeginChild(id, ImVec2(kpi_width, kpi_height), ImGuiChildFlags_Borders);
+
+        // Top accent bar
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2 p = ImGui::GetWindowPos();
+        draw_list->AddRectFilled(p, ImVec2(p.x + kpi_width, p.y + 4.0f),
+            ImGui::ColorConvertFloat4ToU32(accent_color), 8.0f, ImDrawFlags_RoundCornersTop);
+
+        // Center everything
+        float content_height = ImGui::GetTextLineHeight() * 2.5f;  // Approximate
+        float start_y = (kpi_height - content_height) * 0.5f;
+        ImGui::SetCursorPosY(start_y);
+
+        // Label - centered, smaller
+        ImVec4 label_color = use_dark ? ImVec4(0.65f, 0.65f, 0.7f, 1.0f) : ImVec4(0.35f, 0.35f, 0.4f, 1.0f);
+        float label_width = ImGui::CalcTextSize(label).x;
+        ImGui::SetCursorPosX((kpi_width - label_width) * 0.5f);
+        ImGui::TextColored(label_color, "%s", label);
+
+        // Value - centered, large and bold
+        ImGui::SetWindowFontScale(1.5f);
+        float value_width = ImGui::CalcTextSize(value).x;
+        ImGui::SetCursorPosX((kpi_width - value_width) * 0.5f);
+        ImGui::TextColored(accent_color, "%s", value);
+        ImGui::SetWindowFontScale(1.0f);
+
+        // Sublabel - centered if exists
+        if(sublabel && sublabel[0])
+        {
+            float sub_width = ImGui::CalcTextSize(sublabel).x;
+            ImGui::SetCursorPosX((kpi_width - sub_width) * 0.5f);
+            ImGui::TextColored(label_color, "%s", sublabel);
+        }
+
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+    };
+
+    // Row 1: Bottleneck and Confidence
     {
-        std::string bottleneck = summary["primary_bottleneck"].isString()
-                                     ? summary["primary_bottleneck"].getString()
-                                     : "unknown";
-        double confidence =
-            summary["confidence"].isNumber() ? summary["confidence"].getNumber() : 0.0;
+        // Bottleneck color
+        ImVec4 bn_color = theme.info;
+        if(bottleneck == "memory" || bottleneck == "Memory")
+            bn_color = theme.warning;
+        else if(bottleneck == "compute" || bottleneck == "Compute")
+            bn_color = theme.success;
+        else if(bottleneck == "latency" || bottleneck == "Latency")
+            bn_color = ImVec4(0.65f, 0.35f, 0.85f, 1.0f);  // Purple
 
-        ImGui::Text("Primary Bottleneck:");
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.33f, 0.60f, 0.93f, 1.0f));  // #5599ee blue - bright
-        ImGui::TextUnformatted(bottleneck.c_str());
-        ImGui::PopStyleColor();
+        RenderKpiCard("kpi_bn", "BOTTLENECK", bottleneck.c_str(), "", bn_color);
 
-        ImGui::SameLine(0.0f, 50.0f);
-        ImGui::Text("Confidence:");
         ImGui::SameLine();
-        ImVec4 conf_color = (confidence >= 0.75) ? ImVec4(0.27f, 0.87f, 0.40f, 1.0f)  // #44dd66 green - bright
-                            : (confidence >= 0.50) ? ImVec4(1.0f, 0.55f, 0.0f, 1.0f)  // #ff8c00 orange - bright
-                                                   : ImVec4(0.70f, 0.70f, 0.70f, 1.0f);  // light gray
-        ImGui::PushStyleColor(ImGuiCol_Text, conf_color);
-        ImGui::Text("%.0f%%", confidence * 100.0);
-        ImGui::PopStyleColor();
-        ImGui::Spacing();
-        ImGui::Spacing();
+
+        // Confidence
+        ImVec4 conf_color = (confidence >= 0.75) ? theme.success
+                            : (confidence >= 0.50) ? theme.warning
+                                                   : theme.critical;
+        char conf_str[32];
+        std::snprintf(conf_str, sizeof(conf_str), "%.0f%%", confidence * 100.0);
+        RenderKpiCard("kpi_conf", "CONFIDENCE", conf_str, "", conf_color);
     }
 
-    // Key findings
+    ImGui::Spacing();
+
+    // Row 2: Kernel Time and Runtime
+    {
+        ImVec4 kernel_color = (kernel_pct >= 60.0) ? theme.success
+                            : (kernel_pct >= 35.0) ? theme.warning
+                                                   : theme.critical;
+        char kernel_str[32];
+        std::snprintf(kernel_str, sizeof(kernel_str), "%.1f%%", kernel_pct);
+        RenderKpiCard("kpi_kernel", "KERNEL TIME", kernel_str, "GPU compute", kernel_color);
+
+        ImGui::SameLine();
+
+        RenderKpiCard("kpi_runtime", "RUNTIME", FormatNs(total_ns).c_str(), "total", theme.info);
+    }
+
+    ImGui::Spacing();
+
+    // ═══ KEY FINDINGS - Brief list ═══
     if(summary.isObject() && summary["key_findings"].isArray() &&
        !summary["key_findings"].getArray().empty())
     {
+        ImGui::Separator();
         ImGui::Spacing();
-        ImGui::TextUnformatted("Key Findings:");
-        ImGui::Spacing();
+        ImGui::TextDisabled("Key Findings:");
+
         for(jt::Json& finding : summary["key_findings"].getArray())
         {
             if(finding.isString())
@@ -312,927 +556,795 @@ AiAnalysisView::RenderOverview()
         }
     }
 
-    ImGui::Spacing();
-    ImGui::Spacing();
-    ImGui::Spacing();
-
-    // Metadata row
-    if(meta.isObject())
+    // ═══ METADATA FOOTER ═══
+    if(meta.isObject() || prof_info.isObject())
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-        std::string ts  = meta["analysis_timestamp"].isString()
-                              ? meta["analysis_timestamp"].getString()
-                              : "";
-        std::string ver = meta["analysis_version"].isString()
-                              ? meta["analysis_version"].getString()
-                              : "";
-        std::string db =
-            meta["database_file"].isString() ? meta["database_file"].getString() : "";
+        ImGui::Spacing();
+        ImGui::Separator();
 
-        if(!ts.empty()) ImGui::Text("Analyzed:  %s", ts.c_str());
-        if(!ver.empty())
-        {
-            ImGui::SameLine(0.0f, 20.0f);
-            ImGui::Text("Schema v%s", ver.c_str());
-        }
-        if(!db.empty()) ImGui::Text("Source:    %s", db.c_str());
-        ImGui::PopStyleColor();
-    }
+        // Inline metadata using pills style
+        ImGui::TextDisabled("Tier %d", analysis_tier);
 
-    // Profiling tier + GPUs
-    if(prof_info.isObject())
-    {
-        if(prof_info["analysis_tier"].isNumber())
-            ImGui::Text("Analysis Tier: %lld",
-                        static_cast<long long>(prof_info["analysis_tier"].getLong()));
-
-        if(prof_info["gpus"].isArray())
+        // GPU info
+        if(prof_info.isObject() && prof_info["gpus"].isArray())
         {
             for(jt::Json& gpu : prof_info["gpus"].getArray())
             {
                 if(!gpu.isObject()) continue;
-                std::string name =
-                    gpu["name"].isString() ? gpu["name"].getString() : "Unknown GPU";
-                std::string arch =
-                    gpu["architecture"].isString() ? gpu["architecture"].getString() : "";
-                if(arch.empty())
-                    ImGui::BulletText("GPU: %s", name.c_str());
-                else
-                    ImGui::BulletText("GPU: %s  (%s)", name.c_str(), arch.c_str());
+                std::string name = gpu["name"].isString() ? gpu["name"].getString() : "Unknown GPU";
+                ImGui::SameLine();
+                ImGui::TextDisabled(" | GPU: %s", name.c_str());
             }
+        }
+
+        // Timestamp
+        if(meta.isObject() && meta["analysis_timestamp"].isString())
+        {
+            ImGui::SameLine();
+            ImGui::TextDisabled(" | %s", meta["analysis_timestamp"].getString().c_str());
         }
     }
 
-    ImGui::Unindent();
+    EndCard();
 }
 
-// ─── execution breakdown ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION: EXECUTION BREAKDOWN
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::RenderExecutionBreakdown()
 {
-    // Dark theme header
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.09f, 0.09f, 0.12f, 1.0f));  // #16161f
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.12f, 0.12f, 0.18f, 1.0f));  // #1e1e2d
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.14f, 0.14f, 0.21f, 1.0f));  // #242436
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0
-    if(!ImGui::CollapsingHeader("Execution Breakdown", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::PopStyleColor(4);
-        return;
-    }
-    ImGui::PopStyleColor(4);
+    auto theme = GetCurrentTheme();
 
     jt::Json& bd = m_data["execution_breakdown"];
-    if(!bd.isObject())
+    if(!bd.isObject()) return;
+
+    // Determine status
+    double kernel_pct = bd["kernel_time_pct"].isNumber() ? bd["kernel_time_pct"].getNumber() : 0.0;
+    double memcpy_pct = bd["memcpy_time_pct"].isNumber() ? bd["memcpy_time_pct"].getNumber() : 0.0;
+    double api_pct = bd["api_overhead_pct"].isNumber() ? bd["api_overhead_pct"].getNumber() : 0.0;
+
+    CardStatus card_status = CardStatus::Success;
+    if(memcpy_pct > 25.0 || api_pct > 15.0 || kernel_pct < 40.0)
+        card_status = CardStatus::Warning;
+    if(memcpy_pct > 40.0 || api_pct > 30.0 || kernel_pct < 25.0)
+        card_status = CardStatus::Critical;
+
+    BeginCard("Execution Time Breakdown", card_status, nullptr);
+
+    if(!m_section_expanded["Execution Time Breakdown"])
     {
-        ImGui::Indent();
-        ImGui::TextUnformatted("No breakdown data.");
-        ImGui::Unindent();
+        EndCard();
         return;
     }
 
-    ImGui::Indent();
+    long long total_ns = bd["total_runtime_ns"].isNumber() ? bd["total_runtime_ns"].getLong() : 0LL;
 
-    long long total_ns =
-        bd["total_runtime_ns"].isNumber() ? bd["total_runtime_ns"].getLong() : 0LL;
-    ImGui::Text("Total Runtime:");
+    // Total runtime
+    ImGui::TextDisabled("Total Runtime:");
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.27f, 0.87f, 0.40f, 1.0f));  // #44dd66 green - bright
-    ImGui::Text("%s", FormatNs(total_ns).c_str());
-    ImGui::PopStyleColor();
-    ImGui::Spacing();
-    ImGui::Spacing();
+    ImGui::TextColored(theme.info, "%s", FormatNs(total_ns).c_str());
     ImGui::Spacing();
 
-    struct BreakdownSection
+    // Time breakdown values
+    double kernel_pct_val = bd["kernel_time_pct"].isNumber() ? bd["kernel_time_pct"].getNumber() : 0.0;
+    double memcpy_pct_val = bd["memcpy_time_pct"].isNumber() ? bd["memcpy_time_pct"].getNumber() : 0.0;
+    double api_pct_val = bd["api_overhead_pct"].isNumber() ? bd["api_overhead_pct"].getNumber() : 0.0;
+    double idle_pct_val = bd["idle_time_pct"].isNumber() ? bd["idle_time_pct"].getNumber() : 0.0;
+
+    // Colors for each segment
+    ImVec4 kernel_color = theme.info;
+    ImVec4 memcpy_color = theme.warning;
+    ImVec4 api_color = ImVec4(0.60f, 0.40f, 0.80f, 1.0f);  // Purple
+    ImVec4 idle_color = theme.text_secondary;
+
+    // ═══ STACKED BAR CHART ═══
+    // Visual horizontal bar showing time distribution
+    const float bar_height = 28.0f;
+    const float bar_width = ImGui::GetContentRegionAvail().x;
+    ImVec2 bar_pos = ImGui::GetCursorScreenPos();
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    // Background
+    bool use_dark = SettingsManager::GetInstance().GetUserSettings().display_settings.use_dark_mode;
+    ImU32 bg_color = use_dark ? IM_COL32(40, 40, 50, 255) : IM_COL32(220, 220, 230, 255);
+    draw_list->AddRectFilled(bar_pos, ImVec2(bar_pos.x + bar_width, bar_pos.y + bar_height), bg_color, 4.0f);
+
+    // Draw segments
+    float x_offset = 0.0f;
+
+    // Kernel segment
+    if(kernel_pct_val > 0.0)
     {
-        const char* label;
-        const char* pct_key;
-        const char* ns_key;
-        ImVec4      color;
-    };
-
-    // Bright colors visible on dark background
-    const BreakdownSection sections[] = {
-        {"Kernel Execution", "kernel_time_pct", "kernel_time_ns",
-         {0.33f, 0.60f, 0.93f, 1.0f}},  // #5599ee blue - bright
-        {"Memory Copies", "memcpy_time_pct", "memcpy_time_ns",
-         {1.0f, 0.55f, 0.0f, 1.0f}},  // #ff8c00 orange - bright
-        {"API Overhead", "api_overhead_pct", "api_overhead_ns",
-         {0.60f, 0.40f, 0.80f, 1.0f}},  // #9966cc purple - bright
-        {"GPU Idle", "idle_time_pct", "idle_time_ns", {0.50f, 0.50f, 0.50f, 1.0f}},  // light gray
-    };
-
-    for(const auto& s : sections)
-    {
-        double    pct = bd[s.pct_key].isNumber() ? bd[s.pct_key].getNumber() : 0.0;
-        long long ns  = bd[s.ns_key].isNumber() ? bd[s.ns_key].getLong() : 0LL;
-
-        // Use default text color (already light)
-        ImGui::Text("%-20s", s.label);
-        ImGui::SameLine(350.0f);
-
-        char overlay[64];
-        std::snprintf(overlay, sizeof(overlay), "%.1f%%  (%s)", pct,
-                      FormatNs(ns).c_str());
-
-        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, s.color);
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.12f, 0.18f, 1.0f));  // #1e1e2d dark bg
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text on colored bar
-        ImGui::ProgressBar(static_cast<float>(pct / 100.0), ImVec2(-1.0f, 50.0f),
-                           overlay);
-        ImGui::PopStyleColor(3);
-
-        // Add tooltip with detailed information and guidance
-        if(ImGui::IsItemHovered())
-        {
-            ImGui::BeginTooltip();
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-            ImGui::Text("%s", s.label);
-            ImGui::Separator();
-            ImGui::Text("Percentage: %.2f%%", pct);
-            ImGui::Text("Time: %s", FormatNs(ns).c_str());
-            ImGui::Text("Total Runtime: %s", FormatNs(total_ns).c_str());
-            if(total_ns > 0)
-            {
-                double ratio = static_cast<double>(ns) / static_cast<double>(total_ns);
-                ImGui::Text("Ratio: %.4f", ratio);
-            }
-            ImGui::Spacing();
-
-            // Add guidance based on the section type
-            if(strcmp(s.label, "Kernel Execution") == 0)
-            {
-                ImGui::TextWrapped("Time spent running GPU kernels (compute work).");
-                ImGui::Spacing();
-                ImGui::TextWrapped("Target: 60-80%% for compute-heavy workloads.");
-                ImGui::TextWrapped("Low? Check for small kernels or launch overhead.");
-            }
-            else if(strcmp(s.label, "Memory Copies") == 0)
-            {
-                ImGui::TextWrapped("Time spent copying data between host and device.");
-                ImGui::Spacing();
-                ImGui::TextWrapped("Target: <15%% for optimal performance.");
-                ImGui::TextWrapped("High? Use pinned memory, async copies, or reduce transfers.");
-            }
-            else if(strcmp(s.label, "API Overhead") == 0)
-            {
-                ImGui::TextWrapped("CPU time for HIP/ROCm API calls and kernel launches.");
-                ImGui::Spacing();
-                ImGui::TextWrapped("Target: <10%% for GPU-bound work.");
-                ImGui::TextWrapped("High? Batch operations, use streams, or fuse kernels.");
-            }
-            else if(strcmp(s.label, "GPU Idle") == 0)
-            {
-                ImGui::TextWrapped("Time when GPU is idle waiting for work.");
-                ImGui::Spacing();
-                ImGui::TextWrapped("Target: Close to 0%%.");
-                ImGui::TextWrapped("High? Overlap work with async operations or reduce sync points.");
-            }
-
-            ImGui::PopStyleColor();
-            ImGui::EndTooltip();
-        }
-
-        ImGui::Spacing();
-        ImGui::Spacing();
+        float seg_width = (float)(kernel_pct_val / 100.0 * bar_width);
+        draw_list->AddRectFilled(
+            ImVec2(bar_pos.x + x_offset, bar_pos.y),
+            ImVec2(bar_pos.x + x_offset + seg_width, bar_pos.y + bar_height),
+            ImGui::ColorConvertFloat4ToU32(kernel_color), 4.0f);
+        x_offset += seg_width;
     }
 
-    ImGui::Unindent();
+    // Memory segment
+    if(memcpy_pct_val > 0.0)
+    {
+        float seg_width = (float)(memcpy_pct_val / 100.0 * bar_width);
+        draw_list->AddRectFilled(
+            ImVec2(bar_pos.x + x_offset, bar_pos.y),
+            ImVec2(bar_pos.x + x_offset + seg_width, bar_pos.y + bar_height),
+            ImGui::ColorConvertFloat4ToU32(memcpy_color), 0.0f);
+        x_offset += seg_width;
+    }
+
+    // API segment
+    if(api_pct_val > 0.0)
+    {
+        float seg_width = (float)(api_pct_val / 100.0 * bar_width);
+        draw_list->AddRectFilled(
+            ImVec2(bar_pos.x + x_offset, bar_pos.y),
+            ImVec2(bar_pos.x + x_offset + seg_width, bar_pos.y + bar_height),
+            ImGui::ColorConvertFloat4ToU32(api_color), 0.0f);
+        x_offset += seg_width;
+    }
+
+    // Idle segment
+    if(idle_pct_val > 0.0)
+    {
+        float seg_width = (float)(idle_pct_val / 100.0 * bar_width);
+        draw_list->AddRectFilled(
+            ImVec2(bar_pos.x + x_offset, bar_pos.y),
+            ImVec2(bar_pos.x + x_offset + seg_width, bar_pos.y + bar_height),
+            ImGui::ColorConvertFloat4ToU32(idle_color), 4.0f);
+    }
+
+    // Reserve space for the bar
+    ImGui::Dummy(ImVec2(bar_width, bar_height));
+    ImGui::Spacing();
+
+    // ═══ LEGEND ═══
+    // Inline legend with colored squares
+    auto RenderLegendItem = [&](const char* label, double pct, ImVec4 color) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+
+        // Colored square
+        float sq_size = 10.0f;
+        float y_offset = (ImGui::GetTextLineHeight() - sq_size) * 0.5f;
+        dl->AddRectFilled(ImVec2(pos.x, pos.y + y_offset),
+                          ImVec2(pos.x + sq_size, pos.y + y_offset + sq_size),
+                          ImGui::ColorConvertFloat4ToU32(color), 2.0f);
+
+        ImGui::Dummy(ImVec2(sq_size + 4.0f, 0.0f));
+        ImGui::SameLine();
+
+        // Use theme text color for label
+        ImGui::TextColored(color, "%.1f%%", pct);
+        ImGui::SameLine();
+        ImGui::TextColored(theme.text_primary, "%s", label);
+        ImGui::SameLine(0.0f, 20.0f);
+    };
+
+    RenderLegendItem("Kernel", kernel_pct_val, kernel_color);
+    RenderLegendItem("Memory", memcpy_pct_val, memcpy_color);
+    RenderLegendItem("API", api_pct_val, api_color);
+    RenderLegendItem("Idle", idle_pct_val, idle_color);
+
+    ImGui::NewLine();
+    ImGui::Spacing();
+
+    // ═══ DETAILED PROGRESS BARS ═══
+    RenderProgressChart("Kernel Execution", (float)kernel_pct_val, kernel_color, "Time executing GPU kernels");
+    RenderProgressChart("Memory Transfers", (float)memcpy_pct_val, memcpy_color, "Data movement");
+    RenderProgressChart("API Overhead", (float)api_pct_val, api_color, "ROCm API calls");
+    RenderProgressChart("GPU Idle Time", (float)idle_pct_val, idle_color, "GPU waiting");
+
+    EndCard();
 }
 
-// ─── recommendations ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION: RECOMMENDATIONS
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::RenderRecommendations()
 {
-    auto& settings = SettingsManager::GetInstance();
-
-    // Dark theme header
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.09f, 0.09f, 0.12f, 1.0f));  // #16161f
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.12f, 0.12f, 0.18f, 1.0f));  // #1e1e2d
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.14f, 0.14f, 0.21f, 1.0f));  // #242436
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0
-    if(!ImGui::CollapsingHeader("Optimization Recommendations",
-                                ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::PopStyleColor(4);
-        return;
-    }
-    ImGui::PopStyleColor(4);
+    auto theme = GetCurrentTheme();
+    bool use_dark = SettingsManager::GetInstance().GetUserSettings().display_settings.use_dark_mode;
 
     jt::Json& recs = m_data["recommendations"];
-    if(!recs.isArray() || recs.getArray().empty())
+    if(!recs.isArray() || recs.getArray().empty()) return;
+
+    // Card status from highest priority
+    CardStatus card_status = CardStatus::Info;
+    for(jt::Json& rec : recs.getArray())
     {
-        ImGui::Indent();
-        ImGui::TextUnformatted("No recommendations.");
-        ImGui::Unindent();
-        return;
+        if(!rec.isObject()) continue;
+        std::string priority = rec["priority"].isString() ? rec["priority"].getString() : "INFO";
+        if(priority == "HIGH") { card_status = CardStatus::Critical; break; }
+        else if(priority == "MEDIUM" && card_status != CardStatus::Critical)
+            card_status = CardStatus::Warning;
     }
 
-    ImGui::Indent();
+    BeginCard("Optimization Recommendations", card_status, nullptr);
+
+    if(!m_section_expanded["Optimization Recommendations"])
+    {
+        EndCard();
+        return;
+    }
 
     int idx = 0;
     for(jt::Json& rec : recs.getArray())
     {
-        if(!rec.isObject())
-        {
-            ++idx;
-            continue;
-        }
+        if(!rec.isObject()) { ++idx; continue; }
 
         std::string id       = rec["id"].isString() ? rec["id"].getString() : "???";
         std::string priority = rec["priority"].isString() ? rec["priority"].getString() : "INFO";
         std::string category = rec["category"].isString() ? rec["category"].getString() : "";
         std::string issue    = rec["issue"].isString() ? rec["issue"].getString() : "";
-        std::string suggest =
-            rec["suggestion"].isString() ? rec["suggestion"].getString() : "";
+        std::string suggest  = rec["suggestion"].isString() ? rec["suggestion"].getString() : "";
+        std::string impact   = rec["estimated_impact"].isString() ? rec["estimated_impact"].getString() : "";
 
-        // Header: "[HIGH]  ROCPD-MEMCPY-001  –  Memory Transfer###rec_0"
-        std::string header = "[" + priority + "]  " + id;
-        if(!category.empty()) header += "  \xe2\x80\x93  " + category;  // "–" in UTF-8
-        header += "###rec_" + std::to_string(idx);
+        ImVec4 priority_color = PriorityColor(priority);
+        bool has_commands = rec["commands"].isArray() && !rec["commands"].getArray().empty();
 
-        // Use default light text color for headers (good contrast on dark background)
-        bool open = ImGui::CollapsingHeader(header.c_str());
+        // ═══ RECOMMENDATION CARD ═══
+        // Subtle background tint based on priority
+        ImVec4 card_bg = use_dark
+            ? ImVec4(priority_color.x * 0.08f, priority_color.y * 0.08f, priority_color.z * 0.08f, 0.5f)
+            : ImVec4(priority_color.x * 0.05f, priority_color.y * 0.05f, priority_color.z * 0.05f, 0.3f);
 
-        if(open)
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, card_bg);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+
+        ImGui::BeginChild(("rec_card_" + std::to_string(idx)).c_str(),
+                          ImVec2(-1, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+
+        // Left accent bar
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2 win_pos = ImGui::GetWindowPos();
+        ImVec2 win_size = ImGui::GetWindowSize();
+        draw_list->AddRectFilled(win_pos, ImVec2(win_pos.x + 4.0f, win_pos.y + win_size.y),
+            ImGui::ColorConvertFloat4ToU32(priority_color), 6.0f, ImDrawFlags_RoundCornersLeft);
+
+        ImGui::Indent(12.0f);
+        ImGui::Spacing();
+
+        // ─── Header: Priority badge + Category ───
         {
-            ImGui::Indent();
+            // Priority badge with white text
+            ImGui::PushStyleColor(ImGuiCol_Button, priority_color);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, priority_color);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, priority_color);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::SmallButton(priority.c_str());
+            ImGui::PopStyleColor(4);
 
-            // Issue
-            if(!issue.empty())
-            {
-                ImGui::TextUnformatted("Issue:");
-                ImGui::SameLine();
-                ImGui::TextWrapped("%s", issue.c_str());
-                ImGui::Spacing();
-            }
+            ImGui::SameLine();
 
-            // Suggestion
-            if(!suggest.empty())
-            {
-                ImGui::TextUnformatted("What to do:");
-                ImGui::SameLine();
-                ImGui::TextWrapped("%s", suggest.c_str());
-                ImGui::Spacing();
-            }
-
-            // Action steps
-            if(rec["actions"].isArray() && !rec["actions"].getArray().empty())
-            {
-                ImGui::TextUnformatted("Steps:");
-                int step = 1;
-                for(jt::Json& action : rec["actions"].getArray())
-                {
-                    if(action.isString())
-                        ImGui::Text("  %d. %s", step++, action.getString().c_str());
-                }
-                ImGui::Spacing();
-            }
-
-            // Estimated impact
-            if(rec["estimated_impact"].isString() &&
-               !rec["estimated_impact"].getString().empty())
-            {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.30f, 0.82f, 0.42f, 1.0f));
-                ImGui::Text("Expected Impact: %s",
-                            rec["estimated_impact"].getString().c_str());
-                ImGui::PopStyleColor();
-                ImGui::Spacing();
-            }
-
-            // Profiling commands
-            if(rec["commands"].isArray() && !rec["commands"].getArray().empty())
-            {
-                ImGui::TextUnformatted("Profiling Commands:");
-
-                int ci = 0;
-                for(jt::Json& cmd : rec["commands"].getArray())
-                {
-                    if(!cmd.isObject())
-                    {
-                        ++ci;
-                        continue;
-                    }
-                    std::string tool     = cmd["tool"].isString() ? cmd["tool"].getString() : "";
-                    std::string desc     = cmd["description"].isString()
-                                              ? cmd["description"].getString()
-                                              : "";
-                    std::string full_cmd = cmd["full_command"].isString()
-                                              ? cmd["full_command"].getString()
-                                              : "";
-
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.33f, 0.60f, 0.93f, 1.0f));  // #5599ee blue for tool
-                    ImGui::BulletText("%s", tool.c_str());
-                    ImGui::PopStyleColor();
-
-                    if(!desc.empty() || !full_cmd.empty())
-                    {
-                        ImGui::Indent();
-
-                        if(!desc.empty())
-                        {
-                            ImGui::TextWrapped("%s", desc.c_str());
-                        }
-
-                        if(!full_cmd.empty())
-                        {
-                            // Command box - dark background with green monospace text (copyable)
-                            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.06f, 0.06f, 0.08f, 1.0f));  // #0e0e14 dark bg
-                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.66f, 0.91f, 0.47f, 1.0f));  // #a8e878 green
-                            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.17f, 0.17f, 0.27f, 1.0f));  // #2c2c44 border
-
-                            // Use InputTextMultiline for copyable text
-                            float cmd_h = ImGui::GetTextLineHeightWithSpacing() * 1.8f;
-
-                            // Create a mutable buffer (ImGui requires non-const)
-                            static char cmd_buffer[4096];
-                            std::strncpy(cmd_buffer, full_cmd.c_str(), sizeof(cmd_buffer) - 1);
-                            cmd_buffer[sizeof(cmd_buffer) - 1] = '\0';
-
-                            ImGui::InputTextMultiline(
-                                ("##cmd_" + std::to_string(idx) + "_" + std::to_string(ci)).c_str(),
-                                cmd_buffer, sizeof(cmd_buffer),
-                                ImVec2(-1.0f, cmd_h),
-                                ImGuiInputTextFlags_ReadOnly);
-
-                            ImGui::PopStyleColor(3);
-
-                            // Add "Run This Command" button
-                            ImGui::Spacing();
-                            if(ImGui::Button(("Run This Command##run_" + std::to_string(idx) + "_" + std::to_string(ci)).c_str()))
-                            {
-                                ExecuteRecommendationCommand(full_cmd, idx);
-                            }
-                        }
-
-                        ImGui::Unindent();
-                    }
-                    ++ci;
-                }
-            }
-
-            ImGui::Unindent();
+            // Category in primary text color
+            ImGui::TextColored(theme.text_primary, "%s", category.c_str());
         }
+
+        ImGui::Spacing();
+
+        // ─── Issue ───
+        if(!issue.empty())
+        {
+            ImGui::TextColored(theme.warning, "Issue:");
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, theme.text_primary);
+            ImGui::TextWrapped("%s", issue.c_str());
+            ImGui::PopStyleColor();
+            ImGui::Spacing();
+        }
+
+        // ─── Solution ───
+        if(!suggest.empty())
+        {
+            ImGui::TextColored(theme.info, "Solution:");
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, theme.text_primary);
+            ImGui::TextWrapped("%s", suggest.c_str());
+            ImGui::PopStyleColor();
+            ImGui::Spacing();
+        }
+
+        // ─── Action Steps ───
+        if(rec["actions"].isArray() && !rec["actions"].getArray().empty())
+        {
+            int step = 1;
+            for(jt::Json& action : rec["actions"].getArray())
+            {
+                if(action.isString())
+                {
+                    ImGui::TextColored(theme.text_secondary, "%d.", step++);
+                    ImGui::SameLine();
+                    ImGui::PushStyleColor(ImGuiCol_Text, theme.text_primary);
+                    ImGui::TextWrapped("%s", action.getString().c_str());
+                    ImGui::PopStyleColor();
+                }
+            }
+            ImGui::Spacing();
+        }
+
+        // ─── Impact ───
+        if(!impact.empty())
+        {
+            ImGui::TextColored(theme.success, "Expected Impact: %s", impact.c_str());
+            ImGui::Spacing();
+        }
+
+        // ─── Commands Section ───
+        if(has_commands)
+        {
+            ImGui::Separator();
+            ImGui::Spacing();
+            ImGui::TextColored(theme.text_primary, "Profiling Commands:");
+            ImGui::Spacing();
+
+            int ci = 0;
+            for(jt::Json& cmd : rec["commands"].getArray())
+            {
+                if(!cmd.isObject()) { ++ci; continue; }
+
+                std::string tool = cmd["tool"].isString() ? cmd["tool"].getString() : "";
+                std::string full_cmd = cmd["full_command"].isString() ? cmd["full_command"].getString() : "";
+                std::string desc = cmd["description"].isString() ? cmd["description"].getString() : "";
+
+                if(full_cmd.empty()) { ++ci; continue; }
+
+                // ─── Tool header (outside command box) ───
+                ImGui::TextColored(theme.info, "%s", tool.c_str());
+                if(!desc.empty())
+                {
+                    ImGui::SameLine();
+                    ImGui::TextColored(theme.text_secondary, "- %s", desc.c_str());
+                }
+
+                // ─── Command box - terminal style ───
+                ImVec4 terminal_bg = ImVec4(0.1f, 0.1f, 0.14f, 1.0f);  // Dark terminal background
+
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, terminal_bg);
+                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+                ImGui::BeginChild(("cmd_" + std::to_string(idx) + "_" + std::to_string(ci)).c_str(),
+                                  ImVec2(-1, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+
+                ImGui::Spacing();
+
+                // Command text with prompt - wrap if long
+                ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x - 10.0f);
+                ImGui::TextColored(ImVec4(0.5f, 0.95f, 0.5f, 1.0f), "$ %s", full_cmd.c_str());
+                ImGui::PopTextWrapPos();
+
+                ImGui::Spacing();
+                ImGui::EndChild();
+                ImGui::PopStyleVar();
+                ImGui::PopStyleColor();
+
+                // ─── Buttons row ───
+                ImGui::Spacing();
+
+                // Copy button
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.35f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.45f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                if(ImGui::Button(("Copy##copy_" + std::to_string(idx) + "_" + std::to_string(ci)).c_str()))
+                {
+                    ImGui::SetClipboardText(full_cmd.c_str());
+                }
+                ImGui::PopStyleColor(3);
+
+                ImGui::SameLine();
+
+                // Run button
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.6f, 0.9f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                if(ImGui::Button(("Run##run_" + std::to_string(idx) + "_" + std::to_string(ci)).c_str()))
+                {
+                    ExecuteRecommendationCommand(full_cmd, idx);
+                }
+                ImGui::PopStyleColor(3);
+
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ++ci;
+            }
+        }
+
+        ImGui::Unindent(12.0f);
+        ImGui::Spacing();
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
 
         ImGui::Spacing();
         ++idx;
     }
 
-    ImGui::Unindent();
+    EndCard();
 }
 
-// ─── hotspots ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION: HOTSPOTS
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::RenderHotspots()
 {
-    auto& settings = SettingsManager::GetInstance();
-
-    // Dark theme header
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.09f, 0.09f, 0.12f, 1.0f));  // #16161f
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.12f, 0.12f, 0.18f, 1.0f));  // #1e1e2d
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.14f, 0.14f, 0.21f, 1.0f));  // #242436
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.87f, 0.88f, 0.94f, 1.0f));  // #dde0f0
-    if(!ImGui::CollapsingHeader("Top Kernel Hotspots", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::PopStyleColor(4);
-        return;
-    }
-    ImGui::PopStyleColor(4);
+    auto theme = GetCurrentTheme();
 
     jt::Json& hotspots = m_data["hotspots"];
-    if(!hotspots.isArray() || hotspots.getArray().empty())
+    if(!hotspots.isArray() || hotspots.getArray().empty()) return;
+
+    // Card status
+    CardStatus card_status = CardStatus::Info;
+    if(!hotspots.getArray().empty())
     {
-        ImGui::Indent();
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-        ImGui::TextUnformatted("No kernel data available.");
-        ImGui::PopStyleColor();
-        ImGui::Unindent();
+        jt::Json& top = hotspots.getArray()[0];
+        if(top.isObject() && top["pct_of_total"].isNumber())
+        {
+            double pct = top["pct_of_total"].getNumber();
+            if(pct > 80.0) card_status = CardStatus::Critical;
+            else if(pct > 50.0) card_status = CardStatus::Warning;
+            else card_status = CardStatus::Success;
+        }
+    }
+
+    BeginCard("Top Kernel Hotspots", card_status, nullptr);
+
+    if(!m_section_expanded["Top Kernel Hotspots"])
+    {
+        EndCard();
         return;
     }
 
-    ImGui::Indent();  // MUCH larger font for table to match UI
+    ImGui::TextDisabled("Kernels consuming the most GPU time:");
+    ImGui::Spacing();
 
+    // Table - simple version
     constexpr ImGuiTableFlags kFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                       ImGuiTableFlags_Resizable |
-                                       ImGuiTableFlags_SizingStretchProp |
-                                       ImGuiTableFlags_ScrollY;
+                                       ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY;
 
-    const float row_h = ImGui::GetTextLineHeightWithSpacing() * 2.2f;  // Even taller rows
-    const size_t n    = hotspots.getArray().size();
-    // Make table very large - use available space or at least 600px
-    const float avail_h = ImGui::GetContentRegionAvail().y;
-    const float  tbl_h = std::max(std::min(static_cast<float>(n) * row_h + row_h * 2.5f, avail_h * 0.7f), 600.0f);
+    const size_t n = hotspots.getArray().size();
+    // Minimum height to show 5 items, max 400px
+    const float row_height = ImGui::GetTextLineHeightWithSpacing();
+    const float min_rows = 5.0f;
+    const float tbl_h = std::max(std::min(static_cast<float>(n + 1) * row_height, 400.0f),
+                                 (min_rows + 1) * row_height);
 
-    if(ImGui::BeginTable("ai_hotspots", 7, kFlags, ImVec2(0, tbl_h)))
+    if(ImGui::BeginTable("hotspots_tbl", 5, kFlags, ImVec2(0, tbl_h)))
     {
         ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("Rank", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn("Kernel Name", ImGuiTableColumnFlags_WidthStretch, 6.0f);
-        ImGui::TableSetupColumn("Calls", ImGuiTableColumnFlags_WidthFixed, 110.0f);
-        ImGui::TableSetupColumn("Total Time", ImGuiTableColumnFlags_WidthStretch, 1.8f);
-        ImGui::TableSetupColumn("Avg Time", ImGuiTableColumnFlags_WidthStretch, 1.5f);
-        ImGui::TableSetupColumn("Min Time", ImGuiTableColumnFlags_WidthStretch, 1.5f);
-        ImGui::TableSetupColumn("% Total", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("Rank", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+        ImGui::TableSetupColumn("Kernel", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Calls", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableHeadersRow();
 
-        // Custom header with better styling
-        ImGui::TableNextRow(ImGuiTableRowFlags_Headers, row_h * 0.9f);
-        for(int col = 0; col < 7; col++)
-        {
-            ImGui::TableSetColumnIndex(col);
-            const char* column_name = ImGui::TableGetColumnName(col);
-            ImGui::TableHeader(column_name);
-        }
-
+        // Rows
         for(jt::Json& k : hotspots.getArray())
         {
             if(!k.isObject()) continue;
 
-            int         rank  = k["rank"].isNumber() ? (int)k["rank"].getLong() : 0;
-            std::string name  = k["name"].isString() ? k["name"].getString() : "";
-            long long   calls = k["calls"].isNumber() ? k["calls"].getLong() : 0LL;
-            long long   total =
-                k["total_duration_ns"].isNumber() ? k["total_duration_ns"].getLong() : 0LL;
-            double    avg = k["avg_duration_ns"].isNumber() ? k["avg_duration_ns"].getNumber() : 0.0;
-            long long min_d =
-                k["min_duration_ns"].isNumber() ? k["min_duration_ns"].getLong() : 0LL;
+            int rank = k["rank"].isNumber() ? (int)k["rank"].getLong() : 0;
+            std::string name = k["name"].isString() ? k["name"].getString() : "";
+            long long calls = k["calls"].isNumber() ? k["calls"].getLong() : 0LL;
+            long long total = k["total_duration_ns"].isNumber() ? k["total_duration_ns"].getLong() : 0LL;
             double pct = k["pct_of_total"].isNumber() ? k["pct_of_total"].getNumber() : 0.0;
 
-            // Highlight hot kernels (>20% of total)
-            if(pct >= 20.0)
-                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                                       ImGui::ColorConvertFloat4ToU32(
-                                           ImVec4(0.45f, 0.20f, 0.20f, 0.60f)));
+            ImGui::TableNextRow();
 
-            ImGui::TableNextRow(ImGuiTableRowFlags_None, row_h * 0.85f);
+            ImGui::TableNextColumn();
+            ImGui::Text("#%d", rank);
 
-            // Use default light text color
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Text("%d", rank);
-            ImGui::TableSetColumnIndex(1);
+            ImGui::TableNextColumn();
             ImGui::TextUnformatted(name.c_str());
-            ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%lld", calls);
-            ImGui::TableSetColumnIndex(3);
-            ImGui::TextUnformatted(FormatNs(total).c_str());
-            ImGui::TableSetColumnIndex(4);
-            ImGui::TextUnformatted(FormatNs(static_cast<long long>(avg)).c_str());
-            ImGui::TableSetColumnIndex(5);
-            ImGui::TextUnformatted(FormatNs(min_d).c_str());
-            ImGui::TableSetColumnIndex(6);
-            // Highlight high percentage
-            if(pct >= 20.0)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.40f, 0.40f, 1.0f));  // Bright red for visibility
-                ImGui::Text("%.1f%%", pct);
-                ImGui::PopStyleColor();
-            }
-            else
-            {
-                ImGui::Text("%.1f%%", pct);
-            }
 
-            // Add tooltip when hovering on the kernel name
-            if(ImGui::TableGetColumnIndex() == 1 && ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-                ImGui::Text("Kernel: %s", name.c_str());
-                ImGui::Separator();
-                ImGui::Text("Rank: #%d", rank);
-                ImGui::Text("Calls: %lld", calls);
-                ImGui::Text("Total: %s", FormatNs(total).c_str());
-                ImGui::Text("Average: %s", FormatNs(static_cast<long long>(avg)).c_str());
-                ImGui::Text("Minimum: %s", FormatNs(min_d).c_str());
-                ImGui::Text("%% of Total: %.2f%%", pct);
-                ImGui::PopStyleColor();
-                ImGui::EndTooltip();
-            }
+            ImGui::TableNextColumn();
+            ImGui::Text("%lld", calls);
+
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(FormatNs(total).c_str());
+
+            ImGui::TableNextColumn();
+            if(pct >= 30.0)
+                ImGui::TextColored(theme.critical, "%.1f%%", pct);
+            else if(pct >= 15.0)
+                ImGui::TextColored(theme.warning, "%.1f%%", pct);
+            else
+                ImGui::TextColored(theme.success, "%.1f%%", pct);
         }
 
         ImGui::EndTable();
     }
 
-    ImGui::Unindent();
+    EndCard();
 }
 
-// ─── memory analysis ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION: MEMORY ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::RenderMemoryAnalysis()
 {
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.30f, 0.50f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.35f, 0.55f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.40f, 0.60f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-    if(!ImGui::CollapsingHeader("Memory Transfer Analysis",
-                                ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        ImGui::PopStyleColor(4);
-        return;
-    }
-    ImGui::PopStyleColor(4);
+    auto theme = GetCurrentTheme();
 
     jt::Json& mem = m_data["memory_analysis"];
-    if(!mem.isObject())
+    if(!mem.isObject()) return;
+
+    BeginCard("Memory Transfer Analysis", CardStatus::Info, nullptr);
+
+    if(!m_section_expanded["Memory Transfer Analysis"])
     {
-        ImGui::Indent();
-        ImGui::TextUnformatted("No memory transfer data.");
-        ImGui::Unindent();
+        EndCard();
         return;
     }
 
-    ImGui::Indent();
+    ImGui::TextDisabled("Data movement between host and device:");
+    ImGui::Spacing();
 
-    constexpr ImGuiTableFlags kFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                       ImGuiTableFlags_Resizable |
-                                       ImGuiTableFlags_SizingStretchProp;
+    // Simple Table
+    constexpr ImGuiTableFlags kFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
 
-    const float row_h = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
-
-    if(ImGui::BeginTable("ai_mem", 6, kFlags, ImVec2(0, row_h * 7.5f)))
+    if(ImGui::BeginTable("memory_tbl", 4, kFlags))
     {
-        ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("Direction", ImGuiTableColumnFlags_WidthStretch, 2.8f);
-        ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, 110.0f);
-        ImGui::TableSetupColumn("Total Bytes", ImGuiTableColumnFlags_WidthStretch, 1.5f);
-        ImGui::TableSetupColumn("Total Time", ImGuiTableColumnFlags_WidthStretch, 1.5f);
-        ImGui::TableSetupColumn("Avg Size", ImGuiTableColumnFlags_WidthStretch, 1.5f);
-        ImGui::TableSetupColumn("Bandwidth", ImGuiTableColumnFlags_WidthStretch, 1.5f);
+        ImGui::TableSetupColumn("Direction", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("Bytes", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("BW", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableHeadersRow();
 
-        // Custom header with better styling
-        ImGui::TableNextRow(ImGuiTableRowFlags_Headers, row_h * 0.9f);
-        for(int col = 0; col < 6; col++)
+        const char* directions[] = {"Host-to-Device", "Device-to-Host", "Device-to-Device"};
+        const char* dir_symbols[] = {"H->D", "D->H", "D<->D"};
+
+        for(int i = 0; i < 3; i++)
         {
-            ImGui::TableSetColumnIndex(col);
-            const char* column_name = ImGui::TableGetColumnName(col);
-            ImGui::TableHeader(column_name);
-        }
-
-        const char* directions[] = {"Host-to-Device", "Device-to-Host", "Device-to-Device",
-                                    "Peer-to-Peer", "Unknown"};
-
-        for(const char* dir : directions)
-        {
-            jt::Json& entry = mem[dir];
+            jt::Json& entry = mem[directions[i]];
             if(!entry.isObject()) continue;
 
-            long long count =
-                entry["count"].isNumber() ? entry["count"].getLong() : 0LL;
-            long long total_b =
-                entry["total_bytes"].isNumber() ? entry["total_bytes"].getLong() : 0LL;
-            long long total_t = entry["total_duration_ns"].isNumber()
-                                    ? entry["total_duration_ns"].getLong()
-                                    : 0LL;
-            double avg_b  = entry["avg_bytes"].isNumber() ? entry["avg_bytes"].getNumber() : 0.0;
-            double bw_gbs = entry["bandwidth_gbps"].isNumber()
-                                ? entry["bandwidth_gbps"].getNumber()
-                                : 0.0;
+            long long count   = entry["count"].isNumber() ? entry["count"].getLong() : 0LL;
+            long long total_b = entry["total_bytes"].isNumber() ? entry["total_bytes"].getLong() : 0LL;
+            double bw_gbs = entry["bandwidth_gbps"].isNumber() ? entry["bandwidth_gbps"].getNumber() : 0.0;
 
-            ImGui::TableNextRow(ImGuiTableRowFlags_None, row_h * 0.85f);
+            ImGui::TableNextRow();
 
-            // Use default light text color on dark table background
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted(dir);
-            ImGui::TableSetColumnIndex(1);
+            ImGui::TableNextColumn();
+            ImGui::Text("%s", dir_symbols[i]);
+
+            ImGui::TableNextColumn();
             ImGui::Text("%lld", count);
-            ImGui::TableSetColumnIndex(2);
+
+            ImGui::TableNextColumn();
             ImGui::TextUnformatted(FormatBytes(static_cast<double>(total_b)).c_str());
-            ImGui::TableSetColumnIndex(3);
-            ImGui::TextUnformatted(FormatNs(total_t).c_str());
-            ImGui::TableSetColumnIndex(4);
-            ImGui::TextUnformatted(FormatBytes(avg_b).c_str());
-            ImGui::TableSetColumnIndex(5);
-            ImGui::Text("%.2f GB/s", bw_gbs);
+
+            ImGui::TableNextColumn();
+            if(bw_gbs < 5.0)
+                ImGui::TextColored(theme.critical, "%.1f GB/s", bw_gbs);
+            else if(bw_gbs < 15.0)
+                ImGui::TextColored(theme.warning, "%.1f GB/s", bw_gbs);
+            else
+                ImGui::TextColored(theme.success, "%.1f GB/s", bw_gbs);
         }
 
         ImGui::EndTable();
     }
 
-    ImGui::Unindent();
+    EndCard();
 }
 
-// ─── hardware counters ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION: HARDWARE COUNTERS
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::RenderHardwareCounters()
 {
-    auto& settings = SettingsManager::GetInstance();
+    auto theme = GetCurrentTheme();
 
     jt::Json& hw = m_data["hardware_counters"];
     if(!hw.isObject()) return;
 
-    const bool has_counters =
-        hw["has_counters"].isBool() && hw["has_counters"].getBool();
-    const ImGuiTreeNodeFlags flags =
-        has_counters ? ImGuiTreeNodeFlags_DefaultOpen : 0;
+    const bool has_counters = hw["has_counters"].isBool() && hw["has_counters"].getBool();
 
-    if(!ImGui::CollapsingHeader("Hardware Counters", flags)) return;
+    CardStatus card_status = CardStatus::Info;
+    if(has_counters)
+    {
+        jt::Json& metrics = hw["metrics"];
+        if(metrics.isObject() && metrics["gpu_utilization_pct"].isNumber())
+        {
+            double util = metrics["gpu_utilization_pct"].getNumber();
+            if(util >= 70.0) card_status = CardStatus::Success;
+            else if(util >= 40.0) card_status = CardStatus::Warning;
+            else card_status = CardStatus::Critical;
+        }
+    }
 
-    ImGui::Indent();
+    BeginCard("Hardware Performance Metrics", card_status, nullptr);
+
+    if(!m_section_expanded["Hardware Performance Metrics"])
+    {
+        EndCard();
+        return;
+    }
 
     if(!has_counters)
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-        ImGui::TextUnformatted("No hardware counter data in this trace.");
-        ImGui::Spacing();
-        ImGui::TextUnformatted(
-            "Collect counters with:   rocprofv3 --pmc GRBM_COUNT GRBM_GUI_ACTIVE "
-            "SQ_WAVES -- ./app");
-        ImGui::PopStyleColor();
-        ImGui::Unindent();
+        ImGui::TextDisabled("No hardware counter data in this trace.");
+        ImGui::TextDisabled("Collect with: rocprofv3 --pmc ... -- ./app");
+        EndCard();
         return;
     }
 
     jt::Json& metrics = hw["metrics"];
     if(metrics.isObject())
     {
-        // GPU utilization bar
+        ImGui::TextDisabled("Low-level GPU performance counters:");
+        ImGui::Spacing();
+
+        // GPU utilization
         if(metrics["gpu_utilization_pct"].isNumber())
         {
             double util = metrics["gpu_utilization_pct"].getNumber();
+            ImVec4 util_color = util >= 70.0 ? theme.success
+                                : util >= 40.0 ? theme.warning
+                                               : theme.critical;
 
-            ImGui::Text("GPU Utilization:");
-            if(ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-                ImGui::Text("GPU Utilization");
-                ImGui::Separator();
-                ImGui::TextWrapped("Percentage of time the GPU was actively executing work.");
-                ImGui::Spacing();
-                ImGui::TextWrapped("Why it matters:");
-                ImGui::BulletText("High utilization (>70%%) = GPU is kept busy");
-                ImGui::BulletText("Low utilization (<70%%) = GPU is waiting or underutilized");
-                ImGui::Spacing();
-                ImGui::TextWrapped("How to improve:");
-                ImGui::BulletText("Launch more work or larger kernels");
-                ImGui::BulletText("Reduce CPU-GPU synchronization");
-                ImGui::BulletText("Overlap compute with memory transfers");
-                ImGui::PopStyleColor();
-                ImGui::EndTooltip();
-            }
-            ImGui::SameLine(190.0f);
-
-            char overlay[32];
-            std::snprintf(overlay, sizeof(overlay), "%.1f%%", util);
-
-            ImVec4 bar_color = util >= 70.0 ? ImVec4(0.20f, 0.80f, 0.32f, 1.0f)
-                                            : ImVec4(0.90f, 0.42f, 0.12f, 1.0f);
-            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, bar_color);
-            ImGui::ProgressBar(static_cast<float>(util / 100.0), ImVec2(-1.0f, 18.0f),
-                               overlay);
-            ImGui::PopStyleColor();
-
-            if(ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-                ImGui::Text("Current: %.1f%%", util);
-                if(util >= 70.0)
-                    ImGui::TextWrapped("Good! GPU is well-utilized.");
-                else
-                    ImGui::TextWrapped("Low - GPU is underutilized. See recommendations below.");
-                ImGui::PopStyleColor();
-                ImGui::EndTooltip();
-            }
+            RenderProgressChart("GPU Utilization", static_cast<float>(util), util_color, "Target: >70%");
 
             if(util < 70.0)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.42f, 0.12f, 1.0f));
-                ImGui::TextUnformatted(
-                    "  Low GPU utilization — consider increasing parallelism or "
-                    "hiding latency with more waves.");
-                ImGui::PopStyleColor();
+                ImGui::TextColored(theme.warning, "  Low utilization - increase parallelism");
             }
-            ImGui::Spacing();
         }
 
         // Wave occupancy
         if(metrics["avg_waves"].isNumber())
         {
             double avg_waves = metrics["avg_waves"].getNumber();
-            double max_waves =
-                metrics["max_waves"].isNumber() ? metrics["max_waves"].getNumber() : avg_waves;
-            double min_waves =
-                metrics["min_waves"].isNumber() ? metrics["min_waves"].getNumber() : avg_waves;
-            ImGui::Text("Wave Count:  avg %.0f   max %.0f   min %.0f", avg_waves,
-                        max_waves, min_waves);
-
-            if(ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-                ImGui::Text("Wave Occupancy");
-                ImGui::Separator();
-                ImGui::TextWrapped("Number of wavefronts (groups of 64 threads) executing simultaneously per SIMD unit.");
-                ImGui::Spacing();
-                ImGui::TextWrapped("Why it matters:");
-                ImGui::BulletText("Higher waves = better GPU utilization");
-                ImGui::BulletText("AMD GPUs can typically run 16-32 waves per CU");
-                ImGui::BulletText("Low waves (<16) = resources are limiting parallelism");
-                ImGui::Spacing();
-                ImGui::TextWrapped("Common limiters:");
-                ImGui::BulletText("Too many registers per thread");
-                ImGui::BulletText("Too much LDS (local shared memory) per workgroup");
-                ImGui::BulletText("Workgroup size too small");
-                ImGui::Spacing();
-                ImGui::TextWrapped("How to improve:");
-                ImGui::BulletText("Reduce register pressure (use fewer variables)");
-                ImGui::BulletText("Reduce LDS usage or increase workgroup size");
-                ImGui::BulletText("Use rocprof-compute to analyze occupancy limits");
-                ImGui::PopStyleColor();
-                ImGui::EndTooltip();
-            }
+            ImGui::TextDisabled("Waves:");
+            ImGui::SameLine();
+            ImGui::Text("%.0f avg", avg_waves);
 
             if(avg_waves < 16.0)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.58f, 0.10f, 1.0f));
-                ImGui::TextUnformatted(
-                    "  Low wave occupancy — check register usage and LDS allocation.");
-                ImGui::PopStyleColor();
+                ImGui::TextColored(theme.warning, "  Low occupancy - check register pressure");
             }
         }
     }
 
-    ImGui::Unindent();
+    EndCard();
 }
 
-// ─── warnings ────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION: WARNINGS
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::RenderWarnings()
 {
-    auto& settings = SettingsManager::GetInstance();
+    auto theme = GetCurrentTheme();
 
     jt::Json& warnings = m_data["warnings"];
     jt::Json& errors   = m_data["errors"];
 
-    const bool has_warnings =
-        warnings.isArray() && !warnings.getArray().empty();
-    const bool has_errors = errors.isArray() && !errors.getArray().empty();
+    const bool has_warnings = warnings.isArray() && !warnings.getArray().empty();
+    const bool has_errors   = errors.isArray() && !errors.getArray().empty();
 
     if(!has_warnings && !has_errors) return;
 
-    if(!ImGui::CollapsingHeader("Warnings & Errors")) return;
+    CardStatus card_status = has_errors ? CardStatus::Critical : CardStatus::Warning;
 
-    ImGui::Indent();
+    BeginCard("Warnings & Errors", card_status, nullptr);
 
+    if(!m_section_expanded["Warnings & Errors"])
+    {
+        EndCard();
+        return;
+    }
+
+    // Errors
     if(has_errors)
     {
+        ImGui::TextColored(theme.critical, "Errors:");
         for(jt::Json& err : errors.getArray())
         {
             if(err.isString())
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.30f, 0.30f, 1.0f));
-                ImGui::BulletText("[ERROR] %s", err.getString().c_str());
-                ImGui::PopStyleColor();
+                ImGui::BulletText("%s", err.getString().c_str());
             }
         }
-        if(has_warnings) ImGui::Spacing();
+        ImGui::Spacing();
     }
 
+    // Warnings
     if(has_warnings)
     {
+        ImGui::TextColored(theme.warning, "Warnings:");
         for(jt::Json& w : warnings.getArray())
         {
             if(!w.isObject()) continue;
 
-            std::string sev = w["severity"].isString() ? w["severity"].getString() : "warning";
             std::string msg = w["message"].isString() ? w["message"].getString() : "";
-            std::string rec =
-                w["recommendation"].isString() ? w["recommendation"].getString() : "";
-
-            ImVec4 color = (sev == "warning")
-                               ? ImVec4(0.90f, 0.62f, 0.12f, 1.0f)
-                               : ImGui::ColorConvertU32ToFloat4(
-                                     settings.GetColor(Colors::kTextDim));
-            ImGui::PushStyleColor(ImGuiCol_Text, color);
-            ImGui::BulletText("[%s] %s", sev.c_str(), msg.c_str());
-            ImGui::PopStyleColor();
-
-            if(!rec.empty())
-            {
-                ImGui::Indent();
-                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-                ImGui::TextWrapped("Tip: %s", rec.c_str());
-                ImGui::PopStyleColor();
-                ImGui::Unindent();
-            }
+            ImGui::BulletText("%s", msg.c_str());
         }
     }
 
-    ImGui::Unindent();
+    EndCard();
 }
 
-// ─── command execution ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// COMMAND EXECUTION
+// ═══════════════════════════════════════════════════════════════════════════
 
 void
 AiAnalysisView::ExecuteRecommendationCommand(const std::string& command, int recommendation_index)
 {
-    // Parse tool arguments from the command
     std::string tool_args = ParseToolArgsFromCommand(command);
 
     if(tool_args.empty())
     {
         AppWindow::GetInstance()->ShowMessageDialog("Error",
-            "Could not parse profiling tool arguments from recommendation command:\n\n" + command);
+            "Could not parse profiling tool arguments from command:\n\n" + command);
         return;
     }
 
-    // Directly show profiling dialog with the tool args
-    // The AppWindow method will handle showing confirmation and checking for stored config
     AppWindow::GetInstance()->ShowProfilingDialogWithRecommendation(tool_args);
 }
 
 std::string
 AiAnalysisView::ParseToolArgsFromCommand(const std::string& command)
 {
-    // The command format is typically:
-    // rocprofv3 [TOOL_ARGS] [APP_PATH] [APP_ARGS]
-    // or
-    // rocprofv3 [TOOL_ARGS] -d [OUTPUT_DIR] -o [OUTPUT_FILE] -- [APP_PATH] [APP_ARGS]
-    //
-    // We need to extract the tool arguments (flags between rocprofv3 and the application)
-    // EXCLUDING -d and -o flags which conflict with the profiling dialog's output settings
-
-    // Find "rocprofv3" or "rocprof-compute" or "rocprof-sys" or "rocprofsys"
+    // Find tool name
     size_t tool_pos = command.find("rocprofv3");
-    if(tool_pos == std::string::npos)
-    {
-        tool_pos = command.find("rocprofsys");
-    }
-    if(tool_pos == std::string::npos)
-    {
-        tool_pos = command.find("rocprof-compute");
-    }
-    if(tool_pos == std::string::npos)
-    {
-        tool_pos = command.find("rocprof-sys");
-    }
-    if(tool_pos == std::string::npos)
-    {
-        return "";
-    }
+    if(tool_pos == std::string::npos) tool_pos = command.find("rocprofsys");
+    if(tool_pos == std::string::npos) tool_pos = command.find("rocprof-compute");
+    if(tool_pos == std::string::npos) tool_pos = command.find("rocprof-sys");
+    if(tool_pos == std::string::npos) return "";
 
-    // Find the end of the tool name
     size_t args_start = command.find(' ', tool_pos);
-    if(args_start == std::string::npos)
-    {
-        return "";
-    }
+    if(args_start == std::string::npos) return "";
 
-    // Skip whitespace
     args_start = command.find_first_not_of(' ', args_start);
-    if(args_start == std::string::npos)
-    {
-        return "";
-    }
+    if(args_start == std::string::npos) return "";
 
-    // Parse arguments, excluding -d, -o, --output-dir, --output-file
+    // Parse arguments, excluding -d, -o, --output
     std::string args = command.substr(args_start);
     std::string result;
 
     std::istringstream iss(args);
     std::string token;
-    bool skip_next = false;  // Skip the value after -d or -o
+    bool skip_next = false;
 
     while(iss >> token)
     {
-        // If we need to skip this token (it's a value for -d or -o)
         if(skip_next)
         {
             skip_next = false;
             continue;
         }
 
-        // Check if this is an option to exclude
-        if(token == "-d" || token == "-o" ||
-           token == "--output-dir" || token == "--output-file" ||
-           token == "--output")
+        if(token == "-d" || token == "-o" || token == "--output-dir" ||
+           token == "--output-file" || token == "--output")
         {
-            // Skip this option and its value
             skip_next = true;
             continue;
         }
 
-        // If token starts with -, it's an option flag
         if(token[0] == '-')
         {
-            // Add to result
             if(!result.empty()) result += " ";
             result += token;
         }
-        // If token looks like a path (starts with / or ./ or contains /app), stop parsing
         else if(token[0] == '/' || token.find("./") != std::string::npos ||
                 token.find("/app") != std::string::npos || token == "--")
         {
             break;
         }
-        // Otherwise it might be an option value - include it
         else if(!result.empty())
         {
             result += " " + token;

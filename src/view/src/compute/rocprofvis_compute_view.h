@@ -48,17 +48,6 @@ private:
     std::shared_ptr<RocCustomWidget> m_tool_bar;
 };
 
-class ComputeWorkloadView: public RocWidget
-{
-public:
-    ComputeWorkloadView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
-    ~ComputeWorkloadView(){};
-
-protected:
-    DataProvider& m_data_provider;
-    std::shared_ptr<ComputeSelection> m_compute_selection;
-};
-
 class ComputeTester : public RocWidget
 {
 public:

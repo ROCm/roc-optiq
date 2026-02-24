@@ -235,11 +235,12 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
         category_has_data = true;
 
         int value_columns = std::max(1, static_cast<int>(tbl.value_names.size()));
-        int num_columns   = 1 + value_columns + 1;  // Metric + values + Unit
+        int num_columns   = 1 + 1 + value_columns + 1;  // ID + Metric + values + Unit
 
         ImGui::SeparatorText(tbl.name.c_str());
         if(ImGui::BeginTable("##t", num_columns, ImGuiTableFlags_Borders))
         {
+            ImGui::TableSetupColumn("Metric ID");
             ImGui::TableSetupColumn("Metric");
             if(tbl.value_names.empty())
             {
@@ -258,9 +259,24 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
                 uint32_t    eid   = entry_pair.first;
                 const auto& entry = entry_pair.second;
 
+                std::string metric_id = std::to_string(cat.id) + "." +
+                                        std::to_string(tbl_id) + "." +
+                                        std::to_string(eid);
+
+                ImGui::PushID(static_cast<int>(eid));
                 ImGui::TableNextRow();
+
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted(entry.name.c_str());
+                CopyableTextUnformatted(metric_id.c_str(), "##mid",
+                                        COPY_DATA_NOTIFICATION, false, true);
+
+                ImGui::TableNextColumn();
+                CopyableTextUnformatted(entry.name.c_str(), "##name",
+                                        COPY_DATA_NOTIFICATION, false, true);
+                if(!entry.description.empty() && ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", entry.description.c_str());
+                }
 
                 if(tbl.value_names.empty())
                 {
@@ -269,7 +285,10 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
                         m_client_id, kernel_id, cat.id, tbl_id, eid);
                     if(mv && mv->entry && !mv->values.empty())
                     {
-                        ImGui::Text("%.2f", mv->values.begin()->second);
+                        char buf[64];
+                        snprintf(buf, sizeof(buf), "%.2f", mv->values.begin()->second);
+                        CopyableTextUnformatted(buf, "##val",
+                                                COPY_DATA_NOTIFICATION, false, true);
                     }
                     else
                     {
@@ -278,6 +297,7 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
                 }
                 else
                 {
+                    int vi = 0;
                     for(const auto& vn : tbl.value_names)
                     {
                         ImGui::TableNextColumn();
@@ -285,24 +305,32 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
                             m_client_id, kernel_id, cat.id, tbl_id, eid);
                         if(mv && mv->entry && mv->values.count(vn))
                         {
-                            ImGui::Text("%.2f", mv->values.at(vn));
+                            char buf[64];
+                            snprintf(buf, sizeof(buf), "%.2f", mv->values.at(vn));
+                            CopyableTextUnformatted(
+                                buf, "##v" + std::to_string(vi),
+                                COPY_DATA_NOTIFICATION, false, true);
                         }
                         else
                         {
                             ImGui::TextDisabled("N/A");
                         }
+                        vi++;
                     }
                 }
 
                 ImGui::TableNextColumn();
                 if(!entry.unit.empty())
                 {
-                    ImGui::TextUnformatted(entry.unit.c_str());
+                    CopyableTextUnformatted(entry.unit.c_str(), "##unit",
+                                            COPY_DATA_NOTIFICATION, false, true);
                 }
                 else
                 {
                     ImGui::TextDisabled("N/A");
                 }
+
+                ImGui::PopID();
             }
             ImGui::EndTable();
         }

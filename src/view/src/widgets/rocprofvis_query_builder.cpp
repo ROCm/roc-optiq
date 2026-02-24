@@ -52,13 +52,20 @@ QueryBuilder::Render()
     ImGui::SetNextWindowSizeConstraints(ImVec2(800, 200), ImVec2(800, 600));
     if(ImGui::BeginPopupModal("Query Builder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
-        ImGui::Text("%s", GetLevelLabel(m_level));
+        std::string query = GetQueryString();
+        if(!query.empty())
+            ImGui::Text("%s", query.c_str());
         ImGui::Separator();
         RenderTags();
         RenderList();
         float button_width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        bool query_complete = !m_value_name.empty();
+        if(!query_complete)
+            ImGui::BeginDisabled();
         if(ImGui::Button("Add", ImVec2(button_width, 0)))
             ImGui::CloseCurrentPopup();
+        if(!query_complete)
+            ImGui::EndDisabled();
         ImGui::SameLine();
         if(ImGui::Button("Cancel", ImVec2(button_width, 0)))
         {
@@ -90,7 +97,7 @@ QueryBuilder::RenderTags()
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kAccentRedHover));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kAccentRedActive));
 
-        std::string tag = "L" + std::to_string(i + 1) + ": " + m_selections[i]->label + "  X";
+        std::string tag = m_selections[i]->label + "  X";
         if(ImGui::SmallButton(tag.c_str()))
             clear = i;
 
@@ -142,7 +149,7 @@ QueryBuilder::GetItems() const
     if(m_level == LEVEL_CATEGORY)
     {
         for(const auto& [id, cat] : workload.available_metrics.tree)
-            items.push_back({ id, "[" + std::to_string(id) + "] " + cat.name });
+            items.push_back({ id, cat.name });
         return items;
     }
 
@@ -157,7 +164,7 @@ QueryBuilder::GetItems() const
     if(m_level == LEVEL_TABLE)
     {
         for(const auto& [id, tbl] : category.tables)
-            items.push_back({ id, "[" + std::to_string(cat_id) + "." + std::to_string(id) + "] " + tbl.name });
+            items.push_back({ id, tbl.name });
         return items;
     }
 
@@ -171,9 +178,8 @@ QueryBuilder::GetItems() const
 
     if(m_level == LEVEL_ENTRY)
     {
-        std::string prefix = std::to_string(cat_id) + "." + std::to_string(tbl_id) + ".";
         for(const auto& [id, entry] : table.entries)
-            items.push_back({ id, "[" + prefix + std::to_string(id) + "] " + entry.name });
+            items.push_back({ id, entry.name });
         return items;
     }
 
@@ -210,17 +216,6 @@ QueryBuilder::ClearFrom(int level)
     m_level = level;
 }
 
-const char*
-QueryBuilder::GetLevelLabel(int level) const
-{
-    static const char* labels[] = {
-        "Level 1 - Category",
-        "Level 2 - Table",
-        "Level 3 - Entry",
-        "Level 4 - Value Name"
-    };
-    return (level >= 0 && level < LEVEL_COUNT) ? labels[level] : "Unknown";
-}
 
 std::string
 QueryBuilder::GetQueryString() const
@@ -233,7 +228,7 @@ QueryBuilder::GetQueryString() const
     if(m_selections[LEVEL_ENTRY])
         result += "." + std::to_string(m_selections[LEVEL_ENTRY]->id);
     if(!m_value_name.empty())
-        result += ":" + m_value_name;
+        result += ": " + m_value_name;
     return result;
 }
 

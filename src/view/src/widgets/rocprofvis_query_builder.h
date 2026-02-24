@@ -45,7 +45,6 @@ private:
     std::vector<LevelItem> GetItems() const;
     void                   Select(int level, const LevelItem& item);
     void                   ClearFrom(int level);
-    const char*            GetLevelLabel(int level) const;
 
     const WorkloadInfo* m_workload = nullptr;
 

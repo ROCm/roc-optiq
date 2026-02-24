@@ -7,6 +7,7 @@
 #include "widgets/rocprofvis_query_builder.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_compute_selection.h"
+#include "rocprofvis_compute_workload_view.h"
 
 namespace RocProfVis
 {
@@ -46,29 +47,6 @@ private:
 
     DataProvider                     m_data_provider;
     std::shared_ptr<RocCustomWidget> m_tool_bar;
-};
-
-// TODO: move these to separate files when they are implemented
-class ComputeTableView : public RocWidget
-{
-public:
-    ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
-    ~ComputeTableView(){};
-
-protected:
-    DataProvider& m_data_provider;
-    std::shared_ptr<ComputeSelection> m_compute_selection;
-};
-
-class ComputeWorkloadView: public RocWidget
-{
-public:
-    ComputeWorkloadView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
-    ~ComputeWorkloadView(){};
-
-protected:
-    DataProvider& m_data_provider;
-    std::shared_ptr<ComputeSelection> m_compute_selection;
 };
 
 class ComputeTester : public RocWidget

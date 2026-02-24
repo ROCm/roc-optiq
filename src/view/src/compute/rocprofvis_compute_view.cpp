@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_view.h"
+#include "rocprofvis_compute_table_view.h"
 #include "rocprofvis_compute_kernel_details.h"
 #include "rocprofvis_compute_summary.h"
 #include "implot/implot.h"
@@ -218,19 +219,6 @@ ComputeView::RenderWorkloadSelection()
         ImGui::EndCombo();
     }
 }
-
-//TODO: move these to their own files
-ComputeTableView::ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
-: RocWidget()
-, m_data_provider(data_provider)
-, m_compute_selection(compute_selection)
-{}
-
-ComputeWorkloadView::ComputeWorkloadView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
-: RocWidget()
-, m_data_provider(data_provider)
-, m_compute_selection(compute_selection)
-{}
 
 ComputeTester::ComputeTester(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : m_data_provider(data_provider)

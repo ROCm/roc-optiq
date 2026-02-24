@@ -43,6 +43,8 @@ public:
     ~ComputeDataModel() = default;
 
     const std::unordered_map<uint32_t, WorkloadInfo>& GetWorkloads() const;
+    const WorkloadInfo* GetWorkload(uint32_t workload_id) const;
+    
     const std::vector<std::shared_ptr<MetricValue>>*  GetMetricsData(uint64_t store_id, uint32_t kernel_id) const;
 
     void AddWorkload(WorkloadInfo& workload);

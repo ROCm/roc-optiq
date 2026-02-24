@@ -90,7 +90,7 @@ ComputeView::CreateView()
     m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
     
-    m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider), false});
+    m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider, m_compute_selection), false});
 }
 
 void
@@ -220,8 +220,9 @@ ComputeView::RenderWorkloadSelection()
     }
 }
 
-ComputeTester::ComputeTester(DataProvider& data_provider)
+ComputeTester::ComputeTester(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
 , m_selections({ true, 0, {}, {}, SelectionState::FP32, {}, {}, {} })
 , m_display_names({
       {
@@ -265,6 +266,27 @@ ComputeTester::Render()
 {
     const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
         m_data_provider.ComputeModel().GetWorkloads();
+
+    uint32_t global_workload_id = m_compute_selection
+                                     ? m_compute_selection->GetSelectedWorkload()
+                                     : ComputeSelection::INVALID_SELECTION_ID;
+    const WorkloadInfo* selected_wl = workloads.count(global_workload_id)
+                                         ? &workloads.at(global_workload_id)
+                                         : nullptr;
+    m_query_builder.SetWorkload(selected_wl);
+
+    if(ImGui::Button("Open Query Builder"))
+    {
+        m_query_builder.Open();
+    }
+    if(!m_query_builder.GetQueryString().empty())
+    {
+        ImGui::SameLine();
+        ImGui::Text("Query: %s", m_query_builder.GetQueryString().c_str());
+    }
+    m_query_builder.Render();
+    ImGui::NewLine();
+
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 15.0f);
     if(ImGui::BeginCombo("Workloads",
                          workloads.count(m_selections.workload_id) > 0

@@ -4,6 +4,7 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_root_view.h"
+#include "widgets/rocprofvis_query_builder.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_compute_workload_view.h"
@@ -51,7 +52,7 @@ private:
 class ComputeTester : public RocWidget
 {
 public:
-    ComputeTester(DataProvider& data_provider);
+    ComputeTester(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTester();
 
     void Update();
@@ -102,9 +103,11 @@ private:
             intensity;
     };
 
-    DataProvider&  m_data_provider;
-    SelectionState m_selections;
-    DisplayStrings m_display_names;
+    DataProvider&                     m_data_provider;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+    SelectionState                    m_selections;
+    DisplayStrings                    m_display_names;
+    QueryBuilder                      m_query_builder;
 
     char m_value_names_input[64] = "3.1.2";
 };

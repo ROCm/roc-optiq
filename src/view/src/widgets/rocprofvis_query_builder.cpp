@@ -10,6 +10,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr char* TITLE_LABEL = "Select Metric";
+
 QueryBuilder::QueryBuilder()
 {
     m_widget_name = GenUniqueName("QueryBuilder");
@@ -37,19 +39,18 @@ QueryBuilder::Render()
 {
     if(m_should_open)
     {
-        ImGui::OpenPopup("Query Builder");
+        ImGui::OpenPopup(TITLE_LABEL);
         m_should_open = false;
     }
 
-    if(!ImGui::IsPopupOpen("Query Builder")) return;
-
+    if(!ImGui::IsPopupOpen(TITLE_LABEL)) return;
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
     popup_style.PushTitlebarColors();
     popup_style.CenterPopup();
 
     ImGui::SetNextWindowSizeConstraints(ImVec2(800, 200), ImVec2(800, 600));
-    if(ImGui::BeginPopupModal("Query Builder", nullptr,
+    if(ImGui::BeginPopupModal(TITLE_LABEL, nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize))
     {
         GetQueryString();
@@ -60,7 +61,7 @@ QueryBuilder::Render()
         ImGui::SameLine();
 
         if(m_selections[LEVEL_CATEGORY])
-            ImGui::Text("%s", m_selections[LEVEL_CATEGORY]->label.c_str());
+            ImGui::Text("%s", m_selections[LEVEL_CATEGORY]->id_str.c_str());
         else
             ImGui::TextDisabled("Category");
         ImGui::SameLine();
@@ -69,7 +70,7 @@ QueryBuilder::Render()
         ImGui::SameLine();
 
         if(m_selections[LEVEL_TABLE])
-            ImGui::Text("%s", m_selections[LEVEL_TABLE]->label.c_str());
+            ImGui::Text("%s", m_selections[LEVEL_TABLE]->id_str.c_str());
         else
             ImGui::TextDisabled("Table");
         ImGui::SameLine();
@@ -78,7 +79,11 @@ QueryBuilder::Render()
         ImGui::SameLine();
 
         if(m_selections[LEVEL_ENTRY])
+        {
+            ImGui::Text("%s ", m_selections[LEVEL_ENTRY]->id_str.c_str());
+            ImGui::SameLine();
             ImGui::Text("%s", m_selections[LEVEL_ENTRY]->label.c_str());
+        }
         else
             ImGui::TextDisabled("Entry");
         ImGui::SameLine();
@@ -89,7 +94,7 @@ QueryBuilder::Render()
         if(!m_value_name.empty())
             ImGui::Text("%s", m_value_name.c_str());
         else
-            ImGui::TextDisabled("Value");
+            ImGui::TextDisabled("Aggregation type");
 
         ImGui::PopStyleVar();
         ImGui::Separator();
@@ -181,7 +186,7 @@ QueryBuilder::GetItems() const
     if(m_level == LEVEL_CATEGORY)
     {
         for(const auto& [id, cat] : workload.available_metrics.tree)
-            items.push_back({ id, cat.name });
+            items.push_back({ id, std::to_string(id), cat.name });
         return items;
     }
 
@@ -194,7 +199,7 @@ QueryBuilder::GetItems() const
     if(m_level == LEVEL_TABLE)
     {
         for(const auto& [id, tbl] : category.tables)
-            items.push_back({ id, tbl.name });
+            items.push_back({ id, std::to_string(id), tbl.name });
         return items;
     }
 
@@ -207,14 +212,14 @@ QueryBuilder::GetItems() const
     if(m_level == LEVEL_ENTRY)
     {
         for(const auto& [id, entry] : table.entries)
-            items.push_back({ id, entry.name });
+            items.push_back({ id, std::to_string(id), entry.name });
         return items;
     }
 
     if(m_level == LEVEL_VALUE_NAME)
     {
         for(uint32_t i = 0; i < table.value_names.size(); i++)
-            items.push_back({ i, table.value_names[i] });
+            items.push_back({ i, std::to_string(i), table.value_names[i] });
     }
 
     return items;
@@ -224,6 +229,7 @@ void
 QueryBuilder::Select(int level, const LevelItem& item)
 {
     m_selections[level] = item;
+
     for(int i = level + 1; i < LEVEL_COUNT; i++)
         m_selections[i] = std::nullopt;
 

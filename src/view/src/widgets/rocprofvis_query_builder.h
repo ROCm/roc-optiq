@@ -37,6 +37,7 @@ private:
     struct LevelItem
     {
         uint32_t    id;
+        std::string id_str;
         std::string label;
     };
 

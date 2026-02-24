@@ -75,6 +75,36 @@ ComputeDataModel::AddWorkload(WorkloadInfo& workload)
     m_workloads[workload.id] = std::move(workload);
 }
 
+void
+ComputeDataModel::AddDispatches(DispatchMap& dispatches, uint64_t max_dispatch_duration)
+{
+    m_dispatches = std::move(dispatches);
+    m_max_dispatch_duration = max_dispatch_duration;
+}
+
+const DispatchMap&
+ComputeDataModel::GetDispatches() const
+{
+    return m_dispatches;
+}
+
+const std::vector<DispatchInfo>*
+ComputeDataModel::GetDispatchesByGpu(uint32_t gpu_id) const
+{
+    auto it = m_dispatches.find(gpu_id);
+    if(it != m_dispatches.end())
+    {
+        return &it->second;
+    }
+    return nullptr;
+}
+
+uint64_t
+ComputeDataModel::GetMaxDispatchDuration() const
+{
+    return m_max_dispatch_duration;
+}
+
 bool
 ComputeDataModel::AddMetricValue(uint64_t store_id, uint32_t workload_id,
                                  uint32_t kernel_id, uint32_t category_id,
@@ -140,6 +170,8 @@ ComputeDataModel::Clear()
 {
     ClearAllMetricValues();
     m_workloads.clear();
+    m_dispatches.clear();
+    m_max_dispatch_duration = 0;
     m_kernel_selection_table.Clear();
 }
 

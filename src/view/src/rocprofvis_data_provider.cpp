@@ -3954,6 +3954,51 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
             kernel.duration_median      = static_cast<uint32_t>(uint64_data);
             workload.kernels[kernel.id] = std::move(kernel);
         }
+        uint64_t num_dispatches = 0;
+        result = rocprofvis_controller_get_uint64(
+            workload_handle, kRPVControllerWorkloadNumDispatches, 0, &num_dispatches);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        DispatchMap dispatch_map;
+        uint64_t max_dispatch_duration = 0;
+        for(uint64_t j = 0; j < num_dispatches; j++)
+        {
+            rocprofvis_handle_t* dispatch_handle = nullptr;
+            result = rocprofvis_controller_get_object(
+                workload_handle, kRPVControllerWorkloadDispatchIndexed, j, &dispatch_handle);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && dispatch_handle);
+            DispatchInfo dispatch{};
+            result = rocprofvis_controller_get_uint64(
+                dispatch_handle, kRPVControllerDispatchUUID, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            dispatch.dispatch_uuid = static_cast<uint32_t>(uint64_data);
+            result = rocprofvis_controller_get_uint64(
+                dispatch_handle, kRPVControllerDispatchKernelUUID, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            dispatch.kernel_uuid = static_cast<uint32_t>(uint64_data);
+            result = rocprofvis_controller_get_uint64(
+                dispatch_handle, kRPVControllerDispatchId, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            dispatch.dispatch_id = static_cast<uint32_t>(uint64_data);
+            result = rocprofvis_controller_get_uint64(
+                dispatch_handle, kRPVControllerDispatchGpuId, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            dispatch.gpu_id = static_cast<uint32_t>(uint64_data);
+            result = rocprofvis_controller_get_uint64(
+                dispatch_handle, kRPVControllerDispatchStartTimestamp, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            dispatch.start_timestamp = uint64_data;
+            result = rocprofvis_controller_get_uint64(
+                dispatch_handle, kRPVControllerDispatchEndTimestamp, 0, &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            dispatch.end_timestamp = uint64_data;
+            uint64_t duration = dispatch.end_timestamp - dispatch.start_timestamp;
+            if(duration > max_dispatch_duration)
+            {
+                max_dispatch_duration = duration;
+            }
+            dispatch_map[dispatch.gpu_id].push_back(std::move(dispatch));
+        }
+        m_compute_model.AddDispatches(dispatch_map, max_dispatch_duration);
         rocprofvis_handle_t* roofline_handle = nullptr;
         result                               = rocprofvis_controller_get_object(
             workload_handle, kRPVControllerWorkloadRoofline, 0, &roofline_handle);

@@ -6,6 +6,7 @@
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_workload.h"
 #include "rocprofvis_controller_kernel.h"
+#include "rocprofvis_controller_dispatch.h"
 #include "rocprofvis_controller_roofline.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_core_assert.h"
@@ -587,7 +588,40 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                 kernel_ids.push_back(id);
                                             }
                                         });
-                                    }                                   
+                                    }
+                                    if(dm_result == kRocProfVisDmResultSuccess)
+                                    {
+                                        m_query_arguments.clear();
+                                        m_query_output = {
+                                            {
+                                                { kRPVComputeColumnDispatchUUID, std::nullopt },
+                                                { kRPVComputeColumnDispatchKernelUUID, std::nullopt },
+                                                { kRPVComputeColumnDispatchId, std::nullopt },
+                                                { kRPVComputeColumnDispatchGpuId, std::nullopt },
+                                                { kRPVComputeColumnDispatchStartTimestamp, std::nullopt },
+                                                { kRPVComputeColumnDispatchEndTimestamp, std::nullopt },
+                                            },
+                                            {}
+                                        };
+                                        dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchDispatchList, m_query_arguments, m_query_output, [this, &workload](const QueryDataStore& data_store){
+                                            workload->SetUInt64(kRPVControllerWorkloadNumDispatches, 0, data_store.rows.size());
+                                            rocprofvis_property_t property;
+                                            rocprofvis_controller_primitive_type_t type;
+                                            for(size_t i = 0; i < data_store.rows.size(); i++)
+                                            {
+                                                Dispatch* dispatch = new Dispatch();
+                                                for(const std::pair<const rocprofvis_db_compute_column_enum_t, std::optional<int>>& column : data_store.columns)
+                                                {
+                                                    if(dispatch->QueryToPropertyEnum(column.first, property, type))
+                                                    {
+                                                        SetObjectProperty((rocprofvis_handle_t*)dispatch, property, 0, data_store.rows[i][column.second.value()], type);
+                                                    }
+                                                }
+                                                workload->SetObject(kRPVControllerWorkloadDispatchIndexed, i, (rocprofvis_handle_t*)dispatch);
+                                            }
+                                        });
+                                        m_query_arguments = { {kRPVComputeParamWorkloadId, std::to_string(id)} };
+                                    }
                                     if(dm_result == kRocProfVisDmResultSuccess)
                                     {
                                         Roofline* roofline = new Roofline();

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -112,6 +113,18 @@ struct WorkloadInfo
     std::unordered_map<uint32_t, KernelInfo> kernels;
     Roofline                                 roofline;
 };
+
+struct DispatchInfo
+{
+    uint32_t dispatch_uuid;
+    uint32_t kernel_uuid;
+    uint32_t dispatch_id;
+    uint32_t gpu_id;
+    uint64_t start_timestamp;
+    uint64_t end_timestamp;
+};
+
+using DispatchMap = std::map<uint32_t, std::vector<DispatchInfo>>;
 
 struct MetricValue 
 {

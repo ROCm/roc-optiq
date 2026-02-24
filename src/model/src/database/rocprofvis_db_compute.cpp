@@ -20,7 +20,8 @@ namespace DataModel
 		{kRPVComputeFetchMetricCategoryTablesList, "Fetch list of tables in a category" },
 		{kRPVComputeFetchMetricValues, "Fetch values of metrics"},
 		{kRPVComputeFetchKernelMetricsMatrix, "Fetch kernel metrics matrix with pivoted metric columns"},
-		{kRPVComputeFetchWorkloadMetricValueNames, "Fetch distinct value names per metric in a workload"}
+		{kRPVComputeFetchWorkloadMetricValueNames, "Fetch distinct value names per metric in a workload"},
+		{kRPVComputeFetchDispatchList, "Fetch list of dispatches sorted by start timestamp"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
@@ -53,6 +54,12 @@ namespace DataModel
 		{"value", kRPVComputeColumnMetricValue},
 		{"unit", kRPVComputeColumnMetricUnit},
 		{"__id", kRPVComputeColumnDynamicKernelUUID},
+		{"dispatch_uuid", kRPVComputeColumnDispatchUUID},
+		{"dispatch_kernel_uuid", kRPVComputeColumnDispatchKernelUUID},
+		{"dispatch_id", kRPVComputeColumnDispatchId},
+		{"gpu_id", kRPVComputeColumnDispatchGpuId},
+		{"start_timestamp", kRPVComputeColumnDispatchStartTimestamp},
+		{"end_timestamp", kRPVComputeColumnDispatchEndTimestamp},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -390,6 +397,20 @@ namespace DataModel
         return query;
     }
 
+	std::string ComputeQueryFactory::GetComputeDispatchList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		query = "SELECT ";
+		query += "dispatch_uuid, ";
+		query += "kernel_uuid as dispatch_kernel_uuid, ";
+		query += "dispatch_id, ";
+		query += "gpu_id, ";
+		query += "start_timestamp, ";
+		query += "end_timestamp ";
+		query += "FROM compute_dispatch ";
+		query += "ORDER BY start_timestamp ASC";
+		return query;
+	}
+
     std::string ComputeQueryFactory::GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
 		std::string query;
 		std::set<std::string> metric_ids;
@@ -584,6 +605,9 @@ namespace DataModel
 			case kRPVComputeFetchWorkloadMetricValueNames:
 				query = m_query_factory.GetComputeWorkloadMetricValueNames(num, params);
 				break;
+			case kRPVComputeFetchDispatchList:
+				query = m_query_factory.GetComputeDispatchList(num, params);
+				break;
 			default:
 				return kRocProfVisDmResultInvalidParameter;
 			}
@@ -631,6 +655,7 @@ namespace DataModel
 				case kRPVComputeFetchMetricCategoryTablesList:
 				case kRPVComputeFetchMetricValues:
 				case kRPVComputeFetchWorkloadMetricValueNames:
+				case kRPVComputeFetchDispatchList:
 					callback = CallbackGetComputeGeneric;
 					break;
 				case kRPVComputeFetchWorkloadRooflineCeiling:

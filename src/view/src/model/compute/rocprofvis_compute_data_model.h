@@ -44,6 +44,11 @@ public:
 
     const std::unordered_map<uint32_t, WorkloadInfo>& GetWorkloads() const;
     const WorkloadInfo* GetWorkload(uint32_t workload_id) const;
+
+    void AddDispatches(DispatchMap& dispatches, uint64_t max_dispatch_duration);
+    const DispatchMap& GetDispatches() const;
+    const std::vector<DispatchInfo>* GetDispatchesByGpu(uint32_t gpu_id) const;
+    uint64_t GetMaxDispatchDuration() const;
     
     const std::vector<std::shared_ptr<MetricValue>>*  GetMetricsData(uint64_t store_id, uint32_t kernel_id) const;
 
@@ -78,6 +83,8 @@ public:
 
 private:
     std::unordered_map<uint32_t, WorkloadInfo> m_workloads;
+    DispatchMap m_dispatches;
+    uint64_t m_max_dispatch_duration = 0;
     
     struct MetricStore
     {    

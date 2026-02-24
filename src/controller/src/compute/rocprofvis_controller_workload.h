@@ -14,6 +14,7 @@ namespace Controller
 {
 
 class Kernel;
+class Dispatch;
 class Roofline;
 
 class Workload : public Handle
@@ -64,6 +65,7 @@ private:
     std::vector<MetricDefinition> m_available_metrics;
     std::vector<MetricValueName>  m_metric_value_names;
     std::vector<Kernel*> m_kernels;
+    std::vector<Dispatch*> m_dispatches;
     Roofline* m_roofline;
 };
 

@@ -50,6 +50,7 @@ list(APPEND rocprofvis_controller_source_files
     src/compute/rocprofvis_controller_plot_compute.cpp
     src/compute/rocprofvis_controller_workload.cpp
     src/compute/rocprofvis_controller_kernel.cpp
+    src/compute/rocprofvis_controller_dispatch.cpp
     src/compute/rocprofvis_controller_metrics_container.cpp
     src/compute/rocprofvis_controller_roofline.cpp
     src/compute/rocprofvis_controller_table_compute_pivot.cpp

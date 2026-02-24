@@ -119,6 +119,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypePlot = 29,
     // Plot series object
     kRPVControllerObjectTypePlotSeries = 30,
+    // Dispatch object
+    kRPVControllerObjectTypeDispatch = 31,
 #endif
     // Topology node object
     kRPVControllerObjectTypeTopologyNode = 27,
@@ -878,6 +880,8 @@ typedef enum rocprofvis_controller_workload_properties_t : uint32_t
     kRPVControllerWorkloadRoofline,
     kRPVControllerWorkloadNumKernels,
     kRPVControllerWorkloadKernelIndexed,
+    kRPVControllerWorkloadNumDispatches,
+    kRPVControllerWorkloadDispatchIndexed,
     __kRPVControllerWorkloadPropertiesLast
 } rocprofvis_controller_workload_properties_t;
 
@@ -897,6 +901,21 @@ typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
     kRPVControllerKernelDurationMean,
     __kRPVControllerKernelPropertiesLast
 } rocprofvis_controller_kernel_properties_t;
+
+/*
+ * Properties for a dispatch in a compute trace.
+ */
+typedef enum rocprofvis_controller_dispatch_properties_t : uint32_t
+{
+    __kRPVControllerDispatchPropertiesFirst,
+    kRPVControllerDispatchUUID = __kRPVControllerDispatchPropertiesFirst,
+    kRPVControllerDispatchKernelUUID,
+    kRPVControllerDispatchId,
+    kRPVControllerDispatchGpuId,
+    kRPVControllerDispatchStartTimestamp,
+    kRPVControllerDispatchEndTimestamp,
+    __kRPVControllerDispatchPropertiesLast
+} rocprofvis_controller_dispatch_properties_t;
 
 /*
  * Arguments for fetching metric values.

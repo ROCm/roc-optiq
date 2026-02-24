@@ -3,6 +3,7 @@
 
 #include "rocprofvis_controller_workload.h"
 #include "rocprofvis_controller_kernel.h"
+#include "rocprofvis_controller_dispatch.h"
 #include "rocprofvis_controller_roofline.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_string_table.h"
@@ -14,6 +15,7 @@ namespace Controller
 {
 
 typedef Reference<rocprofvis_controller_kernel_t, Kernel, kRPVControllerObjectTypeKernel> KernelRef;
+typedef Reference<rocprofvis_controller_kernel_t, Dispatch, kRPVControllerObjectTypeDispatch> DispatchRef;
 typedef Reference<rocprofvis_controller_kernel_t, Roofline, kRPVControllerObjectTypeRoofline> RooflineRef;
 
 Workload::Workload()
@@ -27,6 +29,10 @@ Workload::~Workload()
     for(Kernel* kernel : m_kernels)
     {
         delete kernel;
+    }
+    for(Dispatch* dispatch : m_dispatches)
+    {
+        delete dispatch;
     }
     if(m_roofline)
     {
@@ -149,6 +155,12 @@ rocprofvis_result_t Workload::GetUInt64(rocprofvis_property_t property, uint64_t
             case kRPVControllerWorkloadNumKernels:
             {
                 *value = m_kernels.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerWorkloadNumDispatches:
+            {
+                *value = m_dispatches.size();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -330,6 +342,19 @@ rocprofvis_result_t Workload::GetObject(rocprofvis_property_t property, uint64_t
                 }
                 break;
             }
+            case kRPVControllerWorkloadDispatchIndexed:
+            {
+                if(index < m_dispatches.size())
+                {
+                    *value = (rocprofvis_handle_t*)m_dispatches[index];
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
             case kRPVControllerWorkloadRoofline:
             {
                 *value = (rocprofvis_handle_t*)m_roofline;
@@ -441,6 +466,12 @@ rocprofvis_result_t Workload::SetUInt64(rocprofvis_property_t property, uint64_t
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerWorkloadNumDispatches:
+        {
+            m_dispatches.resize(value);
+            result = kRocProfVisResultSuccess;
+            break;
+        }
         default:
         {
             result = UnhandledProperty(property);
@@ -463,6 +494,23 @@ rocprofvis_result_t Workload::SetObject(rocprofvis_property_t property, uint64_t
                 if(ref.IsValid())
                 {
                     m_kernels[index] = ref.Get();
+                    result = kRocProfVisResultSuccess;
+                }
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
+            break;
+        }
+        case kRPVControllerWorkloadDispatchIndexed:
+        {
+            if(m_dispatches.size() > index)
+            {
+                DispatchRef ref(value);
+                if(ref.IsValid())
+                {
+                    m_dispatches[index] = ref.Get();
                     result = kRocProfVisResultSuccess;
                 }
             }

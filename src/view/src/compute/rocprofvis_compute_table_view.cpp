@@ -114,7 +114,7 @@ ComputeTableView::RebuildTabs()
         const auto& cat    = cp.second;
         auto        widget = std::make_shared<RocCustomWidget>(
             [this, &cat]() { RenderCategory(cat); });
-        m_tabs->AddTab({ cat.name, std::to_string(cp.first), widget, false });
+        m_tabs->AddTab({ cat.name, cat.name, widget, false });
     }
 }
 

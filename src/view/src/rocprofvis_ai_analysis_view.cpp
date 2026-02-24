@@ -789,90 +789,121 @@ AiAnalysisView::RenderRecommendations()
         ImVec4 priority_color = PriorityColor(priority);
         bool has_commands = rec["commands"].isArray() && !rec["commands"].getArray().empty();
 
-        // ═══ RECOMMENDATION CARD ═══
-        // Subtle background tint based on priority
-        ImVec4 card_bg = use_dark
-            ? ImVec4(priority_color.x * 0.08f, priority_color.y * 0.08f, priority_color.z * 0.08f, 0.5f)
-            : ImVec4(priority_color.x * 0.05f, priority_color.y * 0.05f, priority_color.z * 0.05f, 0.3f);
+        // ═══ COLLAPSIBLE RECOMMENDATION HEADER ═══
+        // Build header string
+        std::string header = "[" + priority + "] " + category;
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, card_bg);
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+        // TreeNode for collapsible functionality
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(priority_color.x * 0.3f, priority_color.y * 0.3f, priority_color.z * 0.3f, 0.4f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(priority_color.x * 0.4f, priority_color.y * 0.4f, priority_color.z * 0.4f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(priority_color.x * 0.5f, priority_color.y * 0.5f, priority_color.z * 0.5f, 0.6f));
 
-        ImGui::BeginChild(("rec_card_" + std::to_string(idx)).c_str(),
-                          ImVec2(-1, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        bool is_open = ImGui::TreeNodeEx(("rec_" + std::to_string(idx)).c_str(),
+                                         ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth,
+                                         "%s", header.c_str());
 
-        // Left accent bar
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImVec2 win_pos = ImGui::GetWindowPos();
-        ImVec2 win_size = ImGui::GetWindowSize();
-        draw_list->AddRectFilled(win_pos, ImVec2(win_pos.x + 4.0f, win_pos.y + win_size.y),
-            ImGui::ColorConvertFloat4ToU32(priority_color), 6.0f, ImDrawFlags_RoundCornersLeft);
+        ImGui::PopStyleColor(3);
 
-        ImGui::Indent(12.0f);
-        ImGui::Spacing();
-
-        // ─── Header: Priority badge + Category ───
+        if(!is_open)
         {
-            // Priority badge with white text
-            ImGui::PushStyleColor(ImGuiCol_Button, priority_color);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, priority_color);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, priority_color);
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-            ImGui::SmallButton(priority.c_str());
-            ImGui::PopStyleColor(4);
-
-            ImGui::SameLine();
-
-            // Category in primary text color
-            ImGui::TextColored(theme.text_primary, "%s", category.c_str());
+            ++idx;
+            continue;
         }
 
+        ImGui::Indent(8.0f);
+
         ImGui::Spacing();
+        ImGui::Spacing();
+
+        // Readable text colors for both light and dark modes
+        ImVec4 label_color = use_dark
+            ? ImVec4(0.9f, 0.7f, 0.4f, 1.0f)   // Warm orange for dark mode
+            : ImVec4(0.6f, 0.4f, 0.1f, 1.0f);  // Dark orange for light mode
+
+        ImVec4 text_color = use_dark
+            ? ImVec4(0.85f, 0.85f, 0.88f, 1.0f)  // Light gray for dark mode
+            : ImVec4(0.15f, 0.15f, 0.18f, 1.0f); // Dark gray for light mode
 
         // ─── Issue ───
         if(!issue.empty())
         {
-            ImGui::TextColored(theme.warning, "Issue:");
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Text, theme.text_primary);
-            ImGui::TextWrapped("%s", issue.c_str());
-            ImGui::PopStyleColor();
+            // Bold label with good contrast
+            ImGui::SetWindowFontScale(1.05f);
+            ImGui::TextColored(label_color, "Issue:");
+            ImGui::SetWindowFontScale(1.0f);
+
+            ImGui::Indent(8.0f);
+            ImGui::TextColored(text_color, "%s", issue.c_str());
+            ImGui::Unindent(8.0f);
+
+            ImGui::Spacing();
             ImGui::Spacing();
         }
 
         // ─── Solution ───
         if(!suggest.empty())
         {
-            ImGui::TextColored(theme.info, "Solution:");
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Text, theme.text_primary);
-            ImGui::TextWrapped("%s", suggest.c_str());
-            ImGui::PopStyleColor();
+            // Bold label
+            ImGui::SetWindowFontScale(1.05f);
+            ImGui::TextColored(label_color, "What to do:");
+            ImGui::SetWindowFontScale(1.0f);
+
+            ImGui::Indent(8.0f);
+            ImGui::TextColored(text_color, "%s", suggest.c_str());
+            ImGui::Unindent(8.0f);
+
+            ImGui::Spacing();
             ImGui::Spacing();
         }
 
         // ─── Action Steps ───
         if(rec["actions"].isArray() && !rec["actions"].getArray().empty())
         {
+            ImGui::SetWindowFontScale(1.05f);
+            ImGui::TextColored(label_color, "Action Steps:");
+            ImGui::SetWindowFontScale(1.0f);
+
+            ImGui::Indent(8.0f);
             int step = 1;
             for(jt::Json& action : rec["actions"].getArray())
             {
                 if(action.isString())
                 {
-                    ImGui::TextColored(theme.text_secondary, "%d.", step++);
-                    ImGui::SameLine();
-                    ImGui::PushStyleColor(ImGuiCol_Text, theme.text_primary);
-                    ImGui::TextWrapped("%s", action.getString().c_str());
-                    ImGui::PopStyleColor();
+                    ImGui::TextColored(text_color, "%d. %s", step++, action.getString().c_str());
                 }
             }
+            ImGui::Unindent(8.0f);
+
+            ImGui::Spacing();
             ImGui::Spacing();
         }
 
         // ─── Impact ───
         if(!impact.empty())
         {
-            ImGui::TextColored(theme.success, "Expected Impact: %s", impact.c_str());
+            // Green badge - brighter for visibility
+            ImVec4 impact_bg = use_dark
+                ? ImVec4(0.1f, 0.3f, 0.1f, 0.6f)   // Dark green tint for dark mode
+                : ImVec4(0.85f, 0.95f, 0.85f, 1.0f); // Light green for light mode
+
+            ImVec4 impact_text = use_dark
+                ? ImVec4(0.5f, 0.95f, 0.5f, 1.0f)  // Bright green for dark mode
+                : ImVec4(0.2f, 0.6f, 0.2f, 1.0f);  // Dark green for light mode
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, impact_bg);
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+            ImGui::BeginChild(("impact_badge_" + std::to_string(idx)).c_str(),
+                              ImVec2(-1, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+
+            ImGui::Spacing();
+            ImGui::TextColored(impact_text, ">> Expected Impact: %s", impact.c_str());
+            ImGui::Spacing();
+
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor();
+
+            ImGui::Spacing();
             ImGui::Spacing();
         }
 
@@ -881,7 +912,12 @@ AiAnalysisView::RenderRecommendations()
         {
             ImGui::Separator();
             ImGui::Spacing();
+            ImGui::Spacing();
+
+            ImGui::SetWindowFontScale(1.05f);
             ImGui::TextColored(theme.text_primary, "Profiling Commands:");
+            ImGui::SetWindowFontScale(1.0f);
+
             ImGui::Spacing();
 
             int ci = 0;
@@ -895,29 +931,47 @@ AiAnalysisView::RenderRecommendations()
 
                 if(full_cmd.empty()) { ++ci; continue; }
 
-                // ─── Tool header (outside command box) ───
-                ImGui::TextColored(theme.info, "%s", tool.c_str());
+                // ─── Tool header ───
+                ImVec4 tool_color = use_dark
+                    ? ImVec4(0.4f, 0.7f, 1.0f, 1.0f)   // Bright blue for dark mode
+                    : ImVec4(0.2f, 0.4f, 0.8f, 1.0f);  // Dark blue for light mode
+
+                ImVec4 desc_color = use_dark
+                    ? ImVec4(0.6f, 0.6f, 0.65f, 1.0f)  // Light gray for dark mode
+                    : ImVec4(0.4f, 0.4f, 0.45f, 1.0f); // Dark gray for light mode
+
+                ImGui::TextColored(tool_color, "%s", tool.c_str());
                 if(!desc.empty())
                 {
                     ImGui::SameLine();
-                    ImGui::TextColored(theme.text_secondary, "- %s", desc.c_str());
+                    ImGui::TextColored(desc_color, "- %s", desc.c_str());
                 }
 
-                // ─── Command box - terminal style ───
-                ImVec4 terminal_bg = ImVec4(0.1f, 0.1f, 0.14f, 1.0f);  // Dark terminal background
+                ImGui::Spacing();
 
-                ImGui::PushStyleColor(ImGuiCol_ChildBg, terminal_bg);
+                // ─── Command box - lighter background like HTML ───
+                ImVec4 cmd_bg = use_dark
+                    ? ImVec4(0.18f, 0.18f, 0.20f, 1.0f)  // Lighter gray for dark mode
+                    : ImVec4(0.92f, 0.92f, 0.94f, 1.0f); // Very light gray for light mode
+
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, cmd_bg);
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
                 ImGui::BeginChild(("cmd_" + std::to_string(idx) + "_" + std::to_string(ci)).c_str(),
                                   ImVec2(-1, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
 
                 ImGui::Spacing();
+                ImGui::Indent(8.0f);
 
-                // Command text with prompt - wrap if long
+                // Command text - better color for readability
+                ImVec4 cmd_color = use_dark
+                    ? ImVec4(0.5f, 0.95f, 0.5f, 1.0f)   // Bright green for dark
+                    : ImVec4(0.2f, 0.5f, 0.2f, 1.0f);   // Dark green for light
+
                 ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x - 10.0f);
-                ImGui::TextColored(ImVec4(0.5f, 0.95f, 0.5f, 1.0f), "$ %s", full_cmd.c_str());
+                ImGui::TextColored(cmd_color, "$ %s", full_cmd.c_str());
                 ImGui::PopTextWrapPos();
 
+                ImGui::Unindent(8.0f);
                 ImGui::Spacing();
                 ImGui::EndChild();
                 ImGui::PopStyleVar();
@@ -927,8 +981,8 @@ AiAnalysisView::RenderRecommendations()
                 ImGui::Spacing();
 
                 // Copy button
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.35f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.45f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.35f, 0.38f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.45f, 0.45f, 0.48f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
                 if(ImGui::Button(("Copy##copy_" + std::to_string(idx) + "_" + std::to_string(ci)).c_str()))
                 {
@@ -954,11 +1008,9 @@ AiAnalysisView::RenderRecommendations()
             }
         }
 
-        ImGui::Unindent(12.0f);
-        ImGui::Spacing();
-        ImGui::EndChild();
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor();
+        // Close the collapsible section
+        ImGui::Unindent(8.0f);
+        ImGui::TreePop();
 
         ImGui::Spacing();
         ++idx;

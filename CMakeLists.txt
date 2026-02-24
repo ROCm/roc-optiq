@@ -128,6 +128,7 @@ list(APPEND VIEW_FILES
     src/view/src/compute/legacy/rocprofvis_compute_roofline.cpp
     src/view/src/compute/rocprofvis_navigation_manager.cpp
     src/view/src/compute/rocprofvis_compute_kernel_details.cpp
+    src/view/src/compute/rocprofvis_compute_dispatch_histogram.cpp
     src/view/src/compute/rocprofvis_compute_memory_chart.cpp
     src/view/src/compute/rocprofvis_compute_selection.cpp
     src/view/src/compute/rocprofvis_compute_summary.cpp

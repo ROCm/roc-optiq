@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_compute_dispatch_histogram.h"
 #include "rocprofvis_compute_memory_chart.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
@@ -28,6 +29,7 @@ public:
 private:
     DataProvider&          m_data_provider;
     ComputeMemoryChartView m_memory_chart;
+    DispatchHistogramView  m_dispatch_histogram;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<Roofline>         m_roofline;

@@ -19,6 +19,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 : RocWidget()
 , m_data_provider(data_provider)
 , m_memory_chart(data_provider, compute_selection)
+, m_dispatch_histogram(data_provider, compute_selection)
 , m_roofline(nullptr)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
@@ -114,6 +115,8 @@ void
 ComputeKernelDetailsView::Render()
 {
     ImGui::BeginChild("kernel_details");
+    m_dispatch_histogram.Render();
+    ImGui::Spacing();
     ImGui::Text("Memory Chart");
     m_memory_chart.Render();
     if(m_roofline)

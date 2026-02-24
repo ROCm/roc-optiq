@@ -106,6 +106,10 @@ TabContainer::Render()
                         ? ImGuiTabItemFlags_SetSelected
                         : 0;
 
+                //This line prevents truncated tab names from showing tooltips
+                if(!m_allow_tool_tips)
+                    flags |= ImGuiTabItemFlags_NoTooltip;
+
                 bool  is_open = true;
                 bool* p_open  = &is_open;
 

@@ -109,6 +109,7 @@ ComputeTableView::RebuildTabs()
 
     const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
+    m_tabs->SetAllowToolTips(false);
     for(const auto& cp : workload.available_metrics.tree)
     {
         const auto& cat    = cp.second;

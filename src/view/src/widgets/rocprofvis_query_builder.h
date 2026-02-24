@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include "rocprofvis_widget.h"
 #include "model/compute/rocprofvis_compute_model_types.h"
-
+#include "rocprofvis_widget.h"
 #include <optional>
 #include <string>
 #include <vector>
+
 
 namespace RocProfVis
 {
@@ -48,11 +48,11 @@ private:
 
     const WorkloadInfo* m_workload = nullptr;
 
-    int                                    m_level           = 0;
-    bool                                   m_should_open     = false;
-    bool                                   m_scroll_to_end   = false;
-    std::string                            m_value_name;
-    std::vector<std::optional<LevelItem>>  m_selections;
+    int                                   m_level         = 0;
+    bool                                  m_should_open   = false;
+    bool                                  m_scroll_to_end = false;
+    std::string                           m_value_name;
+    std::vector<std::optional<LevelItem>> m_selections;
 };
 
 }  // namespace View

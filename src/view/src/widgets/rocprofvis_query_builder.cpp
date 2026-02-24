@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_query_builder.h"
-#include "rocprofvis_settings_manager.h"
 #include "imgui.h"
+#include "rocprofvis_settings_manager.h"
 
 namespace RocProfVis
 {
@@ -41,8 +41,7 @@ QueryBuilder::Render()
         m_should_open = false;
     }
 
-    if(!ImGui::IsPopupOpen("Query Builder"))
-        return;
+    if(!ImGui::IsPopupOpen("Query Builder")) return;
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
@@ -50,22 +49,58 @@ QueryBuilder::Render()
     popup_style.CenterPopup();
 
     ImGui::SetNextWindowSizeConstraints(ImVec2(800, 200), ImVec2(800, 600));
-    if(ImGui::BeginPopupModal("Query Builder", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if(ImGui::BeginPopupModal("Query Builder", nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize))
     {
-        std::string query = GetQueryString();
-        if(!query.empty())
-            ImGui::Text("%s", query.c_str());
+        GetQueryString();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+
+        ImGui::Text("Metric ");
+        ImGui::SameLine();
+
+        if(m_selections[LEVEL_CATEGORY])
+            ImGui::Text("%s", m_selections[LEVEL_CATEGORY]->label.c_str());
+        else
+            ImGui::TextDisabled("Category");
+        ImGui::SameLine();
+
+        ImGui::Text(".");
+        ImGui::SameLine();
+
+        if(m_selections[LEVEL_TABLE])
+            ImGui::Text("%s", m_selections[LEVEL_TABLE]->label.c_str());
+        else
+            ImGui::TextDisabled("Table");
+        ImGui::SameLine();
+
+        ImGui::Text(".");
+        ImGui::SameLine();
+
+        if(m_selections[LEVEL_ENTRY])
+            ImGui::Text("%s", m_selections[LEVEL_ENTRY]->label.c_str());
+        else
+            ImGui::TextDisabled("Entry");
+        ImGui::SameLine();
+
+        ImGui::Text(": ");
+        ImGui::SameLine();
+
+        if(!m_value_name.empty())
+            ImGui::Text("%s", m_value_name.c_str());
+        else
+            ImGui::TextDisabled("Value");
+
+        ImGui::PopStyleVar();
         ImGui::Separator();
         RenderTags();
         RenderList();
-        float button_width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        float button_width =
+            (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
         bool query_complete = !m_value_name.empty();
-        if(!query_complete)
-            ImGui::BeginDisabled();
-        if(ImGui::Button("Add", ImVec2(button_width, 0)))
-            ImGui::CloseCurrentPopup();
-        if(!query_complete)
-            ImGui::EndDisabled();
+        if(!query_complete) ImGui::BeginDisabled();
+        if(ImGui::Button("Add", ImVec2(button_width, 0))) ImGui::CloseCurrentPopup();
+        if(!query_complete) ImGui::EndDisabled();
         ImGui::SameLine();
         if(ImGui::Button("Cancel", ImVec2(button_width, 0)))
         {
@@ -80,26 +115,25 @@ void
 QueryBuilder::RenderTags()
 {
     SettingsManager& settings = SettingsManager::GetInstance();
-    int clear = -1;
+    int              clear    = -1;
 
     ImGui::BeginChild("##tags", ImVec2(-1, ImGui::GetFrameHeightWithSpacing()),
                       ImGuiChildFlags_FrameStyle, ImGuiWindowFlags_HorizontalScrollbar);
 
     for(int i = 0; i < LEVEL_COUNT; i++)
     {
-        if(!m_selections[i])
-            continue;
-        if(clear >= 0 || i > 0)
-            ImGui::SameLine();
+        if(!m_selections[i]) continue;
+        if(clear >= 0 || i > 0) ImGui::SameLine();
 
         ImGui::PushID(i);
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccentRed));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kAccentRedHover));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kAccentRedActive));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              settings.GetColor(Colors::kAccentRedHover));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                              settings.GetColor(Colors::kAccentRedActive));
 
         std::string tag = m_selections[i]->label + "  X";
-        if(ImGui::SmallButton(tag.c_str()))
-            clear = i;
+        if(ImGui::SmallButton(tag.c_str())) clear = i;
 
         ImGui::PopStyleColor(3);
         ImGui::PopID();
@@ -113,8 +147,7 @@ QueryBuilder::RenderTags()
 
     ImGui::EndChild();
 
-    if(clear >= 0)
-        ClearFrom(clear);
+    if(clear >= 0) ClearFrom(clear);
 }
 
 void
@@ -128,12 +161,12 @@ QueryBuilder::RenderList()
     {
         ImGui::PushID(static_cast<int>(i));
         bool selected = m_selections[m_level] && m_selections[m_level]->id == items[i].id;
-        if(ImGui::Selectable(items[i].label.c_str(), selected))
-            Select(m_level, items[i]);
+        if(ImGui::Selectable(items[i].label.c_str(), selected)) Select(m_level, items[i]);
         ImGui::PopID();
     }
     if(items.empty())
-        ImGui::TextDisabled(!m_workload ? "No workload selected" : "No items at this level");
+        ImGui::TextDisabled(!m_workload ? "No workload selected"
+                                        : "No items at this level");
     ImGui::EndChild();
 }
 
@@ -141,8 +174,7 @@ std::vector<QueryBuilder::LevelItem>
 QueryBuilder::GetItems() const
 {
     std::vector<LevelItem> items;
-    if(!m_workload)
-        return items;
+    if(!m_workload) return items;
 
     const WorkloadInfo& workload = *m_workload;
 
@@ -153,12 +185,10 @@ QueryBuilder::GetItems() const
         return items;
     }
 
-    if(!m_selections[LEVEL_CATEGORY])
-        return items;
+    if(!m_selections[LEVEL_CATEGORY]) return items;
     uint32_t cat_id = m_selections[LEVEL_CATEGORY]->id;
-    auto cat_it = workload.available_metrics.tree.find(cat_id);
-    if(cat_it == workload.available_metrics.tree.end())
-        return items;
+    auto     cat_it = workload.available_metrics.tree.find(cat_id);
+    if(cat_it == workload.available_metrics.tree.end()) return items;
     const AvailableMetrics::Category& category = cat_it->second;
 
     if(m_level == LEVEL_TABLE)
@@ -168,12 +198,10 @@ QueryBuilder::GetItems() const
         return items;
     }
 
-    if(!m_selections[LEVEL_TABLE])
-        return items;
+    if(!m_selections[LEVEL_TABLE]) return items;
     uint32_t tbl_id = m_selections[LEVEL_TABLE]->id;
-    auto tbl_it = category.tables.find(tbl_id);
-    if(tbl_it == category.tables.end())
-        return items;
+    auto     tbl_it = category.tables.find(tbl_id);
+    if(tbl_it == category.tables.end()) return items;
     const AvailableMetrics::Table& table = tbl_it->second;
 
     if(m_level == LEVEL_ENTRY)
@@ -201,8 +229,7 @@ QueryBuilder::Select(int level, const LevelItem& item)
 
     m_value_name = (level == LEVEL_VALUE_NAME) ? item.label : "";
 
-    if(level < LEVEL_COUNT - 1)
-        m_level = level + 1;
+    if(level < LEVEL_COUNT - 1) m_level = level + 1;
 
     m_scroll_to_end = true;
 }
@@ -215,7 +242,6 @@ QueryBuilder::ClearFrom(int level)
     m_value_name.clear();
     m_level = level;
 }
-
 
 std::string
 QueryBuilder::GetQueryString() const

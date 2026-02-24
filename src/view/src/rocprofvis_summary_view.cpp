@@ -864,9 +864,8 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
         ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
         ImGui::BeginChild("legend", ImVec2(region.x * 0.25f, 0),
                           ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY);
-        float legend_width     = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
-        float icon_width       = ImGui::GetFontSize();
-        float elide_width      = ImGui::CalcTextSize(" [...]").x;
+        float legend_width = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
+        float icon_width   = ImGui::GetFontSize();
         float scroll_bar_width = ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f;
         ImGui::BeginChild(
             "legend_scroll_view", ImVec2(legend_width - scroll_bar_width, 0),
@@ -890,39 +889,14 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
                            icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK),
                 ImGui::GetColorU32(ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
                                    row_hovered ? 0.75f : 1.0f));
-            bool elide = icon_width + text_width + scroll_bar_width > legend_width;
-            if(elide)
-            {
-                ImGui::PushClipRect(
-                    ImGui::GetCursorScreenPos(),
-                    ImGui::GetCursorScreenPos() +
-                        ImVec2(legend_width - scroll_bar_width - elide_width,
-                               ImGui::GetFrameHeightWithSpacing()),
-                    true);
-            }
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetFontSize());
             ImGui::BeginDisabled(i == m_padded_idx);
-            ImGui::TextUnformatted((*m_kernels)[i].name.c_str());
-            if(elide)
-            {
-                ImGui::PopClipRect();
-                ImGui::SameLine(legend_width - scroll_bar_width - elide_width);
-                ImGui::TextUnformatted(" [...]");
-            }
+            ImGui::SameLine(icon_width);
+            ElidedText((*m_kernels)[i].name.c_str(), ImGui::GetContentRegionAvail().x,
+                       region.x * 0.5f);
             ImGui::EndDisabled();
             if(row_hovered)
             {
                 hovered_idx = i;
-                if(elide)
-                {
-                    if(BeginItemTooltipStyled())
-                    {
-                        ImGui::PushTextWrapPos(region.x * 0.5f);
-                        ImGui::TextWrapped("%s", (*m_kernels)[i].name.c_str());
-                        ImGui::PopTextWrapPos();
-                        EndTooltipStyled();
-                    }
-                }
                 if(row_clicked && m_selection_callback)
                 {
                     ToggleSelectKernel(i);

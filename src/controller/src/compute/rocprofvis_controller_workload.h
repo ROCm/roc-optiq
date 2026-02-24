@@ -50,6 +50,11 @@ private:
         size_t description_idx;
         size_t unit_idx;
     };
+    struct MetricValueName {
+        uint32_t category_id;
+        uint32_t table_id;
+        size_t   value_name_idx;
+    };
 
     uint32_t m_id;
     std::string m_name;
@@ -57,6 +62,7 @@ private:
     JsonData m_system_info;
     JsonData m_profiling_config;
     std::vector<MetricDefinition> m_available_metrics;
+    std::vector<MetricValueName>  m_metric_value_names;
     std::vector<Kernel*> m_kernels;
     Roofline* m_roofline;
 };

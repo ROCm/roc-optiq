@@ -4,7 +4,10 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_root_view.h"
+#include "widgets/rocprofvis_query_builder.h"
 #include "widgets/rocprofvis_tab_container.h"
+#include "rocprofvis_compute_selection.h"
+#include "rocprofvis_compute_workload_view.h"
 
 namespace RocProfVis
 {
@@ -13,6 +16,7 @@ namespace View
 
 class SettingsManager;
 class ComputeTester;
+class Roofline;
 
 class ComputeView : public RootView
 {
@@ -33,8 +37,11 @@ public:
 
 private:
     void RenderToolbar();
+    void RenderWorkloadSelection();
 
     bool m_view_created;
+
+    std::shared_ptr<ComputeSelection> m_compute_selection;
 
     std::shared_ptr<TabContainer> m_tab_container;
 
@@ -42,52 +49,10 @@ private:
     std::shared_ptr<RocCustomWidget> m_tool_bar;
 };
 
-
-//TODO: move these to separate files when they are implemented
-class ComputeSummaryView: public RocWidget
-{
-public:
-    ComputeSummaryView(DataProvider& data_provider);
-    ~ComputeSummaryView(){};
-
-protected:
-    DataProvider& m_data_provider;
-};
-
-class ComputeKernelDetailsView: public RocWidget
-{
-public:
-    ComputeKernelDetailsView(DataProvider& data_provider);
-    ~ComputeKernelDetailsView(){};
-
-protected:
-    DataProvider& m_data_provider;
-};
-
-class ComputeTableView: public RocWidget
-{
-public:
-    ComputeTableView(DataProvider& data_provider);
-    ~ComputeTableView(){};
-
-protected:
-    DataProvider& m_data_provider;
-};
-
-class ComputeWorkloadView: public RocWidget
-{
-public:
-    ComputeWorkloadView(DataProvider& data_provider);
-    ~ComputeWorkloadView(){};
-
-protected:
-    DataProvider& m_data_provider;
-};
-
 class ComputeTester : public RocWidget
 {
 public:
-    ComputeTester(DataProvider& data_provider);
+    ComputeTester(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTester();
 
     void Update();
@@ -138,9 +103,13 @@ private:
             intensity;
     };
 
-    DataProvider&  m_data_provider;
-    SelectionState m_selections;
-    DisplayStrings m_display_names;
+    DataProvider&                     m_data_provider;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+    SelectionState                    m_selections;
+    DisplayStrings                    m_display_names;
+    QueryBuilder                      m_query_builder;
+
+    char m_value_names_input[64] = "3.1.2";
 };
 
 }  // namespace View

@@ -119,7 +119,7 @@ FlameTrackItem::RenderMetaAreaExpand()
             RecalculateTrackHeight();
             m_is_expanded = true;
         }
-        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to see all events");
+        if(ImGui::IsItemHovered()) SetTooltipStyled("Expand track to see all events");
     }
     else if(m_track_height >
             std::max(m_max_level * m_level_height + m_level_height,
@@ -132,7 +132,7 @@ FlameTrackItem::RenderMetaAreaExpand()
             m_track_height_changed = true;
             m_is_expanded          = false;
         }
-        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to default height");
+        if(ImGui::IsItemHovered()) SetTooltipStyled("Contract track to default height");
     }
     ImGui::PopStyleColor(3);
 }

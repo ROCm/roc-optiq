@@ -16,6 +16,7 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_debug_window.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
 
@@ -751,7 +752,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                     std::string label = nanosecond_to_formatted_str(
                         m_highlighted_region.first,
                         m_settings.GetUserSettings().unit_settings.time_format, true);
-                    ImGui::SetTooltip("%s", label.c_str());
+                    SetTooltipStyled("%s", label.c_str());
                 }
 
                 if(mouse_clicked)
@@ -797,7 +798,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
                     std::string label = nanosecond_to_formatted_str(
                         m_highlighted_region.second,
                         m_settings.GetUserSettings().unit_settings.time_format, true);
-                    ImGui::SetTooltip("%s", label.c_str());
+                    SetTooltipStyled("%s", label.c_str());
                     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
                 }
                 if(mouse_clicked)
@@ -1507,8 +1508,8 @@ TimelineView::RenderHistogram()
 
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip(is_global ? "Normalization: All Tracks"
-                                    : "Normalization: Visible Tracks");
+        SetTooltipStyled(is_global ? "Normalization: All Tracks"
+                                   : "Normalization: Visible Tracks");
     }
 
     // Visuals

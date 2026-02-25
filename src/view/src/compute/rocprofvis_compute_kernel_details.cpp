@@ -32,7 +32,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 {
     SubscribeToEvents();
 
-    m_roofline = std::make_unique<RocProfVis::View::Roofline>(data_provider);
+    m_roofline = std::make_unique<RocProfVis::View::Roofline>(data_provider, Roofline::SingleKernel);
     m_kernel_metric_table = std::make_unique<RocProfVis::View::KernelMetricTable>(data_provider, compute_selection);
 
     m_widget_name = GenUniqueName("ComputeKernelDetailsView");
@@ -65,6 +65,10 @@ void ComputeKernelDetailsView::SubscribeToEvents()
                 m_data_provider.ComputeModel().GetKernelSelectionTable().Clear();
                 m_kernel_metric_table->FetchData(evt->GetId());
             }
+			if(m_roofline)
+			{
+				m_roofline->SetWorkload(evt->GetId());	
+			}
             m_sol_table.Clear();
         }
     };
@@ -80,7 +84,6 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             m_memory_chart.FetchMemChartMetrics();
             if(m_roofline)
             {
-                m_roofline->SetWorkload(m_compute_selection->GetSelectedWorkload());
                 m_roofline->SetKernel(evt->GetId());
             }
         }

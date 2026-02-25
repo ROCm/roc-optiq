@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <array>
 
 namespace RocProfVis
 {
@@ -53,6 +54,16 @@ struct Point
 
 struct KernelInfo
 {
+    enum DispatchMetric
+    {
+        InvocationCount,
+        DurationTotal,
+        DurationMin,
+        DurationMax,
+        DurationMean,
+        DurationMedian,
+        NumMetrics
+    };
     struct Roofline
     {
         struct Intensity
@@ -64,15 +75,10 @@ struct KernelInfo
                            Intensity>
             intensities;
     };
-    uint32_t    id;
-    std::string name;
-    uint32_t    invocation_count;
-    uint64_t    duration_total;
-    uint32_t    duration_min;
-    uint32_t    duration_max;
-    uint32_t    duration_mean;
-    uint32_t    duration_median;
-    Roofline    roofline;
+    uint32_t                         id;
+    std::string                      name;
+    std::array<uint64_t, NumMetrics> dispatch_metrics;
+    Roofline                         roofline;
 };
 
 struct WorkloadInfo

@@ -21,7 +21,13 @@ class SettingsManager;
 class Roofline : public RocWidget
 {
 public:
-    Roofline(DataProvider& data_provider);
+    enum KernelMode
+    {
+        SingleKernel,
+        AllKernels,
+    };
+
+    Roofline(DataProvider& data_provider, KernelMode kernel_mode);
 
     void Update() override;
     void Render() override;
@@ -100,6 +106,7 @@ private:
     bool                  m_workload_changed;
     const WorkloadInfo*   m_workload;
     uint32_t              m_requested_workload_id;
+    KernelMode            m_kernel_mode;
     bool                  m_kernel_changed;
     const KernelInfo*     m_kernel;
     uint32_t              m_requested_kernel_id;

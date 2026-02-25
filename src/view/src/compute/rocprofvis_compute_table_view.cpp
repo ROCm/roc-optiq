@@ -5,6 +5,7 @@
 #include "rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_requests.h"
+#include "widgets/rocprofvis_compute_widget.h"
 
 namespace RocProfVis
 {
@@ -233,79 +234,9 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
             continue;
 
         category_has_data = true;
-
-        int value_columns = std::max(1, static_cast<int>(tbl.value_names.size()));
-        int num_columns   = 1 + value_columns + 1;  // Metric + values + Unit
-
-        ImGui::SeparatorText(tbl.name.c_str());
-        if(ImGui::BeginTable("##t", num_columns, ImGuiTableFlags_Borders))
-        {
-            ImGui::TableSetupColumn("Metric");
-            if(tbl.value_names.empty())
-            {
-                ImGui::TableSetupColumn("Value");
-            }
-            else
-            {
-                for(const auto& vn : tbl.value_names)
-                    ImGui::TableSetupColumn(vn.c_str());
-            }
-            ImGui::TableSetupColumn("Unit");
-            ImGui::TableHeadersRow();
-
-            for(const auto& entry_pair : tbl.entries)
-            {
-                uint32_t    eid   = entry_pair.first;
-                const auto& entry = entry_pair.second;
-
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                ImGui::TextUnformatted(entry.name.c_str());
-
-                if(tbl.value_names.empty())
-                {
-                    ImGui::TableNextColumn();
-                    auto mv = model.GetMetricValue(
-                        m_client_id, kernel_id, cat.id, tbl_id, eid);
-                    if(mv && mv->entry && !mv->values.empty())
-                    {
-                        ImGui::Text("%.2f", mv->values.begin()->second);
-                    }
-                    else
-                    {
-                        ImGui::TextDisabled("N/A");
-                    }
-                }
-                else
-                {
-                    for(const auto& vn : tbl.value_names)
-                    {
-                        ImGui::TableNextColumn();
-                        auto mv = model.GetMetricValue(
-                            m_client_id, kernel_id, cat.id, tbl_id, eid);
-                        if(mv && mv->entry && mv->values.count(vn))
-                        {
-                            ImGui::Text("%.2f", mv->values.at(vn));
-                        }
-                        else
-                        {
-                            ImGui::TextDisabled("N/A");
-                        }
-                    }
-                }
-
-                ImGui::TableNextColumn();
-                if(!entry.unit.empty())
-                {
-                    ImGui::TextUnformatted(entry.unit.c_str());
-                }
-                else
-                {
-                    ImGui::TextDisabled("N/A");
-                }
-            }
-            ImGui::EndTable();
-        }
+        MetricTableWidget::Render(tbl, [&](uint32_t eid) {
+            return model.GetMetricValue(m_client_id, kernel_id, cat.id, tbl_id, eid);
+        });
     }
 
     if(!category_has_data)

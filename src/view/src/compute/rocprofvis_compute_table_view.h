@@ -4,6 +4,7 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include <unordered_set>
 

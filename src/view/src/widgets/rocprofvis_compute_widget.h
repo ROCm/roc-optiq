@@ -3,6 +3,7 @@
 
 #pragma once
 #include "compute/rocprofvis_compute_data_provider.h"
+#include "model/compute/rocprofvis_compute_model_types.h"
 #include "rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -99,6 +100,15 @@ private:
     std::vector<const char*> m_ai_names;
     std::vector<std::vector<double>*> m_ai_x;
     std::vector<std::vector<double>*> m_ai_y;
+};
+
+class MetricTableWidget
+{
+public:
+    using MetricValueLookup = std::function<std::shared_ptr<MetricValue>(uint32_t entry_id)>;
+
+    static void Render(const AvailableMetrics::Table& table,
+                       const MetricValueLookup&       get_value);
 };
 
 }  // namespace View

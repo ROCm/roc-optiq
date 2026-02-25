@@ -4,6 +4,7 @@
 #include "rocprofvis_compute_widget.h"
 #include "rocprofvis_core_assert.h"
 #include "implot.h"
+#include <algorithm>
 #include <regex>
 
 namespace RocProfVis
@@ -369,6 +370,82 @@ void ComputePlotRooflineLegacy::SetGroupMode(const GroupMode& mode)
         m_group_dirty = true;
         UpdateGroupMode();
     }
+}
+
+void
+MetricTableWidget::Render(const AvailableMetrics::Table& table,
+                          const MetricValueLookup&       get_value)
+{
+    int value_columns = std::max(1, static_cast<int>(table.value_names.size()));
+    int num_columns   = 1 + value_columns + 1;
+
+    ImGui::SeparatorText(table.name.c_str());
+    if(!ImGui::BeginTable("##t", num_columns, ImGuiTableFlags_Borders))
+        return;
+
+    ImGui::TableSetupColumn("Metric");
+    if(table.value_names.empty())
+    {
+        ImGui::TableSetupColumn("Value");
+    }
+    else
+    {
+        for(const auto& vn : table.value_names)
+            ImGui::TableSetupColumn(vn.c_str());
+    }
+    ImGui::TableSetupColumn("Unit");
+    ImGui::TableHeadersRow();
+
+    for(const auto& entry_pair : table.entries)
+    {
+        uint32_t    eid   = entry_pair.first;
+        const auto& entry = entry_pair.second;
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(entry.name.c_str());
+
+        auto mv = get_value(eid);
+
+        if(table.value_names.empty())
+        {
+            ImGui::TableNextColumn();
+            if(mv && mv->entry && !mv->values.empty())
+            {
+                ImGui::Text("%.2f", mv->values.begin()->second);
+            }
+            else
+            {
+                ImGui::TextDisabled("N/A");
+            }
+        }
+        else
+        {
+            for(const auto& vn : table.value_names)
+            {
+                ImGui::TableNextColumn();
+                if(mv && mv->entry && mv->values.count(vn))
+                {
+                    ImGui::Text("%.2f", mv->values.at(vn));
+                }
+                else
+                {
+                    ImGui::TextDisabled("N/A");
+                }
+            }
+        }
+
+        ImGui::TableNextColumn();
+        if(!entry.unit.empty())
+        {
+            ImGui::TextUnformatted(entry.unit.c_str());
+        }
+        else
+        {
+            ImGui::TextDisabled("N/A");
+        }
+    }
+    ImGui::EndTable();
 }
 
 }  // namespace View

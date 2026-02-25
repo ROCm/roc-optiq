@@ -47,7 +47,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
             if(m_fetch_pending) FetchAllMetrics();
-            RebuildTableDataCache();
+            if(evt->GetClientId() == m_client_id) RebuildTableDataCache();
         }
     };
 

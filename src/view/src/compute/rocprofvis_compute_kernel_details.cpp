@@ -6,6 +6,8 @@
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_requests.h"
+#include "model/compute/rocprofvis_compute_data_model.h"
 
 #include "imgui.h"
 
@@ -23,18 +25,11 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
 {
-    // Add event listener for selection changes to trigger metric fetch for the newly
-    // selected kernel
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto selection_changed_event =
-               std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e))
+        auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_data_provider.GetTraceFilePath() !=
-               selection_changed_event->GetSourceId())
-            {
-                return;
-            }
-            // TODO: fetch pivot table data
+            m_sol_table = {};
         }
     };
 
@@ -43,19 +38,14 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
         workload_changed_handler);
 
     auto kernel_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto selection_changed_event =
-               std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e))
+        auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_data_provider.GetTraceFilePath() !=
-               selection_changed_event->GetSourceId())
-            {
-                return;
-            }
             m_memory_chart.FetchMemChartMetrics();
             if(m_roofline)
             {
                 m_roofline->SetWorkload(m_compute_selection->GetSelectedWorkload());
-                m_roofline->SetKernel(selection_changed_event->GetId());
+                m_roofline->SetKernel(evt->GetId());
             }
         }
     };
@@ -64,19 +54,18 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
         static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
         kernel_changed_handler);
 
-    // subscribe to fetch metrics event
     auto metrics_fetched_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto metrics_fetched_event =
-               std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e))
+        auto evt = std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_data_provider.GetTraceFilePath() != metrics_fetched_event->GetSourceId())
-            {
-                return;
-            }
-
-            if(m_memory_chart.GetClientId() == metrics_fetched_event->GetClientId())
+            if(m_memory_chart.GetClientId() == evt->GetClientId())
             {
                 m_memory_chart.UpdateMetrics();
+                FetchSOLMetrics();
+            }
+            if(m_client_id == evt->GetClientId())
+            {
+                UpdateSOLTable();
             }
         }
     };
@@ -116,11 +105,48 @@ ComputeKernelDetailsView::Render()
     ImGui::BeginChild("kernel_details");
     ImGui::Text("Memory Chart");
     m_memory_chart.Render();
+    m_sol_table.Render();
     if(m_roofline)
     {
         m_roofline->Render();
     }
     ImGui::EndChild();
+}
+
+void
+ComputeKernelDetailsView::FetchSOLMetrics()
+{
+    m_sol_table = {};
+    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+
+    uint32_t wid = m_compute_selection->GetSelectedWorkload();
+    uint32_t kid = m_compute_selection->GetSelectedKernel();
+    if(wid == ComputeSelection::INVALID_SELECTION_ID ||
+       kid == ComputeSelection::INVALID_SELECTION_ID)
+        return;
+
+    m_data_provider.FetchMetrics(MetricsRequestParams(
+        wid, {kid}, {{2, 1, std::nullopt}}, m_client_id));
+}
+
+void
+ComputeKernelDetailsView::UpdateSOLTable()
+{
+    uint32_t wid = m_compute_selection->GetSelectedWorkload();
+    uint32_t kid = m_compute_selection->GetSelectedKernel();
+    if(wid == ComputeSelection::INVALID_SELECTION_ID ||
+       kid == ComputeSelection::INVALID_SELECTION_ID)
+        return;
+
+    auto& model = m_data_provider.ComputeModel();
+    if(!model.GetWorkloads().count(wid)) return;
+
+    const auto& tree = model.GetWorkloads().at(wid).available_metrics.tree;
+    if(!tree.count(2) || !tree.at(2).tables.count(1)) return;
+
+    m_sol_table.Populate(tree.at(2).tables.at(1), [&](uint32_t eid) {
+        return model.GetMetricValue(m_client_id, kid, 2, 1, eid);
+    });
 }
 
 }  // namespace View

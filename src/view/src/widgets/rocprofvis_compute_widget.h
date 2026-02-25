@@ -102,15 +102,15 @@ private:
     std::vector<std::vector<double>*> m_ai_y;
 };
 
-class MetricTableWidget
+class MetricTableCache
 {
 public:
     using MetricValueLookup = std::function<std::shared_ptr<MetricValue>(uint32_t entry_id)>;
 
     struct Row
     {
-        std::string              name;
-        std::vector<std::string> values;
+        std::string                name;
+        std::vector<std::string>   values;
         std::string              unit;
     };
 
@@ -123,6 +123,7 @@ public:
 
 private:
     std::string              m_title;
+    std::string              m_table_id;
     std::vector<std::string> m_column_names;
     std::vector<Row>         m_rows;
 };

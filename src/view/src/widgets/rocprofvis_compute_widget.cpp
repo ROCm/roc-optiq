@@ -373,12 +373,14 @@ void ComputePlotRooflineLegacy::SetGroupMode(const GroupMode& mode)
 }
 
 void
-MetricTableWidget::Populate(const AvailableMetrics::Table& table,
-                            const MetricValueLookup&       get_value)
+MetricTableCache::Populate(const AvailableMetrics::Table& table,
+                           const MetricValueLookup&       get_value)
 {
-    m_title = table.name;
+    m_title    = table.name;
+    m_table_id = "##" + table.name;
     m_column_names.clear();
     m_rows.clear();
+    m_rows.reserve(table.entries.size());
 
     m_column_names.push_back("Metric");
     if(table.value_names.empty())
@@ -437,7 +439,7 @@ MetricTableWidget::Populate(const AvailableMetrics::Table& table,
 }
 
 void
-MetricTableWidget::Render() const
+MetricTableCache::Render() const
 {
     if(m_rows.empty())
         return;
@@ -445,7 +447,7 @@ MetricTableWidget::Render() const
     int num_columns = static_cast<int>(m_column_names.size());
 
     ImGui::SeparatorText(m_title.c_str());
-    if(!ImGui::BeginTable("##t", num_columns, ImGuiTableFlags_Borders))
+    if(!ImGui::BeginTable(m_table_id.c_str(), num_columns, ImGuiTableFlags_Borders))
         return;
 
     for(const auto& col : m_column_names)
@@ -485,7 +487,7 @@ MetricTableWidget::Render() const
 }
 
 bool
-MetricTableWidget::Empty() const
+MetricTableCache::Empty() const
 {
     return m_rows.empty();
 }

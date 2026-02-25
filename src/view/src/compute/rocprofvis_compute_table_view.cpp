@@ -5,7 +5,6 @@
 #include "rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_requests.h"
-#include "widgets/rocprofvis_compute_widget.h"
 
 namespace RocProfVis
 {
@@ -20,13 +19,9 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
 , m_client_id(IdGenerator::GetInstance().GenerateId())
 {
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto selection_event =
-               std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e))
+        auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_data_provider.GetTraceFilePath() != selection_event->GetSourceId())
-            {
-                return;
-            }
             RebuildTabs();
         }
     };
@@ -36,13 +31,9 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
         workload_changed_handler);
 
     auto kernel_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto selection_event =
-               std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e))
+        auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_data_provider.GetTraceFilePath() != selection_event->GetSourceId())
-            {
-                return;
-            }
             FetchAllMetrics();
         }
     };
@@ -52,17 +43,10 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
         kernel_changed_handler);
 
     auto metrics_fetched_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto fetched_event =
-               std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e))
+        auto evt = std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_data_provider.GetTraceFilePath() != fetched_event->GetSourceId())
-            {
-                return;
-            }
-            if(m_fetch_pending)
-            {
-                FetchAllMetrics();
-            }
+            if(m_fetch_pending) FetchAllMetrics();
             RebuildTableDataCache();
         }
     };
@@ -205,7 +189,7 @@ ComputeTableView::RebuildTableDataCache()
             key.fields.category_id = cp.first;
             key.fields.table_id    = tp.first;
 
-            MetricTableWidget widget;
+            MetricTableCache widget;
             widget.Populate(tp.second, [&](uint32_t eid) {
                 return model.GetMetricValue(
                     m_client_id, kernel_id, cp.first, tp.first, eid);

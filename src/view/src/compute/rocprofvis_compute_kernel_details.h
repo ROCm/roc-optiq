@@ -4,6 +4,7 @@
 #pragma once
 #include "rocprofvis_compute_memory_chart.h"
 #include "rocprofvis_event_manager.h"
+#include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -26,11 +27,15 @@ public:
     void Update() override;
 
 private:
+    void FetchSOLMetrics();
+    void UpdateSOLTable();
+
     DataProvider&          m_data_provider;
     ComputeMemoryChartView m_memory_chart;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<Roofline>         m_roofline;
+    MetricTableCache                  m_sol_table;
 
     uint64_t m_client_id;
 

@@ -106,6 +106,7 @@ void
 StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
                    std::shared_ptr<TimePixelTransform> tpt)
 {
+    (void)draw_list;
     if(!tpt)
     {
         spdlog::error(

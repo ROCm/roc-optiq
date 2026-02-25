@@ -203,7 +203,7 @@ ComputeBlockViewLegacy::ComputeBlockViewLegacy(std::string owner_id, std::shared
 , m_block_diagram_region(ImVec2(-1, -1))
 , m_block_diagram_center(ImVec2(-1, -1))
 , m_navigation_changed(true)
-, m_navigation_event_token(-1)
+, m_navigation_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_owner_id(owner_id)
 {
     m_navigation = std::make_unique<ComputeBlockDiagramNavHelper>();
@@ -252,6 +252,7 @@ ComputeBlockViewLegacy::ComputeBlockViewLegacy(std::string owner_id, std::shared
 
     auto navigation_changed_handler = [this](std::shared_ptr<RocEvent> event) 
     {
+        (void)event;
         m_navigation_changed = true;
     };
     m_navigation_event_token = EventManager::GetInstance()->Subscribe(static_cast<int>(RocEvents::kComputeBlockNavigationChanged), navigation_changed_handler);

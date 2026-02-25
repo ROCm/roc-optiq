@@ -87,7 +87,7 @@ const std::array TAB_DEFINITIONS {
 };
 
 ComputeTableCategory::ComputeTableCategory(std::shared_ptr<ComputeDataProvider> data_provider, table_view_category_t category)
-: m_search_event_token(-1)
+: m_search_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 {
     for (const rocprofvis_controller_compute_table_types_t& table : TAB_DEFINITIONS[category].m_table_types)
     {

@@ -41,6 +41,7 @@ AnnotationView::Render()
 
         double trace_start_time =
             m_data_provider.DataModel().GetTimeline().GetStartTime();
+        (void)trace_start_time;
         const auto& time_format =
             SettingsManager::GetInstance().GetUserSettings().unit_settings.time_format;
         std::string time_label;

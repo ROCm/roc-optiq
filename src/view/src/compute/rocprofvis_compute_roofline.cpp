@@ -390,7 +390,7 @@ Roofline::Render()
                     display &= m_items[i].visible;
                     if(display)
                     {
-                        ImGui::PushID(i);
+                        ImGui::PushID(static_cast<int>(i));
                         bool hovered =
                             m_hovered_item_idx && m_hovered_item_idx.value() == i;
                         switch(m_items[i].type)
@@ -398,7 +398,7 @@ Roofline::Render()
                             case ItemModel::Type::CeilingCompute:
                             case ItemModel::Type::CeilingBandwidth:
                             {
-                                ImPlot::SetNextLineStyle(ImPlot::GetColormapColor(i),
+                                ImPlot::SetNextLineStyle(ImPlot::GetColormapColor(static_cast<int>(i)),
                                                          hovered ? plot_style.LineWeight *
                                                                        3.0f
                                                                  : plot_style.LineWeight);
@@ -436,8 +436,8 @@ Roofline::Render()
                                         (m_scale_intensity ? m_items[i].weight : 0.0f) *
                                             2.0f * plot_style.MarkerSize +
                                         (hovered ? plot_style.MarkerSize : 0.0f),
-                                    ImPlot::GetColormapColor(i), IMPLOT_AUTO,
-                                    ImPlot::GetColormapColor(i));
+                                    ImPlot::GetColormapColor(static_cast<int>(i)), IMPLOT_AUTO,
+                                    ImPlot::GetColormapColor(static_cast<int>(i)));
                                 ImPlot::PlotScatter(
                                     "", &m_items[i].info.intensity->position.x,
                                     &m_items[i].info.intensity->position.y, 1);
@@ -464,7 +464,7 @@ Roofline::Render()
                                                 ImGui::CalcTextSize(
                                                     m_items[i].label.c_str()),
                                             ImGui::GetColorU32(
-                                                ImPlot::GetColormapColor(i)));
+                                                ImPlot::GetColormapColor(static_cast<int>(i))));
                                         ImGui::TextUnformatted(m_items[i].label.c_str());
                                         ImGui::Text(
                                             "%.0f GFLOP/s",
@@ -480,7 +480,7 @@ Roofline::Render()
                                                 ImGui::CalcTextSize(
                                                     m_items[i].label.c_str()),
                                             ImGui::GetColorU32(
-                                                ImPlot::GetColormapColor(i)));
+                                                ImPlot::GetColormapColor(static_cast<int>(i))));
                                         ImGui::TextUnformatted(m_items[i].label.c_str());
                                         ImGui::Text(
                                             "%.0f GB/s",
@@ -498,7 +498,7 @@ Roofline::Render()
                                                     DISPLAY_NAMES_KERNEL_INTENSITY
                                                         [m_items[i].subtype.intensity]),
                                             ImGui::GetColorU32(
-                                                ImPlot::GetColormapColor(i)));
+                                                ImPlot::GetColormapColor(static_cast<int>(i))));
                                         ImGui::TextUnformatted(
                                             DISPLAY_NAMES_KERNEL_INTENSITY
                                                 [m_items[i].subtype.intensity]);
@@ -672,7 +672,7 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
                (m_menus_mode == Legend && m_items[i].visible || m_menus_mode == Options))
             {
                 empty = false;
-                ImGui::PushID(i);
+                ImGui::PushID(static_cast<int>(i));
                 ImVec2 pos         = ImGui::GetCursorPos();
                 bool   row_clicked = ImGui::Selectable(
                     "", false,
@@ -697,7 +697,7 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
                                     ImVec2(icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK,
                                            icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK),
                                 ImGui::GetColorU32(
-                                    ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
+                                    ImGui::GetColorU32(ImPlot::GetColormapColor(static_cast<int>(i))),
                                     row_hovered ? 0.75f : 1.0f));
                             break;
                         }
@@ -708,7 +708,7 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
                                     ImVec2(icon_width, icon_width) * 0.5f,
                                 icon_width * 0.5f - 2 * IMPLOT_LEGEND_ICON_SHRINK,
                                 ImGui::GetColorU32(
-                                    ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
+                                    ImGui::GetColorU32(ImPlot::GetColormapColor(static_cast<int>(i))),
                                     row_hovered ? 0.75f : 1.0f),
                                 10);
                             break;

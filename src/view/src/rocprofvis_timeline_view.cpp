@@ -116,6 +116,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
         static_cast<int>(RocEvents::kSetViewRange), set_view_range_handle);
 
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void)e;
         m_recalculate_grid_interval = true;
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
         CalculateMaxMetaAreaSize();

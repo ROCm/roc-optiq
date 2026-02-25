@@ -87,7 +87,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                 level_height = settings.GetEventLevelHeight();
             }
 
-            float origin_x = tpt->RawTimeToPixel(origin.end_timestamp);
+            float origin_x = tpt->RawTimeToPixel(static_cast<double>(origin.end_timestamp));
             float origin_y = track_position_y.at(origin.track_id) +
                              std::min(level_height * origin.level + level_height / 2,
                                       origin_track.chart->GetTrackHeight());
@@ -111,7 +111,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                     level_height = settings.GetEventLevelHeight();
                 }
 
-                float target_x = tpt->RawTimeToPixel(target.start_timestamp);
+                float target_x = tpt->RawTimeToPixel(static_cast<double>(target.start_timestamp));
                 float target_y = track_position_y.at(target.track_id) +
                                  std::min(level_height * target.level + level_height / 2,
                                           target_track.chart->GetTrackHeight());
@@ -185,7 +185,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                     level_height = settings.GetEventLevelHeight();
                 }
 
-                float from_x = tpt->RawTimeToPixel(from.end_timestamp);
+                float from_x = tpt->RawTimeToPixel(static_cast<double>(from.end_timestamp));
                 float from_y = track_position_y.at(from.track_id) +
                                std::min(level_height * from.level + level_height / 2,
                                         from_track.chart->GetTrackHeight());
@@ -200,7 +200,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                     level_height = settings.GetEventLevelHeight();
                 }
 
-                float to_x = tpt->RawTimeToPixel(to.start_timestamp);
+                float to_x = tpt->RawTimeToPixel(static_cast<double>(to.start_timestamp));
                 float to_y = track_position_y.at(to.track_id) +
                              std::min(level_height * to.level + level_height / 2,
                                       to_track.chart->GetTrackHeight());
@@ -255,7 +255,7 @@ TimelineArrow::TimelineArrow(DataProvider&                      data_provider,
                              std::shared_ptr<TimelineSelection> selection)
 : m_data_provider(data_provider)
 , m_timeline_selection(selection)
-, m_selection_changed_token(-1)
+, m_selection_changed_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_flow_display_mode(FlowDisplayMode::kShowAll)
 , m_render_style(RenderStyle::kFan)
 {

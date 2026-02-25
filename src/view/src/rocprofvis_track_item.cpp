@@ -863,6 +863,7 @@ Pill::Pill(const std::string& label, bool shown, bool active)
     CalculatePillSize();
 
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void)e;
         CalculatePillSize();
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(

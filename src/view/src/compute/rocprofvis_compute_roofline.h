@@ -35,6 +35,13 @@ private:
         Legend,
         Options
     };
+    enum MenusPosition
+    {
+        TopRight,
+        TopLeft,
+        BottomLeft,
+        BottomRight
+    };
     struct ItemModel
     {
         enum Type
@@ -92,9 +99,10 @@ private:
     std::vector<PresetModel> m_presets;
 
     // User options...
-    bool      m_show_menus;
-    MenusMode m_menus_mode;
-    bool      m_scale_intensity;
+    bool          m_show_menus;
+    MenusMode     m_menus_mode;
+    MenusPosition m_menus_position;
+    bool          m_scale_intensity;
 
     // Internal state...
     bool                  m_workload_changed;
@@ -106,6 +114,8 @@ private:
     bool                  m_options_changed;
     std::optional<size_t> m_hovered_item_idx;
     float                 m_hovered_item_distance;
+    float                 m_menus_height;
+    float                 m_plot_left_x;
 
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;

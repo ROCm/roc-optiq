@@ -107,8 +107,24 @@ class MetricTableWidget
 public:
     using MetricValueLookup = std::function<std::shared_ptr<MetricValue>(uint32_t entry_id)>;
 
-    static void Render(const AvailableMetrics::Table& table,
-                       const MetricValueLookup&       get_value);
+    struct Row
+    {
+        std::string              name;
+        std::vector<std::string> values;
+        std::string              unit;
+    };
+
+    void Populate(const AvailableMetrics::Table& table,
+                  const MetricValueLookup&       get_value);
+
+    void Render() const;
+
+    bool Empty() const;
+
+private:
+    std::string              m_title;
+    std::vector<std::string> m_column_names;
+    std::vector<Row>         m_rows;
 };
 
 }  // namespace View

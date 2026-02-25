@@ -373,72 +373,108 @@ void ComputePlotRooflineLegacy::SetGroupMode(const GroupMode& mode)
 }
 
 void
-MetricTableWidget::Render(const AvailableMetrics::Table& table,
-                          const MetricValueLookup&       get_value)
+MetricTableWidget::Populate(const AvailableMetrics::Table& table,
+                            const MetricValueLookup&       get_value)
 {
-    int value_columns = std::max(1, static_cast<int>(table.value_names.size()));
-    int num_columns   = 1 + value_columns + 1;
+    m_title = table.name;
+    m_column_names.clear();
+    m_rows.clear();
 
-    ImGui::SeparatorText(table.name.c_str());
-    if(!ImGui::BeginTable("##t", num_columns, ImGuiTableFlags_Borders))
-        return;
-
-    ImGui::TableSetupColumn("Metric");
+    m_column_names.push_back("Metric");
     if(table.value_names.empty())
     {
-        ImGui::TableSetupColumn("Value");
+        m_column_names.push_back("Value");
     }
     else
     {
         for(const auto& vn : table.value_names)
-            ImGui::TableSetupColumn(vn.c_str());
+            m_column_names.push_back(vn);
     }
-    ImGui::TableSetupColumn("Unit");
-    ImGui::TableHeadersRow();
+    m_column_names.push_back("Unit");
 
+    char buf[64];
     for(const auto& entry_pair : table.entries)
     {
         uint32_t    eid   = entry_pair.first;
         const auto& entry = entry_pair.second;
 
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
-        ImGui::TextUnformatted(entry.name.c_str());
+        Row row;
+        row.name = entry.name;
+        row.unit = entry.unit.empty() ? "N/A" : entry.unit;
 
         auto mv = get_value(eid);
 
         if(table.value_names.empty())
         {
-            ImGui::TableNextColumn();
             if(mv && mv->entry && !mv->values.empty())
             {
-                ImGui::Text("%.2f", mv->values.begin()->second);
+                snprintf(buf, sizeof(buf), "%.2f", mv->values.begin()->second);
+                row.values.push_back(buf);
             }
             else
             {
-                ImGui::TextDisabled("N/A");
+                row.values.emplace_back();
             }
         }
         else
         {
             for(const auto& vn : table.value_names)
             {
-                ImGui::TableNextColumn();
                 if(mv && mv->entry && mv->values.count(vn))
                 {
-                    ImGui::Text("%.2f", mv->values.at(vn));
+                    snprintf(buf, sizeof(buf), "%.2f", mv->values.at(vn));
+                    row.values.push_back(buf);
                 }
                 else
                 {
-                    ImGui::TextDisabled("N/A");
+                    row.values.emplace_back();
                 }
             }
         }
 
+        m_rows.push_back(std::move(row));
+    }
+}
+
+void
+MetricTableWidget::Render() const
+{
+    if(m_rows.empty())
+        return;
+
+    int num_columns = static_cast<int>(m_column_names.size());
+
+    ImGui::SeparatorText(m_title.c_str());
+    if(!ImGui::BeginTable("##t", num_columns, ImGuiTableFlags_Borders))
+        return;
+
+    for(const auto& col : m_column_names)
+        ImGui::TableSetupColumn(col.c_str());
+    ImGui::TableHeadersRow();
+
+    for(const auto& row : m_rows)
+    {
+        ImGui::TableNextRow();
         ImGui::TableNextColumn();
-        if(!entry.unit.empty())
+        ImGui::TextUnformatted(row.name.c_str());
+
+        for(const auto& val : row.values)
         {
-            ImGui::TextUnformatted(entry.unit.c_str());
+            ImGui::TableNextColumn();
+            if(!val.empty())
+            {
+                ImGui::TextUnformatted(val.c_str());
+            }
+            else
+            {
+                ImGui::TextDisabled("N/A");
+            }
+        }
+
+        ImGui::TableNextColumn();
+        if(row.unit != "N/A")
+        {
+            ImGui::TextUnformatted(row.unit.c_str());
         }
         else
         {
@@ -446,6 +482,12 @@ MetricTableWidget::Render(const AvailableMetrics::Table& table,
         }
     }
     ImGui::EndTable();
+}
+
+bool
+MetricTableWidget::Empty() const
+{
+    return m_rows.empty();
 }
 
 }  // namespace View

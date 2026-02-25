@@ -99,7 +99,7 @@ void
 ComputeTableView::RebuildTabs()
 {
     m_tabs.reset();
-    m_non_empty_tables.clear();
+    m_table_widgets.clear();
     m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
@@ -124,7 +124,7 @@ void
 ComputeTableView::FetchAllMetrics()
 {
     m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
-    m_non_empty_tables.clear();
+    m_table_widgets.clear();
     m_fetch_pending = false;
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
@@ -182,8 +182,9 @@ ComputeTableView::Render()
 void
 ComputeTableView::RebuildTableDataCache()
 {
-    m_non_empty_tables.clear();
+    m_table_widgets.clear();
 
+    auto&    model       = m_data_provider.ComputeModel();
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
@@ -192,7 +193,7 @@ ComputeTableView::RebuildTableDataCache()
         return;
     }
 
-    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();
+    const auto& workloads = model.GetWorkloads();
     if(!workloads.count(workload_id)) return;
 
     const auto& workload = workloads.at(workload_id);
@@ -200,14 +201,19 @@ ComputeTableView::RebuildTableDataCache()
     {
         for(const auto& tp : cp.second.tables)
         {
-            auto* entries = m_data_provider.ComputeModel().GetMetricValuesByTable(
-                m_client_id, kernel_id, cp.first, tp.first);
-            if(entries && !entries->empty())
+            TableKey key{};
+            key.fields.category_id = cp.first;
+            key.fields.table_id    = tp.first;
+
+            MetricTableWidget widget;
+            widget.Populate(tp.second, [&](uint32_t eid) {
+                return model.GetMetricValue(
+                    m_client_id, kernel_id, cp.first, tp.first, eid);
+            });
+
+            if(!widget.Empty())
             {
-                TableKey key{};
-                key.fields.category_id = cp.first;
-                key.fields.table_id    = tp.first;
-                m_non_empty_tables.insert(key.id);
+                m_table_widgets[key.id] = std::move(widget);
             }
         }
     }
@@ -216,27 +222,21 @@ ComputeTableView::RebuildTableDataCache()
 void
 ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
 {
-    auto&    model     = m_data_provider.ComputeModel();
-    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-
     bool category_has_data = false;
 
     ImGui::BeginChild("scroll", ImVec2(-1, -1));
     for(const auto& tbl_pair : cat.tables)
     {
-        uint32_t    tbl_id = tbl_pair.first;
-        const auto& tbl    = tbl_pair.second;
-
         TableKey key{};
         key.fields.category_id = cat.id;
-        key.fields.table_id    = tbl_id;
-        if(m_non_empty_tables.find(key.id) == m_non_empty_tables.end())
+        key.fields.table_id    = tbl_pair.first;
+
+        auto it = m_table_widgets.find(key.id);
+        if(it == m_table_widgets.end())
             continue;
 
         category_has_data = true;
-        MetricTableWidget::Render(tbl, [&](uint32_t eid) {
-            return model.GetMetricValue(m_client_id, kernel_id, cat.id, tbl_id, eid);
-        });
+        it->second.Render();
     }
 
     if(!category_has_data)

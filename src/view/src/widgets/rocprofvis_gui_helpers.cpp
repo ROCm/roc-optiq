@@ -219,6 +219,7 @@ EndTooltipStyled()
     ImGui::EndTooltip();
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();
+}
 
 void
 ElidedText(const char* text, float available_width, float tooltip_width,

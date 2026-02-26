@@ -361,10 +361,14 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::SystemTraceRef system_trace(controller);
-#ifdef COMPUTE_UI_SUPPORT
-    RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
-#endif
+    
+    // Determine actual controller type first to avoid ambiguous reference validation
+    rocprofvis_controller_object_type_t controller_type;
+    if(rocprofvis_controller_get_object_type(controller, &controller_type) != kRocProfVisResultSuccess)
+    {
+        return error;
+    }
+    
     RocProfVis::Controller::TableRef table_ref(table);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);
@@ -372,14 +376,22 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
 
     if (table_ref.IsValid() && args_ref.IsValid() && future.IsValid() && array.IsValid())
     {
-        if (system_trace.IsValid())
+        if (controller_type == kRPVControllerObjectTypeControllerSystem)
         {
-            error = system_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+            RocProfVis::Controller::SystemTraceRef system_trace(controller);
+            if(system_trace.IsValid())
+            {
+                error = system_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+            }
         }
 #ifdef COMPUTE_UI_SUPPORT
-        else if (compute_trace.IsValid())
+        else if (controller_type == kRPVControllerObjectTypeControllerCompute)
         {
-            error = compute_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+            RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
+            if(compute_trace.IsValid())
+            {
+                error = compute_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+            }
         }
 #endif
     }

@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_widget.h"
+#include "compute/rocprofvis_compute_selection.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_data_provider.h"
+#include "rocprofvis_requests.h"
 #include "implot.h"
 #include <algorithm>
 #include <regex>
@@ -486,10 +489,84 @@ MetricTableCache::Render() const
     ImGui::EndTable();
 }
 
+void
+MetricTableCache::Clear()
+{
+    m_rows.clear();
+    m_column_names.clear();
+}
+
 bool
 MetricTableCache::Empty() const
 {
     return m_rows.empty();
+}
+
+MetricTableWidget::MetricTableWidget(DataProvider& data_provider,
+                                     std::shared_ptr<ComputeSelection> compute_selection,
+                                     uint32_t category_id, uint32_t table_id)
+: RocWidget()
+, m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
+, m_category_id(category_id)
+, m_table_id(table_id)
+, m_client_id(IdGenerator::GetInstance().GenerateId())
+{
+    m_widget_name = GenUniqueName("MetricTableWidget");
+}
+
+void
+MetricTableWidget::Render()
+{
+    m_table.Render();
+}
+
+void
+MetricTableWidget::Clear()
+{
+    m_table.Clear();
+}
+
+void
+MetricTableWidget::FetchMetrics()
+{
+    m_table.Clear();
+    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    m_data_provider.FetchMetrics(MetricsRequestParams(
+        workload_id, {kernel_id}, {{m_category_id, m_table_id, std::nullopt}}, m_client_id));
+}
+
+void
+MetricTableWidget::UpdateTable()
+{
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    auto& model = m_data_provider.ComputeModel();
+    if(!model.GetWorkloads().count(workload_id))
+        return;
+
+    const auto& tree = model.GetWorkloads().at(workload_id).available_metrics.tree;
+    if(!tree.count(m_category_id) || !tree.at(m_category_id).tables.count(m_table_id))
+        return;
+
+    m_table.Populate(tree.at(m_category_id).tables.at(m_table_id), [&](uint32_t eid) {
+        return model.GetMetricValue(m_client_id, kernel_id, m_category_id, m_table_id, eid);
+    });
 }
 
 }  // namespace View

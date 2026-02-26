@@ -46,8 +46,10 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
         auto evt = std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_fetch_pending) FetchAllMetrics();
-            if(evt->GetClientId() == m_client_id) RebuildTableDataCache();
+            if(m_fetch_pending)
+                FetchAllMetrics();
+            if(evt->GetClientId() == m_client_id)
+                RebuildTableDataCache();
         }
     };
 
@@ -87,10 +89,12 @@ ComputeTableView::RebuildTabs()
     m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID) return;
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+        return;
 
     const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();
-    if(!workloads.count(workload_id)) return;
+    if(!workloads.count(workload_id))
+        return;
 
     const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
@@ -120,14 +124,17 @@ ComputeTableView::FetchAllMetrics()
     }
 
     const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();
-    if(!workloads.count(workload_id)) return;
+    if(!workloads.count(workload_id))
+        return;
 
     const auto& workload = workloads.at(workload_id);
     std::vector<uint32_t>                   kernel_ids = { kernel_id };
     std::vector<MetricsRequestParams::MetricID> metric_ids;
     for(const auto& cp : workload.available_metrics.tree)
+    {
         for(const auto& tp : cp.second.tables)
             metric_ids.push_back({ cp.first, tp.first, std::nullopt });
+    }
 
     bool success = m_data_provider.FetchMetrics(
         MetricsRequestParams(workload.id, kernel_ids, metric_ids, m_client_id));
@@ -141,7 +148,8 @@ ComputeTableView::FetchAllMetrics()
 void
 ComputeTableView::Update()
 {
-    if(m_tabs) m_tabs->Update();
+    if(m_tabs)
+        m_tabs->Update();
 }
 
 void
@@ -160,7 +168,8 @@ ComputeTableView::Render()
         return;
     }
 
-    if(m_tabs) m_tabs->Render();
+    if(m_tabs)
+        m_tabs->Render();
 }
 
 void
@@ -178,7 +187,8 @@ ComputeTableView::RebuildTableDataCache()
     }
 
     const auto& workloads = model.GetWorkloads();
-    if(!workloads.count(workload_id)) return;
+    if(!workloads.count(workload_id))
+        return;
 
     const auto& workload = workloads.at(workload_id);
     for(const auto& cp : workload.available_metrics.tree)

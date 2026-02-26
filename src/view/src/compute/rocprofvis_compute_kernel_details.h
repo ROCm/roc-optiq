@@ -27,17 +27,12 @@ public:
     void Update() override;
 
 private:
-    void FetchSOLMetrics();
-    void UpdateSOLTable();
-
     DataProvider&          m_data_provider;
     ComputeMemoryChartView m_memory_chart;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<Roofline>         m_roofline;
-    MetricTableCache                  m_sol_table;
-
-    uint64_t m_client_id;
+    MetricTableWidget                 m_sol_table;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

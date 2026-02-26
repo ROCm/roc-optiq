@@ -6,6 +6,7 @@
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_compute_kernel_metric_table.h"
 
 #include "imgui.h"
 
@@ -20,8 +21,37 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_data_provider(data_provider)
 , m_memory_chart(data_provider, compute_selection)
 , m_roofline(nullptr)
+, m_kernel_metric_table(nullptr)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
+, m_workload_selection_changed_token(EventManager::InvalidSubscriptionToken)
+, m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
+, m_new_table_data_token(EventManager::InvalidSubscriptionToken)
+, m_metrics_fetched_token(EventManager::InvalidSubscriptionToken)
+{
+    SubscribeToEvents();
+
+    m_roofline = std::make_unique<RocProfVis::View::Roofline>(data_provider);
+    m_kernel_metric_table = std::make_unique<RocProfVis::View::KernelMetricTable>(data_provider, compute_selection);
+
+    m_widget_name = GenUniqueName("ComputeKernelDetailsView");
+}
+
+ComputeKernelDetailsView::~ComputeKernelDetailsView()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
+        m_workload_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
+        m_kernel_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeMetricsFetched), m_metrics_fetched_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kNewTableData), m_new_table_data_token);
+}
+
+void ComputeKernelDetailsView::SubscribeToEvents()
 {
     // Add event listener for selection changes to trigger metric fetch for the newly
     // selected kernel
@@ -34,7 +64,13 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
             {
                 return;
             }
-            // TODO: fetch pivot table data
+            // Fetch pivot table data
+            if(m_kernel_metric_table)
+            {
+                //clear existing model table data
+                m_data_provider.ComputeModel().GetKernelSelectionTable().Clear();
+                m_kernel_metric_table->FetchData(selection_changed_event->GetId());
+            }
         }
     };
 
@@ -80,26 +116,33 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
             }
         }
     };
-
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
 
-    m_roofline = std::make_unique<RocProfVis::View::Roofline>(data_provider);
+    // subscribe to fetch table data event 
+    auto new_table_data_handler = [this](std::shared_ptr<RocEvent> e) {
+        if(auto table_data_event = std::dynamic_pointer_cast<TableDataEvent>(e) )
+        {
+            if(m_data_provider.GetTraceFilePath() != table_data_event->GetSourceId())
+            {
+                return;
+            }
 
-    m_widget_name = GenUniqueName("ComputeKernelDetailsView");
-}
+            if(table_data_event->GetResponseCode() != kRocProfVisResultSuccess)
+            {
+                return;
+            }
 
-ComputeKernelDetailsView::~ComputeKernelDetailsView()
-{
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
-        m_workload_selection_changed_token);
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
-        m_kernel_selection_changed_token);
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kComputeMetricsFetched), m_metrics_fetched_token);
-}
+            if(table_data_event->GetRequestID() == DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID)
+            {
+                m_kernel_metric_table->HandleNewData();
+            }
+        }
+    };
+
+    m_new_table_data_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kNewTableData), new_table_data_handler);
+}   
 
 void
 ComputeKernelDetailsView::Update()
@@ -108,13 +151,24 @@ ComputeKernelDetailsView::Update()
     {
         m_roofline->Update();
     }
+    if(m_kernel_metric_table)
+    {
+        m_kernel_metric_table->Update();
+    }
 }
 
 void
 ComputeKernelDetailsView::Render()
 {
     ImGui::BeginChild("kernel_details");
+
+    if(m_kernel_metric_table)
+    {
+        m_kernel_metric_table->Render();
+    }
+
     ImGui::Text("Memory Chart");
+
     m_memory_chart.Render();
     if(m_roofline)
     {

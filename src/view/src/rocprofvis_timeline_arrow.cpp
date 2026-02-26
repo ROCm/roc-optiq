@@ -255,7 +255,7 @@ TimelineArrow::TimelineArrow(DataProvider&                      data_provider,
                              std::shared_ptr<TimelineSelection> selection)
 : m_data_provider(data_provider)
 , m_timeline_selection(selection)
-, m_selection_changed_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_flow_display_mode(FlowDisplayMode::kShowAll)
 , m_render_style(RenderStyle::kFan)
 {

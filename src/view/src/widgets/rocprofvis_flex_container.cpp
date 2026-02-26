@@ -12,8 +12,6 @@ namespace RocProfVis
 namespace View
 {
 
-// Helpers
-
 struct FlexRow
 {
     size_t start = 0;
@@ -21,9 +19,6 @@ struct FlexRow
     float  min_w = 0.0f;
     float  grow  = 0.0f;
 };
-
-// FlexContainer
-
 
 void
 FlexContainer::Render()
@@ -33,7 +28,7 @@ FlexContainer::Render()
     float avail_width  = ImGui::GetContentRegionAvail().x;
     float avail_height = ImGui::GetContentRegionAvail().y;
 
-    // ---- Step 1: bin items into rows ----
+    // bin items into rows
 
     std::vector<FlexRow> rows;
     rows.push_back({});
@@ -54,25 +49,25 @@ FlexContainer::Render()
         target.count++;
     }
 
-    // ---- Step 2: figure out default row height ----
+    // figure out default row height
 
     size_t num_rows      = rows.size();
     float  row_gap_total = gap * static_cast<float>(num_rows > 1 ? num_rows - 1 : 0);
     float  row_height    = std::max(avail_height, min_row_height);
     row_height           = (row_height - row_gap_total) / static_cast<float>(num_rows);
 
-    // ---- Step 3: render ----
+    // render
 
-    for(size_t ri = 0; ri < num_rows; ri++)
+    for(size_t row_index = 0; row_index < num_rows; row_index++)
     {
-        FlexRow& row       = rows[ri];
+        FlexRow& row       = rows[row_index];
         float    row_gaps  = gap * static_cast<float>(row.count > 1 ? row.count - 1 : 0);
         float    min_sum   = row.min_w - row_gaps;
         float    free      = std::max(0.0f, avail_width - min_sum - row_gaps);
 
-        for(size_t ci = 0; ci < row.count; ci++)
+        for(size_t column_index = 0; column_index < row.count; column_index++)
         {
-            FlexItem& item = items[row.start + ci];
+            FlexItem& item = items[row.start + column_index];
 
             float w = item.min_width;
             if(row.grow > 0.0f)
@@ -90,10 +85,10 @@ FlexContainer::Render()
 
             ImGui::PopStyleColor();
 
-            if(ci + 1 < row.count) ImGui::SameLine(0.0f, gap);
+            if(column_index + 1 < row.count) ImGui::SameLine(0.0f, gap);
         }
 
-        if(ri + 1 < num_rows) ImGui::Dummy(ImVec2(0.0f, gap));
+        if(row_index + 1 < num_rows) ImGui::Dummy(ImVec2(0.0f, gap));
     }
 }
 

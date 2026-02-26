@@ -117,7 +117,6 @@ ComputeKernelDetailsView::BuildFlexLayout()
 {
     m_flex = std::make_shared<FlexContainer>();
 
-    //                                                                                    min_width  height  grow
     m_flex->items.push_back({std::make_shared<RocCustomWidget>([this]() { m_memory_chart.Render(); }), 2300.0f, 600.0f});
     m_flex->items.push_back({std::make_shared<RocCustomWidget>([this]() { if(m_roofline) m_roofline->Render(); }), 900.0f, 500.0f});
     m_flex->items.push_back({std::make_shared<RocCustomWidget>([]() { ImGui::Text("Panel 1"); }), 500.0f, 400.0f});

@@ -6,6 +6,7 @@
 #include "rocprofvis_db_profile.h"
 
 #include <unordered_map>
+#include <set>
 
 namespace RocProfVis
 {
@@ -19,13 +20,7 @@ class RocpdDatabase : public ProfileDatabase
     typedef std::unordered_map<uint64_t, uint32_t> string_index_map_t;
     typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_db_string_id_t>> string_id_map_t;
 
-    // map array for fast non-PMC track ID search
-    typedef std::map<uint32_t, uint32_t> sub_process_map_t;
-    typedef std::map<uint32_t, sub_process_map_t> track_find_map_t;
-
-    // map array for fast PMC track ID search
-    typedef std::map<std::string, uint32_t> sub_process_map_pmc_t;
-    typedef std::map<uint32_t, sub_process_map_pmc_t> track_find_pmc_map_t;
+    typedef std::unordered_map<uint64_t, rocprofvis_dm_process_id> queue_pid_map_t;
     
 public:
     // class constructor
@@ -109,29 +104,24 @@ private:
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
     static int CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
+    // sqlite3_exec callback to collect Agent/Queue/Process dependency
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallBackAgentToProcess(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
     // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     string_index_map_t m_string_index_map; // id to index
     string_id_map_t m_string_id_map; // index to id
+    queue_pid_map_t m_pid_map;
 
     // method to remap string IDs. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     // @param record - event record structure
     // @return status of operation
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_record_data_t & record) override;
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_flow_data_t& record) override;
-
-    // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
-    // @param node_id - node id
-    // @param process_id - process id 
-    // @param sub_process_name - metric name
-    // @param operation - operation of event that requesting track id
-    // @return status of operation
-    rocprofvis_dm_result_t          FindTrackId(
-                                                        uint64_t node,
-                                                        uint32_t process,
-                                                        const char* subprocess,
-                                                        rocprofvis_dm_op_t operation,
-                                                        rocprofvis_dm_track_id_t& track_id) override;
 
     // method to remap single string ID. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     // @param id - string id to be remapped
@@ -162,8 +152,6 @@ private:
         rocprofvis_dm_result_t CreateIndexes();
 
     private:
-        track_find_map_t find_track_map;
-        track_find_pmc_map_t find_track_pmc_map;
 
         inline static const rocprofvis_event_data_category_map_t
             s_rocpd_categorized_data = {

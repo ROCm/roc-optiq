@@ -3,6 +3,7 @@
 
 #include "rocprofvis_events_view.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -448,14 +449,8 @@ EventsView::XButton()
     ImGui::PopFont();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        m_settings.GetDefaultStyle().WindowPadding);
-    if(ImGui::BeginItemTooltip())
-    {
-        ImGui::TextUnformatted("Unselect Event");
-        ImGui::EndTooltip();
-    }
-    ImGui::PopStyleVar();
+    if(ImGui::IsItemHovered())
+        SetTooltipStyled("Unselect Event");
     return clicked;
 }
 

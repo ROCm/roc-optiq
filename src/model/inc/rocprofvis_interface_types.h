@@ -1,6 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#include "rocprofvis_shared_types.h"
 
 /*
 * This interface header file cannot have any pre-compiler conditions to be successfully built by CFFI   
@@ -24,6 +25,7 @@ typedef     rocprofvis_dm_handle_t        rocprofvis_dm_stacktrace_t;           
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_extdata_t;                      // External data object handle
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_table_t;                        // Table object handle
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_table_row_t;                    // Table row object handle
+typedef     rocprofvis_dm_handle_t        rocprofvis_dm_topology_node;                  // Topology node handle
 typedef     uint32_t                      rocprofvis_dm_index_t;                        // Any data model array index, assuming array sizes will not exceed 32-bit value
 typedef     uint64_t                      rocprofvis_dm_timestamp_t;                    // Timestamp
 typedef     uint32_t                      rocprofvis_dm_property_t;                     // any property enumeration
@@ -47,6 +49,7 @@ typedef     uint16_t                      rocprofvis_dm_num_string_table_filters
 typedef     const char**                  rocprofvis_dm_string_table_filters_t;         // string table filters for table query
 typedef     rocprofvis_dm_handle_t        rocprofvis_db_instance_t;                     // Instance handle
 typedef     uint32_t                      rocprofvis_db_table_column_enum_t;            // database query column enumeration cast type
+typedef     uint32_t                      rocprofvis_dm_process_id;                     // pid
 
 /*******************************Enumerations******************************/
 
@@ -82,25 +85,32 @@ typedef enum rocprofvis_dm_track_category_t {
     // Object is not track
     kRocProfVisDmNotATrack = 0,
     // Object is PMC track (performance counters track)
-    kRocProfVisDmPmcTrack = 1,
+    kRocProfVisDmPmcTrack = 0x1,
     // Object is region track (HIP calls)
-    kRocProfVisDmRegionTrack = 2,
+    kRocProfVisDmRegionTrack = 0x2,
     // Object is kernel track (kernel execution)
-    kRocProfVisDmKernelDispatchTrack = 3,
+    kRocProfVisDmKernelDispatchTrack = 0x4,
     // Object is SQTT track
-    kRocProfVisDmSQTTTrack = 4,
+    kRocProfVisDmSQTTTrack = 0x8,
     // Object is NIC track
-    kRocProfVisDmNICTrack = 5,
+    kRocProfVisDmNICTrack = 0x10,
     // Object is memory allocation track
-    kRocProfVisDmMemoryAllocationTrack = 6,
+    kRocProfVisDmMemoryAllocationTrack = 0x20,
     // Object is memory copy track
-    kRocProfVisDmMemoryCopyTrack = 7,
+    kRocProfVisDmMemoryCopyTrack = 0x40,
     // Object is stream track
-    kRocProfVisDmStreamTrack = 8,
+    kRocProfVisDmStreamTrack = 0x80,
     // Object is region sample track
-    kRocProfVisDmRegionMainTrack = 9,
+    kRocProfVisDmRegionMainTrack = 0x100,
     // Object is region sample track
-    kRocProfVisDmRegionSampleTrack = 10,
+    kRocProfVisDmRegionSampleTrack = 0x200,
+
+    kRocProfVisDmLaunchTrack = kRocProfVisDmRegionTrack | kRocProfVisDmRegionMainTrack | kRocProfVisDmRegionSampleTrack,
+    kRocProfVisDmDispatchTrack = kRocProfVisDmKernelDispatchTrack | kRocProfVisDmMemoryAllocationTrack | kRocProfVisDmMemoryCopyTrack,
+    kRocProfVisDmEventTrack = kRocProfVisDmLaunchTrack | kRocProfVisDmDispatchTrack,
+    kRocProfVisDmCounterTrack = kRocProfVisDmPmcTrack,
+    kRocProfVisDmAgentTrack = kRocProfVisDmDispatchTrack | kRocProfVisDmCounterTrack,
+    kRocProfVisDmProcessTrack = kRocProfVisDmEventTrack | kRocProfVisDmCounterTrack
 } rocprofvis_dm_track_category_t;
 
 //Event operation
@@ -199,7 +209,9 @@ typedef enum  rocprofvis_dm_trace_property_t {
     kRPVDPmcInfoTableHandleIndexed,
     kRPVDAgentQueueMappingInfoTableHandleIndexed,
     kRPVDAgentStreamMappingInfoTableHandleIndexed,
-    kRPVDStreamQueueMappingInfoTableHandleIndexed
+    kRPVDStreamQueueMappingInfoTableHandleIndexed,
+    // Topology handle
+    kRPVDMTopologyHandle,
 } rocprofvis_dm_trace_property_t;
 
 // Track properties
@@ -438,6 +450,8 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnWorkloadRooflineBenchL2Bw,
     kRPVComputeColumnWorkloadRooflineBenchL1Bw,
     kRPVComputeColumnWorkloadRooflineBenchLDSBw,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF4Flops,
+    kRPVComputeColumnWorkloadRooflineBenchMFMAF6Flops,
     kRPVComputeColumnWorkloadRooflineBenchMFMAF8Flops,
     kRPVComputeColumnWorkloadRooflineBenchFP16Flops,
     kRPVComputeColumnWorkloadRooflineBenchMFMAF16Flops,
@@ -476,7 +490,10 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnMetricUnit,
 
     kRPVComputeColumnMetricValueName,
-    kRPVComputeColumnMetricValue
+    kRPVComputeColumnMetricValue,
+
+    kRPVComputeColumnDynamicMetricValue,
+    kRPVComputeColumnDynamicKernelUUID,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations
@@ -491,6 +508,8 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchKernelMetricCategoriesList,
     kRPVComputeFetchMetricCategoryTablesList,
     kRPVComputeFetchMetricValues,
+    kRPVComputeFetchKernelMetricsMatrix,
+    kRPVComputeFetchWorkloadMetricValueNames,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration
@@ -498,7 +517,10 @@ typedef enum rocprofvis_db_compute_param_enum_t
 {
     kRPVComputeParamWorkloadId,
     kRPVComputeParamKernelId,
-    kRPVComputeParamMetricId
+    kRPVComputeParamMetricId,
+    kRPVComputeParamMetricSelector,
+    kRPVComputeParamSortColumnIndex,
+    kRPVComputeParamSortColumnOrder,
 } rocprofvis_db_compute_param_enum_t;
 
 // Compute database query input parameter structure

@@ -8,6 +8,10 @@
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_requests.h"
 #include "model/rocprofvis_trace_data_model.h"
+#ifdef COMPUTE_UI_SUPPORT
+#include "model/compute/rocprofvis_compute_data_model.h"
+#endif
+
 
 #include <functional>
 #include <memory>
@@ -66,6 +70,8 @@ public:
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
 #ifdef COMPUTE_UI_SUPPORT
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
+    static const uint64_t METRICS_REQUEST_ID;
+    static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
 #endif
 
     DataProvider();
@@ -77,7 +83,6 @@ public:
      * @param event_id: ID of event to fetch
      */
     bool FetchEvent(uint64_t track_id, uint64_t event_id);
-    bool FetchEventExtData(uint64_t event_id);
     bool FetchEventFlowDetails(uint64_t event_id);
     bool FetchEventCallStackData(uint64_t event_id);
 
@@ -214,6 +219,8 @@ public:
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
     void SetExportTableCallback(
         const std::function<void(const std::string&, bool)>& callback);
+    void SetEventDataReadyCallback(
+        const std::function<void(uint64_t, const std::string&, bool)>& callback);
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -233,14 +240,21 @@ private:
     struct ProcessChildCount
     {
         size_t thread_count;
-        size_t queue_count;
         size_t stream_count;
+    };
+
+    struct ProcessorChildCount
+    {
+        size_t queue_count;
         size_t counter_count;
     };
 
+    /* Helper called by FetchEvent()*/
+    bool FetchEventExtData(uint64_t event_id);
     void HandleLoadSystemTopology();
     bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
-    bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info);
+    bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info,
+                          DataProvider::ProcessorChildCount& processor_child_count);
     bool ParseProcessData(rocprofvis_handle_t* process_handle, ProcessInfo& process_info,
                           ProcessChildCount& process_child_count);
     bool ParseQueueData(rocprofvis_handle_t* queue_handle, QueueInfo& queue_info);
@@ -298,6 +312,10 @@ private:
         m_track_data_ready_callback;
     // Called when a new trace is loaded
     std::function<void(const std::string&, uint64_t)> m_trace_data_ready_callback;
+    // called when event data is ready
+    std::function<void(uint64_t, const std::string&, bool)>
+        m_event_data_ready_callback;
+
     // Called when summary data has changed
     std::function<void()> m_summary_data_ready_callback;
     // Callback when trace is saved
@@ -311,10 +329,23 @@ private:
 
 #ifdef COMPUTE_UI_SUPPORT
 public:
+    ComputeDataModel& ComputeModel();
+    
+    bool FetchMetrics(const MetricsRequestParams& metrics_params);
+    bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
 
+    void SetFetchMetricsCallback(
+        const std::function<void(const std::string&, uint64_t, bool)>& callback);
 
 private:
     void ProcessLoadComputeTrace(RequestInfo& req);
+    void ProcessMetricsRequest(RequestInfo& req);
+    void ProcessMetricPivotTable(RequestInfo& req);
+
+    ComputeDataModel m_compute_model;
+
+    std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
+
 #endif
 };
 

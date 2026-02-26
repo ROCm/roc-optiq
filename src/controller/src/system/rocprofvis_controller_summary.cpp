@@ -3,10 +3,8 @@
 
 #include "rocprofvis_controller_summary.h"
 #include "rocprofvis_controller_array.h"
-#include "rocprofvis_controller_counter.h"
 #include "rocprofvis_controller_future.h"
-#include "rocprofvis_controller_node.h"
-#include "rocprofvis_controller_processor.h"
+#include "rocprofvis_controller_topology.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_table_system.h"
 #include "rocprofvis_controller_trace.h"

@@ -19,6 +19,7 @@ using RuntimeValue = std::variant<uint64_t, double, std::string>;
 typedef enum  rocprofvis_db_future_runtime_storage_t
 {
     kRPVFutureStorageSampleValue,
+    kRPVFutureStorageEventId,
 
     kRPVFutureRuntimeStorageSize
 }rocprofvis_db_future_runtime_storage_t;
@@ -83,7 +84,7 @@ class Future
         template <typename T> 
         void                                SetRuntimeStorageValue(rocprofvis_db_future_runtime_storage_t key, T&& value) 
         {
-            static_assert(std::is_same_v<std::decay_t<T>, int> || 
+            static_assert(std::is_same_v<std::decay_t<T>, uint64_t> || 
                 std::is_same_v<std::decay_t<T>, double> ||
                 std::is_same_v<std::decay_t<T>, std::string>,
                 "Unsupported type!");

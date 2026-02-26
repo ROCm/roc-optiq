@@ -3,12 +3,19 @@
 
 #include "rocprofvis_gui_helpers.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+
+namespace RocProfVis
+{
+
+namespace View
+{
 
 ImVec2
-RocProfVis::View::MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
+MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
                                               float spacing)
 {
     // Calculate total width needed
@@ -17,7 +24,7 @@ RocProfVis::View::MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
 }
 
 void
-RocProfVis::View::RenderLoadingIndicatorDots(float dot_radius, int num_dots,
+RenderLoadingIndicatorDots(float dot_radius, int num_dots,
                                              float spacing, ImU32 color, float speed)
 {
     // Calculate total width needed
@@ -55,10 +62,10 @@ RocProfVis::View::RenderLoadingIndicatorDots(float dot_radius, int num_dots,
 }
 
 bool
-RocProfVis::View::IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
-                             const char* tooltip, ImVec2 tooltip_padding, bool frameless,
-                             ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
-                             ImU32 bg_color_active, const char* id)
+IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
+           const char* tooltip, ImVec2 tooltip_padding, bool frameless,
+           ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
+           ImU32 bg_color_active, const char* id)
 {
     if(id && strlen(id) > 0)
     {
@@ -102,7 +109,7 @@ RocProfVis::View::IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
 }
 
 bool
-RocProfVis::View::IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold)
+IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold)
 {
     if(ImGui::IsMouseReleased(button))
     {
@@ -119,7 +126,7 @@ RocProfVis::View::IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float dr
 }
 
 std::pair<bool, bool>
-RocProfVis::View::InputTextWithClear(const char* id, const char* hint, char* buf,
+InputTextWithClear(const char* id, const char* hint, char* buf,
                                      size_t buf_size, ImFont* icon_font, ImU32 bg_color,
                                      const ImGuiStyle& style, float width)
 {
@@ -155,6 +162,137 @@ RocProfVis::View::InputTextWithClear(const char* id, const char* hint, char* buf
     ImGui::PopID();
     ImGui::EndGroup();
     return std::make_pair(input_changed, input_cleared);
+}
+
+void
+SetTooltipStyled(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::SetTooltipV(fmt, args);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+
+    va_end(args);
+}
+
+void
+BeginTooltipStyled()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::BeginTooltip();
+}
+
+bool
+BeginItemTooltipStyled()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    if(ImGui::BeginItemTooltip())
+    {
+        return true;
+    }
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    return false;
+}
+
+void
+EndTooltipStyled()
+{
+    ImGui::EndTooltip();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+}
+
+void
+ElidedText(const char* text, float available_width, float tooltip_width,
+           bool imgui_AlignTextToFramePadding)
+{
+    ImGuiStyle       style      = ImGui::GetStyle();
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    float            text_width = ImGui::CalcTextSize(text).x;
+    ImVec2           elide_size = ImGui::CalcTextSize(" [...]");
+    float  scroll_bar_width     = (ImGui::GetScrollMaxY() != 0.0f) ? style.ScrollbarSize : 0.0f;
+    bool   elide                = text_width + scroll_bar_width > available_width;
+    ImVec2 elide_pos;
+    // Dynamically sized containers do not adapt to clip rect...
+    // Use a window to restrict our size and provide sizing hint to client.
+    // Do not take input to avoid interfering with client.
+    ImGui::BeginChild("elided",
+                      ImVec2(available_width, imgui_AlignTextToFramePadding
+                                                  ? ImGui::GetFrameHeightWithSpacing()
+                                                  : ImGui::GetFontSize()),
+                      ImGuiChildFlags_None,
+                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
+
+    if(imgui_AlignTextToFramePadding)
+    {
+        ImGui::AlignTextToFramePadding();
+    }
+    if(elide)
+    {
+        ImGui::PushClipRect(ImGui::GetCursorScreenPos(),
+                            ImGui::GetCursorScreenPos() +
+                                ImVec2(available_width - scroll_bar_width - elide_size.x,
+                                       ImGui::GetFrameHeightWithSpacing()),
+                            true);
+    }
+    ImGui::TextUnformatted(text);
+    if(elide)
+    {
+        ImGui::PopClipRect();
+        ImGui::SameLine(available_width - scroll_bar_width - elide_size.x);
+        elide_pos = ImGui::GetCursorScreenPos();
+        ImGui::TextUnformatted(" [...]");
+    }
+    ImGui::EndChild();
+    if(elide)
+    {
+        ImGui::SetCursorScreenPos(elide_pos);
+        ImGui::InvisibleButton("elide_hover", elide_size);
+        if(tooltip_width > 0.0f)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                settings.GetDefaultIMGUIStyle().WindowPadding);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                                settings.GetDefaultStyle().FrameRounding);
+            if(ImGui::BeginItemTooltip())
+            {
+                ImGui::PushTextWrapPos(tooltip_width);
+                ImGui::TextWrapped("%s", text);
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+            ImGui::PopStyleVar(2);
+        }
+    }
+}
+
+void
+CenterNextTextItem(const char* text)
+{
+    ImVec2 avail  = ImGui::GetContentRegionAvail();
+    ImVec2 size   = ImGui::CalcTextSize(text);
+    ImVec2 cursor = ImGui::GetCursorPos();
+    ImVec2 pos((avail.x - size.x) * 0.5f, cursor.y);
+    ImGui::SetCursorPos(pos);
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
@@ -224,3 +362,6 @@ RocProfVis::View::DrawInternalBuildBanner(const char* text /*= "Internal Build"*
     }
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER
+
+}   // namespace View
+}   // namespace RocProfVis

@@ -16,6 +16,8 @@ namespace RocProfVis
 namespace View
 {
 
+inline constexpr float DEFAULT_TRACK_HEIGHT = 75.0f;
+
 class SettingsManager;
 class TrackItem;
 class TimePixelTransform;
@@ -84,13 +86,12 @@ public:
     bool IsInViewVertical();
     void SetInViewVertical(bool in_view);
 
-    bool IsSelected() const;
-    void SetSelected(bool selected);
-
+    bool  IsSelected() const;
+    void  SetSelected(bool selected);
     void  SetDistanceToView(float distance);
+
     float GetDistanceToView();
 
- 
     bool        TrackHeightChanged();
     static void SetSidebarSize(float sidebar_size);
 
@@ -111,7 +112,6 @@ public:
     float GetMetaAreaScaleWidth() { return m_meta_area_scale_width; }
     void  UpdateMaxMetaAreaSize(float newSize);
 
-
 protected:
     virtual void RenderMetaArea();
     virtual void RenderMetaAreaScale()          = 0;
@@ -129,7 +129,6 @@ protected:
     uint64_t              m_track_id;
     float                 m_track_height;
     float                 m_track_content_height;
-    float                 m_track_default_height; //TODO: It should be a constant, we don't need store it for each track
     float                 m_min_track_height;
     bool                  m_track_height_changed;
     bool                  m_is_in_view_vertical;

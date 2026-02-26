@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 
 // Layout constants
@@ -195,7 +196,7 @@ SettingsPanel::RenderDisplayOptions()
     }
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Switch between dark and light UI themes.");
+        SetTooltipStyled("Switch between dark and light UI themes.");
     }
 
     ImGui::Spacing();
@@ -206,7 +207,7 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::Checkbox("DPI-based Font Scaling", &m_font_settings.dpi_scaling);
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Automatically scale font size based on display DPI.");
+        SetTooltipStyled("Automatically scale font size based on display DPI.");
     }
 
     // Font size section
@@ -236,7 +237,7 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::EndDisabled();
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Increase or decrease the font size for the UI.");
+        SetTooltipStyled("Increase or decrease the font size for the UI.");
     }
     ImGui::EndDisabled();
     // Font preview
@@ -253,11 +254,11 @@ SettingsPanel::RenderDisplayOptions()
         ImGui::PushFont(preview_font);
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
-            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm Visualizer") +
+            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm(TM) Optiq") +
                 ImVec2(style.FramePadding.x, 2 * style.FramePadding.y),
             ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)),
             style.FrameRounding);
-        ImGui::Text("AMD ROCm Visualizer");
+        ImGui::Text("AMD ROCm(TM) Optiq");
         ImGui::PopFont();
     }
 }
@@ -341,14 +342,8 @@ SettingsPanel::ResetButton()
     clicked = ImGui::Button(ICON_ARROWS_CYCLE);
     ImGui::PopFont();
     ImGui::PopStyleColor(3);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        m_settings.GetDefaultStyle().WindowPadding);
-    if(ImGui::BeginItemTooltip())
-    {
-        ImGui::TextUnformatted("Restore defaults");
-        ImGui::EndTooltip();
-    }
-    ImGui::PopStyleVar();
+    if(ImGui::IsItemHovered())
+        SetTooltipStyled("Restore defaults");
     ImGui::EndChild();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();

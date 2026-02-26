@@ -32,11 +32,22 @@
 #include <shared_mutex>
 #include "rocprofvis_common_types.h"
 #include "rocprofvis_db_expression_filter.h"
+#include "rocprofvis_db_cache.h"
 
 namespace RocProfVis
 {
 namespace DataModel
 {
+    typedef struct rocprofvis_db_sqlite_track_identifier_index_t
+    {
+        uint32_t                        nid_index = -1;
+        uint32_t                        pid_index = -1;
+        uint32_t                        process_index = -1;
+        uint32_t                        sub_process_index = -1;
+        uint32_t                        stream_index = -1;
+        bool                            is_pmc_identifier = false;
+        bool                            is_rocpd_pmc = false;
+    } rocprofvis_db_sqlite_track_identifier_index_t;
 
     enum class ColumnType : uint8_t
     {
@@ -92,20 +103,6 @@ namespace DataModel
         std::string name;
         uint32_t count;
         std::unordered_map<std::string, NumericWithType> result;
-    };
-
-
-    class StringTable 
-    {
-    public:        
-        uint32_t ToInt(const char* s);
-        const char* ToString(uint32_t id) const;
-        void Clear();
-
-    private:
-        mutable std::shared_mutex m_mutex;
-        std::unordered_map<std::string, uint32_t> m_str_to_id;
-        std::vector<rocprofvis_dm_string_t> m_id_to_str;
     };
 
     struct Aggregation
@@ -203,9 +200,14 @@ namespace DataModel
         void ClearAggregation();
         void AggregateRow(ProfileDatabase * db, int row_index, int map_index);
         void SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order);
-        void RemoveRowsForSetOfTracks(std::set<uint32_t> tracks, bool remove_all);
+        void RemoveRowsForSetOfTracks(std::set<uint32_t> & selected_tracks, std::set<uint32_t> & unselected_tracks, bool remove_all);
 
         static const char* ConvertSqlStringReference(ProfileDatabase* db, uint32_t column_index, uint64_t index, uint32_t node_id, bool & numeric_string);
+
+        void ResetTrackIdetifiers() { 
+            track_ids_indices.nid_index = track_ids_indices.process_index = track_ids_indices.sub_process_index = track_ids_indices.stream_index = track_ids_indices.pid_index = -1; 
+            track_ids_indices.is_pmc_identifier = track_ids_indices.is_rocpd_pmc = false;
+        };
 
     private:
         std::vector<ColumnDef> m_columns;
@@ -216,8 +218,7 @@ namespace DataModel
         size_t m_currentRow = static_cast<size_t>(-1); 
         Aggregation m_aggregation;
     public:
-        int track_id = -1;
-        int stream_track_id = -1;
+        rocprofvis_db_sqlite_track_identifier_index_t track_ids_indices;
     };
 
 

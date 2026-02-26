@@ -59,17 +59,8 @@ EditableTextField::DrawPlainText()
         {
             RevertToDefault();
         }
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                            settings.GetDefaultStyle().WindowPadding);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                            settings.GetDefaultStyle().FrameRounding);
-        if(ImGui::BeginItemTooltip())
-        {
-            ImGui::TextUnformatted("Revert To Default");
-            ImGui::TextUnformatted(m_reset_tooltip.c_str());
-            ImGui::EndTooltip();
-        }
-        ImGui::PopStyleVar(2);
+        if(ImGui::IsItemHovered())
+            SetTooltipStyled("Revert To Default\n%s", m_reset_tooltip.c_str());
         ImGui::SameLine();
     }
     // Draw the text as a button to avoid the background
@@ -89,18 +80,9 @@ EditableTextField::DrawPlainText()
     }
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        settings.GetDefaultStyle().WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                        settings.GetDefaultStyle().FrameRounding);
-    if(ImGui::BeginItemTooltip())
-    {
-        ImGui::TextUnformatted(m_tooltip_text.c_str());
-        ImGui::EndTooltip();
-    }
-    ImGui::PopStyleVar(2);
     if(ImGui::IsItemHovered())
     {
+        SetTooltipStyled("%s", m_tooltip_text.c_str());
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     }
 }

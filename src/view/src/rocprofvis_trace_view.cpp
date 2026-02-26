@@ -42,6 +42,30 @@ TraceView::TraceView()
 , m_event_search(nullptr)
 , m_summary_view(nullptr)
 {
+    m_data_provider.SetEventDataReadyCallback([this](uint64_t           event_id,
+                                                     const std::string& trace_path,
+                                                     bool               success) {
+        (void)trace_path;                                    
+        if(!success)
+        {
+            spdlog::debug("Failed to fetch event data for event ID: {}", event_id);
+            return;
+        }
+
+        bool result = m_data_provider.FetchEventFlowDetails(event_id);
+        if(!result)
+        {
+            spdlog::debug("Failed to fetch event flow details for event ID: {}",
+                            event_id);
+        }
+        result = m_data_provider.FetchEventCallStackData(event_id);
+        if(!result)
+        {
+            spdlog::debug("Failed to fetch event call stack data for event ID: {}",
+                            event_id);
+        }
+    });
+
     m_data_provider.SetTrackDataReadyCallback(
         [](uint64_t track_id, const std::string& trace_path, const RequestInfo& req) {
             EventManager::GetInstance()->AddEvent(std::make_shared<TrackDataEvent>(
@@ -570,7 +594,7 @@ TraceView::RenderToolbar()
 
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Show Minimap");
+        SetTooltipStyled("Show Minimap");
     }
     RenderSeparator();
 
@@ -585,7 +609,7 @@ TraceView::RenderToolbar()
     }
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Reset view to default zoom and pan");
+        SetTooltipStyled("Reset view to default zoom and pan");
     }
     ImGui::EndGroup();
     float available_width = ImGui::GetContentRegionAvail().x - ImGui::GetItemRectSize().x;
@@ -656,7 +680,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Show Annotation Layer");
+        SetTooltipStyled("Show Annotation Layer");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -681,7 +705,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Hide Annotation Layer");
+        SetTooltipStyled("Hide Annotation Layer");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -707,7 +731,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Add New Annotation");
+        SetTooltipStyled("Add New Annotation");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -859,7 +883,7 @@ TraceView::RenderFlowControls()
         if(ImGui::IsItemHovered())
         {
             ImGui::PopFont();
-            ImGui::SetTooltip("%s", flow_tool_tips[i]);
+            SetTooltipStyled("%s", flow_tool_tips[i]);
             ImGui::PushFont(icon_font);
         }
 
@@ -888,7 +912,7 @@ TraceView::RenderFlowControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Flow Render Style");
+        SetTooltipStyled("Flow Render Style");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopFont();

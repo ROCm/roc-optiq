@@ -2,130 +2,89 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_summary.h"
-#include "widgets/rocprofvis_compute_widget.h"
-#include "widgets/rocprofvis_tab_container.h"
-#include "widgets/rocprofvis_split_containers.h"
+#include "rocprofvis_compute_roofline.h"
+#include "rocprofvis_compute_selection.h"
+#include "rocprofvis_data_provider.h"
+#include "rocprofvis_event_manager.h"
 
 namespace RocProfVis
 {
 namespace View
 {
 
-constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
-
-ComputeSummaryView::ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider)
-: m_container(nullptr)
-, m_left_column(nullptr)
-, m_right_column(nullptr)
-, m_owner_id(owner_id)
-, m_sysinfo_table(nullptr)
-, m_kernel_pie(nullptr)
-, m_kernel_bar(nullptr)
-, m_kernel_table(nullptr)
-, m_dispatch_table(nullptr)
+ComputeSummaryView::ComputeSummaryView(
+    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
+: RocWidget()
+, m_data_provider(data_provider)
+, m_roofline(nullptr)
+, m_compute_selection(compute_selection)
+, m_client_id(IdGenerator::GetInstance().GenerateId())
 {
-    m_sysinfo_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeSysInfo);
-    m_kernel_pie = std::make_unique<ComputePlotPie>(data_provider, kRPVControllerComputePlotTypeKernelDurationPercentage);
-    m_kernel_bar = std::make_unique<ComputePlotBar>(data_provider, kRPVControllerComputePlotTypeKernelDuration);
-    m_kernel_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeKernelList);
-    m_dispatch_table = std::make_unique<ComputeTable>(data_provider, kRPVControllerComputeTableTypeDispatchList);
+    auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        if(auto selection_changed_event =
+               std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e))
+        {
+            if(m_data_provider.GetTraceFilePath() !=
+               selection_changed_event->GetSourceId())
+            {
+                return;
+            }
+            if(m_roofline)
+            {
+                m_roofline->SetWorkload(selection_changed_event->GetId());
+            }
+        }
+    };
 
-    m_left_column = std::make_shared<RocCustomWidget>([this]()
-    {
-        this->RenderLeftColumn();
-    });
-    m_right_column = std::make_shared<RocCustomWidget>([this]()
-    {
-        this->RenderRightColumn();
-    });
+    m_workload_selection_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
+        workload_changed_handler);
 
-    LayoutItem::Ptr left = std::make_shared<LayoutItem>();
-    left->m_item = m_left_column;
-    LayoutItem::Ptr right = std::make_shared<LayoutItem>();
-    right->m_item = m_right_column;
-    m_container = std::make_shared<HSplitContainer>(left, right);
-    m_container->SetSplit(0.5f);
+    auto metrics_fetched_handler = [this](std::shared_ptr<RocEvent> e) {
+        if(auto metrics_fetched_event =
+               std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e))
+        {
+            if(m_data_provider.GetTraceFilePath() != metrics_fetched_event->GetSourceId())
+            {
+                return;
+            }
+        }
+    };
+
+    m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
+
+    m_roofline = std::make_unique<Roofline>(m_data_provider);
+
+    m_widget_name = GenUniqueName("ComputeSummaryView");
 }
 
-ComputeSummaryView::~ComputeSummaryView() {}
-
-void ComputeSummaryView::RenderMenuBar()
-{
-    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_region = ImGui::GetContentRegionAvail();
-    ImGui::GetWindowDrawList()->AddRectFilled(
-    ImVec2(cursor_position.x, cursor_position.y),
-    ImVec2(cursor_position.x + content_region.x,
-            cursor_position.y + ImGui::GetFrameHeightWithSpacing()),
-    ImGui::ColorConvertFloat4ToU32(ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg]), 
-    0.0f);
-    
-    ImGui::Dummy(ImVec2(content_region.x, ImGui::GetFrameHeightWithSpacing()));
+ComputeSummaryView::~ComputeSummaryView() {
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
+        m_workload_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeMetricsFetched), m_metrics_fetched_token);
 }
 
-void ComputeSummaryView::RenderLeftColumn()
+void
+ComputeSummaryView::Update()
 {
-    if (m_sysinfo_table)
+    if(m_roofline)
     {
-        m_sysinfo_table->Render();
-    }
-}
-
-void ComputeSummaryView::RenderRightColumn()
-{
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
-    ImGui::SeparatorText("Top Stats");
-    ImGui::PopStyleVar();
-    if (m_kernel_pie)
-    {
-        m_kernel_pie->Render();
-    }
-    if (m_kernel_bar)
-    {
-        m_kernel_bar->Render();
-    }
-    if (m_kernel_table)
-    {
-        m_kernel_table->Render();
-    }
-    if (m_dispatch_table)
-    {
-        m_dispatch_table->Render();
+        m_roofline->Update();
     }
 }
 
-void ComputeSummaryView::Update()
+void
+ComputeSummaryView::Render()
 {
-    if (m_sysinfo_table)
+    ImGui::BeginChild("summary");
+    if(m_roofline)
     {
-        m_sysinfo_table->Update();
+        m_roofline->Render();
     }
-    if (m_kernel_pie)
-    {
-        m_kernel_pie->Update();
-    }
-    if (m_kernel_bar)
-    {
-        m_kernel_bar->Update();
-    }
-    if (m_kernel_table)
-    {
-        m_kernel_table->Update();
-    }
-    if (m_dispatch_table)
-    {
-        m_dispatch_table->Update();
-    }
-}
-
-void ComputeSummaryView::Render()
-{
-    RenderMenuBar();
-    if(m_container)
-    {
-        m_container->Render();
-        return;
-    }
+    ImGui::EndChild();
 }
 
 }  // namespace View

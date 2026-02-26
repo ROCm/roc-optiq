@@ -864,9 +864,8 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
         ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
         ImGui::BeginChild("legend", ImVec2(region.x * 0.25f, 0),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-        float legend_width     = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
-        float icon_width       = ImGui::GetFontSize();
-        float elide_width      = ImGui::CalcTextSize(" [...]").x;
+        float legend_width = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
+        float icon_width   = ImGui::GetFontSize();
         float scroll_bar_width = ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f;
         ImGui::BeginChild(
             "legend_scroll_view", ImVec2(legend_width - scroll_bar_width, 0),
@@ -890,44 +889,14 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
                            icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK),
                 ImGui::GetColorU32(ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
                                    row_hovered ? 0.75f : 1.0f));
-            bool elide = icon_width + text_width + scroll_bar_width > legend_width;
-            if(elide)
-            {
-                ImGui::PushClipRect(
-                    ImGui::GetCursorScreenPos(),
-                    ImGui::GetCursorScreenPos() +
-                        ImVec2(legend_width - scroll_bar_width - elide_width,
-                               ImGui::GetFrameHeightWithSpacing()),
-                    true);
-            }
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetFontSize());
             ImGui::BeginDisabled(i == m_padded_idx);
-            ImGui::TextUnformatted((*m_kernels)[i].name.c_str());
-            if(elide)
-            {
-                ImGui::PopClipRect();
-                ImGui::SameLine(legend_width - scroll_bar_width - elide_width);
-                ImGui::TextUnformatted(" [...]");
-            }
+            ImGui::SameLine(icon_width);
+            ElidedText((*m_kernels)[i].name.c_str(), ImGui::GetContentRegionAvail().x,
+                       region.x * 0.5f);
             ImGui::EndDisabled();
             if(row_hovered)
             {
                 hovered_idx = i;
-                if(elide)
-                {
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                        m_settings.GetDefaultIMGUIStyle().WindowPadding);
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                                        m_settings.GetDefaultStyle().FrameRounding);
-                    if(ImGui::BeginItemTooltip())
-                    {
-                        ImGui::PushTextWrapPos(region.x * 0.5f);
-                        ImGui::TextWrapped("%s", (*m_kernels)[i].name.c_str());
-                        ImGui::PopTextWrapPos();
-                        ImGui::EndTooltip();
-                    }
-                    ImGui::PopStyleVar(2);
-                }
                 if(row_clicked && m_selection_callback)
                 {
                     ToggleSelectKernel(i);
@@ -999,11 +968,7 @@ TopKernels::PlotInputHandler()
     {
         if(ImGui::IsItemHovered())
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                m_settings.GetDefaultIMGUIStyle().WindowPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                                m_settings.GetDefaultStyle().FrameRounding);
-            if(ImGui::BeginItemTooltip())
+            if(BeginItemTooltipStyled())
             {
                 if(m_hovered_idx != m_padded_idx)
                 {
@@ -1020,9 +985,8 @@ TopKernels::PlotInputHandler()
                         (*m_kernels)[m_hovered_idx.value()].exec_time_sum,
                         m_settings.GetUserSettings().unit_settings.time_format, true)
                         .c_str());
-                ImGui::EndTooltip();
+                EndTooltipStyled();
             }
-            ImGui::PopStyleVar(2);
         }
         if(ImGui::IsItemClicked() && m_selection_callback)
         {

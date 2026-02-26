@@ -9,6 +9,7 @@
 #include "rocprofvis_dm_ext_data.h"
 #include "rocprofvis_dm_track.h"
 #include "rocprofvis_dm_table.h"
+#include "rocprofvis_dm_topology.h"
 #include <vector> 
 #include <memory> 
 #include <map>
@@ -41,6 +42,8 @@ class Trace : public DmBase{
         rocprofvis_dm_size_t                            NumberOfTables() {return m_tables.size();}
         // Returns pointer to database object
         rocprofvis_dm_database_t                        Database() { return m_db; }
+        // Returns pointer to topology object
+        rocprofvis_dm_topology_node                     Topology() { return &m_topology_root; }
         // Returns pointer to database binding structure 
         rocprofvis_dm_db_bind_struct*                   BindingInfo() {return &m_binding_info;}
         // Returns class mutex
@@ -261,6 +264,13 @@ class Trace : public DmBase{
         // @param level - event level in graph
         // @return status of operation
         static rocprofvis_dm_result_t                   AddEventLevel(const rocprofvis_dm_trace_t object,  const rocprofvis_dm_event_id_t event_id, rocprofvis_dm_event_level_t level);
+        // Static method to add topology node. Used by database component via binding interface
+        // @param object - trace object handle to add table object to.
+        // @param track_indentifiers - structure with track identifiers
+        // @param description - pointer to table description string
+        // @return status of operation           
+        static rocprofvis_dm_result_t                   AddTopologyNode(const rocprofvis_dm_trace_t object, rocprofvis_dm_track_identifiers_t * track_indentifiers);
+        static rocprofvis_dm_result_t                   AddTopologyNodeProperty(const rocprofvis_dm_trace_t object, rocprofvis_dm_track_identifiers_t * track_identifiers, rocprofvis_db_topology_data_type_t type, const char* table, const char* name, void* value);
 
         static rocprofvis_dm_result_t                   CheckSliceExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_db_num_of_tracks_t num, const rocprofvis_db_track_selection_t tracks);
         static rocprofvis_dm_result_t                   CheckEventPropertyExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
@@ -303,6 +313,7 @@ class Trace : public DmBase{
         // object mutex, for shared access
         mutable std::shared_mutex                       m_event_property_lock[kRPVDMNumEventPropertyTypes];
 
+        TopologyNodeRoot                                m_topology_root;
 };
 
 

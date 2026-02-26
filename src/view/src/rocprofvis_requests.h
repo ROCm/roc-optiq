@@ -18,6 +18,26 @@ namespace RocProfVis
 namespace View
 {
 
+// Singleton class for creating unique IDs
+class IdGenerator
+{
+public:
+    static IdGenerator& GetInstance()
+    {
+        static IdGenerator instance;
+        return instance;
+    }
+
+    uint64_t GenerateId()
+    {
+        return ++m_current_id;
+    }
+
+private:
+    IdGenerator() : m_current_id(0) {}
+    uint64_t m_current_id;
+};
+
 enum class RequestType
 {
     kFetchTrack,
@@ -34,8 +54,10 @@ enum class RequestType
     kTableExport,
     kFetchSystemTrace,
 #ifdef COMPUTE_UI_SUPPORT
-    kFetchComputeTrace
-#endif   
+    kFetchComputeTrace,
+    kFetchMetrics,
+    kFetchMetricPivotTable,
+#endif
 };
 
 enum class RequestState
@@ -147,6 +169,56 @@ public:
     : m_event_id(event_id)
     {}
 };
+
+#ifdef COMPUTE_UI_SUPPORT
+class MetricsRequestParams : public RequestParamsBase
+{
+public:
+    struct MetricID
+    {
+        uint32_t                category_id;
+        std::optional<uint32_t> table_id;
+        std::optional<uint32_t> entry_id;
+    };
+    uint32_t              m_workload_id;
+    std::vector<uint32_t> m_kernel_ids;
+    std::vector<MetricID> m_metric_ids;
+    uint64_t              m_client_id;  // ID to identify the requester for the response
+
+    MetricsRequestParams(const MetricsRequestParams& metrics_params)            = default;
+    MetricsRequestParams& operator=(const MetricsRequestParams& metrics_params) = default;
+
+    MetricsRequestParams(uint32_t workload_id, const std::vector<uint32_t>& kernel_ids,
+                         const std::vector<MetricID>& metric_ids, uint64_t client_id)
+    : m_workload_id(workload_id)
+    , m_kernel_ids(kernel_ids)
+    , m_metric_ids(metric_ids)
+    , m_client_id(client_id)
+    {}
+};
+
+class ComputeTableRequestParams : public RequestParamsBase
+{
+public:
+    uint32_t                           m_workload_id;
+    std::vector<std::string>           m_metric_selectors;  // Format: "metric_id:value_name"
+    uint64_t                           m_sort_column_index;
+    rocprofvis_controller_sort_order_t m_sort_order;
+
+    ComputeTableRequestParams(const ComputeTableRequestParams& params) = default;
+    ComputeTableRequestParams& operator=(const ComputeTableRequestParams& params) = default;
+
+    ComputeTableRequestParams(uint32_t workload_id,
+                            const std::vector<std::string>& metric_selectors,
+                            uint64_t sort_column_index = 1,
+                            rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderDescending)
+    : m_workload_id(workload_id)
+    , m_metric_selectors(metric_selectors)
+    , m_sort_column_index(sort_column_index)
+    , m_sort_order(sort_order)
+    {}
+};
+#endif
 
 
 struct RequestInfo

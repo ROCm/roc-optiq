@@ -10,10 +10,10 @@ namespace RocProfVis
 namespace View
 {
 
-class ComputeWidget : public RocWidget
+class ComputeWidgetLegacy : public RocWidget
 {
 public:
-    ComputeWidget(std::shared_ptr<ComputeDataProvider> data_provider);
+    ComputeWidgetLegacy(std::shared_ptr<ComputeDataProvider> data_provider);
     void Update() = 0;
     void Render() = 0;
 
@@ -22,10 +22,10 @@ protected:
     std::string m_id;
 };
 
-class ComputePlot : public ComputeWidget
+class ComputePlotLegacy : public ComputeWidgetLegacy
 {
 public:
-    ComputePlot(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
+    ComputePlotLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
     void Update() override;
     void Render() = 0;
 
@@ -34,10 +34,10 @@ protected:
     ComputePlotModel* m_model;
 };
 
-class ComputeTable : public ComputeWidget
+class ComputeTableLegacy : public ComputeWidgetLegacy
 {
 public:
-    ComputeTable(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_table_types_t type);
+    ComputeTableLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_table_types_t type);
     void Update() override;
     void Render() override;
     void Search(const std::string& term);
@@ -47,24 +47,24 @@ private:
     ComputeTableModel* m_model;
 };
 
-class ComputePlotPie : public ComputePlot
+class ComputePlotPieLegacy : public ComputePlotLegacy
 {
 public:
-    ComputePlotPie(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
+    ComputePlotPieLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
     void Render() override;
 };
 
-class ComputePlotBar : public ComputePlot
+class ComputePlotBarLegacy : public ComputePlotLegacy
 {
 public:
-    ComputePlotBar(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
+    ComputePlotBarLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
     void Render() override;
 };
 
-class ComputeMetric : public ComputeWidget
+class ComputeMetricLegacy : public ComputeWidgetLegacy
 {
 public:
-    ComputeMetric(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit);
+    ComputeMetricLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit);
     void Update() override;
     void Render() {};
     std::string GetFormattedString() const;
@@ -77,14 +77,14 @@ private:
     std::string m_formatted_string;
 };
 
-class ComputePlotRoofline : public ComputePlot
+class ComputePlotRooflineLegacy : public ComputePlotLegacy
 {
 public:
     enum GroupMode {
         GroupModeKernel,
         GroupModeDispatch
     };
-    ComputePlotRoofline(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
+    ComputePlotRooflineLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
     void Update() override;
     void Render() override;
     void UpdateGroupMode();

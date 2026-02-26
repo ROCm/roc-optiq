@@ -258,6 +258,29 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(rocprofvis_controller
 rocprofvis_result_t rocprofvis_controller_summary_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_summary_t* summary, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_summary_metrics_t* output);
 
 #ifdef COMPUTE_UI_SUPPORT
+
+/*
+* Allocate a metrics container used for carrying compute trace metric data.
+* @returns A valid metrics container object, or nullptr.
+*/
+rocprofvis_controller_metrics_container_t* rocprofvis_controller_metrics_container_alloc(void);
+
+/*
+* Frees the provided metrics container object
+* @param object The object to free.
+*/
+void rocprofvis_controller_metrics_container_free(rocprofvis_controller_metrics_container_t* object);
+
+/*
+* Fetch compute trace metrics values, populating the passed in metrics container object.
+* @param controller The controller
+* @param args The input arguments
+* @param result The future to wait on
+* @param output The metrics container object to write to
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_metric_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_metrics_container_t* output);
+
 /*
 * Setup and fetches data for a plot, populating the passed in array with PlotSeries objects.
 * Data within PlotSeries can be accessed using GetUInt64/GetDouble/GetString.

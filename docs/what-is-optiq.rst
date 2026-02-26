@@ -26,6 +26,8 @@ ROCm Optiq is structured around several key panels that work together to deliver
   - Tools for zooming, filtering, and bookmarking for detailed analysis.
 
 - :ref:`advanced`: Provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. This section provides a unified interface for multiple data perspectives, offering granular insights.
+- :ref:`summary-view`: Displays the top 10 kernels by execution time using pie charts, bar charts, or tables.
+- :ref:`minimap`: Provides a compact overview of event density and counter values across the entire trace, enabling rapid navigation of large datasets.
 
 
 

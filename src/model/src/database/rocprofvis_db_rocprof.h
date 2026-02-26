@@ -26,18 +26,47 @@ typedef struct rocprofvis_db_string_id_hash_t
     }
 } rocprofvis_db_string_id_hash_t;
 
+typedef enum rocprofvis_db_memalloc_type_t : uint8_t
+{
+    kRPVMemActivityAlloc,
+    kRPVMemActivityFree,
+    kRPVMemActivityRealloc,
+    kRPVMemActivityReclaim,
+    kRPVMemActivityNumTypes
+}rocprofvis_db_memalloc_type_t;
+
+typedef enum rocprofvis_db_memalloc_level_t : uint8_t
+{
+    kRPVMemLevelReal,
+    kRPVMemLevelVirtual,
+    kRPVMemLevelScratch,
+    kRPVMemLevelNumLevels
+}rocprofvis_db_memalloc_level_t;
+
+typedef struct rocprofvis_db_memalloc_activity_t
+{
+    uint64_t start;
+    uint64_t end;
+    uint64_t address;
+    uint64_t size;
+    uint32_t id;
+    uint32_t pid;
+    uint16_t stream_id;
+    uint8_t agent_id;
+    uint8_t queue_id;
+    rocprofvis_db_memalloc_type_t type;
+    rocprofvis_db_memalloc_level_t level;
+}rocprofvis_db_memalloc_activity_t;
+
 class RocprofDatabase : public ProfileDatabase
 {
-    // map array for fast track ID search
-    typedef std::map<uint64_t, uint32_t> sub_process_map_t;
-    typedef std::map<uint64_t, sub_process_map_t> process_map_t;
-    typedef std::map<uint64_t, process_map_t> op_map_t;
-    //typedef std::map<uint64_t, process_map_t> op_map_t;
-    typedef std::map<uint32_t, process_map_t> track_find_map_t;
+
     // type of map array for string indexes remapping
     typedef std::unordered_map<rocprofvis_db_string_id_t, rocprofvis_dm_index_t, rocprofvis_db_string_id_hash_t> string_index_map_t;
     typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_db_string_id_t>> string_id_map_t;
     typedef std::unordered_map<std::string, uint32_t> string_map_t;
+    typedef std::map<uint32_t, std::vector<rocprofvis_db_memalloc_activity_t>> memalloc_activity_t;
+    typedef std::map<uint32_t, std::unordered_map<uint32_t, uint32_t>> mem_free_stream_to_agent_t;
 
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
@@ -113,6 +142,13 @@ private:
     // @param argv - pointer to row values
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
+    static int CallbackCaptureMemoryActivity(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+    // sqlite3_exec callback to process string list query and add string object to Trace container
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
     static int CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to cache specified tables data
     // @param data - pointer to callback caller argument
@@ -148,25 +184,20 @@ private:
     // @return SQLITE_OK if successful
     static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt,
         char** azColName);
-    
+    // sqlite3_exec callback to collect memory allocation activity
+    // object to StackTrace container
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallBackAddMemoryAllocationActivity(void* data, int argc, sqlite3_stmt* stmt,
+        char** azColName);
     // method to remap string IDs. Main reason for remapping is having strings and kernel symbol names in one array 
     // @param record - event record structure
     // @return status of operation
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_record_data_t & record) override;
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_flow_data_t& record) override;
-    // finds and returns track id by 3 input parameters  (Node, Agent/PID, QueueId/PmcId/Metric name) 
-    // @param node_id - node id
-    // @param process_id - process id 
-    // @param sub_process_name - metric name
-    // @return status of operation
-    // @param operation - operation of event that requesting track id
-    // @return status of operation
-    rocprofvis_dm_result_t          FindTrackId(
-                                                        uint64_t node,
-                                                        uint32_t process,
-                                                        const char* subprocess,
-                                                        rocprofvis_dm_op_t operation,
-                                                        rocprofvis_dm_track_id_t& track_id) override;
 
     int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
 
@@ -195,15 +226,19 @@ private:
     private:
         rocprofvis_dm_result_t CreateIndexes();
         rocprofvis_dm_result_t LoadInformationTables(Future* future);
+        rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance);
+        rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
+        rocprofvis_dm_result_t CreateMemoryActivityTable(Future* future);
         
     private:
-        track_find_map_t find_track_map;
         QueryFactory m_query_factory;
         std::string m_db_version;
         // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
         string_index_map_t m_string_index_map; // id to index
         string_id_map_t m_string_id_map; // index to id
         string_map_t m_string_map; //temporary map to reuse string
+        memalloc_activity_t m_memalloc_activity;
+        mem_free_stream_to_agent_t m_memfree_stream_to_agent;
         std::mutex m_lock;
 
 

@@ -2,42 +2,38 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
-#include "widgets/rocprofvis_split_containers.h"
 
 namespace RocProfVis
 {
 namespace View
 {
 
-class ComputeDataProvider;
-class ComputeTable;
-class ComputePlotBar;
-class ComputePlotPie;
+class DataProvider;
+class ComputeSelection;
+class Roofline;
 
 class ComputeSummaryView : public RocWidget
 {
 public:
-    void Render();
-    void Update();
-    ComputeSummaryView(std::string owner_id, std::shared_ptr<ComputeDataProvider> data_provider);
-    ~ComputeSummaryView(); 
+    ComputeSummaryView(DataProvider&                     data_provider,
+                       std::shared_ptr<ComputeSelection> compute_selection);
+    ~ComputeSummaryView();
+
+    void Update() override;
+    void Render() override;
 
 private:
-    void RenderMenuBar();
-    void RenderLeftColumn();
-    void RenderRightColumn();
+    DataProvider& m_data_provider;
 
-    std::shared_ptr<HSplitContainer> m_container;
-    std::shared_ptr<RocCustomWidget> m_left_column;
-    std::shared_ptr<RocCustomWidget> m_right_column;
-    std::string m_owner_id;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+    std::unique_ptr<Roofline>         m_roofline;
 
-    std::unique_ptr<ComputeTable> m_sysinfo_table;
-    std::unique_ptr<ComputePlotPie> m_kernel_pie;
-    std::unique_ptr<ComputePlotBar> m_kernel_bar;
-    std::unique_ptr<ComputeTable> m_kernel_table;
-    std::unique_ptr<ComputeTable> m_dispatch_table;
+    uint64_t m_client_id;
+
+    EventManager::SubscriptionToken m_workload_selection_changed_token;
+    EventManager::SubscriptionToken m_metrics_fetched_token;
 };
 
 }  // namespace View

@@ -98,17 +98,98 @@ TrackTopology::UpdateTopology()
                           { InfoTable::Cell{ "OS Version", false },
                             InfoTable::Cell{ node_infos[i]->os_version, false } } }
                 };
-                for(const uint64_t& device_id : node_info->device_ids)
+                const std::vector<uint64_t>& processor_ids = node_infos[i]->device_ids;
+                m_topology.nodes[i].processors.resize(processor_ids.size());
+                m_topology.nodes[i].processor_header =
+                    "Processors (" + std::to_string(processor_ids.size()) + ")";
+                for (int j = 0; j < processor_ids.size(); j++)
                 {
-                    const DeviceInfo* device_info =
-                        topology_data.GetDevice(device_id);
-                    if(device_info)
+                    m_topology.nodes[i].processor_lut[processor_ids[j]] =
+                        &m_topology.nodes[i].processors[j];
+                    const DeviceInfo* processor_info =
+                        topology_data.GetDevice(processor_ids[j]);
+                    if (processor_info)
                     {
-                        m_topology.nodes[i].info_table.cells.emplace_back(std::vector{
-                            InfoTable::Cell{ DeviceTypeString(device_info->type) + " " +
-                                                 std::to_string(device_info->type_index),
-                                             false },
-                            InfoTable::Cell{ device_info->product_name, false } });
+                        m_topology.nodes[i].processors[j].info       = processor_info;
+                        m_topology.nodes[i].processors[j].info_table = InfoTable{
+                            { { InfoTable::Cell{ "Processor type", false },
+                            InfoTable::Cell{ DeviceTypeString(processor_info->type), false } },
+                            { InfoTable::Cell{ "Processor index", false },
+                            InfoTable::Cell{ std::to_string(processor_info->type_index), false } },
+                            { InfoTable::Cell{ "Product name", false },
+                            InfoTable::Cell{ processor_info->product_name, false } } }
+                        };
+                        m_topology.nodes[i].processors[j].header =
+                            "[" + std::to_string(processor_info->id.fields.id) + "] " + 
+                            DeviceTypeString(processor_info->type) + 
+                            std::to_string(processor_info->type_index) + ": "+
+                            processor_info->product_name;
+
+                        const std::vector<uint64_t>& queue_ids = processor_info->queue_ids;
+                        m_topology.nodes[i].processors[j].queues.resize(queue_ids.size());
+                        m_topology.nodes[i].processors[j].queue_header =
+                            "Queues (" + std::to_string(queue_ids.size()) + ")";
+                        for(int k = 0; k < queue_ids.size(); k++)
+                        {
+                            m_topology.nodes[i].processors[j].queue_lut[queue_ids[k]] =
+                                &m_topology.nodes[i].processors[j].queues[k];
+                            const QueueInfo* queue_info =
+                                topology_data.GetQueue(queue_ids[k]);
+                            if(queue_info)
+                            {
+                                const DeviceInfo* device_info =
+                                    topology_data.GetDevice(queue_info->device_id);
+                                m_topology.nodes[i].processors[j].queues[k].info =
+                                    queue_info;
+                                if(device_info)
+                                {
+                                    m_topology.nodes[i]
+                                        .processors[j]
+                                        .queues[k]
+                                        .info_table = InfoTable{
+                                            { { InfoTable::Cell{
+                                                DeviceTypeString(device_info->type) +
+                                                " " +
+                                        std::to_string(
+                                            device_info->type_index),
+                                        false },
+                                        InfoTable::Cell{ device_info->product_name,
+                                        false } } }
+                                    };
+                                }
+                            }
+                        }
+
+                        const std::vector<uint64_t>& counter_ids =
+                            processor_info->counter_ids;
+                        m_topology.nodes[i].processors[j].counters.resize(
+                            counter_ids.size());
+                        m_topology.nodes[i].processors[j].counter_header =
+                            "Counters (" + std::to_string(counter_ids.size()) + ")";
+                        for(int k = 0; k < counter_ids.size(); k++)
+                        {
+                            m_topology.nodes[i].processors[j].counter_lut[counter_ids[k]] =
+                                &m_topology.nodes[i].processors[j].counters[k];
+                            const CounterInfo* counter_info =
+                                topology_data.GetCounter(counter_ids[k]);
+                            if(counter_info)
+                            {
+                                m_topology.nodes[i].processors[j].counters[k].info =
+                                    counter_info;
+                                m_topology.nodes[i].processors[j].counters[k].info_table =
+                                    InfoTable{
+                                        { { InfoTable::Cell{ "Description", false },
+                                        InfoTable::Cell{ counter_info->description,
+                                        false } },
+                                        { InfoTable::Cell{ "Units", false },
+                                        InfoTable::Cell{ counter_info->units,
+                                        false } },
+                                        { InfoTable::Cell{ "Value Type", false },
+                                        InfoTable::Cell{ counter_info->value_type,
+                                        false } } }
+                                };
+                            }
+                        }
                     }
                 }
                 const std::vector<uint64_t>& process_ids = node_infos[i]->process_ids;
@@ -147,40 +228,6 @@ TrackTopology::UpdateTopology()
                         m_topology.nodes[i].processes[j].header =
                             process_info->command + 
                             " (" + std::to_string(process_info->id) + ")";
-                        const std::vector<uint64_t>& queue_ids = process_info->queue_ids;
-                        m_topology.nodes[i].processes[j].queues.resize(queue_ids.size());
-                        m_topology.nodes[i].processes[j].queue_header =
-                            "Queues (" + std::to_string(queue_ids.size()) + ")";
-                        for(int k = 0; k < queue_ids.size(); k++)
-                        {
-                            m_topology.nodes[i].processes[j].queue_lut[queue_ids[k]] =
-                                &m_topology.nodes[i].processes[j].queues[k];
-                            const QueueInfo* queue_info =
-                                topology_data.GetQueue(queue_ids[k]);
-                            if(queue_info)
-                            {
-                                const DeviceInfo* device_info =
-                                    topology_data.GetDevice(queue_info->device_id);
-                                m_topology.nodes[i].processes[j].queues[k].info =
-                                    queue_info;
-                                if(device_info)
-                                {
-                                    m_topology.nodes[i]
-                                        .processes[j]
-                                        .queues[k]
-                                        .info_table = InfoTable{
-                                        { { InfoTable::Cell{
-                                                DeviceTypeString(device_info->type) +
-                                                    " " +
-                                                    std::to_string(
-                                                        device_info->type_index),
-                                                false },
-                                            InfoTable::Cell{ device_info->product_name,
-                                                             false } } }
-                                    };
-                                }
-                            }
-                        }
 
                         const std::vector<uint64_t>& stream_ids = process_info->stream_ids;
                         m_topology.nodes[i].processes[j].streams.resize(stream_ids.size());
@@ -304,54 +351,6 @@ TrackTopology::UpdateTopology()
                                 } };
                             }
                         }
-                        const std::vector<uint64_t>& counter_ids =
-                            process_info->counter_ids;
-                        m_topology.nodes[i].processes[j].counters.resize(
-                            counter_ids.size());
-                        m_topology.nodes[i].processes[j].counter_header =
-                            "Counters (" + std::to_string(counter_ids.size()) + ")";
-                        for(int k = 0; k < counter_ids.size(); k++)
-                        {
-                            m_topology.nodes[i].processes[j].counter_lut[counter_ids[k]] =
-                                &m_topology.nodes[i].processes[j].counters[k];
-                            const CounterInfo* counter_info =
-                                topology_data.GetCounter(counter_ids[k]);
-                            if(counter_info)
-                            {
-                                const DeviceInfo* device_info =
-                                    topology_data.GetDevice(
-                                        counter_info->device_id);
-                                m_topology.nodes[i].processes[j].counters[k].info =
-                                    counter_info;
-                                m_topology.nodes[i].processes[j].counters[k].info_table =
-                                    InfoTable{
-                                        { { InfoTable::Cell{ "Description", false },
-                                            InfoTable::Cell{ counter_info->description,
-                                                             false } },
-                                          { InfoTable::Cell{ "Units", false },
-                                            InfoTable::Cell{ counter_info->units,
-                                                             false } },
-                                          { InfoTable::Cell{ "Value Type", false },
-                                            InfoTable::Cell{ counter_info->value_type,
-                                                             false } } }
-                                    };
-                                if(device_info)
-                                {
-                                    m_topology.nodes[i]
-                                        .processes[j]
-                                        .counters[k]
-                                        .info_table.cells.push_back(
-                                            { InfoTable::Cell{
-                                                  DeviceTypeString(device_info->type) +
-                                                      " " +
-                                                      std::to_string(
-                                                          device_info->type_index),
-                                                  false },
-                                              InfoTable::Cell{ device_info->product_name,
-                                                               false } });
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -369,6 +368,35 @@ TrackTopology::FormatCells()
 {
     for(auto& node : m_topology.nodes)
     {
+        for (auto& processor : node.processors)
+        {
+            for(auto& q : processor.queues)
+            {
+                for(auto& row : q.info_table.cells)
+                {
+                    for(auto& cell : row)
+                    {
+                        if(cell.needs_format && cell.formatter)
+                        {
+                            cell.formatter(cell.data, cell.formatted);
+                        }
+                    }
+                }
+            }
+            for(auto& c : processor.counters)
+            {
+                for(auto& row : c.info_table.cells)
+                {
+                    for(auto& cell : row)
+                    {
+                        if(cell.needs_format && cell.formatter)
+                        {
+                            cell.formatter(cell.data, cell.formatted);
+                        }
+                    }
+                }
+            }
+        }
         for(auto& process : node.processes)
         {
             // Format process table
@@ -412,32 +440,6 @@ TrackTopology::FormatCells()
             for(auto& s : process.streams)
             {
                 for(auto& row : s.info_table.cells)
-                {
-                    for(auto& cell : row)
-                    {
-                        if(cell.needs_format && cell.formatter)
-                        {
-                            cell.formatter(cell.data, cell.formatted);
-                        }
-                    }
-                }
-            }
-            for(auto& q : process.queues)
-            {
-                for(auto& row : q.info_table.cells)
-                {
-                    for(auto& cell : row)
-                    {
-                        if(cell.needs_format && cell.formatter)
-                        {
-                            cell.formatter(cell.data, cell.formatted);
-                        }
-                    }
-                }
-            }
-            for(auto& c : process.counters)
-            {
-                for(auto& row : c.info_table.cells)
                 {
                     for(auto& cell : row)
                     {
@@ -494,16 +496,17 @@ TrackTopology::UpdateGraphs()
         {
             if(track)
             {
-                const uint64_t& node_id    = track->topology.node_id;
-                const uint64_t& process_id = track->topology.process_id;
-                const uint64_t& id         = track->topology.id;
-                const uint64_t& index      = track->index;
+                const uint64_t& node_id      = track->topology.node_id;
+                const uint64_t& process_id   = track->topology.process_id;
+                const uint64_t& processor_id = track->topology.device_id;
+                const uint64_t& id           = track->topology.id.value;
+                const uint64_t& index        = track->index;
                 switch(track->topology.type)
                 {
                     case TrackInfo::TrackType::Queue:
                     {
                         m_topology.node_lut[node_id]
-                            ->process_lut[process_id]
+                            ->processor_lut[processor_id]
                             ->queue_lut[id]
                             ->graph_index = index;
                         break;
@@ -535,7 +538,7 @@ TrackTopology::UpdateGraphs()
                     case TrackInfo::TrackType::Counter:
                     {
                         m_topology.node_lut[node_id]
-                            ->process_lut[process_id]
+                            ->processor_lut[processor_id]
                             ->counter_lut[id]
                             ->graph_index = index;
                         break;

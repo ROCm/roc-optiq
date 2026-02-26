@@ -118,7 +118,7 @@ namespace DataModel
             track = row->Get<uint64_t>(track_column_it->m_offset[op], size);
         }
         ROCPROFVIS_ASSERT_MSG_RETURN(db->IsTrackIndexValid(track), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
-        return (DbInstance*)db->TrackPropertiesAt(track)->db_instance;
+        return (DbInstance*)db->TrackPropertiesAt(track)->track_indentifiers.db_instance;
     }
 
     void PackedTable::PlaceValue(size_t col, double value)
@@ -660,13 +660,13 @@ namespace DataModel
     //    m_rows.erase(new_end, m_rows.end());
     //}
 
-    void PackedTable::RemoveRowsForSetOfTracks(std::set<uint32_t> tracks, bool remove_all)
+    void PackedTable::RemoveRowsForSetOfTracks(std::set<uint32_t> & selected_tracks, std::set<uint32_t> & unselected_tracks, bool remove_all)
     {
         if (remove_all)
         {
             m_rows.clear();
         } else
-        if (tracks.size() > 0 && m_merged_columns.size() > 0)
+        if (unselected_tracks.size() > 0 && m_merged_columns.size() > 0)
         {
             auto track_info_it = Builder::table_view_schema.find(Builder::TRACK_ID_PUBLIC_NAME);
             auto stream_track_info_it = Builder::table_view_schema.find(Builder::STREAM_TRACK_ID_PUBLIC_NAME);
@@ -674,21 +674,27 @@ namespace DataModel
             uint8_t stream_track_id_size = ColumnTypeSize(stream_track_info_it->second.type);
             auto track_id_it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [](MergedColumnDef col) {return col.m_name == Builder::TRACK_ID_PUBLIC_NAME; });
             auto stream_track_id_it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [](MergedColumnDef col) {return col.m_name == Builder::STREAM_TRACK_ID_PUBLIC_NAME; });
+            if (track_id_it == m_merged_columns.end()) 
+                throw std::runtime_error("Missing track ID in table data");
             m_rows.erase(
                 std::remove_if(m_rows.begin(), m_rows.end(),
                     [&](std::unique_ptr<PackedRow>& row) {
                         uint8_t op = row->Get<uint8_t>(0);
                         uint16_t track = row->Get<uint16_t>(track_id_it->m_offset[op], track_id_size);
-                        if (tracks.find(track) != tracks.end())
-                            return true;
-                        if (stream_track_id_it != m_merged_columns.end())
+                        if (stream_track_id_it == m_merged_columns.end() || op == kRocProfVisDmOperationLaunch || op == kRocProfVisDmOperationLaunchSample)
+                        {
+                            if (unselected_tracks.find(track) != unselected_tracks.end())
+                                return true;
+                        }
+                        else
                         {
                             uint16_t stream_track = row->Get<uint16_t>(stream_track_id_it->m_offset[op], stream_track_id_size);
-                            if (tracks.find(stream_track) != tracks.end())
-                            {
+                            if (unselected_tracks.find(track) != unselected_tracks.end() && selected_tracks.find(stream_track) == selected_tracks.end())
                                 return true;
-                            }
+                            if (unselected_tracks.find(stream_track) != unselected_tracks.end() && selected_tracks.find(track) == selected_tracks.end())
+                                return true;
                         }
+
                         return false;
                     }
                 ),
@@ -775,32 +781,6 @@ namespace DataModel
                 RemoveDuplicates();
             }
         }
-    }
-
-
-    uint32_t StringTable::ToInt(const char* str) {
-        std::unique_lock lock(m_mutex);
-
-        auto it = m_str_to_id.find(str);
-        if (it != m_str_to_id.end())
-            return it->second;
-
-        uint32_t id = m_id_to_str.size();
-        m_id_to_str.push_back(str);
-        m_str_to_id[str] = id;
-        return id;
-    }
-
-    const char* StringTable::ToString(uint32_t id) const {
-        std::shared_lock lock(m_mutex);
-        if (id >= m_id_to_str.size()) return "";
-        return m_id_to_str[id].c_str();
-    }
-
-    void StringTable::Clear() {
-        std::unique_lock lock(m_mutex);
-        m_id_to_str.clear();
-        m_str_to_id.clear();
     }
 
 }  // namespace DataModel

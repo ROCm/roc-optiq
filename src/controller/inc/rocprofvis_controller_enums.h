@@ -107,11 +107,21 @@ typedef enum rocprofvis_controller_object_type_t
 #ifdef COMPUTE_UI_SUPPORT
     // Compute trace controller object
     kRPVControllerObjectTypeControllerCompute = 24,
+    // Workload object
+    kRPVControllerObjectTypeWorkload = 25,
+    // Kernel object
+    kRPVControllerObjectTypeKernel = 26,
+    // Metrics container object
+    kRPVControllerObjectTypeMetricsContainer = 27,
+    // Roofline object
+    kRPVControllerObjectTypeRoofline = 28,
     // Plot object
-    kRPVControllerObjectTypePlot = 25,
+    kRPVControllerObjectTypePlot = 29,
     // Plot series object
-    kRPVControllerObjectTypePlotSeries = 26,
+    kRPVControllerObjectTypePlotSeries = 30,
 #endif
+    // Topology node object
+    kRPVControllerObjectTypeTopologyNode = 27,
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -265,205 +275,7 @@ typedef enum rocprofvis_controller_track_type_t
     kRPVControllerTrackTypeEvents = 1,
 } rocprofvis_controller_track_type_t;
 
-typedef enum rocprofvis_controller_node_properties_t : uint32_t
-{
-    __kRPVControllerNodePropertiesFirst = 0xC0000000,
-    kRPVControllerNodeId                = __kRPVControllerNodePropertiesFirst,
-    kRPVControllerNodeHostName,
-    kRPVControllerNodeDomainName,
-    kRPVControllerNodeOSName,
-    kRPVControllerNodeOSRelease,
-    kRPVControllerNodeOSVersion,
-    kRPVControllerNodeHardwareName,
-    kRPVControllerNodeMachineId,
-    kRPVControllerNodeNumProcessors,
-    kRPVControllerNodeProcessorIndexed,
-    kRPVControllerNodeNumProcesses,
-    kRPVControllerNodeProcessIndexed,
-    kRPVControllerNodeMachineGuid,
-    kRPVControllerNodeHash,
-    __kRPVControllerNodePropertiesLast
-} rocprofvis_controller_node_properties_t;
-/* JSON: RPVNode
-{
-    id: Int,
-    host_name: String,
-    domain_name: String,
-    os_name: String,
-    os_release: String,
-    os_version: String,
-    hardware_name: String,
-    machine_id: String,
-    num_processors: Int,
-    processors: Array[RPVProcessor],
-    num_processes: Int,
-    processes: Array[RPVProcess]
-}
-*/
 
-typedef enum rocprofvis_controller_processor_properties_t : uint32_t
-{
-    __kRPVControllerProcessorPropertiesFirst = 0xD0000000,
-    kRPVControllerProcessorId                = __kRPVControllerProcessorPropertiesFirst,
-    kRPVControllerProcessorName,
-    kRPVControllerProcessorModelName,
-    kRPVControllerProcessorUserName,
-    kRPVControllerProcessorVendorName,
-    kRPVControllerProcessorProductName,
-    kRPVControllerProcessorExtData,
-    kRPVControllerProcessorUUID,
-    kRPVControllerProcessorType,
-    kRPVControllerProcessorTypeIndex,
-    kRPVControllerProcessorNodeId,
-    kRPVControllerProcessorNumQueues,
-    kRPVControllerProcessorNumStreams,
-    kRPVControllerProcessorNumCounters,
-    kRPVControllerProcessorQueueIndexed,
-    kRPVControllerProcessorStreamIndexed,
-    kRPVControllerProcessorCounterIndexed,
-    kRPVControllerProcessorIndex,
-    kRPVControllerProcessorLogicalIndex,
-    __kRPVControllerProcessorPropertiesLast
-} rocprofvis_controller_processor_properties_t;
-/* JSON: RPVProcessor
-{
-    id: Int,
-    name: String,
-    model_name: String,
-    user_name: String,
-    vendor_name: String,
-    product_name: String,
-    ext_data: String,
-    uuid: String,
-    type: String,
-    type_index: Int,
-    node_id: Int
-}
-*/
-
-typedef enum rocprofvis_controller_processor_type_t
-{
-    kRPVControllerProcessorTypeUndefined = 0,
-    kRPVControllerProcessorTypeGPU       = 1,
-    kRPVControllerProcessorTypeCPU       = 2,
-} rocprofvis_controller_processor_type_t;
-
-typedef enum rocprofvis_controller_thread_properties_t : uint32_t
-{
-    __kRPVControllerThreadPropertiesFirst = 0xF2000000,
-    kRPVControllerThreadId                = __kRPVControllerThreadPropertiesFirst,
-    kRPVControllerThreadNode,
-    kRPVControllerThreadProcess,
-    kRPVControllerThreadParentId,
-    kRPVControllerThreadTid,
-    kRPVControllerThreadName,
-    kRPVControllerThreadExtData,
-    kRPVControllerThreadStartTime,
-    kRPVControllerThreadEndTime,
-    kRPVControllerThreadTrack,
-    kRPVControllerThreadType,
-    __kRPVControllerThreadPropertiesLast
-} rocprofvis_controller_thread_properties_t;
-
-typedef enum rocprofvis_controller_thread_type_t
-{
-    kRPVControllerThreadTypeUndefined    = 0,
-    kRPVControllerThreadTypeInstrumented = 1,
-    kRPVControllerThreadTypeSampled      = 2,
-} rocprofvis_controller_thread_type_t;
-
-typedef enum rocprofvis_controller_queue_properties_t : uint32_t
-{
-    __kRPVControllerQueuePropertiesFirst = 0xF3000000,
-    kRPVControllerQueueId                = __kRPVControllerQueuePropertiesFirst,
-    kRPVControllerQueueNode,
-    kRPVControllerQueueProcess,
-    __kRPVControllerQueueReserved0,
-    kRPVControllerQueueName,
-    kRPVControllerQueueExtData,
-    kRPVControllerQueueProcessor,
-    kRPVControllerQueueTrack,
-    __kRPVControllerQueuePropertiesLast
-} rocprofvis_controller_queue_properties_t;
-
-typedef enum rocprofvis_controller_counter_properties_t : uint32_t
-{
-    __kRPVControllerCounterPropertiesFirst = 0xF5000000,
-    kRPVControllerCounterId                = __kRPVControllerCounterPropertiesFirst,
-    kRPVControllerCounterNode,
-    kRPVControllerCounterProcess,
-    kRPVControllerCounterProcessor,
-    kRPVControllerCounterName,
-    kRPVControllerCounterSymbol,
-    kRPVControllerCounterDescription,
-    kRPVControllerCounterExtendedDesc,
-    kRPVControllerCounterComponent,
-    kRPVControllerCounterUnits,
-    kRPVControllerCounterValueType,
-    kRPVControllerCounterBlock,
-    kRPVControllerCounterExpression,
-    kRPVControllerCounterGuid,
-    kRPVControllerCounterExtData,
-    kRPVControllerCounterTargetArch,
-    kRPVControllerCounterEventCode,
-    kRPVControllerCounterInstanceId,
-    kRPVControllerCounterIsConstant,
-    kRPVControllerCounterIsDerived,
-    kRPVControllerCounterTrack,
-    __kRPVControllerCounterPropertiesLast
-} rocprofvis_controller_counter_properties_t;
-
-typedef enum rocprofvis_controller_stream_properties_t : uint32_t
-{
-    __kRPVControllerStreamPropertiesFirst = 0xF4000000,
-    kRPVControllerStreamId      = __kRPVControllerStreamPropertiesFirst,
-    kRPVControllerStreamNode,
-    kRPVControllerStreamProcess,
-    kRPVControllerStreamName,
-    kRPVControllerStreamExtData,
-    kRPVControllerStreamProcessor,
-    kRPVControllerStreamNumQueues,
-    kRPVControllerStreamQueueIndexed,
-    kRPVControllerStreamTrack,
-    __kRPVControllerStreamPropertiesLast
-} rocprofvis_controller_stream_properties_t;
-
-typedef enum rocprofvis_controller_process_properties_t : uint32_t
-{
-    __kRPVControllerProcessPropertiesFirst = 0xF1000000,
-    kRPVControllerProcessId      = __kRPVControllerProcessPropertiesFirst,
-    kRPVControllerProcessNodeId,
-    kRPVControllerProcessInitTime,
-    kRPVControllerProcessFinishTime,
-    kRPVControllerProcessStartTime,
-    kRPVControllerProcessEndTime,
-    kRPVControllerProcessCommand,
-    kRPVControllerProcessEnvironment,
-    kRPVControllerProcessExtData,
-    kRPVControllerProcessParentId,
-    kRPVControllerProcessNumThreads,
-    kRPVControllerProcessNumQueues,
-    kRPVControllerProcessNumStreams,
-    kRPVControllerProcessThreadIndexed,
-    kRPVControllerProcessQueueIndexed,
-    kRPVControllerProcessStreamIndexed,
-    kRPVControllerProcessNumCounters,
-    kRPVControllerProcessCounterIndexed,
-    __kRPVControllerProcessPropertiesLast,
-} rocprofvis_controller_process_properties_t;
-/* JSON: RPVProcess
-{
-    id: Int,
-    node_id: Int,
-    init_time: Double,
-    finish_time: Double,
-    start_time: Double,
-    end_time: Double,
-    command: String,
-    environment: String,
-    ext_data: String
-}
-*/
 
 /*
  * Properties for each track of data within the data set.
@@ -1031,15 +843,189 @@ typedef enum rocprofvis_controller_compute_properties_t : uint32_t
 {
     __kRPVControllerComputePropertiesFirst,
     kRPVControllerComputeId = __kRPVControllerComputePropertiesFirst,
+    kRPVControllerNumWorkloads,
+    kRPVControllerWorkloadIndexed,
+    kRPVControllerKernelMetricTable,
     __kRPVControllerComputePropertiesLast
 } rocprofvis_controller_compute_properties_t;
 
+/*
+ * Properties for a workload in a compute trace.
+ */
+typedef enum rocprofvis_controller_workload_properties_t : uint32_t
+{
+    __kRPVControllerWorkloadPropertiesFirst,
+    kRPVControllerWorkloadId = __kRPVControllerWorkloadPropertiesFirst,
+    kRPVControllerWorkloadName,
+    kRPVControllerWorkloadSystemInfoNumEntries,
+    kRPVControllerWorkloadSystemInfoEntryNameIndexed,
+    kRPVControllerWorkloadSystemInfoEntryValueIndexed,
+    kRPVControllerWorkloadConfigurationNumEntries,
+    kRPVControllerWorkloadConfigurationEntryNameIndexed,
+    kRPVControllerWorkloadConfigurationEntryValueIndexed,
+    kRPVControllerWorkloadNumAvailableMetrics,
+    kRPVControllerWorkloadAvailableMetricCategoryIdIndexed,
+    kRPVControllerWorkloadAvailableMetricTableIdIndexed,
+    kRPVControllerWorkloadAvailableMetricCategoryNameIndexed,
+    kRPVControllerWorkloadAvailableMetricTableNameIndexed,
+    kRPVControllerWorkloadAvailableMetricNameIndexed,
+    kRPVControllerWorkloadAvailableMetricDescriptionIndexed,
+    kRPVControllerWorkloadAvailableMetricUnitIndexed,
+    kRPVControllerWorkloadNumMetricValueNames,
+    kRPVControllerWorkloadMetricValueNameCategoryIdIndexed,
+    kRPVControllerWorkloadMetricValueNameTableIdIndexed,
+    kRPVControllerWorkloadMetricValueNameStringIndexed,
+    kRPVControllerWorkloadRoofline,
+    kRPVControllerWorkloadNumKernels,
+    kRPVControllerWorkloadKernelIndexed,
+    __kRPVControllerWorkloadPropertiesLast
+} rocprofvis_controller_workload_properties_t;
+
+/*
+ * Properties for a kernel in a compute trace.
+ */
+typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
+{
+    __kRPVControllerKernelPropertiesFirst,
+    kRPVControllerKernelId = __kRPVControllerKernelPropertiesFirst,
+    kRPVControllerKernelName,
+    kRPVControllerKernelInvocationCount,
+    kRPVControllerKernelDurationTotal,
+    kRPVControllerKernelDurationMin,
+    kRPVControllerKernelDurationMax,
+    kRPVControllerKernelDurationMedian,
+    kRPVControllerKernelDurationMean,
+    __kRPVControllerKernelPropertiesLast
+} rocprofvis_controller_kernel_properties_t;
+
+/*
+ * Arguments for fetching metric values.
+ */
+typedef enum rocprofvis_controller_metric_arguments_t : uint32_t
+{
+    kRPVControllerMetricArgsNumKernels,
+    kRPVControllerMetricArgsKernelIdIndexed,
+    kRPVControllerMetricArgsNumMetrics,
+    kRPVControllerMetricArgsMetricCategoryIdIndexed,
+    kRPVControllerMetricArgsMetricTableIdIndexed,
+    kRPVControllerMetricArgsMetricEntryIdIndexed,
+} rocprofvis_controller_metric_arguments_t;
+
+/*
+ * Arguments for fetching dynamic metrics matrix (pivot table).
+ */
+typedef enum rocprofvis_controller_compute_pivot_table_arguments_t : uint32_t
+{
+    // Workload ID to query (uint64)
+    kRPVControllerCPTArgsWorkloadId = 0x13000000,
+    // Number of metric selectors (uint64)
+    kRPVControllerCPTArgsNumMetricSelectors,
+    // Indexed metric selector strings in format "metric_id:value_name" (e.g., "2.1.4:peak")
+    kRPVControllerCPTArgsMetricSelectorIndexed,
+    // Optional sort column index (uint64) - 0=kernel_name, 1=duration_ns_sum (default), 2+=metrics
+    kRPVControllerCPTArgsSortColumnIndex,
+    // Optional sort order (rocprofvis_controller_sort_order_t) - 0=ascending, 1=descending (default = descending)
+    kRPVControllerCPTArgsSortOrder,
+} rocprofvis_controller_compute_pivot_table_arguments_t;
+
+/*
+ * Properties for a metrics container.
+ */
+typedef enum rocprofvis_controller_metrics_container_properties_t : uint32_t
+{
+    __kRPVControllerMetricsContainerPropertiesFirst,
+    kRPVControllerMetricsContainerNumMetrics = __kRPVControllerMetricsContainerPropertiesFirst,
+    kRPVControllerMetricsContainerMetricIdIndexed,
+    kRPVControllerMetricsContainerMetricNameIndexed,
+    kRPVControllerMetricsContainerKernelIdIndexed,
+    kRPVControllerMetricsContainerMetricValueNameIndexed,
+    kRPVControllerMetricsContainerMetricValueValueIndexed,
+    __kRPVControllerMetricsContainerPropertiesLast
+} rocprofvis_controller_metrics_container_properties_t;
+
+/*
+ * Properties for roofline.
+ */
+typedef enum rocprofvis_controller_roofline_properties_t : uint32_t
+{
+    __kRPVControllerRooflinePropertiesFirst,
+    kRPVControllerRooflineDataType = __kRPVControllerRooflinePropertiesFirst,
+    kRPVControllerRooflineNumCeilingsCompute,
+    kRPVControllerRooflineCeilingComputeTypeIndexed,
+    kRPVControllerRooflineCeilingComputeXIndexed,
+    kRPVControllerRooflineCeilingComputeYIndexed,
+    kRPVControllerRooflineCeilingComputeThroughputIndexed,
+    kRPVControllerRooflineNumCeilingsBandwidth,
+    kRPVControllerRooflineCeilingBandwidthTypeIndexed,
+    kRPVControllerRooflineCeilingBandwidthXIndexed,
+    kRPVControllerRooflineCeilingBandwidthYIndexed,
+    kRPVControllerRooflineCeilingBandwidthThroughputIndexed,
+    kRPVControllerRooflineNumCeilingsRidge,
+    kRPVControllerRooflineCeilingRidgeComputeTypeIndexed,
+    kRPVControllerRooflineCeilingRidgeBandwidthTypeIndexed,
+    kRPVControllerRooflineCeilingRidgeXIndexed,
+    kRPVControllerRooflineCeilingRidgeYIndexed,
+    kRPVControllerRooflineNumKernels,
+    kRPVControllerRooflineKernelIdIndexed,
+    kRPVControllerRooflineKernelIntensityTypeIndexed,
+    kRPVControllerRooflineKernelIntensityXIndexed,
+    kRPVControllerRooflineKernelIntensityYIndexed,
+    __kRPVControllerRooflinePropertiesLast
+} rocprofvis_controller_roofline_properties_t;
+
+/*
+ * Roofline compute ceiling types.
+ */
+typedef enum rocprofvis_controller_roofline_ceiling_compute_type_t : uint32_t
+{
+    __KRPVControllerRooflineCeilingComputeTypeFirst,
+    kRPVControllerRooflineCeilingComputeMFMAFP4 = __KRPVControllerRooflineCeilingComputeTypeFirst,
+    kRPVControllerRooflineCeilingComputeMFMAFP6,
+    kRPVControllerRooflineCeilingComputeMFMAFP8,
+    kRPVControllerRooflineCeilingComputeVALUI8,
+    kRPVControllerRooflineCeilingComputeMFMAI8,
+    kRPVControllerRooflineCeilingComputeVALUFP16,
+    kRPVControllerRooflineCeilingComputeMFMAFP16,
+    kRPVControllerRooflineCeilingComputeMFMABF16,
+    kRPVControllerRooflineCeilingComputeVALUFP32,
+    kRPVControllerRooflineCeilingComputeMFMAFP32,
+    kRPVControllerRooflineCeilingComputeVALUI32,
+    kRPVControllerRooflineCeilingComputeVALUFP64,
+    kRPVControllerRooflineCeilingComputeMFMAFP64,
+    kRPVControllerRooflineCeilingComputeVALUI64,
+    __KRPVControllerRooflineCeilingComputeTypeLast
+} rocprofvis_controller_roofline_ceiling_compute_type_t;
+
+/*
+* Roofline bandwidth ceiling types.
+*/
+typedef enum rocprofvis_controller_roofline_ceiling_bandwidth_type_t : uint32_t
+{
+    __KRPVControllerRooflineCeilingBandwidthTypeFirst,
+    kRPVControllerRooflineCeilingTypeBandwidthHBM = __KRPVControllerRooflineCeilingBandwidthTypeFirst,
+    kRPVControllerRooflineCeilingTypeBandwidthL2,
+    kRPVControllerRooflineCeilingTypeBandwidthL1,
+    kRPVControllerRooflineCeilingTypeBandwidthLDS,
+    __KRPVControllerRooflineCeilingBandwidthTypeLast
+} rocprofvis_controller_roofline_ceiling_bandwidth_type_t;
+
+/*
+* Roofline kernel intensity types.
+*/
+typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
+{
+    kRPVControllerRooflineKernelIntensityTypeHBM,
+    kRPVControllerRooflineKernelIntensityTypeL2,
+    kRPVControllerRooflineKernelIntensityTypeL1,
+} rocprofvis_controller_roofline_kernel_intensity_type_t;
+
+#pragma region Deprecated
 /*
  * Identifiers for each table in a compute trace.
  */
 typedef enum rocprofvis_controller_compute_table_types_t
 {
-    kRPVControllerComputeTableTypeKernelList = 0,
+    kRPVControllerComputeTableTypeKernelList = 0x1A000000,
     kRPVControllerComputeTableTypeDispatchList,
     kRPVControllerComputeTableTypeSysInfo,
     kRPVControllerComputeTableTypeSpeedOfLight,
@@ -1175,7 +1161,7 @@ typedef enum rocprofvis_controller_compute_metric_types_t
  */
 typedef enum rocprofvis_controller_plot_properties_t : uint32_t
 {
-    __kRPVControllerPlotPropertiesFirst = 0x1A000000,
+    __kRPVControllerPlotPropertiesFirst = 0x1B000000,
     // Id for the plot
     kRPVControllerPlotId = __kRPVControllerPlotPropertiesFirst,
     // Number of data series
@@ -1202,7 +1188,7 @@ typedef enum rocprofvis_controller_plot_properties_t : uint32_t
  */
 typedef enum rocprofvis_controller_plot_series_properties_t : uint32_t
 {
-    __kRPVControllerPlotSeriesPropertiesFirst = 0x2A000000,
+    __kRPVControllerPlotSeriesPropertiesFirst = 0x1C000000,
     // Number of x,y pairs in the series
     kRPVControllerPlotSeriesNumValues = __kRPVControllerPlotSeriesPropertiesFirst,
     // Indexed x values
@@ -1213,4 +1199,5 @@ typedef enum rocprofvis_controller_plot_series_properties_t : uint32_t
     kRPVControllerPlotSeriesName,
     __kRPVControllerPlotSeriesPropertiesLast
 } rocprofvis_controller_plot_series_properties_t;
+#pragma endregion
 #endif

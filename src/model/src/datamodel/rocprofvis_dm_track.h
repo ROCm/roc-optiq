@@ -32,19 +32,19 @@ public:
     // Returns class mutex
     std::shared_mutex*                                  Mutex() override;
     // Returns track category enumeration value
-    rocprofvis_dm_track_category_t                      Category() { return m_track_params->process.category; }
+    rocprofvis_dm_track_category_t                      Category() { return m_track_params->track_indentifiers.category; }
     // Returns track ID. Track id is currently equal to track index in array of tracks
-    rocprofvis_dm_track_id_t                            TrackId() { return m_track_params->track_id; }
+    rocprofvis_dm_track_id_t                            TrackId() { return m_track_params->track_indentifiers.track_id; }
     // Returns node id
-    rocprofvis_dm_node_id_t                             NodeId() { return m_track_params->process.id[TRACK_ID_NODE]; }
+    rocprofvis_dm_node_id_t                             NodeId() { return m_track_params->track_indentifiers.id[TRACK_ID_NODE]; }
     // Returns pid or agent id
-    rocprofvis_dm_process_id_t                          ProcessId() { return m_track_params->process.id[TRACK_ID_PID_OR_AGENT]; }
+    rocprofvis_dm_process_id_t                          ProcessId() { return m_track_params->track_indentifiers.id[TRACK_ID_PID_OR_AGENT]; }
     // Returns tid or queue id
-    rocprofvis_dm_process_id_t                          SubProcessId() { return m_track_params->process.id[TRACK_ID_TID_OR_QUEUE]; }
+    rocprofvis_dm_process_id_t                          SubProcessId() { return m_track_params->track_indentifiers.id[TRACK_ID_TID_OR_QUEUE]; }
     // Returns pointer to process string
-    rocprofvis_dm_charptr_t                             Process() { return m_track_params->process.name[TRACK_ID_PID_OR_AGENT].c_str(); }
+    rocprofvis_dm_charptr_t                             Process() { return m_track_params->track_indentifiers.name[TRACK_ID_PID_OR_AGENT].c_str(); }
     // Returns pointer to subprocess string
-    rocprofvis_dm_charptr_t                             SubProcess() { return m_track_params->process.name[TRACK_ID_TID_OR_QUEUE].c_str(); }
+    rocprofvis_dm_charptr_t                             SubProcess() { return m_track_params->track_indentifiers.name[TRACK_ID_TID_OR_QUEUE].c_str(); }
     // Return total number of records                   
     rocprofvis_dm_size_t                                NumRecords() { return m_track_params->record_count; }
     // Return track minimum timestamp
@@ -57,8 +57,8 @@ public:
     rocprofvis_dm_value_t                               MaxValue() { return m_track_params->max_value; }
     // Database instance (Guid index)
     rocprofvis_dm_id_t                                  InstanceId() { 
-        return m_track_params->db_instance == nullptr ?
-            0 : ((DbInstance*)m_track_params->db_instance)->GuidIndex();
+        return m_track_params->track_indentifiers.db_instance == nullptr ?
+            0 : ((DbInstance*)m_track_params->track_indentifiers.db_instance)->GuidIndex();
     }
     // Returns pointer to category string
     rocprofvis_dm_charptr_t                             CategoryString();

@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <chrono>
  
 namespace RocProfVis
 {
@@ -36,6 +37,24 @@ typedef struct ViewCoords
     double v_max_x;
 
 } ViewCoords;
+
+class LoadingTimer
+{
+public:
+    LoadingTimer(uint64_t delay);
+    ~LoadingTimer() = default;
+
+    void Start();
+    bool IsStarted() const { return m_started; }
+    bool IsExpired();
+    void Restart();
+    void Tick();
+private:
+    std::chrono::time_point<std::chrono::steady_clock> m_last_tick;
+    std::chrono::milliseconds                          m_timer;
+    std::chrono::milliseconds                          m_delay;
+    bool                                               m_started;
+};
 
 class TimelineViewProjectSettings : public ProjectSetting
 {
@@ -97,9 +116,19 @@ public:
     TimelineArrow& GetArrowLayer();
 
 private:
-    void                            UpdateMaxMetaAreaSize(float new_size);
-    void                            CalculateMaxMetaAreaSize();
-    void                            UpdateAllMaxMetaAreaSizes();
+    void UpdateMaxMetaAreaSize(float new_size);
+    void CalculateMaxMetaAreaSize();
+    void UpdateAllMaxMetaAreaSizes();
+
+    void RenderTrack(int track_index, bool request_data, ImGuiWindowFlags window_flags,
+                     ImVec2 container_size);
+    bool IsRequestDataNeeded();
+    void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
+    void RenderNormalTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
+                   bool is_reordering);
+    void RenderEmptyTrack(TrackItem* track_item);
+    void RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size);
+
     void                            ClearTimeRangeSelection();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
@@ -126,7 +155,6 @@ private:
     std::pair<double, double>           m_highlighted_region;
     SettingsManager&                    m_settings;
     double                              m_last_data_req_view_time_offset_ns;
-    float                               m_artificial_scrollbar_height;
     double                              m_grid_interval_ns;
     int                                 m_grid_interval_count;
     bool                                m_recalculate_grid_interval;
@@ -156,6 +184,7 @@ private:
     bool m_is_selecting_region;
 
     TimelineViewProjectSettings m_project_settings;
+    LoadingTimer                m_loading_timer;
 };
 
 }  // namespace View

@@ -4,7 +4,7 @@
 #pragma once
 #include "rocprofvis_compute_memory_chart.h"
 #include "rocprofvis_event_manager.h"
-#include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_flex_container.h"
 
 namespace RocProfVis
 {
@@ -26,11 +26,14 @@ public:
     void Update() override;
 
 private:
+    void BuildFlexLayout();
+
     DataProvider&          m_data_provider;
     ComputeMemoryChartView m_memory_chart;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<Roofline>         m_roofline;
+    std::shared_ptr<FlexContainer>    m_flex;
 
     uint64_t m_client_id;
 

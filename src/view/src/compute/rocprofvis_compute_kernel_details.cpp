@@ -87,6 +87,8 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
     m_roofline = std::make_unique<RocProfVis::View::Roofline>(data_provider);
 
     m_widget_name = GenUniqueName("ComputeKernelDetailsView");
+
+    BuildFlexLayout();
 }
 
 ComputeKernelDetailsView::~ComputeKernelDetailsView()
@@ -111,16 +113,22 @@ ComputeKernelDetailsView::Update()
 }
 
 void
+ComputeKernelDetailsView::BuildFlexLayout()
+{
+    m_flex = std::make_shared<FlexContainer>();
+
+    //                                                                                    min_width  height  grow
+    m_flex->items.push_back({std::make_shared<RocCustomWidget>([this]() { m_memory_chart.Render(); }), 2300.0f, 600.0f});
+    m_flex->items.push_back({std::make_shared<RocCustomWidget>([this]() { if(m_roofline) m_roofline->Render(); }), 900.0f, 500.0f});
+    m_flex->items.push_back({std::make_shared<RocCustomWidget>([]() { ImGui::Text("Panel 1"); }), 500.0f, 400.0f});
+    m_flex->items.push_back({std::make_shared<RocCustomWidget>([]() { ImGui::Text("Panel 2"); }), 500.0f, 400.0f});
+    m_flex->items.push_back({std::make_shared<RocCustomWidget>([]() { ImGui::Text("Panel 3"); }), 500.0f, 400.0f});
+}
+
+void
 ComputeKernelDetailsView::Render()
 {
-    ImGui::BeginChild("kernel_details");
-    ImGui::Text("Memory Chart");
-    m_memory_chart.Render();
-    if(m_roofline)
-    {
-        m_roofline->Render();
-    }
-    ImGui::EndChild();
+    if(m_flex) m_flex->Render();
 }
 
 }  // namespace View

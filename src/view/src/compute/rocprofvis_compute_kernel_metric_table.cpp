@@ -361,11 +361,6 @@ KernelMetricTable::Render()
 
                 ImGui::EndTable();
             }
-
-            if(request_pending)
-            {
-                RenderLoadingIndicator();
-            }
         }
         else
         {
@@ -375,8 +370,20 @@ KernelMetricTable::Render()
             }
             else
             {
-                ImGui::TextDisabled("No data to display");
+                if(request_pending)
+                {
+                    ImGui::TextDisabled("Loading data...");
+                }
+                else
+                {
+                    ImGui::TextDisabled("No data to display");
+                }
             }
+        }
+
+        if(request_pending)
+        {
+            RenderLoadingIndicator();
         }
     }
     ImGui::EndChild();

@@ -528,9 +528,9 @@ SettingsManager::InitStyling()
         colormap.push_back(255 << IM_COL32_A_SHIFT | flame_color);
     }
     colormap.push_back(IM_COL32(220, 50, 50, 255));
-    ImPlot::AddColormap("flame", colormap.data(), colormap.size());
+    ImPlot::AddColormap("flame", colormap.data(), static_cast<int>(colormap.size()));
     colormap = { IM_COL32(255, 255, 255, 255), IM_COL32(255, 255, 255, 255) };
-    ImPlot::AddColormap("white", colormap.data(), colormap.size());
+    ImPlot::AddColormap("white", colormap.data(), static_cast<int>(colormap.size()));
 }
 
 const ImGuiStyle&

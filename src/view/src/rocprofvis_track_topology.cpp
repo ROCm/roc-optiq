@@ -33,7 +33,7 @@ TrackTopology::TrackTopology(DataProvider& dp)
 
     //subscribe to time format changed event
     auto format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        // Reformat time columns
+        (void)e;
         FormatCells();
     };
 

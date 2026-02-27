@@ -69,7 +69,7 @@ void ComputeTableLegacy::Render()
         ImGui::PopStyleVar();
 
         std::vector<std::vector<ComputeTableCellModel>>& cells = m_model->m_cells;
-        if (ImGui::BeginTable(m_id.c_str(), cells[0].size(), ImGuiTableFlags_Borders))
+        if (ImGui::BeginTable(m_id.c_str(), static_cast<int>(cells[0].size()), ImGuiTableFlags_Borders))
         {
             for (std::string& c : m_model->m_column_names)
             {
@@ -97,7 +97,7 @@ void ComputeTableLegacy::Render()
                         }
                         else if (cell.m_type == kRPVControllerPrimitiveTypeUInt64)
                         {
-                            value = cell.m_num_value.m_uint64;
+                            value = static_cast<double>(cell.m_num_value.m_uint64);
                         }
                         if (value > TABLE_THRESHOLD_HIGH)
                         {
@@ -151,6 +151,7 @@ void ComputePlotPieLegacy::Render()
         std::vector<const char*>& series_names = m_model->m_y_axis.m_tick_labels;
         std::vector<double>& x_values = m_model->m_series[0].m_x_values;
         std::vector<double>& y_values = m_model->m_series[0].m_y_values;
+        (void)y_values;
 
         ImGui::PushID(m_id.c_str());
         if (ImPlot::BeginPlot(title, ImVec2(-1, 0), ImPlotFlags_Equal | ImPlotFlags_NoInputs)) {
@@ -209,13 +210,13 @@ void ComputePlotBarLegacy::Render()
             ImPlot::SetupAxis(ImAxis_Y1, y_label, ImPlotAxisFlags_NoInitialFit | ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
             ImPlot::SetupAxisLimits(ImAxis_X1, x_min, x_max * 1.01f, ImPlotCond_None);
             ImPlot::SetupAxisLimits(ImAxis_Y1, -PLOT_BAR_SIZE, series_names.size() - 1 + PLOT_BAR_SIZE, ImPlotCond_None);
-            ImPlot::SetupAxisTicks(ImAxis_Y1, y_values.data(), y_values.size(), series_names.data());
+            ImPlot::SetupAxisTicks(ImAxis_Y1, y_values.data(), static_cast<int>(y_values.size()), series_names.data());
             ImPlot::PushStyleColor(ImPlotCol_Line, ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
             for (int i = 0; i < x_values.size(); i ++)
             {
                 double& value = x_values[i];
                 ImGui::PushID(i);
-                ImPlot::SetNextFillStyle(ImPlot::SampleColormap(x_max - x_min > 0 ? value / (x_max - x_min) : 0, PLOT_COLOR_MAP));
+                ImPlot::SetNextFillStyle(ImPlot::SampleColormap(static_cast<float>(x_max - x_min > 0 ? value / (x_max - x_min) : 0), PLOT_COLOR_MAP));
                 ImPlot::PlotBars("", &value, 1, PLOT_BAR_SIZE, i, ImPlotBarsFlags_Horizontal);
                 ImGui::PopID();
             }
@@ -313,12 +314,12 @@ void ComputePlotRooflineLegacy::Render()
                 ImPlot::SetupLegend(ImPlotLocation_East, ImPlotLegendFlags_Outside);
                 for (int i = 0; i < m_ceilings_names.size(); i ++)
                 {
-                    ImPlot::PlotLine(m_ceilings_names[i], m_ceilings_x[i]->data(), m_ceilings_y[i]->data(), m_ceilings_x[i]->size());
+                    ImPlot::PlotLine(m_ceilings_names[i], m_ceilings_x[i]->data(), m_ceilings_y[i]->data(), static_cast<int>(m_ceilings_x[i]->size()));
                 }
                 for (int i = 0; i < m_ai_names.size(); i ++)
                 {
                     ImGui::PushID(i);
-                    ImPlot::PlotScatter(m_ai_names[i], m_ai_x[i]->data(), m_ai_y[i]->data(), m_ai_x[i]->size());
+                    ImPlot::PlotScatter(m_ai_names[i], m_ai_x[i]->data(), m_ai_y[i]->data(), static_cast<int>(m_ai_x[i]->size()));
                     ImGui::PopID();
                 }
                 ImPlot::EndPlot();

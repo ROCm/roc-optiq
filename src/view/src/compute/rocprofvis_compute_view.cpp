@@ -1234,7 +1234,7 @@ ComputeTester::RenderKernelSelectionTable()
 
     if(!header.empty() && !data.empty())
     {
-        if(ImGui::BeginTable("kernel_selection_table", header.size(),
+        if(ImGui::BeginTable("kernel_selection_table", static_cast<int>(header.size()),
                             ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
                                 ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_Sortable,
                             ImVec2(0.0f, data.empty()

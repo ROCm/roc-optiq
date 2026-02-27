@@ -121,8 +121,7 @@ Minimap::SetData(const std::vector<std::vector<double>>& data)
         return;
     }
 
-    const size_t height = data.size();
-    const size_t width  = data.front().size();
+    const size_t width = data.front().size();
     for(const auto& row : data)
     {
         if(row.size() != width)
@@ -380,8 +379,8 @@ Minimap::RenderViewport(ImDrawList* drawlist, ImVec2 map_pos, ImVec2 map_size)
     double start_time = m_data_provider.DataModel().GetTimeline().GetStartTime();
     double duration = m_data_provider.DataModel().GetTimeline().GetEndTime() - start_time;
 
-    float start_ratio = (view_coords.v_min_x - start_time) / duration;
-    float end_ratio   = (view_coords.v_max_x - start_time) / duration;
+    float start_ratio = static_cast<float>((view_coords.v_min_x - start_time) / duration);
+    float end_ratio   = static_cast<float>((view_coords.v_max_x - start_time) / duration);
     float x_start     = map_pos.x + std::clamp(start_ratio, 0.0f, 1.0f) * map_size.x;
     float x_end       = map_pos.x + std::clamp(end_ratio, 0.0f, 1.0f) * map_size.x;
 

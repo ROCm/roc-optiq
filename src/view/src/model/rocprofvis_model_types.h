@@ -62,7 +62,6 @@ struct TrackInfo
 
     uint64_t                           index;  // index of the track in the controller
     uint64_t                           id;     // id of the track in the controller
-    std::string                        name;   // name of the track
     rocprofvis_controller_track_type_t track_type;       // the type of track
     double                             min_ts;           // starting time stamp of track
     double                             max_ts;           // ending time stamp of track

@@ -341,7 +341,14 @@ KernelMetricTable::Render()
                             }
                             else
                             {
-                                ImGui::TextUnformatted(cell.c_str());
+                                if(cell.empty())
+                                {
+                                    ImGui::TextDisabled("N/A");
+                                }
+                                else
+                                {
+                                    ImGui::TextUnformatted(cell.c_str());
+                                }
                             }
                         }
                     }

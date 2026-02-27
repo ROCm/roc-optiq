@@ -4,8 +4,9 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_tab_container.h"
-#include <unordered_set>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -34,7 +35,7 @@ private:
     uint64_t                          m_client_id;
     bool                              m_fetch_pending = false;
     std::shared_ptr<TabContainer>     m_tabs;
-    std::unordered_set<uint64_t>      m_non_empty_tables;
+    std::unordered_map<uint64_t, MetricTableCache> m_table_widgets;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

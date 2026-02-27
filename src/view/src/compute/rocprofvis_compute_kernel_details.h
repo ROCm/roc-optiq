@@ -4,6 +4,7 @@
 #pragma once
 #include "rocprofvis_compute_memory_chart.h"
 #include "rocprofvis_event_manager.h"
+#include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -31,8 +32,7 @@ private:
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<Roofline>         m_roofline;
-
-    uint64_t m_client_id;
+    MetricTableWidget                 m_sol_table;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

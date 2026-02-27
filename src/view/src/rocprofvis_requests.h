@@ -12,6 +12,7 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_c_interface_types.h"
+#include "rocprofvis_core_assert.h"
 
 namespace RocProfVis
 {
@@ -76,6 +77,7 @@ public:
 
     static uint64_t MakeClientRequestId(RequestType request_type, uint64_t client_id)
     {
+        ROCPROFVIS_ASSERT(client_id < (1ULL << REQUEST_TYPE_OFFSET_BITS));
         return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
                (static_cast<uint64_t>(client_id) & ((1ULL << REQUEST_TYPE_OFFSET_BITS) - 1));
     }

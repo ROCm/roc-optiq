@@ -279,13 +279,15 @@ QueryBuilder::GetValueName() const
     return m_value_name;
 }
 
-const AvailableMetrics::Entry* QueryBuilder::GetSelectedMetricInfo() const
+const AvailableMetrics::Entry*
+QueryBuilder::GetSelectedMetricInfo() const
 {
-    if(m_selections[LEVEL_ENTRY] && m_selections[LEVEL_TABLE] && m_selections[LEVEL_CATEGORY])
+    if(m_workload && m_selections[LEVEL_ENTRY] && m_selections[LEVEL_TABLE] &&
+       m_selections[LEVEL_CATEGORY])
     {
-        return ComputeDataModel::GetMetricInfo(*m_workload, m_selections[LEVEL_CATEGORY]->id, m_selections[LEVEL_TABLE]->id,
-                      m_selections[LEVEL_ENTRY]->id);
-
+        return ComputeDataModel::GetMetricInfo(
+            *m_workload, m_selections[LEVEL_CATEGORY]->id, m_selections[LEVEL_TABLE]->id,
+            m_selections[LEVEL_ENTRY]->id);
     }
     return nullptr;
 }

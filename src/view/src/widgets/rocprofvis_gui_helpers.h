@@ -38,6 +38,15 @@ void
 SetTooltipStyled(const char* fmt, ...);
 
 void
+BeginTooltipStyled();
+
+bool
+BeginItemTooltipStyled();
+
+void
+EndTooltipStyled();
+
+void
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            bool imgui_AlignTextToFramePadding = false);
 

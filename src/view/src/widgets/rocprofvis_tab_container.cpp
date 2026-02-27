@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_tab_container.h"
+#include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_event_manager.h"
 #include <algorithm>
@@ -118,15 +119,30 @@ TabContainer::Render()
                 {
                     p_open = nullptr;
                 }
+                bool is_active_tab = (static_cast<int>(i) == m_active_tab_index);
+                if(is_active_tab)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImGui::ColorConvertU32ToFloat4(
+                            SettingsManager::GetInstance().GetColor(Colors::kTextOnAccent)));
+                }
+
                 bool tab_visible = false;
                 ImGui::PushID(tab.m_id.c_str());
-                if(ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags))
+                bool tab_selected = ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags);
+
+                if(is_active_tab)
+                {
+                    ImGui::PopStyleColor();
+                }
+
+                if(tab_selected)
                 {
                     tab_visible = true;
                     // Show tooltip for the active tab if header is hovered
                     if(m_allow_tool_tips && ImGui::IsItemHovered())
                     {
-                        ImGui::SetTooltip("%s", tab.m_id.c_str());
+                        SetTooltipStyled("%s", tab.m_id.c_str());
                     }
 
                     new_selected_tab = static_cast<int>(i);
@@ -143,7 +159,7 @@ TabContainer::Render()
                 {
                     if(m_allow_tool_tips)
                     {
-                        ImGui::SetTooltip("%s", tab.m_id.c_str());
+                        SetTooltipStyled("%s", tab.m_id.c_str());
                     }
                 }
 

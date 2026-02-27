@@ -24,6 +24,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_kernel_metric_table(nullptr)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
+, m_sol_table(data_provider, compute_selection, METRIC_CAT_SOL, METRIC_TABLE_SOL)
 , m_workload_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_new_table_data_token(EventManager::InvalidSubscriptionToken)
@@ -53,11 +54,9 @@ ComputeKernelDetailsView::~ComputeKernelDetailsView()
 
 void ComputeKernelDetailsView::SubscribeToEvents()
 {
-    // Add event listener for selection changes to trigger metric fetch for the newly
-    // selected kernel
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto selection_changed_event =
-               std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e))
+        auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
             if(m_data_provider.GetTraceFilePath() !=
                selection_changed_event->GetSourceId())
@@ -71,6 +70,7 @@ void ComputeKernelDetailsView::SubscribeToEvents()
                 m_data_provider.ComputeModel().GetKernelSelectionTable().Clear();
                 m_kernel_metric_table->FetchData(selection_changed_event->GetId());
             }
+            m_sol_table.Clear();
         }
     };
 
@@ -79,19 +79,14 @@ void ComputeKernelDetailsView::SubscribeToEvents()
         workload_changed_handler);
 
     auto kernel_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto selection_changed_event =
-               std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e))
+        auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_data_provider.GetTraceFilePath() !=
-               selection_changed_event->GetSourceId())
-            {
-                return;
-            }
             m_memory_chart.FetchMemChartMetrics();
             if(m_roofline)
             {
                 m_roofline->SetWorkload(m_compute_selection->GetSelectedWorkload());
-                m_roofline->SetKernel(selection_changed_event->GetId());
+                m_roofline->SetKernel(evt->GetId());
             }
         }
     };
@@ -100,19 +95,18 @@ void ComputeKernelDetailsView::SubscribeToEvents()
         static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
         kernel_changed_handler);
 
-    // subscribe to fetch metrics event
     auto metrics_fetched_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto metrics_fetched_event =
-               std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e))
+        auto evt = std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_data_provider.GetTraceFilePath() != metrics_fetched_event->GetSourceId())
-            {
-                return;
-            }
-
-            if(m_memory_chart.GetClientId() == metrics_fetched_event->GetClientId())
+            if(m_memory_chart.GetClientId() == evt->GetClientId())
             {
                 m_memory_chart.UpdateMetrics();
+                m_sol_table.FetchMetrics();
+            }
+            if(m_sol_table.GetClientId() == evt->GetClientId())
+            {
+                m_sol_table.UpdateTable();
             }
         }
     };
@@ -170,6 +164,7 @@ ComputeKernelDetailsView::Render()
     ImGui::Text("Memory Chart");
 
     m_memory_chart.Render();
+    m_sol_table.Render();
     if(m_roofline)
     {
         m_roofline->Render();

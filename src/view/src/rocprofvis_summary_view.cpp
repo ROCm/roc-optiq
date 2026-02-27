@@ -968,11 +968,7 @@ TopKernels::PlotInputHandler()
     {
         if(ImGui::IsItemHovered())
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                m_settings.GetDefaultIMGUIStyle().WindowPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                                m_settings.GetDefaultStyle().FrameRounding);
-            if(ImGui::BeginItemTooltip())
+            if(BeginItemTooltipStyled())
             {
                 if(m_hovered_idx != m_padded_idx)
                 {
@@ -989,9 +985,8 @@ TopKernels::PlotInputHandler()
                         (*m_kernels)[m_hovered_idx.value()].exec_time_sum,
                         m_settings.GetUserSettings().unit_settings.time_format, true)
                         .c_str());
-                ImGui::EndTooltip();
+                EndTooltipStyled();
             }
-            ImGui::PopStyleVar(2);
         }
         if(ImGui::IsItemClicked() && m_selection_callback)
         {

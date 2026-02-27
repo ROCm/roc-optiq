@@ -754,7 +754,7 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
             ImGui::Checkbox("##scale_intensity", &m_scale_intensity);
             ImGui::SameLine();
             ElidedText("Scale kernel marker size to duration",
-                       ImGui::GetContentRegionAvail().x, region.x * 0.5f, true);
+                       ImGui::GetContentRegionAvail().x, region.x * 0.5f, false, true);
         }
         ImGui::EndChild();
         ImGui::PopStyleColor();

@@ -189,7 +189,7 @@ ComputeTopKernels::GetTopKernels(std::vector<const KernelInfo*>& kernels)
             m_padded_info->dispatch_metrics[KernelInfo::DurationTotal] +=
                 kernels[i]->dispatch_metrics[KernelInfo::DurationTotal];
         }
-        kernels.resize(NUM_TOP_KERNELS + 1);
+        kernels.resize(NUM_TOP_KERNELS);
         kernels.push_back(m_padded_info.get());
         m_padded_idx = kernels.size() - 1;
     }
@@ -233,7 +233,7 @@ ComputeTopKernels::Update()
                                      kernel->dispatch_metrics[metric]);
                     }
                 }
-                std::array<float, KernelInfo::NumMetrics> accumlated_pie_angles{};
+                std::array<float, KernelInfo::NumMetrics> accumulated_pie_angles{};
                 m_kernel_pie.labels.resize(m_kernels.size());
                 for(size_t i = 0; i < m_kernels.size(); i++)
                 {
@@ -254,9 +254,9 @@ ComputeTopKernels::Update()
                             m_kernel_pie.metric_sets[metric].pct_values[i] = value;
                             value *= 360.0f;
                             m_kernel_pie.metric_sets[metric].slices[i] =
-                                KernelPieModel::Slice{ accumlated_pie_angles[metric],
+                                KernelPieModel::Slice{ accumulated_pie_angles[metric],
                                                        value };
-                            accumlated_pie_angles[metric] += value;
+                            accumulated_pie_angles[metric] += value;
                         }
                     }
                 }
@@ -334,7 +334,7 @@ ComputeTopKernels::Update()
                     }
                 }
             }
-            m_kernel_bar.axis_label_dirty = true;
+            m_kernel_bar.axis_label_dirty = false;
         }
     }
 }
@@ -539,20 +539,28 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
 void
 ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time_format)
 {
+    ImGui::BeginChild("bar_area", ImVec2(0, ImGui::GetContentRegionAvail().y -
+                                                ImGui::GetFrameHeightWithSpacing() -
+                                                plot_style.PlotPadding.y));
+    float y_axis_width = 0.1f * ImGui::GetContentRegionAvail().x;
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
     ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
     ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
-    if(ImPlot::BeginPlot(
-           "##Bar",
-           ImVec2(-1, ImGui::GetContentRegionAvail().y -
-                          ImGui::GetFrameHeightWithSpacing() - plot_style.PlotPadding.y),
-           ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_CanvasOnly))
+    ImGui::SetCursorPos(ImVec2(y_axis_width, 0.0f));
+    if(ImPlot::BeginPlot("##Bar", ImVec2(-1, -1),
+                         ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
+                             ImPlotFlags_CanvasOnly))
     {
         ImPlot::SetupAxes(
             m_kernel_bar.metric_sets[m_kernel_bar.selected_metric].axis_title.c_str(),
-            nullptr, ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoHighlight,
-            ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoDecorations |
+            nullptr, ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoHighlight,
+            ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels |
                 ImPlotAxisFlags_NoHighlight);
+        ImPlot::SetupAxisLimits(
+            ImAxis_X1, 0.0,
+            m_kernel_bar.metric_sets[m_kernel_bar.selected_metric].max_value *
+                (1 + CHART_FIT_PADDING.x * 0.5),
+            ImPlotCond_Always);
         if(m_kernel_bar.selected_metric != KernelInfo::InvocationCount)
         {
             ImPlot::SetupAxisFormat(
@@ -583,19 +591,33 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
         PlotHoverIdx();
         for(size_t i = 0; i < m_kernels.size(); i++)
         {
-            if(i == m_hovered_idx)
+            if(i != m_padded_idx ||
+               m_kernel_bar.selected_metric == KernelInfo::InvocationCount ||
+               m_kernel_bar.selected_metric == KernelInfo::DurationTotal)
             {
-                ImPlot::PushColormap("white");
-            }
-            ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(static_cast<int>(i)));
-            // PlotBars(uint64_t) may be undefined on Linux, cast to ImU64.
-            const ImU64 bar_value = static_cast<ImU64>(
-                m_kernels[i]->dispatch_metrics[m_kernel_bar.selected_metric]);
-            ImPlot::PlotBars(m_kernels[i]->name.c_str(), &bar_value, 1,
-                             BAR_CHART_THICKNESS, i, ImPlotBarsFlags_Horizontal);
-            if(i == m_hovered_idx)
-            {
-                ImPlot::PopColormap();
+                ImGui::PushID(i);
+                ImGui::SetCursorScreenPos(ImVec2(
+                    plot_style.PlotPadding.x,
+                    ImPlot::PlotToPixels(ImPlotPoint(0, i), IMPLOT_AUTO, IMPLOT_AUTO).y -
+                        ImGui::GetFontSize() * 0.5f));
+                ElidedText(m_kernels[i]->name.c_str(),
+                           y_axis_width - plot_style.LabelPadding.x,
+                           ImGui::GetContentRegionAvail().x * 0.5f, true);
+                if(i == m_hovered_idx)
+                {
+                    ImPlot::PushColormap("white");
+                }
+                ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(static_cast<int>(i)));
+                // PlotBars(uint64_t) may be undefined on Linux, cast to ImU64.
+                const ImU64 bar_value = static_cast<ImU64>(
+                    m_kernels[i]->dispatch_metrics[m_kernel_bar.selected_metric]);
+                ImPlot::PlotBars(m_kernels[i]->name.c_str(), &bar_value, 1,
+                                 BAR_CHART_THICKNESS, i, ImPlotBarsFlags_Horizontal);
+                if(i == m_hovered_idx)
+                {
+                    ImPlot::PopColormap();
+                }
+                ImGui::PopID();
             }
         }
         float plot_width = ImPlot::GetPlotSize().x;
@@ -604,11 +626,15 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
             m_kernel_bar.width               = plot_width;
             m_kernel_bar.tick_interval_dirty = true;
         }
+        if(ImPlot::IsPlotHovered())
+        {
+            RenderPlotTooltip(m_kernel_bar.selected_metric, time_format);
+        }
         ImPlot::EndPlot();
     }
     ImPlot::PopStyleColor(2);
     ImPlot::PopStyleVar();
-    RenderPlotTooltip(m_kernel_bar.selected_metric, time_format);
+    ImGui::EndChild();
 }
 
 void
@@ -731,49 +757,46 @@ ComputeTopKernels::RenderPlotTooltip(KernelInfo::DispatchMetric metric,
 {
     if(m_hovered_idx && 0 <= m_hovered_idx && m_hovered_idx < m_kernels.size())
     {
-        if(ImGui::IsItemHovered())
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            m_settings.GetDefaultIMGUIStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            m_settings.GetDefaultStyle().FrameRounding);
+        if(ImGui::BeginTooltip())
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                m_settings.GetDefaultIMGUIStyle().WindowPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                                m_settings.GetDefaultStyle().FrameRounding);
-            if(ImGui::BeginItemTooltip())
+            ImVec2 reserved_pos = ImGui::GetCursorPos();
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImGui::GetCursorScreenPos(),
+                ImGui::GetCursorScreenPos() +
+                    ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize()),
+                ImGui::GetColorU32(
+                    ImPlot::GetColormapColor(static_cast<int>(m_hovered_idx.value()))));
+            ImGui::NewLine();
+            switch(metric)
             {
-                ImVec2 reserved_pos = ImGui::GetCursorPos();
-                ImGui::GetWindowDrawList()->AddRectFilled(
-                    ImGui::GetCursorScreenPos(),
-                    ImGui::GetCursorScreenPos() +
-                        ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize()),
-                    ImGui::GetColorU32(ImPlot::GetColormapColor(
-                        static_cast<int>(m_hovered_idx.value()))));
-                ImGui::NewLine();
-                switch(metric)
+                case KernelInfo::InvocationCount:
                 {
-                    case KernelInfo::InvocationCount:
-                    {
-                        ImGui::Text(
-                            "%s: %llu", DISPLAY_STRING_METRICS[metric],
-                            m_kernels[m_hovered_idx.value()]->dispatch_metrics[metric]);
-                        break;
-                    }
-                    default:
-                    {
-                        ImGui::Text(
-                            "%s: %s", DISPLAY_STRING_METRICS[metric],
-                            nanosecond_to_formatted_str(m_kernels[m_hovered_idx.value()]
-                                                            ->dispatch_metrics[metric],
-                                                        time_format, true)
-                                .c_str());
-                        break;
-                    }
+                    ImGui::Text(
+                        "%s: %llu", DISPLAY_STRING_METRICS[metric],
+                        m_kernels[m_hovered_idx.value()]->dispatch_metrics[metric]);
+                    break;
                 }
-                ImGui::SetCursorPos(reserved_pos);
-                ElidedText(m_kernels[m_hovered_idx.value()]->name.c_str(),
-                           ImGui::GetItemRectSize().x);
-                ImGui::EndTooltip();
+                default:
+                {
+                    ImGui::Text(
+                        "%s: %s", DISPLAY_STRING_METRICS[metric],
+                        nanosecond_to_formatted_str(
+                            m_kernels[m_hovered_idx.value()]->dispatch_metrics[metric],
+                            time_format, true)
+                            .c_str());
+                    break;
+                }
             }
-            ImGui::PopStyleVar(2);
+            ImGui::SetCursorPos(reserved_pos);
+            ElidedText(m_kernels[m_hovered_idx.value()]->name.c_str(),
+                       ImGui::GetItemRectSize().x);
+            ImGui::EndTooltip();
         }
+        ImGui::PopStyleVar(2);
     }
 }
 

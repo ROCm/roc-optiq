@@ -58,17 +58,12 @@ void ComputeKernelDetailsView::SubscribeToEvents()
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_data_provider.GetTraceFilePath() !=
-               selection_changed_event->GetSourceId())
-            {
-                return;
-            }
             // Fetch pivot table data
             if(m_kernel_metric_table)
             {
                 //clear existing model table data
                 m_data_provider.ComputeModel().GetKernelSelectionTable().Clear();
-                m_kernel_metric_table->FetchData(selection_changed_event->GetId());
+                m_kernel_metric_table->FetchData(evt->GetId());
             }
             m_sol_table.Clear();
         }

@@ -278,14 +278,16 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
         result = args.GetUInt64(kRPVControllerMetricArgsNumKernels, 0, &num_entries);
         if(result == kRocProfVisResultSuccess)
         {
+            auto query_args = std::make_shared<QueryArgumentStore>();
+            auto query_out = std::make_shared<QueryDataStore>();
+            
             uint64_t uint64_data = 0;
-            m_query_arguments.clear();
             for(uint64_t i = 0; i < num_entries; i++)
             {
                 result = args.GetUInt64(kRPVControllerMetricArgsKernelIdIndexed, i, &uint64_data);
                 if(result == kRocProfVisResultSuccess)
                 {
-                    m_query_arguments.emplace_back(kRPVComputeParamKernelId, std::to_string(uint64_data));
+                    query_args->emplace_back(kRPVComputeParamKernelId, std::to_string(uint64_data));
                 } 
                 else
                 {
@@ -313,7 +315,7 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
                                     metric_id.SetEntryID((uint32_t)uint64_data);                                   
                                 }
                             }
-                            m_query_arguments.emplace_back(kRPVComputeParamMetricId, metric_id.ToString());
+                            query_args->emplace_back(kRPVComputeParamMetricId, metric_id.ToString());
                             result = kRocProfVisResultSuccess;
                         }
                         else
@@ -325,9 +327,9 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
             }
             if(result == kRocProfVisResultSuccess)
             {
-                future.Set(JobSystem::Get().IssueJob([this, &output](Future* future) -> rocprofvis_result_t {
+                future.Set(JobSystem::Get().IssueJob([this, &output, query_args, query_out](Future* future) -> rocprofvis_result_t {
                     rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                    m_query_output = { 
+                    *query_out = { 
                         { 
                             { kRPVComputeColumnMetricId, std::nullopt },
                             { kRPVComputeColumnMetricName, std::nullopt },
@@ -338,7 +340,7 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
                         {} 
                     };
                     rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(m_dm_handle, kRPVDMDatabaseHandle, 0);
-                    rocprofvis_dm_result_t dm_result = ExecuteQuery(db, m_dm_handle, nullptr, future, kRPVComputeFetchMetricValues, m_query_arguments, m_query_output, [this, &output](const QueryDataStore& data_store){
+                    rocprofvis_dm_result_t dm_result = ExecuteQuery(db, m_dm_handle, nullptr, future, kRPVComputeFetchMetricValues, *query_args, *query_out, [this, &output](const QueryDataStore& data_store){
                         uint64_t valid_results = 0;
                         rocprofvis_property_t property;
                         rocprofvis_controller_primitive_type_t type;

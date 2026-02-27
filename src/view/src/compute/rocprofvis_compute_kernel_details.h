@@ -15,6 +15,7 @@ namespace View
 class DataProvider;
 class ComputeSelection;
 class Roofline;
+class KernelMetricTable;
 
 class ComputeKernelDetailsView : public RocWidget
 {
@@ -27,16 +28,23 @@ public:
     void Update() override;
 
 private:
+
+    void SubscribeToEvents();
+
     DataProvider&          m_data_provider;
     ComputeMemoryChartView m_memory_chart;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<Roofline>         m_roofline;
+    std::unique_ptr<KernelMetricTable> m_kernel_metric_table;
+
+    uint64_t m_client_id;
     MetricTableWidget                 m_sol_table;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_metrics_fetched_token;
+    EventManager::SubscriptionToken m_new_table_data_token;
 };
 
 }  // namespace View

@@ -164,11 +164,13 @@ private:
 class TableDataEvent : public RocEvent
 {
 public:
-    TableDataEvent(const std::string& source_id, uint64_t request_id);
+    TableDataEvent(const std::string& source_id, uint64_t request_id, uint64_t response_code);
     uint64_t           GetRequestID() const;
+    uint64_t           GetResponseCode() const;
 
 private:
     uint64_t    m_request_id;
+    uint64_t    m_response_code;
 };
 
 class StickyNoteEvent : public RocEvent

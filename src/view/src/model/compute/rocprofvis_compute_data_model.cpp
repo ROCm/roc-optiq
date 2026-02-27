@@ -135,6 +135,35 @@ ComputeDataModel::AddMetricValue(uint64_t store_id, uint32_t workload_id,
     return valid;
 }
 
+const AvailableMetrics::Entry*
+ComputeDataModel::GetMetricInfo(uint32_t workload_id, uint32_t category_id,
+                                uint32_t table_id, uint32_t entry_id) const
+{
+    if(m_workloads.count(workload_id))
+    {
+        const WorkloadInfo& workload = m_workloads.at(workload_id);
+        return GetMetricInfo(workload, category_id, table_id, entry_id);
+    }
+    return nullptr;
+}
+
+const AvailableMetrics::Entry*
+ComputeDataModel::GetMetricInfo(const WorkloadInfo& workload, uint32_t category_id, uint32_t table_id,
+                               uint32_t entry_id)
+{
+    if(workload.available_metrics.tree.count(category_id))
+    {
+        const AvailableMetrics::Category& category =
+            workload.available_metrics.tree.at(category_id);
+        if(category.tables.count(table_id) &&
+           category.tables.at(table_id).entries.count(entry_id))
+        {
+            return &category.tables.at(table_id).entries.at(entry_id);
+        }
+    }
+    return nullptr;
+}
+
 void
 ComputeDataModel::Clear()
 {

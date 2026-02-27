@@ -91,9 +91,9 @@ TraceView::TraceView()
     });
 
     m_data_provider.SetTableDataReadyCallback(
-        [](const std::string& trace_path, uint64_t request_id) {
+        [](const std::string& trace_path, uint64_t request_id, uint64_t response_code) {
             EventManager::GetInstance()->AddEvent(
-                std::make_shared<TableDataEvent>(trace_path, request_id));
+                std::make_shared<TableDataEvent>(trace_path, request_id, response_code));
         });
 
     m_data_provider.SetTraceLoadedCallback(

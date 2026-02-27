@@ -20,34 +20,32 @@ namespace View
 {
 
 const uint64_t DataProvider::EVENT_TABLE_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchTrackEventTable);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchTrackEventTable);
 const uint64_t DataProvider::SAMPLE_TABLE_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchTrackSampleTable);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchTrackSampleTable);
 const uint64_t DataProvider::EVENT_SEARCH_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchEventSearchTable);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventSearchTable);
 const uint64_t DataProvider::EVENT_EXTENDED_DATA_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchEventExtendedData);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventExtendedData);
 const uint64_t DataProvider::EVENT_FLOW_DATA_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchEventFlowDetails);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventFlowDetails);
 const uint64_t DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchEventCallStack);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventCallStack);
 const uint64_t DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID =
-    MakeRequestId(RequestType::kSaveTrimmedTrace);
+    RequestIdBuilder::MakeRequestId(RequestType::kSaveTrimmedTrace);
 const uint64_t DataProvider::TABLE_EXPORT_REQUEST_ID =
-    MakeRequestId(RequestType::kTableExport);
+    RequestIdBuilder::MakeRequestId(RequestType::kTableExport);
 const uint64_t DataProvider::FETCH_SYSTEM_TRACE_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchSystemTrace);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchSystemTrace);
 const uint64_t DataProvider::SUMMARY_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchSummary);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchSummary);
 const uint64_t DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchSummaryKernelInstanceTable);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchSummaryKernelInstanceTable);
 #ifdef COMPUTE_UI_SUPPORT
 const uint64_t DataProvider::FETCH_COMPUTE_TRACE_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchComputeTrace);
-const uint64_t DataProvider::METRICS_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchMetrics);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchComputeTrace);
 const uint64_t DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID =
-    MakeRequestId(RequestType::kFetchMetricPivotTable);
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchMetricPivotTable);
 #endif
 
 DataProvider::DataProvider()
@@ -180,7 +178,7 @@ DataProvider::SetTrackMetadataChangedCallback(
 
 void
 DataProvider::SetTableDataReadyCallback(
-    const std::function<void(const std::string&, uint64_t)>& callback)
+    const std::function<void(const std::string&, uint64_t, uint64_t)>& callback)
 {
     m_table_data_ready_callback = callback;
 }
@@ -1162,8 +1160,8 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
         return false;
     }
 
-    uint64_t request_id =
-        MakeTrackDataRequestId(track_id, chunk_index, group_id, RequestType::kFetchTrack);
+    uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
+        track_id, chunk_index, group_id, RequestType::kFetchTrack);
 
     const TrackInfo* metadata = m_model.GetTimeline().GetTrack(track_id);
     if(metadata)
@@ -1251,9 +1249,9 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
         return { false, 0 };
     }
 
-    uint64_t request_id =
-        MakeTrackDataRequestId(request_params.m_track_id, request_params.m_chunk_index,
-                               request_params.m_data_group_id, RequestType::kFetchGraph);
+    uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
+        request_params.m_track_id, request_params.m_chunk_index,
+        request_params.m_data_group_id, RequestType::kFetchGraph);
 
     if(m_model.GetTimeline().GetTrack(request_params.m_track_id))
     {
@@ -2993,7 +2991,7 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
 
     if(m_table_data_ready_callback)
     {
-        m_table_data_ready_callback(m_model.GetTraceFilePath(), req.request_id);
+        m_table_data_ready_callback(m_model.GetTraceFilePath(), req.request_id, req.response_code);
     }
 }
 
@@ -3597,7 +3595,8 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
                       static_cast<int>(m_state));
         return false;
     }
-    auto it = m_requests.find(METRICS_REQUEST_ID);
+    uint64_t request_id = RequestIdBuilder::MakeClientRequestId(RequestType::kFetchMetrics, metrics_params.m_client_id);
+    auto it = m_requests.find(request_id);
     if(it == m_requests.end())
     {
         rocprofvis_controller_future_t*    future = rocprofvis_controller_future_alloc();
@@ -3648,8 +3647,8 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
         if(result == kRocProfVisResultSuccess)
         {
             m_requests.emplace(
-                METRICS_REQUEST_ID,
-                RequestInfo{ METRICS_REQUEST_ID, future, nullptr, output, args,
+                request_id,
+                RequestInfo{ request_id, future, nullptr, output, args,
                              RequestState::kLoading, RequestType::kFetchMetrics,
                              std::make_shared<MetricsRequestParams>(metrics_params) });
             return true;
@@ -4249,8 +4248,6 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
             ComputeTableInfo& kernel_pivot_table =
                 m_compute_model.GetKernelSelectionTable().GetTableInfoMutable();
 
-            kernel_pivot_table.table_header.clear();
-
             for(uint64_t col = 0; col < num_columns; col++)
             {
                 // Get column name
@@ -4312,6 +4309,11 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
                          req.response_code);
         }
 
+        if(m_table_data_ready_callback)
+        {
+            m_table_data_ready_callback(m_model.GetTraceFilePath(), req.request_id, req.response_code);
+        }
+            
         // Free array
         rocprofvis_controller_array_free(array);
         req.request_array = nullptr;

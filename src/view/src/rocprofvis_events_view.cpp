@@ -437,20 +437,7 @@ EventsView::RenderArgumentData(const EventInfo* event_data)
 bool
 EventsView::XButton()
 {
-    bool clicked = false;
-    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-    clicked = ImGui::SmallButton(ICON_X_CIRCLED);
-    ImGui::PopFont();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
-    if(ImGui::IsItemHovered())
-        SetTooltipStyled("Unselect Event");
+    bool clicked = RocProfVis::View::XButton(nullptr, "Unselect Event", &m_settings);
     return clicked;
 }
 

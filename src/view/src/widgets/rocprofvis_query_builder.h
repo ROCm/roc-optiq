@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <functional>
 
 
 namespace RocProfVis
@@ -21,11 +22,16 @@ public:
     QueryBuilder();
 
     void Render() override;
-    void Open();
+    void Show(std::function<void(const std::string&)> on_confirm_callback,
+              std::function<void()> on_cancel_callback = nullptr);
 
     void SetWorkload(const WorkloadInfo* workload);
 
     std::string GetQueryString() const;
+    std::string GetMetricName() const;
+    std::string GetValueName() const;
+
+    const AvailableMetrics::Entry* GetSelectedMetricInfo() const;
 
 private:
     static constexpr int LEVEL_CATEGORY   = 0;
@@ -54,6 +60,8 @@ private:
     bool                                  m_scroll_to_end = false;
     std::string                           m_value_name;
     std::vector<std::optional<LevelItem>> m_selections;
+    std::function<void(const std::string&)>             m_on_confirm;
+    std::function<void()>                               m_on_cancel;
 };
 
 }  // namespace View

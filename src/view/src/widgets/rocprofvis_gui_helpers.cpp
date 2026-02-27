@@ -296,7 +296,7 @@ CenterNextTextItem(const char* text)
 }
 
 bool
-XButton(const char* id, SettingsManager* settings)
+XButton(const char* id, const char * tool_tip_label, SettingsManager* settings)
 {
     bool clicked = false;
 
@@ -327,6 +327,8 @@ XButton(const char* id, SettingsManager* settings)
     ImGui::PopFont();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
+    if(tool_tip_label && ImGui::IsItemHovered())
+         SetTooltipStyled(tool_tip_label);
     return clicked;
 }
 

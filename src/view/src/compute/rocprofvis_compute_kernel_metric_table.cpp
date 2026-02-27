@@ -249,11 +249,11 @@ KernelMetricTable::Render()
 
                     ImGui::PushID(col);
                     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-                    if(XButton(nullptr, &settings))
+                    if(XButton(nullptr, "Remove Metric", &settings))
                     {
                         remove_index = col - PERMANENT_COLUMN_COUNT;
                     }
-                    ImGui::PopStyleVar();
+                    ImGui::PopStyleVar();   
                     ImGui::PopID();
                 }
 

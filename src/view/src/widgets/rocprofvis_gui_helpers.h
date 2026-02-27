@@ -61,7 +61,8 @@ void
 CenterNextTextItem(const char* text);
 
 bool
-XButton(const char* id = nullptr, SettingsManager* settings = nullptr);
+XButton(const char* id = nullptr, const char* tool_tip_label = nullptr,
+        SettingsManager* settings = nullptr);
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void

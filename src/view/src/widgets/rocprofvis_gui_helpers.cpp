@@ -295,6 +295,41 @@ CenterNextTextItem(const char* text)
     ImGui::SetCursorPos(pos);
 }
 
+bool
+XButton(const char* id, SettingsManager* settings)
+{
+    bool clicked = false;
+
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_Button, settings->GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          settings->GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          settings->GetColor(Colors::kTransparent));
+    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
+    ImGui::PushFont(settings->GetFontManager().GetIconFont(FontType::kDefault));
+    if(id && strlen(id) > 0)
+    {
+        ImGui::PushID(id);
+    }
+
+    clicked = ImGui::SmallButton(ICON_X_CIRCLED);
+
+    if(id && strlen(id) > 0)
+    {
+        ImGui::PopID();
+    }
+
+    ImGui::PopFont();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    return clicked;
+}
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
 void

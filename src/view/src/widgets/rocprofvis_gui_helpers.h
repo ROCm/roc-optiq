@@ -10,6 +10,8 @@ namespace RocProfVis
 namespace View
 {
 
+class SettingsManager;
+
 constexpr float PI = 3.14159265358979323846f;  // Define PI constant
 
 void
@@ -57,6 +59,9 @@ ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
  */
 void
 CenterNextTextItem(const char* text);
+
+bool
+XButton(const char* id = nullptr, SettingsManager* settings = nullptr);
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void

@@ -36,27 +36,6 @@ enum class ProviderState
 class DataProvider
 {
 public:
-    static constexpr uint8_t TRACK_CHUNK_OFFSET_BITS = sizeof(uint32_t) * 8;
-    static constexpr uint8_t TRACK_GROUP_OFFSET_BITS =
-        sizeof(uint16_t) * 8 + TRACK_CHUNK_OFFSET_BITS;
-    static constexpr uint8_t REQUEST_TYPE_OFFSET_BITS =
-        sizeof(uint8_t) * 8 + TRACK_GROUP_OFFSET_BITS;
-
-    static uint64_t MakeTrackDataRequestId(uint32_t track_id, uint16_t chunk_index,
-                                           uint8_t group_id, RequestType request_type)
-    {
-        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
-               (static_cast<uint64_t>(group_id) << TRACK_GROUP_OFFSET_BITS) |
-               (static_cast<uint64_t>(chunk_index) << TRACK_CHUNK_OFFSET_BITS) |
-               (static_cast<uint64_t>(track_id));
-    }
-
-    static uint64_t MakeRequestId(RequestType request_type)
-    {
-        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
-               static_cast<uint64_t>(0);
-    }
-
     static const uint64_t EVENT_TABLE_REQUEST_ID;
     static const uint64_t SAMPLE_TABLE_REQUEST_ID;
     static const uint64_t EVENT_SEARCH_REQUEST_ID;
@@ -70,7 +49,6 @@ public:
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
 #ifdef COMPUTE_UI_SUPPORT
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
-    static const uint64_t METRICS_REQUEST_ID;
     static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
 #endif
 

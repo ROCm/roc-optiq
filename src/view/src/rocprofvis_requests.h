@@ -18,26 +18,6 @@ namespace RocProfVis
 namespace View
 {
 
-// Singleton class for creating unique IDs
-class IdGenerator
-{
-public:
-    static IdGenerator& GetInstance()
-    {
-        static IdGenerator instance;
-        return instance;
-    }
-
-    uint64_t GenerateId()
-    {
-        return ++m_current_id;
-    }
-
-private:
-    IdGenerator() : m_current_id(0) {}
-    uint64_t m_current_id;
-};
-
 enum class RequestType
 {
     kFetchTrack,
@@ -67,6 +47,68 @@ enum class RequestState
     kReady,
     kError
 };
+
+
+// Helper class for constructing request IDs with packed fields
+class RequestIdBuilder
+{
+public:
+    static constexpr uint8_t TRACK_CHUNK_OFFSET_BITS = sizeof(uint32_t) * 8;
+    static constexpr uint8_t TRACK_GROUP_OFFSET_BITS =
+        sizeof(uint16_t) * 8 + TRACK_CHUNK_OFFSET_BITS;
+    static constexpr uint8_t REQUEST_TYPE_OFFSET_BITS =
+        sizeof(uint8_t) * 8 + TRACK_GROUP_OFFSET_BITS;
+
+    static uint64_t MakeTrackDataRequestId(uint32_t track_id, uint16_t chunk_index,
+                                           uint8_t group_id, RequestType request_type)
+    {
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+               (static_cast<uint64_t>(group_id) << TRACK_GROUP_OFFSET_BITS) |
+               (static_cast<uint64_t>(chunk_index) << TRACK_CHUNK_OFFSET_BITS) |
+               (static_cast<uint64_t>(track_id));
+    }
+
+    static uint64_t MakeRequestId(RequestType request_type)
+    {
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+               static_cast<uint64_t>(0);
+    }
+
+    static uint64_t MakeClientRequestId(RequestType request_type, uint64_t client_id)
+    {
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+               (static_cast<uint64_t>(client_id) & ((1ULL << REQUEST_TYPE_OFFSET_BITS) - 1));
+    }
+};
+
+// Singleton class for creating unique IDs
+class IdGenerator
+{
+public:
+    static IdGenerator& GetInstance()
+    {
+        static IdGenerator instance;
+        return instance;
+    }
+
+    uint64_t GenerateId()
+    {
+        uint64_t id = m_current_id;
+        m_current_id++;
+        if(m_current_id > (1ULL << RequestIdBuilder::REQUEST_TYPE_OFFSET_BITS) - 1)
+        {
+            // Wrap around if we exceed the maximum client ID that can be encoded in the
+            // request ID
+            m_current_id = 0;
+        }
+        return id;
+    }
+
+private:
+    IdGenerator() : m_current_id(0) {}
+    uint64_t m_current_id;
+};
+
 
 class RequestParamsBase
 {

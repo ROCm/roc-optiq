@@ -360,8 +360,9 @@ TimelineModel::DumpMetaData() const
     {
         spdlog::debug("Track index {}, id {}, name {}, min ts {}, max ts {}, type {}, "
                       "num entries {}, min value {}, max value {}",
-                      track_info->index, track_info->id, track_info->name,
-                      track_info->min_ts, track_info->max_ts,
+                      track_info->index, track_info->id,
+                      track_info->main_name + track_info->sub_name, track_info->min_ts,
+                      track_info->max_ts,
                       track_info->track_type == kRPVControllerTrackTypeSamples ? "Samples"
                                                                                : "Events",
                       track_info->num_entries, track_info->min_value,

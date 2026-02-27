@@ -77,7 +77,7 @@ TrackDetails::Render()
             for(DetailItem& detail : m_track_details)
             {
                 ImGui::PushID(detail.id);
-                if(ImGui::CollapsingHeader(detail.track_name->c_str(),
+                if(ImGui::CollapsingHeader(detail.track_name.c_str(),
                                            ImGuiTreeNodeFlags_DefaultOpen))
                 {
                     ImGui::TextUnformatted("Node: ");
@@ -145,7 +145,8 @@ TrackDetails::Update()
                 m_data_provider.DataModel().GetTimeline().GetTrack(item.track_id);
             if(metadata && metadata->topology.type != TrackInfo::TrackType::Unknown)
             {
-                item.track_name = &metadata->name;
+                item.track_name =
+                    m_data_provider.DataModel().BuildTrackName(item.track_id);
 
                 const uint64_t& node_id    = metadata->topology.node_id;
                 const uint64_t& process_id = metadata->topology.process_id;
@@ -324,9 +325,9 @@ TrackDetails::HandleTrackSelectionChanged(const uint64_t track_id, const bool se
 {
     if(selected)
     {
-        m_track_details.emplace_front(DetailItem{ m_detail_item_id++, track_id, nullptr,
+        m_track_details.emplace_front(DetailItem{ m_detail_item_id++, track_id, "",
                                                   nullptr, nullptr, nullptr, nullptr,
-                                                  nullptr, nullptr });
+                                                  nullptr, nullptr, nullptr });
     }
     else if(track_id == TimelineSelection::INVALID_SELECTION_ID)
     {
@@ -334,7 +335,7 @@ TrackDetails::HandleTrackSelectionChanged(const uint64_t track_id, const bool se
     }
     else
     {
-        m_track_details.remove(DetailItem{ 0, track_id, nullptr, nullptr, nullptr,
+        m_track_details.remove(DetailItem{ 0, track_id, "", nullptr, nullptr, nullptr,
                                            nullptr, nullptr, nullptr, nullptr });
     }
     m_selection_dirty = true;

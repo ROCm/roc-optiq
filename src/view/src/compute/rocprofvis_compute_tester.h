@@ -24,7 +24,6 @@ public:
     void Render() override;
 
 private:
-    void RenderKernelSelectionTable();
 
     struct SelectionState
     {

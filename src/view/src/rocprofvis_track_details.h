@@ -5,6 +5,7 @@
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include <list>
+#include <string>
 
 namespace RocProfVis
 {
@@ -36,7 +37,7 @@ private:
     {
         const int          id;
         const uint64_t     track_id;
-        const std::string* track_name;
+        std::string        track_name;
         NodeModel*         node;
         ProcessModel*      process;
         ProcessorModel*    processor;

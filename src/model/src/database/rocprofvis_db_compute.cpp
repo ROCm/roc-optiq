@@ -295,6 +295,9 @@ namespace DataModel
                 {
                     std::string metric_id  = selector_str.substr(0, colon_pos);
                     std::string value_name = selector_str.substr(colon_pos + 1);
+                    // Convert value_name to lowercase to match SQL LOWER(value_name) comparison
+                    std::transform(value_name.begin(), value_name.end(), value_name.begin(),
+                                   [](unsigned char c) { return std::tolower(c); });
                     metric_selectors.push_back({ metric_id, value_name });
                 }
             }

@@ -122,6 +122,7 @@ enum class Colors
 
     kMinimapBg,
     kLoadingScreenColor,
+    kTextOnAccent,
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };

@@ -124,7 +124,6 @@ protected:
     void FetchHelper();
     void SetDefaultPillLabel(const TrackInfo* track_info);
     void SetMetaAreaLabel(const TrackInfo* track_info);
-    void SetTrackName(const TrackInfo* track_info);
 
     uint64_t              m_track_id;
     float                 m_track_height;

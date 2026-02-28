@@ -12,6 +12,7 @@ namespace View
 
 struct FlexItem
 {
+    std::string                id;
     std::shared_ptr<RocWidget> widget;
     float                      min_width = 500.0f;
     float                      height    = 0.0f;
@@ -21,7 +22,8 @@ struct FlexItem
 class FlexContainer : public RocWidget
 {
 public:
-    void Render() override;
+    void      Render() override;
+    FlexItem& GetItem(const std::string& id);
 
     std::vector<FlexItem> items;
     float                 gap            = 8.0f;

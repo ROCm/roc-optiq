@@ -332,17 +332,17 @@ ComputeTester::Render()
                 ImGui::TableNextColumn();
                 ImGui::Text(kernel.second.name.c_str());
                 ImGui::TableNextColumn();
-                ImGui::Text("%u", kernel.second.invocation_count);
+                ImGui::Text("%llu", kernel.second.dispatch_metrics[KernelInfo::InvocationCount]);
                 ImGui::TableNextColumn();
-                ImGui::Text("%llu", kernel.second.duration_total);
+                ImGui::Text("%llu", kernel.second.dispatch_metrics[KernelInfo::DurationTotal]);
                 ImGui::TableNextColumn();
-                ImGui::Text("%u", kernel.second.duration_min);
+                ImGui::Text("%llu", kernel.second.dispatch_metrics[KernelInfo::DurationMin]);
                 ImGui::TableNextColumn();
-                ImGui::Text("%u", kernel.second.duration_max);
+                ImGui::Text("%llu", kernel.second.dispatch_metrics[KernelInfo::DurationMax]);
                 ImGui::TableNextColumn();
-                ImGui::Text("%u", kernel.second.duration_mean);
+                ImGui::Text("%llu", kernel.second.dispatch_metrics[KernelInfo::DurationMean]);
                 ImGui::TableNextColumn();
-                ImGui::Text("%u", kernel.second.duration_median);
+                ImGui::Text("%llu", kernel.second.dispatch_metrics[KernelInfo::DurationMedian]);
                 ImGui::PopID();
             }
             ImGui::EndTable();

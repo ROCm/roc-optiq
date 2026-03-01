@@ -223,7 +223,7 @@ EndTooltipStyled()
 
 void
 ElidedText(const char* text, float available_width, float tooltip_width,
-           bool imgui_AlignTextToFramePadding)
+           bool right_justify, bool imgui_AlignTextToFramePadding)
 {
     ImGuiStyle       style      = ImGui::GetStyle();
     SettingsManager& settings   = SettingsManager::GetInstance();
@@ -253,6 +253,10 @@ ElidedText(const char* text, float available_width, float tooltip_width,
                                 ImVec2(available_width - scroll_bar_width - elide_size.x,
                                        ImGui::GetFrameHeightWithSpacing()),
                             true);
+    }
+    else if(right_justify)
+    {
+        ImGui::SetCursorPosX(available_width - text_width);
     }
     ImGui::TextUnformatted(text);
     if(elide)

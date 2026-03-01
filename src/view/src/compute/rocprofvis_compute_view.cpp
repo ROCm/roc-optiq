@@ -234,6 +234,5 @@ ComputeView::RenderWorkloadSelection()
     }
 }
 
-
 }  // namespace View
 }  // namespace RocProfVis

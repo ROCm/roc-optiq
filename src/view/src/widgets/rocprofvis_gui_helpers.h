@@ -50,7 +50,7 @@ EndTooltipStyled();
 
 void
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
-           bool imgui_AlignTextToFramePadding = false);
+           bool right_justify = false, bool imgui_AlignTextToFramePadding = false);
 
 /* 
  * Center the next text item horizontally with respect to the available 

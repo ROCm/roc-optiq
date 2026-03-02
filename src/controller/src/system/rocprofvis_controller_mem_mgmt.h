@@ -120,6 +120,11 @@ namespace RocProfVis
             using MemPoolsMap  = std::map<uint64_t, MemoryPoolMap>;
 
         public:
+            MemoryManager(const MemoryManager&) = delete;
+            MemoryManager& operator=(const MemoryManager&) = delete;
+            MemoryManager(MemoryManager&&) = delete;
+            MemoryManager& operator=(MemoryManager&&) = delete;
+
             MemoryManager(uint64_t id);
             void Init(size_t num_objects);
             bool IsShuttingDown();

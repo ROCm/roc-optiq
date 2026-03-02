@@ -56,6 +56,7 @@ private:
     SystemTrace* m_ctx;
     rocprofvis_controller_graph_type_t m_type;
     std::condition_variable_any  m_cv;
+    std::mutex m_mutex;
 };
 
 }

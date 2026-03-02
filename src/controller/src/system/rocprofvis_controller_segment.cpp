@@ -31,23 +31,37 @@ Segment::Segment(rocprofvis_controller_track_type_t type, SegmentTimeline* ctx)
 Segment::~Segment()
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    SystemTrace* trace = (SystemTrace*) m_ctx->GetContext()->GetContext();
-    if(trace->GetMemoryManager() && !trace->GetMemoryManager()->IsShuttingDown())
+    if (m_ctx->GetContext())
     {
-        for(auto& level : m_entries)
+        SystemTrace* trace = (SystemTrace*)m_ctx->GetContext()->GetContext();
+        if (trace)
         {
-            for(auto& pair : level.second)
+            if (trace->GetMemoryManager() && !trace->GetMemoryManager()->IsShuttingDown())
             {
-                trace->GetMemoryManager()->Delete(pair.second, m_ctx);
+                for (auto& level : m_entries)
+                {
+                    for (auto& pair : level.second)
+                    {
+                        trace->GetMemoryManager()->Delete(pair.second, m_ctx);
+                    }
+                }
             }
+            else
+            {
+                for (auto& level : m_entries)
+                {
+                    level.second.clear();
+                }
+            }
+        }
+        else
+        {
+            spdlog::error("Possible memory leak for segment {}! SegmentTimeline is already NULL", (void*) this);
         }
     }
     else
     {
-        for(auto& level : m_entries)
-        {
-            level.second.clear();
-        }
+        spdlog::error("Possible memory leak for segment {}! Trace is already NULL", (void*) this);
     }
 }
 

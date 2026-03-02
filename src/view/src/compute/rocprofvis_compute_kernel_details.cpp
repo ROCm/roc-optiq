@@ -13,6 +13,21 @@
 
 #include "imgui.h"
 
+namespace
+{
+constexpr float MEMORY_CHART_MIN_WIDTH = 2300.0f;
+constexpr float MEMORY_CHART_HEIGHT    = 700.0f;
+constexpr float SOL_TABLE_MIN_WIDTH    = 700.0f;
+constexpr float SOL_TABLE_HEIGHT       = 700.0f;
+constexpr float ROOFLINE_MIN_WIDTH     = 1000.0f;
+constexpr float ROOFLINE_HEIGHT        = 700.0f;
+constexpr float FLEX_ITEM_GROW         = 1.0f;
+
+constexpr float KERNEL_TABLE_PANEL_HEIGHT        = 350.0f;
+constexpr float KERNEL_TABLE_HEADER_ICON_SPACING = 8.0f;
+constexpr float KERNEL_TABLE_PANEL_PADDING       = 4.0f;
+}  // namespace
+
 namespace RocProfVis
 {
 namespace View
@@ -44,9 +59,9 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
     });
 
     m_flex_container.items = {
-        {"memory_chart", memory_chart_wrapper,  2300.0f, 700.0f, 1.0f},
-        {"sol_table",    m_sol_table,           700.0f,  700.0f, 1.0f},
-        {"roofline",     m_roofline,            1000.0f, 700.0f, 1.0f},
+        {"memory_chart", memory_chart_wrapper,  MEMORY_CHART_MIN_WIDTH, MEMORY_CHART_HEIGHT, FLEX_ITEM_GROW},
+        {"sol_table",    m_sol_table,           SOL_TABLE_MIN_WIDTH,    SOL_TABLE_HEIGHT,    FLEX_ITEM_GROW},
+        {"roofline",     m_roofline,            ROOFLINE_MIN_WIDTH,     ROOFLINE_HEIGHT,     FLEX_ITEM_GROW},
     };
 
     m_widget_name = GenUniqueName("ComputeKernelDetailsView");
@@ -166,8 +181,6 @@ ComputeKernelDetailsView::Update()
 void
 ComputeKernelDetailsView::Render()
 {
-    constexpr float kKernelTablePanelHeight = 350.0f;
-
     SettingsManager& settings   = SettingsManager::GetInstance();
     ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
     ImU32            header_bg  = settings.GetColor(Colors::kTableHeaderBg);
@@ -175,7 +188,7 @@ ComputeKernelDetailsView::Render()
     ImGuiStyle&      style      = ImGui::GetStyle();
 
     if(ImGui::BeginChild("##kernel_table_panel",
-                         ImVec2(0, kKernelTablePanelHeight),
+                         ImVec2(0, KERNEL_TABLE_PANEL_HEIGHT),
                          ImGuiChildFlags_Borders))
     {
         float avail_w  = ImGui::GetContentRegionAvail().x;
@@ -203,7 +216,7 @@ ComputeKernelDetailsView::Render()
             m_show_kernel_table = !m_show_kernel_table;
         }
 
-        ImGui::SameLine(0.0f, 8.0f);
+        ImGui::SameLine(0.0f, KERNEL_TABLE_HEADER_ICON_SPACING);
         ImGui::SetCursorScreenPos(
             ImVec2(ImGui::GetCursorScreenPos().x, cursor.y + icon_y_offset));
         ImGui::Text("Kernel Selection Table");
@@ -219,7 +232,7 @@ ComputeKernelDetailsView::Render()
     if(ImGui::BeginChild("##kernel_details_flex_panel", ImVec2(0, 0),
                          ImGuiChildFlags_None, ImGuiWindowFlags_None))
     {
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        ImGui::Dummy(ImVec2(0.0f, KERNEL_TABLE_PANEL_PADDING));
         m_flex_container.Render();
     }
     ImGui::EndChild();

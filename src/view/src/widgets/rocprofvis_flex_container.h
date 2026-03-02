@@ -12,21 +12,27 @@ namespace View
 
 struct FlexItem
 {
+    static constexpr float DEFAULT_MIN_WIDTH = 500.0f;
+    static constexpr float DEFAULT_HEIGHT    = 0.0f;
+    static constexpr float DEFAULT_FLEX_GROW = 1.0f;
+
     std::string                id;
     std::shared_ptr<RocWidget> widget;
-    float                      min_width = 500.0f;
-    float                      height    = 0.0f;
-    float                      flex_grow = 1.0f;
+    float                      min_width = DEFAULT_MIN_WIDTH;
+    float                      height    = DEFAULT_HEIGHT;
+    float                      flex_grow = DEFAULT_FLEX_GROW;
 };
 
 class FlexContainer : public RocWidget
 {
 public:
+    static constexpr float DEFAULT_GAP = 8.0f;
+
     void      Render() override;
     FlexItem* GetItem(const std::string& id);
 
     std::vector<FlexItem> items;
-    float                 gap            = 8.0f;
+    float                 gap            = DEFAULT_GAP;
     float                 min_row_height = 0.0f;
 };
 

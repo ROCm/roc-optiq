@@ -7,6 +7,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "rocprofvis_common_defs.h"
 
 #include "imgui.h"
 #include "spdlog/spdlog.h"
@@ -19,18 +20,31 @@ namespace View
 // ID, Name, duration, invocation columns that are always present in the table
 constexpr int PERMANENT_COLUMN_COUNT = 4;
 
+constexpr int ID_COLUMN_INDEX         = 0;
+constexpr int NAME_COLUMN_INDEX       = 1;
+constexpr int DURATION_COLUMN_INDEX   = 2;
+constexpr int INVOCATION_COLUMN_INDEX = 3;
+
+constexpr float kTooltipMaxWidth = 400.0f;
+
 KernelMetricTable::KernelMetricTable(DataProvider&                     data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
 , m_fetch_requested(false)
 , m_workload_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_sort_column_index(-1)
+, m_sort_column_index(DURATION_COLUMN_INDEX)
 , m_sort_order(kRPVControllerSortOrderDescending)
 , m_selected_row(-1)
 , m_compute_selection(compute_selection)
 , m_selected_kernel_id_local(ComputeSelection::INVALID_SELECTION_ID)
-{}
+, m_update_table_selection(false)
+, m_allow_deselect(false)
+, m_sort_specs_initialized(false)
+, m_permanent_column_names({ "ID", "Name", "Duration (ns)", "Invocations" })
+{
+    m_widget_name = GenUniqueName("KernelMetricTable");
+}
 
 void
 KernelMetricTable::ClearData()
@@ -68,9 +82,12 @@ KernelMetricTable::HandleNewData()
     size_t metric_count = request_params->m_metric_selectors.size();
     for(size_t i = 0; i < metric_count; i++)
     {
-        m_metrics_column_names.push_back(m_metrics_info[i].entry.name + " (" +
-                                         m_metrics_info[i].value_name + ")");
+        m_metrics_column_names.push_back(m_metrics_info[i].entry.name + " " +
+                                         m_metrics_info[i].value_name + " " + "(" +
+                                         m_metrics_info[i].entry.unit + ")");
     }
+
+    m_update_table_selection = true; 
 }
 
 void
@@ -107,22 +124,27 @@ KernelMetricTable::Update()
         }
         else
         {
-            // Find the row with the selected kernel ID and update selection
-            ComputeKernelSelectionTable& table =
-                m_data_provider.ComputeModel().GetKernelSelectionTable();
-            const std::vector<std::vector<std::string>>& data = table.GetTableData();
-            for(size_t row = 0; row < data.size(); row++)
+            m_update_table_selection = true;
+        }
+    }
+
+    if(m_update_table_selection) {
+        // Find the row with the selected kernel ID and update selection
+        ComputeKernelSelectionTable& table =
+            m_data_provider.ComputeModel().GetKernelSelectionTable();
+        const std::vector<std::vector<std::string>>& data = table.GetTableData();
+        for(size_t row = 0; row < data.size(); row++)
+        {
+            // TODO: add "Important Column" for indentifying id column instead of
+            // assuming index 0?
+            if(!data[row].empty() &&
+            data[row][ID_COLUMN_INDEX] == std::to_string(selected_kernel_id))
             {
-                // TODO: add "Important Column" for indentifying id column instead of
-                // assuming index 0
-                if(!data[row].empty() &&
-                   data[row][0] == std::to_string(selected_kernel_id))
-                {
-                    m_selected_row = static_cast<int>(row);
-                    break;
-                }
+                m_selected_row = static_cast<int>(row);
+                break;
             }
         }
+        m_update_table_selection = false;
     }
 }
 
@@ -137,12 +159,6 @@ KernelMetricTable::Render()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Kernel Selection Table");
 
-    // if(m_workload_id == ComputeSelection::INVALID_SELECTION_ID)
-    // {
-    //     ImGui::Separator();
-    //     ImGui::TextUnformatted("No workload selected");
-    //     return;
-    // }
     m_query_builder.SetWorkload(
         m_data_provider.ComputeModel().GetWorkload(m_workload_id));
 
@@ -207,8 +223,14 @@ KernelMetricTable::Render()
                         {
                             col_flags = ImGuiTableColumnFlags_DefaultHide |
                                         ImGuiTableColumnFlags_Disabled;
+                        }   
+                        if(!m_sort_specs_initialized && col == DURATION_COLUMN_INDEX)
+                        {
+                            col_flags = col_flags | ImGuiTableColumnFlags_DefaultSort;
+                            m_sort_specs_initialized = true;
                         }
-                        ImGui::TableSetupColumn(header[col].c_str(), col_flags);
+                        col_flags = col_flags | ImGuiTableColumnFlags_PreferSortDescending;
+                        ImGui::TableSetupColumn(m_permanent_column_names[col].c_str(), col_flags);
                     }
                     else
                     {
@@ -245,6 +267,24 @@ KernelMetricTable::Render()
                     const char* name = ImGui::TableGetColumnName(col);
                     ImGui::TableHeader(name);
                     ImVec2 text_size = ImGui::CalcTextSize(name);
+                    if(ImGui::IsItemHovered())
+                    {
+                        int index = col - PERMANENT_COLUMN_COUNT;
+                        if(index < static_cast<int>(m_metrics_info.size()))
+                        {
+                            const std::string &desc = m_metrics_info[index].entry.description;
+                            if(!desc.empty())
+                            {
+                                ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                                                    ImVec2(kTooltipMaxWidth, FLT_MAX));
+                                BeginTooltipStyled();
+                                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
+                                ImGui::TextUnformatted(desc.c_str());
+                                ImGui::PopTextWrapPos();
+                                EndTooltipStyled();                                
+                            }
+                        }
+                    }
                     ImGui::SameLine(text_size.x, item_spacing);
 
                     ImGui::PushID(col);
@@ -321,9 +361,12 @@ KernelMetricTable::Render()
                                 {
                                     if(is_selected)
                                     {
-                                        m_selected_row = -1;  // Deselect if already selected
-                                        m_compute_selection->SelectKernel(
-                                            ComputeSelection::INVALID_SELECTION_ID);
+                                        if(m_allow_deselect)
+                                        {
+                                            m_selected_row = -1;  // Deselect if already selected
+                                            m_compute_selection->SelectKernel(
+                                                ComputeSelection::INVALID_SELECTION_ID);
+                                        }
                                     }
                                     else
                                     {

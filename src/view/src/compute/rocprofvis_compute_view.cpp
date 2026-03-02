@@ -28,6 +28,25 @@ ComputeView::ComputeView()
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("ComputeView");
 
+    m_data_provider.SetTraceLoadedCallback([this](const std::string& trace_path,
+                                                  uint64_t           response_code) {
+        if(response_code != kRocProfVisResultSuccess)
+        {
+            spdlog::error("Failed to load trace: {}", response_code);
+            NotificationManager::GetInstance().Show("Failed to load trace: " + trace_path,
+                                                    NotificationLevel::Error);
+        }
+        else
+        {
+            // select the first workload by default when a trace is loaded
+            const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();  
+            if(!workloads.empty())
+            {
+                m_compute_selection->SelectWorkload(workloads.begin()->first);
+            }
+        }
+    });
+
     m_data_provider.SetFetchMetricsCallback(
         [this](const std::string& trace_path, uint64_t client_id, bool success) {
             if(!success)
@@ -190,14 +209,12 @@ ComputeView::RenderWorkloadSelection()
     ImGui::Text("Workload:");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
+    ImGui::BeginDisabled(workloads.empty());
     if(ImGui::BeginCombo("##Workloads", workloads.count(workload_id) > 0
                                           ? workloads.at(workload_id).name.c_str()
                                           : "-"))
     {
-        if(ImGui::Selectable("-", workload_id == ComputeSelection::INVALID_SELECTION_ID))
-        {
-            m_compute_selection->SelectWorkload(ComputeSelection::INVALID_SELECTION_ID);
-        }
+
         for(const std::pair<const uint32_t, WorkloadInfo>& workload : workloads)
         {
             if(ImGui::Selectable(workload.second.name.c_str(),
@@ -208,6 +225,7 @@ ComputeView::RenderWorkloadSelection()
         }
         ImGui::EndCombo();
     }
+    ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::Text("Kernel:");
     ImGui::SameLine();
@@ -217,12 +235,9 @@ ComputeView::RenderWorkloadSelection()
     std::vector<const KernelInfo*> kernel_info_list =
         m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
+    ImGui::BeginDisabled(kernel_info_list.empty());
     if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str() : "-"))
     {
-        if(ImGui::Selectable("-", kernel_id == ComputeSelection::INVALID_SELECTION_ID))
-        {
-            m_compute_selection->SelectKernel(ComputeSelection::INVALID_SELECTION_ID);
-        }
         for(const KernelInfo* info : kernel_info_list)
         {
             if(ImGui::Selectable(info->name.c_str(), kernel_id == info->id))
@@ -232,6 +247,7 @@ ComputeView::RenderWorkloadSelection()
         }
         ImGui::EndCombo();
     }
+    ImGui::EndDisabled();
 }
 
 }  // namespace View

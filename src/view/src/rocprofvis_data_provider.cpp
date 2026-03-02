@@ -4141,6 +4141,11 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
         m_compute_model.AddWorkload(workload);
     }
     m_state = ProviderState::kReady;
+
+    if(m_trace_data_ready_callback)
+    {
+        m_trace_data_ready_callback(m_model.GetTraceFilePath(), kRocProfVisResultSuccess);
+    }    
 }
 
 void

@@ -857,7 +857,9 @@ rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceLeftNeighbourQuery(rocp
     BuildSliceQueryMap(slice_query_map, props);
 
     for (auto it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
-        query += "SELECT * FROM ( ";
+        query = "SELECT *, ";
+        query += std::to_string(track_index);
+        query += " as track_id FROM(";
         query += it_query->first;
         query += it_query->second[db_instance->GuidIndex()];
         query += ") and ";
@@ -880,12 +882,12 @@ rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceRightNeighbourQuery(roc
     start += TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
     end += TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
 
-    rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track_index);
-    DbInstance* instance = (DbInstance*)props->track_indentifiers.db_instance;
     BuildSliceQueryMap(slice_query_map, props);
 
     for (auto it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
-        query += "SELECT * FROM ( ";
+        query = "SELECT *, ";
+        query += std::to_string(track_index);
+        query += " as track_id FROM(";
         query += it_query->first;
         query += it_query->second[db_instance->GuidIndex()];
         query += ") and ";

@@ -210,7 +210,7 @@ RocpdDatabase::CreateIndexes()
     std::vector<std::string> vec;
     vec.push_back("CREATE INDEX IF NOT EXISTS pid_tid_idx ON rocpd_api(pid, tid, start);");
     vec.push_back("CREATE INDEX IF NOT EXISTS gid_qid_idx ON rocpd_op(gpuId, queueId, start);");
-    vec.push_back("CREATE INDEX IF NOT EXISTS monitorTypeIdx on rocpd_monitor(gpuId,monitorType,start);");
+    vec.push_back("CREATE INDEX IF NOT EXISTS monitorTypeIdx on rocpd_monitor(deviceId,monitorType,start);");
 
     return ExecuteTransaction(vec);
 }

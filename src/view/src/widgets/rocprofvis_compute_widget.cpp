@@ -5,6 +5,7 @@
 #include "compute/rocprofvis_compute_selection.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_requests.h"
 #include "implot.h"
 #include <algorithm>
@@ -385,6 +386,7 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
     m_rows.clear();
     m_rows.reserve(table.entries.size());
 
+    m_column_names.push_back("Metric ID");
     m_column_names.push_back("Metric");
     if(table.value_names.empty())
     {
@@ -404,8 +406,12 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
         const auto& entry = entry_pair.second;
 
         Row row;
-        row.name = entry.name;
-        row.unit = entry.unit.empty() ? "N/A" : entry.unit;
+        row.metric_id   = std::to_string(entry.category_id) + "." +
+                          std::to_string(entry.table_id) + "." +
+                          std::to_string(eid);
+        row.name        = entry.name;
+        row.description = entry.description;
+        row.unit        = entry.unit.empty() ? "N/A" : entry.unit;
 
         auto mv = get_value(eid);
 
@@ -457,18 +463,39 @@ MetricTableCache::Render() const
         ImGui::TableSetupColumn(col.c_str());
     ImGui::TableHeadersRow();
 
+    int row_idx = 0;
     for(const auto& row : m_rows)
     {
+        ImGui::PushID(row_idx++);
         ImGui::TableNextRow();
-        ImGui::TableNextColumn();
-        ImGui::TextUnformatted(row.name.c_str());
 
-        for(const auto& val : row.values)
+        ImGui::TableNextColumn();
+        CopyableTextUnformatted(row.metric_id.c_str(), "##mid",
+                                COPY_DATA_NOTIFICATION, false, true);
+
+        ImGui::TableNextColumn();
+        CopyableTextUnformatted(row.name.c_str(), "##name",
+                                COPY_DATA_NOTIFICATION, false, true);
+        if(!row.description.empty() && ImGui::IsItemHovered())
+        {
+            constexpr float kTooltipMaxWidth = 400.0f;
+            ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                                ImVec2(kTooltipMaxWidth, FLT_MAX));
+            BeginTooltipStyled();
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
+            ImGui::TextUnformatted(row.description.c_str());
+            ImGui::PopTextWrapPos();
+            EndTooltipStyled();
+        }
+
+        for(int vi = 0; vi < static_cast<int>(row.values.size()); vi++)
         {
             ImGui::TableNextColumn();
-            if(!val.empty())
+            if(!row.values[vi].empty())
             {
-                ImGui::TextUnformatted(val.c_str());
+                CopyableTextUnformatted(row.values[vi].c_str(),
+                                        std::string("##v") + std::to_string(vi),
+                                        COPY_DATA_NOTIFICATION, false, true);
             }
             else
             {
@@ -479,12 +506,15 @@ MetricTableCache::Render() const
         ImGui::TableNextColumn();
         if(row.unit != "N/A")
         {
-            ImGui::TextUnformatted(row.unit.c_str());
+            CopyableTextUnformatted(row.unit.c_str(), "##unit",
+                                    COPY_DATA_NOTIFICATION, false, true);
         }
         else
         {
             ImGui::TextDisabled("N/A");
         }
+
+        ImGui::PopID();
     }
     ImGui::EndTable();
 }

@@ -945,8 +945,8 @@ TopKernels::PlotHoverIdx() const
             {
                 for(size_t i = 0; i < m_kernels->size(); i++)
                 {
-                    if(mouse_pos.x >= static_cast<double>(i) - PIE_CHART_RADIUS / 2.0 &&
-                       mouse_pos.x <= static_cast<double>(i) + PIE_CHART_RADIUS / 2.0 &&
+                    if(mouse_pos.x >= static_cast<double>(i) - BAR_CHART_THICKNESS / 2.0 &&
+                       mouse_pos.x <= static_cast<double>(i) + BAR_CHART_THICKNESS / 2.0 &&
                        mouse_pos.y >= 0.0 && mouse_pos.y <= (*m_kernels)[i].exec_time_sum)
                     {
                         idx = i;

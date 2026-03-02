@@ -109,8 +109,10 @@ public:
 
     struct Row
     {
-        std::string                name;
-        std::vector<std::string>   values;
+        std::string              metric_id;
+        std::string              name;
+        std::string              description;
+        std::vector<std::string> values;
         std::string              unit;
     };
 

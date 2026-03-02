@@ -262,6 +262,43 @@ RocProfVis::View::calculate_nice_interval(double view_range, int target_division
     return nice_multiplier * scale;
 }
 
+RocProfVis::View::FittedGraphAxisInterval
+RocProfVis::View::fit_graph_axis_interval(double max_ns, float available_width,
+                                               float label_width, bool pad_first_and_last,
+                                               int min_intervals)
+{
+    // calculate the number of intervals based on available width and label width
+    // reserve space for first and last label if requested
+    int interval_count =
+        label_width > 0
+            ? (static_cast<int>((pad_first_and_last ? available_width - label_width * 2.0f
+                                                    : available_width) /
+                                label_width))
+            : 0;
+    if(interval_count < 1) interval_count = 1;
+
+    double pixels_per_ns = available_width / max_ns;
+    double interval_ns   = calculate_nice_interval(max_ns, interval_count);
+    double step_size_px  = interval_ns * pixels_per_ns;
+
+    int pad_amount = 2; // +2 for the first and last label
+
+    // If the step size is smaller than the label size, try to adjust the interval
+    // count
+    while(step_size_px < label_width)
+    {
+        interval_count--;
+        interval_ns  = calculate_nice_interval(max_ns, interval_count);
+        step_size_px = interval_ns * pixels_per_ns;
+        // If the interval count is too small break out
+        if(interval_count <= min_intervals)
+        {
+            break;
+        }
+    }
+    return { interval_ns, interval_count + pad_amount };
+}
+
 RocProfVis::View::ViewRangeNS
 RocProfVis::View::calculate_adaptive_view_range(double item_start_ns,
                                                 double item_duration_ns)

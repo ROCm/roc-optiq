@@ -132,6 +132,10 @@ private:
 
     void DrawConnections(ImDrawList* draw_list, ImVec2 origin);
 
+    float DrawMetricRow(ImDrawList* draw_list, float block_x, float cursor_y,
+                        float block_w, const char* label, MemChartMetric metric_id,
+                        const char* unit = "");
+
     // Get the display string for a metric (returns "-" if not yet populated)
     const char* GetMetricText(MemChartMetric metric) const;
 

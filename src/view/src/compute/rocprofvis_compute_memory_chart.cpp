@@ -7,6 +7,7 @@
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -54,6 +55,16 @@ FormatMetricValue(double value)
     return compact_number_format(value);
 }
 
+static std::string
+FormatMetricValueRaw(double value)
+{
+    if(value != value) return "-";
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%.2f", value);
+    return std::string(buf);
+}
+
+
 // Rounded-rect block with fill + border
 static void
 DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right)
@@ -78,30 +89,6 @@ DrawBlockHeader(ImDrawList* draw_list, const char* title,
                        ImVec2(block_x + block_w - BLOCK_TEXT_PAD, line_y),
                        Settings().GetColor(Colors::kBorderGray), 1.0f);
     return line_y + HEADER_SEP_GAP;
-}
-
-// Dim label on left, bright value on right. Returns cursor_y for next row.
-static float
-DrawMetricRow(ImDrawList* draw_list, float block_x, float cursor_y, float block_w,
-              const char* label, const char* value, const char* unit = "")
-{
-    draw_list->AddText(ImVec2(block_x + BLOCK_TEXT_PAD, cursor_y),
-                       Settings().GetColor(Colors::kTextDim), label);
-
-    float value_x = block_x + block_w * 0.48f;
-    if(unit[0] != '\0')
-    {
-        char text_buf[64];
-        snprintf(text_buf, sizeof(text_buf), "%s %s", value, unit);
-        draw_list->AddText(ImVec2(value_x, cursor_y),
-                           Settings().GetColor(Colors::kTextMain), text_buf);
-    }
-    else
-    {
-        draw_list->AddText(ImVec2(value_x, cursor_y),
-                           Settings().GetColor(Colors::kTextMain), value);
-    }
-    return cursor_y + ROW_HEIGHT;
 }
 
 // Horizontal arrow pointing right
@@ -254,11 +241,6 @@ ComputeMemoryChartView::Render()
     // -----------------------------------------------------------------
     ComputeLayout();
 
-
-
-   
-
-
     // -----------------------------------------------------------------
     // 2. Draw every block
     // -----------------------------------------------------------------
@@ -328,6 +310,63 @@ ComputeMemoryChartView::ComputeLayout()
     // HBM (right of fabric)
     m_hbm_block = {m_fabric_block.Right() + ARROW_COLUMN_GAP,
                    m_fabric_block.y, 160, 140};
+}
+
+// Dim label on left, bright value on right. Returns cursor_y for next row.
+float
+ComputeMemoryChartView::DrawMetricRow(ImDrawList* draw_list, float block_x, float cursor_y, float block_w,
+              const char* label, MemChartMetric metric_id, const char* unit /*= ""*/)
+{
+    draw_list->AddText(ImVec2(block_x + BLOCK_TEXT_PAD, cursor_y),
+                       Settings().GetColor(Colors::kTextDim), label);
+
+    // Add tooltip for label
+    ImVec2 text_pos = ImVec2(block_x + BLOCK_TEXT_PAD, cursor_y);
+    ImVec2 label_size = ImGui::CalcTextSize(label);
+    ImVec2 label_min = text_pos;
+    ImVec2 label_max = ImVec2(text_pos.x + label_size.x, text_pos.y + label_size.y);
+    
+    if(m_metric_ptrs[metric_id] && ImGui::IsMouseHoveringRect(label_min, label_max))
+    {
+        constexpr float kTooltipMaxWidth = 300.0f;
+        const char* description = m_metric_ptrs[metric_id]->entry->description.c_str();
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                            ImVec2(kTooltipMaxWidth, FLT_MAX));
+        BeginTooltipStyled();
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
+        ImGui::TextUnformatted(description);
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();             
+    }
+                           
+    float value_x = block_x + block_w * 0.48f;
+    if(unit[0] != '\0')
+    {
+        char text_buf[64];
+        snprintf(text_buf, sizeof(text_buf), "%s %s", GetMetricText(metric_id), unit);
+        draw_list->AddText(ImVec2(value_x, cursor_y),
+                           Settings().GetColor(Colors::kTextMain), text_buf);
+    }
+    else
+    {
+        draw_list->AddText(ImVec2(value_x, cursor_y),
+                           Settings().GetColor(Colors::kTextMain), GetMetricText(metric_id));
+    }
+
+    // Add tooltip for value
+    ImVec2 value_pos = ImVec2(value_x, cursor_y);
+    ImVec2 value_size = ImGui::CalcTextSize(GetMetricText(metric_id));
+    ImVec2 value_min = value_pos;
+    ImVec2 value_max = ImVec2(value_pos.x + value_size.x, value_pos.y + value_size.y);
+    if(ImGui::IsMouseHoveringRect(value_min, value_max))
+    {
+        if(m_metric_ptrs[metric_id] && !m_metric_ptrs[metric_id]->values.empty())
+        {
+            ImGui::SetTooltip("%s", FormatMetricValueRaw(
+                m_metric_ptrs[metric_id]->values.begin()->second).c_str());
+        }
+    } 
+    return cursor_y + ROW_HEIGHT;
 }
 
 // =============================================================================
@@ -525,18 +564,16 @@ ComputeMemoryChartView::DrawActiveCUs(ImDrawList* draw_list, ImVec2 origin)
                        Settings().GetColor(Colors::kBorderGray), 1.0f);
     cursor_y += 8;
 
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "VGPRs:", VGPR);
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "SGPRs:", SGPR);
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "VGPRs:",         GetMetricText(VGPR));
+                             "LDS Alloc:", LDS_ALLOCATION);
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "SGPRs:",         GetMetricText(SGPR));
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "LDS Alloc:",     GetMetricText(LDS_ALLOCATION));
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Scratch Alloc:", GetMetricText(SCRATCH_ALLOCATION));
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Wavefronts:",    GetMetricText(WAVEFRONTS));
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Workgroups:",    GetMetricText(WORKGROUPS));
+                             "Scratch Alloc:", SCRATCH_ALLOCATION);
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wavefronts:", WAVEFRONTS);
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Workgroups:", WORKGROUPS);
 }
 
 void
@@ -551,10 +588,10 @@ ComputeMemoryChartView::DrawLDS(ImDrawList* draw_list, ImVec2 origin)
     float cursor_y = DrawBlockHeader(draw_list, "LDS",
                                      block_x, block_y, block.w);
 
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Util:", GetMetricText(LDS_UTIL),    "%");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Lat:",  GetMetricText(LDS_LATENCY), "cycles");
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Util:", LDS_UTIL, "%");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", LDS_LATENCY,
+                             "cycles");
 }
 
 void
@@ -566,17 +603,16 @@ ComputeMemoryChartView::DrawVectorL1(ImDrawList* draw_list, ImVec2 origin)
 
     DrawBlockRect(draw_list, {block_x, block_y},
                   {block_x + block.w, block_y + block.h});
-    float cursor_y = DrawBlockHeader(draw_list, "Vector L1 Cache",
-                                     block_x, block_y, block.w);
+    float cursor_y =
+        DrawBlockHeader(draw_list, "Vector L1 Cache", block_x, block_y, block.w);
 
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", VL1_HIT, "%");
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", VL1_LAT, "cycles");
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Hit:",    GetMetricText(VL1_HIT),      "%");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Lat:",    GetMetricText(VL1_LAT),      "cycles");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Coales:", GetMetricText(VL1_COALESCE), "%");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Stall:",  GetMetricText(VL1_STALL),    "%");
+                             "Coales:", VL1_COALESCE, "%");
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Stall:", VL1_STALL, "%");
 }
 
 void
@@ -591,10 +627,10 @@ ComputeMemoryChartView::DrawScalarL1D(ImDrawList* draw_list, ImVec2 origin)
     float cursor_y = DrawBlockHeader(draw_list, "Scalar L1D Cache",
                                      block_x, block_y, block.w);
 
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Hit:", GetMetricText(SL1D_HIT), "%");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Lat:", GetMetricText(SL1D_LAT), "cycles");
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", SL1D_HIT, "%");
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", SL1D_LAT, "cycles");
 }
 
 void
@@ -609,10 +645,9 @@ ComputeMemoryChartView::DrawInstrL1(ImDrawList* draw_list, ImVec2 origin)
     float cursor_y = DrawBlockHeader(draw_list, "Instr L1 Cache",
                                      block_x, block_y, block.w);
 
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Hit:", GetMetricText(IL1_HIT), "%");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Lat:", GetMetricText(IL1_LAT), "cycles");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", IL1_HIT, "%");
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", IL1_LAT, "cycles");
 }
 
 void
@@ -627,22 +662,18 @@ ComputeMemoryChartView::DrawL2(ImDrawList* draw_list, ImVec2 origin)
     float cursor_y = DrawBlockHeader(draw_list, "L2 Cache",
                                      block_x, block_y, block.w);
 
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Rd:",     GetMetricText(L2_RD));
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Wr:",     GetMetricText(L2_WR));
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Atomic:", GetMetricText(L2_ATOMIC));
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Hit:",    GetMetricText(L2_HIT), "%");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", L2_RD);
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", L2_WR);
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Atomic:", L2_ATOMIC);
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", L2_HIT, "%");
 
     cursor_y += HEADER_SEP_GAP;
     cursor_y = DrawBlockHeader(draw_list, "Latency",
                                block_x, cursor_y - BLOCK_TEXT_PAD, block.w);
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Rd:",  GetMetricText(L2_RD_LAT), "cycles");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Wr:",  GetMetricText(L2_WR_LAT), "cycles");
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", L2_RD_LAT, "cycles");
+    cursor_y =
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", L2_WR_LAT, "cycles");
 }
 
 void
@@ -674,12 +705,12 @@ ComputeMemoryChartView::DrawFabric(ImDrawList* draw_list, ImVec2 origin)
     float cursor_y = DrawBlockHeader(draw_list, "Fabric",
                                      block_x, block_y, block.w);
 
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", FABRIC_RD_LAT,
+                             "cycles");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", FABRIC_WR_LAT,
+                             "cycles");
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Rd:",     GetMetricText(FABRIC_RD_LAT),     "cycles");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Wr:",     GetMetricText(FABRIC_WR_LAT),     "cycles");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Atomic:", GetMetricText(FABRIC_ATOMIC_LAT), "cycles");
+                             "Atomic:", FABRIC_ATOMIC_LAT, "cycles");
 }
 
 void
@@ -710,10 +741,8 @@ ComputeMemoryChartView::DrawHBM(ImDrawList* draw_list, ImVec2 origin)
     float cursor_y = DrawBlockHeader(draw_list, "HBM",
                                      block_x, block_y, block.w);
 
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Rd:", GetMetricText(HBM_RD));
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Wr:", GetMetricText(HBM_WR));
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", HBM_RD);
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", HBM_WR);
 }
 
 // =============================================================================

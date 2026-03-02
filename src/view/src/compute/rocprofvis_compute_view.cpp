@@ -16,11 +16,23 @@
 #include "implot/implot.h"
 #include "spdlog/spdlog.h"
 
-
 namespace RocProfVis
 {
 namespace View
 {
+
+static constexpr ImVec2 TOOLBAR_FRAME_PADDING  = ImVec2(6, 6);
+static constexpr float  TOOLBAR_FRAME_ROUNDING = 0.0f;
+static constexpr ImVec2 COMBO_FRAME_PADDING    = ImVec2(10, 5);
+static constexpr float  COMBO_FRAME_ROUNDING   = 6.0f;
+static constexpr float  POPUP_ROUNDING         = 6.0f;
+static constexpr float  POPUP_BORDER_SIZE      = 1.0f;
+static constexpr float  LABEL_COMBO_SPACING    = 8.0f;
+static constexpr float  SELECTOR_GAP           = 24.0f;
+static constexpr float  WORKLOAD_WIDTH_FRAC    = 0.25f;
+static constexpr float  WORKLOAD_MIN_WIDTH     = 140.0f;
+static constexpr float  KERNEL_WIDTH_FRAC      = 0.5f;
+static constexpr float  KERNEL_MIN_WIDTH       = 350.0f;
 
 ComputeView::ComputeView()
 : m_view_created(false)
@@ -154,13 +166,13 @@ ComputeView::RenderEditMenuOptions()
 void
 ComputeView::RenderToolbar()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, TOOLBAR_FRAME_PADDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, TOOLBAR_FRAME_ROUNDING);
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 5));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, COMBO_FRAME_PADDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, COMBO_FRAME_ROUNDING);
     ImGui::AlignTextToFramePadding();
 
     RenderWorkloadSelection();
@@ -179,31 +191,31 @@ ComputeView::RenderWorkloadSelection()
     const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
         m_data_provider.ComputeModel().GetWorkloads();
 
-    SettingsManager& settings   = SettingsManager::GetInstance();
-    ImVec4 labelCol   = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextDim));
-    ImVec4 accentCol  = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kAccentRed));
-    ImVec4 bgMain     = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgMain));
-    ImVec4 bgHover    = ImVec4(bgMain.x + 0.06f, bgMain.y + 0.06f, bgMain.z + 0.07f, 1.0f);
-    ImVec4 borderCol  = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBorderGray));
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImVec4 text_dim      = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextDim));
+    ImVec4 bg_main       = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgMain));
+    ImVec4 bg_frame      = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgFrame));
+    ImVec4 accent_active = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kAccentRedActive));
+    ImVec4 border_gray   = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBorderGray));
 
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, bgMain);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, bgHover);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, accentCol);
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, bgMain);
-    ImGui::PushStyleColor(ImGuiCol_Border, borderCol);
-    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 6.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, bg_main);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, bg_frame);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, accent_active);
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, bg_main);
+    ImGui::PushStyleColor(ImGuiCol_Border, border_gray);
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, POPUP_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, POPUP_BORDER_SIZE);
 
-    // --- Workload selector ---
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
 
-    ImGui::TextColored(labelCol, "Workload");
-    ImGui::SameLine(0.0f, 8.0f);
+    ImGui::TextColored(text_dim, "Workload");
+    ImGui::SameLine(0.0f, LABEL_COMBO_SPACING);
 
-    ImGui::SetNextItemWidth(std::max(ImGui::GetContentRegionAvail().x * 0.25f, 140.0f));
+    float avail = ImGui::GetContentRegionAvail().x;
+    ImGui::SetNextItemWidth(std::max(avail * WORKLOAD_WIDTH_FRAC, WORKLOAD_MIN_WIDTH));
     if(ImGui::BeginCombo("##Workloads", workloads.count(workload_id) > 0
-                                          ? workloads.at(workload_id).name.c_str()
-                                          : "Select workload..."))
+                                            ? workloads.at(workload_id).name.c_str()
+                                            : "Select workload..."))
     {
         if(ImGui::Selectable("-", workload_id == ComputeSelection::INVALID_SELECTION_ID))
         {
@@ -222,20 +234,20 @@ ComputeView::RenderWorkloadSelection()
         ImGui::EndCombo();
     }
 
-    ImGui::SameLine(0.0f, 24.0f);
+    ImGui::SameLine(0.0f, SELECTOR_GAP);
 
-    // --- Kernel selector ---
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
     const KernelInfo* kernel_info =
         m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id);
     std::vector<const KernelInfo*> kernel_info_list =
         m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
 
-    ImGui::TextColored(labelCol, "Kernel");
-    ImGui::SameLine(0.0f, 8.0f);
+    ImGui::TextColored(text_dim, "Kernel");
+    ImGui::SameLine(0.0f, LABEL_COMBO_SPACING);
 
+    avail = ImGui::GetContentRegionAvail().x;
     ImGui::SetNextItemWidth(
-        std::min(ImGui::GetContentRegionAvail().x, std::max(350.0f, ImGui::GetContentRegionAvail().x * 0.5f)));
+        std::min(avail, std::max(KERNEL_MIN_WIDTH, avail * KERNEL_WIDTH_FRAC)));
     if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str()
                                                   : "Select kernel..."))
     {

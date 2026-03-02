@@ -72,9 +72,19 @@ FlexContainer::Render()
         float    row_gaps  = gap * static_cast<float>(row.count > 1 ? row.count - 1 : 0);
         float    min_sum   = row.min_w - row_gaps;
         float    free      = std::max(0.0f, avail_width - min_sum - row_gaps);
+        float    row_h     = row_height;
+
+        // Keep each row tall enough for its tallest item so child scrollbars
+        // (like memory chart horizontal scroll) are not clipped by the row.
+        for(size_t column_index = 0; column_index < row.count; column_index++)
+        {
+            const FlexItem& item = items[row.start + column_index];
+            float item_h = (item.height > 0.0f) ? item.height : row_height;
+            row_h = std::max(row_h, item_h);
+        }
 
         ImGui::PushID(static_cast<int>(row_index));
-        ImGui::BeginChild("row", ImVec2(avail_width, row_height), ImGuiChildFlags_Borders);
+        ImGui::BeginChild("row", ImVec2(avail_width, row_h), ImGuiChildFlags_Borders);
         for(size_t column_index = 0; column_index < row.count; column_index++)
         {
             FlexItem& item = items[row.start + column_index];
@@ -84,7 +94,7 @@ FlexContainer::Render()
                 w += free * (item.flex_grow / row.grow);
             w = std::min(w, avail_width);
 
-            float h = (item.height > 0.0f) ? item.height : row_height;
+            float h = (item.height > 0.0f) ? item.height : row_h;
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg,
                 SettingsManager::GetInstance().GetColor(Colors::kFillerColor));

@@ -136,6 +136,14 @@ private:
                         float block_w, const char* label, MemChartMetric metric_id,
                         const char* unit = "");
 
+    void ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
+                           MemChartMetric metric_id,
+                           bool show_description, bool show_raw_value);
+
+    void DrawTextWithTooltip(ImDrawList* draw_list, ImVec2 pos, uint32_t color,
+                             const char* text, MemChartMetric metric_id,
+                             bool show_description, bool show_raw_value);
+
     // Get the display string for a metric (returns "-" if not yet populated)
     const char* GetMetricText(MemChartMetric metric) const;
 

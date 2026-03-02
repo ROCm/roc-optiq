@@ -16,6 +16,7 @@
 #include "implot/implot.h"
 #include "spdlog/spdlog.h"
 
+
 namespace RocProfVis
 {
 namespace View
@@ -153,25 +154,19 @@ ComputeView::RenderEditMenuOptions()
 void
 ComputeView::RenderToolbar()
 {
-    ImGuiStyle& style          = ImGui::GetStyle();
-    ImVec2      frame_padding  = style.FramePadding;
-    float       frame_rounding = style.FrameRounding;
-
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, frame_rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 5));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
     ImGui::AlignTextToFramePadding();
 
     RenderWorkloadSelection();
 
-    // pop content style
     ImGui::PopStyleVar(2);
     ImGui::EndChild();
-    // pop child window style
     ImGui::PopStyleVar(2);
 }
 
@@ -179,20 +174,36 @@ void
 ComputeView::RenderWorkloadSelection()
 {
     if(!m_compute_selection)
-    {
         return;
-    }
 
     const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
         m_data_provider.ComputeModel().GetWorkloads();
 
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    ImVec4 labelCol   = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextDim));
+    ImVec4 accentCol  = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kAccentRed));
+    ImVec4 bgMain     = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgMain));
+    ImVec4 bgHover    = ImVec4(bgMain.x + 0.06f, bgMain.y + 0.06f, bgMain.z + 0.07f, 1.0f);
+    ImVec4 borderCol  = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBorderGray));
+
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, bgMain);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, bgHover);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, accentCol);
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, bgMain);
+    ImGui::PushStyleColor(ImGuiCol_Border, borderCol);
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0f);
+
+    // --- Workload selector ---
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    ImGui::Text("Workload:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
+
+    ImGui::TextColored(labelCol, "Workload");
+    ImGui::SameLine(0.0f, 8.0f);
+
+    ImGui::SetNextItemWidth(std::max(ImGui::GetContentRegionAvail().x * 0.25f, 140.0f));
     if(ImGui::BeginCombo("##Workloads", workloads.count(workload_id) > 0
                                           ? workloads.at(workload_id).name.c_str()
-                                          : "-"))
+                                          : "Select workload..."))
     {
         if(ImGui::Selectable("-", workload_id == ComputeSelection::INVALID_SELECTION_ID))
         {
@@ -200,24 +211,33 @@ ComputeView::RenderWorkloadSelection()
         }
         for(const std::pair<const uint32_t, WorkloadInfo>& workload : workloads)
         {
-            if(ImGui::Selectable(workload.second.name.c_str(),
-                                 workload_id == workload.second.id))
+            bool is_selected = workload_id == workload.second.id;
+            if(ImGui::Selectable(workload.second.name.c_str(), is_selected))
             {
                 m_compute_selection->SelectWorkload(workload.second.id);
             }
+            if(is_selected)
+                ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
     }
-    ImGui::SameLine();
-    ImGui::Text("Kernel:");
-    ImGui::SameLine();
-    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-    const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id);
 
+    ImGui::SameLine(0.0f, 24.0f);
+
+    // --- Kernel selector ---
+    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+    const KernelInfo* kernel_info =
+        m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id);
     std::vector<const KernelInfo*> kernel_info_list =
         m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
-    if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str() : "-"))
+
+    ImGui::TextColored(labelCol, "Kernel");
+    ImGui::SameLine(0.0f, 8.0f);
+
+    ImGui::SetNextItemWidth(
+        std::min(ImGui::GetContentRegionAvail().x, std::max(350.0f, ImGui::GetContentRegionAvail().x * 0.5f)));
+    if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str()
+                                                  : "Select kernel..."))
     {
         if(ImGui::Selectable("-", kernel_id == ComputeSelection::INVALID_SELECTION_ID))
         {
@@ -225,13 +245,19 @@ ComputeView::RenderWorkloadSelection()
         }
         for(const KernelInfo* info : kernel_info_list)
         {
-            if(ImGui::Selectable(info->name.c_str(), kernel_id == info->id))
+            bool is_selected = kernel_id == info->id;
+            if(ImGui::Selectable(info->name.c_str(), is_selected))
             {
                 m_compute_selection->SelectKernel(info->id);
             }
+            if(is_selected)
+                ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
     }
+
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(5);
 }
 
 }  // namespace View

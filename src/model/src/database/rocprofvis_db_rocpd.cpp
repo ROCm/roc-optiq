@@ -224,10 +224,10 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->events_count[kRocProfVisDmOperationLaunch]   = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
         TraceProperties()->tracks_info_restored = true;
-        TraceProperties()->tracks_info_id_mismatch = false;
-        TraceProperties()->start_time = UINT64_MAX;
-        TraceProperties()->end_time = 0;
+        TraceProperties()->trace_duration = 0;
         TraceProperties()->num_db_instances = 1;
+        TraceProperties()->db_inst_start_time.push_back(UINT64_MAX);
+        TraceProperties()->db_inst_end_time.push_back(0);
 
         ShowProgress(10, "Indexing tables", kRPVDbBusy, future);
         CreateIndexes();

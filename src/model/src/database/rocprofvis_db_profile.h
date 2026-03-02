@@ -147,6 +147,9 @@ class ProfileDatabase : public SqliteDatabase
             rocprofvis_dm_string_t& select,
             rocprofvis_dm_string_t& group_by) = 0;
 
+        std::string GetHistogramQueryPrefix(uint64_t bucket_size);
+        std::string GetHistogramQuerySuffix();
+
     protected:
 
     // method to build a query to read time slice of records for single track 
@@ -211,6 +214,7 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_charptr_t prefix, 
                             rocprofvis_dm_charptr_t suffix,
                             RpvSqliteExecuteQueryCallback callback, 
+                            std::function<std::string(rocprofvis_dm_track_params_t*, rocprofvis_dm_charptr_t)> func_prepare,
                             std::function<void(rocprofvis_dm_track_params_t*)> func_clear,
                             guid_list_t run_for_db_instances);
         rocprofvis_dm_result_t ExecuteQueriesAsync(

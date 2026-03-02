@@ -145,15 +145,15 @@ typedef struct {
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model and database. Physically located in trace object and referenced by a pointer in binding structure.
 typedef struct {
-    rocprofvis_dm_timestamp_t start_time;           // trace start time
-    rocprofvis_dm_timestamp_t end_time;             // trace end time
+    rocprofvis_dm_timestamp_t trace_duration;             // trace duration    
+    std::vector<rocprofvis_dm_timestamp_t> db_inst_start_time;           // trace start time per db instance
+    std::vector<rocprofvis_dm_timestamp_t> db_inst_end_time;             // trace end time per db instance
     rocprofvis_dm_timestamp_t events_count[kRocProfVisDmNumOperation];  // events count per operation
     uint64_t                  histogram_bucket_size;
     uint64_t                  histogram_bucket_count;
     uint32_t                  num_db_instances;
     bool                      metadata_loaded;                           // status of metadata being fully loaded
     bool                      tracks_info_restored;
-    bool                      tracks_info_id_mismatch;
     std::map<uint32_t,uint32_t> histogram;
 } rocprofvis_dm_trace_params_t;
 

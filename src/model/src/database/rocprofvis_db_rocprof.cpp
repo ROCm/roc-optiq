@@ -840,10 +840,14 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->events_count[kRocProfVisDmOperationLaunchSample]   = 0;
 
         TraceProperties()->tracks_info_restored = true;
-        TraceProperties()->tracks_info_id_mismatch = false;
-        TraceProperties()->start_time = UINT64_MAX;
-        TraceProperties()->end_time = 0;
+        TraceProperties()->trace_duration = 0;
 
+        for (auto& guid_info : DbInstances())
+        {
+            TraceProperties()->db_inst_start_time.push_back(UINT64_MAX);
+            TraceProperties()->db_inst_end_time.push_back(0);
+        }
+        
         std::string track_queries = m_query_factory.GetRocprofRegionTrackQuery(false) +
             m_query_factory.GetRocprofRegionTrackQuery(true) +
             m_query_factory.GetRocprofKernelDispatchTrackQuery() +
@@ -1219,6 +1223,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 ExecuteQueryForAllTracksAsync(
                     kRocProfVisDmIncludeStreamTracks,
                     kRPVQueryLevel, "SELECT *, ", (std::string(" ORDER BY ") + Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
+                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
                     [](rocprofvis_dm_track_params_t* params) {
                         params->m_active_events.clear();
                     }, calculate_level_for_guids))
@@ -1271,13 +1276,13 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         {
             ShowProgress(5, "Collecting track properties",
                 kRPVDbBusy, future);
-            TraceProperties()->start_time = UINT64_MAX;
-            TraceProperties()->end_time = 0;
+            TraceProperties()->trace_duration = 0;
             if (kRocProfVisDmResultSuccess !=
                 ExecuteQueryForAllTracksAsync(
                     kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ",
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
+                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
                     [](rocprofvis_dm_track_params_t* params) {},
                     DbInstances()))
             {

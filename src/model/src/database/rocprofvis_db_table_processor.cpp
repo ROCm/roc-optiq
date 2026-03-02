@@ -911,6 +911,11 @@ namespace DataModel
                 uint64_t value = 0;
                 table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
             }
+            else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_END || columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_START)
+            {
+                uint64_t value = db->Sqlite3ColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
+                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value - db->TraceProperties()->db_inst_start_time[callback_params->db_instance->GuidIndex()]);
+            }
             else 
             {
                 uint64_t value = db->Sqlite3ColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);

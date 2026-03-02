@@ -7,6 +7,9 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_compute_kernel_metric_table.h"
+#include "rocprofvis_settings_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 #include "imgui.h"
 
@@ -24,7 +27,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_kernel_metric_table(nullptr)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
-, m_sol_table(data_provider, compute_selection, METRIC_CAT_SOL, METRIC_TABLE_SOL)
+, m_sol_table(std::make_shared<MetricTableWidget>(data_provider, compute_selection, METRIC_CAT_SOL, METRIC_TABLE_SOL))
 , m_workload_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_new_table_data_token(EventManager::InvalidSubscriptionToken)
@@ -32,8 +35,76 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 {
     SubscribeToEvents();
 
-    m_roofline = std::make_unique<RocProfVis::View::Roofline>(data_provider);
-    m_kernel_metric_table = std::make_unique<RocProfVis::View::KernelMetricTable>(data_provider, compute_selection);
+    m_roofline = std::make_shared<RocProfVis::View::Roofline>(data_provider);
+    m_kernel_metric_table = std::make_shared<RocProfVis::View::KernelMetricTable>(data_provider, compute_selection);
+
+    auto memory_chart_wrapper = std::make_shared<RocCustomWidget>([this]() {
+        ImGui::Text("Memory Chart");
+        m_memory_chart.Render();
+    });
+
+    m_flex_container.items = {
+        {"memory_chart", memory_chart_wrapper,  2300.0f, 700.0f, 1.0f},
+        {"sol_table",    m_sol_table,           700.0f,  700.0f, 1.0f},
+        {"roofline",     m_roofline,            1000.0f, 700.0f, 1.0f},
+    };
+
+    auto table_panel = std::make_shared<RocCustomWidget>([this]() {
+        SettingsManager& settings   = SettingsManager::GetInstance();
+        ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
+        ImU32            header_bg  = settings.GetColor(Colors::kTableHeaderBg);
+        ImU32            border_col = settings.GetColor(Colors::kBorderGray);
+        ImGuiStyle&      style      = ImGui::GetStyle();
+
+        float  avail_w  = ImGui::GetContentRegionAvail().x;
+        float  header_h = ImGui::GetFrameHeightWithSpacing();
+
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2      cursor    = ImGui::GetCursorScreenPos();
+
+        draw_list->AddRectFilled(cursor,
+                                 ImVec2(cursor.x + avail_w, cursor.y + header_h),
+                                 header_bg, style.ChildRounding);
+        draw_list->AddRect(cursor,
+                           ImVec2(cursor.x + avail_w, cursor.y + header_h),
+                           border_col, style.ChildRounding);
+
+        float icon_y_offset = (header_h - ImGui::GetFontSize()) * 0.5f;
+        ImGui::SetCursorScreenPos(
+            ImVec2(cursor.x + style.FramePadding.x, cursor.y + icon_y_offset));
+
+        const char* icon = m_show_kernel_table ? ICON_EYE : ICON_EYE_SLASH;
+        if(IconButton(icon, icon_font, ImVec2(0, 0),
+                      m_show_kernel_table ? "Hide Table" : "Show Table",
+                      style.WindowPadding, true, style.FramePadding))
+        {
+            m_show_kernel_table = !m_show_kernel_table;
+        }
+
+        ImGui::SameLine(0.0f, 8.0f);
+        ImGui::SetCursorScreenPos(
+            ImVec2(ImGui::GetCursorScreenPos().x, cursor.y + icon_y_offset));
+        ImGui::Text("Kernel Selection Table");
+
+        ImGui::SetCursorScreenPos(
+            ImVec2(cursor.x, cursor.y + header_h + style.ItemSpacing.y));
+
+        if(m_show_kernel_table && m_kernel_metric_table)
+            m_kernel_metric_table->Render();
+    });
+
+    auto flex_panel = std::make_shared<RocCustomWidget>([this]() {
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        m_flex_container.Render();
+    });
+
+    auto top_item    = LayoutItem::CreateFromWidget(table_panel);
+    auto bottom_item = LayoutItem::CreateFromWidget(flex_panel);
+
+    m_vsplit = std::make_unique<VSplitContainer>(top_item, bottom_item);
+    m_vsplit->SetMinTopHeight(40.0f);
+    m_vsplit->SetMinBottomHeight(200.0f);
+    m_vsplit->SetSplit(0.25f);
 
     m_widget_name = GenUniqueName("ComputeKernelDetailsView");
 }
@@ -65,7 +136,7 @@ void ComputeKernelDetailsView::SubscribeToEvents()
                 m_data_provider.ComputeModel().GetKernelSelectionTable().Clear();
                 m_kernel_metric_table->FetchData(evt->GetId());
             }
-            m_sol_table.Clear();
+            m_sol_table->Clear();
         }
     };
 
@@ -97,11 +168,11 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             if(m_memory_chart.GetClientId() == evt->GetClientId())
             {
                 m_memory_chart.UpdateMetrics();
-                m_sol_table.FetchMetrics();
+                m_sol_table->FetchMetrics();
             }
-            if(m_sol_table.GetClientId() == evt->GetClientId())
+            if(m_sol_table->GetClientId() == evt->GetClientId())
             {
-                m_sol_table.UpdateTable();
+                m_sol_table->UpdateTable();
             }
         }
     };
@@ -149,22 +220,8 @@ ComputeKernelDetailsView::Update()
 void
 ComputeKernelDetailsView::Render()
 {
-    ImGui::BeginChild("kernel_details");
-
-    if(m_kernel_metric_table)
-    {
-        m_kernel_metric_table->Render();
-    }
-
-    ImGui::Text("Memory Chart");
-
-    m_memory_chart.Render();
-    m_sol_table.Render();
-    if(m_roofline)
-    {
-        m_roofline->Render();
-    }
-    ImGui::EndChild();
+    if(m_vsplit)
+        m_vsplit->Render();
 }
 
 }  // namespace View

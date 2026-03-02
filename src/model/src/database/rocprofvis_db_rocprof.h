@@ -54,6 +54,7 @@ typedef struct rocprofvis_db_memalloc_activity_t
     uint16_t stream_id;
     uint8_t agent_id;
     uint8_t queue_id;
+    uint32_t track_id;
     rocprofvis_db_memalloc_type_t type;
     rocprofvis_db_memalloc_level_t level;
 }rocprofvis_db_memalloc_activity_t;
@@ -184,15 +185,6 @@ private:
     // @return SQLITE_OK if successful
     static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt,
         char** azColName);
-    // sqlite3_exec callback to collect memory allocation activity
-    // object to StackTrace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallBackAddMemoryAllocationActivity(void* data, int argc, sqlite3_stmt* stmt,
-        char** azColName);
     // method to remap string IDs. Main reason for remapping is having strings and kernel symbol names in one array 
     // @param record - event record structure
     // @return status of operation
@@ -229,6 +221,10 @@ private:
         rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance);
         rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
         rocprofvis_dm_result_t CreateMemoryActivityTable(Future* future);
+        rocprofvis_dm_result_t CreateAgentFriendlyMemoryAllocationTable(Future* future);
+        rocprofvis_dm_result_t LoadMemoryActivityData(Future* future);
+        rocprofvis_dm_result_t GenerateInterdependencyTables(Future* future);
+        rocprofvis_dm_result_t RunCacheQueriesAsync(Future* future, std::vector<std::pair<std::string, std::string>>& info_table_lis);
         
     private:
         QueryFactory m_query_factory;
@@ -239,7 +235,6 @@ private:
         string_map_t m_string_map; //temporary map to reuse string
         memalloc_activity_t m_memalloc_activity;
         mem_free_stream_to_agent_t m_memfree_stream_to_agent;
-        std::mutex m_lock;
 
 
         inline static const rocprofvis_event_data_category_map_t

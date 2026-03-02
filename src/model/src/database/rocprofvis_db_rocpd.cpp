@@ -244,7 +244,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             "SELECT DISTINCT pid, gpuId, queueId FROM rocpd_api_ops INNER JOIN api ON rocpd_api_ops.api_id = api.id INNER JOIN op ON rocpd_api_ops.op_id = op.id;", &CallBackAgentToProcess)) break;
 
         ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );
-        m_add_track_mutex.reset();
+        m_add_track_mutex.init(1);
         if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(
             future, DbInstancePtrAt(0), track_queries_hash_value, load_id++,
             { 
@@ -289,7 +289,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         &CallBackAddTrack, &CallBackLoadTrack)) break;
 
         ShowProgress(5, "Adding kernel dispatch tracks", kRPVDbBusy, future );
-        m_add_track_mutex.reset();
+        m_add_track_mutex.init(1);
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(
             future, DbInstancePtrAt(0), track_queries_hash_value, load_id++,
             {
@@ -333,7 +333,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                         &CallBackAddTrack, &CallBackLoadTrack)) break;
 
         ShowProgress(5, "Adding performance counters tracks", kRPVDbBusy, future );
-        m_add_track_mutex.reset();
+        m_add_track_mutex.init(1);
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(
             future, DbInstancePtrAt(0),track_queries_hash_value, load_id++,
             { 
@@ -408,6 +408,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                    0,
                    kRPVQueryLevel,
                    "SELECT *, ", (std::string(" ORDER BY ")+Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
+                   [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
                    [](rocprofvis_dm_track_params_t* params) {
                        params->m_active_events.clear();
                    },
@@ -455,6 +456,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                     kRPVQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ", 
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
+                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
                     [](rocprofvis_dm_track_params_t* params) {
                     },
                     { DbInstances() }))
@@ -545,6 +547,9 @@ rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t 
 
         if (result != kRocProfVisDmResultSuccess) break;
 
+        rocprofvis_dm_timestamp_t fecth_start = start + TraceProperties()->db_inst_start_time[0];
+        rocprofvis_dm_timestamp_t fetch_end = end + TraceProperties()->db_inst_start_time[0];
+
         for(auto const& table : trim_tables.tables)
         {
             if(table.first != "sqlite_master" && table.first != "sqlite_sequence")
@@ -563,9 +568,9 @@ rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t 
                     query += " SELECT * FROM oldDb.";
                     query += table.first;
                     query += " WHERE start < ";
-                    query += std::to_string(end);
+                    query += std::to_string(fetch_end);
                     query += " AND end > ";
-                    query += std::to_string(start);
+                    query += std::to_string(fecth_start);
                     query += ";";
                 }
                 else

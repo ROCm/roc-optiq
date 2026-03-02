@@ -10,6 +10,11 @@ namespace RocProfVis
 namespace DataModel
 {
     const char* g_select_str = "SELECT ";
+    std::string Builder::Select(rocprofvis_db_sqlite_mem_act_subquery_format params)
+    {
+        return BuildQuery("(SELECT ", params.NUM_PARAMS, params.parameters, params.from,
+            ")");
+    }
     std::string Builder::Select(rocprofvis_db_sqlite_track_query_format params)
     {
         return BuildTrackQuery(params.NUM_PARAMS, params.parameters,

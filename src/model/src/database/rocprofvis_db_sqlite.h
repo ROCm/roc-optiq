@@ -273,7 +273,7 @@ class SqliteDatabase : public Database
 
         sqlite3* GetServiceConnection(uint32_t db_node_id=0);
 
-        rocprofvis_dm_result_t ExecuteTransaction(std::vector<std::string> queries, uint32_t db_node_id=0);
+        rocprofvis_dm_result_t ExecuteTransaction(std::vector<std::string> queries, uint32_t db_node_id = 0);
 
         // method to run SQL query
         // @param db_conn - database connection 
@@ -299,6 +299,10 @@ class SqliteDatabase : public Database
         void CreateDbNode(rocprofvis_db_filename_t filepath);
 
         std::vector<std::unique_ptr<rocprofvis_db_sqlite_db_node_t>> m_db_nodes;
+        sqlite3* GetConnection(uint32_t db_node_id); 
+
+        void ReleaseConnection(sqlite3* conn);
+        void ReleaseConnection(sqlite3* conn, uint32_t db_node_id);
 
     private:     
       
@@ -311,10 +315,6 @@ class SqliteDatabase : public Database
         int Sqlite3Exec(sqlite3* db, const char* query,
                                         int (*callback)(void*, int, sqlite3_stmt*, char**),
                                         void* user_data);
-        sqlite3* GetConnection(uint32_t db_node_id); 
-        
-        void ReleaseConnection(sqlite3* conn);
-        void ReleaseConnection(sqlite3* conn, uint32_t db_node_id);
         static void ReplaceAllSubstrings(std::string& str, const std::string& from, const std::string& to);
         
 

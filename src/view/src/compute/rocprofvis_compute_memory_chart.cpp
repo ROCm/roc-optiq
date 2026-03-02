@@ -6,6 +6,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -50,12 +51,7 @@ static std::string
 FormatMetricValue(double value)
 {
     if(value != value) return "-";
-    int64_t int_val = static_cast<int64_t>(value);
-    if(value == static_cast<double>(int_val))
-        return std::to_string(int_val);
-    char text_buf[32];
-    snprintf(text_buf, sizeof(text_buf), "%.1f", value);
-    return text_buf;
+    return compact_number_format(value);
 }
 
 // Rounded-rect block with fill + border
@@ -313,10 +309,10 @@ ComputeMemoryChartView::ComputeLayout()
 
     // Cache column
     float cache_column_x = m_active_cus_block.Right() + ARROW_COLUMN_GAP;
-    m_lds_block        = {cache_column_x, CHART_PADDING, 220, 105};
-    m_vector_l1_block  = {cache_column_x, m_lds_block.Bottom() + BLOCK_GAP, 220, 160};
-    m_scalar_l1d_block = {cache_column_x, m_vector_l1_block.Bottom() + BLOCK_GAP, 220, 105};
-    m_instr_l1_block   = {cache_column_x, m_scalar_l1d_block.Bottom() + BLOCK_GAP, 220, 105};
+    m_lds_block        = {cache_column_x, CHART_PADDING, 240, 105};
+    m_vector_l1_block  = {cache_column_x, m_lds_block.Bottom() + BLOCK_GAP, 240, 160};
+    m_scalar_l1d_block = {cache_column_x, m_vector_l1_block.Bottom() + BLOCK_GAP, 240, 105};
+    m_instr_l1_block   = {cache_column_x, m_scalar_l1d_block.Bottom() + BLOCK_GAP, 240, 105};
 
     // L2 column (spans full cache height)
     float l2_height = m_instr_l1_block.Bottom() - CHART_PADDING;
@@ -325,9 +321,9 @@ ComputeMemoryChartView::ComputeLayout()
 
     // Fabric column
     float fabric_column_x = m_l2_block.Right() + ARROW_COLUMN_GAP;
-    m_xgmi_pcie_block = {fabric_column_x, CHART_PADDING, 140, 95};
-    m_fabric_block    = {fabric_column_x, m_xgmi_pcie_block.Bottom() + BLOCK_GAP, 200, 280};
-    m_gmi_block       = {fabric_column_x, m_fabric_block.Bottom() + BLOCK_GAP, 140, 80};
+    m_xgmi_pcie_block = {fabric_column_x, CHART_PADDING, 160, 95};
+    m_fabric_block    = {fabric_column_x, m_xgmi_pcie_block.Bottom() + BLOCK_GAP, 250, 280};
+    m_gmi_block       = {fabric_column_x, m_fabric_block.Bottom() + BLOCK_GAP, 160, 80};
 
     // HBM (right of fabric)
     m_hbm_block = {m_fabric_block.Right() + ARROW_COLUMN_GAP,
@@ -576,6 +572,8 @@ ComputeMemoryChartView::DrawVectorL1(ImDrawList* draw_list, ImVec2 origin)
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
                              "Hit:",    GetMetricText(VL1_HIT),      "%");
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Lat:",    GetMetricText(VL1_LAT),      "cycles");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
                              "Coales:", GetMetricText(VL1_COALESCE), "%");
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
                              "Stall:",  GetMetricText(VL1_STALL),    "%");
@@ -637,6 +635,14 @@ ComputeMemoryChartView::DrawL2(ImDrawList* draw_list, ImVec2 origin)
                              "Atomic:", GetMetricText(L2_ATOMIC));
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
                              "Hit:",    GetMetricText(L2_HIT), "%");
+
+    cursor_y += HEADER_SEP_GAP;
+    cursor_y = DrawBlockHeader(draw_list, "Latency",
+                               block_x, cursor_y - BLOCK_TEXT_PAD, block.w);
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Rd:",  GetMetricText(L2_RD_LAT), "cycles");
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
+                             "Wr:",  GetMetricText(L2_WR_LAT), "cycles");
 }
 
 void
@@ -808,7 +814,7 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
                        m_scalar_l1d_block.x, arrow_y, text_buf);
     }
 
-    // Instr Buff -> Instr L1 (L-shaped: down from Instr Buff, then right to Instr L1)
+    // Instr L1 -> Instr Buff (L-shaped: left from Instr L1, then up to Instr Buff)
     {
         float corner_x = m_instr_buff_block.MidX();
         float start_y  = m_instr_buff_block.Bottom();
@@ -819,14 +825,14 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
         ImVec2 end_point    = screen(m_instr_l1_block.x, end_y);
 
         ImU32 arrow_color = Settings().GetColor(Colors::kArrowColor);
-        draw_list->AddLine(top_point, corner_point, arrow_color, ARROW_THICKNESS);
-        draw_list->AddLine(corner_point, end_point, arrow_color, ARROW_THICKNESS);
+        draw_list->AddLine(end_point, corner_point, arrow_color, ARROW_THICKNESS);
+        draw_list->AddLine(corner_point, top_point, arrow_color, ARROW_THICKNESS);
 
         float head = ARROW_HEAD_SIZE;
         draw_list->AddTriangleFilled(
-            end_point,
-            {end_point.x - head, end_point.y - head * 0.6f},
-            {end_point.x - head, end_point.y + head * 0.6f},
+            top_point,
+            {top_point.x - head * 0.6f, top_point.y + head},
+            {top_point.x + head * 0.6f, top_point.y + head},
             arrow_color);
 
         snprintf(text_buf, sizeof(text_buf), "Fetch: %s",

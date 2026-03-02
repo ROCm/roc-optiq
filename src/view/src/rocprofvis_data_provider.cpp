@@ -3785,6 +3785,11 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
     {
         spdlog::error("Failed to load trace file: {}, error code: {}",
                       m_model.GetTraceFilePath(), req.response_code);
+
+        if(m_trace_data_ready_callback)
+        {
+            m_trace_data_ready_callback(m_model.GetTraceFilePath(), req.response_code);
+        }                          
         return;
     }
     uint64_t            num_workloads = 0;
@@ -4141,6 +4146,11 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
         m_compute_model.AddWorkload(workload);
     }
     m_state = ProviderState::kReady;
+
+    if(m_trace_data_ready_callback)
+    {
+        m_trace_data_ready_callback(m_model.GetTraceFilePath(), kRocProfVisResultSuccess);
+    }    
 }
 
 void

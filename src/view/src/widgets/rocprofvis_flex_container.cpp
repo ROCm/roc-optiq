@@ -5,7 +5,6 @@
 #include "rocprofvis_settings_manager.h"
 
 #include <algorithm>
-#include <stdexcept>
 #include <imgui.h>
 
 namespace RocProfVis
@@ -21,12 +20,12 @@ struct FlexRow
     float  grow  = 0.0f;
 };
 
-FlexItem&
+FlexItem*
 FlexContainer::GetItem(const std::string& id)
 {
     for(auto& item : items)
-        if(item.id == id) return item;
-    throw std::runtime_error("FlexContainer: item not found: " + id);
+        if(item.id == id) return &item;
+    return nullptr;
 }
 
 void

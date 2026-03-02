@@ -23,7 +23,7 @@ class FlexContainer : public RocWidget
 {
 public:
     void      Render() override;
-    FlexItem& GetItem(const std::string& id);
+    FlexItem* GetItem(const std::string& id);
 
     std::vector<FlexItem> items;
     float                 gap            = 8.0f;

@@ -5,6 +5,7 @@
 #include "compute/rocprofvis_compute_selection.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_requests.h"
 #include "implot.h"
 #include <algorithm>
@@ -477,7 +478,14 @@ MetricTableCache::Render() const
                                 COPY_DATA_NOTIFICATION, false, true);
         if(!row.description.empty() && ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip("%s", row.description.c_str());
+            constexpr float kTooltipMaxWidth = 400.0f;
+            ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                                ImVec2(kTooltipMaxWidth, FLT_MAX));
+            BeginTooltipStyled();
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
+            ImGui::TextUnformatted(row.description.c_str());
+            ImGui::PopTextWrapPos();
+            EndTooltipStyled();
         }
 
         for(int vi = 0; vi < static_cast<int>(row.values.size()); vi++)

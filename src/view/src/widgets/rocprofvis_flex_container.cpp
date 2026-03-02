@@ -73,6 +73,8 @@ FlexContainer::Render()
         float    min_sum   = row.min_w - row_gaps;
         float    free      = std::max(0.0f, avail_width - min_sum - row_gaps);
 
+        ImGui::PushID(static_cast<int>(row_index));
+        ImGui::BeginChild("row", ImVec2(avail_width, row_height), ImGuiChildFlags_Borders);
         for(size_t column_index = 0; column_index < row.count; column_index++)
         {
             FlexItem& item = items[row.start + column_index];
@@ -95,6 +97,8 @@ FlexContainer::Render()
 
             if(column_index + 1 < row.count) ImGui::SameLine(0.0f, gap);
         }
+        ImGui::EndChild();
+        ImGui::PopID();
 
         if(row_index + 1 < num_rows) ImGui::Dummy(ImVec2(0.0f, gap));
     }

@@ -38,6 +38,7 @@ public:
     std::string GetRocprofMemoryAllocSliceQueryForStream();
     std::string GetRocprofMemoryAllocTableQuery();
     std::string GetRocprofMemoryAllocActivityQuery();
+    std::string GetRocprofMemoryAllocActivityLoadQuery();
 
     std::string GetRocprofMemoryCopyTrackQuery();
     std::string GetRocprofMemoryCopyTrackQueryForStream();

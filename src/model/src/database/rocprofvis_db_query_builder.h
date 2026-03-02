@@ -436,7 +436,6 @@ class Builder
         static std::string Where(std::string name, std::string condition, std::string value);
         static std::string Union();
         static std::string LevelTable(std::string operation, std::string guid="");
-        static void OldLevelTables(std::string operation, std::vector<std::string> & table_list, std::string guid="");
         static std::string StoreConfigVersion();
     private:
         static std::string BuildQuery(std::string start_with, int num_params,

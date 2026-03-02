@@ -1291,6 +1291,26 @@ namespace DataModel
         }
     }
 
+    std::string QueryFactory::GetRocprofMemoryAllocActivityLoadQuery() {
+
+        return Builder::Select(rocprofvis_db_sqlite_memory_alloc_activity_query_format(
+            {{
+                    Builder::QParam("id", Builder::ID_PUBLIC_NAME),
+                    Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
+                    Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                    Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                    Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                    Builder::QParam("type", Builder::M_TYPE_REFERENCE),
+                    Builder::QParam("level", Builder::LEVEL_REFERENCE),
+                    Builder::QParam("start", Builder::START_SERVICE_NAME),
+                    Builder::QParam("end", Builder::END_SERVICE_NAME),
+                    Builder::QParam("address", Builder::ADDRESS_PUBLIC_NAME),
+                    Builder::QParam("size", Builder::SIZE_PUBLIC_NAME),
+                    Builder::QParam("track_id")
+                },
+            { Builder::From("roc_optiq_memory_activity") } }));
+    }
+
     std::string QueryFactory::GetRocprofMemoryCopyTableQuery() {
         if (IsVersionGreaterOrEqual("4"))
         {

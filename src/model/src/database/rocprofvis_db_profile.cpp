@@ -71,6 +71,40 @@ rocprofvis_dm_event_operation_t ProfileDatabase::GetTableQueryOperation(std::str
     return kRocProfVisDmOperationNoOp;
 }
 
+int ProfileDatabase::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    void* func = (void*)&CallbackCacheTable;
+    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
+    DatabaseCache * ref_tables = (DatabaseCache *)callback_params->handle;
+    std::lock_guard<std::mutex> lock(db->m_lock);
+    if (callback_params->future->GetProcessedRowsCount() == 0)
+    {
+        for (int i = 0; i < argc; i++)
+        {
+            ref_tables->AddTableColumn(callback_params->query[kRPVCacheTableName], azColName[i], (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i));
+        }
+    }
+
+    uint64_t id = db->Sqlite3ColumnInt64(func, stmt, azColName, 0);
+    ref_tables->AddTableRow(callback_params->query[kRPVCacheTableName], id);
+    for (int i = 0; i < argc; i++)
+    {
+        rocprofvis_db_data_type_t col_type = (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i);
+        if (col_type == kRPVDataTypeNull && strcmp(azColName[i],"name") == 0)
+        {
+            ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName], id, i, callback_params->query[kRPVCacheTableName]);
+        }
+        else
+        {
+            ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName], id, i,
+                (char*)db->Sqlite3ColumnText(func, stmt, azColName, i));
+        }
+    }
+
+    callback_params->future->CountThisRow();
+    return 0;
+}
 
 int ProfileDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==TRACK_ID_RECORD_COUNT+1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
@@ -109,7 +143,6 @@ int ProfileDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
     track_params.min_value = DBL_MAX;
 
     db->ProcessTrack(track_params, callback_params->query);
-    db->TraceProperties()->tracks_info_id_mismatch = true;
 
     callback_params->future->CountThisRow();
     return 0;
@@ -166,11 +199,6 @@ int ProfileDatabase::CallBackLoadTrack(void *data, int argc, sqlite3_stmt* stmt,
     track_params.track_indentifiers.tag[TRACK_ID_TID_OR_QUEUE] = db->Sqlite3ColumnText(func, stmt, azColName,kRpvDbTrackLoadSubprocessTag);
 
     db->ProcessTrack(track_params, callback_params->query);
-
-    if (track_params.track_indentifiers.track_id != loaded_track_id)
-    {
-        db->TraceProperties()->tracks_info_id_mismatch = true;
-    }
 
     callback_params->future->CountThisRow();
     return 0;
@@ -1574,8 +1602,8 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
 }
 
 
-rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future, uint64_t hash) {
-    SQLInsertParams params[] = { 
+rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
+    SQLInsertParams params = { 
         { "id", "INTEGER PRIMARY KEY" },
         { "load_id", "INTEGER" },
         { "track_id", "INTEGER" },
@@ -1622,7 +1650,7 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future, uint
     std::map<uint32_t, std::vector<store_params>> v;
     uint32_t counter=0;
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    std::string table_name = std::string("track_info_") + std::to_string(hash);
+    std::string table_name = GetMetadataVersionControl()->GetTrackInfoTableName();
     for (int i = 0; i < NumTracks(); i++)
     {
         for (auto load_id : TrackPropertiesAt(i)->load_id)
@@ -1655,18 +1683,11 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future, uint
     }
     for (auto it = v.begin(); it != v.end(); ++it)
     {
-        DbInstance db_instance(it->first, 0);
-        while (true)
-        {
-            std::string name;           
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &db_instance, "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'track_info_%'", &CallbackGetValue, &name)) break;
-            if (name.length() == 0) break;
-            DropSQLTable(name.c_str(), it->first);
-        }
+        if (false == GetMetadataVersionControl()->MustRebuildTrackInfo(it->first)) continue;
+
         result = CreateSQLTable(
             table_name.c_str(), 
             params, 
-            18,
             v[it->first].size(),
             [&](sqlite3_stmt* stmt, int index) {
                 store_params& p = v[it->first][index];
@@ -1795,6 +1816,15 @@ std::string ProfileDatabase::GetHistogramQuerySuffix()
     return histogram_query_suffix;
 }
 
+uint64_t ProfileDatabase::GetHistogramQueryAndSchemaHash() {
+    std::string hash_str = GetHistogramQueryPrefix(0) + GetHistogramQuerySuffix();
+    for (auto param : s_histogram_schema_params)
+    {
+        hash_str += param.column;
+        hash_str += param.type;
+    }
+    return std::hash<std::string>{}(hash_str);
+}
 
 rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t desired_bins) {
 
@@ -1828,20 +1858,12 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
     {
         std::vector<store_params> v;
         TemporaryDbInstance db_instance(file_node->node_id);
-        if (!TraceProperties()->tracks_info_id_mismatch && CheckTableExists(histogram_table_name, file_node->node_id))
+        if (false == GetMetadataVersionControl()->MustRebuildHistogram(file_node->node_id))
         {
             result = ExecuteSQLQuery(future, &db_instance, (std::string("SELECT * FROM ") + histogram_table_name).c_str(), &CallBackLoadHistogram);
         }
         else
         {
-            while (true)
-            {
-                std::string name;
-                if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &db_instance, "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'histogram_%'", &CallbackGetValue, &name)) break;
-                if (name.length() == 0) break;
-                DropSQLTable(name.c_str(), file_node->node_id);
-            }
-
             guid_list_t guids_per_file;
 
             for (int i = 0; i < NumTracks(); i++)
@@ -1938,7 +1960,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                 }
 
                 result = CreateSQLTable(
-                    (std::string("histogram_") + std::to_string(hitogram_query_hash_value)).c_str(), params, 5,
+                    histogram_table_name, s_histogram_schema_params,
                     v.size(),
                     [&](sqlite3_stmt* stmt, int index) {
                         store_params& p = v[index];

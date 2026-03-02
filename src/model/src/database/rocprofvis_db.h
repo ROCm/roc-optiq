@@ -6,6 +6,7 @@
 #include "rocprofvis_db_future.h"
 #include "rocprofvis_db_cache.h"
 #include "rocprofvis_db_track.h"
+#include "rocprofvis_db_version.h"
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -84,32 +85,6 @@ private:
     std::set<uint32_t> m_instances;
     std::mutex m_lock;
     std::condition_variable m_cv;
-};
-
-
-class DatabaseVersion
-{
-public:
-
-    void SetVersion(const char* version);
-    bool IsVersionEqual(const char*);
-    bool IsVersionGreaterOrEqual(const char*);
-
-    uint32_t GetMajorVersion()
-    {
-        return m_db_version.size() > 0 ? m_db_version[0] : 0;
-    }
-    uint32_t GetMinorVersion()
-    {
-        return m_db_version.size() > 1 ? m_db_version[1] : 0;
-    }
-    uint32_t GetPatchVersion()
-    {
-        return m_db_version.size() > 2 ? m_db_version[2] : 0;
-    }
-private:
-    std::vector<uint32_t>  ConvertVersionStringToInt(const char* version);
-    std::vector<uint32_t> m_db_version;
 };
 
 class Database

@@ -26,7 +26,8 @@ public:
     // class constructor
     // @param path - database file path
     RocpdDatabase(rocprofvis_db_filename_t path) :
-        ProfileDatabase(path) {
+        ProfileDatabase(path), 
+        m_metadata_version_control(this) {
         CreateDbNode(path);
     }
     // class destructor, not really required, unless declared as virtual
@@ -81,6 +82,8 @@ public:
                                         rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) override;
 
     rocprofvis_dm_string_t GetEventTrackQuery( const rocprofvis_dm_track_category_t category);
+    rocprofvis_dm_string_t GetEventLevelQuery( const rocprofvis_dm_track_category_t category);
+    rocprofvis_dm_string_t GetEventSliceQuery( const rocprofvis_dm_track_category_t category);
 
     int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
     
@@ -116,6 +119,7 @@ private:
     string_index_map_t m_string_index_map; // id to index
     string_id_map_t m_string_id_map; // index to id
     queue_pid_map_t m_pid_map;
+    RocpdMetadataVersionControl m_metadata_version_control;
 
     // method to remap string IDs. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     // @param record - event record structure
@@ -148,8 +152,17 @@ private:
     {
         return kRocProfVisDmRegionTrack;
     }
+
+    MetadataVersionControl* GetMetadataVersionControl() override 
+    { 
+        return &m_metadata_version_control; 
+    };
+
     private:
         rocprofvis_dm_result_t CreateIndexes();
+
+    protected:
+        std::string GetLevelSchemaHashStr();
 
     private:
 
@@ -199,6 +212,10 @@ private:
             s_null_data_exception_string = {
 
             };
+
+        inline static SQLInsertParams s_level_schema_params = { { "eid", "INTEGER PRIMARY KEY" }, { "level", "INTEGER" } };
+
+        friend class RocpdMetadataVersionControl;
 
 };
 

@@ -6,7 +6,6 @@
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_flex_container.h"
-#include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -43,9 +42,8 @@ private:
     uint64_t                           m_client_id;
     std::shared_ptr<MetricTableWidget> m_sol_table;
 
-    FlexContainer                    m_flex_container;
-    bool                             m_show_kernel_table = true;
-    std::unique_ptr<VSplitContainer> m_vsplit;
+    FlexContainer m_flex_container;
+    bool          m_show_kernel_table = true;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

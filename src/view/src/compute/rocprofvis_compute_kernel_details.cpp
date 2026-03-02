@@ -49,63 +49,6 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
         {"roofline",     m_roofline,            1000.0f, 700.0f, 1.0f},
     };
 
-    auto table_panel = std::make_shared<RocCustomWidget>([this]() {
-        SettingsManager& settings   = SettingsManager::GetInstance();
-        ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
-        ImU32            header_bg  = settings.GetColor(Colors::kTableHeaderBg);
-        ImU32            border_col = settings.GetColor(Colors::kBorderGray);
-        ImGuiStyle&      style      = ImGui::GetStyle();
-
-        float  avail_w  = ImGui::GetContentRegionAvail().x;
-        float  header_h = ImGui::GetFrameHeightWithSpacing();
-
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImVec2      cursor    = ImGui::GetCursorScreenPos();
-
-        draw_list->AddRectFilled(cursor,
-                                 ImVec2(cursor.x + avail_w, cursor.y + header_h),
-                                 header_bg, style.ChildRounding);
-        draw_list->AddRect(cursor,
-                           ImVec2(cursor.x + avail_w, cursor.y + header_h),
-                           border_col, style.ChildRounding);
-
-        float icon_y_offset = (header_h - ImGui::GetFontSize()) * 0.5f;
-        ImGui::SetCursorScreenPos(
-            ImVec2(cursor.x + style.FramePadding.x, cursor.y + icon_y_offset));
-
-        const char* icon = m_show_kernel_table ? ICON_EYE : ICON_EYE_SLASH;
-        if(IconButton(icon, icon_font, ImVec2(0, 0),
-                      m_show_kernel_table ? "Hide Table" : "Show Table",
-                      style.WindowPadding, true, style.FramePadding))
-        {
-            m_show_kernel_table = !m_show_kernel_table;
-        }
-
-        ImGui::SameLine(0.0f, 8.0f);
-        ImGui::SetCursorScreenPos(
-            ImVec2(ImGui::GetCursorScreenPos().x, cursor.y + icon_y_offset));
-        ImGui::Text("Kernel Selection Table");
-
-        ImGui::SetCursorScreenPos(
-            ImVec2(cursor.x, cursor.y + header_h + style.ItemSpacing.y));
-
-        if(m_show_kernel_table && m_kernel_metric_table)
-            m_kernel_metric_table->Render();
-    });
-
-    auto flex_panel = std::make_shared<RocCustomWidget>([this]() {
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
-        m_flex_container.Render();
-    });
-
-    auto top_item    = LayoutItem::CreateFromWidget(table_panel);
-    auto bottom_item = LayoutItem::CreateFromWidget(flex_panel);
-
-    m_vsplit = std::make_unique<VSplitContainer>(top_item, bottom_item);
-    m_vsplit->SetMinTopHeight(40.0f);
-    m_vsplit->SetMinBottomHeight(200.0f);
-    m_vsplit->SetSplit(0.25f);
-
     m_widget_name = GenUniqueName("ComputeKernelDetailsView");
 }
 
@@ -223,8 +166,63 @@ ComputeKernelDetailsView::Update()
 void
 ComputeKernelDetailsView::Render()
 {
-    if(m_vsplit)
-        m_vsplit->Render();
+    constexpr float kKernelTablePanelHeight = 350.0f;
+
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
+    ImU32            header_bg  = settings.GetColor(Colors::kTableHeaderBg);
+    ImU32            border_col = settings.GetColor(Colors::kBorderGray);
+    ImGuiStyle&      style      = ImGui::GetStyle();
+
+    if(ImGui::BeginChild("##kernel_table_panel",
+                         ImVec2(0, kKernelTablePanelHeight),
+                         ImGuiChildFlags_Borders))
+    {
+        float avail_w  = ImGui::GetContentRegionAvail().x;
+        float header_h = ImGui::GetFrameHeightWithSpacing();
+
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImVec2      cursor    = ImGui::GetCursorScreenPos();
+
+        draw_list->AddRectFilled(cursor,
+                                 ImVec2(cursor.x + avail_w, cursor.y + header_h),
+                                 header_bg, style.ChildRounding);
+        draw_list->AddRect(cursor,
+                           ImVec2(cursor.x + avail_w, cursor.y + header_h),
+                           border_col, style.ChildRounding);
+
+        float icon_y_offset = (header_h - ImGui::GetFontSize()) * 0.5f;
+        ImGui::SetCursorScreenPos(
+            ImVec2(cursor.x + style.FramePadding.x, cursor.y + icon_y_offset));
+
+        const char* icon = m_show_kernel_table ? ICON_EYE : ICON_EYE_SLASH;
+        if(IconButton(icon, icon_font, ImVec2(0, 0),
+                      m_show_kernel_table ? "Hide Table" : "Show Table",
+                      style.WindowPadding, true, style.FramePadding))
+        {
+            m_show_kernel_table = !m_show_kernel_table;
+        }
+
+        ImGui::SameLine(0.0f, 8.0f);
+        ImGui::SetCursorScreenPos(
+            ImVec2(ImGui::GetCursorScreenPos().x, cursor.y + icon_y_offset));
+        ImGui::Text("Kernel Selection Table");
+
+        ImGui::SetCursorScreenPos(
+            ImVec2(cursor.x, cursor.y + header_h + style.ItemSpacing.y));
+
+        if(m_show_kernel_table && m_kernel_metric_table)
+            m_kernel_metric_table->Render();
+    }
+    ImGui::EndChild();
+
+    if(ImGui::BeginChild("##kernel_details_flex_panel", ImVec2(0, 0),
+                         ImGuiChildFlags_None, ImGuiWindowFlags_None))
+    {
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        m_flex_container.Render();
+    }
+    ImGui::EndChild();
 }
 
 }  // namespace View

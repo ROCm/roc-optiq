@@ -80,6 +80,7 @@ FlexContainer::Render()
             float w = item.min_width;
             if(row.grow > 0.0f)
                 w += free * (item.flex_grow / row.grow);
+            w = std::min(w, avail_width);
 
             float h = (item.height > 0.0f) ? item.height : row_height;
 

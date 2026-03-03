@@ -242,29 +242,28 @@ ComputeMemoryChartView::UpdateMetrics()
 void
 ComputeMemoryChartView::Render()
 {
-    // Outer scrollable container (the only child window in the whole chart)
+    // Compute block positions first so we know the canvas dimensions before
+    // creating the child window (required for auto-height parent containers).
+    ComputeLayout();
+
+    float canvas_w = m_hbm_block.Right() + CHART_PADDING;
+    float canvas_h = std::max({m_instr_buff_block.Bottom(),
+                               m_instr_dispatch_block.Bottom(),
+                               m_instr_l1_block.Bottom(),
+                               m_gmi_block.Bottom()}) + CHART_PADDING;
+
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgMain));
     ImGui::PushStyleColor(ImGuiCol_Border, Settings().GetColor(Colors::kBorderGray));
 
-    ImGui::BeginChild("MemoryChart", ImVec2(0, 0), ImGuiChildFlags_Borders,
-                      ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::BeginChild("MemoryChart", ImVec2(0, canvas_h), ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar);
     ImGui::PopStyleColor(2);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetCursorScreenPos();
 
     // -----------------------------------------------------------------
-    // 1. Compute layout — assign positions to every block
-    // -----------------------------------------------------------------
-    ComputeLayout();
-
-
-
-   
-
-
-    // -----------------------------------------------------------------
-    // 2. Draw every block
+    // Draw every block
     // -----------------------------------------------------------------
     DrawInstrBuff(draw_list, window_position);
     DrawInstrDispatch(draw_list, window_position);
@@ -283,18 +282,11 @@ ComputeMemoryChartView::Render()
     DrawHBM(draw_list, window_position);
 
     // -----------------------------------------------------------------
-    // 2. Draw connection arrows + labels (on top to allow stacks in instr buff to connect)
+    // Draw connection arrows + labels (on top to allow stacks in instr buff to connect)
     // -----------------------------------------------------------------
     DrawConnections(draw_list, window_position);
 
-    // -----------------------------------------------------------------
-    // 4. Set canvas size so scrollbars cover the entire diagram
-    // -----------------------------------------------------------------
-    float canvas_w = m_hbm_block.Right() + CHART_PADDING;
-    float canvas_h = std::max({m_instr_buff_block.Bottom(),
-                               m_instr_dispatch_block.Bottom(),
-                               m_instr_l1_block.Bottom(),
-                               m_gmi_block.Bottom()}) + CHART_PADDING;
+    // Declare full canvas extent so horizontal scrollbar covers the diagram
     ImGui::SetCursorPos(ImVec2(canvas_w, canvas_h));
     ImGui::Dummy(ImVec2(1, 1));
 

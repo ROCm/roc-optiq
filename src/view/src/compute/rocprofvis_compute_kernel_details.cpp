@@ -7,25 +7,17 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_compute_kernel_metric_table.h"
-#include "rocprofvis_settings_manager.h"
-#include "icons/rocprovfis_icon_defines.h"
-#include "widgets/rocprofvis_gui_helpers.h"
 
 #include "imgui.h"
 
 namespace
 {
 constexpr float MEMORY_CHART_MIN_WIDTH = 2300.0f;
-constexpr float MEMORY_CHART_HEIGHT    = 700.0f;
-constexpr float SOL_TABLE_MIN_WIDTH    = 500.0f;
-constexpr float SOL_TABLE_HEIGHT       = 700.0f;
+constexpr float SOL_TABLE_MIN_WIDTH    = 900.0f;
 constexpr float ROOFLINE_MIN_WIDTH     = 800.0f;
-constexpr float ROOFLINE_HEIGHT        = 700.0f;
 constexpr float FLEX_ITEM_GROW         = 1.0f;
 
-constexpr float KERNEL_TABLE_PANEL_HEIGHT        = 350.0f;
-constexpr float KERNEL_TABLE_HEADER_ICON_SPACING = 8.0f;
-constexpr float KERNEL_TABLE_PANEL_PADDING       = 4.0f;
+constexpr float KERNEL_TABLE_PANEL_PADDING = 4.0f;
 }  // namespace
 
 namespace RocProfVis
@@ -59,9 +51,9 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
     });
 
     m_flex_container.items = {
-        {"memory_chart", memory_chart_wrapper,  MEMORY_CHART_MIN_WIDTH, MEMORY_CHART_HEIGHT, FLEX_ITEM_GROW},
-        {"sol_table",    m_sol_table,           SOL_TABLE_MIN_WIDTH,    SOL_TABLE_HEIGHT,    FLEX_ITEM_GROW},
-        {"roofline",     m_roofline,            ROOFLINE_MIN_WIDTH,     ROOFLINE_HEIGHT,     FLEX_ITEM_GROW},
+        {"memory_chart", memory_chart_wrapper,  MEMORY_CHART_MIN_WIDTH, 0.0f, FLEX_ITEM_GROW, true},
+        {"sol_table",    m_sol_table,           SOL_TABLE_MIN_WIDTH,    0.0f, FLEX_ITEM_GROW},
+        {"roofline",     m_roofline,            ROOFLINE_MIN_WIDTH,     0.0f, FLEX_ITEM_GROW},
     };
 
     m_widget_name = GenUniqueName("ComputeKernelDetailsView");
@@ -181,12 +173,6 @@ ComputeKernelDetailsView::Update()
 void
 ComputeKernelDetailsView::Render()
 {
-    SettingsManager& settings   = SettingsManager::GetInstance();
-    ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
-    ImU32            header_bg  = settings.GetColor(Colors::kTableHeaderBg);
-    ImU32            border_col = settings.GetColor(Colors::kBorderGray);
-    ImGuiStyle&      style      = ImGui::GetStyle();
-
     if(m_kernel_metric_table)
         m_kernel_metric_table->Render();
 

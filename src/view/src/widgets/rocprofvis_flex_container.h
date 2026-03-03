@@ -21,6 +21,7 @@ struct FlexItem
     float                      min_width = DEFAULT_MIN_WIDTH;
     float                      height    = DEFAULT_HEIGHT;
     float                      flex_grow = DEFAULT_FLEX_GROW;
+    bool                       full_row  = false;
 };
 
 class FlexContainer : public RocWidget
@@ -32,8 +33,7 @@ public:
     FlexItem* GetItem(const std::string& id);
 
     std::vector<FlexItem> items;
-    float                 gap            = DEFAULT_GAP;
-    float                 min_row_height = 0.0f;
+    float                 gap = DEFAULT_GAP;
 };
 
 }  // namespace View

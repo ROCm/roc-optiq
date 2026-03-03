@@ -343,115 +343,98 @@ void
 ComputeTopKernels::Render()
 {
     SectionTitle("Top Kernels by Execution Time");
-    ImGui::BeginChild(
-        "top_kernels",
-        ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().x * 0.5f),
-        ImGuiChildFlags_None);
-    const ImVec2       region     = ImGui::GetContentRegionAvail();
+
     const ImGuiStyle&  style      = ImGui::GetStyle();
     const ImPlotStyle& plot_style = ImPlot::GetStyle();
+
     if(!m_workload || m_kernels.empty())
     {
-        ImGui::GetWindowDrawList()->AddRect(
-            ImGui::GetCursorScreenPos() +
-                ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                       plot_style.PlotBorderSize + plot_style.PlotPadding.y),
-            ImGui::GetWindowPos() + region -
-                ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                       plot_style.PlotPadding.y + ImGui::GetFrameHeightWithSpacing()),
-            ImGui::GetColorU32(style.Colors[ImGuiCol_TableBorderStrong]));
-        ImGui::SetCursorPos((region - ImGui::CalcTextSize("No data available.")) * 0.5f);
         ImGui::TextDisabled("No data available.");
+        return;
     }
-    else
+
+    std::optional<size_t> hovered_idx = std::nullopt;
+    TimeFormat time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    ImPlot::PushColormap("flame");
+
+    float avail_w  = ImGui::GetContentRegionAvail().x;
+    float table_w  = avail_w * (2.0f / 3.0f);
+    float panel_h  = avail_w * 0.25f;
+
+    ImGui::BeginChild("table_panel", ImVec2(table_w, panel_h));
+    RenderTable(plot_style, time_format, hovered_idx);
+    ImGui::EndChild();
+
+    m_hovered_idx = hovered_idx;
+
+    ImGui::SameLine();
+
+    ImGui::BeginChild("chart_panel", ImVec2(0, panel_h));
+    switch(m_display_mode)
     {
-        // Chart...
-        std::optional<size_t> hovered_idx = std::nullopt;
-        TimeFormat time_format = m_settings.GetUserSettings().unit_settings.time_format;
-        ImPlot::PushColormap("flame");
-        RenderTable(plot_style, time_format, hovered_idx);
-        m_hovered_idx = hovered_idx;
-        switch(m_display_mode)
-        {
-            case Pie:
-            {
-                RenderPieChart(plot_style, time_format);
-                break;
-            }
-            case Bar:
-            {
-                RenderBarChart(plot_style, time_format);
-                break;
-            }
-        }
-        ImPlot::PopColormap();
-        // Chart switcher...
-        ImGui::SetCursorPosX(plot_style.PlotPadding.x);
-        ImGui::BeginGroup();
-        if(IconButton(ICON_CHART_PIE,
-                      m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
-                      m_settings.GetColor(m_display_mode == Pie ? Colors::kButton
-                                                                : Colors::kTransparent),
-                      m_settings.GetColor(Colors::kButtonHovered),
-                      m_settings.GetColor(Colors::kButtonActive)))
-        {
-            m_display_mode = Pie;
-        }
-        ImGui::SameLine();
-        if(IconButton(ICON_CHART_BAR,
-                      m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
-                      m_settings.GetColor(m_display_mode == Bar ? Colors::kButton
-                                                                : Colors::kTransparent),
-                      m_settings.GetColor(Colors::kButtonHovered),
-                      m_settings.GetColor(Colors::kButtonActive)))
-        {
-            m_display_mode = Bar;
-        }
-        ImGui::EndGroup();
-        // Metric combo...
-        KernelInfo::DispatchMetric* selected_metric = nullptr;
-        switch(m_display_mode)
-        {
-            case Pie:
-            {
-                selected_metric = &m_kernel_pie.selected_metric;
-                break;
-            }
-            case Bar:
-            {
-                selected_metric = &m_kernel_bar.selected_metric;
-                break;
-            }
-        }
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
-                             ImGui::CalcTextSize("Plot:").x - region.x * 0.25f -
-                             2.0f * plot_style.PlotPadding.x);
-        ImGui::AlignTextToFramePadding();
-        ImGui::PushStyleVarX(ImGuiStyleVar_ItemSpacing, plot_style.PlotPadding.x);
-        ImGui::TextUnformatted("Plot:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(region.x * 0.25f);
-        if(selected_metric &&
-           ImGui::BeginCombo("##plot_combo",
-                             DISPLAY_STRING_METRICS[static_cast<int>(*selected_metric)]))
-        {
-            for(int i = 0; i < IM_ARRAYSIZE(DISPLAY_STRING_METRICS); i++)
-            {
-                if((m_display_mode == Pie ? m_kernel_pie.metric_sets[i].available
-                                          : true) &&
-                   ImGui::Selectable(DISPLAY_STRING_METRICS[i]))
-                {
-                    *selected_metric = static_cast<KernelInfo::DispatchMetric>(i);
-                }
-            }
-            ImGui::EndCombo();
-        }
-        ImGui::PopStyleVar();
+        case Pie: RenderPieChart(plot_style, time_format); break;
+        case Bar: RenderBarChart(plot_style, time_format); break;
     }
     ImGui::EndChild();
+
+    ImPlot::PopColormap();
+
+    ImGui::SetCursorPosX(plot_style.PlotPadding.x);
+    ImGui::BeginGroup();
+    if(IconButton(ICON_CHART_PIE,
+                  m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+                  ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                  m_settings.GetColor(m_display_mode == Pie ? Colors::kButton
+                                                            : Colors::kTransparent),
+                  m_settings.GetColor(Colors::kButtonHovered),
+                  m_settings.GetColor(Colors::kButtonActive)))
+    {
+        m_display_mode = Pie;
+    }
+    ImGui::SameLine();
+    if(IconButton(ICON_CHART_BAR,
+                  m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+                  ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                  m_settings.GetColor(m_display_mode == Bar ? Colors::kButton
+                                                            : Colors::kTransparent),
+                  m_settings.GetColor(Colors::kButtonHovered),
+                  m_settings.GetColor(Colors::kButtonActive)))
+    {
+        m_display_mode = Bar;
+    }
+    ImGui::EndGroup();
+
+    KernelInfo::DispatchMetric* selected_metric = nullptr;
+    switch(m_display_mode)
+    {
+        case Pie: selected_metric = &m_kernel_pie.selected_metric; break;
+        case Bar: selected_metric = &m_kernel_bar.selected_metric; break;
+    }
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                         ImGui::CalcTextSize("Plot:").x - avail_w * 0.25f -
+                         2.0f * plot_style.PlotPadding.x);
+    ImGui::AlignTextToFramePadding();
+    ImGui::PushStyleVarX(ImGuiStyleVar_ItemSpacing, plot_style.PlotPadding.x);
+    ImGui::TextUnformatted("Plot:");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(avail_w * 0.25f);
+    if(selected_metric &&
+       ImGui::BeginCombo("##plot_combo",
+                         DISPLAY_STRING_METRICS[static_cast<int>(*selected_metric)]))
+    {
+        for(int i = 0; i < IM_ARRAYSIZE(DISPLAY_STRING_METRICS); i++)
+        {
+            if((m_display_mode == Pie ? m_kernel_pie.metric_sets[i].available
+                                      : true) &&
+               ImGui::Selectable(DISPLAY_STRING_METRICS[i]))
+            {
+                *selected_metric = static_cast<KernelInfo::DispatchMetric>(i);
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::PopStyleVar();
 }
 
 void
@@ -468,9 +451,7 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
     ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
     ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
     if(ImPlot::BeginPlot(
-           "##Pie",
-           ImVec2(-1, ImGui::GetContentRegionAvail().y -
-                          ImGui::GetFrameHeightWithSpacing() - plot_style.PlotPadding.y),
+           "##Pie", ImVec2(-1, -1),
            ImPlotFlags_Equal | ImPlotFlags_NoFrame | ImPlotFlags_CanvasOnly))
     {
         ImPlot::SetupAxes(nullptr, nullptr,
@@ -535,10 +516,8 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
 void
 ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time_format)
 {
-    ImGui::BeginChild("bar_area", ImVec2(0, ImGui::GetContentRegionAvail().y -
-                                                ImGui::GetFrameHeightWithSpacing() -
-                                                plot_style.PlotPadding.y));
-    float y_axis_width = 0.1f * ImGui::GetContentRegionAvail().x;
+    ImGui::BeginChild("bar_area", ImVec2(0, 0));
+    float y_axis_width = 0.15f * ImGui::GetContentRegionAvail().x;
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
     ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
     ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
@@ -593,7 +572,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
             {
                 ImGui::PushID(i);
                 ImGui::SetCursorScreenPos(ImVec2(
-                    plot_style.PlotPadding.x,
+                    ImGui::GetWindowPos().x + plot_style.PlotPadding.x,
                     ImPlot::PlotToPixels(ImPlotPoint(0, i), IMPLOT_AUTO, IMPLOT_AUTO).y -
                         ImGui::GetFontSize() * 0.5f));
                 ElidedText(m_kernels[i]->name.c_str(),
@@ -637,18 +616,9 @@ void
 ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format,
                                std::optional<size_t>& hovered_idx)
 {
-    ImGui::SetCursorPos(ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                               ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                                   plot_style.PlotPadding.y +
-                                   2 * plot_style.LabelPadding.y));
     if(ImGui::BeginTable(
            "Table", 2 + KernelInfo::NumMetrics,
-           ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable,
-           ImGui::GetContentRegionAvail() -
-               ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                      ImGui::GetContentRegionAvail().y * 0.5f +
-                          ImGui::GetFrameHeightWithSpacing() +
-                          2 * plot_style.PlotPadding.y + plot_style.PlotBorderSize)))
+           ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable))
     {
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("##legend",

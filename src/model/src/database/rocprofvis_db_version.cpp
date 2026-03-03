@@ -133,13 +133,31 @@ namespace DataModel
         return it != m_roc_optiq_table_properties.end();
     }
 
+    // Verify that the on-disk RocOptiq-related tables match the versions and schema
+    // expected by the current metadata configuration.
+    //
+    // The function builds a composite string from all RocOptiq table properties and from
+    // the set of database nodes (input files). This string is hashed and appended to the
+    // base metadata table name to form a unique, versioned metadata table identifier.
+    // It then uses this identifier to query / manage the metadata table and returns a
+    // rocprofvis_dm_result_t indicating whether the RocOptiq tables are compatible and
+    // can be reused, or must be rebuilt.
 	rocprofvis_dm_result_t MetadataVersionControl::VerifyRocOptiqTablesVersions(Future* future) {
+        // Default to "not loaded" until the verification logic determines the outcome.
         rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
+
+        // Start building the SQL query to operate on the derived metadata table.
         std::string query = "SELECT * from ";
         std::string metadata_table_name = s_metadata_table_name;
+
+        // hash_str accumulates properties of all RocOptiq tables and input files.
+        // Any change to table definitions or the set of files will change this hash,
+        // forcing use of a different metadata table name.
         std::string hash_str;
         for (auto prop : m_roc_optiq_table_properties)
         {
+            // Fold all relevant table attributes into the hash input so that
+            // schema or dependency changes are reflected in the version key.
             hash_str = hash_str +
                 prop.name + 
                 std::to_string(prop.hash) +
@@ -148,10 +166,14 @@ namespace DataModel
                 std::to_string(prop.version) +
                 std::to_string(prop.dependency);
         }
+        // Also include the set of database nodes (input files) in the hash so that
+        // different file sets map to different metadata tables.
         for (auto& file_node : m_db->m_db_nodes)
         {
             hash_str = hash_str + file_node->filepath.c_str();
         }
+        // Compute the final hash string and append it to the base metadata table name
+        // to obtain a unique, versioned metadata table identifier.
         hash_str = std::to_string(std::hash<std::string>{}(hash_str));
         metadata_table_name = metadata_table_name + "_" + hash_str;
         query += metadata_table_name;

@@ -43,7 +43,6 @@ private:
     std::shared_ptr<MetricTableWidget> m_sol_table;
 
     FlexContainer m_flex_container;
-    bool          m_show_kernel_table = true;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

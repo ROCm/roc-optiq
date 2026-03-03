@@ -55,6 +55,8 @@ private:
     std::shared_ptr<ComputeSelection> m_compute_selection;
     uint32_t m_selected_kernel_id_local;
 
+    bool m_show_kernel_table;
+
 };
 
 }  // namespace View

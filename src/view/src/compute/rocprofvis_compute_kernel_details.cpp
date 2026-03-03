@@ -17,9 +17,9 @@ namespace
 {
 constexpr float MEMORY_CHART_MIN_WIDTH = 2300.0f;
 constexpr float MEMORY_CHART_HEIGHT    = 700.0f;
-constexpr float SOL_TABLE_MIN_WIDTH    = 700.0f;
+constexpr float SOL_TABLE_MIN_WIDTH    = 500.0f;
 constexpr float SOL_TABLE_HEIGHT       = 700.0f;
-constexpr float ROOFLINE_MIN_WIDTH     = 1000.0f;
+constexpr float ROOFLINE_MIN_WIDTH     = 800.0f;
 constexpr float ROOFLINE_HEIGHT        = 700.0f;
 constexpr float FLEX_ITEM_GROW         = 1.0f;
 
@@ -187,47 +187,8 @@ ComputeKernelDetailsView::Render()
     ImU32            border_col = settings.GetColor(Colors::kBorderGray);
     ImGuiStyle&      style      = ImGui::GetStyle();
 
-    if(ImGui::BeginChild("##kernel_table_panel",
-                         ImVec2(0, KERNEL_TABLE_PANEL_HEIGHT),
-                         ImGuiChildFlags_Borders))
-    {
-        float avail_w  = ImGui::GetContentRegionAvail().x;
-        float header_h = ImGui::GetFrameHeightWithSpacing();
-
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        ImVec2      cursor    = ImGui::GetCursorScreenPos();
-
-        draw_list->AddRectFilled(cursor,
-                                 ImVec2(cursor.x + avail_w, cursor.y + header_h),
-                                 header_bg, style.ChildRounding);
-        draw_list->AddRect(cursor,
-                           ImVec2(cursor.x + avail_w, cursor.y + header_h),
-                           border_col, style.ChildRounding);
-
-        float icon_y_offset = (header_h - ImGui::GetFontSize()) * 0.5f;
-        ImGui::SetCursorScreenPos(
-            ImVec2(cursor.x + style.FramePadding.x, cursor.y + icon_y_offset));
-
-        const char* icon = m_show_kernel_table ? ICON_EYE : ICON_EYE_SLASH;
-        if(IconButton(icon, icon_font, ImVec2(0, 0),
-                      m_show_kernel_table ? "Hide Table" : "Show Table",
-                      style.WindowPadding, true, style.FramePadding))
-        {
-            m_show_kernel_table = !m_show_kernel_table;
-        }
-
-        ImGui::SameLine(0.0f, KERNEL_TABLE_HEADER_ICON_SPACING);
-        ImGui::SetCursorScreenPos(
-            ImVec2(ImGui::GetCursorScreenPos().x, cursor.y + icon_y_offset));
-        ImGui::Text("Kernel Selection Table");
-
-        ImGui::SetCursorScreenPos(
-            ImVec2(cursor.x, cursor.y + header_h + style.ItemSpacing.y));
-
-        if(m_show_kernel_table && m_kernel_metric_table)
-            m_kernel_metric_table->Render();
-    }
-    ImGui::EndChild();
+    if(m_kernel_metric_table)
+        m_kernel_metric_table->Render();
 
     if(ImGui::BeginChild("##kernel_details_flex_panel", ImVec2(0, 0),
                          ImGuiChildFlags_None, ImGuiWindowFlags_None))

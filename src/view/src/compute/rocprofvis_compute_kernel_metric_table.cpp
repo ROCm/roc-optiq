@@ -6,6 +6,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
 #include "imgui.h"
@@ -30,6 +31,7 @@ KernelMetricTable::KernelMetricTable(DataProvider&                     data_prov
 , m_selected_row(-1)
 , m_compute_selection(compute_selection)
 , m_selected_kernel_id_local(ComputeSelection::INVALID_SELECTION_ID)
+, m_show_kernel_table(true)
 {}
 
 void
@@ -132,9 +134,22 @@ KernelMetricTable::Render()
     int remove_index = -1;
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    float            item_spacing = settings.GetDefaultStyle().ItemSpacing.x;
+    ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
+    const ImGuiStyle &style = settings.GetDefaultStyle();
+    float            item_spacing = style.ItemSpacing.x;
 
     ImGui::AlignTextToFramePadding();
+
+    const char* icon = m_show_kernel_table ? ICON_EYE : ICON_EYE_SLASH;
+    if(IconButton(icon, icon_font, ImVec2(0, 0),
+                    m_show_kernel_table ? "Hide Table" : "Show Table",
+                    style.WindowPadding, false, style.FramePadding))
+    {
+        m_show_kernel_table = !m_show_kernel_table;
+    }
+
+    ImGui::SameLine(0.0f, item_spacing);
+
     ImGui::TextUnformatted("Kernel Selection Table");
 
     // if(m_workload_id == ComputeSelection::INVALID_SELECTION_ID)
@@ -173,12 +188,17 @@ KernelMetricTable::Render()
         m_data_provider.IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID);
 
     float       line_height   = ImGui::GetTextLineHeightWithSpacing();
-    ImGuiStyle& style         = ImGui::GetStyle();
+    //ImGuiStyle& style         = ImGui::GetStyle();
     float       row_padding_v = style.CellPadding.y * 2.0f;
     line_height += row_padding_v;
 
+    int row_count = data.size() + 1; //+1 for header row
+    int rows_to_render = std::max(std::min(10, row_count), 5);
+    
+    if(m_show_kernel_table) 
+    {
     // Set a fixed height for the table container
-    if(ImGui::BeginChild("kernel_metric_table_cont", ImVec2(0, 10.0f * line_height),
+    if(ImGui::BeginChild("kernel_metric_table_cont", ImVec2(0, rows_to_render * line_height),
                          ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
     {
         if(!header.empty() && !data.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
@@ -397,6 +417,7 @@ KernelMetricTable::Render()
 
         m_fetch_requested = true;
         spdlog::debug("Removed metric column at index {}", remove_index);
+    }
     }
 
     m_query_builder.Render();

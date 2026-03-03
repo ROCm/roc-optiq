@@ -1826,6 +1826,28 @@ std::string ProfileDatabase::GetHistogramQuerySuffix()
         ") ";
     histogram_query_suffix += "SELECT "
         "bucket_no, "
+/**
+ * @brief Build a time-based histogram over the current trace.
+ *
+ * This function constructs and executes a histogram query using the
+ * SQL fragments produced by GetHistogramQueryPrefix() and
+ * GetHistogramQuerySuffix(). The histogram partitions the trace
+ * duration into a fixed number of buckets and aggregates events into
+ * those buckets based on their overlap with each bucket interval.
+ *
+ * @param future
+ *        Pointer to a Future object used to execute the query and/or
+ *        retrieve the resulting histogram data asynchronously.
+ * @param desired_bins
+ *        Requested number of histogram buckets. This value is used,
+ *        together with the total trace duration, to derive a bucket
+ *        size that determines the temporal resolution of the
+ *        histogram.
+ *
+ * @return rocprofvis_dm_result_t
+ *         kRocProfVisDmResultSuccess on success, or an appropriate
+ *         error code if the histogram could not be constructed.
+ */
         "COUNT(DISTINCT event_id) AS event_count, "
         "SUM(overlap_end - overlap_start)  AS total_duration, "
         "track_id "
@@ -1842,6 +1864,9 @@ uint64_t ProfileDatabase::GetHistogramQueryAndSchemaHash() {
     {
         hash_str += param.column;
         hash_str += param.type;
+    // Choose a bucket size that approximately yields the requested
+    // number of bins over the full trace duration; store it so other
+    // components can interpret the resulting histogram correctly.
     }
     return std::hash<std::string>{}(hash_str);
 }

@@ -1602,7 +1602,16 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
 }
 
 
+// Persist per-track aggregate properties and metadata into the database.
+// This function walks the collected profiling data, derives summary
+// statistics for each track (timestamps, values, process/node identifiers),
+// and uses the provided Future/database context to insert one row per track
+// into the track_properties table defined below.
 rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
+    // Define the schema for the track_properties table that will receive the
+    // per-track summary rows. The SQLInsertParams describes the column names
+    // and their SQLite types; the order here must match the order used when
+    // binding values later in this function.
     SQLInsertParams params = { 
         { "id", "INTEGER PRIMARY KEY" },
         { "load_id", "INTEGER" },
@@ -1624,6 +1633,17 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
         { "pid", "INTEGER" }
     };
 
+    // Temporary container holding the derived properties for a single track
+    // before it is written to the database. Each field corresponds to one
+    // column in the params schema above:
+    //  - id/load_id: identifiers for this record and the profiler load.
+    //  - track_id/category/op: logical track and event categorization.
+    //  - record_count/min_ts/max_ts/min_val/max_val: basic statistics over
+    //    the events associated with the track.
+    //  - node_id/process_id/subproc_*: topology and process information
+    //    extracted from the profiling context.
+    //  - node_tag/process_tag/subproc_tag/guid/pid: human-readable labels
+    //    and identifiers that assist with post-processing and visualization.
     typedef struct store_params {
         uint32_t id;
         uint32_t load_id;

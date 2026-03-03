@@ -53,33 +53,9 @@ namespace DataModel
             kRocOptiqTableDisposeWhenTrimmed,
         };
 
-        enum roc_optiq_table_dependency_mask_t : uint16_t
-        {
-            kRocOptiqTableDependentOnNoDependency = 0,
-            kRocOptiqTableDependentOnTrackInfo = 0x0001,
-            kRocOptiqTableDependentOnMemoryActivity = 0x0002,
-            kRocOptiqTableDependentOnMemoryAllocate = 0x0004,
-            kRocOptiqTableDependentOnMemoryVisibility = 
-                kRocOptiqTableDependentOnMemoryActivity | 
-                kRocOptiqTableDependentOnMemoryAllocate,
-            kRocOptiqTableDependentOnKernelDispatchLevel = 0x0008,
-            kRocOptiqTableDependentOnRegionLevel = 0x0010,
-            kRocOptiqTableDependentOnRegionSampleLevel = 0x0020,
-            kRocOptiqTableDependentOnMemoryAllocLevel = 0x0040,
-            kRocOptiqTableDependentOnMemoryCopyLevel = 0x0080,
-            kRocOptiqTableDependentOnAllLevelTables = 
-                kRocOptiqTableDependentOnKernelDispatchLevel | 
-                kRocOptiqTableDependentOnRegionLevel | 
-                kRocOptiqTableDependentOnRegionSampleLevel | 
-                kRocOptiqTableDependentOnMemoryAllocLevel | 
-                kRocOptiqTableDependentOnMemoryCopyLevel | 
-                kRocOptiqTableDependentOnTrackInfo,
-            kRocOptiqTableDependentOnHistogram = 0x0100,
-            
-        };
         enum roc_optiq_table_version_t : uint32_t
         {
-            kRocOptiqTableVersionMemoryActivity = 0x0001,
+            kRocOptiqTableVersionMemoryActivity = 0x0002,
             kRocOptiqTableVersionMemoryAllocate = 0x0001,
             kRocOptiqTableVersionKernelDispatchLevel = 0x0001,
             kRocOptiqTableVersionRegionLevel = 0x0001,
@@ -95,7 +71,7 @@ namespace DataModel
             std::string name;
             roc_optiq_table_type type;
             roc_optiq_table_trim_type trim_type;
-            roc_optiq_table_dependency_mask_t dependency;
+            uint16_t dependency;
             uint32_t version;
             uint64_t hash;
             std::map<uint32_t, bool> rebuild;
@@ -144,6 +120,31 @@ namespace DataModel
 
             kRocOptiqNumTables
         };
+
+        enum roc_optiq_table_dependency_mask_t : uint16_t
+        {
+            kRocOptiqTableDependentOnNoDependency = 0,
+            kRocOptiqTableDependentOnTrackInfo = 1 << kRocOptiqTableTrackInfo,
+            kRocOptiqTableDependentOnMemoryActivity = 1 << kRocOptiqTableMemoryActivity,
+            kRocOptiqTableDependentOnMemoryAllocate = 1 << kRocOptiqTableMemoryAllocate,
+            kRocOptiqTableDependentOnMemoryVisibility = 
+            kRocOptiqTableDependentOnMemoryActivity | 
+            kRocOptiqTableDependentOnMemoryAllocate,
+            kRocOptiqTableDependentOnKernelDispatchLevel = 1 << kRocOptiqTableKernelDispatchLevel,
+            kRocOptiqTableDependentOnRegionLevel = 1 << kRocOptiqTableRegionLevel,
+            kRocOptiqTableDependentOnRegionSampleLevel = 1 << kRocOptiqTableRegionSampleLevel,
+            kRocOptiqTableDependentOnMemoryAllocLevel = 1 << kRocOptiqTableMemoryAllocLevel,
+            kRocOptiqTableDependentOnMemoryCopyLevel = 1 << kRocOptiqTableMemoryCopyLevel,
+            kRocOptiqTableDependentOnAllLevelTables = 
+            kRocOptiqTableDependentOnKernelDispatchLevel | 
+            kRocOptiqTableDependentOnRegionLevel | 
+            kRocOptiqTableDependentOnRegionSampleLevel | 
+            kRocOptiqTableDependentOnMemoryAllocLevel | 
+            kRocOptiqTableDependentOnMemoryCopyLevel | 
+            kRocOptiqTableDependentOnTrackInfo,
+            kRocOptiqTableDependentOnHistogram = 1 << kRocOptiqTableHistogram,
+
+        };
         RocprofMetadataVersionControl(RocprofDatabase* db);
         bool MustRebuildLevels(uint32_t file_node_id) { 
             return MustRebuild(file_node_id, kRocOptiqTableKernelDispatchLevel) ||
@@ -169,6 +170,19 @@ namespace DataModel
             kRocOptiqTableHistogram,
 
             kRocOptiqNumTables
+        };
+        enum roc_optiq_table_dependency_mask_t : uint16_t
+        {
+            kRocOptiqTableDependentOnNoDependency = 0,
+            kRocOptiqTableDependentOnTrackInfo = 1 << kRocOptiqTableTrackInfo,
+            kRocOptiqTableDependentOnKernelDispatchLevel = 1 << kRocOptiqTableKernelDispatchLevel,
+            kRocOptiqTableDependentOnRegionLevel = 1 << kRocOptiqTableRegionLevel,
+            kRocOptiqTableDependentOnAllLevelTables = 
+            kRocOptiqTableDependentOnKernelDispatchLevel | 
+            kRocOptiqTableDependentOnRegionLevel | 
+            kRocOptiqTableDependentOnTrackInfo,
+            kRocOptiqTableDependentOnHistogram = 1 << kRocOptiqTableHistogram,
+
         };
         RocpdMetadataVersionControl(RocpdDatabase* db);
 

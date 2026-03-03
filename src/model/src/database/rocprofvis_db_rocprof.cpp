@@ -231,8 +231,6 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
             memact.track_id = it->track_id;
             memact.size = it->size;
             db->m_memfree_stream_to_agent[callback_params->db_instance->GuidIndex()][memact.stream_id] = it->agent_id;
-            callback_params->future->SetRuntimeStorageValue(kRPVFutureStorageEventId, (uint64_t)it->agent_id);
-            callback_params->future->SetRuntimeStorageValue(kRPVFutureStorageTrackId, (uint64_t)it->track_id);
         }
         else
         {
@@ -240,6 +238,11 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
             memact.track_id = callback_params->future->GetRuntimeStorageValue(kRPVFutureStorageTrackId, (uint64_t)memact.track_id);
             db->m_memfree_stream_to_agent[callback_params->db_instance->GuidIndex()][memact.stream_id] = memact.agent_id;
         }
+    }
+    else
+    {
+        callback_params->future->SetRuntimeStorageValue(kRPVFutureStorageEventId, (uint64_t)memact.agent_id);
+        callback_params->future->SetRuntimeStorageValue(kRPVFutureStorageTrackId, (uint64_t)memact.track_id);
     }
     vec.push_back(memact);
     callback_params->future->CountThisRow();

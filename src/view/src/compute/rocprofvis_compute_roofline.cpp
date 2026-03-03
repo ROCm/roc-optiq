@@ -318,17 +318,14 @@ Roofline::Update()
 void
 Roofline::Render()
 {
+    SectionTitle("Roofline Analysis");
     ImGui::BeginChild(
         "roofline",
         ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().x * 0.5f),
-        ImGuiChildFlags_Border);
+        ImGuiChildFlags_None);
     const ImVec2       region     = ImGui::GetContentRegionAvail();
     const ImGuiStyle&  style      = ImGui::GetStyle();
     const ImPlotStyle& plot_style = ImPlot::GetStyle();
-    ImGui::SetCursorPos(ImVec2(region.x * 0.5f - plot_style.PlotBorderSize -
-                                   ImGui::CalcTextSize("Roofline Analysis").x * 0.5f,
-                               plot_style.PlotPadding.y));
-    ImGui::TextUnformatted("Roofline Analysis");
     if(!m_workload ||
        (m_workload->roofline.ceiling_bandwidth.empty() ||
         m_workload->roofline.ceiling_compute.empty()) ||

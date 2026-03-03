@@ -252,16 +252,11 @@ ComputeMemoryChartView::Render()
                                m_instr_l1_block.Bottom(),
                                m_gmi_block.Bottom()}) + CHART_PADDING;
 
-    float avail_w = ImGui::GetContentRegionAvail().x;
-    if(canvas_w < avail_w)
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_w - canvas_w) * 0.5f);
-
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgMain));
-    ImGui::PushStyleColor(ImGuiCol_Border, Settings().GetColor(Colors::kBorderGray));
 
-    ImGui::BeginChild("MemoryChart", ImVec2(canvas_w, canvas_h), ImGuiChildFlags_Borders,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    ImGui::PopStyleColor(2);
+    ImGui::BeginChild("MemoryChart", ImVec2(0, canvas_h), ImGuiChildFlags_None,
+                      ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleColor(1);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetCursorScreenPos();

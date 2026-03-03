@@ -336,6 +336,20 @@ XButton(const char* id, const char * tool_tip_label, SettingsManager* settings)
     return clicked;
 }
 
+void
+SectionTitle(const char* text, bool large, SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+
+    FontType font_type = large ? FontType::kLarge : FontType::kMedLarge;
+    ImGui::PushFont(settings->GetFontManager().GetFont(font_type));
+    ImGui::SeparatorText(text);
+    ImGui::PopFont();
+}
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
 void

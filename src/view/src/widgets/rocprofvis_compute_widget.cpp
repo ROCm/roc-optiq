@@ -455,7 +455,7 @@ MetricTableCache::Render() const
 
     int num_columns = static_cast<int>(m_column_names.size());
 
-    ImGui::SeparatorText(m_title.c_str());
+    SectionTitle(m_title.c_str());
     if(!ImGui::BeginTable(m_table_id.c_str(), num_columns, ImGuiTableFlags_Borders))
         return;
 

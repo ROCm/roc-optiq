@@ -7,6 +7,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_compute_kernel_metric_table.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 #include "imgui.h"
 
@@ -46,7 +47,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
     m_kernel_metric_table = std::make_shared<RocProfVis::View::KernelMetricTable>(data_provider, compute_selection);
 
     auto memory_chart_wrapper = std::make_shared<RocCustomWidget>([this]() {
-        ImGui::Text("Memory Chart");
+        SectionTitle("Memory Chart");
         m_memory_chart.Render();
     });
 
@@ -176,13 +177,8 @@ ComputeKernelDetailsView::Render()
     if(m_kernel_metric_table)
         m_kernel_metric_table->Render();
 
-    if(ImGui::BeginChild("##kernel_details_flex_panel", ImVec2(0, 0),
-                         ImGuiChildFlags_None, ImGuiWindowFlags_None))
-    {
-        ImGui::Dummy(ImVec2(0.0f, KERNEL_TABLE_PANEL_PADDING));
-        m_flex_container.Render();
-    }
-    ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0.0f, KERNEL_TABLE_PANEL_PADDING));
+    m_flex_container.Render();
 }
 
 }  // namespace View

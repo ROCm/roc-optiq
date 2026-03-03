@@ -64,19 +64,11 @@ ComputeWorkloadView::Render()
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     m_workload_info      = m_data_provider.ComputeModel().GetWorkload(workload_id);
 
-    const char* title_label = "Workload Information";
-    CenterNextTextItem(title_label);
-    // use larger font for workload name
-    SettingsManager& settings   = SettingsManager::GetInstance();
-    ImFont*          large_font = settings.GetFontManager().GetFont(FontType::kLarge);
-    ImGui::PushFont(large_font);
-    ImGui::TextUnformatted(title_label);
-    ImGui::PopFont();
+    SectionTitle("Workload Information");
 
     if(m_workload_info)
     {
-        if(ImGui::BeginChild("info", ImVec2(0, 0),
-                             ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY))
+        if(ImGui::BeginChild("info", ImVec2(0, 0), ImGuiChildFlags_None))
         {
             if(m_content_container)
             {
@@ -109,7 +101,7 @@ ComputeWorkloadView::RenderSystemInfo(const WorkloadInfo& workload_info)
 {
     if(ImGui::BeginChild("sys_info", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY))
     {
-        ImGui::Text("System Information");
+        SectionTitle("System Information", false);
 
         // Check if system info is available and valid before rendering
         // Validity check: Ensure there are exactly 2 columns and both columns have the
@@ -160,7 +152,7 @@ ComputeWorkloadView::RenderProfilingConfig(const WorkloadInfo& workload_info)
            workload_info.profiling_config[0].size() ==
                workload_info.profiling_config[1].size())
         {
-            ImGui::Text("Profiling Configuration");
+            SectionTitle("Profiling Configuration", false);
             if(ImGui::BeginTable("",
                                  static_cast<int>(workload_info.profiling_config.size()),
                                  ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders))

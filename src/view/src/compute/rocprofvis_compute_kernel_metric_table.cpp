@@ -138,6 +138,8 @@ KernelMetricTable::Render()
     const ImGuiStyle &style = settings.GetDefaultStyle();
     float            item_spacing = style.ItemSpacing.x;
 
+    SectionTitle("Kernel Selection Table");
+
     ImGui::AlignTextToFramePadding();
 
     const char* icon = m_show_kernel_table ? ICON_EYE : ICON_EYE_SLASH;
@@ -148,10 +150,6 @@ KernelMetricTable::Render()
         m_show_kernel_table = !m_show_kernel_table;
     }
 
-    ImGui::SameLine(0.0f, item_spacing);
-
-    ImGui::TextUnformatted("Kernel Selection Table");
-
     // if(m_workload_id == ComputeSelection::INVALID_SELECTION_ID)
     // {
     //     ImGui::Separator();
@@ -161,21 +159,24 @@ KernelMetricTable::Render()
     m_query_builder.SetWorkload(
         m_data_provider.ComputeModel().GetWorkload(m_workload_id));
 
-    ImGui::SameLine(0.0f, item_spacing);
-
-    ImGui::BeginDisabled(m_workload_id == ComputeSelection::INVALID_SELECTION_ID);
-    if(ImGui::Button("Add Metric"))
+    if(m_show_kernel_table)
     {
-        m_query_builder.Show([this](const std::string& query) {
-            m_metrics_params.push_back(query);
-            const AvailableMetrics::Entry* entry =
-                m_query_builder.GetSelectedMetricInfo();
-            m_metrics_info.push_back({ entry ? *entry : AvailableMetrics::Entry(),
-                                       m_query_builder.GetValueName() });
-            m_fetch_requested = true;
-        });
+        ImGui::SameLine(0.0f, item_spacing);
+
+        ImGui::BeginDisabled(m_workload_id == ComputeSelection::INVALID_SELECTION_ID);
+        if(ImGui::Button("Add Metric"))
+        {
+            m_query_builder.Show([this](const std::string& query) {
+                m_metrics_params.push_back(query);
+                const AvailableMetrics::Entry* entry =
+                    m_query_builder.GetSelectedMetricInfo();
+                m_metrics_info.push_back({ entry ? *entry : AvailableMetrics::Entry(),
+                                           m_query_builder.GetValueName() });
+                m_fetch_requested = true;
+            });
+        }
+        ImGui::EndDisabled();
     }
-    ImGui::EndDisabled();
 
     ImGui::Separator();
 

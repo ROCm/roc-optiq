@@ -79,7 +79,7 @@ FlexContainer::Render()
         ImGui::PushID(static_cast<int>(row_index));
         ImGui::BeginChild("row", ImVec2(avail_width, 0),
                           ImGuiChildFlags_AutoResizeY,
-                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+                          ImGuiWindowFlags_NoScrollWithMouse);
 
         for(size_t column_index = 0; column_index < row.count; column_index++)
         {
@@ -90,7 +90,7 @@ FlexContainer::Render()
                 w += free * (item.flex_grow / row.grow);
             w = std::min(w, avail_width);
 
-            ImGuiChildFlags item_flags = ImGuiChildFlags_Borders;
+            ImGuiChildFlags item_flags = ImGuiChildFlags_None;
             float h = item.height;
             if(h <= 0.0f)
             {
@@ -102,7 +102,7 @@ FlexContainer::Render()
                 SettingsManager::GetInstance().GetColor(Colors::kFillerColor));
 
             ImGui::BeginChild(ImGui::GetID(&item), ImVec2(w, h), item_flags,
-                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+                              ImGuiWindowFlags_NoScrollWithMouse);
             if(item.widget) item.widget->Render();
             ImGui::EndChild();
 

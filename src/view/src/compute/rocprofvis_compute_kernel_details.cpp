@@ -14,8 +14,8 @@
 namespace
 {
 constexpr float MEMORY_CHART_MIN_WIDTH = 2300.0f;
-constexpr float SOL_TABLE_MIN_WIDTH    = 900.0f;
-constexpr float ROOFLINE_MIN_WIDTH     = 800.0f;
+constexpr float SOL_TABLE_MIN_WIDTH    = 600.0f;
+constexpr float ROOFLINE_MIN_WIDTH     = 600.0f;
 constexpr float FLEX_ITEM_GROW         = 1.0f;
 
 constexpr float KERNEL_TABLE_PANEL_PADDING = 4.0f;

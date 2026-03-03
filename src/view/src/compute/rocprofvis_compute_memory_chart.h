@@ -60,6 +60,7 @@ enum MemChartMetric
     VL1_WR,
     VL1_ATOMIC,
     VL1_HIT,
+    VL1_LAT,
     VL1_COALESCE,
     VL1_STALL,
     VL1_L2_RD,
@@ -79,6 +80,8 @@ enum MemChartMetric
     L2_WR,
     L2_ATOMIC,
     L2_HIT,
+    L2_RD_LAT,
+    L2_WR_LAT,
     FABRIC_L2_RD,
     FABRIC_L2_WR,
     FABRIC_L2_ATOMIC,
@@ -88,7 +91,7 @@ enum MemChartMetric
     HBM_RD,
     HBM_WR,
 
-    MEMCHART_METRIC_COUNT  // sentinel: total number of metrics (52)
+    MEMCHART_METRIC_COUNT  // sentinel: total number of metrics (55)
 };
 
 class ComputeMemoryChartView
@@ -128,6 +131,18 @@ private:
     void DrawHBM(ImDrawList* draw_list, ImVec2 origin);
 
     void DrawConnections(ImDrawList* draw_list, ImVec2 origin);
+
+    float DrawMetricRow(ImDrawList* draw_list, float block_x, float cursor_y,
+                        float block_w, const char* label, MemChartMetric metric_id,
+                        const char* unit = "");
+
+    void ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
+                           MemChartMetric metric_id,
+                           bool show_description, bool show_raw_value);
+
+    void DrawTextWithTooltip(ImDrawList* draw_list, ImVec2 pos, uint32_t color,
+                             const char* text, MemChartMetric metric_id,
+                             bool show_description, bool show_raw_value);
 
     // Get the display string for a metric (returns "-" if not yet populated)
     const char* GetMetricText(MemChartMetric metric) const;

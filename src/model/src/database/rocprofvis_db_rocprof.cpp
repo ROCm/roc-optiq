@@ -951,7 +951,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->tracks_info_restored = true;
         TraceProperties()->trace_duration = 0;
 
-        for (auto& guid_info : DbInstances())
+        for (size_t i = 0; i < DbInstances().size(); ++i)
         {
             TraceProperties()->db_inst_start_time.push_back(UINT64_MAX);
             TraceProperties()->db_inst_end_time.push_back(0);

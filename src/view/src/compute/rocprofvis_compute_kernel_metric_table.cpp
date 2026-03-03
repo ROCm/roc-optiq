@@ -40,7 +40,6 @@ KernelMetricTable::KernelMetricTable(DataProvider&                     data_prov
 , m_compute_selection(compute_selection)
 , m_selected_kernel_id_local(ComputeSelection::INVALID_SELECTION_ID)
 , m_show_kernel_table(true)
-{}
 , m_update_table_selection(false)
 , m_allow_deselect(false)
 , m_sort_specs_initialized(false)

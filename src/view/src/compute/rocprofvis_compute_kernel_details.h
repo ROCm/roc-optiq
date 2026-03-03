@@ -5,6 +5,7 @@
 #include "rocprofvis_compute_memory_chart.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_compute_widget.h"
+#include "widgets/rocprofvis_flex_container.h"
 #include "widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -34,12 +35,14 @@ private:
     DataProvider&          m_data_provider;
     ComputeMemoryChartView m_memory_chart;
 
-    std::shared_ptr<ComputeSelection> m_compute_selection;
-    std::unique_ptr<Roofline>         m_roofline;
-    std::unique_ptr<KernelMetricTable> m_kernel_metric_table;
+    std::shared_ptr<ComputeSelection>  m_compute_selection;
+    std::shared_ptr<Roofline>          m_roofline;
+    std::shared_ptr<KernelMetricTable> m_kernel_metric_table;
 
-    uint64_t m_client_id;
-    MetricTableWidget                 m_sol_table;
+    uint64_t                           m_client_id;
+    std::shared_ptr<MetricTableWidget> m_sol_table;
+
+    FlexContainer m_flex_container;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

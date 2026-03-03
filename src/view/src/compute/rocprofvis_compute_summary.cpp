@@ -342,18 +342,14 @@ ComputeTopKernels::Update()
 void
 ComputeTopKernels::Render()
 {
+    SectionTitle("Top Kernels by Execution Time");
     ImGui::BeginChild(
         "top_kernels",
         ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().x * 0.5f),
-        ImGuiChildFlags_Border);
+        ImGuiChildFlags_None);
     const ImVec2       region     = ImGui::GetContentRegionAvail();
     const ImGuiStyle&  style      = ImGui::GetStyle();
     const ImPlotStyle& plot_style = ImPlot::GetStyle();
-    ImGui::SetCursorPos(
-        ImVec2(region.x * 0.5f - plot_style.PlotBorderSize -
-                   ImGui::CalcTextSize("Top Kernels by Execution Time").x * 0.5f,
-               plot_style.PlotPadding.y));
-    ImGui::TextUnformatted("Top Kernels by Execution Time");
     if(!m_workload || m_kernels.empty())
     {
         ImGui::GetWindowDrawList()->AddRect(

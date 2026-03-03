@@ -7,8 +7,19 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_compute_kernel_metric_table.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 #include "imgui.h"
+
+namespace
+{
+constexpr float MEMORY_CHART_MIN_WIDTH = 2300.0f;
+constexpr float SOL_TABLE_MIN_WIDTH    = 600.0f;
+constexpr float ROOFLINE_MIN_WIDTH     = 600.0f;
+constexpr float FLEX_ITEM_GROW         = 1.0f;
+
+constexpr float KERNEL_TABLE_PANEL_PADDING = 4.0f;
+}  // namespace
 
 namespace RocProfVis
 {
@@ -24,7 +35,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_kernel_metric_table(nullptr)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
-, m_sol_table(data_provider, compute_selection, METRIC_CAT_SOL, METRIC_TABLE_SOL)
+, m_sol_table(std::make_shared<MetricTableWidget>(data_provider, compute_selection, METRIC_CAT_SOL, METRIC_TABLE_SOL))
 , m_workload_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_new_table_data_token(EventManager::InvalidSubscriptionToken)
@@ -32,8 +43,19 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 {
     SubscribeToEvents();
 
-    m_roofline = std::make_unique<RocProfVis::View::Roofline>(data_provider, Roofline::SingleKernel);
-    m_kernel_metric_table = std::make_unique<RocProfVis::View::KernelMetricTable>(data_provider, compute_selection);
+    m_roofline = std::make_shared<RocProfVis::View::Roofline>(data_provider, Roofline::SingleKernel);
+    m_kernel_metric_table = std::make_shared<RocProfVis::View::KernelMetricTable>(data_provider, compute_selection);
+
+    auto memory_chart_wrapper = std::make_shared<RocCustomWidget>([this]() {
+        SectionTitle("Memory Chart");
+        m_memory_chart.Render();
+    });
+
+    m_flex_container.items = {
+        {"memory_chart", memory_chart_wrapper,  MEMORY_CHART_MIN_WIDTH, 0.0f, FLEX_ITEM_GROW, true},
+        {"sol_table",    m_sol_table,           SOL_TABLE_MIN_WIDTH,    0.0f, FLEX_ITEM_GROW},
+        {"roofline",     m_roofline,            ROOFLINE_MIN_WIDTH,     0.0f, FLEX_ITEM_GROW},
+    };
 
     m_widget_name = GenUniqueName("ComputeKernelDetailsView");
 }
@@ -65,11 +87,11 @@ void ComputeKernelDetailsView::SubscribeToEvents()
                 m_data_provider.ComputeModel().GetKernelSelectionTable().Clear();
                 m_kernel_metric_table->FetchData(evt->GetId());
             }
-			if(m_roofline)
-			{
-				m_roofline->SetWorkload(evt->GetId());	
-			}
-            m_sol_table.Clear();
+            if(m_roofline)
+            {
+                m_roofline->SetWorkload(evt->GetId());
+            }
+            m_sol_table->Clear();
         }
     };
 
@@ -100,11 +122,11 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             if(m_memory_chart.GetClientId() == evt->GetClientId())
             {
                 m_memory_chart.UpdateMetrics();
-                m_sol_table.FetchMetrics();
+                m_sol_table->FetchMetrics();
             }
-            if(m_sol_table.GetClientId() == evt->GetClientId())
+            if(m_sol_table->GetClientId() == evt->GetClientId())
             {
-                m_sol_table.UpdateTable();
+                m_sol_table->UpdateTable();
             }
         }
     };
@@ -152,22 +174,11 @@ ComputeKernelDetailsView::Update()
 void
 ComputeKernelDetailsView::Render()
 {
-    ImGui::BeginChild("kernel_details");
-
     if(m_kernel_metric_table)
-    {
         m_kernel_metric_table->Render();
-    }
 
-    ImGui::Text("Memory Chart");
-
-    m_memory_chart.Render();
-    m_sol_table.Render();
-    if(m_roofline)
-    {
-        m_roofline->Render();
-    }
-    ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0.0f, KERNEL_TABLE_PANEL_PADDING));
+    m_flex_container.Render();
 }
 
 }  // namespace View

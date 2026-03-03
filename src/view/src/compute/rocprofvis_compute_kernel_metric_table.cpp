@@ -6,6 +6,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_common_defs.h"
 
@@ -38,6 +39,7 @@ KernelMetricTable::KernelMetricTable(DataProvider&                     data_prov
 , m_selected_row(-1)
 , m_compute_selection(compute_selection)
 , m_selected_kernel_id_local(ComputeSelection::INVALID_SELECTION_ID)
+, m_show_kernel_table(true)
 , m_update_table_selection(false)
 , m_allow_deselect(false)
 , m_sort_specs_initialized(false)
@@ -154,29 +156,43 @@ KernelMetricTable::Render()
     int remove_index = -1;
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    float            item_spacing = settings.GetDefaultStyle().ItemSpacing.x;
+    ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
+    const ImGuiStyle &style = settings.GetDefaultStyle();
+    float            item_spacing = style.ItemSpacing.x;
+
+    SectionTitle("Kernel Selection Table");
 
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Kernel Selection Table");
+
+    const char* icon = m_show_kernel_table ? ICON_EYE : ICON_EYE_SLASH;
+    if(IconButton(icon, icon_font, ImVec2(0, 0),
+                    m_show_kernel_table ? "Hide Table" : "Show Table",
+                    style.WindowPadding, false, style.FramePadding))
+    {
+        m_show_kernel_table = !m_show_kernel_table;
+    }
 
     m_query_builder.SetWorkload(
         m_data_provider.ComputeModel().GetWorkload(m_workload_id));
 
-    ImGui::SameLine(0.0f, item_spacing);
-
-    ImGui::BeginDisabled(m_workload_id == ComputeSelection::INVALID_SELECTION_ID);
-    if(ImGui::Button("Add Metric"))
+    if(m_show_kernel_table)
     {
-        m_query_builder.Show([this](const std::string& query) {
-            m_metrics_params.push_back(query);
-            const AvailableMetrics::Entry* entry =
-                m_query_builder.GetSelectedMetricInfo();
-            m_metrics_info.push_back({ entry ? *entry : AvailableMetrics::Entry(),
-                                       m_query_builder.GetValueName() });
-            m_fetch_requested = true;
-        });
+        ImGui::SameLine(0.0f, item_spacing);
+
+        ImGui::BeginDisabled(m_workload_id == ComputeSelection::INVALID_SELECTION_ID);
+        if(ImGui::Button("Add Metric"))
+        {
+            m_query_builder.Show([this](const std::string& query) {
+                m_metrics_params.push_back(query);
+                const AvailableMetrics::Entry* entry =
+                    m_query_builder.GetSelectedMetricInfo();
+                m_metrics_info.push_back({ entry ? *entry : AvailableMetrics::Entry(),
+                                           m_query_builder.GetValueName() });
+                m_fetch_requested = true;
+            });
+        }
+        ImGui::EndDisabled();
     }
-    ImGui::EndDisabled();
 
     ImGui::Separator();
 
@@ -189,12 +205,17 @@ KernelMetricTable::Render()
         m_data_provider.IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID);
 
     float       line_height   = ImGui::GetTextLineHeightWithSpacing();
-    ImGuiStyle& style         = ImGui::GetStyle();
+    //ImGuiStyle& style         = ImGui::GetStyle();
     float       row_padding_v = style.CellPadding.y * 2.0f;
     line_height += row_padding_v;
 
+    int row_count = data.size() + 1; //+1 for header row
+    int rows_to_render = std::max(std::min(10, row_count), 5);
+    
+    if(m_show_kernel_table) 
+    {
     // Set a fixed height for the table container
-    if(ImGui::BeginChild("kernel_metric_table_cont", ImVec2(0, 10.0f * line_height),
+    if(ImGui::BeginChild("kernel_metric_table_cont", ImVec2(0, rows_to_render * line_height),
                          ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
     {
         if(!header.empty() && !data.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
@@ -440,6 +461,7 @@ KernelMetricTable::Render()
 
         m_fetch_requested = true;
         spdlog::debug("Removed metric column at index {}", remove_index);
+    }
     }
 
     m_query_builder.Render();

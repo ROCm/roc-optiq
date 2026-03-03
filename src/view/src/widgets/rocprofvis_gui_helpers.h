@@ -64,6 +64,9 @@ bool
 XButton(const char* id = nullptr, const char* tool_tip_label = nullptr,
         SettingsManager* settings = nullptr);
 
+void
+SectionTitle(const char* text, bool large = true, SettingsManager* settings = nullptr);
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void
 DrawInternalBuildBanner(const char* text = "Internal Build");

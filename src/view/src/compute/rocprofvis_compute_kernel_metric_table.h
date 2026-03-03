@@ -58,6 +58,8 @@ private:
     uint32_t                          m_selected_kernel_id_local;
     bool                              m_update_table_selection;
     bool                              m_allow_deselect;
+    
+    bool m_show_kernel_table;
 };
 
 }  // namespace View

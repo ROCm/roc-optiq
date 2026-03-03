@@ -33,8 +33,7 @@ FlexContainer::Render()
 {
     if(items.empty()) return;
 
-    float avail_width  = ImGui::GetContentRegionAvail().x;
-    float avail_height = ImGui::GetContentRegionAvail().y;
+    float avail_width = ImGui::GetContentRegionAvail().x;
 
     // bin items into rows
 
@@ -43,11 +42,17 @@ FlexContainer::Render()
 
     for(size_t i = 0; i < items.size(); i++)
     {
-        FlexRow& cur  = rows.back();
-        float gap_w   = (cur.count > 0) ? gap : 0.0f;
-        float needed  = cur.min_w + gap_w + items[i].min_width;
+        FlexRow& cur = rows.back();
 
-        if(cur.count > 0 && needed > avail_width)
+        bool needs_new_row = items[i].full_row && cur.count > 0;
+        if(!needs_new_row && cur.count > 0)
+        {
+            float gap_w  = gap;
+            float needed = cur.min_w + gap_w + items[i].min_width;
+            needs_new_row = needed > avail_width;
+        }
+
+        if(needs_new_row)
             rows.push_back({i, 0, 0.0f, 0.0f});
 
         FlexRow& target = rows.back();
@@ -55,23 +60,26 @@ FlexContainer::Render()
         target.min_w += items[i].min_width;
         target.grow  += items[i].flex_grow;
         target.count++;
+
+        if(items[i].full_row && i + 1 < items.size())
+            rows.push_back({i + 1, 0, 0.0f, 0.0f});
     }
 
-    // figure out default row height
-
-    size_t num_rows      = rows.size();
-    float  row_gap_total = gap * static_cast<float>(num_rows > 1 ? num_rows - 1 : 0);
-    float  row_height    = std::max(avail_height, min_row_height);
-    row_height           = (row_height - row_gap_total) / static_cast<float>(num_rows);
+    size_t num_rows = rows.size();
 
     // render
 
     for(size_t row_index = 0; row_index < num_rows; row_index++)
     {
-        FlexRow& row       = rows[row_index];
-        float    row_gaps  = gap * static_cast<float>(row.count > 1 ? row.count - 1 : 0);
-        float    min_sum   = row.min_w - row_gaps;
-        float    free      = std::max(0.0f, avail_width - min_sum - row_gaps);
+        FlexRow& row      = rows[row_index];
+        float    row_gaps = gap * static_cast<float>(row.count > 1 ? row.count - 1 : 0);
+        float    min_sum  = row.min_w - row_gaps;
+        float    free     = std::max(0.0f, avail_width - min_sum - row_gaps);
+
+        ImGui::PushID(static_cast<int>(row_index));
+        ImGui::BeginChild("row", ImVec2(avail_width, 0),
+                          ImGuiChildFlags_AutoResizeY,
+                          ImGuiWindowFlags_NoScrollWithMouse);
 
         for(size_t column_index = 0; column_index < row.count; column_index++)
         {
@@ -80,14 +88,21 @@ FlexContainer::Render()
             float w = item.min_width;
             if(row.grow > 0.0f)
                 w += free * (item.flex_grow / row.grow);
+            w = std::min(w, avail_width);
 
-            float h = (item.height > 0.0f) ? item.height : row_height;
+            ImGuiChildFlags item_flags = ImGuiChildFlags_None;
+            float h = item.height;
+            if(h <= 0.0f)
+            {
+                item_flags |= ImGuiChildFlags_AutoResizeY;
+                h = 0.0f;
+            }
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg,
                 SettingsManager::GetInstance().GetColor(Colors::kFillerColor));
 
-            ImGui::BeginChild(ImGui::GetID(&item), ImVec2(w, h),
-                              ImGuiChildFlags_Borders);
+            ImGui::BeginChild(ImGui::GetID(&item), ImVec2(w, h), item_flags,
+                              ImGuiWindowFlags_NoScrollWithMouse);
             if(item.widget) item.widget->Render();
             ImGui::EndChild();
 
@@ -95,6 +110,8 @@ FlexContainer::Render()
 
             if(column_index + 1 < row.count) ImGui::SameLine(0.0f, gap);
         }
+        ImGui::EndChild();
+        ImGui::PopID();
 
         if(row_index + 1 < num_rows) ImGui::Dummy(ImVec2(0.0f, gap));
     }

@@ -187,21 +187,10 @@ ComputeView::RenderWorkloadSelection()
 
     SettingsManager&  settings      = SettingsManager::GetInstance();
     const ImGuiStyle& default_style = settings.GetDefaultStyle();
-    ImVec4 text_dim      = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextDim));
-    ImVec4 bg_main       = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgMain));
-    ImVec4 bg_frame      = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgFrame));
-    ImVec4 accent_active = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kAccentRedActive));
-    ImVec4 border_gray   = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBorderGray));
-
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, bg_main);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, bg_frame);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, accent_active);
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, bg_main);
-    ImGui::PushStyleColor(ImGuiCol_Border, border_gray);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
 
-    ImGui::TextColored(text_dim, "Workload");
+    ImGui::TextUnformatted("Workload");
     ImGui::SameLine(0.0f, default_style.ItemSpacing.x * 1.5f);
 
     float avail = ImGui::GetContentRegionAvail().x;
@@ -235,7 +224,7 @@ ComputeView::RenderWorkloadSelection()
     std::vector<const KernelInfo*> kernel_info_list =
         m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
 
-    ImGui::TextColored(text_dim, "Kernel");
+    ImGui::TextUnformatted("Kernel");
     ImGui::SameLine(0.0f, default_style.ItemSpacing.x * 1.5f);
 
     avail = ImGui::GetContentRegionAvail().x;
@@ -261,7 +250,6 @@ ComputeView::RenderWorkloadSelection()
         ImGui::EndCombo();
     }
 
-    ImGui::PopStyleColor(5);
 }
 
 }  // namespace View

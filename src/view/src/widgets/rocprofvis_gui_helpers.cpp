@@ -298,7 +298,7 @@ CenterNextTextItem(const char* text)
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
 void
-RocProfVis::View::DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
+DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 {
     if(!text || !*text) return;
 

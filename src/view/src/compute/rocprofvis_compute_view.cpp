@@ -21,18 +21,10 @@ namespace RocProfVis
 namespace View
 {
 
-static constexpr ImVec2 TOOLBAR_FRAME_PADDING  = ImVec2(6, 6);
-static constexpr float  TOOLBAR_FRAME_ROUNDING = 0.0f;
-static constexpr ImVec2 COMBO_FRAME_PADDING    = ImVec2(10, 5);
-static constexpr float  COMBO_FRAME_ROUNDING   = 6.0f;
-static constexpr float  POPUP_ROUNDING         = 6.0f;
-static constexpr float  POPUP_BORDER_SIZE      = 1.0f;
-static constexpr float  LABEL_COMBO_SPACING    = 8.0f;
-static constexpr float  SELECTOR_GAP           = 24.0f;
-static constexpr float  WORKLOAD_WIDTH_FRAC    = 0.25f;
-static constexpr float  WORKLOAD_MIN_WIDTH     = 140.0f;
-static constexpr float  KERNEL_WIDTH_FRAC      = 0.5f;
-static constexpr float  KERNEL_MIN_WIDTH       = 350.0f;
+static constexpr float WORKLOAD_WIDTH_FRAC = 0.25f;
+static constexpr float WORKLOAD_MIN_WIDTH  = 140.0f;
+static constexpr float KERNEL_WIDTH_FRAC   = 0.5f;
+static constexpr float KERNEL_MIN_WIDTH    = 350.0f;
 
 ComputeView::ComputeView()
 : m_view_created(false)
@@ -166,13 +158,15 @@ ComputeView::RenderEditMenuOptions()
 void
 ComputeView::RenderToolbar()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, TOOLBAR_FRAME_PADDING);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, TOOLBAR_FRAME_ROUNDING);
+    const ImGuiStyle& default_style = SettingsManager::GetInstance().GetDefaultStyle();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, default_style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, COMBO_FRAME_PADDING);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, COMBO_FRAME_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, default_style.FramePadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, default_style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
     RenderWorkloadSelection();
@@ -191,7 +185,8 @@ ComputeView::RenderWorkloadSelection()
     const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
         m_data_provider.ComputeModel().GetWorkloads();
 
-    SettingsManager& settings = SettingsManager::GetInstance();
+    SettingsManager&  settings      = SettingsManager::GetInstance();
+    const ImGuiStyle& default_style = settings.GetDefaultStyle();
     ImVec4 text_dim      = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextDim));
     ImVec4 bg_main       = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgMain));
     ImVec4 bg_frame      = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgFrame));
@@ -203,13 +198,11 @@ ComputeView::RenderWorkloadSelection()
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive, accent_active);
     ImGui::PushStyleColor(ImGuiCol_PopupBg, bg_main);
     ImGui::PushStyleColor(ImGuiCol_Border, border_gray);
-    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, POPUP_ROUNDING);
-    ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, POPUP_BORDER_SIZE);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
 
     ImGui::TextColored(text_dim, "Workload");
-    ImGui::SameLine(0.0f, LABEL_COMBO_SPACING);
+    ImGui::SameLine(0.0f, default_style.ItemSpacing.x * 1.5f);
 
     float avail = ImGui::GetContentRegionAvail().x;
     ImGui::SetNextItemWidth(std::max(avail * WORKLOAD_WIDTH_FRAC, WORKLOAD_MIN_WIDTH));
@@ -234,7 +227,7 @@ ComputeView::RenderWorkloadSelection()
         ImGui::EndCombo();
     }
 
-    ImGui::SameLine(0.0f, SELECTOR_GAP);
+    ImGui::SameLine(0.0f, default_style.ItemSpacing.x * 2.0f);
 
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
     const KernelInfo* kernel_info =
@@ -243,7 +236,7 @@ ComputeView::RenderWorkloadSelection()
         m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
 
     ImGui::TextColored(text_dim, "Kernel");
-    ImGui::SameLine(0.0f, LABEL_COMBO_SPACING);
+    ImGui::SameLine(0.0f, default_style.ItemSpacing.x * 1.5f);
 
     avail = ImGui::GetContentRegionAvail().x;
     ImGui::SetNextItemWidth(
@@ -268,7 +261,6 @@ ComputeView::RenderWorkloadSelection()
         ImGui::EndCombo();
     }
 
-    ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(5);
 }
 

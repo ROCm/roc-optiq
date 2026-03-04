@@ -31,9 +31,14 @@ constexpr int DURATION_COLUMN_INDEX   = 2;
 constexpr int INVOCATION_COLUMN_INDEX = 3;
 
 // Minimum character limits for calculating column widths
+constexpr std::string_view FILTER_TEXT_HINT_STR = "LIKE %text%";
+constexpr std::string_view FILTER_TEXT_HINT_NUMERICAL = ">, <, =, >=, <=, !=";
+constexpr float            COL_FILTER_CHAR_LIMIT      = static_cast<float>(
+    std::max(FILTER_TEXT_HINT_STR.length(), FILTER_TEXT_HINT_NUMERICAL.length()));
+
 constexpr float COL_NAME_CHAR_LIMIT       = 50.0f;
 constexpr float COL_DEFAULT_CHAR_LIMIT    = 30.0f;
-constexpr float COL_INVOCATION_CHAR_LIMIT = 10.0f;
+constexpr float COL_INVOCATION_CHAR_LIMIT = COL_FILTER_CHAR_LIMIT;
 
 constexpr float kTooltipMaxWidth = 400.0f;
 
@@ -184,7 +189,9 @@ KernelMetricTable::Render()
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
     const ImGuiStyle &style = settings.GetDefaultStyle();
-    float            item_spacing = style.ItemSpacing.x;
+    const float      item_spacing = style.ItemSpacing.x;
+    const float      cell_padding = style.CellPadding.x * 2.0f;
+    const float      char_width = ImGui::CalcTextSize("M").x;
 
     SectionTitle("Kernel Selection Table");
 
@@ -303,16 +310,15 @@ KernelMetricTable::Render()
                 ImGui::TableSetupScrollFreeze(0, 2);  // Freeze header row and filter row
 
                 // Calculate minimum column widths based on character counts
-                float char_width = ImGui::CalcTextSize("A").x;
                 float name_min_width = char_width * COL_NAME_CHAR_LIMIT;
                 float default_min_width = char_width * COL_DEFAULT_CHAR_LIMIT;
                 float invocation_min_width = char_width * COL_INVOCATION_CHAR_LIMIT;
 
                 for(int col = 0; col < column_count; col++)
                 {
+                    ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_WidthFixed;
                     if(col < PERMANENT_COLUMN_COUNT)
                     {
-                        ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_WidthFixed;
                         if(!header[col].empty() && header[col][0] == '_')
                         {
                             col_flags |= ImGuiTableColumnFlags_DefaultHide |
@@ -341,15 +347,23 @@ KernelMetricTable::Render()
                     else
                     {
                         int index = col - PERMANENT_COLUMN_COUNT;
+                        
                         // Since render reads directly from the data model, the
                         // m_metrics_column_names may not be synced for a few frames
                         if(index < static_cast<int>(m_metrics_column_names.size()))
                         {
+                            // Calculate width based on name + padding for close button
+                            float column_size =
+                                ImGui::CalcTextSize(m_metrics_column_names[index].c_str()).x +
+                                cell_padding + char_width * 2.0;
+
+                            column_size = std::max(column_size, default_min_width);
+
                             ImGui::TableSetupColumn(
                                 m_metrics_column_names[index].c_str(),
                                 ImGuiTableColumnFlags_WidthFixed,
-                                default_min_width);
-                        }
+                                column_size);
+                            }
                         else
                         {
                             ImGui::TableSetupColumn(
@@ -458,6 +472,7 @@ KernelMetricTable::Render()
                     for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++)
                     {
                         ImGui::TableNextRow();
+                        ImGui::PushID(row);  // Push row ID for unique identification
 
                         bool is_selected       = (m_selected_row == row);
                         bool selectable_placed = false;
@@ -512,6 +527,7 @@ KernelMetricTable::Render()
                                 }
                             }
                         }
+                        ImGui::PopID();  // Pop row ID
                     }
                 }
 
@@ -590,7 +606,7 @@ KernelMetricTable::RenderColumnFilter(int column_index)
     ColumnFilter& filter = m_pending_column_filters[column_index];
 
     // Determine hint based on column type (column 1 is Name - text column)
-    const char* hint = (column_index == 1) ? "LIKE %text%" : ">, <, =, >=, <=, !=";
+    const char* hint = (column_index == 1) ? FILTER_TEXT_HINT_STR.data() : FILTER_TEXT_HINT_NUMERICAL.data();
 
     ImGui::PushID(column_index);
     ImGui::SetNextItemWidth(-1);  // Fill column width
@@ -614,7 +630,7 @@ KernelMetricTable::ApplyFilters()
         if(!filter.is_active || strlen(filter.filter_text) == 0)
             continue;
 
-        bool is_numeric_column = (i != 1);  // Column 1 is Name (text), others are numeric
+        bool is_numeric_column = (i != NAME_COLUMN_INDEX);  // Name Column is text, others are numeric
 
         if(!ValidateFilterExpression(filter.filter_text, is_numeric_column))
         {

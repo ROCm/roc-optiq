@@ -263,13 +263,19 @@ KernelMetricTable::Render()
     float       row_padding_v = style.CellPadding.y * 2.0f;
     line_height += row_padding_v;
 
-    int row_count = data.size() + 1; //+1 for header row
-    int rows_to_render = std::max(std::min(10, row_count), 5);
-    
-    if(m_show_kernel_table) 
+    // Filter row height (InputText widgets are taller than text)
+    float filter_row_height = ImGui::GetFrameHeightWithSpacing() + row_padding_v;
+
+    int data_row_count = data.size();
+    int rows_to_render = std::max(std::min(10, data_row_count), 5);
+
+    // Calculate total table height: header + filter row + data rows
+    float total_table_height = line_height + filter_row_height + (rows_to_render * line_height);
+
+    if(m_show_kernel_table)
     {
     // Set a fixed height for the table container
-    if(ImGui::BeginChild("kernel_metric_table_cont", ImVec2(0, rows_to_render * line_height),
+    if(ImGui::BeginChild("kernel_metric_table_cont", ImVec2(0, total_table_height),
                          ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
     {
         if(!header.empty() && !data.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)

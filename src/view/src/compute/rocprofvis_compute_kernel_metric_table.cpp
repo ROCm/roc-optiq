@@ -30,6 +30,11 @@ constexpr int NAME_COLUMN_INDEX       = 1;
 constexpr int DURATION_COLUMN_INDEX   = 2;
 constexpr int INVOCATION_COLUMN_INDEX = 3;
 
+// Minimum character limits for calculating column widths
+constexpr float COL_NAME_CHAR_LIMIT       = 50.0f;
+constexpr float COL_DEFAULT_CHAR_LIMIT    = 30.0f;
+constexpr float COL_INVOCATION_CHAR_LIMIT = 10.0f;
+
 constexpr float kTooltipMaxWidth = 400.0f;
 
 KernelMetricTable::KernelMetricTable(DataProvider&                     data_provider,
@@ -266,7 +271,7 @@ KernelMetricTable::Render()
     // Filter row height (InputText widgets are taller than text)
     float filter_row_height = ImGui::GetFrameHeightWithSpacing() + row_padding_v;
 
-    int data_row_count = data.size();
+    int data_row_count = static_cast<int>(data.size());
     int rows_to_render = std::max(std::min(10, data_row_count), 5);
 
     // Calculate total table height: header + filter row + data rows
@@ -283,7 +288,7 @@ KernelMetricTable::Render()
             ImGuiTableFlags table_flags =
                 ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX |
                 ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings;
+                ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings;
             if(!request_pending)
             {
                 table_flags = table_flags | ImGuiTableFlags_Sortable;
@@ -296,23 +301,42 @@ KernelMetricTable::Render()
                                  outer_size))
             {
                 ImGui::TableSetupScrollFreeze(0, 2);  // Freeze header row and filter row
+
+                // Calculate minimum column widths based on character counts
+                float char_width = ImGui::CalcTextSize("A").x;
+                float name_min_width = char_width * COL_NAME_CHAR_LIMIT;
+                float default_min_width = char_width * COL_DEFAULT_CHAR_LIMIT;
+                float invocation_min_width = char_width * COL_INVOCATION_CHAR_LIMIT;
+
                 for(int col = 0; col < column_count; col++)
                 {
                     if(col < PERMANENT_COLUMN_COUNT)
                     {
-                        ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_None;
+                        ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_WidthFixed;
                         if(!header[col].empty() && header[col][0] == '_')
                         {
-                            col_flags = ImGuiTableColumnFlags_DefaultHide |
+                            col_flags |= ImGuiTableColumnFlags_DefaultHide |
                                         ImGuiTableColumnFlags_Disabled;
-                        }   
+                        }
                         if(!m_sort_specs_initialized && col == DURATION_COLUMN_INDEX)
                         {
-                            col_flags = col_flags | ImGuiTableColumnFlags_DefaultSort;
+                            col_flags |= ImGuiTableColumnFlags_DefaultSort;
                             m_sort_specs_initialized = true;
                         }
-                        col_flags = col_flags | ImGuiTableColumnFlags_PreferSortDescending;
-                        ImGui::TableSetupColumn(m_permanent_column_names[col].c_str(), col_flags);
+                        col_flags |= ImGuiTableColumnFlags_PreferSortDescending;
+
+                        // Set minimum width based on column type
+                        float min_width = default_min_width;
+                        if(col == NAME_COLUMN_INDEX)
+                        {
+                            min_width = name_min_width;
+                        }
+                        else if(col == INVOCATION_COLUMN_INDEX)
+                        {
+                            min_width = invocation_min_width;
+                        }
+
+                        ImGui::TableSetupColumn(m_permanent_column_names[col].c_str(), col_flags, min_width);
                     }
                     else
                     {
@@ -322,12 +346,16 @@ KernelMetricTable::Render()
                         if(index < static_cast<int>(m_metrics_column_names.size()))
                         {
                             ImGui::TableSetupColumn(
-                                m_metrics_column_names[index].c_str());
+                                m_metrics_column_names[index].c_str(),
+                                ImGuiTableColumnFlags_WidthFixed,
+                                default_min_width);
                         }
                         else
                         {
                             ImGui::TableSetupColumn(
-                                ("Metric " + std::to_string(index + 1)).c_str());
+                                ("Metric " + std::to_string(index + 1)).c_str(),
+                                ImGuiTableColumnFlags_WidthFixed,
+                                default_min_width);
                         }
                     }
                 }

@@ -73,6 +73,30 @@ namespace DataModel
             });
     }
 
+    rocprofvis_dm_track_category_t TrackLookup::SearchCategoryMaskLookup(rocprofvis_dm_event_operation_t op)
+    {
+        rocprofvis_dm_track_category_t cat = kRocProfVisDmProcessTrack;
+        switch (op)
+        {
+        case kRocProfVisDmOperationLaunchSample:
+            cat = kRocProfVisDmRegionSampleTrack;
+            break;
+        case kRocProfVisDmOperationLaunch:
+            cat = kRocProfVisDmRegionTrack;
+            break;
+        case kRocProfVisDmOperationDispatch:
+            cat = kRocProfVisDmKernelDispatchTrack;
+            break;
+        case kRocProfVisDmOperationMemoryCopy:
+            cat = kRocProfVisDmMemoryCopyTrack;
+            break;
+        case kRocProfVisDmOperationMemoryAllocate:
+            cat = kRocProfVisDmMemoryAllocationTrack;
+            break;
+        }
+        return cat;
+    }
+
     TrackLookup::TrackKey TrackLookup::MakeKey(const rocprofvis_dm_track_identifiers_t & ids, uint32_t db_instance)
     {
         TrackKey key;

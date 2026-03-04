@@ -1969,6 +1969,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
         std::string query;
         DbInstance* node_ptr = DbInstancePtrAt(event_id.bitfield.event_node);
         ROCPROFVIS_ASSERT_MSG_BREAK(node_ptr, ERROR_NODE_KEY_CANNOT_BE_NULL);
+        future->SetRuntimeStorageValue(kRPVFutureStorageEventId, event_id.value);
         if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
            event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
         {
@@ -1985,7 +1986,6 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
                    &CallbackAddExtInfo))
                 break;
             query = m_query_factory.GetRocprofEssentialInfoQueryForRegionEvent(event_id.bitfield.event_id, event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample);
-            future->SetRuntimeStorageValue(kRPVFutureStorageEventId, event_id.value);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
             future->ResetRowCount();
             query = m_query_factory.GetRocprofArgumentsInfoQueryForRegionEvent(event_id.bitfield.event_id);

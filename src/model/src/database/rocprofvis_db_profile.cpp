@@ -440,9 +440,9 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
     std::string column_data;
 
     uint32_t track_id;
-    rocprofvis_dm_track_category_t cat = ((rocprofvis_dm_event_id_t*)&event_id)->bitfield.event_op == kRocProfVisDmOperationLaunchSample ? kRocProfVisDmRegionSampleTrack : kRocProfVisDmProcessTrack;
 
-    if (!db->TrackTracker()->FindTrack(cat, 
+    if (!db->TrackTracker()->FindTrack(
+        db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)((rocprofvis_dm_event_id_t*)&event_id)->bitfield.event_op),
         service_data.process_id,
         service_data.sub_process_id,
         callback_params->db_instance->GuidIndex(),

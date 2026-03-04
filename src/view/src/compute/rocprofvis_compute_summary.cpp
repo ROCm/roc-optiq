@@ -530,7 +530,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
             m_kernel_bar.metric_sets[m_kernel_bar.selected_metric].axis_title.c_str(),
             nullptr, ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoHighlight,
             ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels |
-                ImPlotAxisFlags_NoHighlight);
+                ImPlotAxisFlags_NoHighlight | ImPlotAxisFlags_Invert);
         ImPlot::SetupAxisLimits(
             ImAxis_X1, 0.0,
             m_kernel_bar.metric_sets[m_kernel_bar.selected_metric].max_value *

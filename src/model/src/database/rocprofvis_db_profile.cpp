@@ -335,6 +335,8 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
                                  ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     void*  func = (void*)&CallbackAddFlowTrace;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
+    uint32_t db_instance = callback_params->db_instance->GuidIndex();
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     rocprofvis_db_flow_data_t record;
@@ -348,10 +350,12 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
     {
         record.id.bitfield.event_id = db->Sqlite3ColumnInt64(func, stmt, azColName, 2 );
         record.time = db->Sqlite3ColumnInt64(func, stmt, azColName, 6 );
+        record.time-=db->TraceProperties()->db_inst_start_time[db_instance];
         record.category_id = db->Sqlite3ColumnInt64(func, stmt, azColName, 7);
         record.symbol_id = db->Sqlite3ColumnInt64(func, stmt, azColName, 8);
         record.level = db->Sqlite3ColumnInt64(func, stmt, azColName, 9);
-        record.end_time = db->Sqlite3ColumnInt64(func, stmt, azColName, 10);    
+        record.end_time = db->Sqlite3ColumnInt64(func, stmt, azColName, 10);  
+        record.end_time-=db->TraceProperties()->db_inst_start_time[db_instance];
         if(kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
         if (db->BindObject()->FuncAddFlow(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
     }
@@ -368,11 +372,24 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
     rocprofvis_db_ext_data_t record;
     if (callback_params->future->Interrupted()) return SQLITE_ABORT;
     record.category = callback_params->query[kRPVCacheTableName];
+
     for (int i = 0; i < argc; i++)
     {
         record.name = azColName[i];
-        record.type = (rocprofvis_db_data_type_t) sqlite3_column_type(stmt, i);
-        record.data = (char*)db->Sqlite3ColumnText(func, stmt, azColName,i);
+        std::string aux_str = record.name;
+        if (aux_str == Builder::START_PUBLIC_NAME|| aux_str == Builder::END_PUBLIC_NAME)
+        {
+            uint64_t timestamp = db->Sqlite3ColumnInt64(func, stmt, azColName, i);
+            timestamp -= db->TraceProperties()->db_inst_start_time[callback_params->db_instance->GuidIndex()];
+            aux_str = std::to_string(timestamp);
+            record.data = aux_str.c_str();
+            record.type = kRPVDataTypeInt;
+        }
+        else
+        {
+            record.type = (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i);
+            record.data = (char*)db->Sqlite3ColumnText(func, stmt, azColName, i);
+        }
         record.category_enum = GetColumnDataCategory(*db->GetCategoryEnumMap(), callback_params->operation, record.name);
         record.db_instance = callback_params->db_instance->GuidIndex();
         if (record.data != nullptr) {

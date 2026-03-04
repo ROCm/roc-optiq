@@ -29,12 +29,26 @@ public:
 private:
 
     void RenderLoadingIndicator() const;
+    void RenderColumnFilter(int column_index);
+    void ApplyFilters();
+    void ClearAllFilters();
+    bool ValidateFilterExpression(const char* expr, bool is_numeric_column);
 
     struct MetricInfo
     {
         AvailableMetrics::Entry entry;
         std::string             value_name;
     };
+
+    // Filter configuration per column
+    struct ColumnFilter
+    {
+        char filter_text[256];  // User input expression
+        bool is_active;         // Has content
+
+        ColumnFilter() : filter_text{0}, is_active(false) {}
+    };
+
     std::vector<MetricInfo>  m_metrics_info;
     std::vector<std::string> m_metrics_params;
 
@@ -60,6 +74,13 @@ private:
     bool                              m_allow_deselect;
     
     bool m_show_kernel_table;
+
+    // Filter storage - vector aligned with column indices
+    // Vector size = PERMANENT_COLUMN_COUNT + m_metrics_params.size()
+    // Index 0-3: permanent columns (ID, Name, Duration, Invocations)
+    // Index 4+: metric columns
+    std::vector<ColumnFilter> m_column_filters;        // Active filters
+    std::vector<ColumnFilter> m_pending_column_filters; // User editing
 };
 
 }  // namespace View

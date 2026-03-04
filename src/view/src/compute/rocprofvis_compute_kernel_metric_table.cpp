@@ -9,9 +9,13 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_common_defs.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 #include "imgui.h"
 #include "spdlog/spdlog.h"
+
+#include <algorithm>
+#include <cctype>
 
 namespace RocProfVis
 {
@@ -100,15 +104,30 @@ KernelMetricTable::Update()
 
     if(!request_pending && m_fetch_requested)
     {
-        ComputeTableRequestParams params(m_workload_id, m_metrics_params);
+        // Build filter map from vector - only include active filters
+        std::unordered_map<uint64_t, std::string> filter_map;
 
-        params.m_sort_column_index = m_sort_column_index;
-        params.m_sort_order =
-            static_cast<rocprofvis_controller_sort_order_t>(m_sort_order);
+        for(size_t i = 0; i < m_column_filters.size(); i++)
+        {
+            const ColumnFilter& filter = m_column_filters[i];
+            if(filter.is_active && strlen(filter.filter_text) > 0)
+            {
+                filter_map[i] = std::string(filter.filter_text);
+            }
+        }
 
-        spdlog::debug("Requesting sorted kernel selection table: column {}, order {}",
+        ComputeTableRequestParams params(
+            m_workload_id,
+            m_metrics_params,
+            m_sort_column_index,
+            static_cast<rocprofvis_controller_sort_order_t>(m_sort_order),
+            filter_map  // Pass filters by column index
+        );
+
+        spdlog::debug("Requesting kernel selection table: column {}, order {}, filters {}",
                       m_sort_column_index,
-                      m_sort_order == kRPVControllerSortOrderAscending ? "ASC" : "DESC");
+                      m_sort_order == kRPVControllerSortOrderAscending ? "ASC" : "DESC",
+                      filter_map.size());
         m_data_provider.FetchMetricPivotTable(params);
 
         m_fetch_requested = false;
@@ -135,6 +154,8 @@ KernelMetricTable::Update()
         ComputeKernelSelectionTable& table =
             m_data_provider.ComputeModel().GetKernelSelectionTable();
         const std::vector<std::vector<std::string>>& data = table.GetTableData();
+        // reset selection (filter may have removed the selected kernel from the table)
+        m_selected_row = -1;
         for(size_t row = 0; row < data.size(); row++)
         {
             // TODO: add "Important Column" for indentifying id column instead of
@@ -175,24 +196,57 @@ KernelMetricTable::Render()
     m_query_builder.SetWorkload(
         m_data_provider.ComputeModel().GetWorkload(m_workload_id));
 
-    if(m_show_kernel_table)
+
+    ImGui::SameLine(0.0f, item_spacing);
+
+    ImGui::BeginDisabled(!m_show_kernel_table ||
+                         m_workload_id == ComputeSelection::INVALID_SELECTION_ID);
+    if(ImGui::Button("Add Metric"))
+    {
+        m_query_builder.Show([this](const std::string& query) {
+            m_metrics_params.push_back(query);
+            const AvailableMetrics::Entry* entry =
+                m_query_builder.GetSelectedMetricInfo();
+            m_metrics_info.push_back({ entry ? *entry : AvailableMetrics::Entry(),
+                                        m_query_builder.GetValueName() });
+
+            // Add filter slot for the new metric column
+            m_column_filters.push_back(ColumnFilter());
+            m_pending_column_filters.push_back(ColumnFilter());
+
+            m_fetch_requested = true;
+        });
+    }
+    
+    ImGui::SameLine(0.0f, item_spacing);
+
+    // Filter control buttons
+    if(ImGui::Button("Apply Filters"))
+    {
+        ApplyFilters();
+    }
+    ImGui::SameLine(0.0f, item_spacing);
+    if(ImGui::Button("Clear All Filters"))
+    {
+        ClearAllFilters();
+    }
+
+    // Show active filter count
+    size_t active_count = 0;
+    for(const auto& filter : m_column_filters)
+    {
+        if(filter.is_active && strlen(filter.filter_text) > 0)
+        {
+            active_count++;
+        }
+    }
+    if(active_count > 0)
     {
         ImGui::SameLine(0.0f, item_spacing);
-
-        ImGui::BeginDisabled(m_workload_id == ComputeSelection::INVALID_SELECTION_ID);
-        if(ImGui::Button("Add Metric"))
-        {
-            m_query_builder.Show([this](const std::string& query) {
-                m_metrics_params.push_back(query);
-                const AvailableMetrics::Entry* entry =
-                    m_query_builder.GetSelectedMetricInfo();
-                m_metrics_info.push_back({ entry ? *entry : AvailableMetrics::Entry(),
-                                           m_query_builder.GetValueName() });
-                m_fetch_requested = true;
-            });
-        }
-        ImGui::EndDisabled();
+        ImGui::TextDisabled("(%zu active filters)", active_count);
     }
+
+    ImGui::EndDisabled();
 
     ImGui::Separator();
 
@@ -234,7 +288,7 @@ KernelMetricTable::Render()
             if(ImGui::BeginTable("kernel_selection_table", column_count, table_flags,
                                  outer_size))
             {
-                ImGui::TableSetupScrollFreeze(0, 1);  // Freeze header row
+                ImGui::TableSetupScrollFreeze(0, 2);  // Freeze header row and filter row
                 for(int col = 0; col < column_count; col++)
                 {
                     if(col < PERMANENT_COLUMN_COUNT)
@@ -314,8 +368,16 @@ KernelMetricTable::Render()
                     {
                         remove_index = col - PERMANENT_COLUMN_COUNT;
                     }
-                    ImGui::PopStyleVar();   
+                    ImGui::PopStyleVar();
                     ImGui::PopID();
+                }
+
+                // Filter row
+                ImGui::TableNextRow();
+                for(int col = 0; col < column_count; col++)
+                {
+                    ImGui::TableSetColumnIndex(col);
+                    RenderColumnFilter(col);
                 }
 
                 if(data.empty())
@@ -459,12 +521,135 @@ KernelMetricTable::Render()
         m_metrics_params.erase(m_metrics_params.begin() + remove_index);
         m_metrics_info.erase(m_metrics_info.begin() + remove_index);
 
+        // Remove corresponding filter for the removed metric column
+        size_t filter_index = PERMANENT_COLUMN_COUNT + remove_index;
+        if(filter_index < m_column_filters.size())
+        {
+            m_column_filters.erase(m_column_filters.begin() + filter_index);
+            m_pending_column_filters.erase(m_pending_column_filters.begin() + filter_index);
+        }
+
         m_fetch_requested = true;
         spdlog::debug("Removed metric column at index {}", remove_index);
     }
     }
 
     m_query_builder.Render();
+}
+
+void
+KernelMetricTable::RenderColumnFilter(int column_index)
+{
+    // Ensure vectors are sized correctly
+    size_t total_columns = PERMANENT_COLUMN_COUNT + m_metrics_params.size();
+    if(m_pending_column_filters.size() != total_columns)
+    {
+        m_pending_column_filters.resize(total_columns);
+    }
+
+    if(column_index < 0 || column_index >= static_cast<int>(total_columns))
+    {
+        return;
+    }
+
+    ColumnFilter& filter = m_pending_column_filters[column_index];
+
+    // Determine hint based on column type (column 1 is Name - text column)
+    const char* hint = (column_index == 1) ? "LIKE %text%" : ">, <, =, >=, <=, !=";
+
+    ImGui::PushID(column_index);
+    ImGui::SetNextItemWidth(-1);  // Fill column width
+
+    if(ImGui::InputTextWithHint("##filter", hint, filter.filter_text,
+                                sizeof(filter.filter_text)))
+    {
+        filter.is_active = (strlen(filter.filter_text) > 0);
+    }
+
+    ImGui::PopID();
+}
+
+void
+KernelMetricTable::ApplyFilters()
+{
+    // Validate each filter before applying
+    for(size_t i = 0; i < m_pending_column_filters.size(); i++)
+    {
+        const ColumnFilter& filter = m_pending_column_filters[i];
+        if(!filter.is_active || strlen(filter.filter_text) == 0)
+            continue;
+
+        bool is_numeric_column = (i != 1);  // Column 1 is Name (text), others are numeric
+
+        if(!ValidateFilterExpression(filter.filter_text, is_numeric_column))
+        {
+            spdlog::warn("Invalid filter expression for column {}: {}", i, filter.filter_text);
+            NotificationManager::GetInstance().Show(
+                "Invalid filter expression: " + std::string(filter.filter_text),
+                NotificationLevel::Error);
+
+            return;  // Don't apply invalid filters
+        }
+    }
+
+    m_column_filters = m_pending_column_filters;
+    m_fetch_requested = true;
+}
+
+void
+KernelMetricTable::ClearAllFilters()
+{
+    size_t total_columns = PERMANENT_COLUMN_COUNT + m_metrics_params.size();
+    m_pending_column_filters.assign(total_columns, ColumnFilter());
+    m_column_filters.assign(total_columns, ColumnFilter());
+    m_fetch_requested = true;
+}
+
+bool
+KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_column)
+{
+    std::string trimmed(expr);
+    // Trim whitespace
+    trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
+    trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
+
+    if(trimmed.empty()) return true;
+
+    if(is_numeric_column)
+    {
+        // Must be: operator + number, or just number
+        // Check for operators followed by numbers
+        static const std::vector<std::string> ops = {">=", "<=", "!=", "<>", ">", "<", "="};
+        for(const auto& op : ops)
+        {
+            if(trimmed.find(op) == 0)
+            {
+                std::string value = trimmed.substr(op.length());
+                // Trim value
+                value.erase(0, value.find_first_not_of(" \t\n\r"));
+                value.erase(value.find_last_not_of(" \t\n\r") + 1);
+                // Check if value is numeric
+                if(!value.empty() && (std::isdigit(value[0]) || value[0] == '-' || value[0] == '.'))
+                {
+                    return true;
+                }
+                return false;
+            }
+        }
+        // If no operator, check if it's just a number
+        return !trimmed.empty() && (std::isdigit(trimmed[0]) || trimmed[0] == '-' || trimmed[0] == '.');
+    }
+    else
+    {
+        // Text column: LIKE operator required
+        auto starts_with_like = [](const std::string& str) {
+            if(str.length() < 4) return false;
+            std::string prefix = str.substr(0, 4);
+            std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::tolower);
+            return prefix == "like";
+        };
+        return starts_with_like(trimmed);
+    }
 }
 
 void

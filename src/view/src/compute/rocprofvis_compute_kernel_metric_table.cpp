@@ -274,16 +274,17 @@ KernelMetricTable::Render()
     {
         if(!header.empty() && !data.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
         {
-            ImGuiTableFlags table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                                          ImGuiTableFlags_Borders |
-                                          ImGuiTableFlags_SizingStretchSame;
+            ImGuiTableFlags table_flags =
+                ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX |
+                ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings;
             if(!request_pending)
             {
                 table_flags = table_flags | ImGuiTableFlags_Sortable;
             }
 
             int column_count = static_cast<int>(header.size());
-            ImVec2 outer_size = ImVec2(0.0f, ImGui::GetContentRegionAvail().y);
+            ImVec2 outer_size = ImVec2(ImGui::GetContentRegionAvail());
 
             if(ImGui::BeginTable("kernel_selection_table", column_count, table_flags,
                                  outer_size))

@@ -54,6 +54,7 @@ typedef struct rocprofvis_db_memalloc_activity_t
     uint16_t stream_id;
     uint8_t agent_id;
     uint8_t queue_id;
+    uint32_t track_id;
     rocprofvis_db_memalloc_type_t type;
     rocprofvis_db_memalloc_level_t level;
 }rocprofvis_db_memalloc_activity_t;
@@ -71,13 +72,15 @@ class RocprofDatabase : public ProfileDatabase
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
         ProfileDatabase(path),
-        m_query_factory(this)
+        m_query_factory(this),
+        m_metadata_version_control(this)
     {
         CreateDbNode(path);
     };
     RocprofDatabase(rocprofvis_db_filename_t path, std::vector<std::string> & multinode_files) :
         ProfileDatabase(path),
-        m_query_factory(this)
+        m_query_factory(this),
+        m_metadata_version_control(this)
     {
         CreateDbNodes(multinode_files);
     };
@@ -150,13 +153,6 @@ private:
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
     static int CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
-    // sqlite3_exec callback to cache specified tables data
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to process stack trace information query and add stack trace
     // object to StackTrace container
     // @param data - pointer to callback caller argument
@@ -184,15 +180,6 @@ private:
     // @return SQLITE_OK if successful
     static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt,
         char** azColName);
-    // sqlite3_exec callback to collect memory allocation activity
-    // object to StackTrace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallBackAddMemoryAllocationActivity(void* data, int argc, sqlite3_stmt* stmt,
-        char** azColName);
     // method to remap string IDs. Main reason for remapping is having strings and kernel symbol names in one array 
     // @param record - event record structure
     // @return status of operation
@@ -217,11 +204,14 @@ private:
     {
         return &s_null_data_exceptions_skip;
     }
-    const rocprofvis_dm_track_category_t GetRegionTrackCategory() override
+    rocprofvis_dm_track_category_t GetRegionTrackCategory() override
     {
         return kRocProfVisDmRegionMainTrack;
     }
-
+    MetadataVersionControl* GetMetadataVersionControl() override 
+    { 
+        return &m_metadata_version_control; 
+    };
 
     private:
         rocprofvis_dm_result_t CreateIndexes();
@@ -229,6 +219,13 @@ private:
         rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance);
         rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
         rocprofvis_dm_result_t CreateMemoryActivityTable(Future* future);
+        rocprofvis_dm_result_t CreateAgentFriendlyMemoryAllocationTable(Future* future);
+        rocprofvis_dm_result_t LoadMemoryActivityData(Future* future);
+        rocprofvis_dm_result_t GenerateInterdependencyTables(Future* future);
+        rocprofvis_dm_result_t RunCacheQueriesAsync(Future* future, std::vector<std::pair<std::string, std::string>>& info_table_lis);
+    protected:
+        uint64_t GetMemoryActivityTableSchemaHash();
+        std::string GetLevelSchemaHashStr();
         
     private:
         QueryFactory m_query_factory;
@@ -239,8 +236,7 @@ private:
         string_map_t m_string_map; //temporary map to reuse string
         memalloc_activity_t m_memalloc_activity;
         mem_free_stream_to_agent_t m_memfree_stream_to_agent;
-        std::mutex m_lock;
-
+        RocprofMetadataVersionControl m_metadata_version_control;
 
         inline static const rocprofvis_event_data_category_map_t
             s_rocprof_categorized_data = {
@@ -331,6 +327,28 @@ private:
             }
 
        };
+        // Define the SQL schema for the memory activity table. Each entry corresponds to a
+        // column in the table that describes a memory allocation/free event and its metadata.
+        inline static SQLInsertParams s_mem_activity_schema_params = { 
+            { "id", "INTEGER PRIMARY KEY" },
+            { "nid", "INTEGER" },
+            { "pid", "INTEGER" },
+            { "agent_id", "INTEGER" },
+            { "queue_id", "INTEGER" },
+            { "stream_id", "INTEGER" },
+            { "pmc_id", "INTEGER" },
+            { "type", "TEXT" },
+            { "level", "TEXT" },
+            { "start", "INTEGER" },
+            { "end", "INTEGER" },
+            { "address", "INTEGER" },
+            { "size", "INTEGER" },
+            { "track_id", "INTEGER" },
+        };
+
+        inline static SQLInsertParams s_level_schema_params = { { "eid", "INTEGER PRIMARY KEY" }, { "level", "INTEGER" } , { "level_for_stream", "INTEGER" } };
+
+        friend class RocprofMetadataVersionControl;
 };
 
 }  // namespace DataModel

@@ -97,7 +97,7 @@ namespace DataModel
                 Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                 Builder::StoreConfigVersion()
                 },
-                { Builder::From("rocpd_memory_allocate","M"),
+                { Builder::From("roc_optiq_memory_allocate","M"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id") } }));
         }
         else
@@ -111,7 +111,7 @@ namespace DataModel
                 Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                 Builder::StoreConfigVersion()
                 },
-                { Builder::From("rocpd_memory_allocate") } }));
+                { Builder::From("roc_optiq_memory_allocate") } }));
         }
     }
 
@@ -181,6 +181,24 @@ namespace DataModel
 
     }
 
+    std::string QueryFactory::GetRocprofMemoryActivitySubQuery() {
+        if (IsVersionGreaterOrEqual("4"))
+        {
+            return Builder::Select(rocprofvis_db_sqlite_mem_act_subquery_format(
+                { { Builder::QParam("T.value", "value")},
+                { Builder::From("roc_optiq_memory_allocate","MA"),
+                Builder::InnerJoin("rocpd_timestamp", "T", "MA.start_id == T.id")
+                } }));
+        }
+        else
+        {
+            return Builder::Select(rocprofvis_db_sqlite_mem_act_subquery_format(
+                { { Builder::QParam("start", "value")},
+                { Builder::From("roc_optiq_memory_allocate")                
+                } }));
+        }
+    }
+
     std::string QueryFactory::GetRocprofMemoryActivityTrackQuery() {
 
         return Builder::Select(rocprofvis_db_sqlite_track_query_format(
@@ -192,7 +210,8 @@ namespace DataModel
             Builder::QParamOperation(kRocProfVisDmOperationNoOp),
             Builder::StoreConfigVersion()
                 },
-            { Builder::From("roc_optiq_memory_activity"),
+            { Builder::From("roc_optiq_memory_activity","A"),
+            Builder::InnerJoin(GetRocprofMemoryActivitySubQuery(), "S", "A.start == S.value", MultiNode::No)
             } }));
     }
 
@@ -279,7 +298,7 @@ namespace DataModel
                 Builder::QParamOperation(kRocProfVisDmMultipleOperations),
                 Builder::StoreConfigVersion()
                 },
-                { Builder::From("rocpd_memory_allocate", "M"),
+                { Builder::From("roc_optiq_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id") } }));
         }
         else
@@ -293,7 +312,7 @@ namespace DataModel
                 Builder::QParamOperation(kRocProfVisDmMultipleOperations),
                 Builder::StoreConfigVersion()
                 },
-                { Builder::From("rocpd_memory_allocate") } }));
+                { Builder::From("roc_optiq_memory_allocate") } }));
         }
     }
 
@@ -422,7 +441,7 @@ namespace DataModel
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME),
                 Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME)
                 },
-                { Builder::From("rocpd_memory_allocate","M"),
+                { Builder::From("roc_optiq_memory_allocate","M"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = M.end_id")} }));
@@ -440,7 +459,7 @@ namespace DataModel
                 Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
                 Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME)
                 },
-                { Builder::From("rocpd_memory_allocate") } }));
+                { Builder::From("roc_optiq_memory_allocate") } }));
         }
     }
 
@@ -576,7 +595,8 @@ namespace DataModel
             Builder::SpaceSaver(0),
             Builder::SpaceSaver(0)
                 },
-            { Builder::From("roc_optiq_memory_activity"),
+            { Builder::From("roc_optiq_memory_activity","A"),
+            Builder::InnerJoin(GetRocprofMemoryActivitySubQuery(), "S", "A.start == S.value", MultiNode::No)
             } }));
     }
 
@@ -691,7 +711,7 @@ namespace DataModel
                 Builder::QParam("L.level", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmMemoryAllocationTrack)
                 },
-                { Builder::From("rocpd_memory_allocate", "M"),
+                { Builder::From("roc_optiq_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
@@ -713,7 +733,7 @@ namespace DataModel
                 Builder::QParam("L.level", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmMemoryAllocationTrack)
                 },
-                { Builder::From("rocpd_memory_allocate", "M"),
+                { Builder::From("roc_optiq_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
                 Builder::LeftJoin(Builder::LevelTable("mem_alloc"), "L", "M.id = L.eid") } }));
         }
@@ -870,7 +890,8 @@ namespace DataModel
             Builder::QParam("size", Builder::EVENT_LEVEL_SERVICE_NAME),
             Builder::QParamCategory(kRocProfVisDmPmcTrack)
                 },
-            { Builder::From("roc_optiq_memory_activity"),
+            { Builder::From("roc_optiq_memory_activity","A"),
+            Builder::InnerJoin(GetRocprofMemoryActivitySubQuery(), "S", "A.start == S.value", MultiNode::No)
             } }));
     }
 
@@ -938,7 +959,7 @@ namespace DataModel
                 Builder::QParam("L.level_for_stream", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack)
                 },
-                { Builder::From("rocpd_memory_allocate", "M"),
+                { Builder::From("roc_optiq_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id "),
@@ -960,7 +981,7 @@ namespace DataModel
                 Builder::QParam("L.level_for_stream", Builder::EVENT_LEVEL_SERVICE_NAME),
                 Builder::QParamCategory(kRocProfVisDmStreamTrack)
                 },
-                { Builder::From("rocpd_memory_allocate", "M"),
+                { Builder::From("roc_optiq_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
                 Builder::LeftJoin(Builder::LevelTable("mem_alloc"), "L", "M.id = L.eid") } }));
         }
@@ -1185,7 +1206,7 @@ namespace DataModel
                 Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
-                { Builder::From("rocpd_memory_allocate", "M"),
+                { Builder::From("roc_optiq_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = M.end_id"),
@@ -1220,7 +1241,7 @@ namespace DataModel
                 Builder::QParam("M.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("M.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                 Builder::QParam("M.stream_id", Builder::STREAM_ID_SERVICE_NAME) },
-                { Builder::From("rocpd_memory_allocate", "M"),
+                { Builder::From("roc_optiq_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id") } }));
         }
     }
@@ -1240,7 +1261,8 @@ namespace DataModel
                 Builder::QParam("TS.value", Builder::START_SERVICE_NAME),
                 Builder::QParam("TE.value", Builder::END_SERVICE_NAME),
                 Builder::QParam("M.address", Builder::ADDRESS_PUBLIC_NAME),
-                Builder::QParam("M.size", Builder::SIZE_PUBLIC_NAME)
+                Builder::QParam("M.size", Builder::SIZE_PUBLIC_NAME),
+                Builder::QParam("T.id", "track_id"),
                  },
                 { Builder::From("rocpd_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
@@ -1262,10 +1284,31 @@ namespace DataModel
                 Builder::QParam("M.start", Builder::START_SERVICE_NAME),
                 Builder::QParam("M.end", Builder::END_SERVICE_NAME),
                 Builder::QParam("M.address", Builder::ADDRESS_PUBLIC_NAME),
-                Builder::QParam("M.size", Builder::SIZE_PUBLIC_NAME)
+                Builder::QParam("M.size", Builder::SIZE_PUBLIC_NAME),
+                Builder::SpaceSaver(0),
                  },
                 { Builder::From("rocpd_memory_allocate", "M") } }));
         }
+    }
+
+    std::string QueryFactory::GetRocprofMemoryAllocActivityLoadQuery() {
+
+        return Builder::Select(rocprofvis_db_sqlite_memory_alloc_activity_query_format(
+            {{
+                    Builder::QParam("id", Builder::ID_PUBLIC_NAME),
+                    Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
+                    Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                    Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                    Builder::QParam("stream_id", Builder::STREAM_ID_SERVICE_NAME),
+                    Builder::QParam("type", Builder::M_TYPE_REFERENCE),
+                    Builder::QParam("level", Builder::LEVEL_REFERENCE),
+                    Builder::QParam("start", Builder::START_SERVICE_NAME),
+                    Builder::QParam("end", Builder::END_SERVICE_NAME),
+                    Builder::QParam("address", Builder::ADDRESS_PUBLIC_NAME),
+                    Builder::QParam("size", Builder::SIZE_PUBLIC_NAME),
+                    Builder::QParam("track_id")
+                },
+            { Builder::From("roc_optiq_memory_activity") } }));
     }
 
     std::string QueryFactory::GetRocprofMemoryCopyTableQuery() {
@@ -1399,7 +1442,8 @@ namespace DataModel
             Builder::QParam("pmc_id", Builder::COUNTER_ID_SERVICE_NAME),
             Builder::QParam("size", Builder::COUNTER_VALUE_SERVICE_NAME)
             },
-            { Builder::From("roc_optiq_memory_activity"),
+            { Builder::From("roc_optiq_memory_activity","A"),
+            Builder::InnerJoin(GetRocprofMemoryActivitySubQuery(), "S", "A.start == S.value", MultiNode::No)
             } }));
     }
 
@@ -1549,7 +1593,7 @@ namespace DataModel
                         Builder::From("rocpd_region", "R"),
                         Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0"),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
-                        Builder::InnerJoin("rocpd_memory_allocate", "M", "M.event_id = E2.id "),
+                        Builder::InnerJoin("roc_optiq_memory_allocate", "M", "M.event_id = E2.id "),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = M.start_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = M.end_id"),
@@ -1651,7 +1695,7 @@ namespace DataModel
                         Builder::From("rocpd_region", "R"),
                         Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0"),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
-                        Builder::InnerJoin("rocpd_memory_allocate", "M", "M.event_id = E2.id "),
+                        Builder::InnerJoin("roc_optiq_memory_allocate", "M", "M.event_id = E2.id "),
                         Builder::InnerJoin(Builder::LevelTable("mem_alloc"), "L", "M.id = L.eid") },
                     { Builder::Where(
                         "R.id", "==", std::to_string(event_id)) } })));
@@ -1908,7 +1952,7 @@ namespace DataModel
 
                         },
                     { 
-                        Builder::From("rocpd_memory_allocate", "M"),
+                        Builder::From("roc_optiq_memory_allocate", "M"),
                         Builder::InnerJoin("rocpd_event", "E1", "M.event_id = E1.id AND E1.stack_id != 0"),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id"),
@@ -1938,7 +1982,7 @@ namespace DataModel
 
                         },
                     { 
-                        Builder::From("rocpd_memory_allocate", "M"),
+                        Builder::From("roc_optiq_memory_allocate", "M"),
                         Builder::InnerJoin("rocpd_event", "E1", "M.event_id = E1.id AND E1.stack_id != 0"),
                         Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
                         Builder::InnerJoin("rocpd_region", "R", "R.event_id = E2.id"),
@@ -2023,7 +2067,7 @@ namespace DataModel
                 Builder::QParam("T.stream_id", Builder::STREAM_ID_SERVICE_NAME), 
                 Builder::QParam("L.level"),
                 Builder::QParam("L.level_for_stream") },
-                { Builder::From("rocpd_memory_allocate", "M"),
+                { Builder::From("roc_optiq_memory_allocate", "M"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id"),
                 Builder::LeftJoin(Builder::LevelTable("mem_alloc"), "L", "M.id = L.eid") },
                 { Builder::Where("M.id", "==", std::to_string(event_id)) } }));
@@ -2038,7 +2082,7 @@ namespace DataModel
                 Builder::QParam("M.stream_id", Builder::STREAM_ID_SERVICE_NAME), 
                 Builder::QParam("L.level"),
                 Builder::QParam("L.level_for_stream") },
-                { Builder::From("rocpd_memory_allocate", "M"),
+                { Builder::From("roc_optiq_memory_allocate", "M"),
                 Builder::LeftJoin(Builder::LevelTable("mem_alloc"), "L", "M.id = L.eid") },
                 { Builder::Where("M.id", "==", std::to_string(event_id)) } }));
         }
@@ -2111,7 +2155,7 @@ namespace DataModel
             Builder::QParam("A.type", Builder::ARG_TYPE_PUBLIC_NAME),
             Builder::QParam("A.name", Builder::ARG_NAME_PUBLIC_NAME),
             Builder::QParam("A.value", Builder::ARG_VALUE_PUBLIC_NAME)},
-            { Builder::From("rocpd_memory_allocate", "M"),
+            { Builder::From("roc_optiq_memory_allocate", "M"),
             Builder::InnerJoin("rocpd_event", "E", "E.id = M.event_id"),
             Builder::InnerJoin("rocpd_arg", "A", "E.id = A.event_id")},
             { Builder::Where("M.id", "==", std::to_string(event_id)) } }));
@@ -2168,7 +2212,7 @@ namespace DataModel
                         Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                         Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                         Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate)},
-                { Builder::From("rocpd_memory_allocate","M"),
+                { Builder::From("roc_optiq_memory_allocate","M"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = M.track_id")} }));
         }
         else
@@ -2180,7 +2224,7 @@ namespace DataModel
                         Builder::QParam("agent_id", Builder::AGENT_ID_SERVICE_NAME),
                         Builder::QParam("queue_id", Builder::QUEUE_ID_SERVICE_NAME),
                         Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate)},
-                { Builder::From("rocpd_memory_allocate")} }));
+                { Builder::From("roc_optiq_memory_allocate")} }));
         }
     }
 

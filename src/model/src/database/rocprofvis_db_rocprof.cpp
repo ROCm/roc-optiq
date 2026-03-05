@@ -128,7 +128,7 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, ro
                 track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("Queue", track_params.track_indentifiers.id[TRACK_ID_QUEUE], "name");
             }
             else {
-                track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("PMC", track_params.track_indentifiers.id[TRACK_ID_QUEUE], "name");
+                track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("PMC", track_params.track_indentifiers.id[TRACK_ID_QUEUE], "symbol");
             }
 
         }
@@ -202,6 +202,7 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
     memact.stream_id = db->Sqlite3ColumnInt(func, stmt, azColName, 4);
     memact.agent_id = db->Sqlite3ColumnInt(func, stmt, azColName, 2);
     memact.queue_id = db->Sqlite3ColumnInt(func, stmt, azColName, 3);
+    memact.track_id = db->Sqlite3ColumnInt(func, stmt, azColName, 11);
     std::string type_str = db->Sqlite3ColumnText(func, stmt, azColName, 5);
     std::string level_str = db->Sqlite3ColumnText(func, stmt, azColName, 6);
     for (int i=kRPVMemActivityAlloc; i < kRPVMemActivityNumTypes; i++)
@@ -227,9 +228,21 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
         if (it != vec.rend())
         {
             memact.agent_id = it->agent_id;
+            memact.track_id = it->track_id;
             memact.size = it->size;
             db->m_memfree_stream_to_agent[callback_params->db_instance->GuidIndex()][memact.stream_id] = it->agent_id;
         }
+        else
+        {
+            memact.agent_id = callback_params->future->GetRuntimeStorageValue(kRPVFutureStorageEventId, (uint64_t)memact.agent_id);
+            memact.track_id = callback_params->future->GetRuntimeStorageValue(kRPVFutureStorageTrackId, (uint64_t)memact.track_id);
+            db->m_memfree_stream_to_agent[callback_params->db_instance->GuidIndex()][memact.stream_id] = memact.agent_id;
+        }
+    }
+    else
+    {
+        callback_params->future->SetRuntimeStorageValue(kRPVFutureStorageEventId, (uint64_t)memact.agent_id);
+        callback_params->future->SetRuntimeStorageValue(kRPVFutureStorageTrackId, (uint64_t)memact.track_id);
     }
     vec.push_back(memact);
     callback_params->future->CountThisRow();
@@ -253,25 +266,9 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
  */
 rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future)
 {
-    // Define the SQL schema for the memory activity table. Each entry corresponds to a
-    // column in the table that describes a memory allocation/free event and its metadata.
-    SQLInsertParams params[] = { 
-        { "id", "INTEGER PRIMARY KEY" },
-        { "nid", "INTEGER" },
-        { "pid", "INTEGER" },
-        { "agent_id", "INTEGER" },
-        { "queue_id", "INTEGER" },
-        { "stream_id", "INTEGER" },
-        { "pmc_id", "INTEGER" },
-        { "type", "TEXT" },
-        { "level", "TEXT" },
-        { "start", "INTEGER" },
-        { "end", "INTEGER" },
-        { "address", "INTEGER" },
-        { "size", "INTEGER" }
+
     // Local structure mirroring the memory activity table schema; used while extracting
     // values from SQLite statements and inserting them into the database model.
-    };
 
     typedef struct store_params {
             uint32_t id;
@@ -280,28 +277,30 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
             uint32_t agent_id;
             uint32_t queue_id;
             uint32_t stream_id;
-            uint32_t pmc_id;
+            uint64_t pmc_id;
             std::string type;
             std::string level;
             uint64_t start;
             uint64_t end;
             uint64_t address;
             uint64_t size;
+            uint32_t track_id;
     } store_params;
 
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
 
     for (auto& guid_info : DbInstances())
     {
+        const char* pmc_table_name = "PMC";
         std::map<uint32_t, uint64_t> allocated_memory_per_agent;
         std::map<uint32_t, uint64_t> pmc_id_per_agent;
-        TableCache* pmc_table = (TableCache*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle("PMC");
+        TableCache* pmc_table = (TableCache*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle(pmc_table_name);
         auto& mem_act_per_guid = m_memalloc_activity[guid_info.first.GuidIndex()];
         std::vector<store_params> v;
         v.reserve(mem_act_per_guid.size());
         uint64_t node_id = std::atoll(CachedTables(guid_info.first.GuidIndex())->GetTableCellByIndex("Node", 0, "id"));
-        std::string table_name = "roc_optiq_memory_activity_" + GuidAt(guid_info.first.GuidIndex());
-        bool table_exists = CheckTableExists(table_name, guid_info.first.FileIndex());
+        std::string table_name = m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryActivity) + GuidAt(guid_info.first.GuidIndex());
+        bool table_exists = false == m_metadata_version_control.MustRebuild(guid_info.first.FileIndex(), m_metadata_version_control.kRocOptiqTableMemoryActivity);
         if (mem_act_per_guid.size() > 0)
         {
             for (auto& m : mem_act_per_guid)
@@ -310,50 +309,50 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
                 if (it == pmc_id_per_agent.end())
                 {
                     uint32_t num = pmc_table->NumRows();
-                    uint32_t pmc_id = num ? std::atol(pmc_table->GetCellByIndex(num - 1, "id")) : 0;
+                    uint64_t pmc_id = num ? std::atoll(pmc_table->GetCellByIndex(num - 1, "id")) : 0;
                     pmc_id++;
                     pmc_table->AddRow(pmc_id);
 
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "id",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "id",
                         kRPVDataTypeInt, std::to_string(pmc_id).c_str());
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "guid",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "guid",
                         kRPVDataTypeString, GuidSymAt(guid_info.first.GuidIndex()).c_str());
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "nid",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "nid",
                         kRPVDataTypeInt, std::to_string(node_id).c_str());
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "pid",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "pid",
                         kRPVDataTypeInt, std::to_string(m.pid).c_str());
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "agent_id",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "agent_id",
                         kRPVDataTypeInt, std::to_string(m.agent_id).c_str());
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "target_arch",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "target_arch",
                         kRPVDataTypeString, "GPU");
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "event_code",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "event_code",
                         kRPVDataTypeInt, "0");
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "instance_id",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "instance_id",
                         kRPVDataTypeInt, "0");
                     std::string pmc_name = Builder::mem_alloc_levels[m.level] + " MEMORY";
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "name",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "name",
                         kRPVDataTypeString, pmc_name.c_str());
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "symbol",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "symbol",
                         kRPVDataTypeString, pmc_name.c_str());
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "description",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "description",
                         kRPVDataTypeString, pmc_name.c_str());
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "long_description",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "long_description",
                         kRPVDataTypeString, pmc_name.c_str());
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "component",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "component",
                         kRPVDataTypeString, "");
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "units",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "units",
                         kRPVDataTypeString, "bytes");
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "value_type",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "value_type",
                         kRPVDataTypeString, "");
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "block",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "block",
                         kRPVDataTypeString, "");
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "expression",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "expression",
                         kRPVDataTypeString, "");
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "is_constant",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "is_constant",
                         kRPVDataTypeInt, "0");
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "is_derived",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "is_derived",
                         kRPVDataTypeInt, "0");
-                    CachedTables(guid_info.first.GuidIndex())->AddTableCell("PMC", pmc_id, "extdata",
+                    CachedTables(guid_info.first.GuidIndex())->AddTableCell(pmc_table_name, pmc_id, "extdata",
                         kRPVDataTypeBlob, "{}");
 
                     pmc_id_per_agent[m.agent_id] = pmc_id;
@@ -391,8 +390,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
             {
                 result = CreateSQLTable(
                     table_name.c_str(),
-                    params,
-                    13,
+                    s_mem_activity_schema_params,
                     v.size(),
                     [&](sqlite3_stmt* stmt, int index) {
                         store_params& p = v[index];
@@ -403,7 +401,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
                         sqlite3_bind_int(stmt, column_index++, p.agent_id);
                         sqlite3_bind_int(stmt, column_index++, p.queue_id);
                         sqlite3_bind_int(stmt, column_index++, p.stream_id);
-                        sqlite3_bind_int(stmt, column_index++, p.pmc_id);
+                        sqlite3_bind_int64(stmt, column_index++, p.pmc_id);
                         sqlite3_bind_text(stmt, column_index++, p.type.c_str(), -1, SQLITE_STATIC);
                         sqlite3_bind_text(stmt, column_index++, p.level.c_str(), -1, SQLITE_STATIC);
                         sqlite3_bind_int64(stmt, column_index++, p.start);
@@ -416,6 +414,92 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
                     break;
                 }
             }
+        } else
+        if (!table_exists)
+        {
+            result = CreateSQLTable(
+                table_name.c_str(),
+                s_mem_activity_schema_params,
+                0,
+                nullptr, 
+                guid_info.first.FileIndex());
+        }
+    }
+    return result;
+}
+
+uint64_t RocprofDatabase::GetMemoryActivityTableSchemaHash()
+{
+    std::string hash_str = m_query_factory.GetRocprofMemoryAllocActivityQuery() + m_query_factory.GetRocprofMemoryAllocActivityLoadQuery();
+    for (auto param : s_mem_activity_schema_params)
+    {
+        hash_str += param.column;
+        hash_str += param.type;
+    }
+    return std::hash<std::string>{}(hash_str);
+}
+
+rocprofvis_dm_result_t RocprofDatabase::CreateAgentFriendlyMemoryAllocationTable(Future* future)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    for (auto& guid_info : DbInstances())
+    {
+        std::string from = "rocpd_memory_allocate_";
+        std::string to = m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryAllocate);
+        std::string original_m_alloc_table = from + GuidAt(guid_info.first.GuidIndex());
+        std::string updated_m_alloc_table = to + GuidAt(guid_info.first.GuidIndex());
+        if (false == m_metadata_version_control.MustRebuild(guid_info.first.FileIndex(), m_metadata_version_control.kRocOptiqTableMemoryAllocate)) continue;
+        std::string query = std::string("SELECT sql FROM sqlite_master WHERE type='table' AND name = '") + original_m_alloc_table + "'";
+        std::string sql;
+        result = ExecuteSQLQuery(future, DbInstancePtrAt(guid_info.first.GuidIndex()), query.c_str(), &CallbackGetValue, &sql);
+        if (kRocProfVisDmResultSuccess != result) break;
+        size_t pos;
+
+        if ((pos = sql.find(from)) != std::string::npos) {
+            sql.replace(pos, from.length(), to);
+            result = ExecuteSQLQuery(future, DbInstancePtrAt(guid_info.first.GuidIndex()), (std::string("DROP TABLE IF EXISTS ") + updated_m_alloc_table).c_str());
+            if (kRocProfVisDmResultSuccess != result) break;
+            result = ExecuteSQLQuery(future, DbInstancePtrAt(guid_info.first.GuidIndex()), sql.c_str());
+            if (kRocProfVisDmResultSuccess != result) break;
+            query = std::string("INSERT INTO ")+updated_m_alloc_table+ " SELECT * FROM " + original_m_alloc_table + ";";
+            result = ExecuteSQLQuery(future, DbInstancePtrAt(guid_info.first.GuidIndex()), query.c_str());
+            if (kRocProfVisDmResultSuccess != result) break;
+            sqlite3_stmt* stmt = nullptr;
+            query = std::string("UPDATE ") + updated_m_alloc_table + (m_query_factory.IsVersionGreaterOrEqual("4") ? " SET track_id = ? WHERE id = ? ; " : " SET agent_id = ? WHERE id = ? ;");
+            sqlite3* conn = GetServiceConnection(guid_info.first.FileIndex());
+            if (sqlite3_prepare_v2(conn, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+            {
+                spdlog::error(sqlite3_errmsg(conn));
+                result = kRocProfVisDmResultDbAccessFailed;
+                break;
+            }
+            sqlite3_exec(conn, "BEGIN;", nullptr, nullptr, nullptr);
+            auto& mem_act_per_guid = m_memalloc_activity[guid_info.first.GuidIndex()];
+
+            for (auto& m : mem_act_per_guid)
+            {
+                if (m_query_factory.IsVersionGreaterOrEqual("4"))
+                {
+                    sqlite3_bind_int(stmt, 1, m.track_id);
+                }
+                else
+                {
+                    sqlite3_bind_int(stmt, 1, m.agent_id);
+                }
+                sqlite3_bind_int(stmt, 2, m.id);
+
+                if (sqlite3_step(stmt) != SQLITE_DONE)
+                {
+                    spdlog::error(sqlite3_errmsg(conn));
+                }
+
+                sqlite3_reset(stmt); 
+                sqlite3_clear_bindings(stmt);
+            }
+
+            sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr);
+
+            sqlite3_finalize(stmt);
         }
     }
     return result;
@@ -439,42 +523,6 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt,
     db->m_string_index_map[string_id_key] = string_index;
     db->m_string_id_map[string_index].push_back(string_id_key);
     db->m_string_map[str] = string_index;
-    callback_params->future->CountThisRow();
-    return 0;
-}
-
-
-int RocprofDatabase::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
-    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    void* func = (void*)&CallbackCacheTable;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
-    DatabaseCache * ref_tables = (DatabaseCache *)callback_params->handle;
-    std::lock_guard<std::mutex> lock(db->m_lock);
-    if (callback_params->future->GetProcessedRowsCount() == 0)
-    {
-        for (int i = 0; i < argc; i++)
-        {
-            ref_tables->AddTableColumn(callback_params->query[kRPVCacheTableName], azColName[i], (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i));
-        }
-    }
-
-    uint64_t id = db->Sqlite3ColumnInt64(func, stmt, azColName, 0);
-    ref_tables->AddTableRow(callback_params->query[kRPVCacheTableName], id);
-    for (int i = 0; i < argc; i++)
-    {
-        rocprofvis_db_data_type_t col_type = (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i);
-        if (col_type == kRPVDataTypeNull && strcmp(azColName[i],"name") == 0)
-        {
-            ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName], id, i, callback_params->query[kRPVCacheTableName]);
-        }
-        else
-        {
-            ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName], id, i,
-                (char*)db->Sqlite3ColumnText(func, stmt, azColName, i));
-        }
-    }
-
     callback_params->future->CountThisRow();
     return 0;
 }
@@ -531,8 +579,8 @@ RocprofDatabase::CreateIndexes()
     uint32_t file_node_id = -1;
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     std::vector<std::thread> threads;
-    auto task = [&](std::vector<std::string> queries, uint32_t db_node_id) {
-        result = ExecuteTransaction(vec, file_node_id);
+    auto task = [&](std::vector<std::string> queries, uint32_t db_node_id) {   
+        result = ExecuteTransaction( vec, db_node_id);
         };
     for (auto& guid_info : DbInstances())
     {
@@ -557,7 +605,7 @@ RocprofDatabase::CreateIndexes()
             vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_track_idx_") + guid_info.second +
                      " ON rocpd_track_" + guid_info.second + "(nid,agent_id,queue_id);");
             vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_stream_idx_") + guid_info.second +
-                     " ON rocpd_track_" + guid_info.second + "(nid,stream_id);");
+                     " ON rocpd_track_" + guid_info.second + "(nid,pid,stream_id);");
         } else
         {
             vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_idx_") + guid_info.second +
@@ -565,19 +613,27 @@ RocprofDatabase::CreateIndexes()
             vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_idx_") + guid_info.second +
                      " ON rocpd_kernel_dispatch_" + guid_info.second + "(nid,agent_id,queue_id);");
             vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_stream_idx_") + guid_info.second +
-                     " ON rocpd_kernel_dispatch_" + guid_info.second + "(nid,stream_id);");
+                     " ON rocpd_kernel_dispatch_" + guid_info.second + "(nid,pid,stream_id);");
             vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_allocate_idx_") + guid_info.second +
                      " ON rocpd_memory_allocate_" + guid_info.second + "(nid,agent_id,queue_id);");
             vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_allocate_stream_idx_") + guid_info.second +
-                     " ON rocpd_memory_allocate_" + guid_info.second + "(nid,stream_id);");
+                     " ON rocpd_memory_allocate_" + guid_info.second + "(nid,pid,stream_id);");
             vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_idx_") + guid_info.second +
                      " ON rocpd_memory_copy_" + guid_info.second + "(nid,dst_agent_id,queue_id);");
             vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_stream_idx_") + guid_info.second +
-                     " ON rocpd_memory_copy_" + guid_info.second + "(nid,stream_id);");
+                     " ON rocpd_memory_copy_" + guid_info.second + "(nid,pid,stream_id);");
 
         }
         vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_event_idx_") + guid_info.second +
                     " ON rocpd_region_" + guid_info.second + "(event_id);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_kernel_dispatch_idx_") + guid_info.second +
+            " ON rocpd_kernel_dispatch_" + guid_info.second + "(event_id);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_allocate_idx_") + guid_info.second +
+            " ON rocpd_memory_allocate_" + guid_info.second + "(event_id);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_memory_copy_idx_") + guid_info.second +
+            " ON rocpd_memory_copy_" + guid_info.second + "(event_id);");
+        vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_arg_idx_") + guid_info.second +
+            " ON rocpd_arg_" + guid_info.second + "(event_id);");
         vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_sample_event_idx_") + guid_info.second +
                     " ON rocpd_sample_" + guid_info.second + "(event_id);");
         vec.push_back(std::string("CREATE INDEX IF NOT EXISTS rocpd_region_stack_idx_") + guid_info.second +
@@ -592,54 +648,16 @@ RocprofDatabase::CreateIndexes()
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
 
+rocprofvis_dm_result_t RocprofDatabase::RunCacheQueriesAsync(Future* future, std::vector<std::pair<std::string, std::string>>& info_table_list){
     std::vector<std::thread> threads;
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
 
     auto get_info_table_task = [&](DbInstance* db_instance, std::string query, std::string tag) {
-            Future* sub_future = future->AddSubFuture();
-            result = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), tag.c_str(), (rocprofvis_dm_handle_t)CachedTables(db_instance->GuidIndex()), &CallbackCacheTable);
-            future->DeleteSubFuture(sub_future);
-        };
-
-    auto get_memory_allocation_activity_task = [&](DbInstance * db_instance, std::string query) {
         Future* sub_future = future->AddSubFuture();
-        result = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), &CallbackCaptureMemoryActivity);
+        result = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), tag.c_str(), (rocprofvis_dm_handle_t)CachedTables(db_instance->GuidIndex()), &CallbackCacheTable);
         future->DeleteSubFuture(sub_future);
         };
-
-    std::vector<std::pair<std::string, std::string>> info_table_list = {
-        {"Node", "SELECT * from rocpd_info_node_%GUID%;"},
-        {"Agent", "SELECT * from rocpd_info_agent_%GUID%;"},
-        {"Queue", "SELECT * from rocpd_info_queue_%GUID%;"},
-        {"Stream", "SELECT * from rocpd_info_stream_%GUID%;"},
-        {"Process", "SELECT * from rocpd_info_process_%GUID%;"},
-        {"Thread", "SELECT * from rocpd_info_thread_%GUID%;"},
-        {"PMC", "SELECT id, guid, nid, pid, agent_id, target_arch, COALESCE(event_code,0) as event_code, COALESCE(instance_id,0) as instance_id, name, symbol, description, long_description, component, units, value_type, block, expression, is_constant, is_derived, extdata from rocpd_info_pmc_%GUID%;"},
-        {"StreamToQueue", "SELECT ROW_NUMBER() OVER (ORDER BY tuple) AS id, d.stream_id, d.queue_id FROM (SELECT DISTINCT concat(nid,'-',pid,'-',stream_id,'-',queue_id) as tuple, stream_id, queue_id FROM rocpd_kernel_dispatch_%GUID%) AS d;"},
-        {"AgentToStream", "SELECT ROW_NUMBER() OVER (ORDER BY tuple) AS id, d.agent_id, d.stream_id FROM (SELECT DISTINCT concat(nid,'-',pid,'-',agent_id,'-',stream_id) as tuple, agent_id, stream_id FROM rocpd_kernel_dispatch_%GUID%) AS d;"},
-        {"AgentToQueue", "SELECT ROW_NUMBER() OVER (ORDER BY tuple) AS id, d.agent_id, d.queue_id FROM (SELECT DISTINCT concat(nid,'-',pid,'-',agent_id,'-',queue_id) as tuple, agent_id, queue_id FROM rocpd_kernel_dispatch_%GUID%) AS d;"}
-    };
-
-    info_table_list.push_back({ "StreamToHw", 
-        std::string("SELECT ROW_NUMBER() OVER (ORDER BY ") +
-        Builder::STREAM_ID_SERVICE_NAME +
-        ") AS row_num, * FROM (" +
-        m_query_factory.GetRocprofMemoryCopyStreamFlowQuery() +
-        Builder::Union() +
-        m_query_factory.GetRocprofMemoryAllocStreamFlowQuery() +
-        Builder::Union() +
-        m_query_factory.GetRocprofKernelDispatchStreamFlowQuery() +
-        ") ORDER BY " +
-        Builder::STREAM_ID_SERVICE_NAME
-        });
-
-    //pre-create cache tables before running multiple threads
-    for (auto& guid_info : DbInstances())
-    {
-        CachedTables(guid_info.first.GuidIndex());
-    }
 
     for (auto& guid_info : DbInstances())
     {
@@ -666,15 +684,74 @@ rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
             }
         }
     }
+    return result;
+}
 
-    threads.clear();
+rocprofvis_dm_result_t RocprofDatabase::GenerateInterdependencyTables(Future* future) {
+
+
+    std::vector<std::pair<std::string, std::string>> info_table_list = {{ "StreamToHw", 
+        std::string("SELECT ROW_NUMBER() OVER (ORDER BY ") +
+        Builder::STREAM_ID_SERVICE_NAME +
+        ") AS row_num, * FROM (" +
+        m_query_factory.GetRocprofMemoryCopyStreamFlowQuery() +
+        Builder::Union() +
+        m_query_factory.GetRocprofMemoryAllocStreamFlowQuery() +
+        Builder::Union() +
+        m_query_factory.GetRocprofKernelDispatchStreamFlowQuery() +
+        ") ORDER BY " +
+        Builder::STREAM_ID_SERVICE_NAME
+        }};
+
+    return RunCacheQueriesAsync(future, info_table_list);
+}
+
+rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
+
+    std::vector<std::thread> threads;
+    rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
+
+    std::vector<std::pair<std::string, std::string>> info_table_list = {
+        {"Node", "SELECT * from rocpd_info_node_%GUID%;"},
+        {"Agent", "SELECT * from rocpd_info_agent_%GUID%;"},
+        {"Queue", "SELECT * from rocpd_info_queue_%GUID%;"},
+        {"Stream", "SELECT * from rocpd_info_stream_%GUID%;"},
+        {"Process", "SELECT * from rocpd_info_process_%GUID%;"},
+        {"Thread", "SELECT * from rocpd_info_thread_%GUID%;"},
+        {"PMC", "SELECT id, guid, nid, pid, agent_id, target_arch, COALESCE(event_code,0) as event_code, COALESCE(instance_id,0) as instance_id, name, symbol, description, long_description, component, units, value_type, block, expression, is_constant, is_derived, extdata from rocpd_info_pmc_%GUID%;"},
+
+   };
+
+    return RunCacheQueriesAsync(future, info_table_list);
+}
+
+
+rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
+    rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
+    std::vector<std::thread> threads;
+    auto get_memory_allocation_activity_task = [&](DbInstance * db_instance, std::string query) {
+        Future* sub_future = future->AddSubFuture();
+        result = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), &CallbackCaptureMemoryActivity);
+        future->DeleteSubFuture(sub_future);
+        };
 
     for (auto& guid_info : DbInstances())
     {
-        threads.emplace_back(
-                get_memory_allocation_activity_task, 
+        std::string table_name = m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryActivity) + GuidAt(guid_info.first.GuidIndex());
+        if (false == m_metadata_version_control.MustRebuild(guid_info.first.FileIndex(), m_metadata_version_control.kRocOptiqTableMemoryActivity))
+        {
+            threads.emplace_back(
+                get_memory_allocation_activity_task,
+                &guid_info.first,
+                m_query_factory.GetRocprofMemoryAllocActivityLoadQuery());
+        }
+        else
+        {
+            threads.emplace_back(
+                get_memory_allocation_activity_task,
                 &guid_info.first,
                 m_query_factory.GetRocprofMemoryAllocActivityQuery());
+        }
     }
     for (auto& t : threads)
         t.join();
@@ -778,11 +855,28 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instanc
             result = BindObject()->FuncAddTopologyNode(BindObject()->trace_object, &track_indentifiers);
             if (kRocProfVisDmResultSuccess == result || kRocProfVisDmResultInvalidParameter == result)
             {
-                result = CachedTables(db_instance)->PopulateTrackTopologyData(this, &track_indentifiers, db_instance, table_name, agent_id);
+                if (kRocProfVisDmResultSuccess == CachedTables(db_instance)->PopulateTrackTopologyData(this, &track_indentifiers, db_instance, table_name, agent_id))
+                {
+                    if (CachedTables(db_instance)->PopulateTrackTopologyData(this, &track_indentifiers, db_instance, "Node", node_id) == kRocProfVisDmResultSuccess)
+                    {
+                        result = CachedTables(db_instance)->PopulateTrackTopologyData(this, &track_indentifiers, db_instance, "Agent", agent_id);
+                    }
+                }
             }
         }
     }
     return result;
+}
+
+std::string RocprofDatabase::GetLevelSchemaHashStr()
+{
+    std::string hash_str;
+    for (auto param : s_level_schema_params)
+    {
+        hash_str += param.column;
+        hash_str += param.type;
+    }
+    return hash_str;
 }
 
 rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
@@ -829,9 +923,27 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Indexing tables", kRPVDbBusy, future);
         CreateIndexes();
 
-        ShowProgress(10, "Load Information Tables", kRPVDbBusy, future);
+        //pre-create cache tables
+        for (auto& guid_info : DbInstances())
+        {
+            CachedTables(guid_info.first.GuidIndex());
+        }
+
+
+        ShowProgress(1, "Load table version information", kRPVDbBusy, future);
+        m_metadata_version_control.VerifyRocOptiqTablesVersions(future);
+
+        ShowProgress(5, "Load Information Tables", kRPVDbBusy, future);
         LoadInformationTables(future);
+
+        ShowProgress(5, "Collect memory activity data", kRPVDbBusy, future);
+
+        LoadMemoryActivityData(future);
         CreateMemoryActivityTable(future);
+        CreateAgentFriendlyMemoryAllocationTable(future);
+
+        ShowProgress(1, "Collect topology data", kRPVDbBusy, future);
+        GenerateInterdependencyTables(future);
 
         TraceProperties()->events_count[kRocProfVisDmOperationLaunch]   = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
@@ -840,10 +952,14 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->events_count[kRocProfVisDmOperationLaunchSample]   = 0;
 
         TraceProperties()->tracks_info_restored = true;
-        TraceProperties()->tracks_info_id_mismatch = false;
-        TraceProperties()->start_time = UINT64_MAX;
-        TraceProperties()->end_time = 0;
+        TraceProperties()->trace_duration = 0;
 
+        for (size_t i = 0; i < DbInstances().size(); ++i)
+        {
+            TraceProperties()->db_inst_start_time.push_back(UINT64_MAX);
+            TraceProperties()->db_inst_end_time.push_back(0);
+        }
+        
         std::string track_queries = m_query_factory.GetRocprofRegionTrackQuery(false) +
             m_query_factory.GetRocprofRegionTrackQuery(true) +
             m_query_factory.GetRocprofKernelDispatchTrackQuery() +
@@ -857,15 +973,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             m_query_factory.GetRocprofMemoryActivityTrackQuery();
         size_t track_queries_hash_value = std::hash<std::string>{}(track_queries);
         uint32_t load_id = 0;
-        m_add_track_mutex.Init(DbInstances());
+
         ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, track_queries_hash_value, load_id,
+                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                         {
                             m_query_factory.GetRocprofRegionTrackQuery(false),
                             "",
@@ -876,7 +992,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                         },
                         &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock();
+                    m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
             for (auto& guid_info : DbInstances())
             {
@@ -891,12 +1007,12 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding HIP API Sample tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
 
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, track_queries_hash_value, load_id,
+                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofRegionTrackQuery(true),
                         "",
@@ -907,7 +1023,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     },
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock();
+                    m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
             for (auto& guid_info : DbInstances())
             {
@@ -921,11 +1037,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding kernel dispatch tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, track_queries_hash_value, load_id,
+                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofKernelDispatchTrackQuery(),
                         m_query_factory.GetRocprofKernelDispatchTrackQueryForStream(),
@@ -936,7 +1052,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     },
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock();
+                    m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
             for (auto& guid_info : DbInstances())
             {
@@ -950,11 +1066,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding memory allocation tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, track_queries_hash_value, load_id,
+                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofMemoryAllocTrackQuery(),
                         m_query_factory.GetRocprofMemoryAllocTrackQueryForStream(),
@@ -965,7 +1081,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     },
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock();
+                    m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
             for (auto& guid_info : DbInstances())
             {
@@ -989,11 +1105,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding memory copy tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, track_queries_hash_value, load_id,
+                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofMemoryCopyTrackQuery(),
                         m_query_factory.GetRocprofMemoryCopyTrackQueryForStream(),
@@ -1004,7 +1120,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     },
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock();
+                    m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
             for (auto& guid_info : DbInstances())
             {
@@ -1019,11 +1135,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding performance counters tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, track_queries_hash_value, load_id,
+                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofPerformanceCountersTrackQuery(),
                         "",
@@ -1034,7 +1150,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     },
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock();
+                    m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
             for (auto& guid_info : DbInstances())
             {
@@ -1049,11 +1165,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding performance smi counters tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, track_queries_hash_value, load_id,
+                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofSMIPerformanceCountersTrackQuery(),
                         "",
@@ -1064,7 +1180,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     },
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock();
+                    m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
             for (auto& guid_info : DbInstances())
             {
@@ -1078,11 +1194,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding memory allocation activity tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, track_queries_hash_value, load_id,
+                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                         { 
                             m_query_factory.GetRocprofMemoryActivityTrackQuery(),
                             "",
@@ -1093,7 +1209,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                         },
                         &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock();
+                    m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
             for (auto& guid_info : DbInstances())
             {
@@ -1127,7 +1243,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         BindObject()->FuncAddString(BindObject()->trace_object, ""); // 0 index string
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1147,7 +1263,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(10, "Loading kenel symbols", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.reset();
+            m_add_track_mutex.init(NumDbInstances());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1166,59 +1282,36 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         m_string_map.clear();
 
-        std::vector<std::pair<std::string, rocprofvis_dm_event_operation_t>> operation_strings =  {
-            {"launch",kRocProfVisDmOperationLaunch},
-            {"launch_sample",kRocProfVisDmOperationLaunchSample},
-            {"dispatch", kRocProfVisDmOperationDispatch},
-            {"mem_alloc",kRocProfVisDmOperationMemoryAllocate},
-            {"mem_copy", kRocProfVisDmOperationMemoryCopy} 
+        std::vector<std::pair<std::string, rocprofvis_dm_event_operation_t>> table_properties =  {
+            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableRegionLevel),kRocProfVisDmOperationLaunch},
+            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableRegionSampleLevel),kRocProfVisDmOperationLaunchSample},
+            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableKernelDispatchLevel), kRocProfVisDmOperationDispatch},
+            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryAllocLevel),kRocProfVisDmOperationMemoryAllocate},
+            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryCopyLevel), kRocProfVisDmOperationMemoryCopy} 
         };
-
-        for (auto operation : operation_strings)
-        {
-            std::vector<std::string> to_drop;
-            Builder::OldLevelTables(operation.first, to_drop);
-            for (auto& guid_info : DbInstances())
-            {
-                Builder::OldLevelTables(operation.first, to_drop, guid_info.second);
-                for (auto table : to_drop)
-                {
-                    DropSQLTable(table.c_str(), guid_info.first.FileIndex());
-                }
-            }
-        }
 
         ShowProgress(10, "Calculating event levels", kRPVDbBusy, future);
         guid_list_t calculate_level_for_guids;
-        bool event_levels_exist = true;
         for (auto& guid_info : DbInstances())
-        {            
-            for (auto operation : operation_strings)
+        {
+            if (m_metadata_version_control.MustRebuildLevels(guid_info.first.FileIndex()))
             {
-                if (SQLITE_OK != DetectTable(GetServiceConnection(guid_info.first.FileIndex()), Builder::LevelTable(operation.first, guid_info.second).c_str(), false))
+                calculate_level_for_guids.push_back(guid_info);
+                for (auto prop : table_properties)
                 {
-                    event_levels_exist = false;
-                    break;
+                    m_event_levels[kRocProfVisDmOperationLaunch][guid_info.first.GuidIndex()].reserve(
+                        TraceProperties()->events_count[prop.second]);
                 }
             }
         }
 
-        if (!event_levels_exist)
+        if (calculate_level_for_guids.size())
         {
-            for (auto& guid_info : DbInstances())
-            {
-                calculate_level_for_guids.push_back(guid_info);
-                for (auto operation : operation_strings)
-                {
-                    m_event_levels[kRocProfVisDmOperationLaunch][guid_info.first.GuidIndex()].reserve(
-                        TraceProperties()->events_count[operation.second]);
-                }
-            }
-
             if (kRocProfVisDmResultSuccess !=
                 ExecuteQueryForAllTracksAsync(
                     kRocProfVisDmIncludeStreamTracks,
                     kRPVQueryLevel, "SELECT *, ", (std::string(" ORDER BY ") + Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
+                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
                     [](rocprofvis_dm_track_params_t* params) {
                         params->m_active_events.clear();
                     }, calculate_level_for_guids))
@@ -1242,27 +1335,26 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 }
             }
 
-            SQLInsertParams params[] = { { "eid", "INTEGER PRIMARY KEY" }, { "level", "INTEGER" } , { "level_for_stream", "INTEGER" } };
-            for (auto operation : operation_strings)
+            for (auto prop : table_properties)
             {
                 for (auto& guid_info : DbInstances())
                 {
                     CreateSQLTable(
-                        Builder::LevelTable(operation.first, guid_info.second).c_str(), params, 3,
-                        m_event_levels[operation.second][guid_info.first.GuidIndex()].size(),
+                        (prop.first + guid_info.second).c_str(), s_level_schema_params,
+                        m_event_levels[prop.second][guid_info.first.GuidIndex()].size(),
                         [&](sqlite3_stmt* stmt, int index) {
                             sqlite3_bind_int64(
                                 stmt, 1,
-                                m_event_levels[operation.second][guid_info.first.GuidIndex()][index].id);
+                                m_event_levels[prop.second][guid_info.first.GuidIndex()][index].id);
                             sqlite3_bind_int(
                                 stmt, 2,
-                                m_event_levels[operation.second][guid_info.first.GuidIndex()][index].level_for_queue);
+                                m_event_levels[prop.second][guid_info.first.GuidIndex()][index].level_for_queue);
                             sqlite3_bind_int(
                                 stmt, 3,
-                                m_event_levels[operation.second][guid_info.first.GuidIndex()][index].level_for_stream);
+                                m_event_levels[prop.second][guid_info.first.GuidIndex()][index].level_for_stream);
                         }, guid_info.first.FileIndex());
-                    m_event_levels[operation.second][guid_info.first.GuidIndex()].clear();
-                    m_event_levels_id_to_index[operation.second][guid_info.first.GuidIndex()].clear();
+                    m_event_levels[prop.second][guid_info.first.GuidIndex()].clear();
+                    m_event_levels_id_to_index[prop.second][guid_info.first.GuidIndex()].clear();
                 }
             }
         }
@@ -1271,13 +1363,13 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         {
             ShowProgress(5, "Collecting track properties",
                 kRPVDbBusy, future);
-            TraceProperties()->start_time = UINT64_MAX;
-            TraceProperties()->end_time = 0;
+            TraceProperties()->trace_duration = 0;
             if (kRocProfVisDmResultSuccess !=
                 ExecuteQueryForAllTracksAsync(
                     kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ",
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
+                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
                     [](rocprofvis_dm_track_params_t* params) {},
                     DbInstances()))
             {
@@ -1286,7 +1378,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         }
 
         ShowProgress(5, "Save track information", kRPVDbBusy, future);
-        SaveTrackProperties(future, track_queries_hash_value);
+        SaveTrackProperties(future);
 
 
         ShowProgress(5, "Collecting track histogram", kRPVDbBusy, future);
@@ -1358,15 +1450,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
 
 rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t start,
     rocprofvis_dm_timestamp_t end,
-                                 rocprofvis_dm_charptr_t new_db_path, Future* future)
+    rocprofvis_dm_charptr_t new_db_path, Future* future)
 {
-
-    auto IsVisualizerTable = [](std::string name)
-        {
-            bool result = name.find("histogram_") == 0 || name.find("track_info_") == 0 || name.find("event_levels_") == 0;
-            return result;
-        };
-
     auto IsSqliteTable = [](std::string name)
         {
             bool result = name == "sqlite_master" || name == "sqlite_sequence";
@@ -1374,9 +1459,9 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
         };
 
     ROCPROFVIS_ASSERT_MSG_RETURN(new_db_path, "New DB path cannot be NULL.",
-                                 kRocProfVisDmResultInvalidParameter);
+        kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
-                                 kRocProfVisDmResultInvalidParameter);
+        kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
 
     std::string query;
@@ -1389,7 +1474,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
     std::filesystem::remove(new_db_path);
 
     while (true) 
-{
+    {
         RocprofDatabase rpDb(new_db_path);
         result = rpDb.Open();
 
@@ -1445,7 +1530,7 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
 
         for(auto const& table : trim_tables.tables)
         {
-            if(!IsSqliteTable(table.first) && !IsVisualizerTable(table.first))
+            if(!IsSqliteTable(table.first) && !GetMetadataVersionControl()->DisposeTableWhenTrimming(table.first))
             {
                 if(result == kRocProfVisDmResultSuccess)
                 {
@@ -1460,61 +1545,181 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
 
         if (result != kRocProfVisDmResultSuccess) break;
 
-       
-        for (auto& file_node : m_db_nodes)
+        std::vector<std::string> order = {"rocpd_kernel_dispatch", "rocpd_memory_allocate", "rocpd_memory_copy", "rocpd_region", "rocpd_sample", "rocpd_event", "rocpd_timestamp"};
+        enum fixed_table_indices_t {
+            kKernelDispatchTable,
+            kMemoryAllocateTable,
+            kMemoryCopyTable,
+            kRegionTable,
+            kSampleTable,
+            kEventTable,
+            kTimestampTable
+        };
+        std::unordered_map<std::string, size_t> priority;
+        for (size_t i = 0; i < order.size(); ++i)
+            priority[order[i]] = i;
+
+        auto get_priority = [&](const std::string& s) -> size_t
+            {
+                for (size_t i = 0; i < order.size(); ++i)
+                {
+                    if (s.find(order[i]) != std::string::npos)
+                        return i;
+                }
+                return order.size(); 
+            };
+
+
+
+        for (auto& guid_info : DbInstances())
         {
+            std::vector<std::string> sorted_tables;
+
+            for (const auto& [key, value] : trim_tables.tables)
+            {
+                if (key.find(GuidAt(guid_info.first.GuidIndex())) != std::string::npos)
+                    sorted_tables.push_back(key);
+            }
+
+            std::sort(sorted_tables.begin(), sorted_tables.end(),
+                [get_priority](std::string& a, std::string& b) {
+                    size_t pa = get_priority(a);
+                    size_t pb = get_priority(b);
+
+                    if (pa != pb)
+                        return pa < pb;
+
+                    return a < b; 
+                });
+
             ShowProgress(0, "Attaching old DB to new", kRPVDbBusy, future);
 
-            result = rpDb.ExecuteSQLQuery(future, &tmp_db_instance, (std::string("ATTACH DATABASE '") + file_node->filepath + "' as 'oldDb';").c_str());
+            rocprofvis_dm_timestamp_t fecth_start = start + TraceProperties()->db_inst_start_time[guid_info.first.GuidIndex()];
+            rocprofvis_dm_timestamp_t fetch_end = end + TraceProperties()->db_inst_start_time[guid_info.first.GuidIndex()];
+            auto& file_node = m_db_nodes[guid_info.first.FileIndex()];
+
+            std::filesystem::path p(file_node->filepath);
+            p = p.lexically_normal();
+
+            result = rpDb.ExecuteSQLQuery(future, &tmp_db_instance, (std::string("ATTACH DATABASE '") + p.generic_string() + "' as 'oldDb';").c_str());
 
             if (result != kRocProfVisDmResultSuccess) break;
 
-            for (auto const& table : trim_tables.tables)
+            for (auto const& table : sorted_tables)
             {
-                if (!IsSqliteTable(table.first) && !IsVisualizerTable(table.first) && CheckTableExists(table.first, file_node->node_id))
+                if (!IsSqliteTable(table) && !GetMetadataVersionControl()->DisposeTableWhenTrimming(table) && CheckTableExists(table, file_node->node_id) )
                 {
                     if (result == kRocProfVisDmResultSuccess)
                     {
-                        std::string msg = "Copy table " + table.first;
+                        std::string msg = "Copy table " + table;
                         ShowProgress(1, msg.c_str(), kRPVDbBusy, future);
 
                         if (result == kRocProfVisDmResultSuccess)
                         {
-                            if (strstr(table.first.c_str(), "rocpd_kernel_dispatch") ||
-                                strstr(table.first.c_str(), "rocpd_memory_allocate") ||
-                                strstr(table.first.c_str(), "rocpd_memory_copy") ||
-                                strstr(table.first.c_str(), "rocpd_region"))
+                            if (strstr(table.c_str(), "rocpd_kernel_dispatch") ||
+                                strstr(table.c_str(), "rocpd_memory_allocate") ||
+                                strstr(table.c_str(), "rocpd_memory_copy") ||
+                                strstr(table.c_str(), "rocpd_region"))
                             {
                                 query = "INSERT INTO ";
-                                query += table.first;
-                                query += " SELECT * FROM oldDb.";
-                                query += table.first;
-                                query += " WHERE start < ";
-                                query += std::to_string(end);
-                                query += " AND end > ";
-                                query += std::to_string(start);
+                                query += table;
+                                query += " SELECT X.* FROM oldDb.";
+                                query += table;
+                                if (m_query_factory.IsVersionGreaterOrEqual("4"))
+                                {
+                                    query += " X INNER JOIN oldDb.";
+                                    query += sorted_tables[kTimestampTable];
+                                    query += " TS ON X.start_id == TS.id ";
+                                    query += " INNER JOIN oldDb.";
+                                    query += sorted_tables[kTimestampTable];
+                                    query += " TE ON X.end_id == TE.id ";
+                                    query += " WHERE TS.value < ";
+                                    query += std::to_string(fetch_end);
+                                    query += " AND TE.value > ";
+                                    query += std::to_string(fecth_start);
+                                }
+                                else
+                                {
+                                    query += " X WHERE start < ";
+                                    query += std::to_string(fetch_end);
+                                    query += " AND end > ";
+                                    query += std::to_string(fecth_start);
+                                }
+
                                 query += ";";
                             }
-                            else if (strstr(table.first.c_str(), "rocpd_sample"))
+                            else if (strstr(table.c_str(), "rocpd_sample"))
                             {
                                 query = "INSERT INTO ";
-                                query += table.first;
+                                query += table;
                                 query += " SELECT S.* FROM oldDb.";
-                                query += table.first;
-                                query += " S LEFT JOIN rocpd_region R ON  S.event_id = R.event_id AND S.guid = R.guid ";
-                                query += " WHERE (timestamp < ";
-                                query += std::to_string(end);
-                                query += " AND timestamp > ";
-                                query += std::to_string(start);
-                                query += ") OR R.start == S.timestamp";
+                                query += table;
+                                query += " S LEFT JOIN oldDb.";
+                                query += sorted_tables[kRegionTable]; 
+                                query += " R ON  S.event_id = R.event_id AND S.guid = R.guid ";
+                                if (m_query_factory.IsVersionGreaterOrEqual("4"))
+                                {
+                                    query += " INNER JOIN oldDb.";
+                                    query += sorted_tables[kTimestampTable]; 
+                                    query += " TS ON S.timestamp_id == TS.id ";
+                                    query += " INNER JOIN oldDb.";
+                                    query += sorted_tables[kTimestampTable]; 
+                                    query += " RS ON R.start_id == RS.id ";
+                                    query += " WHERE (TS.value < ";
+                                    query += std::to_string(fetch_end);
+                                    query += " AND TS.value > ";
+                                    query += std::to_string(fecth_start);
+                                    query += ") OR RS.value == TS.value";
+                                }
+                                else
+                                {
+                                    query += " WHERE (timestamp < ";
+                                    query += std::to_string(fetch_end);
+                                    query += " AND timestamp > ";
+                                    query += std::to_string(fecth_start);
+                                    query += ") OR R.start == S.timestamp";
+                                }
                                 query += ";";
+                            }
+                            else if (strstr(table.c_str(), "rocpd_event"))
+                            {
+                                // This will make target rocpd_event table limited to selected events only 
+                                query = "INSERT INTO ";
+                                query += table;
+                                query += " SELECT DISTINCT E.* FROM oldDb.";
+                                query += table;
+                                query += " E LEFT JOIN oldDb.";
+                                query += sorted_tables[kKernelDispatchTable];
+                                query += " K ON E.id = K.event_id LEFT JOIN oldDb.";
+                                query += sorted_tables[kMemoryAllocateTable];
+                                query += " MA ON E.id = MA.event_id LEFT JOIN oldDb.";
+                                query += sorted_tables[kMemoryCopyTable];
+                                query += " MC ON E.id = MC.event_id LEFT JOIN oldDb.";
+                                query += sorted_tables[kRegionTable];
+                                query += " R ON E.id = R.event_id  LEFT JOIN oldDb.";
+                                query += sorted_tables[kSampleTable];
+                                query += " S ON E.id = S.event_id ";
+                                query += " WHERE K.event_id IS NOT NULL OR MA.event_id IS NOT NULL OR MC.event_id IS NOT NULL OR R.event_id IS NOT NULL OR S.event_id IS NOT NULL;";
+                            }
+                            else if (strstr(table.c_str(), "rocpd_arg") ||
+                                strstr(table.c_str(), "rocpd_pmc_event"))
+                            {
+                                // This will make target rocpd_arg and rocpd_pmc_event table limited to selected events only 
+                                query = "INSERT INTO ";
+                                query += table;
+                                query += " SELECT X.* FROM oldDb.";
+                                query += table;
+                                query += " X LEFT JOIN oldDb.";
+                                query += sorted_tables[kEventTable];
+                                query += " E ON E.id = X.event_id ";
+                                query += " WHERE E.id IS NOT NULL;";
                             }
                             else
                             {
                                 query = "INSERT INTO ";
-                                query += table.first;
+                                query += table;
                                 query += " SELECT * FROM oldDb.";
-                                query += table.first;
+                                query += table;
                                 query += ";";
                             }
 
@@ -1764,6 +1969,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
         std::string query;
         DbInstance* node_ptr = DbInstancePtrAt(event_id.bitfield.event_node);
         ROCPROFVIS_ASSERT_MSG_BREAK(node_ptr, ERROR_NODE_KEY_CANNOT_BE_NULL);
+        future->SetRuntimeStorageValue(kRPVFutureStorageEventId, event_id.value);
         if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
            event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
         {
@@ -1780,7 +1986,6 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
                    &CallbackAddExtInfo))
                 break;
             query = m_query_factory.GetRocprofEssentialInfoQueryForRegionEvent(event_id.bitfield.event_id, event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample);
-            future->SetRuntimeStorageValue(kRPVFutureStorageEventId, event_id.value);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
             future->ResetRowCount();
             query = m_query_factory.GetRocprofArgumentsInfoQueryForRegionEvent(event_id.bitfield.event_id);

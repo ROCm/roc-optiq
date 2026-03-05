@@ -33,9 +33,9 @@ class Trace : public DmBase{
         // Trace class destructor, not required unless declared as virtual
         ~Trace(){}
         // Returns trace start time, as uint64_t timestamp
-        rocprofvis_dm_timestamp_t                       StartTime() {return m_parameters.start_time;}
+        rocprofvis_dm_timestamp_t                       StartTime() {return 0;}
         // Returns trace end time, as uint64_t timestamp
-        rocprofvis_dm_timestamp_t                       EndTime() {return m_parameters.end_time;}
+        rocprofvis_dm_timestamp_t                       EndTime() { return m_parameters.trace_duration; }
         // Return number of track objects
         rocprofvis_dm_size_t                            NumberOfTracks() {return m_tracks.size();}
         // Returns number table objects

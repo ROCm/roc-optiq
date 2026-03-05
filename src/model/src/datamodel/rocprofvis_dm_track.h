@@ -48,9 +48,9 @@ public:
     // Return total number of records                   
     rocprofvis_dm_size_t                                NumRecords() { return m_track_params->record_count; }
     // Return track minimum timestamp
-    rocprofvis_dm_timestamp_t                           MinTimestamp() { return m_track_params->min_ts; }
+    rocprofvis_dm_timestamp_t                           MinTimestamp();
     // Return track maximum timestamp
-    rocprofvis_dm_timestamp_t                           MaxTimestamp() { return m_track_params->max_ts; }
+    rocprofvis_dm_timestamp_t                           MaxTimestamp();
     // Return track minimum level or value
     rocprofvis_dm_value_t                               MinValue() { return m_track_params->min_value; }
     // Return track maximum level or value

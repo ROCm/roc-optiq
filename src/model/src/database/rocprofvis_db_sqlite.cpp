@@ -534,7 +534,6 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
 
 rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
                                                         DbInstance* db_instance,
-                                                        uint64_t load_hash,
                                                         uint32_t load_id,
                                                         std::vector<std::string> query,
                                                         RpvSqliteExecuteQueryCallback find_callback,
@@ -555,9 +554,9 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
     };
 
     rocprofvis_dm_result_t result  = kRocProfVisDmResultSuccess;
-    std::string load_table_name = std::string("track_info_")+std::to_string(load_hash);
+    const char* load_table_name = GetMetadataVersionControl()->GetTrackInfoTableName();
     
-    if (CheckTableExists(load_table_name, db_instance->FileIndex()))
+    if (false == GetMetadataVersionControl()->MustRebuildTrackInfo(db_instance->FileIndex()))
     {
         std::string load_query = std::string("SELECT * FROM ") + load_table_name + " WHERE load_id = " + std::to_string(load_id);
         std::string guid = GuidAt(db_instance->GuidIndex());
@@ -686,7 +685,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(DbInstance* db_instance,
         {
             spdlog::debug("Query: "); spdlog::debug(query);
             spdlog::debug("SQL error "); spdlog::debug(std::to_string(rc).c_str()); spdlog::debug(":"); 
-            spdlog::debug(sqlite3_errmsg(conn));
+            spdlog::error(sqlite3_errmsg(conn));
             result = kRocProfVisDmResultDbAccessFailed;
         }
     } 
@@ -756,39 +755,40 @@ SqliteDatabase::DropSQLIndex(const char* index_name, uint32_t db_node_id)
 }
 
 rocprofvis_dm_result_t
-SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries, uint32_t db_node_id)
+SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries,  uint32_t db_node_id)
 {
-    sqlite3* conn = GetConnection(db_node_id);
+    sqlite3* conn = GetServiceConnection(db_node_id);
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     while (true)
     {
-        if(sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) !=
-           SQLITE_OK)
+
+        if (sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) !=
+            SQLITE_OK)
         {
             result = kRocProfVisDmResultDbAccessFailed;
             spdlog::error("Failed to start transaction after error {}",
-                          sqlite3_errmsg(conn));
+                sqlite3_errmsg(conn));
             break;
         }
 
-        for (const auto &query : queries)
+        for (const auto& query : queries)
         {
-            if(sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
+            if (sqlite3_exec(conn, query.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK)
             {
                 result = kRocProfVisDmResultDbAccessFailed;
                 spdlog::error("Failed to execute query '{}' with error {}", query,
-                              sqlite3_errmsg(conn));
+                    sqlite3_errmsg(conn));
                 break;
             }
         }
         // Break out of the outer loop if there was a failure
-        if(result == kRocProfVisDmResultDbAccessFailed) 
+        if (result == kRocProfVisDmResultDbAccessFailed)
         {
             // Try to rollback the transaction
-            if(sqlite3_exec(conn, "ROLLBACK;", nullptr, nullptr, nullptr) != SQLITE_OK)
+            if (sqlite3_exec(conn, "ROLLBACK;", nullptr, nullptr, nullptr) != SQLITE_OK)
             {
                 spdlog::error("Failed to rollback transaction after error {}",
-                              sqlite3_errmsg(conn));
+                    sqlite3_errmsg(conn));
             }
             break;
         }
@@ -801,15 +801,14 @@ SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries, uint32_t db
         }
         break;
     }
-    ReleaseConnection(conn, db_node_id);
+
     return result;
 }
 
 rocprofvis_dm_result_t
 SqliteDatabase::CreateSQLTable(
                                 const char* table_name, 
-                                SQLInsertParams* parameters, 
-                                uint8_t num_cols, 
+                                SQLInsertParams parameters,  
                                 size_t num_row,
                                 std::function<void(sqlite3_stmt* stmt, int index)> insert_func,
                                 uint32_t db_node_id)
@@ -828,7 +827,7 @@ SqliteDatabase::CreateSQLTable(
         query = "CREATE TABLE IF NOT EXISTS ";
         query += table_name;
         query += "(";
-        for(int i = 0; i < num_cols; i++)
+        for(int i = 0; i < parameters.size(); i++)
         {
             if(i > 0)
             {
@@ -844,55 +843,59 @@ SqliteDatabase::CreateSQLTable(
             break;
         }
 
-        if(sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) !=
-           SQLITE_OK)
+        if (insert_func && num_row)
         {
-            break;
-        }
 
-        query = "INSERT INTO ";
-        query += table_name;
-        query += "(";
-
-        for(int i = 0; i < num_cols; i++)
-        {
-            if(i > 0)
+            if (sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) !=
+                SQLITE_OK)
             {
-                query += ", ";
+                break;
             }
-            query += parameters[i].column;
-        }
-        query += ") VALUES (";
 
-        for(int i = 0; i < num_cols; i++)
-        {
-            if(i > 0)
+            query = "INSERT INTO ";
+            query += table_name;
+            query += "(";
+
+            for (int i = 0; i < parameters.size(); i++)
             {
-                query += ", ";
+                if (i > 0)
+                {
+                    query += ", ";
+                }
+                query += parameters[i].column;
             }
-            query += "?";
-        }
-        query += ");";
+            query += ") VALUES (";
 
-        sqlite3_stmt* stmt;
-        sqlite3_prepare_v2(conn, query.c_str(), -1, &stmt, nullptr);
-
-        for(int i = 0; i < num_row; i++)
-        {
-            insert_func(stmt, i);
-            int rc = sqlite3_step(stmt);
-            if(rc != SQLITE_DONE)
+            for (int i = 0; i < parameters.size(); i++)
             {
-                spdlog::debug("Insert failed");
+                if (i > 0)
+                {
+                    query += ", ";
+                }
+                query += "?";
             }
-            sqlite3_reset(stmt);
-        }
+            query += ");";
 
-        sqlite3_finalize(stmt);
+            sqlite3_stmt* stmt;
+            sqlite3_prepare_v2(conn, query.c_str(), -1, &stmt, nullptr);
 
-        if(sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
-        {
-            break;
+            for (int i = 0; i < num_row; i++)
+            {
+                insert_func(stmt, i);
+                int rc = sqlite3_step(stmt);
+                if (rc != SQLITE_DONE)
+                {
+                    spdlog::debug("Insert failed");
+                }
+                sqlite3_reset(stmt);
+            }
+
+            sqlite3_finalize(stmt);
+
+            if (sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
+            {
+                break;
+            }
         }
         break;
     }

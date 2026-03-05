@@ -69,6 +69,8 @@ public:
 
     rocprofvis_dm_track_params_it FindTrackParamsIterator(rocprofvis_dm_track_identifiers_t& track_indentifiers, uint32_t db_instance);
 
+    rocprofvis_dm_track_category_t SearchCategoryMaskLookup(rocprofvis_dm_event_operation_t op);
+
     uint32_t GetStringIdentifierIndex(const char* str_id) { return m_string_lookup.ToInt(str_id); }
 
 

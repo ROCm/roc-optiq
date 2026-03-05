@@ -269,15 +269,77 @@ namespace DataModel
 		return result;
 	}
 
+	std::string ComputeQueryFactory::BuildFilterCondition(const std::string& column_name, const std::string& filter_expr) {
+		// Trim whitespace from filter expression
+		std::string trimmed = filter_expr;
+		trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
+		trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
+
+		if(trimmed.empty()) return "";
+
+		// Helper lambda to check if string starts with a given prefix (case-insensitive)
+		auto starts_with_ci = [](const std::string& str, const std::string& prefix) {
+			if(str.length() < prefix.length()) return false;
+			return std::equal(prefix.begin(), prefix.end(), str.begin(),
+				[](char a, char b) { return std::tolower(a) == std::tolower(b); });
+		};
+
+		// Handle LIKE operator
+		if(starts_with_ci(trimmed, "LIKE"))
+		{
+			std::string pattern = trimmed.substr(4);
+			// Trim whitespace from pattern
+			pattern.erase(0, pattern.find_first_not_of(" \t\n\r"));
+			pattern.erase(pattern.find_last_not_of(" \t\n\r") + 1);
+
+			// Ensure pattern is quoted
+			if(!pattern.empty() && pattern[0] != '\'' && pattern[0] != '"')
+			{
+				pattern = "'" + pattern + "'";
+			}
+			return column_name + " LIKE " + pattern;
+		}
+
+		// Handle comparison operators (ordered by length to match >= before >)
+		static const std::vector<std::string> ops = {">=", "<=", "!=", "<>", ">", "<", "="};
+		for(const auto& op : ops)
+		{
+			if(trimmed.find(op) == 0)
+			{
+				std::string value = trimmed.substr(op.length());
+				// Trim whitespace from value
+				value.erase(0, value.find_first_not_of(" \t\n\r"));
+				value.erase(value.find_last_not_of(" \t\n\r") + 1);
+
+				// Validate value is numeric for numeric operators
+				if(!value.empty() && (std::isdigit(value[0]) || value[0] == '-' || value[0] == '.'))
+				{
+					return column_name + " " + op + " " + value;
+				}
+				break;
+			}
+		}
+
+		// If no operator found, assume equality with numeric value
+		if(!trimmed.empty() && (std::isdigit(trimmed[0]) || trimmed[0] == '-' || trimmed[0] == '.'))
+		{
+			return column_name + " = " + trimmed;
+		}
+
+		return "";  // Invalid expression
+	}
+
 	std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
         std::string query;
         std::string workload_id;
         int         sort_column_index = 2;       // default to duration_ns_sum (index 2)
         std::string sort_order        = "DESC";  // default to descending
-        
+
 		// (metric_id, value_name) pairs
 		std::vector<std::pair<std::string, std::string>> metric_selectors;
         std::vector<std::string> column_names;  // Track column order for sorting
+        std::unordered_map<size_t, std::string> column_filters;  // column_index to expression
+        size_t last_filter_column_index = 0;
 
         // Parse parameters
         for(size_t i = 0; i < num; i++)
@@ -322,6 +384,14 @@ namespace DataModel
                     // Default to DESC if not ASC
                     sort_order = "DESC";
                 }
+            }
+            else if(params[i].param_type == kRPVComputeParamFilterColumnIndex)
+            {
+                last_filter_column_index = std::stoull(params[i].param_str);
+            }
+            else if(params[i].param_type == kRPVComputeParamFilterExpression)
+            {
+                column_filters[last_filter_column_index] = params[i].param_str;
             }
         }
 
@@ -371,11 +441,40 @@ namespace DataModel
         // Add WHERE clause
         query += "WHERE workload_id = ";
         query += workload_id;
-        // TODO: allow other filtering ?
         query += "\n";
 
         // Add GROUP BY clause
         query += "GROUP BY kernel_uuid\n";
+
+        // Add HAVING clause for column filters (applied after aggregation)
+        if(!column_filters.empty())
+        {
+            std::vector<std::string> having_conditions;
+
+            for(const auto& [column_index, filter_expr] : column_filters)
+            {
+                if(column_index < column_names.size())
+                {
+                    std::string column_name = column_names[column_index];
+                    std::string condition = BuildFilterCondition(column_name, filter_expr);
+                    if(!condition.empty())
+                    {
+                        having_conditions.push_back(condition);
+                    }
+                }
+            }
+
+            if(!having_conditions.empty())
+            {
+                query += "HAVING ";
+                for(size_t i = 0; i < having_conditions.size(); i++)
+                {
+                    if(i > 0) query += " AND ";
+                    query += having_conditions[i];
+                }
+                query += "\n";
+            }
+        }
 
         // Add ORDER BY clause with validated index
         query += "ORDER BY ";

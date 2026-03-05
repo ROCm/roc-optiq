@@ -33,6 +33,7 @@ namespace DataModel
     private:
         MetricIdFormat ClassifyMetricIdFormat(const std::string& s);
         std::string SanitizeMetricValueName(const std::string& name);
+        std::string BuildFilterCondition(const std::string& column_name, const std::string& filter_expr);
     };
 
 

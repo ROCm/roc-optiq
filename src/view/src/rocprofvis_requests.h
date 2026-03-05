@@ -248,6 +248,7 @@ public:
     std::vector<std::string>           m_metric_selectors;  // Format: "metric_id:value_name"
     uint64_t                           m_sort_column_index;
     rocprofvis_controller_sort_order_t m_sort_order;
+    std::unordered_map<uint64_t, std::string> m_column_filters;  // Column filters by index
 
     ComputeTableRequestParams(const ComputeTableRequestParams& params) = default;
     ComputeTableRequestParams& operator=(const ComputeTableRequestParams& params) = default;
@@ -255,11 +256,13 @@ public:
     ComputeTableRequestParams(uint32_t workload_id,
                             const std::vector<std::string>& metric_selectors,
                             uint64_t sort_column_index = 1,
-                            rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderDescending)
+                            rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderDescending,
+                            const std::unordered_map<uint64_t, std::string>& column_filters = {})
     : m_workload_id(workload_id)
     , m_metric_selectors(metric_selectors)
     , m_sort_column_index(sort_column_index)
     , m_sort_order(sort_order)
+    , m_column_filters(column_filters)
     {}
 };
 #endif

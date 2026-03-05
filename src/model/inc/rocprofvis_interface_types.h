@@ -521,6 +521,8 @@ typedef enum rocprofvis_db_compute_param_enum_t
     kRPVComputeParamMetricSelector,
     kRPVComputeParamSortColumnIndex,
     kRPVComputeParamSortColumnOrder,
+    kRPVComputeParamFilterColumnIndex,   // Column index to filter (0-based)
+    kRPVComputeParamFilterExpression,    // Filter expression for that column
 } rocprofvis_db_compute_param_enum_t;
 
 // Compute database query input parameter structure

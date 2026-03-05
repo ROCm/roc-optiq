@@ -926,6 +926,12 @@ typedef enum rocprofvis_controller_compute_pivot_table_arguments_t : uint32_t
     kRPVControllerCPTArgsSortColumnIndex,
     // Optional sort order (rocprofvis_controller_sort_order_t) - 0=ascending, 1=descending (default = descending)
     kRPVControllerCPTArgsSortOrder,
+    // Number of column filters (uint64)
+    kRPVControllerCPTArgsNumColumnFilters,
+    // Indexed filter column index (uint64)
+    kRPVControllerCPTArgsFilterColumnIndexIndexed,
+    // Indexed filter expression string (e.g., "> 1000", "LIKE '%kernel%'")
+    kRPVControllerCPTArgsFilterExpressionIndexed,
 } rocprofvis_controller_compute_pivot_table_arguments_t;
 
 /*

@@ -1,7 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_db.h"
+#include "rocprofvis_db_profile.h"
 
 namespace RocProfVis
 {
@@ -82,7 +82,7 @@ namespace DataModel
             cat = kRocProfVisDmRegionSampleTrack;
             break;
         case kRocProfVisDmOperationLaunch:
-            cat = kRocProfVisDmRegionTrack;
+            cat = ((ProfileDatabase*)m_db)->GetRegionTrackCategory();
             break;
         case kRocProfVisDmOperationDispatch:
             cat = kRocProfVisDmKernelDispatchTrack;

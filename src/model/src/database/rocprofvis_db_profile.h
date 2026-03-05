@@ -116,6 +116,7 @@ class ProfileDatabase : public SqliteDatabase
             Future* future) override;
 
         virtual rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) = 0;
+        virtual const rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
 
     private:
 
@@ -323,7 +324,6 @@ class ProfileDatabase : public SqliteDatabase
             rocprofvis_dm_event_operation_t op, std::string column);
 
     virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
-    virtual const rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
 
     static void CollectTrackServiceData(ProfileDatabase* db,
         sqlite3_stmt* stmt, int column_index, char** azColName,

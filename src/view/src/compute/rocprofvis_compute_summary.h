@@ -5,6 +5,7 @@
 #include "compute/rocprofvis_compute_model_types.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_utils.h"
+#include "widgets/rocprofvis_flex_container.h"
 #include "widgets/rocprofvis_widget.h"
 #include <memory>
 
@@ -107,6 +108,8 @@ private:
     };
 
     void GetTopKernels(std::vector<const KernelInfo*>& kernels);
+    void RenderTableContent();
+    void RenderChartContent();
     void RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time_format);
     void RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time_format);
     void RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format,
@@ -131,6 +134,9 @@ private:
     std::optional<size_t>          m_hovered_idx;
     std::optional<size_t>          m_padded_idx;   // "Others" position
     std::unique_ptr<KernelInfo>    m_padded_info;  // "Others" data
+
+    // Layout...
+    FlexContainer m_flex_container;
 
     // External flags...
     bool                m_workload_changed;

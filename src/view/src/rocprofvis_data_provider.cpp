@@ -3734,6 +3734,35 @@ DataProvider::FetchMetricPivotTable(const ComputeTableRequestParams& params)
             static_cast<uint64_t>(params.m_sort_order));
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+        // Set number of column filters
+        result = rocprofvis_controller_set_uint64(
+            (rocprofvis_handle_t*)args,
+            kRPVControllerCPTArgsNumColumnFilters,
+            0,
+            params.m_column_filters.size());
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // Set column filters (indexed)
+        uint64_t filter_idx = 0;
+        for (const auto& [column_index, filter_expr] : params.m_column_filters)
+        {
+            result = rocprofvis_controller_set_uint64(
+                (rocprofvis_handle_t*)args,
+                kRPVControllerCPTArgsFilterColumnIndexIndexed,
+                filter_idx,
+                column_index);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_set_string(
+                (rocprofvis_handle_t*)args,
+                kRPVControllerCPTArgsFilterExpressionIndexed,
+                filter_idx,
+                filter_expr.c_str());
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            filter_idx++;
+        }
+
         // Allocate future and array
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future);

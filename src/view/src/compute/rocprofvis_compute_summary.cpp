@@ -26,6 +26,10 @@ constexpr double      BAR_CHART_THICKNESS             = 0.67;
 constexpr size_t      NUM_TOP_KERNELS                 = 10;
 constexpr ImVec2      CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
 constexpr float       FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
+constexpr float       TABLE_PANEL_MIN_WIDTH            = 800.0f;
+constexpr float       CHART_PANEL_MIN_WIDTH            = 700.0f;
+constexpr float       TABLE_PANEL_FLEX_GROW            = 2.0f;
+constexpr float       CHART_PANEL_FLEX_GROW            = 1.0f;
 constexpr const char* DISPLAY_STRING_METRICS[]{ "Invocation(s)", "Total Duration",
                                                 "Min Duration",  "Max Duration",
                                                 "Mean Duration", "Median Duration" };
@@ -160,6 +164,14 @@ ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
     };
     m_time_format_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimeFormatChanged), time_format_changed_handler);
+
+    auto table_widget = std::make_shared<RocCustomWidget>([this]() { RenderTableContent(); });
+    auto chart_widget = std::make_shared<RocCustomWidget>([this]() { RenderChartContent(); });
+
+    m_flex_container.items = {
+        {"top_kernels_table", table_widget, TABLE_PANEL_MIN_WIDTH, 0.0f, TABLE_PANEL_FLEX_GROW},
+        {"top_kernels_chart", chart_widget, CHART_PANEL_MIN_WIDTH, 0.0f, CHART_PANEL_FLEX_GROW},
+    };
 }
 
 ComputeTopKernels::~ComputeTopKernels()
@@ -344,40 +356,49 @@ ComputeTopKernels::Render()
 {
     SectionTitle("Top Kernels by Execution Time");
 
-    const ImGuiStyle&  style      = ImGui::GetStyle();
-    const ImPlotStyle& plot_style = ImPlot::GetStyle();
-
     if(!m_workload || m_kernels.empty())
     {
         ImGui::TextDisabled("No data available.");
         return;
     }
 
-    std::optional<size_t> hovered_idx = std::nullopt;
-    TimeFormat time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    float panel_h = ImGui::GetContentRegionAvail().x * 0.25f;
+    for(auto& item : m_flex_container.items)
+        item.height = panel_h;
+
     ImPlot::PushColormap("flame");
+    m_flex_container.Render();
+    ImPlot::PopColormap();
+}
 
-    float avail_w  = ImGui::GetContentRegionAvail().x;
-    float table_w  = avail_w * (2.0f / 3.0f);
-    float panel_h  = avail_w * 0.25f;
+void
+ComputeTopKernels::RenderTableContent()
+{
+    const ImPlotStyle& plot_style = ImPlot::GetStyle();
+    TimeFormat time_format = m_settings.GetUserSettings().unit_settings.time_format;
 
-    ImGui::BeginChild("table_panel", ImVec2(table_w, panel_h));
+    std::optional<size_t> hovered_idx = std::nullopt;
     RenderTable(plot_style, time_format, hovered_idx);
-    ImGui::EndChild();
-
     m_hovered_idx = hovered_idx;
+}
 
-    ImGui::SameLine();
+void
+ComputeTopKernels::RenderChartContent()
+{
+    const ImGuiStyle&  style      = ImGui::GetStyle();
+    const ImPlotStyle& plot_style = ImPlot::GetStyle();
+    TimeFormat         time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    float              avail_w     = ImGui::GetContentRegionAvail().x;
+    float              controls_h  = ImGui::GetFrameHeightWithSpacing();
+    float              chart_h     = ImGui::GetContentRegionAvail().y - controls_h;
 
-    ImGui::BeginChild("chart_panel", ImVec2(0, panel_h));
+    ImGui::BeginChild("chart_area", ImVec2(-1, chart_h));
     switch(m_display_mode)
     {
         case Pie: RenderPieChart(plot_style, time_format); break;
         case Bar: RenderBarChart(plot_style, time_format); break;
     }
     ImGui::EndChild();
-
-    ImPlot::PopColormap();
 
     ImGui::SetCursorPosX(plot_style.PlotPadding.x);
     ImGui::BeginGroup();

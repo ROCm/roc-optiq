@@ -917,24 +917,6 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                         if (current_segment == range.first)
                                         {
                                             segment->Insert(timestamp.first, level, object);
-                                        } else
-                                        {                                            
-                                            Sample* new_sample = m_ctx->GetMemoryManager()->NewSample(
-                                                kRPVControllerPrimitiveTypeDouble,
-                                                0, segment_start, GetSegments());
-                                            if(new_sample)
-                                            {
-                                                new_sample->SetDouble(
-                                                    kRPVControllerSampleValue, 0, value);
-                                                new_sample->SetDouble(
-                                                    kRPVControllerSampleEndTimestamp, 0, range.second);
-                                                segment->Insert(segment_start, level, new_sample);
-                                            }
-                                            else
-                                            {
-                                                result = kRocProfVisResultMemoryAllocError;
-                                                break;
-                                            }
                                         }
                                     }
                                 }

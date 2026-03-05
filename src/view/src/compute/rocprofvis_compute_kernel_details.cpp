@@ -174,11 +174,15 @@ ComputeKernelDetailsView::Update()
 void
 ComputeKernelDetailsView::Render()
 {
-    if(m_kernel_metric_table)
+    ImGui::BeginChild("kernel_details");
+    if(m_kernel_metric_table) 
+    {
         m_kernel_metric_table->Render();
+    }
 
     ImGui::Dummy(ImVec2(0.0f, KERNEL_TABLE_PANEL_PADDING));
     m_flex_container.Render();
+    ImGui::EndChild();
 }
 
 }  // namespace View

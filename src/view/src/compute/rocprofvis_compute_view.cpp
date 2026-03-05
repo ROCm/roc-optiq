@@ -163,13 +163,6 @@ ComputeView::GetToolbar()
 }
 
 void
-ComputeView::RenderEditMenuOptions()
-{
-    ImGui::MenuItem("Compute Edit Item");
-    ImGui::Separator();
-}
-
-void
 ComputeView::RenderToolbar()
 {
     ImGuiStyle& style          = ImGui::GetStyle();

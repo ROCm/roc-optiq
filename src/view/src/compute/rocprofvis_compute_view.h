@@ -31,7 +31,6 @@ public:
     void DestroyView();
 
     std::shared_ptr<RocWidget> GetToolbar() override;
-    void                       RenderEditMenuOptions() override;
 
 private:
     void RenderToolbar();

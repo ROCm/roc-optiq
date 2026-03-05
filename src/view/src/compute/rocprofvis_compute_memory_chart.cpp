@@ -340,7 +340,10 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                                           MemChartMetric metric_id,
                                           bool show_description, bool show_raw_value)
 {
-    if(!ImGui::IsMouseHoveringRect(hover_min, hover_max)) return;
+    if(!ImGui::IsMouseHoveringRect(hover_min, hover_max) ||
+       !ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                               ImGuiHoveredFlags_NoPopupHierarchy))
+        return;
     if(metric_id < 0 || metric_id >= MEMCHART_METRIC_COUNT) return;
     if(!m_metric_ptrs[metric_id]) return;
 

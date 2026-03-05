@@ -566,8 +566,7 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
                       const ImPlotStyle& plot_style, bool& item_hovered)
 {
     ImVec2 window_pos = ImVec2(0.75f * region.x - 2 * plot_style.PlotPadding.x,
-                               ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                                   3 * plot_style.PlotPadding.y);
+                               plot_style.PlotBorderSize + 2 * plot_style.PlotPadding.y);
     ImVec2 button_pos =
         m_show_menus ? window_pos - ImVec2(ImGui::GetFrameHeightWithSpacing(), 0.0f)
                      : ImVec2(region.x - 2 * plot_style.PlotPadding.x -

@@ -637,18 +637,17 @@ void
 ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format,
                                std::optional<size_t>& hovered_idx)
 {
-    ImGui::SetCursorPos(ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                               ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                                   plot_style.PlotPadding.y +
-                                   2 * plot_style.LabelPadding.y));
+    ImGui::SetCursorPosX(plot_style.PlotBorderSize + plot_style.PlotPadding.x);
     if(ImGui::BeginTable(
            "Table", 2 + KernelInfo::NumMetrics,
            ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable,
-           ImGui::GetContentRegionAvail() -
-               ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                      ImGui::GetContentRegionAvail().y * 0.5f +
-                          ImGui::GetFrameHeightWithSpacing() +
-                          2 * plot_style.PlotPadding.y + plot_style.PlotBorderSize)))
+           ImVec2(ImGui::GetContentRegionAvail().x - plot_style.PlotBorderSize -
+                      plot_style.PlotPadding.x,
+                  std::min(ImGui::GetFrameHeightWithSpacing() * (NUM_TOP_KERNELS + 2),
+                           ImGui::GetContentRegionAvail().y * 0.5f -
+                               ImGui::GetFrameHeightWithSpacing() -
+                               2 * plot_style.PlotPadding.y -
+                               plot_style.PlotBorderSize))))
     {
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("##legend",

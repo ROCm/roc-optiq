@@ -499,7 +499,9 @@ AppWindow::RenderFileMenu(Project* project)
         {
             project->Save();
         }
-        if(ImGui::MenuItem("Save As", nullptr, false, project || !is_open_file_dialog_open))
+        if(ImGui::MenuItem("Save As", nullptr, false,
+                           project && project->GetTraceType() == Project::System &&
+                               !is_open_file_dialog_open))
         {
             HandleSaveAsFile();
         }
@@ -565,7 +567,6 @@ AppWindow::RenderViewMenu(Project* project)
                 tool_bar_item->m_visible = settings.show_toolbar;
             }
         }
-#ifdef COMPUTE_UI_SUPPORT
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
         {
             if(m_notification_callback)
@@ -576,7 +577,6 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::SeparatorText("System Profiler Panels");
-#endif
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))
         {
@@ -610,21 +610,6 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
-
-#ifdef COMPUTE_UI_SUPPORT
-        ImGui::SeparatorText("Compute Profiler Panels");
-        ImGui::MenuItem("Compute View Item");
-#else
-        ImGui::Separator();
-        if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
-        {
-            if(m_notification_callback)
-            {
-                m_notification_callback(
-                    rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen);
-            }
-        }
-#endif
         ImGui::EndMenu();
     }
 }

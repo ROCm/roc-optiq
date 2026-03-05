@@ -116,7 +116,7 @@ class ProfileDatabase : public SqliteDatabase
             Future* future) override;
 
         virtual rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) = 0;
-        virtual const rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
+        virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
 
     private:
 

@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROCProfiler Visualizer</title>
+<style>
+:root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --panel-alt: #fafafa;
+    --chrome: #eff1f3;
+    --border: #d7dbe2;
+    --border-strong: #c6ccd6;
+    --text: #1f2328;
+    --subtext: #6b7280;
+    --dim: #8f97a7;
+    --accent: #e45b2c;
+    --accent-soft: rgba(228, 91, 44, 0.12);
+    --grid: #eceef2;
+    --grid-strong: #d8dde5;
+    --tree-w: 260px;
+    --label-w: 220px;
+    --minimap-h: 36px;
+    --ruler-h: 24px;
+    --analysis-h: 225px;
+    --event-level-h: 14px;
+    --sample-track-h: 42px;
+    --font: "Segoe UI", system-ui, sans-serif;
+    --mono: "Cascadia Code", Consolas, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+}
+button, input, select { font: inherit; }
+header {
+    height: 42px;
+    background: var(--chrome);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    flex-shrink: 0;
+}
+.logo {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    white-space: nowrap;
+}
+.logo span { color: var(--subtext); font-weight: 400; }
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+.toolbar input {
+    height: 26px;
+    border: 1px solid var(--border-strong);
+    background: #fff;
+    color: var(--text);
+    border-radius: 4px;
+    padding: 0 8px;
+    font-size: 12px;
+}
+#file-path { width: 360px; font-family: var(--mono); }
+#track-filter { width: 220px; }
+.btn {
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+}
+.btn:hover { background: #f8f8f8; }
+.btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.btn.primary:hover { filter: brightness(1.05); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.badge.ok { color: #196c3a; background: rgba(25, 108, 58, 0.12); }
+.badge.loading { color: #8a6200; background: rgba(219, 157, 20, 0.16); }
+.badge.idle { color: var(--subtext); background: rgba(107, 114, 128, 0.12); }
+
+.workspace {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.trace-shell {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    border-bottom: 1px solid var(--border);
+}
+.project-pane {
+    width: var(--tree-w);
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+}
+.pane-title {
+    height: 26px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 11px;
+    color: var(--subtext);
+    background: var(--chrome);
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.tree-body {
+    flex: 1;
+    overflow: auto;
+    padding: 8px 8px 16px 8px;
+    font-size: 11px;
+}
+.tree-body details { margin-left: 10px; }
+.tree-body details > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 2px 0;
+}
+.tree-body details > summary::-webkit-details-marker { display: none; }
+.tree-body details > summary::before {
+    content: "▸";
+    display: inline-block;
+    width: 12px;
+    color: var(--dim);
+}
+.tree-body details[open] > summary::before { content: "▾"; }
+.tree-node {
+    padding: 2px 0 2px 12px;
+    color: var(--subtext);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.timeline-pane {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+}
+.timeline-toolbar {
+    height: 30px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-alt);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    font-size: 11px;
+    color: var(--subtext);
+    flex-shrink: 0;
+}
+.timeline-toolbar .spacer { flex: 1; }
+.stat-pill {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid rgba(228, 91, 44, 0.22);
+    border-radius: 999px;
+    padding: 2px 8px;
+}
+#timeline-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--dim);
+    font-size: 12px;
+}
+#timeline-wrap {
+    display: none;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+}
+#minimap-row, #ruler-row {
+    display: flex;
+    flex-shrink: 0;
+    background: var(--panel-alt);
+}
+#minimap-row {
+    height: var(--minimap-h);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+}
+#ruler-row {
+    height: var(--ruler-h);
+    border-bottom: 1px solid var(--border);
+}
+.label-spacer {
+    width: var(--label-w);
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--subtext);
+}
+#minimap-canvas, #ruler-canvas { flex: 1; display: block; }
+#minimap-canvas { cursor: pointer; }
+#minimap-viewport {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 3px;
+    pointer-events: none;
+}
+#tracks-viewport {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    background: #fff;
+}
+.track-row {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    min-height: 40px;
+}
+.track-row:hover { background: rgba(0, 0, 0, 0.01); }
+.track-label {
+    width: var(--label-w);
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--panel-alt);
+    padding: 4px 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    cursor: pointer;
+}
+.track-label.selected { background: rgba(228, 91, 44, 0.08); }
+.track-cat {
+    font-size: 9px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.35px;
+    line-height: 1.1;
+}
+.track-main {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.track-sub {
+    font-size: 10px;
+    color: var(--subtext);
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.track-chart {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+}
+.track-chart canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+#zoom-info {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    z-index: 10;
+    background: rgba(31, 35, 40, 0.9);
+    color: #fff;
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 11px;
+    font-family: var(--mono);
+    pointer-events: none;
+}
+#tooltip {
+    position: fixed;
+    display: none;
+    z-index: 9999;
+    background: rgba(17, 17, 17, 0.96);
+    color: #fff;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 11px;
+    line-height: 1.35;
+    font-family: var(--mono);
+    pointer-events: none;
+    white-space: pre-line;
+    max-width: 360px;
+}
+
+.analysis-pane {
+    height: var(--analysis-h);
+    min-height: 170px;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+}
+.analysis-tabs {
+    height: 28px;
+    display: flex;
+    background: var(--chrome);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.analysis-tab {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 11px;
+    color: var(--subtext);
+    cursor: pointer;
+    border-right: 1px solid var(--border);
+}
+.analysis-tab.active {
+    background: var(--panel);
+    color: var(--accent);
+    font-weight: 600;
+}
+.analysis-panel {
+    flex: 1;
+    overflow: auto;
+    display: none;
+}
+.analysis-panel.active { display: block; }
+.analysis-content { padding: 10px; font-size: 11px; }
+.table-toolbar {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-alt);
+    color: var(--subtext);
+    font-size: 11px;
+}
+.table-wrap { height: calc(100% - 28px); overflow: auto; }
+table.data {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+table.data th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--chrome);
+    border-bottom: 1px solid var(--border-strong);
+    text-align: left;
+    padding: 5px 8px;
+    white-space: nowrap;
+    font-size: 10px;
+}
+table.data td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10px;
+    white-space: nowrap;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+table.data tr:hover td { background: #fafcff; }
+.details-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 12px;
+    align-items: start;
+}
+.details-grid .k { color: var(--subtext); }
+.details-grid .v { font-family: var(--mono); word-break: break-word; }
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+}
+.summary-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel-alt);
+    padding: 10px;
+}
+.summary-card h3 {
+    font-size: 12px;
+    color: var(--subtext);
+    margin-bottom: 8px;
+}
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: 11px;
+}
+.summary-row .name { color: var(--subtext); }
+.summary-row .value { font-family: var(--mono); }
+.empty-state {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--dim);
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c8ccd4; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #b1b8c3; }
+</style>
+</head>
+<body>
+<header>
+    <div class="logo">ROC-Optiq <span>Web</span></div>
+    <div class="toolbar">
+        <input id="file-path" placeholder="Path to trace file (.db, .rpd)">
+        <button class="btn primary" id="load-btn">Load</button>
+        <button class="btn" id="close-btn" style="display:none">Close</button>
+        <input id="track-filter" placeholder="Search tracks">
+        <button class="btn" id="reset-view-btn">Reset View</button>
+        <span class="badge idle" id="status-badge">No trace</span>
+    </div>
+</header>
+
+<div class="workspace">
+    <div class="trace-shell">
+        <aside class="project-pane">
+            <div class="pane-title">Project</div>
+            <div class="tree-body" id="project-tree"><div class="empty-state">Load a trace to see the project tree.</div></div>
+        </aside>
+
+        <section class="timeline-pane">
+            <div class="timeline-toolbar">
+                <span id="trace-range-label">No timeline loaded</span>
+                <span class="stat-pill" id="track-count-pill">0 tracks</span>
+                <span class="stat-pill" id="request-pill">Idle</span>
+                <div class="spacer"></div>
+                <span>Desktop-style LOD timeline</span>
+            </div>
+
+            <div id="timeline-empty" class="empty-state">Load a trace to render the timeline.</div>
+            <div id="timeline-wrap">
+                <div id="minimap-row">
+                    <div class="label-spacer">Overview</div>
+                    <canvas id="minimap-canvas"></canvas>
+                    <div id="minimap-viewport"></div>
+                </div>
+                <div id="ruler-row">
+                    <div class="label-spacer">Track Labels</div>
+                    <canvas id="ruler-canvas"></canvas>
+                </div>
+                <div id="tracks-viewport">
+                    <div id="tracks-inner"></div>
+                    <div id="zoom-info"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <section class="analysis-pane">
+        <div class="analysis-tabs">
+            <div class="analysis-tab active" data-panel="event-table">Event Table</div>
+            <div class="analysis-tab" data-panel="sample-table">Sample Table</div>
+            <div class="analysis-tab" data-panel="event-details">Event Details</div>
+            <div class="analysis-tab" data-panel="track-details">Track Details</div>
+            <div class="analysis-tab" data-panel="summary">Summary</div>
+            <div class="analysis-tab" data-panel="annotations">Annotations</div>
+        </div>
+
+        <div class="analysis-panel active" id="panel-event-table">
+            <div class="table-toolbar">
+                <button class="btn" id="event-prev-btn">&lt;</button>
+                <span id="event-page-label">Page 0</span>
+                <button class="btn" id="event-next-btn">&gt;</button>
+                <span>Rows</span>
+                <select id="event-page-size"><option value="50">50</option><option value="100" selected>100</option><option value="500">500</option></select>
+            </div>
+            <div class="table-wrap" id="event-table-wrap"><div class="empty-state">Load a trace to fetch event rows.</div></div>
+        </div>
+
+        <div class="analysis-panel" id="panel-sample-table">
+            <div class="table-toolbar">
+                <button class="btn" id="sample-prev-btn">&lt;</button>
+                <span id="sample-page-label">Page 0</span>
+                <button class="btn" id="sample-next-btn">&gt;</button>
+                <span>Rows</span>
+                <select id="sample-page-size"><option value="50">50</option><option value="100" selected>100</option><option value="500">500</option></select>
+            </div>
+            <div class="table-wrap" id="sample-table-wrap"><div class="empty-state">Load a trace to fetch sample rows.</div></div>
+        </div>
+
+        <div class="analysis-panel" id="panel-event-details"><div class="analysis-content" id="event-details-content"><div class="empty-state">Click an event in the timeline to inspect it.</div></div></div>
+        <div class="analysis-panel" id="panel-track-details"><div class="analysis-content" id="track-details-content"><div class="empty-state">Click a track label to inspect track metadata.</div></div></div>
+        <div class="analysis-panel" id="panel-summary"><div class="analysis-content" id="summary-content"><div class="empty-state">Load a trace to fetch summary data.</div></div></div>
+        <div class="analysis-panel" id="panel-annotations"><div class="analysis-content"><div class="empty-state">Annotations are not wired up yet in the web UI.</div></div></div>
+    </section>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+const COLORS = ["#e57373", "#64b5f6", "#81c784", "#ffb74d", "#ba68c8", "#4db6ac", "#f06292", "#90a4ae", "#ff8a65", "#7986cb", "#aed581", "#ffd54f", "#4fc3f7", "#9575cd", "#a1887f", "#f48fb1"];
+const REFETCH_DELAY_MS = 800;
+const BUFFER_MULTIPLIER = 1.0;
+const ZOOM_SPEED = 0.12;
+const PAN_STEP_RATIO = 0.02;
+const DEFAULT_EVENT_TRACK_HEIGHT = 54;
+const DEFAULT_SAMPLE_TRACK_HEIGHT = 42;
+const EVENT_LEVEL_HEIGHT = 14;
+
+const state = {
+    timeline: null,
+    topology: null,
+    allTracks: [],
+    visibleTracks: [],
+    trackData: {},
+    summary: null,
+    requestGeneration: 0,
+    requestTimer: null,
+    lastRequestedWidth: 0,
+    lastRequestedOffset: 0,
+    globalStart: 0,
+    globalEnd: 1,
+    viewStart: 0,
+    viewEnd: 1,
+    isPanning: false,
+    panStartX: 0,
+    panStartViewStart: 0,
+    panStartViewEnd: 0,
+    selectedTrackId: null,
+    selectedEventId: null,
+    eventPage: 0,
+    eventTotal: 0,
+    samplePage: 0,
+    sampleTotal: 0
+};
+
+function $(id) { return document.getElementById(id); }
+
+async function api(method, path, body) {
+    const options = { method, headers: { "Content-Type": "application/json" } };
+    if(body !== undefined) options.body = JSON.stringify(body);
+    const response = await fetch(path, options);
+    return response.json();
+}
+
+function setStatus(kind, text) {
+    const badge = $("status-badge");
+    badge.textContent = text;
+    badge.className = "badge " + kind;
+}
+
+function setRequestStatus(text) {
+    $("request-pill").textContent = text;
+}
+
+function escapeHtml(value) {
+    if(value === null || value === undefined) return "";
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+function formatTime(ns) {
+    const n = Number(ns);
+    if(!Number.isFinite(n)) return "-";
+    if(Math.abs(n) >= 1e9) return (n / 1e9).toFixed(3) + " s";
+    if(Math.abs(n) >= 1e6) return (n / 1e6).toFixed(3) + " ms";
+    if(Math.abs(n) >= 1e3) return (n / 1e3).toFixed(3) + " us";
+    return n.toFixed(1) + " ns";
+}
+
+function formatTimeShort(ns) {
+    const n = Number(ns);
+    if(!Number.isFinite(n)) return "-";
+    if(Math.abs(n) >= 1e9) return (n / 1e9).toFixed(2) + "s";
+    if(Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + "ms";
+    if(Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + "us";
+    return n.toFixed(0) + "ns";
+}
+
+function formatNumber(value) {
+    if(value === null || value === undefined) return "-";
+    return Number(value).toLocaleString();
+}
+
+function truncate(value, length) {
+    const s = String(value || "");
+    return s.length > length ? s.slice(0, length) + "..." : s;
+}
+
+function hashString(value) {
+    let h = 0;
+    for(let i = 0; i < value.length; i++) h = ((h << 5) - h + value.charCodeAt(i)) | 0;
+    return Math.abs(h);
+}
+
+function switchAnalysisPanel(panelName) {
+    document.querySelectorAll(".analysis-tab").forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.panel === panelName);
+    });
+    document.querySelectorAll(".analysis-panel").forEach(panel => {
+        panel.classList.toggle("active", panel.id === "panel-" + panelName);
+    });
+}
+
+async function loadTrace() {
+    const filePath = $("file-path").value.trim();
+    if(!filePath) return;
+    setStatus("loading", "Loading...");
+    $("load-btn").disabled = true;
+    try {
+        const result = await api("POST", "/api/trace/load", { file_path: filePath });
+        if(result.status !== "ok") {
+            setStatus("idle", "Load failed");
+            alert(result.message || "Failed to load trace");
+            return;
+        }
+
+        state.timeline = result.timeline;
+        state.globalStart = state.viewStart = result.timeline.min_timestamp;
+        state.globalEnd = state.viewEnd = result.timeline.max_timestamp;
+        state.trackData = {};
+        state.selectedTrackId = null;
+        state.selectedEventId = null;
+        state.eventPage = 0;
+        state.samplePage = 0;
+
+        $("timeline-empty").style.display = "none";
+        $("timeline-wrap").style.display = "flex";
+        $("close-btn").style.display = "";
+        $("trace-range-label").textContent =
+            "Trace range: " + formatTime(state.globalStart) + " - " + formatTime(state.globalEnd);
+
+        await Promise.all([fetchTopology(), fetchTracks(), fetchSummary()]);
+
+        setStatus("ok", "Loaded");
+        scheduleRefetch(true);
+        fetchEventTable();
+        fetchSampleTable();
+    } catch(err) {
+        setStatus("idle", "Error");
+        alert(err.message);
+    } finally {
+        $("load-btn").disabled = false;
+    }
+}
+
+async function closeTrace() {
+    await api("DELETE", "/api/trace");
+    state.timeline = null;
+    state.topology = null;
+    state.allTracks = [];
+    state.visibleTracks = [];
+    state.trackData = {};
+    state.summary = null;
+    state.selectedTrackId = null;
+    state.selectedEventId = null;
+    clearTimeout(state.requestTimer);
+
+    $("timeline-empty").style.display = "flex";
+    $("timeline-wrap").style.display = "none";
+    $("project-tree").innerHTML = '<div class="empty-state">Load a trace to see the project tree.</div>';
+    $("tracks-inner").innerHTML = "";
+    $("close-btn").style.display = "none";
+    $("track-count-pill").textContent = "0 tracks";
+    $("request-pill").textContent = "Idle";
+    $("trace-range-label").textContent = "No timeline loaded";
+    $("event-table-wrap").innerHTML = '<div class="empty-state">Load a trace to fetch event rows.</div>';
+    $("sample-table-wrap").innerHTML = '<div class="empty-state">Load a trace to fetch sample rows.</div>';
+    $("event-details-content").innerHTML = '<div class="empty-state">Click an event in the timeline to inspect it.</div>';
+    $("track-details-content").innerHTML = '<div class="empty-state">Click a track label to inspect track metadata.</div>';
+    $("summary-content").innerHTML = '<div class="empty-state">Load a trace to fetch summary data.</div>';
+    $("zoom-info").textContent = "";
+    setStatus("idle", "No trace");
+}
+
+async function fetchTopology() {
+    const result = await api("GET", "/api/trace/topology");
+    if(result.status !== "ok") return;
+    state.topology = result.topology;
+    renderProjectTree();
+}
+
+async function fetchTracks() {
+    const result = await api("GET", "/api/trace/tracks");
+    if(result.status !== "ok") return;
+    state.allTracks = result.tracks || [];
+    applyTrackFilter();
+}
+
+function applyTrackFilter() {
+    const query = $("track-filter").value.trim().toLowerCase();
+    state.visibleTracks = state.allTracks.filter(track => {
+        if(!query) return true;
+        const haystack = [track.category, track.main_name, track.sub_name, track.track_type]
+            .join(" ")
+            .toLowerCase();
+        return haystack.includes(query);
+    });
+    $("track-count-pill").textContent = state.visibleTracks.length + " tracks";
+    buildTrackRows();
+    renderAll();
+}
+
+function renderProjectTree() {
+    if(!state.topology || !state.topology.nodes) {
+        $("project-tree").innerHTML = '<div class="empty-state">No topology data.</div>';
+        return;
+    }
+
+    const parts = [];
+    parts.push('<details open><summary>Project</summary>');
+    parts.push('<details open><summary>Nodes (' + state.topology.nodes.length + ')</summary>');
+
+    for(const node of state.topology.nodes) {
+        parts.push('<details open><summary>' + escapeHtml(node.host_name || ("Node " + node.id)) + '</summary>');
+
+        if(node.devices && node.devices.length) {
+            parts.push('<details open><summary>Devices (' + node.devices.length + ')</summary>');
+            for(const device of node.devices) {
+                parts.push(
+                    '<details><summary>' +
+                    escapeHtml(device.type + " " + device.type_index + " (" + (device.product_name || device.id) + ")") +
+                    '</summary>'
+                );
+                if(device.queues && device.queues.length) {
+                    parts.push('<details><summary>Queues (' + device.queues.length + ')</summary>');
+                    for(const queue of device.queues) {
+                        parts.push('<div class="tree-node">' + escapeHtml(queue.name || ("Queue " + queue.id)) + '</div>');
+                    }
+                    parts.push('</details>');
+                }
+                if(device.counters && device.counters.length) {
+                    parts.push('<details><summary>Counters (' + device.counters.length + ')</summary>');
+                    for(const counter of device.counters) {
+                        parts.push('<div class="tree-node">' + escapeHtml(counter.name || ("Counter " + counter.id)) + '</div>');
+                    }
+                    parts.push('</details>');
+                }
+                parts.push('</details>');
+            }
+            parts.push('</details>');
+        }
+
+        if(node.processes && node.processes.length) {
+            parts.push('<details open><summary>Processes (' + node.processes.length + ')</summary>');
+            for(const process of node.processes) {
+                parts.push('<details><summary>' + escapeHtml(process.command || ("PID " + process.id)) + '</summary>');
+                if(process.threads && process.threads.length) {
+                    parts.push('<details><summary>Threads (' + process.threads.length + ')</summary>');
+                    for(const thread of process.threads) {
+                        parts.push('<div class="tree-node">' + escapeHtml(thread.name || ("TID " + thread.tid)) + '</div>');
+                    }
+                    parts.push('</details>');
+                }
+                if(process.streams && process.streams.length) {
+                    parts.push('<details><summary>Streams (' + process.streams.length + ')</summary>');
+                    for(const stream of process.streams) {
+                        parts.push('<div class="tree-node">' + escapeHtml(stream.name || ("Stream " + stream.id)) + '</div>');
+                    }
+                    parts.push('</details>');
+                }
+                parts.push('</details>');
+            }
+            parts.push('</details>');
+        }
+
+        parts.push('</details>');
+    }
+
+    parts.push('</details></details>');
+    $("project-tree").innerHTML = parts.join("");
+}
+
+function trackHeight(track) {
+    const data = state.trackData[track.id];
+    if(track.track_type === "samples") return DEFAULT_SAMPLE_TRACK_HEIGHT;
+    if(!data || !data.entries || !data.entries.length) return DEFAULT_EVENT_TRACK_HEIGHT;
+    let maxLevel = 0;
+    for(const entry of data.entries) maxLevel = Math.max(maxLevel, entry.level || 0);
+    return Math.max(DEFAULT_EVENT_TRACK_HEIGHT, (maxLevel + 1) * EVENT_LEVEL_HEIGHT + 8);
+}
+
+function buildTrackRows() {
+    const viewport = $("tracks-viewport");
+    const oldScrollTop = viewport.scrollTop;
+    const container = $("tracks-inner");
+    container.innerHTML = "";
+
+    for(const track of state.visibleTracks) {
+        const row = document.createElement("div");
+        row.className = "track-row";
+        row.style.height = trackHeight(track) + "px";
+        row.dataset.trackId = track.id;
+
+        const selected = state.selectedTrackId === track.id ? " selected" : "";
+        row.innerHTML =
+            '<div class="track-label' + selected + '" data-track-label="' + track.id + '">' +
+                '<div class="track-cat">' + escapeHtml(track.category || track.track_type) + '</div>' +
+                '<div class="track-main">' + escapeHtml(track.main_name || ("Track " + track.id)) + '</div>' +
+                '<div class="track-sub">' + escapeHtml(track.sub_name || "") + '</div>' +
+            '</div>' +
+            '<div class="track-chart"><canvas data-track-canvas="' + track.id + '"></canvas></div>';
+
+        container.appendChild(row);
+    }
+
+    viewport.scrollTop = oldScrollTop;
+
+    container.querySelectorAll("[data-track-label]").forEach(label => {
+        label.addEventListener("click", () => {
+            state.selectedTrackId = Number(label.dataset.trackLabel);
+            renderTrackDetails();
+            switchAnalysisPanel("track-details");
+            buildTrackRows();
+            renderAll();
+        });
+    });
+
+    container.querySelectorAll("[data-track-canvas]").forEach(canvas => {
+        canvas.addEventListener("click", async event => {
+            const trackId = Number(canvas.dataset.trackCanvas);
+            const hit = findHitEvent(trackId, event);
+            if(!hit) return;
+            state.selectedTrackId = trackId;
+            state.selectedEventId = hit.id;
+            buildTrackRows();
+            renderAll();
+            await fetchEventDetails(hit.id);
+            switchAnalysisPanel("event-details");
+        });
+    });
+}
+
+function scheduleRefetch(force) {
+    clearTimeout(state.requestTimer);
+    if(force) {
+        doRefetch(true);
+        return;
+    }
+    state.requestTimer = setTimeout(() => doRefetch(false), REFETCH_DELAY_MS);
+}
+
+function needsRefetch() {
+    const width = state.viewEnd - state.viewStart;
+    if(state.lastRequestedWidth === 0) return true;
+    if(width > state.lastRequestedWidth) return true;
+    if(state.lastRequestedWidth > width * 2.0) return true;
+    if(Math.abs(state.viewStart - state.lastRequestedOffset) > width) return true;
+    return false;
+}
+
+async function doRefetch(force) {
+    if(!state.timeline || !state.visibleTracks.length) {
+        renderAll();
+        return;
+    }
+    if(!force && !needsRefetch()) {
+        renderAll();
+        return;
+    }
+
+    const width = state.viewEnd - state.viewStart;
+    const buffer = width * BUFFER_MULTIPLIER;
+    const reqStart = Math.max(state.globalStart, state.viewStart - buffer);
+    const reqEnd = Math.min(state.globalEnd, state.viewEnd + buffer);
+    const chartWidth = document.querySelector(".track-chart")?.clientWidth || 1600;
+    const resolution = Math.max(1024, Math.round(chartWidth * 3));
+    const generation = ++state.requestGeneration;
+
+    state.lastRequestedWidth = width;
+    state.lastRequestedOffset = state.viewStart;
+    setRequestStatus("Loading " + state.visibleTracks.length + " tracks");
+
+    const fetches = state.visibleTracks.map(track =>
+        api("GET", "/api/trace/tracks/" + track.id + "/graph?start=" + reqStart + "&end=" + reqEnd + "&resolution=" + resolution)
+            .then(result => ({ trackId: track.id, result }))
+            .catch(() => ({ trackId: track.id, result: null }))
+    );
+
+    const results = await Promise.all(fetches);
+    if(generation !== state.requestGeneration) return;
+
+    for(const item of results) {
+        if(item.result && item.result.status === "ok") state.trackData[item.trackId] = item.result;
+    }
+
+    setRequestStatus("Buffered LOD loaded");
+    buildTrackRows();
+    renderAll();
+}
+
+function setupCanvas(canvas) {
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(width * dpr));
+    canvas.height = Math.max(1, Math.round(height * dpr));
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, width, height };
+}
+
+function calcTickInterval(range, width) {
+    const targetTicks = Math.max(4, Math.floor(width / 120));
+    let interval = range / targetTicks;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(interval)));
+    const residual = interval / magnitude;
+    if(residual <= 1.5) interval = magnitude;
+    else if(residual <= 3.5) interval = 2 * magnitude;
+    else if(residual <= 7.5) interval = 5 * magnitude;
+    else interval = 10 * magnitude;
+    return interval;
+}
+
+function renderAll() {
+    if(!state.timeline) return;
+    renderMinimap();
+    renderRuler();
+    for(const track of state.visibleTracks) renderTrack(track);
+    renderZoomInfo();
+}
+
+function renderRuler() {
+    const canvas = $("ruler-canvas");
+    const { ctx, width, height } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, width, height);
+
+    const range = state.viewEnd - state.viewStart;
+    if(range <= 0) return;
+
+    const interval = calcTickInterval(range, width);
+    const first = Math.ceil(state.viewStart / interval) * interval;
+
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--grid-strong").trim();
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--subtext").trim();
+    ctx.font = "10px " + getComputedStyle(document.body).fontFamily;
+    ctx.textAlign = "center";
+
+    for(let t = first; t <= state.viewEnd; t += interval) {
+        const x = ((t - state.viewStart) / range) * width;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+        ctx.fillText(formatTimeShort(t), x, height - 6);
+    }
+}
+
+function renderMinimap() {
+    const canvas = $("minimap-canvas");
+    const { ctx, width, height } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, width, height);
+
+    const total = state.globalEnd - state.globalStart;
+    if(total <= 0 || !state.visibleTracks.length) return;
+
+    const miniTrackHeight = Math.max(1, height / state.visibleTracks.length);
+
+    for(let i = 0; i < state.visibleTracks.length; i++) {
+        const track = state.visibleTracks[i];
+        const data = state.trackData[track.id];
+        if(!data || !data.entries) continue;
+
+        const y = i * miniTrackHeight;
+        if(data.track_type === "events") {
+            for(const event of data.entries) {
+                const x1 = ((event.start_timestamp - state.globalStart) / total) * width;
+                const x2 = ((event.end_timestamp - state.globalStart) / total) * width;
+                const colorIndex = hashString(event.name || "") % COLORS.length;
+                ctx.fillStyle = COLORS[colorIndex];
+                ctx.globalAlpha = 0.75;
+                ctx.fillRect(x1, y, Math.max(0.5, x2 - x1), miniTrackHeight);
+            }
+        } else {
+            const values = data.entries.map(entry => typeof entry.value === "number" ? entry.value : 0);
+            const minValue = Math.min(...values);
+            const maxValue = Math.max(...values);
+            const valueRange = maxValue - minValue || 1;
+            ctx.beginPath();
+            ctx.strokeStyle = "#5b8def";
+            ctx.globalAlpha = 0.8;
+            ctx.lineWidth = 1;
+            data.entries.forEach((entry, index) => {
+                const ts = entry.timestamp ?? entry.start_timestamp;
+                const x = ((ts - state.globalStart) / total) * width;
+                const yy = y + miniTrackHeight - ((values[index] - minValue) / valueRange) * miniTrackHeight;
+                if(index === 0) ctx.moveTo(x, yy);
+                else ctx.lineTo(x, yy);
+            });
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    const spacerWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--label-w"));
+    const left = spacerWidth + ((state.viewStart - state.globalStart) / total) * width;
+    const right = spacerWidth + ((state.viewEnd - state.globalStart) / total) * width;
+    const viewport = $("minimap-viewport");
+    viewport.style.left = left + "px";
+    viewport.style.width = Math.max(3, right - left) + "px";
+}
+
+function renderTrack(track) {
+    const canvas = document.querySelector('canvas[data-track-canvas="' + track.id + '"]');
+    if(!canvas) return;
+
+    const { ctx, width, height } = setupCanvas(canvas);
+    ctx.clearRect(0, 0, width, height);
+    renderTrackGrid(ctx, width, height);
+
+    const data = state.trackData[track.id];
+    if(!data || !data.entries || !data.entries.length) return;
+
+    if(data.track_type === "events") renderEventTrack(ctx, width, height, data.entries);
+    else renderSampleTrack(ctx, width, height, data.entries);
+}
+
+function renderTrackGrid(ctx, width, height) {
+    const range = state.viewEnd - state.viewStart;
+    if(range <= 0) return;
+    const interval = calcTickInterval(range, width);
+    const first = Math.ceil(state.viewStart / interval) * interval;
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--grid").trim();
+    ctx.lineWidth = 1;
+    for(let t = first; t <= state.viewEnd; t += interval) {
+        const x = ((t - state.viewStart) / range) * width;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+    }
+}
+
+function renderEventTrack(ctx, width, height, entries) {
+    const range = state.viewEnd - state.viewStart;
+    if(range <= 0) return;
+    const maxVisibleLevel = Math.max(0, Math.floor((height - 6) / EVENT_LEVEL_HEIGHT) - 1);
+
+    for(const event of entries) {
+        if(event.end_timestamp < state.viewStart || event.start_timestamp > state.viewEnd) continue;
+        const x1 = Math.max(0, ((event.start_timestamp - state.viewStart) / range) * width);
+        const x2 = Math.min(width, ((event.end_timestamp - state.viewStart) / range) * width);
+        const barWidth = Math.max(0.8, x2 - x1);
+        const level = Math.min(event.level || 0, maxVisibleLevel);
+        const y = level * EVENT_LEVEL_HEIGHT + 2;
+        const h = EVENT_LEVEL_HEIGHT - 2;
+        const colorIndex = hashString(event.name || "") % COLORS.length;
+        ctx.fillStyle = COLORS[colorIndex];
+        ctx.fillRect(x1, y, barWidth, h);
+
+        if(state.selectedEventId === event.id) {
+            ctx.strokeStyle = "#1f2328";
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x1 + 0.5, y + 0.5, Math.max(1, barWidth - 1), Math.max(1, h - 1));
+        }
+
+        if(barWidth > 42) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x1 + 2, y, barWidth - 4, h);
+            ctx.clip();
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "10px " + getComputedStyle(document.body).fontFamily;
+            ctx.fillText(event.name || "", x1 + 4, y + h - 3);
+            ctx.restore();
+        }
+    }
+}
+
+function renderSampleTrack(ctx, width, height, entries) {
+    if(!entries.length) return;
+    const range = state.viewEnd - state.viewStart;
+    const values = entries.map(entry => typeof entry.value === "number" ? entry.value : 0);
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const valueRange = maxValue - minValue || 1;
+    const pad = 4;
+
+    ctx.beginPath();
+    let started = false;
+    entries.forEach((entry, index) => {
+        const ts = entry.timestamp ?? entry.start_timestamp;
+        if(ts < state.viewStart || ts > state.viewEnd) return;
+        const x = ((ts - state.viewStart) / range) * width;
+        const y = height - pad - ((values[index] - minValue) / valueRange) * (height - pad * 2);
+        if(!started) {
+            ctx.moveTo(x, y);
+            started = true;
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    if(!started) return;
+
+    ctx.lineTo(width, height - pad);
+    ctx.lineTo(0, height - pad);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(91, 141, 239, 0.12)";
+    ctx.fill();
+
+    ctx.beginPath();
+    started = false;
+    entries.forEach((entry, index) => {
+        const ts = entry.timestamp ?? entry.start_timestamp;
+        if(ts < state.viewStart || ts > state.viewEnd) return;
+        const x = ((ts - state.viewStart) / range) * width;
+        const y = height - pad - ((values[index] - minValue) / valueRange) * (height - pad * 2);
+        if(!started) {
+            ctx.moveTo(x, y);
+            started = true;
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.strokeStyle = "#5b8def";
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+}
+
+function renderZoomInfo() {
+    const range = state.viewEnd - state.viewStart;
+    const total = state.globalEnd - state.globalStart;
+    const percent = total > 0 ? (range / total * 100).toFixed(1) : "100";
+    $("zoom-info").textContent =
+        formatTimeShort(state.viewStart) + " — " + formatTimeShort(state.viewEnd) +
+        "   " + percent + "%   |   wheel = zoom   drag = pan   dblclick = reset";
+}
+
+function clampView() {
+    const range = state.viewEnd - state.viewStart;
+    const total = state.globalEnd - state.globalStart;
+    if(range >= total) {
+        state.viewStart = state.globalStart;
+        state.viewEnd = state.globalEnd;
+        return;
+    }
+    if(state.viewStart < state.globalStart) {
+        state.viewStart = state.globalStart;
+        state.viewEnd = state.viewStart + range;
+    }
+    if(state.viewEnd > state.globalEnd) {
+        state.viewEnd = state.globalEnd;
+        state.viewStart = state.viewEnd - range;
+    }
+}
+
+function zoomAroundFraction(fraction, factor) {
+    const range = state.viewEnd - state.viewStart;
+    const pivot = state.viewStart + fraction * range;
+    const total = state.globalEnd - state.globalStart;
+    let nextRange = range * factor;
+    nextRange = Math.max(total * 0.00005, Math.min(total, nextRange));
+    state.viewStart = pivot - fraction * nextRange;
+    state.viewEnd = pivot + (1 - fraction) * nextRange;
+    clampView();
+}
+
+function resetView() {
+    if(!state.timeline) return;
+    state.viewStart = state.globalStart;
+    state.viewEnd = state.globalEnd;
+    renderAll();
+    scheduleRefetch(true);
+}
+
+function setupInteractions() {
+    const viewport = $("tracks-viewport");
+    const ruler = $("ruler-canvas");
+    const minimap = $("minimap-canvas");
+
+    function wheelHandler(event) {
+        if(!state.timeline) return;
+        event.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        const labelWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--label-w"));
+        const chartWidth = viewport.clientWidth - labelWidth;
+        const localX = event.clientX - rect.left - labelWidth;
+        if(chartWidth <= 0 || localX < 0) return;
+        const fraction = Math.max(0, Math.min(1, localX / chartWidth));
+        const factor = event.deltaY > 0 ? (1 + ZOOM_SPEED) : 1 / (1 + ZOOM_SPEED);
+        zoomAroundFraction(fraction, factor);
+        renderAll();
+        scheduleRefetch(false);
+    }
+
+    viewport.addEventListener("wheel", wheelHandler, { passive: false });
+    ruler.addEventListener("wheel", wheelHandler, { passive: false });
+
+    viewport.addEventListener("mousedown", event => {
+        if(event.button !== 0 || !state.timeline) return;
+        const rect = viewport.getBoundingClientRect();
+        const labelWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--label-w"));
+        if(event.clientX - rect.left < labelWidth) return;
+        state.isPanning = true;
+        state.panStartX = event.clientX;
+        state.panStartViewStart = state.viewStart;
+        state.panStartViewEnd = state.viewEnd;
+        document.body.style.cursor = "grabbing";
+        event.preventDefault();
+    });
+
+    window.addEventListener("mousemove", event => {
+        if(!state.timeline) return;
+        if(state.isPanning) {
+            const labelWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--label-w"));
+            const chartWidth = viewport.clientWidth - labelWidth;
+            if(chartWidth <= 0) return;
+            const dx = event.clientX - state.panStartX;
+            const range = state.panStartViewEnd - state.panStartViewStart;
+            const shift = -(dx / chartWidth) * range;
+            state.viewStart = state.panStartViewStart + shift;
+            state.viewEnd = state.panStartViewEnd + shift;
+            clampView();
+            renderAll();
+            return;
+        }
+        updateTooltip(event);
+    });
+
+    window.addEventListener("mouseup", () => {
+        if(!state.isPanning) return;
+        state.isPanning = false;
+        document.body.style.cursor = "";
+        scheduleRefetch(false);
+    });
+
+    viewport.addEventListener("dblclick", resetView);
+
+    minimap.addEventListener("mousedown", event => {
+        if(!state.timeline) return;
+        const rect = minimap.getBoundingClientRect();
+        const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+        const total = state.globalEnd - state.globalStart;
+        const range = state.viewEnd - state.viewStart;
+        const center = state.globalStart + fraction * total;
+        state.viewStart = center - range / 2;
+        state.viewEnd = center + range / 2;
+        clampView();
+        renderAll();
+        scheduleRefetch(false);
+    });
+
+    document.addEventListener("keydown", event => {
+        if(!state.timeline) return;
+        if(event.target instanceof HTMLInputElement) return;
+        const range = state.viewEnd - state.viewStart;
+        const step = range * PAN_STEP_RATIO * (event.shiftKey ? 4 : 1);
+
+        if(event.key === "a" || event.key === "ArrowLeft") {
+            state.viewStart -= step;
+            state.viewEnd -= step;
+            clampView();
+            renderAll();
+            scheduleRefetch(false);
+        } else if(event.key === "d" || event.key === "ArrowRight") {
+            state.viewStart += step;
+            state.viewEnd += step;
+            clampView();
+            renderAll();
+            scheduleRefetch(false);
+        } else if(event.key === "w") {
+            zoomAroundFraction(0.5, 1 / (1 + ZOOM_SPEED));
+            renderAll();
+            scheduleRefetch(false);
+        } else if(event.key === "s") {
+            zoomAroundFraction(0.5, 1 + ZOOM_SPEED);
+            renderAll();
+            scheduleRefetch(false);
+        }
+    });
+}
+
+function findHitEvent(trackId, mouseEvent) {
+    const data = state.trackData[trackId];
+    if(!data || data.track_type !== "events" || !data.entries) return null;
+
+    const canvas = document.querySelector('canvas[data-track-canvas="' + trackId + '"]');
+    if(!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = mouseEvent.clientX - rect.left;
+    const y = mouseEvent.clientY - rect.top;
+    const width = canvas.clientWidth;
+    const range = state.viewEnd - state.viewStart;
+    const level = Math.floor((y - 2) / EVENT_LEVEL_HEIGHT);
+
+    let best = null;
+    let bestWidth = Infinity;
+    for(const event of data.entries) {
+        if((event.level || 0) !== level) continue;
+        const x1 = ((event.start_timestamp - state.viewStart) / range) * width;
+        const x2 = ((event.end_timestamp - state.viewStart) / range) * width;
+        if(x >= x1 && x <= x2) {
+            const duration = event.end_timestamp - event.start_timestamp;
+            if(duration < bestWidth) {
+                best = event;
+                bestWidth = duration;
+            }
+        }
+    }
+    return best;
+}
+
+function updateTooltip(event) {
+    const tooltip = $("tooltip");
+    const target = event.target;
+    const canvas = target instanceof Element ? target.closest("canvas[data-track-canvas]") : null;
+    if(!canvas || state.isPanning) {
+        tooltip.style.display = "none";
+        return;
+    }
+
+    const trackId = Number(canvas.dataset.trackCanvas);
+    const data = state.trackData[trackId];
+    if(!data) {
+        tooltip.style.display = "none";
+        return;
+    }
+
+    if(data.track_type === "events") {
+        const hit = findHitEvent(trackId, event);
+        if(!hit) {
+            tooltip.style.display = "none";
+            return;
+        }
+        tooltip.textContent =
+            (hit.name || "Event") + "\n" +
+            "Duration: " + formatTime(hit.duration || (hit.end_timestamp - hit.start_timestamp)) + "\n" +
+            "Start: " + formatTime(hit.start_timestamp) + "\n" +
+            "End: " + formatTime(hit.end_timestamp) + "\n" +
+            "Level: " + (hit.level ?? 0);
+    } else {
+        const rect = canvas.getBoundingClientRect();
+        const fraction = (event.clientX - rect.left) / rect.width;
+        const hoverTime = state.viewStart + fraction * (state.viewEnd - state.viewStart);
+        tooltip.textContent = "Time: " + formatTime(hoverTime);
+    }
+
+    tooltip.style.display = "block";
+    tooltip.style.left = event.clientX + 14 + "px";
+    tooltip.style.top = event.clientY + 14 + "px";
+}
+
+async function fetchEventDetails(eventId) {
+    $("event-details-content").innerHTML = '<div class="empty-state">Loading event details...</div>';
+    const result = await api("GET", "/api/trace/events/" + eventId);
+    if(result.status !== "ok" || !result.event) {
+        $("event-details-content").innerHTML = '<div class="empty-state">Failed to load event details.</div>';
+        return;
+    }
+
+    const event = result.event;
+    let html = '<div class="details-grid">';
+    html += detailRow("Name", event.name);
+    html += detailRow("ID", event.id);
+    html += detailRow("Category", event.category);
+    html += detailRow("Start", formatTime(event.start_timestamp));
+    html += detailRow("End", formatTime(event.end_timestamp));
+    html += detailRow("Duration", formatTime(event.duration));
+    html += detailRow("Level", event.level);
+    html += '</div>';
+
+    if(event.ext_data && event.ext_data.length) {
+        html += '<h4 style="margin:12px 0 6px 0">Extended Data</h4><div class="details-grid">';
+        for(const item of event.ext_data) {
+            html += detailRow(item.category || item.name || "Value", item.value || "");
+        }
+        html += '</div>';
+    }
+    if(event.call_stack && event.call_stack.length) {
+        html += '<h4 style="margin:12px 0 6px 0">Call Stack</h4><div class="details-grid">';
+        for(const item of event.call_stack) {
+            html += detailRow(item.name || "Frame", [item.file, item.address].filter(Boolean).join(" "));
+        }
+        html += '</div>';
+    }
+    if(event.flow_control && event.flow_control.length) {
+        html += '<h4 style="margin:12px 0 6px 0">Flow Control</h4><div class="details-grid">';
+        for(const item of event.flow_control) {
+            html += detailRow(item.direction || "flow", "Track " + item.track_id + " : " + (item.name || ""));
+        }
+        html += '</div>';
+    }
+
+    $("event-details-content").innerHTML = html;
+}
+
+function renderTrackDetails() {
+    const track = state.allTracks.find(item => item.id === state.selectedTrackId);
+    if(!track) {
+        $("track-details-content").innerHTML = '<div class="empty-state">Click a track label to inspect track metadata.</div>';
+        return;
+    }
+    $("track-details-content").innerHTML =
+        '<div class="details-grid">' +
+            detailRow("Track ID", track.id) +
+            detailRow("Type", track.track_type) +
+            detailRow("Category", track.category) +
+            detailRow("Main", track.main_name) +
+            detailRow("Sub", track.sub_name) +
+            detailRow("Entries", formatNumber(track.num_entries)) +
+            detailRow("Start", formatTime(track.min_timestamp)) +
+            detailRow("End", formatTime(track.max_timestamp)) +
+            detailRow("Min Value", track.min_value) +
+            detailRow("Max Value", track.max_value) +
+            detailRow("Agent/PID", track.agent_or_pid) +
+            detailRow("Queue/TID", track.queue_id_or_tid) +
+        '</div>';
+}
+
+function detailRow(key, value) {
+    return '<div class="k">' + escapeHtml(key) + '</div><div class="v">' + escapeHtml(value) + '</div>';
+}
+
+async function fetchEventTable() {
+    if(!state.timeline || !state.visibleTracks.length) return;
+    const pageSize = Number($("event-page-size").value);
+    const offset = state.eventPage * pageSize;
+    const trackIds = state.visibleTracks.map(track => track.id).join(",");
+
+    const result = await api("GET",
+        "/api/trace/tables/events?track_ids=" + trackIds +
+        "&start=" + state.globalStart +
+        "&end=" + state.globalEnd +
+        "&offset=" + offset +
+        "&count=" + pageSize
+    );
+    if(result.status !== "ok") return;
+
+    state.eventTotal = result.total_rows || 0;
+    $("event-page-label").textContent =
+        "Page " + (state.eventPage + 1) + " / " + Math.max(1, Math.ceil(state.eventTotal / pageSize)) +
+        " (" + state.eventTotal + ")";
+    $("event-table-wrap").innerHTML = renderTable(result.headers, result.rows);
+}
+
+async function fetchSampleTable() {
+    if(!state.timeline || !state.visibleTracks.length) return;
+    const pageSize = Number($("sample-page-size").value);
+    const offset = state.samplePage * pageSize;
+    const trackIds = state.visibleTracks.map(track => track.id).join(",");
+
+    const result = await api("GET",
+        "/api/trace/tables/samples?track_ids=" + trackIds +
+        "&start=" + state.globalStart +
+        "&end=" + state.globalEnd +
+        "&offset=" + offset +
+        "&count=" + pageSize
+    );
+    if(result.status !== "ok") return;
+
+    state.sampleTotal = result.total_rows || 0;
+    $("sample-page-label").textContent =
+        "Page " + (state.samplePage + 1) + " / " + Math.max(1, Math.ceil(state.sampleTotal / pageSize)) +
+        " (" + state.sampleTotal + ")";
+    $("sample-table-wrap").innerHTML = renderTable(result.headers, result.rows);
+}
+
+function renderTable(headers, rows) {
+    if(!headers || !rows) return '<div class="empty-state">No table data.</div>';
+    let html = '<table class="data"><thead><tr>';
+    for(const header of headers) html += '<th>' + escapeHtml(header) + '</th>';
+    html += '</tr></thead><tbody>';
+    for(const row of rows) {
+        html += '<tr>';
+        for(const cell of row) {
+            html += '<td title="' + escapeHtml(cell) + '">' + escapeHtml(cell) + '</td>';
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    return html;
+}
+
+async function fetchSummary() {
+    const result = await api("GET", "/api/trace/summary");
+    if(result.status !== "ok") return;
+    state.summary = result.summary;
+    $("summary-content").innerHTML = renderSummary(result.summary);
+}
+
+function renderSummary(summary) {
+    if(!summary) return '<div class="empty-state">No summary data.</div>';
+    return '<div class="summary-grid">' + renderSummaryCard(summary) + '</div>';
+}
+
+function renderSummaryCard(summary) {
+    let html = '<div class="summary-card"><h3>' + escapeHtml(summary.name || summary.level || "Summary") + '</h3>';
+    if(summary.processor_type) html += summaryRow("Type", summary.processor_type);
+    if(summary.gfx_utilization !== undefined) html += summaryRow("GFX Util", (summary.gfx_utilization * 100).toFixed(1) + "%");
+    if(summary.mem_utilization !== undefined) html += summaryRow("Mem Util", (summary.mem_utilization * 100).toFixed(1) + "%");
+    if(summary.kernel_exec_time_total !== undefined) html += summaryRow("Kernel Time", formatTime(summary.kernel_exec_time_total));
+    if(summary.top_kernels && summary.top_kernels.length) {
+        html += '<table class="data" style="margin-top:8px"><thead><tr><th>Kernel</th><th>Calls</th><th>Total</th><th>%</th></tr></thead><tbody>';
+        for(const kernel of summary.top_kernels) {
+            html += '<tr>' +
+                '<td title="' + escapeHtml(kernel.name) + '">' + escapeHtml(truncate(kernel.name, 32)) + '</td>' +
+                '<td>' + formatNumber(kernel.invocations) + '</td>' +
+                '<td>' + formatTime(kernel.exec_time_sum) + '</td>' +
+                '<td>' + (kernel.exec_time_pct * 100).toFixed(1) + '%</td>' +
+                '</tr>';
+        }
+        html += '</tbody></table>';
+    }
+    html += '</div>';
+    if(summary.sub_metrics) {
+        for(const child of summary.sub_metrics) html += renderSummaryCard(child);
+    }
+    return html;
+}
+
+function summaryRow(name, value) {
+    return '<div class="summary-row"><span class="name">' + escapeHtml(name) + '</span><span class="value">' + escapeHtml(value) + '</span></div>';
+}
+
+function bindUi() {
+    $("load-btn").addEventListener("click", loadTrace);
+    $("close-btn").addEventListener("click", closeTrace);
+    $("reset-view-btn").addEventListener("click", resetView);
+    $("file-path").addEventListener("keydown", event => {
+        if(event.key === "Enter") loadTrace();
+    });
+    $("track-filter").addEventListener("input", () => {
+        applyTrackFilter();
+        scheduleRefetch(true);
+        fetchEventTable();
+        fetchSampleTable();
+    });
+
+    document.querySelectorAll(".analysis-tab").forEach(tab => {
+        tab.addEventListener("click", () => switchAnalysisPanel(tab.dataset.panel));
+    });
+
+    $("event-page-size").addEventListener("change", () => { state.eventPage = 0; fetchEventTable(); });
+    $("sample-page-size").addEventListener("change", () => { state.samplePage = 0; fetchSampleTable(); });
+    $("event-prev-btn").addEventListener("click", () => { if(state.eventPage > 0) { state.eventPage--; fetchEventTable(); } });
+    $("event-next-btn").addEventListener("click", () => {
+        const size = Number($("event-page-size").value);
+        if((state.eventPage + 1) * size < state.eventTotal) { state.eventPage++; fetchEventTable(); }
+    });
+    $("sample-prev-btn").addEventListener("click", () => { if(state.samplePage > 0) { state.samplePage--; fetchSampleTable(); } });
+    $("sample-next-btn").addEventListener("click", () => {
+        const size = Number($("sample-page-size").value);
+        if((state.samplePage + 1) * size < state.sampleTotal) { state.samplePage++; fetchSampleTable(); }
+    });
+
+    window.addEventListener("resize", () => {
+        if(state.timeline) renderAll();
+    });
+}
+
+bindUi();
+setupInteractions();
+</script>
+</body>
+</html>

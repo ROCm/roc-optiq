@@ -25,6 +25,7 @@ option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" OFF)
+option(BUILD_WEB_SERVER "Build the REST/JSON web server target" OFF)
 
 if(APPLE AND USE_NATIVE_FILE_DIALOG)
     set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
@@ -57,6 +58,10 @@ add_subdirectory(thirdparty)
 add_subdirectory(src/core)
 add_subdirectory(src/model)
 add_subdirectory(src/controller)
+
+if(BUILD_WEB_SERVER)
+    add_subdirectory(src/web)
+endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 

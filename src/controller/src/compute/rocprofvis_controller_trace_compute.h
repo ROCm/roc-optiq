@@ -19,9 +19,6 @@ namespace Controller
 class Arguments;
 class Array;
 class Future;
-class ComputeTable;
-class Plot;
-class ComputePlot;
 class Workload;
 class MetricsContainer;
 class MetricID;
@@ -92,17 +89,6 @@ private:
     QueryDataStore m_query_output;
 
     ComputePivotTable* m_kernel_metric_table;
-
-#pragma region Deprecated
-public:   
-    rocprofvis_result_t AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array);
-
-private:
-    rocprofvis_result_t LoadCSV();
-    rocprofvis_result_t GetMetric(const rocprofvis_controller_compute_metric_types_t metric_type, Data** value);
-    std::unordered_map<rocprofvis_controller_compute_table_types_t, ComputeTable*> m_tables;
-    std::unordered_map<rocprofvis_controller_compute_plot_types_t, ComputePlot*> m_plots;
-#pragma endregion
 };
 
 }

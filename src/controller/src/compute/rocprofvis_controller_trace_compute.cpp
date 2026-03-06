@@ -13,6 +13,7 @@
 
 #include "json.h"
 
+#include <algorithm>
 #include <set>
 
 #pragma region Deprecated
@@ -91,13 +92,11 @@ rocprofvis_result_t ComputeTrace::Load(RocProfVis::Controller::Future& future)
             {
                 result = LoadRocpd();
             }
-#pragma region Deprecated
-            else if(m_trace_file.find(".csv", m_trace_file.size() - 4) != std::string::npos)
+            else if(m_trace_file.find(".csv", m_trace_file.size() - 4) != std::string::npos) // Deprecated
             {
                 m_trace_file = std::filesystem::path(m_trace_file).parent_path().string();
                 result = LoadCSV();
             }
-#pragma endregion
             else
             {
                 result = kRocProfVisResultInvalidArgument;

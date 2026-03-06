@@ -31,7 +31,7 @@ constexpr float    SIDEBAR_WIDTH_MAX             = 600.0f;
 constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
 constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
-constexpr uint64_t DEFAULT_LOADING_TIMER         = 800;  // milliseconds
+constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 30.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
@@ -1018,7 +1018,6 @@ TimelineView::RenderGraphView()
     float temp_scroll_position = ImGui::GetScrollY();
     if(m_previous_scroll_position != temp_scroll_position)
     {
-        m_loading_timer.Restart();
         m_previous_scroll_position = temp_scroll_position;
         m_scroll_position_y        = temp_scroll_position;
     }

@@ -573,7 +573,7 @@ std::string TopologyNodeMemoryCopy::GetNodeName() {
 rocprofvis_dm_result_t TopologyNodeMemoryAllocation::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) {
 	if (kRPVControllerTopologyNodePropertyValueKeyed == property && kRPVControllerQueueId == index)
 	{
-		*value = kRocProfVisDmMemoryAllocationTrack;
+		*value = kRocProfVisDmMemoryAllocationTrack + m_prev_node->GetId();
 		return kRocProfVisDmResultSuccess;
 	}
 	else
@@ -585,7 +585,7 @@ rocprofvis_dm_result_t TopologyNodeMemoryAllocation::GetPropertyAsUint64(rocprof
 rocprofvis_dm_result_t TopologyNodeMemoryCopy::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) {
 	if (kRPVControllerTopologyNodePropertyValueKeyed == property && kRPVControllerQueueId == index)
 	{
-		*value = kRocProfVisDmMemoryCopyTrack;
+		*value = kRocProfVisDmMemoryCopyTrack + m_prev_node->GetId();
 		return kRocProfVisDmResultSuccess;
 	}
 	else

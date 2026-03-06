@@ -12,16 +12,12 @@
 #endif
 
 #include "rocprofvis_controller.h"
-#include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_utils.h"
-#ifdef COMPUTE_UI_SUPPORT
-#    include "compute/rocprofvis_navigation_manager.h"
-#endif
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_view_module.h"
@@ -106,9 +102,6 @@ AppWindow::~AppWindow()
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
     m_projects.clear();
-#ifdef COMPUTE_UI_SUPPORT
-    NavigationManager::DestroyInstance();
-#endif
 }
 
 bool
@@ -144,9 +137,7 @@ AppWindow::Init()
     m_tab_container->SetEventSourceName(TAB_CONTAINER_SRC_NAME);
     m_tab_container->EnableSendCloseEvent(true);
     m_tab_container->EnableSendChangeEvent(true);
-#ifdef COMPUTE_UI_SUPPORT
-    NavigationManager::GetInstance()->RegisterRootContainer(m_tab_container);
-#endif
+
     main_area_item.m_item = m_tab_container;
 
     std::vector<LayoutItem> layout_items;
@@ -639,10 +630,7 @@ AppWindow::HandleOpenFile()
     FileFilter trace_filter;
     trace_filter.m_name = "Traces";
     trace_filter.m_extensions = { "db", "rpd", "yaml" };
-#ifdef COMPUTE_UI_SUPPORT
-    all_filter.m_extensions.push_back("csv");
-    trace_filter.m_extensions.push_back("csv");
-#endif
+
     FileFilter project_filter;
     project_filter.m_name = "Projects";
     project_filter.m_extensions = { "rpv" };

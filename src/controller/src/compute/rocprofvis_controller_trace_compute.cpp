@@ -10,18 +10,9 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_controller_table_compute_pivot.h"
-
 #include "json.h"
-
 #include <algorithm>
 #include <set>
-
-#pragma region Deprecated
-#include "rocprofvis_controller_compute_metrics.h"
-#include "rocprofvis_controller_plot_compute.h"
-#include "rocprofvis_controller_table_compute.h"
-#include <filesystem>
-#pragma endregion
 
 namespace RocProfVis
 {
@@ -44,24 +35,6 @@ ComputeTrace::~ComputeTrace()
     {
         delete m_kernel_metric_table;
     }
-#pragma region Deprecated
-    for (auto& it : m_tables)
-    {
-        ComputeTable* table = it.second;
-        if (table)
-        {
-            delete table;
-        }
-    }
-    for (auto& it : m_plots)
-    {
-        ComputePlot* plot = it.second;
-        if (plot)
-        {
-            delete plot;
-        }
-    }
-#pragma endregion
 }
 
 rocprofvis_result_t ComputeTrace::Init()
@@ -91,11 +64,6 @@ rocprofvis_result_t ComputeTrace::Load(RocProfVis::Controller::Future& future)
             if(m_trace_file.find(".db", m_trace_file.size() - 3) != std::string::npos)
             {
                 result = LoadRocpd();
-            }
-            else if(m_trace_file.find(".csv", m_trace_file.size() - 4) != std::string::npos) // Deprecated
-            {
-                m_trace_file = std::filesystem::path(m_trace_file).parent_path().string();
-                result = LoadCSV();
             }
             else
             {
@@ -155,44 +123,7 @@ rocprofvis_result_t ComputeTrace::GetUInt64(rocprofvis_property_t property, uint
             }
             default:
             {
-#pragma region Deprecated
-                if (kRPVControllerComputeMetricTypeL2CacheRd <= property && property < kRPVControllerComputeMetricTypeCount)
-                {
-                    Data* metric_data = nullptr;
-                    result = GetMetric(static_cast<rocprofvis_controller_compute_metric_types_t>(property), &metric_data);
-                    if (result == kRocProfVisResultSuccess)
-                    {
-                        ROCPROFVIS_ASSERT(metric_data);
-                        switch(metric_data->GetType())
-                        {
-                            case kRPVControllerPrimitiveTypeUInt64:
-                            {
-                                result = metric_data->GetUInt64(value);
-                                break;
-                            }
-                            case kRPVControllerPrimitiveTypeDouble:
-                            {
-                                double data;
-                                result = metric_data->GetDouble(&data);
-                                if (result == kRocProfVisResultSuccess)
-                                {
-                                    *value = static_cast<uint64_t>(data);
-                                }
-                                break;
-                            }
-                            default: 
-                            {
-                                result = kRocProfVisResultInvalidType;
-                                break;
-                            }
-                        }
-                    }
-                }
-                else
-#pragma endregion
-                {
-                    result = UnhandledProperty(property);
-                }                
+                result = UnhandledProperty(property);             
                 break;
             }
         }
@@ -228,38 +159,7 @@ rocprofvis_result_t ComputeTrace::GetObject(rocprofvis_property_t property, uint
             }
             default:
             {
-#pragma region Deprecated                
-                if(kRPVControllerComputeTableTypeKernelList <= property && property < kRPVControllerComputeTableTypeCount)
-                {
-                    rocprofvis_controller_compute_table_types_t table_type = static_cast<rocprofvis_controller_compute_table_types_t>(property);
-                    if (m_tables.count(table_type) > 0)
-                    {
-                        *value = (rocprofvis_handle_t*)m_tables[static_cast<rocprofvis_controller_compute_table_types_t>(property)];
-                        result = kRocProfVisResultSuccess;
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultNotLoaded;
-                    }          
-                }
-                else if(kRPVControllerComputePlotTypeKernelDurationPercentage <= property && property < kRPVControllerComputePlotTypeCount)
-                {
-                    rocprofvis_controller_compute_plot_types_t plot_type = static_cast<rocprofvis_controller_compute_plot_types_t>(property);
-                    if (m_plots.count(plot_type) > 0)
-                    {
-                        *value = (rocprofvis_handle_t*)m_plots[static_cast<rocprofvis_controller_compute_plot_types_t>(property)];
-                        result = kRocProfVisResultSuccess;
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultNotLoaded;
-                    }
-                }
-                else
-#pragma endregion
-                {
-                    result = UnhandledProperty(property);
-                }               
+                result = UnhandledProperty(property);               
                 break;
             }
         }
@@ -905,121 +805,6 @@ rocprofvis_result_t ComputeTrace::SetObjectProperty(rocprofvis_handle_t* object,
     }
     return result;
 }
-
-#pragma region Deprecated
-rocprofvis_result_t ComputeTrace::AsyncFetch(Plot& plot, Arguments& args, Future& future, Array& array)
-{
-    rocprofvis_result_t error = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
-
-    future.Set(JobSystem::Get().IssueJob([&plot, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
-            (void) future;
-            rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            result = plot.Setup(dm_handle, args);
-            if (result == kRocProfVisResultSuccess)
-            {
-                result = plot.Fetch(dm_handle, 0, 0, array);
-            }
-            return result;
-        }, &future));
-
-    if(future.IsValid())
-    {
-        error = kRocProfVisResultSuccess;
-    }
-
-    return error;
-}
-
-rocprofvis_result_t ComputeTrace::LoadCSV()
-{
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    if (std::filesystem::exists(m_trace_file) && std::filesystem::is_directory(m_trace_file))
-    {        
-        for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator{m_trace_file})
-        {
-            if (entry.path().extension() == ".csv")
-            {
-                const std::string& file = entry.path().filename().string();
-                if (COMPUTE_TABLE_DEFINITIONS.count(file) > 0)
-                {
-                    const ComputeTableDefinition& definition = COMPUTE_TABLE_DEFINITIONS.at(file);
-                    ComputeTable* table = new ComputeTable(m_tables.size(), definition.m_type, definition.m_title);
-                    ROCPROFVIS_ASSERT(table);
-                    result = table->Load(entry.path().string());
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                    m_tables[definition.m_type] = table;
-                }
-            }
-        }
-        spdlog::debug("ComputeTrace::Load - {}/{} Tables", m_tables.size(), COMPUTE_TABLE_DEFINITIONS.size());
-        for (const ComputeTablePlotDefinition& definition : COMPUTE_PLOT_DEFINITIONS)
-        {
-            ComputePlot* plot = new ComputePlot(m_plots.size(), definition.m_title, definition.x_axis_label, definition.y_axis_label, definition.m_type);
-            ROCPROFVIS_ASSERT(plot);
-            for (const ComputePlotDataSeriesDefinition& series : definition.m_series)
-            {
-                for (const ComputePlotDataDefinition& data : series.m_values)
-                {
-                    if (m_tables.count(data.m_table_type) > 0)
-                    {
-                        result = plot->Load(m_tables[data.m_table_type], series.m_name, data.m_metric_keys);
-                        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                    }
-                    else
-                    {
-                        delete plot;
-                        result = kRocProfVisResultNotLoaded;
-                        break;
-                    }
-                }
-                if (result != kRocProfVisResultSuccess)
-                {
-                    break;
-                }
-            }
-            if (result == kRocProfVisResultSuccess)
-            {
-                m_plots[definition.m_type] = plot;
-            }
-        }
-        spdlog::debug("ComputeTrace::Load - {}/{} Plots", m_plots.size(), COMPUTE_PLOT_DEFINITIONS.size());
-        if (m_tables.count(kRPVControllerComputeTableTypeRooflineBenchmarks) > 0 && m_tables.count(kRPVControllerComputeTableTypeRooflineCounters) > 0)
-        {
-            for (auto& it : ROOFLINE_DEFINITION.m_plots)
-            {
-                ComputePlot* plot = new ComputePlot(m_plots.size(), it.second.m_title, it.second.x_axis_label, it.second.y_axis_label, it.second.m_type);
-                ROCPROFVIS_ASSERT(plot);
-                result = plot->Load(m_tables[kRPVControllerComputeTableTypeRooflineCounters], m_tables[kRPVControllerComputeTableTypeRooflineBenchmarks]);
-                if (result == kRocProfVisResultSuccess)
-                {
-                    m_plots[it.second.m_type] = plot;
-                }
-            }
-        }
-        spdlog::debug("ComputeTrace::Load - {}/{} Rooflines", m_plots.size() - COMPUTE_PLOT_DEFINITIONS.size(), ROOFLINE_DEFINITION.m_plots.size());
-    }
-    return result;
-}
-
-rocprofvis_result_t ComputeTrace::GetMetric(const rocprofvis_controller_compute_metric_types_t metric_type, Data** value)
-{
-    rocprofvis_result_t result = kRocProfVisResultNotLoaded;
-    const ComputeMetricDefinition& metric = COMPUTE_METRIC_DEFINITIONS.at(metric_type);
-    const rocprofvis_controller_compute_table_types_t& table_type = metric.m_table_type;
-    if (m_tables.count(table_type))
-    {
-        const std::string& key = metric.m_metric_key;
-        std::pair<std::string, Data*> metric_data;
-        result = m_tables[table_type]->GetMetric(key, metric_data);
-        if (result == kRocProfVisResultSuccess)
-        {
-            *value = metric_data.second;
-        }
-    }
-    return result;
-}
-#pragma endregion
 
 ComputeTrace::MetricID::MetricID(uint32_t cateory_id)
 : m_category_id(cateory_id)

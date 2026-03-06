@@ -44,7 +44,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(90, 90, 100, 255),    // kSplitterColor
     IM_COL32(28, 30, 34, 255),     // kBgMain
     IM_COL32(38, 40, 44, 255),     // kBgPanel
-    IM_COL32(52, 54, 58, 255),     // kBgFrame
+    IM_COL32(44, 46, 50, 255),     // kBgFrame
     IM_COL32(224, 62, 62, 255),    // kAccentRed
     IM_COL32(255, 140, 140, 255),  // kAccentRedHover
     IM_COL32(181, 40, 40, 255),    // kAccentRedActive

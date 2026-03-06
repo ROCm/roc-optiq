@@ -19,6 +19,7 @@ namespace View
 
 constexpr float       IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
 constexpr float       HOVER_THESHOLD                  = 8.0f;
+constexpr float       MININUM_HEIGHT_RELATIVE         = 15.0f;
 constexpr const char* DISPLAY_NAMES_CEILING_COMPUTE[] = {
     "Peak MFMA FP4",   // kRPVControllerRooflineCeilingComputeMFMAFP4
     "Peak MFMA FP6",   // kRPVControllerRooflineCeilingComputeMFMAFP6
@@ -60,6 +61,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_settings(SettingsManager::GetInstance())
 , m_show_menus(true)
 , m_menus_mode(Legend)
+, m_menus_overlap(true)
 , m_scale_intensity(true)
 , m_hovered_item_distance(FLT_MAX)
 , m_workload_changed(false)
@@ -321,7 +323,9 @@ Roofline::Render()
     SectionTitle("Roofline Analysis");
     ImGui::BeginChild(
         "roofline",
-        ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().x * 0.5f),
+        ImVec2(ImGui::GetContentRegionAvail().x,
+               std::max(ImGui::GetContentRegionAvail().x * 0.5f,
+                        ImGui::GetFrameHeightWithSpacing() * MININUM_HEIGHT_RELATIVE)),
         ImGuiChildFlags_None);
     const ImVec2       region     = ImGui::GetContentRegionAvail();
     const ImGuiStyle&  style      = ImGui::GetStyle();
@@ -351,10 +355,11 @@ Roofline::Render()
         ImPlot::PushStyleColor(ImPlotCol_FrameBg,
                                m_settings.GetColor(Colors::kTransparent));
         ImPlot::PushColormap("flame");
-        if(ImPlot::BeginPlot("plot", ImVec2(-1, -1),
-                             ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
-                                 ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
-                                 ImPlotFlags_Crosshairs))
+        if(ImPlot::BeginPlot(
+               "plot",
+               ImVec2(m_menus_overlap ? -1 : (m_show_menus ? 0.75f * region.x : -1), -1),
+               ImPlotFlags_NoTitle | ImPlotFlags_NoFrame | ImPlotFlags_NoLegend |
+                   ImPlotFlags_NoMenus | ImPlotFlags_Crosshairs))
         {
             ImPlot::SetupAxis(ImAxis_X1, "Arithmetic Intensity (FLOP/Byte)",
                               ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
@@ -534,6 +539,20 @@ Roofline::Render()
             }
             ImPlot::EndPlot();
         }
+        if(m_show_menus && !m_menus_overlap)
+        {
+            // Fill empty space when menus is not overlapped...
+            ImGui::SameLine();
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImGui::GetCursorScreenPos() +
+                    ImVec2(-plot_style.PlotPadding.x, plot_style.PlotPadding.y),
+                ImGui::GetCursorScreenPos() +
+                    ImVec2(region.x * 0.25f - plot_style.PlotPadding.x,
+                           region.y - ImGui::GetFrameHeightWithSpacing() -
+                               plot_style.LabelPadding.y * 4.0f -
+                               plot_style.PlotPadding.y - plot_style.PlotBorderSize),
+                ImGui::GetColorU32(plot_style.Colors[ImPlotCol_PlotBg]));
+        }
         bool menus_item_hovered = false;
         RenderMenus(region, style, plot_style, menus_item_hovered);
         if(!menus_item_hovered)
@@ -567,12 +586,10 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
 {
     ImVec2 window_pos = ImVec2(0.75f * region.x - 2 * plot_style.PlotPadding.x,
                                plot_style.PlotBorderSize + 2 * plot_style.PlotPadding.y);
-    ImVec2 button_pos =
-        m_show_menus ? window_pos - ImVec2(ImGui::GetFrameHeightWithSpacing(), 0.0f)
-                     : ImVec2(region.x - 2 * plot_style.PlotPadding.x -
-                                  ImGui::GetFrameHeightWithSpacing(),
-                              ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                                  3 * plot_style.PlotPadding.y);
+    ImVec2 button_pos = window_pos;
+    button_pos.x      = m_show_menus ? window_pos.x - ImGui::GetFrameHeightWithSpacing()
+                                     : region.x - 2 * plot_style.PlotPadding.x -
+                                      ImGui::GetFrameHeightWithSpacing();
     ImGui::SetCursorPos(button_pos);
     if(ImGui::ArrowButton("toggle_menus", m_show_menus ? ImGuiDir_Right : ImGuiDir_Left))
     {
@@ -630,8 +647,8 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
         ImGui::EndGroup();
         float header_height = ImGui::GetItemRectSize().y + 2 * style.WindowPadding.y;
         float footer_height =
-            m_kernel ? 0.0f
-                     : 2 * ImGui::GetFrameHeightWithSpacing() + 2 * style.WindowPadding.y;
+            (m_kernel_mode == AllKernels ? 3 : 2) * ImGui::GetFrameHeightWithSpacing() +
+            2 * style.WindowPadding.y;
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(menus_content_width, 0),
             ImVec2(menus_content_width,
@@ -744,13 +761,25 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
         }
         ImGui::EndChild();
         ImGui::EndChild();
-        if(m_menus_mode == Options && m_kernel_mode == AllKernels)
+        if(m_menus_mode == Options)
         {
             ImGui::SeparatorText("Options");
-            ImGui::Checkbox("##scale_intensity", &m_scale_intensity);
+            ImGui::PushID("menus_overlap");
+            ImGui::Checkbox("", &m_menus_overlap);
             ImGui::SameLine();
-            ElidedText("Scale kernel marker size to duration",
-                       ImGui::GetContentRegionAvail().x, region.x * 0.5f, false, true);
+            ElidedText("Overlap legend with plot", ImGui::GetContentRegionAvail().x,
+                       region.x * 0.5f, false, true);
+            ImGui::PopID();
+            if(m_kernel_mode == AllKernels)
+            {
+                ImGui::PushID("kernel_scale");
+                ImGui::Checkbox("", &m_scale_intensity);
+                ImGui::SameLine();
+                ElidedText("Scale kernel marker size to duration",
+                           ImGui::GetContentRegionAvail().x, region.x * 0.5f, false,
+                           true);
+                ImGui::PopID();
+            }
         }
         ImGui::EndChild();
         ImGui::PopStyleColor();

@@ -99,6 +99,7 @@ private:
 
     // User options...
     bool      m_show_menus;
+    bool      m_menus_overlap;
     MenusMode m_menus_mode;
     bool      m_scale_intensity;
 

@@ -172,6 +172,7 @@ ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
         {"top_kernels_table", table_widget, TABLE_PANEL_MIN_WIDTH, 0.0f, TABLE_PANEL_FLEX_GROW},
         {"top_kernels_chart", chart_widget, CHART_PANEL_MIN_WIDTH, 0.0f, CHART_PANEL_FLEX_GROW},
     };
+    m_flex_container.gap = 0.0f;
 }
 
 ComputeTopKernels::~ComputeTopKernels()
@@ -527,11 +528,14 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
             ImGui::PopID();
             ImPlot::PopColormap();
         }
+        if(ImPlot::IsPlotHovered())
+        {
+            RenderPlotTooltip(m_kernel_bar.selected_metric, time_format);
+        }
         ImPlot::EndPlot();
     }
     ImPlot::PopStyleColor(2);
     ImPlot::PopStyleVar();
-    RenderPlotTooltip(m_kernel_pie.selected_metric, time_format);
 }
 
 void

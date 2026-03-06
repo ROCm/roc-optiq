@@ -13,6 +13,7 @@
 
 #include "json.h"
 
+#include <algorithm>
 #include <set>
 
 #pragma region Deprecated

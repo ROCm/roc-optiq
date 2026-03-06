@@ -1018,7 +1018,6 @@ TimelineView::RenderGraphView()
     float temp_scroll_position = ImGui::GetScrollY();
     if(m_previous_scroll_position != temp_scroll_position)
     {
-        //m_loading_timer.Restart();
         m_previous_scroll_position = temp_scroll_position;
         m_scroll_position_y        = temp_scroll_position;
     }

@@ -575,13 +575,13 @@ TraceView::RenderToolbar()
     // Toolbar Controls
     ImGui::BeginGroup();
     RenderFlowControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderAnnotationControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderEventSearch();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderBookmarkControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     
     ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
@@ -596,7 +596,7 @@ TraceView::RenderToolbar()
     {
         SetTooltipStyled("Show Minimap");
     }
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
 
     if(ImGui::Button("Reset View"))
     {
@@ -623,23 +623,6 @@ TraceView::RenderToolbar()
     ImGui::EndChild();
     // pop child window style
     ImGui::PopStyleVar(2);
-}
-
-void
-TraceView::RenderSeparator()
-{
-    auto style = m_settings_manager.GetDefaultStyle();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
-    ImGui::SameLine();
-
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    float       height    = ImGui::GetFrameHeight();
-    ImVec2      p         = ImGui::GetCursorScreenPos();
-    draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + height),
-                       m_settings_manager.GetColor(Colors::kMetaDataSeparator), 2.0f);
-    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
-    ImGui::SameLine();
 }
 
 void

@@ -743,7 +743,7 @@ AppWindow::RenderAboutDialog()
 {
     static constexpr char* NAME_LABEL = "ROCm (TM) Optiq";
     static constexpr char* COPYRIGHT_LABEL =
-        "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.";
+        "Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.";
     static constexpr char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
     static constexpr char* DOC_URL =
         "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/";

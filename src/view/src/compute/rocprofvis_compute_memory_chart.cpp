@@ -233,7 +233,7 @@ ComputeMemoryChartView::Render()
     float canvas_h = std::max({m_instr_buff_block.Bottom(),
                                m_instr_dispatch_block.Bottom(),
                                m_instr_l1_block.Bottom(),
-                               m_gmi_block.Bottom()}) + CHART_PADDING;
+                               m_gmi_block.Bottom()}) + CHART_PADDING * 2;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, Settings().GetColor(Colors::kBgMain));
 
@@ -268,8 +268,11 @@ ComputeMemoryChartView::Render()
     // -----------------------------------------------------------------
     DrawConnections(draw_list, window_position);
 
-    // Declare full canvas extent so horizontal scrollbar covers the diagram
-    ImGui::SetCursorPos(ImVec2(canvas_w, canvas_h));
+    // Compute and reserve space for horizontal scrollbar if needed
+    const float h_scrollbar_size = (ImGui::GetScrollMaxX() > 0.0f)
+                                       ? ImGui::GetStyle().ScrollbarSize
+                                       : 0.0f;
+    ImGui::SetCursorPos(ImVec2(canvas_w, canvas_h - 1.0f - h_scrollbar_size));
     ImGui::Dummy(ImVec2(1, 1));
 
     ImGui::EndChild();

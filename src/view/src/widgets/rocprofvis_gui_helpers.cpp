@@ -350,10 +350,32 @@ SectionTitle(const char* text, bool large, SettingsManager* settings)
     ImGui::PopFont();
 }
 
+
+void
+VerticalSeparator(SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+    auto style = settings->GetDefaultStyle();
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
+    ImGui::SameLine();
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    float       height    = ImGui::GetFrameHeight();
+    ImVec2      p         = ImGui::GetCursorScreenPos();
+    draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + height),
+                       settings->GetColor(Colors::kMetaDataSeparator), 2.0f);
+    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
+    ImGui::SameLine();
+}
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
 void
-RocProfVis::View::DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
+DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 {
     if(!text || !*text) return;
 

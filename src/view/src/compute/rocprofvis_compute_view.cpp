@@ -11,6 +11,7 @@
 #include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
 #include "implot/implot.h"
@@ -165,7 +166,7 @@ ComputeView::GetToolbar()
 void
 ComputeView::RenderToolbar()
 {
-    ImGuiStyle& style          = ImGui::GetStyle();
+    const ImGuiStyle& style          = SettingsManager::GetInstance().GetDefaultStyle();
     ImVec2      frame_padding  = style.FramePadding;
     float       frame_rounding = style.FrameRounding;
 
@@ -195,6 +196,8 @@ ComputeView::RenderWorkloadSelection()
         return;
     }
 
+    const ImGuiStyle& style          = SettingsManager::GetInstance().GetDefaultStyle();
+
     const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
         m_data_provider.ComputeModel().GetWorkloads();
 
@@ -219,7 +222,9 @@ ComputeView::RenderWorkloadSelection()
         ImGui::EndCombo();
     }
     ImGui::EndDisabled();
-    ImGui::SameLine();
+    ImGui::SameLine(0, style.ItemSpacing.x);
+    VerticalSeparator();
+    ImGui::SameLine(0, style.ItemSpacing.x);
     ImGui::Text("Kernel:");
     ImGui::SameLine();
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();

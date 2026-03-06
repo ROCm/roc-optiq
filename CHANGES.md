@@ -15,8 +15,8 @@
 - Time normalization for multi-node configurations
 
 **Misc**
-- UI Styling enchancements
-- 
+- UI Styling enhancements
+
 ### Fixes
 - Flow arrow rendering fixes
 - Fix crash on trace load

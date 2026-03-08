@@ -45,6 +45,7 @@ SystemTrace::SystemTrace(const std::string& filename)
 , m_search_table(nullptr)
 , m_summary(nullptr)
 , m_mem_mgmt(nullptr)
+, m_topology_root(nullptr)
 {
     
 }

@@ -5,6 +5,7 @@
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_local_protocol.h"
 #include "rocprofvis_events.h"
 
 #include "spdlog/spdlog.h"
@@ -75,6 +76,7 @@ DataProvider::CloseController()
 
     m_model.Clear();
     FreeRequests();
+    m_protocol.reset();
     m_state      = ProviderState::kInit;
 
     if(m_trace_controller)
@@ -100,7 +102,19 @@ DataProvider::FreeRequests()
     for(auto item : m_requests)
     {
         RequestInfo& req = item.second;
-        if(req.request_future)
+        if(req.uses_protocol)
+        {
+            if(m_protocol)
+            {
+                Result result = m_protocol->CancelRequest(req.protocol_request_handle);
+                if(result != Result::Success && result != Result::Cancelled)
+                {
+                    spdlog::warn("Failed to cancel protocol request {}: {}",
+                                 req.request_id, static_cast<int>(result));
+                }
+            }
+        }
+        else if(req.request_future)
         {
             spdlog::warn("FreeRequests: cancelling request {} of type {}", req.request_id,
                          static_cast<int>(req.request_type));
@@ -118,7 +132,34 @@ DataProvider::FreeRequests()
     {
         RequestInfo& req = item.second;
 
-        if(req.request_future)
+        if(req.uses_protocol)
+        {
+            if(m_protocol)
+            {
+                ProtocolRequestStatus status = {};
+                Result result = m_protocol->GetRequestStatus(req.protocol_request_handle,
+                                                             &status);
+                if(result == Result::Success &&
+                   status.state == ProtocolRequestState::Pending)
+                {
+                    result = m_protocol->CancelRequest(req.protocol_request_handle);
+                    if(result != Result::Success && result != Result::Cancelled)
+                    {
+                        spdlog::warn("Failed to finish cancelling protocol request {}: {}",
+                                     req.request_id, static_cast<int>(result));
+                    }
+                }
+
+                Result release_result = m_protocol->ReleaseRequest(req.protocol_request_handle);
+                if(release_result != Result::Success)
+                {
+                    spdlog::warn("Failed to release protocol request {}: {}",
+                                 req.request_id, static_cast<int>(release_result));
+                }
+            }
+            req.protocol_request_handle = 0;
+        }
+        else if(req.request_future)
         {
             rocprofvis_result_t result =
                 rocprofvis_controller_future_wait(req.request_future, FLT_MAX);
@@ -146,6 +187,7 @@ DataProvider::FreeRequests()
         {
             req.request_obj_handle = nullptr;
         }
+        req.uses_protocol = false;
     }
 
     m_requests.clear();
@@ -306,38 +348,81 @@ DataProvider::FetchTrace(rocprofvis_controller_t* controller, const std::string&
         }
         if(result == kRocProfVisResultSuccess)
         {
-            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
-            if(future)
+            bool load_started = false;
+            if(controller_type == kRPVControllerObjectTypeControllerSystem)
             {
-                result = rocprofvis_controller_load_async(m_trace_controller, future);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
+                m_protocol = std::make_unique<LocalProtocol>();
+                result = m_protocol->Initialize(file_path.c_str()) == Result::Success
+                    ? kRocProfVisResultSuccess
+                    : kRocProfVisResultInvalidArgument;
                 if(result == kRocProfVisResultSuccess)
                 {
-                    RequestInfo request_info;
-                    request_info.request_array      = nullptr;
-                    request_info.request_future     = future;
-                    request_info.request_obj_handle = nullptr;
-                    request_info.request_args       = nullptr;
-                    request_info.loading_state      = RequestState::kLoading;
-                    if(controller_type == kRPVControllerObjectTypeControllerSystem)
+                    m_protocol->SetController(m_trace_controller);
+                    ProtocolRequestHandle request_handle = 0;
+                    Result protocol_result = m_protocol->BeginLoad(&request_handle);
+                    result = protocol_result == Result::Success
+                        ? kRocProfVisResultSuccess
+                        : kRocProfVisResultInvalidArgument;
+
+                    if(result == kRocProfVisResultSuccess)
                     {
-                        request_info.request_id   = FETCH_SYSTEM_TRACE_REQUEST_ID;
+                        RequestInfo request_info;
+                        request_info.request_array      = nullptr;
+                        request_info.request_future     = nullptr;
+                        request_info.request_obj_handle = nullptr;
+                        request_info.request_args       = nullptr;
+                        request_info.loading_state      = RequestState::kLoading;
+                        request_info.request_id         = FETCH_SYSTEM_TRACE_REQUEST_ID;
                         request_info.request_type = RequestType::kFetchSystemTrace;
+                        request_info.protocol_request_handle = request_handle;
+                        request_info.uses_protocol = true;
+                        m_requests.emplace(request_info.request_id, request_info);
+                        load_started = true;
                     }
-#ifdef COMPUTE_UI_SUPPORT
-                    else if(controller_type == kRPVControllerObjectTypeControllerCompute)
+                }
+            }
+
+            if(!load_started && result == kRocProfVisResultSuccess)
+            {
+                rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+                if(future)
+                {
+                    result = rocprofvis_controller_load_async(m_trace_controller, future);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                    if(result == kRocProfVisResultSuccess)
                     {
-                        request_info.request_id   = FETCH_COMPUTE_TRACE_REQUEST_ID;
-                        request_info.request_type = RequestType::kFetchComputeTrace;
-                    }
+                        RequestInfo request_info;
+                        request_info.request_array      = nullptr;
+                        request_info.request_future     = future;
+                        request_info.request_obj_handle = nullptr;
+                        request_info.request_args       = nullptr;
+                        request_info.loading_state      = RequestState::kLoading;
+#ifdef COMPUTE_UI_SUPPORT
+                        if(controller_type == kRPVControllerObjectTypeControllerCompute)
+                        {
+                            request_info.request_id   = FETCH_COMPUTE_TRACE_REQUEST_ID;
+                            request_info.request_type = RequestType::kFetchComputeTrace;
+                        }
 #endif
-                    m_requests.emplace(request_info.request_id, request_info);
+#ifdef COMPUTE_UI_SUPPORT
+                        else
+#endif
+                        {
+                            request_info.request_id   = FETCH_SYSTEM_TRACE_REQUEST_ID;
+                            request_info.request_type = RequestType::kFetchSystemTrace;
+                        }
+                        m_requests.emplace(request_info.request_id, request_info);
+                    }
+                    else
+                    {
+                        rocprofvis_controller_future_free(future);
+                        future = nullptr;
+                    }
                 }
                 else
                 {
-                    rocprofvis_controller_future_free(future);
-                    future = nullptr;
+                    result = kRocProfVisResultMemoryAllocError;
                 }
             }
         }
@@ -895,204 +980,258 @@ DataProvider::HandleLoadTrackMetaData()
     TimelineModel& tlm = m_model.GetTimeline();
     tlm.ClearTrackMetaData();
     tlm.FreeAllTrackData();
-    uint64_t num_graphs = tlm.GetTrackCount();
-
-    for(uint64_t i = 0; i < num_graphs; i++)
+    if(m_protocol)
     {
-        rocprofvis_handle_t* graph  = nullptr;
-        rocprofvis_result_t  result = rocprofvis_controller_get_object(
-            m_trace_timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && graph);
+        const ProtocolTrackInfo* tracks = nullptr;
+        uint32_t                 track_count = 0;
+        const StringTable*       strings = nullptr;
+        Result protocol_result = m_protocol->GetTrackList(&tracks, &track_count, &strings);
+        ROCPROFVIS_ASSERT(protocol_result == Result::Success);
 
-        rocprofvis_handle_t* track = nullptr;
-        result =
-            rocprofvis_controller_get_object(graph, kRPVControllerGraphTrack, 0, &track);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && track);
-
-        if(result == kRocProfVisResultSuccess)
+        tlm.SetTrackCount(track_count);
+        for(uint32_t i = 0; i < track_count; ++i)
         {
-            TrackInfo track_info;
+            const ProtocolTrackInfo& protocol_track = tracks[i];
+            TrackInfo                track_info = {};
+            track_info.index = protocol_track.index;
+            track_info.id = protocol_track.id;
+            track_info.track_type =
+                protocol_track.track_type == static_cast<uint8_t>(Controller::ITrack::Type::Samples)
+                    ? kRPVControllerTrackTypeSamples
+                    : kRPVControllerTrackTypeEvents;
+            track_info.min_ts = protocol_track.min_timestamp;
+            track_info.max_ts = protocol_track.max_timestamp;
+            track_info.num_entries = protocol_track.entry_count;
+            track_info.agent_or_pid = protocol_track.owner_process_or_agent_id;
+            track_info.queue_id_or_tid = protocol_track.owner_queue_or_thread_id;
+            track_info.min_value = protocol_track.min_value;
+            track_info.max_value = protocol_track.max_value;
+            track_info.graph_handle = nullptr;
+            track_info.category = strings ? strings->GetString(protocol_track.category_index) : "";
+            track_info.main_name = strings ? strings->GetString(protocol_track.main_name_index) : "";
+            track_info.sub_name = strings ? strings->GetString(protocol_track.sub_name_index) : "";
+            track_info.topology.id.value = protocol_track.topology_id;
+            track_info.topology.process_id = protocol_track.topology_process_id;
+            track_info.topology.node_id = protocol_track.topology_node_id;
+            track_info.topology.device_id = protocol_track.topology_device_id;
 
-            track_info.graph_handle = graph;
-
-            track_info.index = i;
-            result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackId, 0,
-                                                      &track_info.id);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            uint64_t track_type = 0;
-            result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
-                                                      &track_type);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                              (track_type == kRPVControllerTrackTypeEvents ||
-                               track_type == kRPVControllerTrackTypeSamples));
-            track_info.track_type = track_type == kRPVControllerTrackTypeSamples
-                                        ? kRPVControllerTrackTypeSamples
-                                        : kRPVControllerTrackTypeEvents;
-
-            result = GetString(track, kRPVControllerCategory, 0, track_info.category);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = GetString(track, kRPVControllerMainName, 0,
-                               track_info.main_name);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            
-            result = GetString(track, kRPVControllerSubName, 0,
-                               track_info.sub_name);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_get_double(
-                track, kRPVControllerTrackMinTimestamp, 0, &track_info.min_ts);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_get_double(
-                track, kRPVControllerTrackMaxTimestamp, 0, &track_info.max_ts);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_get_uint64(
-                track, kRPVControllerTrackNumberOfEntries, 0, &track_info.num_entries);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_get_uint64(
-                track, kRPVControllerTrackAgentIdOrPid, 0, &track_info.agent_or_pid);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_get_uint64(
-                track, kRPVControllerTrackQueueIdOrTid, 0, &track_info.queue_id_or_tid);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_get_double(track, kRPVControllerTrackMinValue,
-                                                      0, &track_info.min_value);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = rocprofvis_controller_get_double(track, kRPVControllerTrackMaxValue,
-                                                      0, &track_info.max_value);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            // Determine queue/thread/counter that this track represents.
-            rocprofvis_handle_t* queue = nullptr;
-            result = rocprofvis_controller_get_object(track, kRPVControllerTrackQueue, 0,
-                                                      &queue);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            rocprofvis_handle_t* stream = nullptr;
-            result = rocprofvis_controller_get_object(track, kRPVControllerTrackStream, 0,
-                                                      &stream);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            rocprofvis_handle_t* thread = nullptr;
-            result = rocprofvis_controller_get_object(track, kRPVControllerTrackThread, 0,
-                                                      &thread);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            rocprofvis_handle_t* counter = nullptr;
-            result = rocprofvis_controller_get_object(track, kRPVControllerTrackCounter,
-                                                      0, &counter);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            rocprofvis_handle_t* process   = nullptr;
-            rocprofvis_handle_t* node      = nullptr;
-            rocprofvis_handle_t* processor = nullptr;
-            if(queue)
+            switch(protocol_track.topology_type)
             {
-                result = rocprofvis_controller_get_uint64(queue, kRPVControllerQueueId, 0,
-                                                          &track_info.topology.id.value);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    queue, kRPVControllerQueueProcess, 0, &process);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(queue, kRPVControllerQueueNode,
-                                                          0, &node);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    queue, kRPVControllerQueueProcessor, 0, &processor);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                track_info.topology.type = TrackInfo::TrackType::Queue;
-            }
-            else if(stream)
-            {
-                result = rocprofvis_controller_get_uint64(stream, kRPVControllerStreamId,
-                                                          0, &track_info.topology.id.value);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    stream, kRPVControllerStreamProcess, 0, &process);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    stream, kRPVControllerStreamNode, 0, &node);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    stream, kRPVControllerStreamProcessor, 0, &processor);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                track_info.topology.type = TrackInfo::TrackType::Stream;
-            }
-            else if(thread)
-            {
-                result = rocprofvis_controller_get_uint64(thread, kRPVControllerThreadId,
-                                                          0, &track_info.topology.id.value);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    thread, kRPVControllerThreadProcess, 0, &process);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    thread, kRPVControllerThreadNode, 0, &node);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                uint64_t type;
-                result = rocprofvis_controller_get_uint64(
-                    thread, kRPVControllerThreadType, 0, &type);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                                  type != kRPVControllerThreadTypeUndefined);
-                track_info.topology.type = type == kRPVControllerThreadTypeInstrumented
-                                               ? TrackInfo::TrackType::InstrumentedThread
-                                               : TrackInfo::TrackType::SampledThread;
-            }
-            else if(counter)
-            {
-                result = rocprofvis_controller_get_uint64(
-                    counter, kRPVControllerCounterId, 0, &track_info.topology.id.value);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    counter, kRPVControllerCounterProcess, 0, &process);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    counter, kRPVControllerCounterNode, 0, &node);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                result = rocprofvis_controller_get_object(
-                    counter, kRPVControllerCounterProcessor, 0, &processor);
-                track_info.topology.type = TrackInfo::TrackType::Counter;
-            }
-            else
-            {
-                track_info.topology.type = TrackInfo::TrackType::Unknown;
-                spdlog::warn("No thread/queue/counter binding found for track {}",
-                             track_info.id);
-            }
-            // Determine process, device, node this track belongs to.
-            if(process)
-            {
-                result = rocprofvis_controller_get_uint64(
-                    process, kRPVControllerProcessId, 0, &track_info.topology.process_id);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            }
-            if(node)
-            {
-                result = rocprofvis_controller_get_uint64(node, kRPVControllerNodeId, 0,
-                                                          &track_info.topology.node_id);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            }
-            if(processor)
-            {
-                result =
-                    rocprofvis_controller_get_uint64(processor, kRPVControllerProcessorId,
-                                                     0, &track_info.topology.device_id);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                case TrackTopologyType::Queue:
+                    track_info.topology.type = TrackInfo::TrackType::Queue;
+                    break;
+                case TrackTopologyType::Stream:
+                    track_info.topology.type = TrackInfo::TrackType::Stream;
+                    break;
+                case TrackTopologyType::InstrumentedThread:
+                    track_info.topology.type = TrackInfo::TrackType::InstrumentedThread;
+                    break;
+                case TrackTopologyType::SampledThread:
+                    track_info.topology.type = TrackInfo::TrackType::SampledThread;
+                    break;
+                case TrackTopologyType::Counter:
+                    track_info.topology.type = TrackInfo::TrackType::Counter;
+                    break;
+                case TrackTopologyType::Unknown:
+                default:
+                    track_info.topology.type = TrackInfo::TrackType::Unknown;
+                    break;
             }
 
-            // Todo:
-            // kRPVControllerTrackDescription = 0x30000007,
-            // kRPVControllerTrackNode = 0x3000000A,
-            // kRPVControllerTrackProcessor = 0x3000000B,
+            // Temporary compatibility backfill for remaining ABI-based table/reorder flows.
+            if(m_trace_timeline)
+            {
+                rocprofvis_result_t result = rocprofvis_controller_get_object(
+                    m_trace_timeline, kRPVControllerTimelineGraphById, track_info.id,
+                    &track_info.graph_handle);
+                if(result != kRocProfVisResultSuccess)
+                {
+                    track_info.graph_handle = nullptr;
+                }
+            }
 
             tlm.AddTrackMetaData(track_info.id, std::move(track_info));
         }
-        else
+    }
+    else
+    {
+        uint64_t num_graphs = tlm.GetTrackCount();
+        for(uint64_t i = 0; i < num_graphs; i++)
         {
-            spdlog::debug("Error getting track meta data for track at index: {}", i);
+            rocprofvis_handle_t* graph  = nullptr;
+            rocprofvis_result_t  result = rocprofvis_controller_get_object(
+                m_trace_timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && graph);
+
+            rocprofvis_handle_t* track = nullptr;
+            result =
+                rocprofvis_controller_get_object(graph, kRPVControllerGraphTrack, 0, &track);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && track);
+
+            if(result == kRocProfVisResultSuccess)
+            {
+                TrackInfo track_info;
+                track_info.graph_handle = graph;
+                track_info.index = i;
+                result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackId, 0,
+                                                          &track_info.id);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                uint64_t track_type = 0;
+                result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
+                                                          &track_type);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
+                                  (track_type == kRPVControllerTrackTypeEvents ||
+                                   track_type == kRPVControllerTrackTypeSamples));
+                track_info.track_type = track_type == kRPVControllerTrackTypeSamples
+                                            ? kRPVControllerTrackTypeSamples
+                                            : kRPVControllerTrackTypeEvents;
+                result = GetString(track, kRPVControllerCategory, 0, track_info.category);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = GetString(track, kRPVControllerMainName, 0, track_info.main_name);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = GetString(track, kRPVControllerSubName, 0, track_info.sub_name);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_double(
+                    track, kRPVControllerTrackMinTimestamp, 0, &track_info.min_ts);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_double(
+                    track, kRPVControllerTrackMaxTimestamp, 0, &track_info.max_ts);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_uint64(
+                    track, kRPVControllerTrackNumberOfEntries, 0, &track_info.num_entries);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_uint64(
+                    track, kRPVControllerTrackAgentIdOrPid, 0, &track_info.agent_or_pid);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_uint64(
+                    track, kRPVControllerTrackQueueIdOrTid, 0, &track_info.queue_id_or_tid);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_double(track, kRPVControllerTrackMinValue,
+                                                          0, &track_info.min_value);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_get_double(track, kRPVControllerTrackMaxValue,
+                                                          0, &track_info.max_value);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                rocprofvis_handle_t* queue = nullptr;
+                result = rocprofvis_controller_get_object(track, kRPVControllerTrackQueue, 0,
+                                                          &queue);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                rocprofvis_handle_t* stream = nullptr;
+                result = rocprofvis_controller_get_object(track, kRPVControllerTrackStream, 0,
+                                                          &stream);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                rocprofvis_handle_t* thread = nullptr;
+                result = rocprofvis_controller_get_object(track, kRPVControllerTrackThread, 0,
+                                                          &thread);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                rocprofvis_handle_t* counter = nullptr;
+                result = rocprofvis_controller_get_object(track, kRPVControllerTrackCounter, 0,
+                                                          &counter);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                rocprofvis_handle_t* process   = nullptr;
+                rocprofvis_handle_t* node      = nullptr;
+                rocprofvis_handle_t* processor = nullptr;
+                if(queue)
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        queue, kRPVControllerQueueId, 0, &track_info.topology.id.value);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(
+                        queue, kRPVControllerQueueProcess, 0, &process);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(queue, kRPVControllerQueueNode, 0,
+                                                              &node);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(
+                        queue, kRPVControllerQueueProcessor, 0, &processor);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    track_info.topology.type = TrackInfo::TrackType::Queue;
+                }
+                else if(stream)
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        stream, kRPVControllerStreamId, 0, &track_info.topology.id.value);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(
+                        stream, kRPVControllerStreamProcess, 0, &process);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(stream, kRPVControllerStreamNode, 0,
+                                                              &node);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(
+                        stream, kRPVControllerStreamProcessor, 0, &processor);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    track_info.topology.type = TrackInfo::TrackType::Stream;
+                }
+                else if(thread)
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        thread, kRPVControllerThreadId, 0, &track_info.topology.id.value);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(
+                        thread, kRPVControllerThreadProcess, 0, &process);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(thread, kRPVControllerThreadNode, 0,
+                                                              &node);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    uint64_t type = 0;
+                    result = rocprofvis_controller_get_uint64(
+                        thread, kRPVControllerThreadType, 0, &type);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
+                                      type != kRPVControllerThreadTypeUndefined);
+                    track_info.topology.type = type == kRPVControllerThreadTypeInstrumented
+                                                   ? TrackInfo::TrackType::InstrumentedThread
+                                                   : TrackInfo::TrackType::SampledThread;
+                }
+                else if(counter)
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        counter, kRPVControllerCounterId, 0, &track_info.topology.id.value);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(
+                        counter, kRPVControllerCounterProcess, 0, &process);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(counter, kRPVControllerCounterNode,
+                                                              0, &node);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_object(
+                        counter, kRPVControllerCounterProcessor, 0, &processor);
+                    track_info.topology.type = TrackInfo::TrackType::Counter;
+                }
+                else
+                {
+                    track_info.topology.type = TrackInfo::TrackType::Unknown;
+                    spdlog::warn("No thread/queue/counter binding found for track {}",
+                                 track_info.id);
+                }
+                if(process)
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        process, kRPVControllerProcessId, 0, &track_info.topology.process_id);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                }
+                if(node)
+                {
+                    result = rocprofvis_controller_get_uint64(node, kRPVControllerNodeId, 0,
+                                                              &track_info.topology.node_id);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                }
+                if(processor)
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        processor, kRPVControllerProcessorId, 0,
+                        &track_info.topology.device_id);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                }
+
+                tlm.AddTrackMetaData(track_info.id, std::move(track_info));
+            }
+            else
+            {
+                spdlog::debug("Error getting track meta data for track at index: {}", i);
+            }
         }
     }
 
@@ -1170,6 +1309,36 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
         // only allow load if a request for this id (track) is not pending
         if(it == m_requests.end())
         {
+            if(m_protocol)
+            {
+                ProtocolRequestHandle request_handle = 0;
+                Result protocol_result = m_protocol->BeginFetchTrack(
+                    track_id, start_ts, end_ts, &request_handle);
+                if(protocol_result == Result::Success)
+                {
+                    RequestInfo request_info;
+                    request_info.request_array = nullptr;
+                    request_info.request_future = nullptr;
+                    request_info.request_obj_handle = nullptr;
+                    request_info.request_args = nullptr;
+                    request_info.request_id = request_id;
+                    request_info.loading_state = RequestState::kLoading;
+                    request_info.request_type = RequestType::kFetchTrack;
+                    request_info.protocol_request_handle = request_handle;
+                    request_info.uses_protocol = true;
+
+                    auto params = std::make_shared<TrackRequestParams>(
+                        track_id, start_ts, end_ts, horz_pixel_range, group_id, chunk_index,
+                        chunk_count);
+                    request_info.custom_params = params;
+                    request_info.request_time = std::chrono::steady_clock::now();
+                    m_requests.emplace(request_info.request_id, request_info);
+
+                    spdlog::debug("Fetching whole track data {} via protocol", track_id);
+                    return true;
+                }
+            }
+
             rocprofvis_handle_t* track_future = rocprofvis_controller_future_alloc();
             rocprofvis_controller_array_t* track_array =
                 rocprofvis_controller_array_alloc(
@@ -1259,6 +1428,34 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
         // only allow load if a request for this id (track chunk) is not pending
         if(it == m_requests.end())
         {
+            if(m_protocol)
+            {
+                ProtocolRequestHandle request_handle = 0;
+                Result protocol_result = m_protocol->BeginFetchTrackLod(
+                    request_params.m_track_id, request_params.m_start_ts,
+                    request_params.m_end_ts, request_params.m_horz_pixel_range,
+                    &request_handle);
+
+                if(protocol_result == Result::Success)
+                {
+                    RequestInfo request_info;
+                    request_info.request_array = nullptr;
+                    request_info.request_future = nullptr;
+                    request_info.request_obj_handle = nullptr;
+                    request_info.request_args = nullptr;
+                    request_info.request_id = request_id;
+                    request_info.loading_state = RequestState::kLoading;
+                    request_info.request_type = RequestType::kFetchGraph;
+                    request_info.protocol_request_handle = request_handle;
+                    request_info.uses_protocol = true;
+                    auto params = std::make_shared<TrackRequestParams>(request_params);
+                    request_info.custom_params = params;
+                    request_info.request_time = std::chrono::steady_clock::now();
+                    m_requests.emplace(request_info.request_id, request_info);
+                    return { true, request_id };
+                }
+            }
+
             rocprofvis_handle_t* graph_future = rocprofvis_controller_future_alloc();
             rocprofvis_controller_array_t* graph_array =
                 rocprofvis_controller_array_alloc(32);
@@ -1939,6 +2136,34 @@ DataProvider::FetchSummary()
     auto it = m_requests.find(SUMMARY_REQUEST_ID);
     if(it == m_requests.end())
     {
+        if(m_protocol)
+        {
+            ProtocolRequestHandle request_handle = 0;
+            Result protocol_result = m_protocol->BeginFetchSummary(
+                m_model.GetTimeline().GetStartTime(),
+                m_model.GetTimeline().GetEndTime(),
+                &request_handle);
+            if(protocol_result == Result::Success)
+            {
+                RequestInfo request_info;
+                request_info.request_id = SUMMARY_REQUEST_ID;
+                request_info.request_future = nullptr;
+                request_info.request_array = nullptr;
+                request_info.request_obj_handle = nullptr;
+                request_info.request_args = nullptr;
+                request_info.loading_state = RequestState::kLoading;
+                request_info.request_type = RequestType::kFetchSummary;
+                request_info.protocol_request_handle = request_handle;
+                request_info.uses_protocol = true;
+                m_requests.emplace(SUMMARY_REQUEST_ID, request_info);
+                spdlog::debug("Fetching summary data via protocol");
+                return true;
+            }
+
+            spdlog::debug("Failed to fetch summary data via protocol");
+            return false;
+        }
+
         rocprofvis_result_t                result = kRocProfVisResultUnknownError;
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         ROCPROFVIS_ASSERT(args != nullptr);
@@ -2022,13 +2247,39 @@ DataProvider::HandleRequests()
         for(auto it = m_requests.begin(); it != m_requests.end();)
         {
             RequestInfo&        req = it->second;
-            rocprofvis_result_t result =
-                rocprofvis_controller_future_wait(req.request_future, 0);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
-                              result == kRocProfVisResultTimeout);
+            rocprofvis_result_t result = kRocProfVisResultTimeout;
+            if(req.uses_protocol)
+            {
+                ProtocolRequestStatus status = {};
+                Result protocol_result = m_protocol
+                    ? m_protocol->GetRequestStatus(req.protocol_request_handle, &status)
+                    : Result::InvalidArgument;
+                if(protocol_result == Result::Success &&
+                   status.state != ProtocolRequestState::Pending)
+                {
+                    req.loading_state = RequestState::kReady;
+                    req.response_code =
+                        status.result == Result::Success ? kRocProfVisResultSuccess :
+                        status.result == Result::Cancelled ? kRocProfVisResultCancelled :
+                                                             kRocProfVisResultUnknownError;
+                    ProcessRequest(req);
+                    if(m_protocol)
+                    {
+                        m_protocol->ReleaseRequest(req.protocol_request_handle);
+                    }
+                    it = m_requests.erase(it);
+                    continue;
+                }
+            }
+            else
+            {
+                result = rocprofvis_controller_future_wait(req.request_future, 0);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
+                                  result == kRocProfVisResultTimeout);
+            }
 
             // the response is ready
-            if(result == kRocProfVisResultSuccess)
+            if(!req.uses_protocol && result == kRocProfVisResultSuccess)
             {
                 req.loading_state = RequestState::kReady;
                 req.response_code = kRocProfVisResultSuccess;
@@ -2569,6 +2820,59 @@ DataProvider::ProcessSaveTrimmedTraceRequest(RequestInfo& req)
 void
 DataProvider::ProcessSummaryRequest(RequestInfo& req)
 {
+    if(req.uses_protocol && m_protocol)
+    {
+        SummaryData summary = { -1.0f, -1.0f, 0, 0, 0.0 };
+        const KernelMetricsData* kernels = nullptr;
+        uint32_t kernel_count = 0;
+        const StringTable* strings = nullptr;
+        Result result = m_protocol->GetSummaryResult(req.protocol_request_handle, &summary,
+                                                     &kernels, &kernel_count, &strings);
+        if(result == Result::Success)
+        {
+            SummaryInfo::AggregateMetrics& root_summary =
+                const_cast<SummaryInfo::AggregateMetrics&>(
+                    m_model.GetSummary().GetSummaryData());
+            root_summary.type = kRPVControllerSummaryAggregationLevelTrace;
+            root_summary.id.reset();
+            root_summary.name.reset();
+            root_summary.device_type.reset();
+            root_summary.device_type_index.reset();
+            root_summary.sub_metrics.clear();
+            root_summary.gpu.top_kernels.clear();
+            root_summary.gpu.kernel_exec_time_total = summary.kernel_exec_time_total_ns;
+            root_summary.gpu.gfx_utilization =
+                summary.gpu_utilization >= 0.0f
+                    ? std::optional<float>(summary.gpu_utilization)
+                    : std::nullopt;
+            root_summary.gpu.mem_utilization =
+                summary.memory_utilization >= 0.0f
+                    ? std::optional<float>(summary.memory_utilization)
+                    : std::nullopt;
+
+            if(kernels && strings)
+            {
+                root_summary.gpu.top_kernels.reserve(kernel_count);
+                for(uint32_t i = 0; i < kernel_count; ++i)
+                {
+                    SummaryInfo::KernelMetrics kernel = {};
+                    kernel.name = strings->GetString(kernels[i].name_index);
+                    kernel.invocations = kernels[i].invocation_count;
+                    kernel.exec_time_sum = static_cast<double>(kernels[i].duration_total_ns);
+                    kernel.exec_time_min = static_cast<double>(kernels[i].duration_min_ns);
+                    kernel.exec_time_max = static_cast<double>(kernels[i].duration_max_ns);
+                    kernel.exec_time_pct = 0.0f;
+                    root_summary.gpu.top_kernels.push_back(std::move(kernel));
+                }
+            }
+        }
+        else
+        {
+            spdlog::debug("Summary request failed with protocol result {}",
+                          static_cast<int>(result));
+        }
+    }
+
     if(req.request_args)
     {
         rocprofvis_controller_arguments_free(req.request_args);
@@ -2764,7 +3068,7 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
         return;
     }
 
-    if(req.response_code == kRocProfVisResultSuccess)
+    if(req.response_code == kRocProfVisResultSuccess && !req.uses_protocol)
     {
         rocprofvis_controller_table_type_t table_type;
         switch(req.request_type)
@@ -3074,7 +3378,7 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
         return;
     }
 
-    if(req.response_code == kRocProfVisResultSuccess)
+    if(req.response_code == kRocProfVisResultSuccess && !req.uses_protocol)
     {
         uint64_t graph_type = 0;
         auto     graph      = req.request_obj_handle;
@@ -3149,14 +3453,27 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     rocprofvis_controller_array_t*               track_data   = req.request_array;
     const std::chrono::steady_clock::time_point& request_time = req.request_time;
     bool response_valid = (req.response_code == kRocProfVisResultSuccess);
+    const SampleData*                            protocol_samples = nullptr;
 
     uint64_t count = 0;
 
     if(response_valid)
     {
-        rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-            track_data, kRPVControllerArrayNumEntries, 0, &count);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        if(req.uses_protocol && m_protocol)
+        {
+            uint32_t protocol_count = 0;
+            Result result = m_protocol->GetSampleResult(req.protocol_request_handle,
+                                                        &protocol_samples,
+                                                        &protocol_count);
+            ROCPROFVIS_ASSERT(result == Result::Success);
+            count = protocol_count;
+        }
+        else
+        {
+            rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+                track_data, kRPVControllerArrayNumEntries, 0, &count);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
     }
     else
     {
@@ -3209,14 +3526,24 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     rocprofvis_controller_sample_t* sample        = nullptr;
     for(uint64_t i = 0; i < count; i++)
     {
-        rocprofvis_result_t result = rocprofvis_controller_get_object(
-            track_data, kRPVControllerArrayEntryIndexed, i, &sample);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
-
+        rocprofvis_result_t result = kRocProfVisResultSuccess;
+        const SampleData* protocol_sample = nullptr;
         double start_ts = 0;
-        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
-                                                  0, &start_ts);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        if(req.uses_protocol)
+        {
+            protocol_sample = &protocol_samples[i];
+            start_ts = protocol_sample->timestamp;
+        }
+        else
+        {
+            result = rocprofvis_controller_get_object(
+                track_data, kRPVControllerArrayEntryIndexed, i, &sample);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && sample);
+
+            result = rocprofvis_controller_get_double(sample, kRPVControllerSampleTimestamp,
+                                                      0, &start_ts);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
 
         auto [_, inserted] = timepoint_set.insert(start_ts);
         if(!inserted)
@@ -3230,15 +3557,18 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
         buffer.emplace_back();
         TraceCounter& trace_counter = buffer.back();
 
-        double value = 0;
-        result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
-                                                  &value);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        double value = req.uses_protocol ? protocol_sample->value : 0;
+        double end_ts = req.uses_protocol ? protocol_sample->end_timestamp : 0;
+        if(!req.uses_protocol)
+        {
+            result = rocprofvis_controller_get_double(sample, kRPVControllerSampleValue, 0,
+                                                      &value);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        double end_ts = 0;
-        result        = rocprofvis_controller_get_double(
-            sample, kRPVControllerSampleEndTimestamp, 0, &end_ts);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_get_double(
+                sample, kRPVControllerSampleEndTimestamp, 0, &end_ts);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
 
         trace_counter.m_start_ts = start_ts;
         trace_counter.m_end_ts   = end_ts;
@@ -3256,14 +3586,29 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     rocprofvis_controller_array_t*               track_data   = req.request_array;
     const std::chrono::steady_clock::time_point& request_time = req.request_time;
     bool response_valid = (req.response_code == kRocProfVisResultSuccess);
+    const EventData*                             protocol_events = nullptr;
+    const StringTable*                           protocol_strings = nullptr;
 
     uint64_t count = 0;
 
     if(response_valid)
     {
-        rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-            track_data, kRPVControllerArrayNumEntries, 0, &count);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        if(req.uses_protocol && m_protocol)
+        {
+            uint32_t protocol_count = 0;
+            Result result = m_protocol->GetEventResult(req.protocol_request_handle,
+                                                       &protocol_events,
+                                                       &protocol_count,
+                                                       &protocol_strings);
+            ROCPROFVIS_ASSERT(result == Result::Success);
+            count = protocol_count;
+        }
+        else
+        {
+            rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+                track_data, kRPVControllerArrayNumEntries, 0, &count);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
     }
     else
     {
@@ -3322,13 +3667,29 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     for(uint64_t i = 0; i < count; i++)
     {
         rocprofvis_controller_event_t* event  = nullptr;
-        rocprofvis_result_t            result = rocprofvis_controller_get_object(
-            track_data, kRPVControllerArrayEntryIndexed, i, &event);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
+        const EventData* protocol_event = nullptr;
+        rocprofvis_result_t result = kRocProfVisResultSuccess;
+        if(req.uses_protocol)
+        {
+            protocol_event = &protocol_events[i];
+        }
+        else
+        {
+            result = rocprofvis_controller_get_object(
+                track_data, kRPVControllerArrayEntryIndexed, i, &event);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && event);
+        }
 
         uint64_t id = 0;
-        result = rocprofvis_controller_get_uint64(event, kRPVControllerEventId, 0, &id);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        if(req.uses_protocol)
+        {
+            id = protocol_event->id;
+        }
+        else
+        {
+            result = rocprofvis_controller_get_uint64(event, kRPVControllerEventId, 0, &id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
 
         auto [_, inserted] = event_set.insert(id);
         if(!inserted)
@@ -3343,38 +3704,71 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
         TraceEvent& trace_event = buffer.back();
         trace_event.m_id.uuid     = id;
 
-        double start_ts = 0;
-        result          = rocprofvis_controller_get_double(
-            event, kRPVControllerEventStartTimestamp, 0, &start_ts);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        double start_ts = req.uses_protocol ? protocol_event->timestamp : 0;
+        if(!req.uses_protocol)
+        {
+            result = rocprofvis_controller_get_double(
+                event, kRPVControllerEventStartTimestamp, 0, &start_ts);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
         trace_event.m_start_ts = start_ts;
 
-        double end_ts = 0;
-        result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp,
-                                                  0, &end_ts);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        trace_event.m_duration = end_ts - start_ts;
+        if(req.uses_protocol)
+        {
+            trace_event.m_duration = protocol_event->duration;
+        }
+        else
+        {
+            double end_ts = 0;
+            result = rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp,
+                                                      0, &end_ts);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            trace_event.m_duration = end_ts - start_ts;
+        }
 
-        uint64_t level = 0;
-        result =
-            rocprofvis_controller_get_uint64(event, kRPVControllerEventLevel, 0, &level);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        uint64_t level = req.uses_protocol ? protocol_event->level : 0;
+        if(!req.uses_protocol)
+        {
+            result =
+                rocprofvis_controller_get_uint64(event, kRPVControllerEventLevel, 0, &level);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
         trace_event.m_level = static_cast<uint32_t>(level);
 
-        uint64_t child_count = 0;
-        result = rocprofvis_controller_get_uint64(event, kRPVControllerEventNumChildren,
-                                                  0, &child_count);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        uint64_t child_count = req.uses_protocol ? protocol_event->child_count : 0;
+        if(!req.uses_protocol)
+        {
+            result = rocprofvis_controller_get_uint64(event, kRPVControllerEventNumChildren,
+                                                      0, &child_count);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
         trace_event.m_child_count = static_cast<uint32_t>(child_count);
 
-        // get event name
-        result = GetString(event, kRPVControllerEventName, 0, trace_event.m_name);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        if(req.uses_protocol)
+        {
+            trace_event.m_name = protocol_strings
+                ? protocol_strings->GetString(protocol_event->name_index)
+                : "";
+        }
+        else
+        {
+            result = GetString(event, kRPVControllerEventName, 0, trace_event.m_name);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
         if(trace_event.m_child_count > 1)
         {
-            result = GetString(event, kRPVControllerEventTopCombinedName, 0,
-                               trace_event.m_top_combined_name);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            if(req.uses_protocol)
+            {
+                trace_event.m_top_combined_name = protocol_strings
+                    ? protocol_strings->GetString(protocol_event->top_combined_name_index)
+                    : "";
+            }
+            else
+            {
+                result = GetString(event, kRPVControllerEventTopCombinedName, 0,
+                                   trace_event.m_top_combined_name);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            }
         }
 
         real_count++;

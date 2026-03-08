@@ -280,6 +280,8 @@ struct RequestInfo
     std::shared_ptr<RequestParamsBase>    custom_params;  // custom request parameters
     std::chrono::steady_clock::time_point request_time;  // time when the request was made
     uint64_t                              response_code;  // response code for the request
+    uint64_t                              protocol_request_handle = 0;  // request handle for protocol-backed requests
+    bool                                  uses_protocol = false;
 };
 
 }  // namespace View

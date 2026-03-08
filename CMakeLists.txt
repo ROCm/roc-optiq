@@ -84,6 +84,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp
     src/view/src/rocprofvis_data_provider.cpp
+    src/view/src/rocprofvis_data_protocol.cpp
+    src/view/src/rocprofvis_local_protocol.cpp
     src/view/src/rocprofvis_root_view.cpp
     src/view/src/model/rocprofvis_topology_model.cpp
     src/view/src/model/rocprofvis_timeline_model.cpp

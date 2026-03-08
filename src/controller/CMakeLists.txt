@@ -13,6 +13,8 @@ include_directories(inc)
 
 set(rocprofvis_controller_source_files)
 list(APPEND rocprofvis_controller_source_files
+    src/rocprofvis_controller_api.cpp
+    src/rocprofvis_controller_api_stringtable.cpp
     src/rocprofvis_controller_arguments.cpp
     src/rocprofvis_controller_array.cpp
     src/rocprofvis_controller_data.cpp

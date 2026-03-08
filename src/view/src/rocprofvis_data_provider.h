@@ -25,6 +25,8 @@ namespace RocProfVis
 namespace View
 {
 
+class IDataProtocol;
+
 enum class ProviderState
 {
     kInit,
@@ -279,6 +281,7 @@ private:
 
     // Data model aggregating all trace data
     TraceDataModel m_model;
+    std::unique_ptr<IDataProtocol> m_protocol;
 
     std::unordered_map<int64_t, RequestInfo> m_requests;
     // Called when track metadata has changed

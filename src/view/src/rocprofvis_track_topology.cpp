@@ -260,7 +260,7 @@ TrackTopology::UpdateTopology()
                                             { InfoTable::Cell{ "Product name", false },
                                             InfoTable::Cell{ processor_info->product_name, false } } }
                                         };
-                                        stream->processors[j].header = "Stream " + std::to_string(stream->info->id) + " >>> " + 
+                                        stream->processors[j].header = stream_info->name + " >>> " + 
                                             DeviceTypeString(processor_info->type) +
                                             std::to_string(processor_info->type_index);
 

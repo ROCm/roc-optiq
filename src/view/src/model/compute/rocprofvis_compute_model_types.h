@@ -34,6 +34,7 @@ struct AvailableMetrics
         uint32_t                             id;
         std::string                          name;
         std::unordered_map<uint32_t, Entry&> entries;
+        std::vector<const Entry*>            ordered_entries;  // built from map values; never null
         std::vector<std::string>             value_names;
     };
     struct Category
@@ -41,9 +42,11 @@ struct AvailableMetrics
         uint32_t                            id;
         std::string                         name;
         std::unordered_map<uint32_t, Table> tables;
+        std::vector<const Table*>           ordered_tables;   // built from map values; never null
     };
     std::vector<Entry>                     list;
     std::unordered_map<uint32_t, Category> tree;
+    std::vector<const Category*>           ordered_categories;  // built from map values; never null
 };
 
 struct Point

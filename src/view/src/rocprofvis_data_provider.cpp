@@ -3913,6 +3913,45 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
             table.entries.insert({ static_cast<uint32_t>(table.entries.size()),
                                    workload.available_metrics.list[j] });
         }
+        for(std::pair<const uint32_t, AvailableMetrics::Category>& cat_pair :
+            workload.available_metrics.tree)
+        {
+            AvailableMetrics::Category& category = cat_pair.second;
+            for(std::pair<const uint32_t, AvailableMetrics::Table>& tbl_pair :
+                category.tables)
+            {
+                AvailableMetrics::Table& table = tbl_pair.second;
+                table.ordered_entries.reserve(table.entries.size());
+                for(const std::pair<const uint32_t, AvailableMetrics::Entry&>&
+                        entry_pair : table.entries)
+                {
+                    table.ordered_entries.push_back(&entry_pair.second);
+                }
+                std::sort(table.ordered_entries.begin(), table.ordered_entries.end(),
+                          [](const AvailableMetrics::Entry* a,
+                             const AvailableMetrics::Entry* b) { return a->id < b->id; });
+            }
+            category.ordered_tables.reserve(category.tables.size());
+            for(const std::pair<const uint32_t, AvailableMetrics::Table>& tbl_pair :
+                category.tables)
+            {
+                category.ordered_tables.push_back(&tbl_pair.second);
+            }
+            std::sort(category.ordered_tables.begin(), category.ordered_tables.end(),
+                      [](const AvailableMetrics::Table* a,
+                         const AvailableMetrics::Table* b) { return a->id < b->id; });
+        }
+        workload.available_metrics.ordered_categories.reserve(
+            workload.available_metrics.tree.size());
+        for(const std::pair<const uint32_t, AvailableMetrics::Category>& cat_pair :
+            workload.available_metrics.tree)
+        {
+            workload.available_metrics.ordered_categories.push_back(&cat_pair.second);
+        }
+        std::sort(workload.available_metrics.ordered_categories.begin(),
+                  workload.available_metrics.ordered_categories.end(),
+                  [](const AvailableMetrics::Category* a,
+                     const AvailableMetrics::Category* b) { return a->id < b->id; });
         uint64_t num_value_names = 0;
         result = rocprofvis_controller_get_uint64(
             workload_handle, kRPVControllerWorkloadNumMetricValueNames, 0,

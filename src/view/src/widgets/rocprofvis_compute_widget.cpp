@@ -20,7 +20,7 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
     m_table_id = "##" + table.name;
     m_column_names.clear();
     m_rows.clear();
-    m_rows.reserve(table.entries.size());
+    m_rows.reserve(table.ordered_entries.size());
 
     m_column_names.push_back("Metric ID");
     m_column_names.push_back("Metric");
@@ -36,18 +36,17 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
     m_column_names.push_back("Unit");
 
     char buf[64];
-    for(const auto& entry_pair : table.entries)
+    for(const auto* entry : table.ordered_entries)
     {
-        uint32_t    eid   = entry_pair.first;
-        const auto& entry = entry_pair.second;
+        uint32_t eid = entry->id;
 
         Row row;
-        row.metric_id   = std::to_string(entry.category_id) + "." +
-                          std::to_string(entry.table_id) + "." +
+        row.metric_id   = std::to_string(entry->category_id) + "." +
+                          std::to_string(entry->table_id) + "." +
                           std::to_string(eid);
-        row.name        = entry.name;
-        row.description = entry.description;
-        row.unit        = entry.unit.empty() ? "N/A" : entry.unit;
+        row.name        = entry->name;
+        row.description = entry->description;
+        row.unit        = entry->unit.empty() ? "N/A" : entry->unit;
 
         auto mv = get_value(eid);
 

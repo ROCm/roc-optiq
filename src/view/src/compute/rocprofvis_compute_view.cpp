@@ -126,6 +126,7 @@ ComputeView::CreateView()
 #ifdef DEVELOPER_MODE
     m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider, m_compute_selection), false});
 #endif
+    m_tab_container->SetAllowToolTips(false);
 }
 
 void

@@ -99,12 +99,11 @@ ComputeTableView::RebuildTabs()
     const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
     m_tabs->SetAllowToolTips(true);
-    for(const auto& cp : workload.available_metrics.tree)
+    for(const auto* cat : workload.available_metrics.ordered_categories)
     {
-        const auto& cat    = cp.second;
-        auto        widget = std::make_shared<RocCustomWidget>(
-            [this, &cat]() { RenderCategory(cat); });
-        m_tabs->AddTab({ cat.name, cat.name, widget, false });
+        auto widget = std::make_shared<RocCustomWidget>(
+            [this, cat]() { RenderCategory(*cat); });
+        m_tabs->AddTab({ cat->name, cat->name, widget, false });
     }
 }
 
@@ -130,10 +129,10 @@ ComputeTableView::FetchAllMetrics()
     const auto& workload = workloads.at(workload_id);
     std::vector<uint32_t>                   kernel_ids = { kernel_id };
     std::vector<MetricsRequestParams::MetricID> metric_ids;
-    for(const auto& cp : workload.available_metrics.tree)
+    for(const auto* cat : workload.available_metrics.ordered_categories)
     {
-        for(const auto& tp : cp.second.tables)
-            metric_ids.push_back({ cp.first, tp.first, std::nullopt });
+        for(const auto* tbl : cat->ordered_tables)
+            metric_ids.push_back({ cat->id, tbl->id, std::nullopt });
     }
 
     bool success = m_data_provider.FetchMetrics(
@@ -191,18 +190,18 @@ ComputeTableView::RebuildTableDataCache()
         return;
 
     const auto& workload = workloads.at(workload_id);
-    for(const auto& cp : workload.available_metrics.tree)
+    for(const auto* cat : workload.available_metrics.ordered_categories)
     {
-        for(const auto& tp : cp.second.tables)
+        for(const auto* tbl : cat->ordered_tables)
         {
             TableKey key{};
-            key.fields.category_id = cp.first;
-            key.fields.table_id    = tp.first;
+            key.fields.category_id = cat->id;
+            key.fields.table_id    = tbl->id;
 
             MetricTableCache widget;
-            widget.Populate(tp.second, [&](uint32_t eid) {
+            widget.Populate(*tbl, [&](uint32_t eid) {
                 return model.GetMetricValue(
-                    m_client_id, kernel_id, cp.first, tp.first, eid);
+                    m_client_id, kernel_id, cat->id, tbl->id, eid);
             });
 
             if(!widget.Empty())
@@ -219,11 +218,11 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
     bool category_has_data = false;
 
     ImGui::BeginChild("scroll", ImVec2(-1, -1));
-    for(const auto& tbl_pair : cat.tables)
+    for(const auto* tbl : cat.ordered_tables)
     {
         TableKey key{};
         key.fields.category_id = cat.id;
-        key.fields.table_id    = tbl_pair.first;
+        key.fields.table_id    = tbl->id;
 
         auto it = m_table_widgets.find(key.id);
         if(it == m_table_widgets.end())

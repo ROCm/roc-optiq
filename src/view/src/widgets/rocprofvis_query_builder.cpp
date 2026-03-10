@@ -187,8 +187,8 @@ QueryBuilder::GetItems() const
 
     if(m_level == LEVEL_CATEGORY)
     {
-        for(const auto& [id, cat] : workload.available_metrics.tree)
-            items.push_back({ id, std::to_string(id), cat.name });
+        for(const auto* cat : workload.available_metrics.ordered_categories)
+            items.push_back({ cat->id, std::to_string(cat->id), cat->name });
         return items;
     }
 
@@ -200,8 +200,8 @@ QueryBuilder::GetItems() const
 
     if(m_level == LEVEL_TABLE)
     {
-        for(const auto& [id, tbl] : category.tables)
-            items.push_back({ id, std::to_string(id), tbl.name });
+        for(const auto* tbl : category.ordered_tables)
+            items.push_back({ tbl->id, std::to_string(tbl->id), tbl->name });
         return items;
     }
 
@@ -213,8 +213,8 @@ QueryBuilder::GetItems() const
 
     if(m_level == LEVEL_ENTRY)
     {
-        for(const auto& [id, entry] : table.entries)
-            items.push_back({ id, std::to_string(id), entry.name });
+        for(const auto* entry : table.ordered_entries)
+            items.push_back({ entry->id, std::to_string(entry->id), entry->name });
         return items;
     }
 

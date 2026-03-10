@@ -158,50 +158,48 @@ ComputeTester::Render()
         ImGui::BeginChild("metrics", ImVec2(0, 0),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         ImGui::Text("Available Metrics");
-        for(const std::pair<const uint32_t, AvailableMetrics::Category>& category :
-            workload.available_metrics.tree)
+        for(const auto* cat : workload.available_metrics.ordered_categories)
         {
-            ImGui::PushID(static_cast<int>(category.first));
-            if(ImGui::TreeNodeEx(std::string("[" + std::to_string(category.second.id) +
-                                             "] " + category.second.name)
+            ImGui::PushID(static_cast<int>(cat->id));
+            if(ImGui::TreeNodeEx(std::string("[" + std::to_string(cat->id) +
+                                             "] " + cat->name)
                                      .c_str()))
             {
-                for(const std::pair<const uint32_t, AvailableMetrics::Table>& table :
-                    category.second.tables)
+                for(const auto* tbl : cat->ordered_tables)
                 {
-                    ImGui::PushID(static_cast<int>(table.first));
-                    std::string partial_metric_id = std::to_string(category.second.id) +
-                                                    "." + std::to_string(table.second.id);
+                    ImGui::PushID(static_cast<int>(tbl->id));
+                    std::string partial_metric_id = std::to_string(cat->id) +
+                                                    "." + std::to_string(tbl->id);
                     bool table_selected =
-                        m_selections.metric_ids.count(category.first) > 0 &&
-                        m_selections.metric_ids.at(category.first).count(table.first) >
+                        m_selections.metric_ids.count(cat->id) > 0 &&
+                        m_selections.metric_ids.at(cat->id).count(tbl->id) >
                             0 &&
-                        m_selections.metric_ids.at(category.first).at(table.first).first;
+                        m_selections.metric_ids.at(cat->id).at(tbl->id).first;
                     bool table_selected_changed = ImGui::Selectable("", table_selected);
                     if(table_selected_changed)
                     {
                         if(table_selected)
                         {
-                            if(m_selections.metric_ids.at(category.first).size() == 1)
+                            if(m_selections.metric_ids.at(cat->id).size() == 1)
                             {
-                                m_selections.metric_ids.erase(category.first);
+                                m_selections.metric_ids.erase(cat->id);
                             }
                             else
                             {
-                                m_selections.metric_ids.at(category.first)
-                                    .erase(table.first);
+                                m_selections.metric_ids.at(cat->id)
+                                    .erase(tbl->id);
                             }
                         }
                         else
                         {
-                            m_selections.metric_ids[category.first][table.first] = { true,
-                                                                                     {} };
+                            m_selections.metric_ids[cat->id][tbl->id] = { true,
+                                                                          {} };
                         }
                     }
                     ImGui::SameLine(0.0f);
                     ImGui::BeginDisabled(table_selected);
                     if(ImGui::TreeNodeEx(
-                           std::string("[" + partial_metric_id + "] " + table.second.name)
+                           std::string("[" + partial_metric_id + "] " + tbl->name)
                                .c_str(),
                            ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet))
                     {
@@ -211,8 +209,7 @@ ComputeTester::Render()
                                                  ImGuiTableFlags_SizingStretchSame))
                         {
                             int col = 0;
-                            for(const std::pair<const uint32_t, AvailableMetrics::Entry&>&
-                                    entry : table.second.entries)
+                            for(const auto* entry : tbl->ordered_entries)
                             {
                                 if(col % 5 == 0)
                                 {
@@ -220,49 +217,49 @@ ComputeTester::Render()
                                 }
                                 ImGui::TableNextColumn();
                                 bool entry_selected =
-                                    m_selections.metric_ids.count(category.first) > 0 &&
-                                    m_selections.metric_ids.at(category.first)
-                                            .count(table.first) > 0 &&
-                                    m_selections.metric_ids.at(category.first)
-                                            .at(table.first)
-                                            .second.count(entry.first) > 0;
+                                    m_selections.metric_ids.count(cat->id) > 0 &&
+                                    m_selections.metric_ids.at(cat->id)
+                                            .count(tbl->id) > 0 &&
+                                    m_selections.metric_ids.at(cat->id)
+                                            .at(tbl->id)
+                                            .second.count(entry->id) > 0;
                                 if(ImGui::Selectable(
                                        std::string("[" + partial_metric_id + "." +
-                                                   std::to_string(entry.second.id) +
-                                                   "] " + entry.second.name)
+                                                   std::to_string(entry->id) +
+                                                   "] " + entry->name)
                                            .c_str(),
                                        entry_selected))
                                 {
                                     if(entry_selected)
                                     {
-                                        if(m_selections.metric_ids.at(category.first)
-                                               .at(table.first)
+                                        if(m_selections.metric_ids.at(cat->id)
+                                               .at(tbl->id)
                                                .second.size() == 1)
                                         {
-                                            if(m_selections.metric_ids.at(category.first)
+                                            if(m_selections.metric_ids.at(cat->id)
                                                    .size() == 1)
                                             {
                                                 m_selections.metric_ids.erase(
-                                                    category.first);
+                                                    cat->id);
                                             }
                                             else
                                             {
-                                                m_selections.metric_ids.at(category.first)
-                                                    .erase(table.first);
+                                                m_selections.metric_ids.at(cat->id)
+                                                    .erase(tbl->id);
                                             }
                                         }
                                         else
                                         {
-                                            m_selections.metric_ids.at(category.first)
-                                                .at(table.first)
-                                                .second.erase(entry.first);
+                                            m_selections.metric_ids.at(cat->id)
+                                                .at(tbl->id)
+                                                .second.erase(entry->id);
                                         }
                                     }
                                     else
                                     {
                                         m_selections
-                                            .metric_ids[category.first][table.first]
-                                            .second.insert(entry.first);
+                                            .metric_ids[cat->id][tbl->id]
+                                            .second.insert(entry->id);
                                     }
                                 }
                                 if(ImGui::BeginItemTooltip())
@@ -270,10 +267,10 @@ ComputeTester::Render()
                                     ImGui::PushTextWrapPos(500.0f);
                                     ImGui::Text("Description: ");
                                     ImGui::SameLine();
-                                    ImGui::Text(entry.second.description.c_str());
+                                    ImGui::Text(entry->description.c_str());
                                     ImGui::Text("Unit: ");
                                     ImGui::SameLine();
-                                    ImGui::Text(entry.second.unit.c_str());
+                                    ImGui::Text(entry->unit.c_str());
                                     ImGui::PopTextWrapPos();
                                     ImGui::EndTooltip();
                                 }

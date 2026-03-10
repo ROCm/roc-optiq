@@ -97,7 +97,7 @@ Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwri
 
 1. Summary View: High-level overview of the captured data.
     - Table: Lists the top longest-running kernels sorted by execution time with duration statistics.
-    - Charts: Pie chart plots duration and invocation percentages across kernels. Bar chart displays per-kernel duration statistics.
+    - Charts: Plots duration and invocation statistics across kernels.
     - Roofline Chart: Plots kernel performance against hardware ceilings to reveal whether performance is memory-bound or compute-bound. Click the gear icon to access customization options.
 
 2. Kernel Details: Focuses on one kernel at a time while allowing comparison across kernels.

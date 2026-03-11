@@ -52,23 +52,28 @@ void
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            bool right_justify = false, bool imgui_AlignTextToFramePadding = false);
 
-struct EmbeddedImage
+class EmbeddedImage
 {
-    int            width  = 0;
-    int            height = 0;
-    unsigned char* pixels = nullptr;
-
+public:
+    EmbeddedImage(const unsigned char* data, int data_len);
     ~EmbeddedImage();
 
-    bool Valid() const { return pixels != nullptr && width > 0 && height > 0; }
+    EmbeddedImage(const EmbeddedImage&)            = delete;
+    EmbeddedImage& operator=(const EmbeddedImage&) = delete;
 
-    bool LoadFromMemory(const unsigned char* data, int data_len);
-    void Free();
+    bool                 Valid() const { return m_pixels != nullptr && m_width > 0 && m_height > 0; }
+    int                  GetWidth() const { return m_width; }
+    int                  GetHeight() const { return m_height; }
+    const unsigned char* GetPixel(int x, int y) const;
+    unsigned char*       GetPixels() { return m_pixels; }
+
+    void Render(ImVec2 top_left, float target_width, bool invert_colors = false) const;
+
+private:
+    int            m_width  = 0;
+    int            m_height = 0;
+    unsigned char* m_pixels = nullptr;
 };
-
-void
-DrawEmbeddedImage(const EmbeddedImage& image, ImVec2 top_left,
-                  float target_width, bool invert_colors = false);
 
 void
 CenterNextTextItem(const char* text);

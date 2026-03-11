@@ -238,10 +238,12 @@ main(int argc, char** argv)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-                RocProfVis::View::EmbeddedImage icon;
-                if(icon.LoadFromMemory(AMD_LOGO_png, static_cast<int>(AMD_LOGO_png_len)))
+                RocProfVis::View::EmbeddedImage icon(AMD_LOGO_png,
+                                                     static_cast<int>(AMD_LOGO_png_len));
+                if(icon.Valid())
                 {
-                    GLFWimage glfw_icon = { icon.width, icon.height, icon.pixels };
+                    GLFWimage glfw_icon = { icon.GetWidth(), icon.GetHeight(),
+                                            icon.GetPixels() };
                     glfwSetWindowIcon(window, 1, &glfw_icon);
                 }
 

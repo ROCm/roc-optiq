@@ -5,6 +5,7 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#include "spdlog/spdlog.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
 #include <algorithm>
@@ -16,49 +17,50 @@ namespace RocProfVis
 namespace View
 {
 
-EmbeddedImage::~EmbeddedImage()
+EmbeddedImage::EmbeddedImage(const unsigned char* data, int data_len)
 {
-    Free();
-}
-
-bool
-EmbeddedImage::LoadFromMemory(const unsigned char* data, int data_len)
-{
-    Free();
     int channels = 0;
-    pixels = stbi_load_from_memory(data, data_len, &width, &height, &channels, STBI_rgb_alpha);
-    return Valid();
-}
-
-void
-EmbeddedImage::Free()
-{
-    if(pixels)
+    m_pixels =
+        stbi_load_from_memory(data, data_len, &m_width, &m_height, &channels, STBI_rgb_alpha);
+    if(!Valid())
     {
-        stbi_image_free(pixels);
-        pixels = nullptr;
-        width  = 0;
-        height = 0;
+        spdlog::warn("EmbeddedImage: failed to load image ({} bytes): {}", data_len,
+                     stbi_failure_reason());
     }
 }
 
-void
-DrawEmbeddedImage(const EmbeddedImage& image, ImVec2 top_left, float target_width,
-                  bool invert_colors)
+EmbeddedImage::~EmbeddedImage()
 {
-    if(!image.Valid()) return;
+    if(m_pixels)
+    {
+        stbi_image_free(m_pixels);
+    }
+}
+
+const unsigned char*
+EmbeddedImage::GetPixel(int x, int y) const
+{
+    if(!Valid() || x < 0 || x >= m_width || y < 0 || y >= m_height)
+        return nullptr;
+    return m_pixels + 4 * (y * m_width + x);
+}
+
+void
+EmbeddedImage::Render(ImVec2 top_left, float target_width, bool invert_colors) const
+{
+    if(!Valid()) return;
 
     constexpr unsigned char BG_THRESHOLD = 240;
 
-    const float scale = target_width / static_cast<float>(image.width);
+    const float scale = target_width / static_cast<float>(m_width);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    for(int y = 0; y < image.height; ++y)
+    for(int y = 0; y < m_height; ++y)
     {
         int x = 0;
-        while(x < image.width)
+        while(x < m_width)
         {
-            const unsigned char* pixel = image.pixels + 4 * (y * image.width + x);
+            const unsigned char* pixel = m_pixels + 4 * (y * m_width + x);
 
             if(pixel[3] == 0 ||
                (pixel[0] >= BG_THRESHOLD && pixel[1] >= BG_THRESHOLD &&
@@ -80,9 +82,9 @@ DrawEmbeddedImage(const EmbeddedImage& image, ImVec2 top_left, float target_widt
             const int   run_start = x;
             ++x;
 
-            while(x < image.width)
+            while(x < m_width)
             {
-                const unsigned char* next = image.pixels + 4 * (y * image.width + x);
+                const unsigned char* next = m_pixels + 4 * (y * m_width + x);
                 if(next[3] == 0 ||
                    (next[0] >= BG_THRESHOLD && next[1] >= BG_THRESHOLD &&
                     next[2] >= BG_THRESHOLD))

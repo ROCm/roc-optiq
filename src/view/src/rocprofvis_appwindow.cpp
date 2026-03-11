@@ -54,22 +54,6 @@ constexpr float STATUS_BAR_HEIGHT = 30.0f;
 void
 RenderProviderTest(DataProvider& provider);
 
-static const EmbeddedImage&
-GetAmdLogo()
-{
-    static EmbeddedImage image;
-    static bool          initialized = false;
-
-    if(!initialized)
-    {
-        image.LoadFromMemory(amd_rocm_optiq_logo_png,
-                             static_cast<int>(sizeof(amd_rocm_optiq_logo_png)));
-        initialized = true;
-    }
-
-    return image;
-}
-
 AppWindow* AppWindow::s_instance = nullptr;
 
 AppWindow*
@@ -97,6 +81,7 @@ AppWindow::AppWindow()
 : m_main_view(nullptr)
 , m_settings_panel(nullptr)
 , m_tab_container(nullptr)
+, m_amd_logo(amd_rocm_optiq_logo_png, static_cast<int>(sizeof(amd_rocm_optiq_logo_png)))
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
@@ -431,19 +416,19 @@ AppWindow::RenderEmptyState()
                       ImGuiWindowFlags_NoScrollbar);
 
     // --- Logo ---
-    const EmbeddedImage& logo = GetAmdLogo();
-    if(logo.Valid())
+    if(m_amd_logo.Valid())
     {
         const float avail      = ImGui::GetContentRegionAvail().x;
         const float logo_width = std::min(avail * 0.42f, font_size * EMPTY_STATE_LOGO_EM);
         const float logo_height =
-            logo_width * static_cast<float>(logo.height) / static_cast<float>(logo.width);
+            logo_width * static_cast<float>(m_amd_logo.GetHeight()) /
+            static_cast<float>(m_amd_logo.GetWidth());
         const float offset = (avail - logo_width) * 0.5f;
         ImVec2      logo_pos = ImGui::GetCursorScreenPos();
         logo_pos.x += offset;
         ImGui::Dummy(ImVec2(avail, logo_height));
         bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
-        DrawEmbeddedImage(logo, logo_pos, logo_width, is_dark);
+        m_amd_logo.Render(logo_pos, logo_width, is_dark);
         ImGui::Dummy(ImVec2(0.0f, font_size));
     }
 

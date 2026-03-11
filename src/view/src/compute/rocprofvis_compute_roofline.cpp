@@ -354,7 +354,7 @@ Roofline::Render()
                                ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
         ImPlot::PushStyleColor(ImPlotCol_FrameBg,
                                m_settings.GetColor(Colors::kTransparent));
-        ImPlot::PushColormap("flame");
+        ImPlot::PushColormap(m_settings.GetFlameColormapName());
         if(ImPlot::BeginPlot(
                "plot",
                ImVec2(m_menus_overlap ? -1 : (m_show_menus ? 0.75f * region.x : -1), -1),

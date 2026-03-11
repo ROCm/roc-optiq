@@ -83,10 +83,12 @@ private:
 
     void RenderFileDialog();
     void RenderAboutDialog();
+    void RenderEmptyState();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleOpenFile();
+    void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
 
 #ifdef USE_NATIVE_FILE_DIALOG

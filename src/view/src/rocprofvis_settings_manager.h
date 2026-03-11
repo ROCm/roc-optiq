@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <list>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -82,6 +83,9 @@ enum class Colors
     kAccentRed,
     kAccentRedHover,
     kAccentRedActive,
+    kTabAccent,
+    kTabAccentHover,
+    kTabAccentActive,
     kBorderGray,
     kTextMain,
     kTextDim,
@@ -163,7 +167,9 @@ public:
 
     // Styling
     ImU32                     GetColor(Colors color) const;
-    const std::vector<ImU32>& GetColorWheel();
+    const std::vector<ImU32>& GetColorWheel() const;
+    const char*               GetFlameColormapName() const;
+    const char*               GetContrastColormapName() const;
     /**
      * Returns the default ImGui style.
      */

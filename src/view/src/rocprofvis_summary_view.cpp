@@ -520,7 +520,7 @@ TopKernels::Render()
             int        hovered_idx = -1;
             TimeFormat time_format =
                 m_settings.GetUserSettings().unit_settings.time_format;
-            ImPlot::PushColormap("flame");
+            ImPlot::PushColormap(m_settings.GetFlameColormapName());
             switch(m_display_mode)
             {
                 case Pie:
@@ -675,7 +675,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
             });
         if(m_hovered_idx)
         {
-            ImPlot::PushColormap("white");
+            ImPlot::PushColormap(m_settings.GetContrastColormapName());
             ImGui::PushID(1);
             ImPlot::PlotPieChart(
                 &m_kernel_pie.labels[m_hovered_idx.value()],
@@ -747,7 +747,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
         {
             if(i == m_hovered_idx)
             {
-                ImPlot::PushColormap("white");
+                ImPlot::PushColormap(m_settings.GetContrastColormapName());
             }
             ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(i));
             ImPlot::PlotBars((*m_kernels)[i].name.c_str(), &(*m_kernels)[i].exec_time_sum,

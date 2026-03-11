@@ -8,9 +8,9 @@
 #    include "nfd.h"
 #else
 #    include "ImGuiFileDialog.h"
-#    include <sstream>
 #endif
 
+#include "amd_rocm_optiq_logo_png.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
@@ -24,7 +24,9 @@
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "stb-image/stb_image.h"
 #include <filesystem>
 #include <sstream>
 
@@ -37,12 +39,120 @@ constexpr ImVec2      FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
 constexpr const char* FILE_DIALOG_NAME       = "ChooseFileDlgKey";
 constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
+constexpr float       EMPTY_STATE_CONTENT_WIDTH     = 480.0f;
+constexpr float       EMPTY_STATE_BUTTON_WIDTH      = 160.0f;
+constexpr float       EMPTY_STATE_LOGO_MAX_WIDTH    = 180.0f;
+constexpr float       EMPTY_STATE_RECENT_FILES_WIDTH = 340.0f;
+constexpr int         EMPTY_STATE_MAX_RECENT_FILES  = 5;
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
 
 // For testing DataProvider
 void
 RenderProviderTest(DataProvider& provider);
+
+namespace
+{
+struct EmbeddedImage
+{
+    int            width  = 0;
+    int            height = 0;
+    unsigned char* pixels = nullptr;
+
+    ~EmbeddedImage()
+    {
+        if(pixels)
+        {
+            stbi_image_free(pixels);
+        }
+    }
+
+    bool Valid() const { return pixels != nullptr && width > 0 && height > 0; }
+};
+
+const EmbeddedImage&
+GetAmdLogo()
+{
+    static EmbeddedImage image;
+    static bool          initialized = false;
+
+    if(!initialized)
+    {
+        int channels = 0;
+        image.pixels =
+            stbi_load_from_memory(amd_rocm_optiq_logo_png,
+                                  static_cast<int>(sizeof(amd_rocm_optiq_logo_png)),
+                                  &image.width, &image.height, &channels, STBI_rgb_alpha);
+        initialized = true;
+    }
+
+    return image;
+}
+
+void
+DrawEmbeddedImage(const EmbeddedImage& image, ImVec2 top_left, float target_width,
+                  bool invert_colors)
+{
+    if(!image.Valid()) return;
+
+    constexpr unsigned char BG_THRESHOLD = 240;
+
+    const float scale = target_width / static_cast<float>(image.width);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    for(int y = 0; y < image.height; ++y)
+    {
+        int x = 0;
+        while(x < image.width)
+        {
+            const unsigned char* pixel = image.pixels + 4 * (y * image.width + x);
+
+            if(pixel[3] == 0 ||
+               (pixel[0] >= BG_THRESHOLD && pixel[1] >= BG_THRESHOLD &&
+                pixel[2] >= BG_THRESHOLD))
+            {
+                ++x;
+                continue;
+            }
+
+            unsigned char r = pixel[0], g = pixel[1], b = pixel[2];
+            if(invert_colors)
+            {
+                r = 255 - r;
+                g = 255 - g;
+                b = 255 - b;
+            }
+
+            const ImU32 color = IM_COL32(r, g, b, pixel[3]);
+            const int   run_start = x;
+            ++x;
+
+            while(x < image.width)
+            {
+                const unsigned char* next = image.pixels + 4 * (y * image.width + x);
+                if(next[3] == 0 ||
+                   (next[0] >= BG_THRESHOLD && next[1] >= BG_THRESHOLD &&
+                    next[2] >= BG_THRESHOLD))
+                    break;
+
+                unsigned char nr = next[0], ng = next[1], nb = next[2];
+                if(invert_colors)
+                {
+                    nr = 255 - nr;
+                    ng = 255 - ng;
+                    nb = 255 - nb;
+                }
+                if(IM_COL32(nr, ng, nb, next[3]) != color) break;
+                ++x;
+            }
+
+            draw_list->AddRectFilled(
+                ImVec2(top_left.x + run_start * scale, top_left.y + y * scale),
+                ImVec2(top_left.x + x * scale, top_left.y + (y + 1) * scale), color);
+        }
+    }
+}
+}  // namespace
 
 AppWindow* AppWindow::s_instance = nullptr;
 
@@ -138,7 +248,16 @@ AppWindow::Init()
     m_tab_container->EnableSendCloseEvent(true);
     m_tab_container->EnableSendChangeEvent(true);
 
-    main_area_item.m_item = m_tab_container;
+    main_area_item.m_item = std::make_shared<RocCustomWidget>([this]() {
+        if(m_tab_container && !m_tab_container->GetTabs().empty())
+        {
+            m_tab_container->Render();
+        }
+        else
+        {
+            RenderEmptyState();
+        }
+    });
 
     std::vector<LayoutItem> layout_items;
     layout_items.push_back(tool_bar_item);
@@ -371,6 +490,142 @@ AppWindow::Render()
     RenderDisableScreen();
 }
 
+void
+AppWindow::RenderEmptyState()
+{
+    SettingsManager&            settings     = SettingsManager::GetInstance();
+    const InternalSettings&     internal     = settings.GetInternalSettings();
+    const std::list<std::string> recent_files = internal.recent_files;
+    const float window_width  = ImGui::GetContentRegionAvail().x;
+    const float window_height = ImGui::GetContentRegionAvail().y;
+    const float card_width   = std::min(window_width - 40.0f, EMPTY_STATE_CONTENT_WIDTH);
+    const float card_padding = 28.0f;
+    std::string recent_file_to_open;
+
+    // Center an item of given width within the padded content area.
+    // GetCursorPosX() gives the padding offset at start-of-line;
+    // GetContentRegionAvail().x gives usable width from there.
+    auto center_x = [](float item_width) {
+        float cx    = ImGui::GetCursorPosX();
+        float avail = ImGui::GetContentRegionAvail().x;
+        ImGui::SetCursorPosX(cx + (avail - item_width) * 0.5f);
+    };
+    auto center_text = [&center_x](const char* text) {
+        center_x(ImGui::CalcTextSize(text).x);
+    };
+
+    // Vertically center the dialog card
+    ImGui::SetCursorPosY(window_height * 0.18f);
+    ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(card_padding, card_padding));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+    ImGui::BeginChild("welcome_dialog", ImVec2(card_width, 0.0f),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
+                      ImGuiWindowFlags_NoScrollbar);
+
+    // --- Logo ---
+    const EmbeddedImage& logo = GetAmdLogo();
+    if(logo.Valid())
+    {
+        const float content_avail = ImGui::GetContentRegionAvail().x;
+        const float logo_width = std::min(content_avail * 0.42f, EMPTY_STATE_LOGO_MAX_WIDTH);
+        const float logo_height =
+            logo_width * static_cast<float>(logo.height) / static_cast<float>(logo.width);
+        const float cx = ImGui::GetCursorPosX();
+        const float logo_offset_x = cx + (content_avail - logo_width) * 0.5f;
+        ImVec2 screen_pos = ImGui::GetCursorScreenPos();
+        screen_pos.x += (logo_offset_x - cx);
+        ImGui::Dummy(ImVec2(content_avail, logo_height));
+        bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
+        DrawEmbeddedImage(logo, screen_pos, logo_width, is_dark);
+        ImGui::Dummy(ImVec2(0.0f, 16.0f));
+    }
+
+    // --- Title ---
+    ImFont* title_font = settings.GetFontManager().GetFont(FontType::kLarge);
+    if(title_font) ImGui::PushFont(title_font);
+    center_text("Open a trace or project");
+    ImGui::TextUnformatted("Open a trace or project");
+    if(title_font) ImGui::PopFont();
+
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
+    // --- Subtitle ---
+    center_text("Drag and drop files here, or open one from disk.");
+    ImGui::TextDisabled("Drag and drop files here, or open one from disk.");
+
+    ImGui::Dummy(ImVec2(0.0f, 14.0f));
+
+    // --- Open button ---
+    center_x(EMPTY_STATE_BUTTON_WIDTH);
+    if(ImGui::Button("Open File", ImVec2(EMPTY_STATE_BUTTON_WIDTH, 0.0f)))
+    {
+        HandleOpenFile();
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Open .db, .rpd, .yaml, or .rpv files.");
+    }
+
+    // --- Recent files ---
+    if(!recent_files.empty())
+    {
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+        ImGui::Separator();
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+        center_text("Recent Files");
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextUnformatted("Recent Files");
+        ImGui::PopStyleColor();
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+
+        const float rf_width =
+            std::min(ImGui::GetContentRegionAvail().x * 0.78f, EMPTY_STATE_RECENT_FILES_WIDTH);
+        int shown = 0;
+        for(const std::string& file : recent_files)
+        {
+            if(shown++ >= EMPTY_STATE_MAX_RECENT_FILES) break;
+
+            const std::filesystem::path fpath(file);
+            const std::string fname  = fpath.filename().empty() ? file : fpath.filename().string();
+            const bool        exists = std::filesystem::exists(fpath);
+            const std::string label  = exists ? fname : fname + "  (missing)";
+
+            ImGui::PushID(file.c_str());
+            center_x(rf_width);
+
+            if(!exists)
+            {
+                ImGui::PushStyleColor(
+                    ImGuiCol_Text,
+                    ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextError)));
+            }
+
+            if(ImGui::Selectable(label.c_str(), false, 0, ImVec2(rf_width, 0.0f)))
+            {
+                recent_file_to_open = file;
+            }
+            if(ImGui::IsItemHovered())
+            {
+                SetTooltipStyled("%s", file.c_str());
+            }
+
+            if(!exists) ImGui::PopStyleColor();
+            ImGui::PopID();
+        }
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+
+    if(!recent_file_to_open.empty())
+    {
+        HandleOpenRecentFile(recent_file_to_open);
+    }
+}
+
 #ifndef USE_NATIVE_FILE_DIALOG
 void
 AppWindow::RenderFileDialog()
@@ -444,6 +699,20 @@ AppWindow::OpenFile(std::string file_path)
 }
 
 void
+AppWindow::HandleOpenRecentFile(const std::string& file_path)
+{
+    if(!std::filesystem::exists(file_path))
+    {
+        SettingsManager::GetInstance().RemoveRecentFile(file_path);
+        ShowMessageDialog("Recent File Not Found",
+                          "This recent file could not be found and was removed from the list:\n\n" +
+                              file_path);
+        return;
+    }
+    OpenFile(file_path);
+}
+
+void
 AppWindow::RenderDisableScreen()
 {
     if(m_disable_app_interaction)
@@ -505,7 +774,7 @@ AppWindow::RenderFileMenu(Project* project)
             {
                 if(ImGui::MenuItem(file.c_str(), nullptr))
                 {
-                    OpenFile(file);
+                    HandleOpenRecentFile(file);
                 }
             }
             ImGui::EndMenu();

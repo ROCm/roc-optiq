@@ -20,12 +20,14 @@ Supported trace formats are *.db* and *.rpd* trace files. Project files have the
 
 Files can also be opened by dragging and dropping them onto the application window.
 
-### Projects
+### ROCm Systems Profiler Trace Data
+
+#### Projects
 Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project. Upon opening a project file, the associated trace file and previous customizations will be recalled.
 
 Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwrite the currently opened project.
 
-### UI Layout
+#### UI Layout
 ![UI Layout](docs/images/ui_sections.png)
 
 1. System Topology Tree: Expand tree nodes to see relationship between tracks.
@@ -34,7 +36,7 @@ Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwri
 4. Histogram Area: Shows an event density histogram.
 5. Toolbar: Provides controls for various functions.
 
-### Controls / Interactions
+#### Controls / Interactions
 1. System Topology Tree
     - Click to expand / collapse the tree nodes.
     - Click on the track node to select it.
@@ -91,3 +93,21 @@ Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwri
     - A button to show the mini-map.
     - A button to reset the timeline view to default zoom and pan.
 
+### ROCm Compute Profiler Analysis Data
+
+1. Summary View: High-level overview of the captured data.
+    - Table: Lists the top longest-running kernels sorted by execution time with duration statistics.
+    - Charts: Plots duration and invocation statistics across kernels.
+    - Roofline Chart: Plots kernel performance against hardware ceilings to reveal whether performance is memory-bound or compute-bound. Click the gear icon to access customization options.
+
+2. Kernel Details: Focuses on one kernel at a time while allowing comparison across kernels.
+    - Kernel Selection Table: Lists kernels with GPU metrics. Use `Add Metric` to append additional GPU metric columns. Per-column search box accepts name or metric expressions (e.g., `metric > threshold`). Click `Apply Filters` to execute; combine multiple filters to narrow analysis.
+    - Memory Chart: Shows memory transactions and throughput per cache hierarchy level for the selected kernel.
+    - System Speed-of-Light: Displays key kernel-level GPU performance metrics with unit, average, peak, and percentage of peak values.
+    - Kernel Roofline Chart: Shows a kernel-specific roofline analysis to determine whether the kernel is compute-bound or memory-bound. Click the gear icon to access customization options.
+
+3. Table View: Provides a complete list of available metrics for the selected kernel grouped by category.
+
+4. Workload Details: Provides contextual information about the workload.
+    - System Information: Hardware details of the system where the data was collected.
+    - Profiling Configuration: Parameters and settings used during capture.

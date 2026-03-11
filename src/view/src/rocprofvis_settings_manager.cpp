@@ -183,7 +183,7 @@ inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
 inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
 inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
-inline constexpr size_t       RECENT_FILES_LIMIT = 5;
+// MAX_RECENT_FILES is defined in rocprofvis_settings_manager.h
 inline constexpr float        EVENT_LEVEL_HEIGHT = 40.0f;
 inline constexpr float        COMPACT_EVENT_HEIGHT = 6.0f;
 
@@ -617,7 +617,7 @@ SettingsManager::AddRecentFile(const std::string& file_path)
 {
     RemoveRecentFile(file_path);
     m_internalsettings.recent_files.emplace_front(file_path);
-    if(m_internalsettings.recent_files.size() > RECENT_FILES_LIMIT)
+    if(m_internalsettings.recent_files.size() > MAX_RECENT_FILES)
     {
         m_internalsettings.recent_files.pop_back();
     }

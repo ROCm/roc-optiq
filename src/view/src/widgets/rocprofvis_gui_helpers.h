@@ -61,6 +61,9 @@ struct EmbeddedImage
     ~EmbeddedImage();
 
     bool Valid() const { return pixels != nullptr && width > 0 && height > 0; }
+
+    bool LoadFromMemory(const unsigned char* data, int data_len);
+    void Free();
 };
 
 void

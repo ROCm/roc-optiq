@@ -5,6 +5,7 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
 #include <algorithm>
 #include <cmath>
@@ -17,9 +18,27 @@ namespace View
 
 EmbeddedImage::~EmbeddedImage()
 {
+    Free();
+}
+
+bool
+EmbeddedImage::LoadFromMemory(const unsigned char* data, int data_len)
+{
+    Free();
+    int channels = 0;
+    pixels = stbi_load_from_memory(data, data_len, &width, &height, &channels, STBI_rgb_alpha);
+    return Valid();
+}
+
+void
+EmbeddedImage::Free()
+{
     if(pixels)
     {
         stbi_image_free(pixels);
+        pixels = nullptr;
+        width  = 0;
+        height = 0;
     }
 }
 

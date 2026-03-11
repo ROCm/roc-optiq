@@ -26,7 +26,6 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "stb-image/stb_image.h"
 #include <filesystem>
 #include <sstream>
 
@@ -39,11 +38,15 @@ constexpr ImVec2      FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
 constexpr const char* FILE_DIALOG_NAME       = "ChooseFileDlgKey";
 constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
-constexpr float       EMPTY_STATE_CONTENT_WIDTH     = 480.0f;
-constexpr float       EMPTY_STATE_BUTTON_WIDTH      = 160.0f;
-constexpr float       EMPTY_STATE_LOGO_MAX_WIDTH    = 180.0f;
-constexpr float       EMPTY_STATE_RECENT_FILES_WIDTH = 340.0f;
-constexpr int         EMPTY_STATE_MAX_RECENT_FILES  = 5;
+constexpr float EMPTY_STATE_CONTENT_EM      = 32.0f;
+constexpr float EMPTY_STATE_BUTTON_EM       = 10.0f;
+constexpr float EMPTY_STATE_LOGO_EM         = 12.0f;
+constexpr float EMPTY_STATE_RECENT_FILES_EM = 22.0f;
+
+const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml" };
+const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
+const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
+constexpr const char* SUPPORTED_FILE_TYPES_HINT   = "Supported types: .db, .rpd, .yaml, .rpv";
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
 
@@ -59,11 +62,8 @@ GetAmdLogo()
 
     if(!initialized)
     {
-        int channels = 0;
-        image.pixels =
-            stbi_load_from_memory(amd_rocm_optiq_logo_png,
-                                  static_cast<int>(sizeof(amd_rocm_optiq_logo_png)),
-                                  &image.width, &image.height, &channels, STBI_rgb_alpha);
+        image.LoadFromMemory(amd_rocm_optiq_logo_png,
+                             static_cast<int>(sizeof(amd_rocm_optiq_logo_png)));
         initialized = true;
     }
 
@@ -412,10 +412,12 @@ AppWindow::RenderEmptyState()
     SettingsManager&            settings     = SettingsManager::GetInstance();
     const InternalSettings&     internal     = settings.GetInternalSettings();
     const std::list<std::string> recent_files = internal.recent_files;
+    const float font_size     = ImGui::GetFontSize();
     const float window_width  = ImGui::GetContentRegionAvail().x;
     const float window_height = ImGui::GetContentRegionAvail().y;
-    const float card_width   = std::min(window_width - 40.0f, EMPTY_STATE_CONTENT_WIDTH);
-    const float card_padding = 28.0f;
+    const float card_width    = std::min(window_width - font_size * 2.0f,
+                                         font_size * EMPTY_STATE_CONTENT_EM);
+    const float card_padding  = font_size * 1.8f;
     std::string recent_file_to_open;
 
     // Vertically center the dialog card
@@ -433,7 +435,7 @@ AppWindow::RenderEmptyState()
     if(logo.Valid())
     {
         const float avail      = ImGui::GetContentRegionAvail().x;
-        const float logo_width = std::min(avail * 0.42f, EMPTY_STATE_LOGO_MAX_WIDTH);
+        const float logo_width = std::min(avail * 0.42f, font_size * EMPTY_STATE_LOGO_EM);
         const float logo_height =
             logo_width * static_cast<float>(logo.height) / static_cast<float>(logo.width);
         const float offset = (avail - logo_width) * 0.5f;
@@ -442,7 +444,7 @@ AppWindow::RenderEmptyState()
         ImGui::Dummy(ImVec2(avail, logo_height));
         bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
         DrawEmbeddedImage(logo, logo_pos, logo_width, is_dark);
-        ImGui::Dummy(ImVec2(0.0f, 16.0f));
+        ImGui::Dummy(ImVec2(0.0f, font_size));
     }
 
     // --- Title ---
@@ -452,61 +454,56 @@ AppWindow::RenderEmptyState()
     ImGui::TextUnformatted("Open a trace or project");
     if(title_font) ImGui::PopFont();
 
-    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
 
     // --- Subtitle ---
     CenterNextTextItem("Drag and drop files here, or open one from disk.");
-    ImGui::TextDisabled("Drag and drop files here, or open one from disk.");
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextUnformatted("Drag and drop files here, or open one from disk.");
+    ImGui::PopStyleColor();
 
-    ImGui::Dummy(ImVec2(0.0f, 14.0f));
+    ImGui::Dummy(ImVec2(0.0f, font_size * 0.9f));
 
     // --- Open button ---
-    CenterNextItem(EMPTY_STATE_BUTTON_WIDTH);
-    if(ImGui::Button("Open File", ImVec2(EMPTY_STATE_BUTTON_WIDTH, 0.0f)))
+    const float button_width = font_size * EMPTY_STATE_BUTTON_EM;
+    CenterNextItem(button_width);
+    if(ImGui::Button("Open File", ImVec2(button_width, 0.0f)))
     {
         HandleOpenFile();
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Open .db, .rpd, .yaml, or .rpv files.");
+        SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
     }
 
     // --- Recent files ---
     if(!recent_files.empty())
     {
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
         ImGui::Separator();
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
 
         CenterNextTextItem("Recent Files");
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
         ImGui::TextUnformatted("Recent Files");
         ImGui::PopStyleColor();
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
 
         const float rf_width =
-            std::min(ImGui::GetContentRegionAvail().x * 0.78f, EMPTY_STATE_RECENT_FILES_WIDTH);
+            std::min(ImGui::GetContentRegionAvail().x * 0.78f,
+                     font_size * EMPTY_STATE_RECENT_FILES_EM);
         int shown = 0;
         for(const std::string& file : recent_files)
         {
-            if(shown++ >= EMPTY_STATE_MAX_RECENT_FILES) break;
+            if(shown++ >= static_cast<int>(MAX_RECENT_FILES)) break;
 
             const std::filesystem::path fpath(file);
-            const std::string fname  = fpath.filename().empty() ? file : fpath.filename().string();
-            const bool        exists = std::filesystem::exists(fpath);
-            const std::string label  = exists ? fname : fname + "  (missing)";
+            const std::string fname = fpath.filename().empty() ? file : fpath.filename().string();
 
             ImGui::PushID(file.c_str());
             CenterNextItem(rf_width);
 
-            if(!exists)
-            {
-                ImGui::PushStyleColor(
-                    ImGuiCol_Text,
-                    ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextError)));
-            }
-
-            if(ImGui::Selectable(label.c_str(), false, 0, ImVec2(rf_width, 0.0f)))
+            if(ImGui::Selectable(fname.c_str(), false, 0, ImVec2(rf_width, 0.0f)))
             {
                 recent_file_to_open = file;
             }
@@ -515,7 +512,6 @@ AppWindow::RenderEmptyState()
                 SetTooltipStyled("%s", file.c_str());
             }
 
-            if(!exists) ImGui::PopStyleColor();
             ImGui::PopID();
         }
     }
@@ -796,16 +792,16 @@ AppWindow::HandleOpenFile()
     std::vector<FileFilter> file_filters;
 
     FileFilter all_filter;
-    all_filter.m_name = "All Supported";
-    all_filter.m_extensions = { "db", "rpd", "yaml", "rpv" };
+    all_filter.m_name       = "All Supported";
+    all_filter.m_extensions = ALL_EXTENSIONS;
 
     FileFilter trace_filter;
-    trace_filter.m_name = "Traces";
-    trace_filter.m_extensions = { "db", "rpd", "yaml" };
+    trace_filter.m_name       = "Traces";
+    trace_filter.m_extensions = TRACE_EXTENSIONS;
 
     FileFilter project_filter;
-    project_filter.m_name = "Projects";
-    project_filter.m_extensions = { "rpv" };
+    project_filter.m_name       = "Projects";
+    project_filter.m_extensions = PROJECT_EXTENSIONS;
 
     file_filters.push_back(all_filter);
     file_filters.push_back(trace_filter);

@@ -10,6 +10,7 @@
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
 #include "rocprofvis_cli_parser.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
 #include <GLFW/glfw3.h>
@@ -237,16 +238,11 @@ main(int argc, char** argv)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-                auto [image, pixels] =
-                    RocProfVis::View::create_icon(AMD_LOGO_png, AMD_LOGO_png_len);
-                if(image.pixels != nullptr)
+                RocProfVis::View::EmbeddedImage icon;
+                if(icon.LoadFromMemory(AMD_LOGO_png, static_cast<int>(AMD_LOGO_png_len)))
                 {
-                    // Set the window icon
-                    GLFWimage images[1] = { image };
-                    glfwSetWindowIcon(window, 1, images);
-
-                    // Free the image pixels after setting the icon
-                    RocProfVis::View::free_icon(pixels);
+                    GLFWimage glfw_icon = { icon.width, icon.height, icon.pixels };
+                    glfwSetWindowIcon(window, 1, &glfw_icon);
                 }
 
                 while(!glfwWindowShouldClose(window))

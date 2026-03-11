@@ -146,6 +146,7 @@ constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
+constexpr size_t      MAX_RECENT_FILES                       = 5;
 
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";

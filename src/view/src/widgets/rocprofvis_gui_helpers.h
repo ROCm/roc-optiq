@@ -61,11 +61,11 @@ public:
     EmbeddedImage(const EmbeddedImage&)            = delete;
     EmbeddedImage& operator=(const EmbeddedImage&) = delete;
 
-    bool                 Valid() const { return m_pixels != nullptr && m_width > 0 && m_height > 0; }
-    int                  GetWidth() const { return m_width; }
-    int                  GetHeight() const { return m_height; }
+    bool                 Valid() const;
+    int                  GetWidth() const;
+    int                  GetHeight() const;
     const unsigned char* GetPixel(int x, int y) const;
-    unsigned char*       GetPixels() { return m_pixels; }
+    unsigned char*       GetPixels();
 
     void Render(ImVec2 top_left, float target_width, bool invert_colors = false) const;
 

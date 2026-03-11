@@ -37,6 +37,30 @@ EmbeddedImage::~EmbeddedImage()
     }
 }
 
+bool
+EmbeddedImage::Valid() const
+{
+    return m_pixels != nullptr && m_width > 0 && m_height > 0;
+}
+
+int
+EmbeddedImage::GetWidth() const
+{
+    return m_width;
+}
+
+int
+EmbeddedImage::GetHeight() const
+{
+    return m_height;
+}
+
+unsigned char*
+EmbeddedImage::GetPixels()
+{
+    return m_pixels;
+}
+
 const unsigned char*
 EmbeddedImage::GetPixel(int x, int y) const
 {

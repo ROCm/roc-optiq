@@ -51,26 +51,7 @@ constexpr float STATUS_BAR_HEIGHT = 30.0f;
 void
 RenderProviderTest(DataProvider& provider);
 
-namespace
-{
-struct EmbeddedImage
-{
-    int            width  = 0;
-    int            height = 0;
-    unsigned char* pixels = nullptr;
-
-    ~EmbeddedImage()
-    {
-        if(pixels)
-        {
-            stbi_image_free(pixels);
-        }
-    }
-
-    bool Valid() const { return pixels != nullptr && width > 0 && height > 0; }
-};
-
-const EmbeddedImage&
+static const EmbeddedImage&
 GetAmdLogo()
 {
     static EmbeddedImage image;
@@ -88,71 +69,6 @@ GetAmdLogo()
 
     return image;
 }
-
-void
-DrawEmbeddedImage(const EmbeddedImage& image, ImVec2 top_left, float target_width,
-                  bool invert_colors)
-{
-    if(!image.Valid()) return;
-
-    constexpr unsigned char BG_THRESHOLD = 240;
-
-    const float scale = target_width / static_cast<float>(image.width);
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-    for(int y = 0; y < image.height; ++y)
-    {
-        int x = 0;
-        while(x < image.width)
-        {
-            const unsigned char* pixel = image.pixels + 4 * (y * image.width + x);
-
-            if(pixel[3] == 0 ||
-               (pixel[0] >= BG_THRESHOLD && pixel[1] >= BG_THRESHOLD &&
-                pixel[2] >= BG_THRESHOLD))
-            {
-                ++x;
-                continue;
-            }
-
-            unsigned char r = pixel[0], g = pixel[1], b = pixel[2];
-            if(invert_colors)
-            {
-                r = 255 - r;
-                g = 255 - g;
-                b = 255 - b;
-            }
-
-            const ImU32 color = IM_COL32(r, g, b, pixel[3]);
-            const int   run_start = x;
-            ++x;
-
-            while(x < image.width)
-            {
-                const unsigned char* next = image.pixels + 4 * (y * image.width + x);
-                if(next[3] == 0 ||
-                   (next[0] >= BG_THRESHOLD && next[1] >= BG_THRESHOLD &&
-                    next[2] >= BG_THRESHOLD))
-                    break;
-
-                unsigned char nr = next[0], ng = next[1], nb = next[2];
-                if(invert_colors)
-                {
-                    nr = 255 - nr;
-                    ng = 255 - ng;
-                    nb = 255 - nb;
-                }
-                if(IM_COL32(nr, ng, nb, next[3]) != color) break;
-                ++x;
-            }
-
-            draw_list->AddRectFilled(
-                ImVec2(top_left.x + run_start * scale, top_left.y + y * scale),
-                ImVec2(top_left.x + x * scale, top_left.y + (y + 1) * scale), color);
-        }
-    }
-}
-}  // namespace
 
 AppWindow* AppWindow::s_instance = nullptr;
 
@@ -502,18 +418,6 @@ AppWindow::RenderEmptyState()
     const float card_padding = 28.0f;
     std::string recent_file_to_open;
 
-    // Center an item of given width within the padded content area.
-    // GetCursorPosX() gives the padding offset at start-of-line;
-    // GetContentRegionAvail().x gives usable width from there.
-    auto center_x = [](float item_width) {
-        float cx    = ImGui::GetCursorPosX();
-        float avail = ImGui::GetContentRegionAvail().x;
-        ImGui::SetCursorPosX(cx + (avail - item_width) * 0.5f);
-    };
-    auto center_text = [&center_x](const char* text) {
-        center_x(ImGui::CalcTextSize(text).x);
-    };
-
     // Vertically center the dialog card
     ImGui::SetCursorPosY(window_height * 0.18f);
     ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
@@ -528,37 +432,36 @@ AppWindow::RenderEmptyState()
     const EmbeddedImage& logo = GetAmdLogo();
     if(logo.Valid())
     {
-        const float content_avail = ImGui::GetContentRegionAvail().x;
-        const float logo_width = std::min(content_avail * 0.42f, EMPTY_STATE_LOGO_MAX_WIDTH);
+        const float avail      = ImGui::GetContentRegionAvail().x;
+        const float logo_width = std::min(avail * 0.42f, EMPTY_STATE_LOGO_MAX_WIDTH);
         const float logo_height =
             logo_width * static_cast<float>(logo.height) / static_cast<float>(logo.width);
-        const float cx = ImGui::GetCursorPosX();
-        const float logo_offset_x = cx + (content_avail - logo_width) * 0.5f;
-        ImVec2 screen_pos = ImGui::GetCursorScreenPos();
-        screen_pos.x += (logo_offset_x - cx);
-        ImGui::Dummy(ImVec2(content_avail, logo_height));
+        const float offset = (avail - logo_width) * 0.5f;
+        ImVec2      logo_pos = ImGui::GetCursorScreenPos();
+        logo_pos.x += offset;
+        ImGui::Dummy(ImVec2(avail, logo_height));
         bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
-        DrawEmbeddedImage(logo, screen_pos, logo_width, is_dark);
+        DrawEmbeddedImage(logo, logo_pos, logo_width, is_dark);
         ImGui::Dummy(ImVec2(0.0f, 16.0f));
     }
 
     // --- Title ---
     ImFont* title_font = settings.GetFontManager().GetFont(FontType::kLarge);
     if(title_font) ImGui::PushFont(title_font);
-    center_text("Open a trace or project");
+    CenterNextTextItem("Open a trace or project");
     ImGui::TextUnformatted("Open a trace or project");
     if(title_font) ImGui::PopFont();
 
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
 
     // --- Subtitle ---
-    center_text("Drag and drop files here, or open one from disk.");
+    CenterNextTextItem("Drag and drop files here, or open one from disk.");
     ImGui::TextDisabled("Drag and drop files here, or open one from disk.");
 
     ImGui::Dummy(ImVec2(0.0f, 14.0f));
 
     // --- Open button ---
-    center_x(EMPTY_STATE_BUTTON_WIDTH);
+    CenterNextItem(EMPTY_STATE_BUTTON_WIDTH);
     if(ImGui::Button("Open File", ImVec2(EMPTY_STATE_BUTTON_WIDTH, 0.0f)))
     {
         HandleOpenFile();
@@ -575,7 +478,7 @@ AppWindow::RenderEmptyState()
         ImGui::Separator();
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-        center_text("Recent Files");
+        CenterNextTextItem("Recent Files");
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
         ImGui::TextUnformatted("Recent Files");
         ImGui::PopStyleColor();
@@ -594,7 +497,7 @@ AppWindow::RenderEmptyState()
             const std::string label  = exists ? fname : fname + "  (missing)";
 
             ImGui::PushID(file.c_str());
-            center_x(rf_width);
+            CenterNextItem(rf_width);
 
             if(!exists)
             {

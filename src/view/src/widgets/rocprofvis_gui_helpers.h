@@ -52,13 +52,26 @@ void
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            bool right_justify = false, bool imgui_AlignTextToFramePadding = false);
 
-/* 
- * Center the next text item horizontally with respect to the available 
- * content region.
- * @param text The text to be rendered next.
- */
+struct EmbeddedImage
+{
+    int            width  = 0;
+    int            height = 0;
+    unsigned char* pixels = nullptr;
+
+    ~EmbeddedImage();
+
+    bool Valid() const { return pixels != nullptr && width > 0 && height > 0; }
+};
+
+void
+DrawEmbeddedImage(const EmbeddedImage& image, ImVec2 top_left,
+                  float target_width, bool invert_colors = false);
+
 void
 CenterNextTextItem(const char* text);
+
+void
+CenterNextItem(float width);
 
 bool
 XButton(const char* id = nullptr, const char* tool_tip_label = nullptr,

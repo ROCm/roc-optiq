@@ -396,7 +396,7 @@ AppWindow::RenderEmptyState()
 {
     SettingsManager&            settings     = SettingsManager::GetInstance();
     const InternalSettings&     internal     = settings.GetInternalSettings();
-    const std::list<std::string> recent_files = internal.recent_files;
+    const std::list<std::string>& recent_files = internal.recent_files;
     const float font_size     = ImGui::GetFontSize();
     const float window_width  = ImGui::GetContentRegionAvail().x;
     const float window_height = ImGui::GetContentRegionAvail().y;
@@ -650,7 +650,7 @@ AppWindow::RenderFileMenu(Project* project)
             HandleSaveAsFile();
         }
         ImGui::Separator();
-        const std::list<std::string> recent_files =
+        const std::list<std::string>& recent_files =
             SettingsManager::GetInstance().GetInternalSettings().recent_files;
         if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))
         {

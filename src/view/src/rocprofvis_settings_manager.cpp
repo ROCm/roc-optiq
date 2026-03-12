@@ -183,7 +183,6 @@ inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
 inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
 inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
-// MAX_RECENT_FILES is defined in rocprofvis_settings_manager.h
 inline constexpr float        EVENT_LEVEL_HEIGHT = 40.0f;
 inline constexpr float        COMPACT_EVENT_HEIGHT = 6.0f;
 

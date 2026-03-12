@@ -5,6 +5,9 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#include "spdlog/spdlog.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb-image/stb_image.h"
 #include <algorithm>
 #include <cmath>
 
@@ -13,6 +16,121 @@ namespace RocProfVis
 
 namespace View
 {
+
+EmbeddedImage::EmbeddedImage(const unsigned char* data, int data_len)
+{
+    int channels = 0;
+    m_pixels =
+        stbi_load_from_memory(data, data_len, &m_width, &m_height, &channels, STBI_rgb_alpha);
+    if(!Valid())
+    {
+        spdlog::warn("EmbeddedImage: failed to load image ({} bytes): {}", data_len,
+                     stbi_failure_reason());
+    }
+}
+
+EmbeddedImage::~EmbeddedImage()
+{
+    if(m_pixels)
+    {
+        stbi_image_free(m_pixels);
+    }
+}
+
+bool
+EmbeddedImage::Valid() const
+{
+    return m_pixels != nullptr && m_width > 0 && m_height > 0;
+}
+
+int
+EmbeddedImage::GetWidth() const
+{
+    return m_width;
+}
+
+int
+EmbeddedImage::GetHeight() const
+{
+    return m_height;
+}
+
+unsigned char*
+EmbeddedImage::GetPixels()
+{
+    return m_pixels;
+}
+
+const unsigned char*
+EmbeddedImage::GetPixel(int x, int y) const
+{
+    if(!Valid() || x < 0 || x >= m_width || y < 0 || y >= m_height)
+        return nullptr;
+    return m_pixels + 4 * (y * m_width + x);
+}
+
+void
+EmbeddedImage::Render(ImVec2 top_left, float target_width, bool invert_colors) const
+{
+    if(!Valid()) return;
+
+    constexpr unsigned char BG_THRESHOLD = 240;
+
+    const float scale = target_width / static_cast<float>(m_width);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    for(int y = 0; y < m_height; ++y)
+    {
+        int x = 0;
+        while(x < m_width)
+        {
+            const unsigned char* pixel = m_pixels + 4 * (y * m_width + x);
+
+            if(pixel[3] == 0 ||
+               (pixel[0] >= BG_THRESHOLD && pixel[1] >= BG_THRESHOLD &&
+                pixel[2] >= BG_THRESHOLD))
+            {
+                ++x;
+                continue;
+            }
+
+            unsigned char r = pixel[0], g = pixel[1], b = pixel[2];
+            if(invert_colors)
+            {
+                r = 255 - r;
+                g = 255 - g;
+                b = 255 - b;
+            }
+
+            const ImU32 color = IM_COL32(r, g, b, pixel[3]);
+            const int   run_start = x;
+            ++x;
+
+            while(x < m_width)
+            {
+                const unsigned char* next = m_pixels + 4 * (y * m_width + x);
+                if(next[3] == 0 ||
+                   (next[0] >= BG_THRESHOLD && next[1] >= BG_THRESHOLD &&
+                    next[2] >= BG_THRESHOLD))
+                    break;
+
+                unsigned char nr = next[0], ng = next[1], nb = next[2];
+                if(invert_colors)
+                {
+                    nr = 255 - nr;
+                    ng = 255 - ng;
+                    nb = 255 - nb;
+                }
+                if(IM_COL32(nr, ng, nb, next[3]) != color) break;
+                ++x;
+            }
+
+            draw_list->AddRectFilled(
+                ImVec2(top_left.x + run_start * scale, top_left.y + y * scale),
+                ImVec2(top_left.x + x * scale, top_left.y + (y + 1) * scale), color);
+        }
+    }
+}
 
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
@@ -292,11 +410,15 @@ ElidedText(const char* text, float available_width, float tooltip_width,
 void
 CenterNextTextItem(const char* text)
 {
-    ImVec2 avail  = ImGui::GetContentRegionAvail();
-    ImVec2 size   = ImGui::CalcTextSize(text);
-    ImVec2 cursor = ImGui::GetCursorPos();
-    ImVec2 pos((avail.x - size.x) * 0.5f, cursor.y);
-    ImGui::SetCursorPos(pos);
+    CenterNextItem(ImGui::CalcTextSize(text).x);
+}
+
+void
+CenterNextItem(float width)
+{
+    float cx    = ImGui::GetCursorPosX();
+    float avail = ImGui::GetContentRegionAvail().x;
+    ImGui::SetCursorPosX(cx + (avail - width) * 0.5f);
 }
 
 bool

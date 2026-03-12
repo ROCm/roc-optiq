@@ -8,9 +8,9 @@
 #    include "nfd.h"
 #else
 #    include "ImGuiFileDialog.h"
-#    include <sstream>
 #endif
 
+#include "amd_rocm_optiq_logo_png.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
@@ -24,6 +24,7 @@
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
 #include <sstream>
@@ -37,6 +38,15 @@ constexpr ImVec2      FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
 constexpr const char* FILE_DIALOG_NAME       = "ChooseFileDlgKey";
 constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
+constexpr float EMPTY_STATE_CONTENT_EM      = 32.0f;
+constexpr float EMPTY_STATE_BUTTON_EM       = 10.0f;
+constexpr float EMPTY_STATE_LOGO_EM         = 12.0f;
+constexpr float EMPTY_STATE_RECENT_FILES_EM = 22.0f;
+
+const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml" };
+const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
+const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
+constexpr const char* SUPPORTED_FILE_TYPES_HINT   = "Supported types: .db, .rpd, .yaml, .rpv";
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
 
@@ -71,6 +81,7 @@ AppWindow::AppWindow()
 : m_main_view(nullptr)
 , m_settings_panel(nullptr)
 , m_tab_container(nullptr)
+, m_amd_logo(amd_rocm_optiq_logo_png, static_cast<int>(sizeof(amd_rocm_optiq_logo_png)))
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
@@ -138,7 +149,16 @@ AppWindow::Init()
     m_tab_container->EnableSendCloseEvent(true);
     m_tab_container->EnableSendChangeEvent(true);
 
-    main_area_item.m_item = m_tab_container;
+    main_area_item.m_item = std::make_shared<RocCustomWidget>([this]() {
+        if(m_tab_container && !m_tab_container->GetTabs().empty())
+        {
+            m_tab_container->Render();
+        }
+        else
+        {
+            RenderEmptyState();
+        }
+    });
 
     std::vector<LayoutItem> layout_items;
     layout_items.push_back(tool_bar_item);
@@ -371,6 +391,125 @@ AppWindow::Render()
     RenderDisableScreen();
 }
 
+void
+AppWindow::RenderEmptyState()
+{
+    SettingsManager&            settings     = SettingsManager::GetInstance();
+    const InternalSettings&     internal     = settings.GetInternalSettings();
+    const std::list<std::string>& recent_files = internal.recent_files;
+    const float font_size     = ImGui::GetFontSize();
+    const float window_width  = ImGui::GetContentRegionAvail().x;
+    const float window_height = ImGui::GetContentRegionAvail().y;
+    const float card_width    = std::min(window_width - font_size * 2.0f,
+                                         font_size * EMPTY_STATE_CONTENT_EM);
+    const float card_padding  = font_size * 1.8f;
+    std::string recent_file_to_open;
+
+    // Vertically center the dialog card
+    ImGui::SetCursorPosY(window_height * 0.18f);
+    ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(card_padding, card_padding));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+    ImGui::BeginChild("welcome_dialog", ImVec2(card_width, 0.0f),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
+                      ImGuiWindowFlags_NoScrollbar);
+
+    // --- Logo ---
+    if(m_amd_logo.Valid())
+    {
+        const float avail      = ImGui::GetContentRegionAvail().x;
+        const float logo_width = std::min(avail * 0.42f, font_size * EMPTY_STATE_LOGO_EM);
+        const float logo_height =
+            logo_width * static_cast<float>(m_amd_logo.GetHeight()) /
+            static_cast<float>(m_amd_logo.GetWidth());
+        const float offset = (avail - logo_width) * 0.5f;
+        ImVec2      logo_pos = ImGui::GetCursorScreenPos();
+        logo_pos.x += offset;
+        ImGui::Dummy(ImVec2(avail, logo_height));
+        bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
+        m_amd_logo.Render(logo_pos, logo_width, is_dark);
+        ImGui::Dummy(ImVec2(0.0f, font_size));
+    }
+
+    // --- Title ---
+    ImFont* title_font = settings.GetFontManager().GetFont(FontType::kLarge);
+    if(title_font) ImGui::PushFont(title_font);
+    CenterNextTextItem("Open a trace or project");
+    ImGui::TextUnformatted("Open a trace or project");
+    if(title_font) ImGui::PopFont();
+
+    ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
+
+    // --- Subtitle ---
+    CenterNextTextItem("Drag and drop files here, or open one from disk.");
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextUnformatted("Drag and drop files here, or open one from disk.");
+    ImGui::PopStyleColor();
+
+    ImGui::Dummy(ImVec2(0.0f, font_size * 0.9f));
+
+    // --- Open button ---
+    const float button_width = font_size * EMPTY_STATE_BUTTON_EM;
+    CenterNextItem(button_width);
+    if(ImGui::Button("Open File", ImVec2(button_width, 0.0f)))
+    {
+        HandleOpenFile();
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
+    }
+
+    // --- Recent files ---
+    if(!recent_files.empty())
+    {
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
+        ImGui::Separator();
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
+
+        CenterNextTextItem("Recent Files");
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextUnformatted("Recent Files");
+        ImGui::PopStyleColor();
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
+
+        const float rf_width =
+            std::min(ImGui::GetContentRegionAvail().x * 0.78f,
+                     font_size * EMPTY_STATE_RECENT_FILES_EM);
+        int shown = 0;
+        for(const std::string& file : recent_files)
+        {
+            if(shown++ >= static_cast<int>(MAX_RECENT_FILES)) break;
+
+            const std::filesystem::path fpath(file);
+            const std::string fname = fpath.filename().empty() ? file : fpath.filename().string();
+
+            ImGui::PushID(file.c_str());
+            CenterNextItem(rf_width);
+
+            if(ImGui::Selectable(fname.c_str(), false, 0, ImVec2(rf_width, 0.0f)))
+            {
+                recent_file_to_open = file;
+            }
+            if(ImGui::IsItemHovered())
+            {
+                SetTooltipStyled("%s", file.c_str());
+            }
+
+            ImGui::PopID();
+        }
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+
+    if(!recent_file_to_open.empty())
+    {
+        HandleOpenRecentFile(recent_file_to_open);
+    }
+}
+
 #ifndef USE_NATIVE_FILE_DIALOG
 void
 AppWindow::RenderFileDialog()
@@ -444,6 +583,20 @@ AppWindow::OpenFile(std::string file_path)
 }
 
 void
+AppWindow::HandleOpenRecentFile(const std::string& file_path)
+{
+    if(!std::filesystem::exists(file_path))
+    {
+        SettingsManager::GetInstance().RemoveRecentFile(file_path);
+        ShowMessageDialog("Recent File Not Found",
+                          "This recent file could not be found and was removed from the list:\n\n" +
+                              file_path);
+        return;
+    }
+    OpenFile(file_path);
+}
+
+void
 AppWindow::RenderDisableScreen()
 {
     if(m_disable_app_interaction)
@@ -497,7 +650,7 @@ AppWindow::RenderFileMenu(Project* project)
             HandleSaveAsFile();
         }
         ImGui::Separator();
-        const std::list<std::string> recent_files =
+        const std::list<std::string>& recent_files =
             SettingsManager::GetInstance().GetInternalSettings().recent_files;
         if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))
         {
@@ -505,7 +658,7 @@ AppWindow::RenderFileMenu(Project* project)
             {
                 if(ImGui::MenuItem(file.c_str(), nullptr))
                 {
-                    OpenFile(file);
+                    HandleOpenRecentFile(file);
                 }
             }
             ImGui::EndMenu();
@@ -624,16 +777,16 @@ AppWindow::HandleOpenFile()
     std::vector<FileFilter> file_filters;
 
     FileFilter all_filter;
-    all_filter.m_name = "All Supported";
-    all_filter.m_extensions = { "db", "rpd", "yaml", "rpv" };
+    all_filter.m_name       = "All Supported";
+    all_filter.m_extensions = ALL_EXTENSIONS;
 
     FileFilter trace_filter;
-    trace_filter.m_name = "Traces";
-    trace_filter.m_extensions = { "db", "rpd", "yaml" };
+    trace_filter.m_name       = "Traces";
+    trace_filter.m_extensions = TRACE_EXTENSIONS;
 
     FileFilter project_filter;
-    project_filter.m_name = "Projects";
-    project_filter.m_extensions = { "rpv" };
+    project_filter.m_name       = "Projects";
+    project_filter.m_extensions = PROJECT_EXTENSIONS;
 
     file_filters.push_back(all_filter);
     file_filters.push_back(trace_filter);

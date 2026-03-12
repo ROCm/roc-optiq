@@ -367,7 +367,7 @@ ComputeTopKernels::Render()
     for(auto& item : m_flex_container.items)
         item.height = panel_h;
 
-    ImPlot::PushColormap("flame");
+    ImPlot::PushColormap(m_settings.GetFlameColormapName());
     m_flex_container.Render();
     ImPlot::PopColormap();
 }
@@ -501,7 +501,7 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
             });
         if(m_hovered_idx)
         {
-            ImPlot::PushColormap("white");
+            ImPlot::PushColormap(m_settings.GetContrastColormapName());
             ImGui::PushID(1);
             ImPlot::PlotPieChart(
                 &m_kernel_pie.labels[m_hovered_idx.value()],
@@ -605,7 +605,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                            ImGui::GetContentRegionAvail().x * 0.5f, true);
                 if(i == m_hovered_idx)
                 {
-                    ImPlot::PushColormap("white");
+                    ImPlot::PushColormap(m_settings.GetContrastColormapName());
                 }
                 ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(static_cast<int>(i)));
                 // PlotBars(uint64_t) may be undefined on Linux, cast to ImU64.

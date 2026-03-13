@@ -43,6 +43,7 @@ private:
     std::shared_ptr<MetricTableWidget> m_sol_table;
 
     FlexContainer m_flex_container;
+    FlexItem*     m_roofline_flex_item;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

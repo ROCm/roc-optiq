@@ -32,6 +32,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_data_provider(data_provider)
 , m_memory_chart(data_provider, compute_selection)
 , m_roofline(nullptr)
+, m_roofline_flex_item(nullptr)
 , m_kernel_metric_table(nullptr)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
@@ -56,8 +57,8 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
         {"sol_table",    m_sol_table,           SOL_TABLE_MIN_WIDTH,    0.0f, FLEX_ITEM_GROW},
         {"roofline",     m_roofline,            ROOFLINE_MIN_WIDTH,     0.0f, FLEX_ITEM_GROW},
     };
-
-    m_widget_name = GenUniqueName("ComputeKernelDetailsView");
+    m_roofline_flex_item = m_flex_container.GetItem("roofline");
+    m_widget_name        = GenUniqueName("ComputeKernelDetailsView");
 }
 
 ComputeKernelDetailsView::~ComputeKernelDetailsView()
@@ -175,7 +176,13 @@ void
 ComputeKernelDetailsView::Render()
 {
     ImGui::BeginChild("kernel_details");
-    if(m_kernel_metric_table) 
+    if(m_roofline_flex_item)
+    {
+        // Maintain 2:1 aspect ratio until 15-frame minimum.
+        m_roofline_flex_item->height = std::max(
+            ImGui::GetContentRegionAvail().x / 4.0f, ImGui::GetFrameHeightWithSpacing() * 15.0f);
+    }
+    if(m_kernel_metric_table)
     {
         m_kernel_metric_table->Render();
     }

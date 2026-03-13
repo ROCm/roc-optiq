@@ -19,7 +19,6 @@ namespace View
 
 constexpr float       IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
 constexpr float       HOVER_THESHOLD                  = 8.0f;
-constexpr float       MININUM_HEIGHT_RELATIVE         = 15.0f;
 constexpr const char* DISPLAY_NAMES_CEILING_COMPUTE[] = {
     "Peak MFMA FP4",   // kRPVControllerRooflineCeilingComputeMFMAFP4
     "Peak MFMA FP6",   // kRPVControllerRooflineCeilingComputeMFMAFP6
@@ -321,12 +320,7 @@ void
 Roofline::Render()
 {
     SectionTitle("Roofline Analysis");
-    ImGui::BeginChild(
-        "roofline",
-        ImVec2(ImGui::GetContentRegionAvail().x,
-               std::max(ImGui::GetContentRegionAvail().x * 0.5f,
-                        ImGui::GetFrameHeightWithSpacing() * MININUM_HEIGHT_RELATIVE)),
-        ImGuiChildFlags_None);
+    ImGui::BeginChild("roofline");
     const ImVec2       region     = ImGui::GetContentRegionAvail();
     const ImGuiStyle&  style      = ImGui::GetStyle();
     const ImPlotStyle& plot_style = ImPlot::GetStyle();

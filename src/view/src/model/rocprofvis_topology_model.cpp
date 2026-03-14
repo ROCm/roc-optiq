@@ -229,7 +229,7 @@ TopologyDataModel::GetDeviceIdByInfoId(uint64_t             info_id,
             const StreamInfo* stream_info = GetStream(info_id);
             if(stream_info)
             {
-                device_id = stream_info->device_id;
+                device_id = stream_info->processors[0].id;
             }
         }
         break;
@@ -464,7 +464,10 @@ TopologyDataModel::StreamInfoToString(const StreamInfo* stream_info, int indent)
     {
         ss << indent_str << "Stream ID: " << stream_info->id << std::endl;
         ss << indent_str << "Name: " << stream_info->name << std::endl;
-        ss << indent_str << "Device ID: " << stream_info->device_id << std::endl;
+        ss << indent_str << "Device ID: ";
+        for (auto& processor : stream_info->processors)
+            ss << processor.id;
+        ss << std::endl;
     }
     else
     {

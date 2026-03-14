@@ -788,7 +788,7 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(u
             uint32_t queue_id = std::atoll(table->GetCellByIndex(ind, Builder::QUEUE_ID_SERVICE_NAME));
             uint32_t track;
             if (TrackTracker()->FindTrack(
-                kRocProfVisDmEventTrack, 
+                TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op), 
                 agent_id, 
                 queue_id, 
                 db_instance, track))

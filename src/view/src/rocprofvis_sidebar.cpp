@@ -215,13 +215,14 @@ SideBar::RenderTrackItem(const uint64_t& index)
     return state_changed;
 }
 
+template<typename Model>
 bool
-SideBar::IsAllSubItemsHidden(const std::vector<IterableModel>& container)
+SideBar::IsAllSubItemsHidden(const std::vector<Model>& container)
 {
     bool all_hidden = true;
     if(m_graphs && !m_graphs->empty())
     {
-        for(const IterableModel& elem : container)
+        for(const Model& elem : container)
         {
             TrackGraph& graph = (*m_graphs)[elem.graph_index];
             if(graph.display)
@@ -234,13 +235,14 @@ SideBar::IsAllSubItemsHidden(const std::vector<IterableModel>& container)
     return all_hidden;
 }
 
+template<typename Model>
 void
-SideBar::HideAllSubItems(const std::vector<IterableModel>& container)
+SideBar::HideAllSubItems(const std::vector<Model>& container)
 {
     if(m_graphs && !m_graphs->empty())
     {
         std::vector<uint64_t> ids_to_remove;
-        for(const IterableModel& elem : container)
+        for(const Model& elem : container)
         {
             TrackGraph& graph = (*m_graphs)[elem.graph_index];
             if(graph.display == true)
@@ -303,13 +305,14 @@ SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
     }
 }
 
+template<typename Model>
 void
-SideBar::UnhideAllSubItems(const std::vector<IterableModel>& container)
+SideBar::UnhideAllSubItems(const std::vector<Model>& container)
 {
     if(m_graphs && !m_graphs->empty())
     {
         std::vector<uint64_t> ids_to_add;
-        for(const IterableModel& elem : container)
+        for(const Model& elem : container)
         {
             TrackGraph& graph = (*m_graphs)[elem.graph_index];
             if(graph.display == false)
@@ -561,7 +564,7 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
 
 SideBar::EyeButtonState
 SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
-    EyeButtonState parent_eye_button_state, bool show_eye_button)
+    EyeButtonState parent_eye_button_state, bool show_eye_button, uint64_t parent_id)
 {
     if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
@@ -581,7 +584,7 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
             EyeButtonState instrumented_thread_button_state = parent_eye_button_state;
             EyeButtonState sampled_thread_button_state      = parent_eye_button_state;
             EyeButtonState counter_button_state             = parent_eye_button_state;
-            ImGui::PushID(static_cast<int>(processor.info->id.fields.id));
+            ImGui::PushID(static_cast<int>(processor.info->id.fields.id) | parent_id << 32);
 
             EyeButtonState current_eye_button_state = parent_eye_button_state;
             if(show_eye_button)
@@ -634,41 +637,47 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
     return all_process_state;
 }
 
+template<typename Model>
 SideBar::EyeButtonState
-SideBar::DrawCollapsable(const std::vector<IterableModel>& container,
+SideBar::DrawCollapsable(const std::vector<Model>& container,
                          const std::string&                collapsable_header,
                          EyeButtonState                    parent_eye_button_state)
 {
-    ImGui::PushID(collapsable_header.c_str());
-    if(parent_eye_button_state == EyeButtonState::kAllVisible)
-    {
-        UnhideAllSubItems(container);
-    }
+    bool open = true;
     EyeButtonState new_button_state = parent_eye_button_state;
-    if(IsAllSubItemsHidden(container))
+    if (!collapsable_header.empty())
     {
-        new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
-    }
-    else
-    {
-        new_button_state = DrawEyeButton(parent_eye_button_state);
-    }
+        ImGui::PushID(collapsable_header.c_str());
+        if (parent_eye_button_state == EyeButtonState::kAllVisible)
+        {
+            UnhideAllSubItems(container);
+        }
+        
+        if (IsAllSubItemsHidden(container))
+        {
+            new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
+        }
+        else
+        {
+            new_button_state = DrawEyeButton(parent_eye_button_state);
+        }
 
-    if(new_button_state == EyeButtonState::kAllHidden)
-    {
-        HideAllSubItems(container);
-    }
-    else if(new_button_state == EyeButtonState::kAllVisible)
-    {
-        UnhideAllSubItems(container);
-    }
+        if (new_button_state == EyeButtonState::kAllHidden)
+        {
+            HideAllSubItems(container);
+        }
+        else if (new_button_state == EyeButtonState::kAllVisible)
+        {
+            UnhideAllSubItems(container);
+        }
 
-    ImGui::SameLine();
-    bool open = ImGui::TreeNodeEx(collapsable_header.c_str(),
-                                  CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
+        ImGui::SameLine();
+        open = ImGui::TreeNodeEx(collapsable_header.c_str(),
+            CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
+    }
     if(open)
     {
-        for(const IterableModel& item : container)
+        for(const Model& item : container)
         {
             if(item.info)
             {
@@ -676,7 +685,20 @@ SideBar::DrawCollapsable(const std::vector<IterableModel>& container,
                 {
                     new_button_state = EyeButtonState::kMixed;
                 }
+
+                if constexpr (std::is_same_v<Model, StreamModel>)
+                {
+                    ImGui::Indent();
+                    DrawProcessors(item.processors, EyeButtonState::kAllVisible, false, item.info->id);
+                    ImGui::Unindent();
+
+                }
+
             }
+        }
+        if (collapsable_header.empty())
+        {
+            return new_button_state;
         }
         ImGui::TreePop();
     }

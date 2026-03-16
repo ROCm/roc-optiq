@@ -1068,6 +1068,28 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 		return result;
 	}
 
+	/**
+	 * @brief Build a kernel metrics matrix for a given workload according to a JSON query plan.
+	 *
+	 * The method interprets the provided JSON @p plan to configure the columns, metric
+	 * selectors and optional filters that define the kernel metrics matrix to be
+	 * returned. It typically performs the following steps:
+	 *  - Extract the workload identifier and requested column names from @p plan.
+	 *  - For each requested column, determine the corresponding data type and any
+	 *    filter expressions specified in the plan.
+	 *  - Construct the set of MetricSelector objects and filter expressions used to
+	 *    query the underlying compute database.
+	 *  - Populate the destination data model table @p table with the resulting
+	 *    kernel metric rows and column metadata.
+	 *
+	 * @param table Destination data model table that will be populated with the
+	 *              kernel metrics matrix (columns and rows).
+	 * @param plan  JSON description of the query plan, including workload_id,
+	 *              column descriptions and optional filter specifications.
+	 *
+	 * @return kRocProfVisDmResultSuccess on success, or an appropriate error
+	 *         code if the plan is invalid or if table population fails.
+	 */
 	rocprofvis_dm_result_t ComputeDatabase::BuildKernelMetricsMatrix(rocprofvis_dm_table_t table, jt::Json& plan)
 	{
 		rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;

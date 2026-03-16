@@ -652,16 +652,21 @@ AppWindow::RenderFileMenu(Project* project)
         ImGui::Separator();
         const std::list<std::string>& recent_files =
             SettingsManager::GetInstance().GetInternalSettings().recent_files;
+        std::string recent_file_to_open;
         if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))
         {
             for(const std::string& file : recent_files)
             {
                 if(ImGui::MenuItem(file.c_str(), nullptr))
                 {
-                    HandleOpenRecentFile(file);
+                    recent_file_to_open = file;
                 }
             }
             ImGui::EndMenu();
+        }
+        if(!recent_file_to_open.empty())
+        {
+            HandleOpenRecentFile(recent_file_to_open);
         }
         ImGui::Separator();
         if(ImGui::MenuItem("Exit"))

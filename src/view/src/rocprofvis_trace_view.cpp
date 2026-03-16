@@ -36,6 +36,7 @@ TraceView::TraceView()
 , m_popup_info({ false, "", "" })
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_event_selection_changed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_event_highlight_changed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
@@ -150,6 +151,14 @@ TraceView::TraceView()
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         event_selection_handler);
 
+    auto event_highlight_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void)e;
+    };
+
+    m_event_highlight_changed_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
+        event_highlight_handler);
+
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("TraceView");
 }
@@ -167,6 +176,9 @@ TraceView::~TraceView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         m_event_selection_changed_event_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
+        m_event_highlight_changed_event_token);
 }
 
 void
@@ -233,7 +245,7 @@ TraceView::CreateView()
     m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection, m_annotations);
-    m_event_search          = std::make_shared<EventSearch>(m_data_provider);
+    m_event_search          = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
@@ -506,6 +518,14 @@ TraceView::RenderEditMenuOptions()
         if(m_timeline_selection)
         {
             m_timeline_selection->UnselectAllEvents();
+        }
+    }
+    if(ImGui::MenuItem("Unhighlight All Events", nullptr, false,
+                       m_timeline_selection && m_timeline_selection->HasHighlightedEvents()))
+    {
+        if(m_timeline_selection)
+        {
+            m_timeline_selection->UnhighlightAllEvents();
         }
     }
     ImGui::Separator();

@@ -42,6 +42,12 @@ public:
     bool HasSelectedEvents() const;
     bool GetSelectedEventsTimeRange(double& start_ts_out, double& end_ts_out) const;
 
+    void HighlightTrackEvent(uint64_t track_id, uint64_t event_id);
+    void UnhighlightTrackEvent(uint64_t track_id, uint64_t event_id);
+    bool EventHighlighted(uint64_t event_id) const;
+    void UnhighlightAllEvents();
+    bool HasHighlightedEvents() const;
+
     static constexpr double INVALID_SELECTION_TIME =
         std::numeric_limits<double>::lowest();
     static constexpr uint64_t INVALID_SELECTION_ID = std::numeric_limits<uint64_t>::max();
@@ -52,6 +58,8 @@ private:
      */
     void SendEventSelectionChanged(uint64_t event_id, uint64_t track_id, bool selected,
                                    bool all = false);
+    void SendEventHighlightChanged(uint64_t event_id, uint64_t track_id, bool highlighted,
+                                   bool all = false);
     void SendTrackSelectionChanged(uint64_t track_id, bool selected);
 
     DataProvider& m_data_provider;
@@ -61,6 +69,7 @@ private:
     double                       m_selected_range_end;
 
     std::unordered_set<uint64_t> m_selected_event_ids;
+    std::unordered_set<uint64_t> m_highlighted_event_ids;
 };
 
 }  // namespace View

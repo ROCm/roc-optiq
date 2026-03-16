@@ -5,6 +5,7 @@
 
 #include "imgui.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
+#include <memory>
 #include <vector>
 
 namespace RocProfVis
@@ -12,10 +13,12 @@ namespace RocProfVis
 namespace View
 {
 
+class TimelineSelection;
+
 class EventSearch : public InfiniteScrollTable
 {
 public:
-    EventSearch(DataProvider& dp);
+    EventSearch(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
     void Update() override;
     void Render() override;
 
@@ -48,6 +51,8 @@ private:
     float m_width;
 
     char m_text_input[256];
+
+    std::shared_ptr<TimelineSelection> m_timeline_selection;
 };
 
 }  // namespace View

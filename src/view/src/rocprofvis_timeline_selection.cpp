@@ -135,6 +135,11 @@ TimelineSelection::HasValidTimeRangeSelection() const
 void
 TimelineSelection::SelectTrackEvent(uint64_t track_id, uint64_t event_id)
 {
+    if(m_highlighted_event_ids.count(event_id) > 0)
+    {
+        UnhighlightTrackEvent(track_id, event_id);
+    }
+
     if(m_selected_event_ids.count(event_id) == 0)
     {
         m_selected_event_ids.insert(event_id);
@@ -205,6 +210,58 @@ bool
 TimelineSelection::HasSelectedEvents() const
 {
     return !m_selected_event_ids.empty();
+}
+
+void
+TimelineSelection::HighlightTrackEvent(uint64_t track_id, uint64_t event_id)
+{
+    if(m_selected_event_ids.count(event_id) > 0)
+    {
+        UnselectTrackEvent(track_id, event_id);
+    }
+
+    if(m_highlighted_event_ids.count(event_id) == 0)
+    {
+        m_highlighted_event_ids.insert(event_id);
+        SendEventHighlightChanged(event_id, track_id, true);
+    }
+}
+
+void
+TimelineSelection::UnhighlightTrackEvent(uint64_t track_id, uint64_t event_id)
+{
+    if(m_highlighted_event_ids.count(event_id) > 0)
+    {
+        m_highlighted_event_ids.erase(event_id);
+        SendEventHighlightChanged(event_id, track_id, false);
+    }
+}
+
+bool
+TimelineSelection::EventHighlighted(uint64_t event_id) const
+{
+    return m_highlighted_event_ids.count(event_id) > 0;
+}
+
+void
+TimelineSelection::UnhighlightAllEvents()
+{
+    m_highlighted_event_ids.clear();
+    SendEventHighlightChanged(INVALID_SELECTION_ID, INVALID_SELECTION_ID, false, true);
+}
+
+bool
+TimelineSelection::HasHighlightedEvents() const
+{
+    return !m_highlighted_event_ids.empty();
+}
+
+void
+TimelineSelection::SendEventHighlightChanged(uint64_t event_id, uint64_t track_id,
+                                              bool highlighted, bool all)
+{
+    EventManager::GetInstance()->AddEvent(std::make_shared<EventHighlightChangedEvent>(
+        event_id, track_id, highlighted, m_data_provider.GetTraceFilePath(), all));
 }
 
 }  // namespace View

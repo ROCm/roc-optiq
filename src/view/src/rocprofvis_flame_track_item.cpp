@@ -87,6 +87,14 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         time_line_selection_changed_handler);
 
+    auto timeline_highlight_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        this->HandleTimelineHighlightChanged(e);
+    };
+
+    m_timeline_event_highlight_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
+        timeline_highlight_changed_handler);
+
     if(m_flame_track_project_settings.Valid())
     {
         m_event_color_mode = m_flame_track_project_settings.ColorEvents();
@@ -142,6 +150,9 @@ FlameTrackItem::~FlameTrackItem()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         m_timeline_event_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
+        m_timeline_event_highlight_changed_token);
 }
 
 bool
@@ -198,6 +209,7 @@ FlameTrackItem::ExtractPointsFromData()
         const TraceEvent& event = events_data[i];
         m_chart_items[i].event                = event;
         m_chart_items[i].selected = m_timeline_selection->EventSelected(event.m_id.uuid);
+        m_chart_items[i].highlighted = m_timeline_selection->EventHighlighted(event.m_id.uuid);
         if(m_chart_items[i].event.m_child_count > 1)
         {
             m_chart_items[i].name_hash =
@@ -290,10 +302,26 @@ FlameTrackItem::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
     if(selection_changed_event &&
        selection_changed_event->GetSourceId() == m_data_provider.GetTraceFilePath())
     {
-        // Update selection state cache.
         for(ChartItem& item : m_chart_items)
         {
-            item.selected = m_timeline_selection->EventSelected(item.event.m_id.uuid);
+            item.selected    = m_timeline_selection->EventSelected(item.event.m_id.uuid);
+            item.highlighted = m_timeline_selection->EventHighlighted(item.event.m_id.uuid);
+        }
+    }
+}
+
+void
+FlameTrackItem::HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e)
+{
+    std::shared_ptr<EventHighlightChangedEvent> highlight_changed_event =
+        std::static_pointer_cast<EventHighlightChangedEvent>(e);
+    if(highlight_changed_event &&
+       highlight_changed_event->GetSourceId() == m_data_provider.GetTraceFilePath())
+    {
+        for(ChartItem& item : m_chart_items)
+        {
+            item.highlighted = m_timeline_selection->EventHighlighted(item.event.m_id.uuid);
+            item.selected    = m_timeline_selection->EventSelected(item.event.m_id.uuid);
         }
     }
 }
@@ -406,7 +434,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         }
     }
 
-    if(chart_item.selected)
+    if(chart_item.selected || chart_item.highlighted)
     {
         m_selected_chart_items.push_back(chart_item);
     }
@@ -658,14 +686,12 @@ FlameTrackItem::RenderChart(float graph_width)
         double normalized_duration =
             std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
 
-        ImVec2 start_position;
         float  rounding = 2.0f;
-        // Calculate the start position based on the normalized start time and level
-        start_position = ImVec2(static_cast<float>(normalized_start),
-                                item.event.m_level * m_level_height);
+        ImVec2 start_position =
+            ImVec2(static_cast<float>(normalized_start),
+                   item.event.m_level * m_level_height);
 
         ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-        ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
         ImVec2 rectMin = ImVec2(start_position.x - HIGHLIGHT_THICKNESS_HALF,
                                 start_position.y + cursor_position.y +
@@ -675,9 +701,12 @@ FlameTrackItem::RenderChart(float graph_width)
                        HIGHLIGHT_THICKNESS_HALF,
                    start_position.y + m_level_height + cursor_position.y -
                        HIGHLIGHT_THICKNESS_HALF + ANTI_ALIASING_WORKAROUND);
-        // Outer border (sticks out by 2)
-        draw_list->AddRect(rectMin, rectMax, m_settings.GetColor(Colors::kEventHighlight),
-                           rounding, 0, HIGHLIGHT_THICKNESS);
+
+        ImU32 border_color = item.highlighted
+                                 ? m_settings.GetColor(Colors::kEventSearchHighlight)
+                                 : m_settings.GetColor(Colors::kEventHighlight);
+        draw_list->AddRect(rectMin, rectMax, border_color, rounding, 0,
+                           HIGHLIGHT_THICKNESS);
     }
 
     m_selected_chart_items.clear();

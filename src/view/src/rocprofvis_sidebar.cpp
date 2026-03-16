@@ -445,7 +445,7 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
 
     if(!node.processors.empty() && open)
     {
-        new_button_state = DrawProcessors(node.processors, new_button_state, false);
+        new_button_state = DrawProcessors(node.processors, new_button_state, true);
         if(new_button_state == EyeButtonState::kAllHidden)
         {
             node.all_subitems_hidden = true;
@@ -576,11 +576,6 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
     {
         if(processor.info)
         {
-            EyeButtonState queue_button_state               = parent_eye_button_state;
-            EyeButtonState stream_button_state              = parent_eye_button_state;
-            EyeButtonState instrumented_thread_button_state = parent_eye_button_state;
-            EyeButtonState sampled_thread_button_state      = parent_eye_button_state;
-            EyeButtonState counter_button_state             = parent_eye_button_state;
             ImGui::PushID(static_cast<int>(processor.info->id.fields.id));
 
             EyeButtonState current_eye_button_state = parent_eye_button_state;
@@ -592,10 +587,16 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
                 }
                 else
                 {
-                    current_eye_button_state = DrawEyeButton(parent_eye_button_state);
+                    current_eye_button_state = DrawEyeButton(EyeButtonState::kMixed);
                 }
                 ImGui::SameLine();
             }
+
+            EyeButtonState queue_button_state               = current_eye_button_state;
+            EyeButtonState counter_button_state             = current_eye_button_state;
+            EyeButtonState stream_button_state              = EyeButtonState::kAllHidden;
+            EyeButtonState instrumented_thread_button_state = EyeButtonState::kAllHidden;
+            EyeButtonState sampled_thread_button_state      = EyeButtonState::kAllHidden;
 
             if(ImGui::TreeNodeEx(processor.header.c_str(),
                 CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
@@ -621,7 +622,6 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
                 counter_button_state == EyeButtonState::kAllHidden)
             {
                 processor.all_subitems_hidden = true;
-                all_process_state           = EyeButtonState::kAllHidden;
             }
             else
             {

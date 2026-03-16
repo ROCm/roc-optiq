@@ -1307,7 +1307,12 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 
 				for (double value : mrow.metrics)
 				{
-					result = BindObject()->FuncAddTableRowCell(row, std::to_string(value).c_str());
+					std::string str;
+					if (!std::isnan(value))
+					{
+						str = std::to_string(value);
+					}
+					result = BindObject()->FuncAddTableRowCell(row,  str.c_str());
 					if (kRocProfVisDmResultSuccess != result) break;
 
 				}

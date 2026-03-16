@@ -161,7 +161,9 @@ namespace DataModel
 			params[0].param_type == kRPVComputeParamWorkloadId &&
 			params[1].param_type == kRPVComputeParamMetricId)
 		{
-			query = "SELECT DISTINCT value_name FROM compute_metric_value WHERE metric_uuid IN (";
+			query = "SELECT DISTINCT value_name FROM ";
+			query += IsVersionGreaterOrEqual("1.3.0") ? "compute_workload_metric_value " : "compute_metric_value ";
+			query += "WHERE metric_uuid IN(";
 			std::string in_query;
 			for (auto& [metric_id, metric_uuid] : m_db->m_metric_uuid_lookup[std::atol(params[0].param_str)])
 			{
@@ -193,9 +195,18 @@ namespace DataModel
 			query += " l1_cache_data, ";
 			query += " l2_cache_data, ";
 			query += " hbm_cache_data ";
-			query += " FROM compute_roofline_data CRD ";
-			query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid ";
-			query += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";
+			if (IsVersionGreaterOrEqual("1.3.0"))
+			{
+				query += " FROM compute_kernel K ";
+				query += " INNER JOIN compute_workload_roofline_data CWRD ON CWRD.workload_id = K.workload_id";				
+				query += " INNER JOIN AVG_D ON K.kernel_uuid = AVG_D.kernel_uuid ";				
+			}
+			else
+			{
+				query += " FROM compute_roofline_data CRD ";
+				query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid ";
+				query += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";
+			}
 		}
 		return query;
 	}
@@ -207,7 +218,15 @@ namespace DataModel
 			query = "SELECT ";
 			query += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
 			query += "table_name ";
-			query += "FROM compute_metric_view ";
+			if (IsVersionGreaterOrEqual("1.3.0"))
+			{
+				query += " FROM compute_worload_metric_view CWMV";
+				query += " INNER JOIN compute_kernel K ON CWMV.workload_id = K.workload_id ";
+			}
+			else
+			{
+				query += " FROM compute_metric_view ";
+			}
 			query += "WHERE kernel_uuid = ";
 			query += params[0].param_str;
 			query += " GROUP BY table_name";
@@ -222,7 +241,14 @@ namespace DataModel
 			query = "SELECT ";
 			query += "metric_id as sub_table_id, "; //parsed in callback method
 			query += "sub_table_name ";
-			query += "FROM compute_metric_view ";
+			if (IsVersionGreaterOrEqual("1.3.0"))
+			{
+				query += " FROM compute_worload_metric_view CWMV";
+				query += " INNER JOIN compute_kernel K ON CWMV.workload_id = K.workload_id ";
+			}
+			{
+				query += " FROM compute_metric_view ";
+			}
 			query += "WHERE kernel_uuid = ";
 			query += params[0].param_str;
 			query += " AND metric_id LIKE '";
@@ -474,7 +500,9 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 				use_in_clause_for_metric_ids = false;
 			}
 
-			query = "SELECT metric_id, metric_name, kernel_uuid, value_name, value from compute_metric_view WHERE (";
+			query = "SELECT metric_id, metric_name, kernel_uuid, value_name, value from ";
+			query += (IsVersionGreaterOrEqual("1.3.0")) ? "compute_kernel_metric_view " : "compute_metric_view ";
+			query += "WHERE(";
 			if (use_in_clause_for_metric_ids)
 			{
 				query += "metric_id IN (";
@@ -536,8 +564,15 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 
 		vec.push_back("CREATE INDEX IF NOT EXISTS idx_dispatch_kernel ON compute_dispatch(kernel_uuid);");
 		vec.push_back("CREATE INDEX IF NOT EXISTS idx_dispatch_kernel_duration ON compute_dispatch(kernel_uuid, end_timestamp - start_timestamp);");
-		vec.push_back("CREATE INDEX IF NOT EXISTS idx_metric_value_metric_uuid ON compute_metric_value(metric_uuid);");
-			
+		if (m_query_factory.IsVersionGreaterOrEqual("1.3.0"))
+		{
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_metric_value_metric_uuid ON compute_workload_metric_value(metric_uuid);");
+		}
+		else
+		{
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_metric_value_metric_uuid ON compute_metric_value(metric_uuid);");
+		}
+		
 	    threads.emplace_back(task, vec, file_node_id);      
 
 		for (auto& t : threads)
@@ -760,7 +795,20 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 				{
 					m_metric_rows.clear();
 					future->ResetRowCount();
-					temp_query = "SELECT M.kernel_uuid, metric_uuid, LOWER(value_name), value FROM compute_metric_value M JOIN compute_kernel K ON M.kernel_uuid = K.kernel_uuid WHERE value IS NOT NULL AND K.workload_id = ";
+					if (m_query_factory.IsVersionGreaterOrEqual("1.3.0"))
+					{
+						temp_query = "SELECT K.kernel_uuid, metric_uuid, LOWER(value_name), value "
+							"FROM compute_workload_metric_value M "
+							"JOIN compute_kernel K ON M.workload_id = K.workload_id "
+							"WHERE value IS NOT NULL AND M.workload_id = ";
+					}
+					else
+					{
+						temp_query = "SELECT M.kernel_uuid, metric_uuid, LOWER(value_name), value "
+							"FROM compute_metric_value M "
+							"JOIN compute_kernel K ON M.kernel_uuid = K.kernel_uuid "
+							"WHERE value IS NOT NULL AND K.workload_id = ";
+					}
 					temp_query += std::to_string(m_last_matrix_workload_id);
 					result = ExecuteSQLQuery(future, &tmp_db_instance, temp_query.c_str(), table, CallbackGetComputeMetricsData);
 				}

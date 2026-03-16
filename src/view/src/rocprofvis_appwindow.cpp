@@ -659,6 +659,7 @@ AppWindow::RenderFileMenu(Project* project)
                 if(ImGui::MenuItem(file.c_str(), nullptr))
                 {
                     HandleOpenRecentFile(file);
+                    break;
                 }
             }
             ImGui::EndMenu();

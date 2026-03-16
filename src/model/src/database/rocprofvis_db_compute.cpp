@@ -1113,10 +1113,6 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 			for (auto& s : obj)
 			{
 				size_t column_index = std::atoll(s.first.c_str());
-				//if (columns[column_index].type == kRPVDataTypeString)
-				//{
-
-				//}
 				columns[column_index].filter = FilterExpression::Parse(columns[column_index].name + " " + s.second.getString());
 				columns[column_index].has_filter = true;
 			}

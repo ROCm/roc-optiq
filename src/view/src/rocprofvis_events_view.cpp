@@ -5,6 +5,8 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_event_manager.h"
+#include "rocprofvis_events.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
@@ -262,41 +264,70 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
+                        const auto& flow = event_data->flow_info[i];
+                        bool row_hovered = false;
+
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
 
-                        const uint64_t& db_id =
-                            event_data->flow_info[i].id.bitfield.event_id;
+                        const uint64_t& db_id = flow.id.bitfield.event_id;
 
                         CopyableTextUnformatted(std::to_string(db_id).c_str(),
                             "##id_" + std::to_string(i), COPY_DATA_NOTIFICATION, false,
                             true);
+                        row_hovered |= ImGui::IsItemHovered();
                         ImGui::TableSetColumnIndex(1);
-                        CopyableTextUnformatted(event_data->flow_info[i].name.c_str(),
+                        CopyableTextUnformatted(flow.name.c_str(),
                                                 "##name_" + std::to_string(i),
                                                 COPY_DATA_NOTIFICATION, false, true);
+                        row_hovered |= ImGui::IsItemHovered();
                         ImGui::TableSetColumnIndex(2);
                         std::string timestamp_label = nanosecond_to_formatted_str(
-                            event_data->flow_info[i].start_timestamp - trace_start_time,
+                            flow.start_timestamp - trace_start_time,
                             time_format, true);
                         CopyableTextUnformatted(timestamp_label.c_str(),
                                                 "##start_timestamp_" + std::to_string(i),
                                                 COPY_DATA_NOTIFICATION, false, true);
+                        row_hovered |= ImGui::IsItemHovered();
                         ImGui::TableSetColumnIndex(3);
                         CopyableTextUnformatted(
-                            std::to_string(event_data->flow_info[i].track_id).c_str(),
+                            std::to_string(flow.track_id).c_str(),
                             "##track_id_" + std::to_string(i), COPY_DATA_NOTIFICATION,
                             false, true);
+                        row_hovered |= ImGui::IsItemHovered();
                         ImGui::TableSetColumnIndex(4);
                         CopyableTextUnformatted(
-                            std::to_string(event_data->flow_info[i].level).c_str(),
+                            std::to_string(flow.level).c_str(),
                             "##level_" + std::to_string(i), COPY_DATA_NOTIFICATION, false,
                             true);
+                        row_hovered |= ImGui::IsItemHovered();
                         ImGui::TableSetColumnIndex(5);
                         CopyableTextUnformatted(
-                            std::to_string(event_data->flow_info[i].direction).c_str(),
+                            std::to_string(flow.direction).c_str(),
                             "##direction_" + std::to_string(i), COPY_DATA_NOTIFICATION,
                             false, true);
+                        row_hovered |= ImGui::IsItemHovered();
+
+                        if(row_hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                        {
+                            double start_ns = static_cast<double>(flow.start_timestamp);
+                            double duration_ns = static_cast<double>(
+                                flow.end_timestamp - flow.start_timestamp);
+                            ViewRangeNS view_range =
+                                calculate_adaptive_view_range(start_ns, duration_ns);
+
+                            EventManager::GetInstance()->AddEvent(
+                                std::make_shared<ScrollToTrackEvent>(
+                                    static_cast<int>(
+                                        RocEvents::kHandleUserGraphNavigationEvent),
+                                    flow.track_id,
+                                    m_data_provider.GetTraceFilePath()));
+                            EventManager::GetInstance()->AddEvent(
+                                std::make_shared<RangeEvent>(
+                                    static_cast<int>(RocEvents::kSetViewRange),
+                                    view_range.start_ns, view_range.end_ns,
+                                    m_data_provider.GetTraceFilePath()));
+                        }
                     }
                 }
                 ImGui::EndTable();

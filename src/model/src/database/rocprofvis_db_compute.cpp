@@ -197,16 +197,14 @@ namespace DataModel
 			query += " hbm_cache_data ";
 			if (IsVersionGreaterOrEqual("1.3.0"))
 			{
-				query += " FROM compute_kernel K ";
-				query += " INNER JOIN compute_workload_roofline_data CWRD ON CWRD.workload_id = K.workload_id";				
-				query += " INNER JOIN AVG_D ON K.kernel_uuid = AVG_D.kernel_uuid ";				
+				query += " FROM compute_kernel_roofline_data CRD ";	
 			}
 			else
 			{
 				query += " FROM compute_roofline_data CRD ";
-				query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid ";
-				query += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";
 			}
+			query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid ";
+			query += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";	
 		}
 		return query;
 	}
@@ -220,8 +218,7 @@ namespace DataModel
 			query += "table_name ";
 			if (IsVersionGreaterOrEqual("1.3.0"))
 			{
-				query += " FROM compute_worload_metric_view CWMV";
-				query += " INNER JOIN compute_kernel K ON CWMV.workload_id = K.workload_id ";
+				query += " FROM compute_kernel_metric_view";
 			}
 			else
 			{
@@ -243,8 +240,7 @@ namespace DataModel
 			query += "sub_table_name ";
 			if (IsVersionGreaterOrEqual("1.3.0"))
 			{
-				query += " FROM compute_worload_metric_view CWMV";
-				query += " INNER JOIN compute_kernel K ON CWMV.workload_id = K.workload_id ";
+				query += " FROM compute_kernel_metric_view";
 			}
 			{
 				query += " FROM compute_metric_view ";
@@ -797,10 +793,10 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 					future->ResetRowCount();
 					if (m_query_factory.IsVersionGreaterOrEqual("1.3.0"))
 					{
-						temp_query = "SELECT K.kernel_uuid, metric_uuid, LOWER(value_name), value "
-							"FROM compute_workload_metric_value M "
-							"JOIN compute_kernel K ON M.workload_id = K.workload_id "
-							"WHERE value IS NOT NULL AND M.workload_id = ";
+						temp_query = "SELECT M.kernel_uuid, metric_uuid, LOWER(value_name), value "
+							"FROM compute_kernel_metric_value M "
+							"JOIN compute_kernel K ON M.kernel_uuid = K.kernel_uuid "
+							"WHERE value IS NOT NULL AND K.workload_id = ";
 					}
 					else
 					{
@@ -1248,8 +1244,8 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 			uint32_t column_index = 0;
 			columns[column_index++].eval_value = (double)mrow.kernel_uuid;
 			columns[column_index++].eval_value = mrow.stats.name;
-			columns[column_index++].eval_value = (double)mrow.stats.count;
 			columns[column_index++].eval_value = (double)mrow.stats.sum;
+			columns[column_index++].eval_value = (double)mrow.stats.count;
 
 			for (double value : mrow.metrics)
 			{

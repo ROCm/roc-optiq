@@ -349,8 +349,9 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 	std::vector<std::pair<std::string, rocprofvis_db_data_type_t>> column_names = { 
 		{"__id",kRPVDataTypeInt},
 		{"kernel_name",kRPVDataTypeString},
-		{"dispatch_count",kRPVDataTypeInt},
-		{"duration_ns_sum",kRPVDataTypeInt}};
+		{"duration_ns_sum",kRPVDataTypeInt},
+		{"dispatch_count",kRPVDataTypeInt}
+		};
 
 
 	for(const auto& [metric_id,value_name] : metric_selectors)
@@ -1189,6 +1190,83 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 			}
 		}
 
+		// -----------------------------
+		// Filter
+		// -----------------------------
+		std::vector<KernelMetricsRow> metrics_rows;
+		metrics_rows.reserve(matrix.size());
+		for (auto& [uuid, mrow] : matrix)
+		{
+			uint32_t column_index = 0;
+			columns[column_index++].eval_value = (double)mrow.kernel_uuid;
+			columns[column_index++].eval_value = mrow.stats.name;
+			columns[column_index++].eval_value = (double)mrow.stats.count;
+			columns[column_index++].eval_value = (double)mrow.stats.sum;
+
+			for (double value : mrow.metrics)
+			{
+				columns[column_index++].eval_value = value;
+			}
+			bool passed_evaluation = true;
+			for (auto column : columns)
+			{
+				if (column.has_filter)
+				{
+					if (!column.filter.Evaluate({ {column.name, column.eval_value} }))
+					{
+						passed_evaluation = false;
+						break;
+					}
+				}
+			}
+			if (passed_evaluation)
+			{
+				metrics_rows.push_back(std::move(mrow));
+			}
+		}
+
+		int sort_column_index = 0;
+		std::string sort_order = "DESC";
+
+		if(plan.contains("sort_column_index"))
+			sort_column_index = (int)plan["sort_column_index"].getLong();
+
+		if(plan.contains("sort_order"))
+			sort_order = plan["sort_order"].getString();
+
+		bool ascending = (sort_order == "ASC");
+
+		enum column_positions_t
+		{
+			kRpvColumnId,
+			kRpvColumnNames,
+			kRpvColumnDurations,
+			kRpvColumnInvocations,
+			kRpvColumnMetrics
+		};
+
+		std::sort(metrics_rows.begin(), metrics_rows.end(), [&](KernelMetricsRow& a, KernelMetricsRow& b) {
+			switch (sort_column_index)
+			{
+			case kRpvColumnNames:
+			{
+				return ascending ? a.stats.name < b.stats.name : a.stats.name > b.stats.name;
+			}
+			case kRpvColumnDurations:
+			{
+				return ascending ? a.stats.sum < b.stats.sum : a.stats.sum > b.stats.sum;
+			}
+			case kRpvColumnInvocations:
+			{
+				return ascending ? a.stats.count < b.stats.count : a.stats.count > b.stats.count;
+			}
+			default:
+			{
+				return ascending ? a.metrics[sort_column_index - kRpvColumnMetrics] < b.metrics[sort_column_index - kRpvColumnMetrics] :
+					a.metrics[sort_column_index - kRpvColumnMetrics] > b.metrics[sort_column_index - kRpvColumnMetrics];
+			}
+			}
+			});
 
 		for (auto& column : columns)
 		{
@@ -1205,32 +1283,14 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 			result = BindObject()->FuncAddTableColumnType(table, column.type);
 			if (kRocProfVisDmResultSuccess != result) break;			
 		}
+
+
+
 		if (kRocProfVisDmResultSuccess == result)
 		{
-			for (auto& [uuid, mrow] : matrix)
+			for (auto& mrow : metrics_rows)
 			{
-				uint32_t column_index = 0;
-				columns[column_index++].eval_value = (double)mrow.kernel_uuid;
-				columns[column_index++].eval_value = mrow.stats.name;
-				columns[column_index++].eval_value = (double)mrow.stats.count;
-				columns[column_index++].eval_value = (double)mrow.stats.sum;
-				for (double value : mrow.metrics)
-				{
-					columns[column_index++].eval_value = value;
-				}
-				bool passed_evaluation = true;
-				for (auto column : columns)
-				{
-					if (column.has_filter)
-					{
-						if (!column.filter.Evaluate({ {column.name, column.eval_value} }))
-						{
-							passed_evaluation = false;
-							break;
-						}
-					}
-				}
-				if (!passed_evaluation) continue;
+
 
 				rocprofvis_dm_table_row_t row = BindObject()->FuncAddTableRow(table);
 				result = BindObject()->FuncAddTableRowCell(row, std::to_string(mrow.kernel_uuid).c_str());
@@ -1239,10 +1299,10 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 				result = BindObject()->FuncAddTableRowCell(row, mrow.stats.name.c_str());
 				if (kRocProfVisDmResultSuccess != result) break;
 
-				result = BindObject()->FuncAddTableRowCell(row, std::to_string(mrow.stats.count).c_str());
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(mrow.stats.sum).c_str());
 				if (kRocProfVisDmResultSuccess != result) break;
 
-				result = BindObject()->FuncAddTableRowCell(row, std::to_string(mrow.stats.sum).c_str());
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(mrow.stats.count).c_str());
 				if (kRocProfVisDmResultSuccess != result) break;
 
 				for (double value : mrow.metrics)

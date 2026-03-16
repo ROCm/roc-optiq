@@ -119,7 +119,12 @@ ComputeSummaryView::Render()
     }
     if(m_roofline)
     {
+        ImGui::BeginChild("roofline_container", ImVec2(ImGui::GetContentRegionAvail().x,
+                                                       ImGui::GetContentRegionAvail().x /
+                                                           (ImGui::GetWindowWidth() /
+                                                            ImGui::GetWindowHeight())));
         m_roofline->Render();
+        ImGui::EndChild();
     }
     ImGui::EndChild();
 }
@@ -172,7 +177,6 @@ ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
         {"top_kernels_table", table_widget, TABLE_PANEL_MIN_WIDTH, 0.0f, TABLE_PANEL_FLEX_GROW},
         {"top_kernels_chart", chart_widget, CHART_PANEL_MIN_WIDTH, 0.0f, CHART_PANEL_FLEX_GROW},
     };
-    m_flex_container.gap = 0.0f;
 }
 
 ComputeTopKernels::~ComputeTopKernels()
@@ -363,11 +367,13 @@ ComputeTopKernels::Render()
         return;
     }
 
-    float panel_h = ImGui::GetContentRegionAvail().x * 0.25f;
+    const ImPlotStyle& plot_style = ImPlot::GetStyle();
+    float panel_h = ImGui::GetContentRegionAvail().x * 0.25f - plot_style.PlotPadding.y;
     for(auto& item : m_flex_container.items)
         item.height = panel_h;
 
     ImPlot::PushColormap(m_settings.GetFlameColormapName());
+    m_flex_container.gap = plot_style.PlotPadding.x;
     m_flex_container.Render();
     ImPlot::PopColormap();
 }
@@ -388,20 +394,22 @@ ComputeTopKernels::RenderChartContent()
 {
     const ImGuiStyle&  style      = ImGui::GetStyle();
     const ImPlotStyle& plot_style = ImPlot::GetStyle();
-    TimeFormat         time_format = m_settings.GetUserSettings().unit_settings.time_format;
-    float              avail_w     = ImGui::GetContentRegionAvail().x;
-    float              controls_h  = ImGui::GetFrameHeightWithSpacing();
-    float              chart_h     = ImGui::GetContentRegionAvail().y - controls_h;
+    TimeFormat time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    float      avail_w     = ImGui::GetContentRegionAvail().x;
+    float      controls_h = ImGui::GetFrameHeightWithSpacing() + plot_style.PlotPadding.y;
+    float      chart_h    = ImGui::GetContentRegionAvail().y - controls_h;
 
     ImGui::BeginChild("chart_area", ImVec2(-1, chart_h));
+    ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0, 0));
     switch(m_display_mode)
     {
         case Pie: RenderPieChart(plot_style, time_format); break;
         case Bar: RenderBarChart(plot_style, time_format); break;
     }
+    ImPlot::PopStyleVar();
     ImGui::EndChild();
 
-    ImGui::SetCursorPosX(plot_style.PlotPadding.x);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + plot_style.PlotPadding.y);
     ImGui::BeginGroup();
     if(IconButton(ICON_CHART_PIE,
                   m_settings.GetFontManager().GetIconFont(FontType::kDefault),
@@ -433,9 +441,8 @@ ComputeTopKernels::RenderChartContent()
         case Bar: selected_metric = &m_kernel_bar.selected_metric; break;
     }
     ImGui::SameLine();
-    ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
-                         ImGui::CalcTextSize("Plot:").x - avail_w * 0.25f -
-                         2.0f * plot_style.PlotPadding.x);
+    ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - ImGui::CalcTextSize("Plot:").x -
+                         avail_w * 0.25f - plot_style.PlotPadding.x);
     ImGui::AlignTextToFramePadding();
     ImGui::PushStyleVarX(ImGuiStyleVar_ItemSpacing, plot_style.PlotPadding.x);
     ImGui::TextUnformatted("Plot:");

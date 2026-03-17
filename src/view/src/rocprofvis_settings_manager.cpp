@@ -21,162 +21,160 @@ namespace View
 
 
 constexpr std::array DARK_THEME_COLORS = {
-    IM_COL32(52, 54, 58, 255),     // kMetaDataColor
-    IM_COL32(44, 46, 50, 255),     // kMetaDataColorSelected
-    IM_COL32(68, 70, 74, 255),     // kMetaDataSeparator
+    IM_COL32(45, 50, 58, 255),     // kMetaDataColor
+    IM_COL32(35, 40, 46, 255),     // kMetaDataColorSelected
+    IM_COL32(55, 62, 70, 255),     // kMetaDataSeparator
     IM_COL32(0, 0, 0, 0),          // kTransparent
-    IM_COL32(224, 62, 62, 255),    // kTextError
-    IM_COL32(90, 200, 120, 255),   // kTextSuccess
-    IM_COL32(186, 154, 160, 255),  // kFlameChartColor
-    IM_COL32(180, 180, 190, 60),   // kGridColor
-    IM_COL32(224, 62, 62, 255),    // kGridRed
-    IM_COL32(255, 120, 120, 255),  // kSelectionBorder
-    IM_COL32(224, 62, 62, 100),    // kSelection
-    IM_COL32(170, 170, 180, 255),  // kBoundBox
-    IM_COL32(36, 38, 42, 255),     // kFillerColor
-    IM_COL32(90, 90, 100, 255),    // kScrollBarColor
-    IM_COL32(255, 140, 140, 120),  // kHighlightChart
-    IM_COL32(62, 64, 68, 255),     // kRulerBgColor
-    IM_COL32(220, 220, 220, 255),  // kRulerTextColor
-    IM_COL32(220, 220, 220, 255),  // kScrubberNumberColor
-    IM_COL32(224, 62, 62, 180),    // kArrowColor
-    IM_COL32(62, 64, 68, 255),     // kBorderColor
-    IM_COL32(90, 90, 100, 255),    // kSplitterColor
-    IM_COL32(28, 30, 34, 255),     // kBgMain
-    IM_COL32(38, 40, 44, 255),     // kBgPanel
-    IM_COL32(44, 46, 50, 255),     // kBgFrame
-    IM_COL32(224, 62, 62, 255),    // kAccentRed
-    IM_COL32(255, 140, 140, 255),  // kAccentRedHover
-    IM_COL32(181, 40, 40, 255),    // kAccentRedActive
-    IM_COL32(170, 74, 86, 255),    // kTabAccent
-    IM_COL32(198, 98, 110, 255),   // kTabAccentHover
-    IM_COL32(144, 56, 68, 255),    // kTabAccentActive
-    IM_COL32(80, 80, 90, 255),     // kBorderGray
-    IM_COL32(235, 235, 240, 255),  // kTextMain
-    IM_COL32(170, 170, 180, 255),  // kTextDim
-    IM_COL32(52, 54, 58, 255),     // kScrollBg
-    IM_COL32(100, 100, 110, 255),  // kScrollGrab
-    IM_COL32(80, 80, 90, 255),     // kTableHeaderBg
-    IM_COL32(100, 100, 110, 255),  // kTableBorderStrong
-    IM_COL32(62, 64, 68, 255),     // kTableBorderLight
-    IM_COL32(52, 54, 58, 255),     // kTableRowBg
-    IM_COL32(58, 60, 64, 255),     // kTableRowBgAlt
-    IM_COL32(255, 128, 110, 220),  // kEventHighlight
-    IM_COL32(235, 235, 240, 69),  // kLineChartColor
-    IM_COL32(100, 100, 110, 255),  // kButton
-    IM_COL32(130, 130, 140, 255),  // kButtonHovered
-    IM_COL32(160, 160, 170, 255),  // kButtonActive
-    IM_COL32(180, 160, 60, 255),   // kBgWarning
-    IM_COL32(160, 60, 60, 255),    // kBgError
-    IM_COL32(60, 160, 60, 255),    // kBgSuccess
-    IM_COL32(60, 80, 100, 255),    // kStickyNoteYellow
-    IM_COL32(230, 240, 255, 140),  // Colors::kLineChartColorAlt
-    IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
-    IM_COL32(60, 80, 120, 255),    // Colors::kMinimapBin1
-    IM_COL32(60, 0, 80, 255),      // Colors::kMinimapBin2
-    IM_COL32(100, 0, 120, 255),    // Colors::kMinimapBin3
-    IM_COL32(140, 20, 40, 255),    // Colors::kMinimapBin4
-    IM_COL32(200, 50, 0, 255),     // Colors::kMinimapBin5
-    IM_COL32(240, 120, 0, 255),    // Colors::kMinimapBin6
-    IM_COL32(255, 240, 180, 255),  // Colors::kMinimapBin7
-    IM_COL32(80, 80, 80, 255),     // Colors::kMinimapBinCounter1
-    IM_COL32(110, 110, 110, 255),  // Colors::kMinimapBinCounter2
-    IM_COL32(140, 140, 140, 255),  // Colors::kMinimapBinCounter3
-    IM_COL32(170, 170, 170, 255),  // Colors::kMinimapBinCounter4
-    IM_COL32(190, 190, 190, 255),  // Colors::kMinimapBinCounter5
-    IM_COL32(210, 210, 210, 255),  // Colors::kMinimapBinCounter6
-    IM_COL32(230, 230, 230, 255),  // Colors::kMinimapBinCounter7
+    IM_COL32(255, 107, 107, 255),  // kTextError
+    IM_COL32(78, 195, 185, 255),   // kTextSuccess
+    IM_COL32(105, 112, 122, 255),  // kFlameChartColor
+    IM_COL32(105, 112, 122, 35),   // kGridColor
+    IM_COL32(235, 98, 98, 255),    // kGridRed
+    IM_COL32(245, 135, 135, 255),  // kSelectionBorder
+    IM_COL32(235, 98, 98, 50),     // kSelection
+    IM_COL32(105, 112, 122, 255),  // kBoundBox
+    IM_COL32(20, 22, 28, 255),     // kFillerColor
+    IM_COL32(55, 62, 72, 255),     // kScrollBarColor
+    IM_COL32(235, 98, 98, 60),     // kHighlightChart
+    IM_COL32(42, 48, 55, 255),     // kRulerBgColor
+    IM_COL32(235, 242, 235, 255),  // kRulerTextColor
+    IM_COL32(235, 242, 235, 255),  // kScrubberNumberColor
+    IM_COL32(235, 98, 98, 145),    // kArrowColor
+    IM_COL32(48, 55, 62, 255),     // kBorderColor
+    IM_COL32(55, 62, 70, 255),     // kSplitterColor
+    IM_COL32(22, 25, 30, 255),     // kBgMain
+    IM_COL32(28, 32, 38, 255),     // kBgPanel
+    IM_COL32(35, 40, 46, 255),     // kBgFrame
+    IM_COL32(235, 98, 98, 255),    // kAccentRed
+    IM_COL32(245, 135, 135, 255),  // kAccentRedHover
+    IM_COL32(195, 75, 78, 255),    // kAccentRedActive
+    IM_COL32(215, 85, 85, 255),    // kTabAccent
+    IM_COL32(235, 115, 115, 255),  // kTabAccentHover
+    IM_COL32(185, 65, 68, 255),    // kTabAccentActive
+    IM_COL32(52, 58, 66, 255),     // kBorderGray
+    IM_COL32(235, 242, 235, 255),  // kTextMain
+    IM_COL32(128, 135, 142, 255),  // kTextDim
+    IM_COL32(28, 32, 38, 255),     // kScrollBg
+    IM_COL32(55, 62, 72, 255),     // kScrollGrab
+    IM_COL32(42, 48, 55, 255),     // kTableHeaderBg
+    IM_COL32(55, 62, 70, 255),     // kTableBorderStrong
+    IM_COL32(42, 48, 55, 255),     // kTableBorderLight
+    IM_COL32(30, 35, 42, 255),     // kTableRowBg
+    IM_COL32(35, 40, 46, 255),     // kTableRowBgAlt
+    IM_COL32(235, 108, 95, 170),   // kEventHighlight
+    IM_COL32(72, 188, 180, 95),    // kLineChartColor
+    IM_COL32(55, 62, 72, 255),     // kButton
+    IM_COL32(72, 78, 88, 255),     // kButtonHovered
+    IM_COL32(88, 95, 105, 255),    // kButtonActive
+    IM_COL32(215, 195, 72, 255),   // kBgWarning
+    IM_COL32(165, 55, 55, 255),    // kBgError
+    IM_COL32(45, 145, 135, 255),   // kBgSuccess
+    IM_COL32(35, 40, 45, 255),     // kStickyNoteYellow
+    IM_COL32(55, 155, 152, 180),   // Colors::kLineChartColorAlt
+    IM_COL32(235, 98, 98, 35),     // Colors::kTrackWarningBand
+    IM_COL32(30, 35, 42, 255),     // Colors::kMinimapBin1
+    IM_COL32(52, 38, 42, 255),     // Colors::kMinimapBin2
+    IM_COL32(82, 42, 45, 255),     // Colors::kMinimapBin3
+    IM_COL32(118, 52, 52, 255),    // Colors::kMinimapBin4
+    IM_COL32(158, 65, 62, 255),    // Colors::kMinimapBin5
+    IM_COL32(195, 82, 78, 255),    // Colors::kMinimapBin6
+    IM_COL32(228, 98, 92, 255),    // Colors::kMinimapBin7
+    IM_COL32(42, 48, 55, 255),     // Colors::kMinimapBinCounter1
+    IM_COL32(58, 65, 75, 255),     // Colors::kMinimapBinCounter2
+    IM_COL32(78, 85, 95, 255),     // Colors::kMinimapBinCounter3
+    IM_COL32(102, 108, 118, 255),  // Colors::kMinimapBinCounter4
+    IM_COL32(128, 135, 145, 255),  // Colors::kMinimapBinCounter5
+    IM_COL32(158, 165, 172, 255),  // Colors::kMinimapBinCounter6
+    IM_COL32(192, 198, 205, 255),  // Colors::kMinimapBinCounter7
     IM_COL32(0, 0, 0, 255),        // Colors::kMinimapBg
-    IM_COL32(0, 0, 0, 180),        // Colors::kLoadingScreenColor
+    IM_COL32(0, 0, 0, 155),        // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
 
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
-    IM_COL32(252, 250, 248, 255),  // Colors::kMetaDataColor
-    IM_COL32(242, 235, 230, 255),  // Colors::kMetaDataColorSelected
-    IM_COL32(225, 220, 215, 255),  // Colors::kMetaDataSeparator
-    IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
-    IM_COL32(242, 90, 70, 255),    // Colors::kTextError
-    IM_COL32(60, 170, 60, 255),    // Colors::kTextSuccess
-    IM_COL32(198, 150, 138, 255),  // Colors::kFlameChartColor
-    IM_COL32(220, 210, 200, 80),   // Colors::kGridColor
-    IM_COL32(242, 90, 70, 255),    // Colors::kGridRed
-    IM_COL32(242, 90, 70, 255),    // Colors::kSelectionBorder
-    IM_COL32(242, 90, 70, 40),     // Colors::kSelection
-    IM_COL32(220, 210, 200, 180),  // Colors::kBoundBox
-    IM_COL32(255, 253, 250, 255),  // Colors::kFillerColor
-    IM_COL32(235, 230, 225, 255),  // Colors::kScrollBarColor
-    IM_COL32(255, 160, 140, 80),   // Colors::kHighlightChart
-    IM_COL32(235, 235, 235, 255),  // Colors::kRulerBgColor
-    IM_COL32(0, 0, 0, 255),        // Colors::kRulerTextColor
-    IM_COL32(30, 30, 30, 255),     // Colors::kScrubberNumberColor
-    IM_COL32(242, 90, 70, 180),    // Colors::kArrowColor
-    IM_COL32(225, 220, 215, 255),  // Colors::kBorderColor
-    IM_COL32(235, 230, 225, 255),  // Colors::kSplitterColor
-    IM_COL32(255, 253, 250, 255),  // Colors::kBgMain
-    IM_COL32(250, 245, 240, 255),  // Colors::kBgPanel
-    IM_COL32(240, 238, 232, 255),  // Colors::kBgFrame
-    IM_COL32(242, 90, 70, 255),    // Colors::kAccentRed
-    IM_COL32(255, 140, 120, 255),  // Colors::kAccentRedHover
-    IM_COL32(255, 110, 90, 255),   // Colors::kAccentRedActive
-    IM_COL32(208, 104, 94, 255),   // Colors::kTabAccent
-    IM_COL32(228, 128, 118, 255),  // Colors::kTabAccentHover
-    IM_COL32(182, 86, 78, 255),    // Colors::kTabAccentActive
-    IM_COL32(230, 225, 220, 255),  // Colors::kBorderGray
-    IM_COL32(40, 30, 25, 255),     // Colors::kTextMain
-    IM_COL32(150, 130, 120, 255),  // Colors::kTextDim
-    IM_COL32(250, 245, 240, 255),  // Colors::kScrollBg
-    IM_COL32(230, 225, 220, 255),  // Colors::kScrollGrab
-    IM_COL32(250, 245, 240, 255),  // Colors::kTableHeaderBg
-    IM_COL32(230, 225, 220, 255),  // Colors::kTableBorderStrong
-    IM_COL32(240, 235, 230, 255),  // Colors::kTableBorderLight
-    IM_COL32(255, 253, 250, 255),  // Colors::kTableRowBg
-    IM_COL32(252, 250, 248, 255),  // Colors::kTableRowBgAlt
-    IM_COL32(224, 94, 78, 210),    // Colors::kEventHighlight
-    IM_COL32(0, 0, 0, 69),        // Colors::kLineChartColor
-    IM_COL32(230, 230, 230, 255),  // Colors::kButton
-    IM_COL32(210, 210, 210, 255),  // Colors::kButtonHovered
-    IM_COL32(180, 180, 180, 255),  // Colors::kButtonActive
-    IM_COL32(250, 250, 100, 255),  // Colors::kBgWarning
-    IM_COL32(250, 100, 100, 255),  // Colors::kBgError
-    IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
-    IM_COL32(255, 235, 110, 255),  // Colors::kStickyNoteYellow
-    IM_COL32(20, 30, 50, 140),     // Colors::kLineChartColorAlt
-    IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
-    IM_COL32(180, 200, 220, 255),  // Colors::kMinimapBin1
-    IM_COL32(150, 100, 180, 255),  // Colors::kMinimapBin2
-    IM_COL32(180, 60, 140, 255),   // Colors::kMinimapBin3
-    IM_COL32(220, 80, 80, 255),    // Colors::kMinimapBin4
-    IM_COL32(240, 120, 40, 255),   // Colors::kMinimapBin5
-    IM_COL32(255, 160, 60, 255),   // Colors::kMinimapBin6
-    IM_COL32(255, 200, 120, 255),  // Colors::kMinimapBin7
-    IM_COL32(230, 230, 230, 255),  // Colors::kMinimapBinCounter1
-    IM_COL32(210, 210, 210, 255),  // Colors::kMinimapBinCounter2
-    IM_COL32(190, 190, 190, 255),  // Colors::kMinimapBinCounter3
-    IM_COL32(170, 170, 170, 255),  // Colors::kMinimapBinCounter4
-    IM_COL32(140, 140, 140, 255),  // Colors::kMinimapBinCounter5
-    IM_COL32(110, 110, 110, 255),  // Colors::kMinimapBinCounter6
-    IM_COL32(80, 80, 80, 255),     // Colors::kMinimapBinCounter7
-    IM_COL32(255, 255, 255, 255),  // Colors::kMinimapBg
-    IM_COL32(0, 0, 0, 60),         // Colors::kLoadingScreenColor
+    IM_COL32(225, 222, 205, 255),  // kMetaDataColor
+    IM_COL32(218, 215, 198, 255),  // kMetaDataColorSelected
+    IM_COL32(208, 205, 188, 255),  // kMetaDataSeparator
+    IM_COL32(0, 0, 0, 0),          // kTransparent
+    IM_COL32(218, 48, 55, 255),    // kTextError
+    IM_COL32(55, 148, 78, 255),    // kTextSuccess
+    IM_COL32(178, 175, 162, 255),  // kFlameChartColor
+    IM_COL32(178, 175, 162, 45),   // kGridColor
+    IM_COL32(218, 48, 55, 255),    // kGridRed
+    IM_COL32(218, 48, 55, 255),    // kSelectionBorder
+    IM_COL32(218, 48, 55, 28),     // kSelection
+    IM_COL32(178, 175, 162, 155),  // kBoundBox
+    IM_COL32(238, 235, 222, 255),  // kFillerColor
+    IM_COL32(208, 204, 188, 255),  // kScrollBarColor
+    IM_COL32(218, 48, 55, 75),     // kHighlightChart
+    IM_COL32(232, 228, 215, 255),  // kRulerBgColor
+    IM_COL32(48, 45, 35, 255),     // kRulerTextColor
+    IM_COL32(58, 55, 45, 255),     // kScrubberNumberColor
+    IM_COL32(218, 48, 55, 140),    // kArrowColor
+    IM_COL32(212, 208, 192, 255),  // kBorderColor
+    IM_COL32(208, 204, 188, 255),  // kSplitterColor
+    IM_COL32(238, 235, 222, 255),  // kBgMain
+    IM_COL32(232, 228, 215, 255),  // kBgPanel
+    IM_COL32(225, 222, 208, 255),  // kBgFrame
+    IM_COL32(218, 48, 55, 255),    // kAccentRed
+    IM_COL32(238, 85, 85, 255),    // kAccentRedHover
+    IM_COL32(185, 38, 45, 255),    // kAccentRedActive
+    IM_COL32(218, 48, 55, 255),    // kTabAccent
+    IM_COL32(238, 85, 85, 255),    // kTabAccentHover
+    IM_COL32(185, 38, 45, 255),    // kTabAccentActive
+    IM_COL32(215, 212, 198, 255),  // kBorderGray
+    IM_COL32(48, 45, 35, 255),     // kTextMain
+    IM_COL32(108, 105, 88, 255),   // kTextDim
+    IM_COL32(232, 228, 215, 255),  // kScrollBg
+    IM_COL32(198, 195, 178, 255),  // kScrollGrab
+    IM_COL32(232, 228, 215, 255),  // kTableHeaderBg
+    IM_COL32(208, 204, 188, 255),  // kTableBorderStrong
+    IM_COL32(218, 215, 200, 255),  // kTableBorderLight
+    IM_COL32(238, 235, 222, 255),  // kTableRowBg
+    IM_COL32(232, 228, 215, 255),  // kTableRowBgAlt
+    IM_COL32(218, 68, 58, 162),    // kEventHighlight
+    IM_COL32(38, 138, 158, 92),    // kLineChartColor
+    IM_COL32(215, 212, 198, 255),  // kButton
+    IM_COL32(202, 198, 182, 255),  // kButtonHovered
+    IM_COL32(188, 185, 168, 255),  // kButtonActive
+    IM_COL32(222, 165, 35, 255),   // kBgWarning
+    IM_COL32(218, 85, 78, 255),    // kBgError
+    IM_COL32(58, 165, 82, 255),    // kBgSuccess
+    IM_COL32(225, 220, 198, 255),  // kStickyNoteYellow
+    IM_COL32(25, 108, 128, 195),   // Colors::kLineChartColorAlt
+    IM_COL32(218, 48, 55, 32),     // Colors::kTrackWarningBand
+    IM_COL32(225, 222, 208, 255),  // Colors::kMinimapBin1
+    IM_COL32(225, 215, 185, 255),  // Colors::kMinimapBin2
+    IM_COL32(228, 195, 148, 255),  // Colors::kMinimapBin3
+    IM_COL32(228, 162, 95, 255),   // Colors::kMinimapBin4
+    IM_COL32(225, 118, 62, 255),   // Colors::kMinimapBin5
+    IM_COL32(222, 82, 58, 255),    // Colors::kMinimapBin6
+    IM_COL32(218, 48, 48, 255),    // Colors::kMinimapBin7
+    IM_COL32(215, 212, 198, 255),  // Colors::kMinimapBinCounter1
+    IM_COL32(198, 195, 178, 255),  // Colors::kMinimapBinCounter2
+    IM_COL32(178, 175, 158, 255),  // Colors::kMinimapBinCounter3
+    IM_COL32(155, 152, 138, 255),  // Colors::kMinimapBinCounter4
+    IM_COL32(132, 128, 115, 255),  // Colors::kMinimapBinCounter5
+    IM_COL32(108, 105, 92, 255),   // Colors::kMinimapBinCounter6
+    IM_COL32(82, 78, 68, 255),     // Colors::kMinimapBinCounter7
+    IM_COL32(235, 232, 218, 255),  // Colors::kMinimapBg
+    IM_COL32(0, 0, 0, 48),         // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
 
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> DARK_FLAME_COLORS = {
-    IM_COL32(196, 74, 74, 224),   IM_COL32(210, 104, 72, 224),
-    IM_COL32(226, 154, 64, 224),  IM_COL32(178, 92, 138, 224),
-    IM_COL32(76, 132, 214, 224),  IM_COL32(62, 168, 160, 224),
-    IM_COL32(202, 82, 112, 224),  IM_COL32(142, 166, 82, 224),
-    IM_COL32(116, 98, 204, 224),  IM_COL32(232, 132, 84, 224)
+    IM_COL32(235, 98, 98, 215),   IM_COL32(72, 188, 180, 215),
+    IM_COL32(185, 168, 55, 215),  IM_COL32(68, 152, 98, 215),
+    IM_COL32(185, 115, 72, 215),  IM_COL32(52, 138, 142, 215),
+    IM_COL32(108, 128, 52, 215),  IM_COL32(178, 95, 105, 215)
 };
 const std::vector<ImU32> LIGHT_FLAME_COLORS = {
-    IM_COL32(184, 62, 62, 236),   IM_COL32(198, 92, 58, 236),
-    IM_COL32(204, 144, 48, 236),  IM_COL32(164, 84, 128, 236),
-    IM_COL32(58, 110, 194, 236),  IM_COL32(48, 146, 138, 236),
-    IM_COL32(188, 72, 102, 236),  IM_COL32(126, 148, 70, 236),
-    IM_COL32(100, 84, 184, 236),  IM_COL32(212, 112, 70, 236)
+    IM_COL32(58, 155, 92, 220),   IM_COL32(218, 48, 55, 220),
+    IM_COL32(222, 152, 15, 220),  IM_COL32(38, 138, 158, 220),
+    IM_COL32(185, 178, 148, 220), IM_COL32(138, 155, 62, 220),
+    IM_COL32(42, 148, 135, 220),  IM_COL32(225, 108, 55, 220)
 };
 inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
 inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
@@ -264,9 +262,9 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_ScrollbarBg]   = scrollBg;
     style.Colors[ImGuiCol_ScrollbarGrab] = scrollGrab;
     style.Colors[ImGuiCol_ScrollbarGrabHovered] =
-        ImVec4(96.0f / 255.0f, 96.0f / 255.0f, 96.0f / 255.0f, 1.0f);
+        ImVec4(72.0f / 255.0f, 78.0f / 255.0f, 88.0f / 255.0f, 1.0f);
     style.Colors[ImGuiCol_ScrollbarGrabActive] =
-        ImVec4(128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
+        ImVec4(88.0f / 255.0f, 95.0f / 255.0f, 105.0f / 255.0f, 1.0f);
 
     // Checkboxes, radio buttons
     style.Colors[ImGuiCol_CheckMark] = accentRed;
@@ -568,7 +566,7 @@ SettingsManager::InitStyling()
         {
             colormap.push_back(255 << IM_COL32_A_SHIFT | flame_color);
         }
-        colormap.push_back(IM_COL32(220, 50, 50, 255));
+        colormap.push_back(IM_COL32(235, 98, 98, 255));
         ImPlot::AddColormap(name, colormap.data(), static_cast<int>(colormap.size()));
     };
 

@@ -705,8 +705,33 @@ FlameTrackItem::RenderChart(float graph_width)
         ImU32 border_color = item.highlighted
                                  ? m_settings.GetColor(Colors::kEventSearchHighlight)
                                  : m_settings.GetColor(Colors::kEventHighlight);
-        draw_list->AddRect(rectMin, rectMax, border_color, rounding, 0,
-                           HIGHLIGHT_THICKNESS);
+
+        bool is_last_highlight =
+            item.highlighted &&
+            item.event.m_id.uuid ==
+                m_timeline_selection->GetLastHighlightedEventId();
+        float thickness = HIGHLIGHT_THICKNESS;
+        if(is_last_highlight)
+        {
+            double elapsed = m_timeline_selection->GetHighlightElapsedSeconds();
+            float  pulse   = 0.5f + 0.5f * std::sin(static_cast<float>(elapsed) * 6.0f);
+            thickness      = HIGHLIGHT_THICKNESS + pulse * 1.5f;
+
+            ImU32 a     = (border_color >> 24) & 0xFF;
+            ImU32 new_a = static_cast<ImU32>(a * (0.5f + 0.5f * pulse));
+            border_color = (border_color & 0x00FFFFFF) | (new_a << 24);
+        }
+
+        float half_t = thickness / 2.0f;
+        ImVec2 pulseMin = ImVec2(start_position.x - half_t,
+                                  rectMin.y - half_t + HIGHLIGHT_THICKNESS_HALF);
+        ImVec2 pulseMax = ImVec2(start_position.x +
+                                      static_cast<float>(normalized_duration) + half_t,
+                                  rectMax.y + half_t - HIGHLIGHT_THICKNESS_HALF);
+
+        draw_list->AddRect(is_last_highlight ? pulseMin : rectMin,
+                           is_last_highlight ? pulseMax : rectMax,
+                           border_color, rounding, 0, thickness);
     }
 
     m_selected_chart_items.clear();

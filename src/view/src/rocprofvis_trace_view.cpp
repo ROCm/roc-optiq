@@ -187,6 +187,11 @@ TraceView::Update()
     auto last_state = m_data_provider.GetState();
     m_data_provider.Update();
 
+    if(m_timeline_selection)
+    {
+        m_timeline_selection->UpdateHighlightTimer();
+    }
+
     if(!m_view_created)
     {
         CreateView();

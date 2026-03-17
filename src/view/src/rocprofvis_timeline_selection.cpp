@@ -16,6 +16,7 @@ TimelineSelection::TimelineSelection(DataProvider& dp)
 : m_selected_range_start(INVALID_SELECTION_TIME)
 , m_selected_range_end(INVALID_SELECTION_TIME)
 , m_data_provider(dp)
+, m_highlight_timer_active(false)
 {}
 
 TimelineSelection::~TimelineSelection() {}
@@ -135,11 +136,6 @@ TimelineSelection::HasValidTimeRangeSelection() const
 void
 TimelineSelection::SelectTrackEvent(uint64_t track_id, uint64_t event_id)
 {
-    if(m_highlighted_event_ids.count(event_id) > 0)
-    {
-        UnhighlightTrackEvent(track_id, event_id);
-    }
-
     if(m_selected_event_ids.count(event_id) == 0)
     {
         m_selected_event_ids.insert(event_id);
@@ -215,16 +211,13 @@ TimelineSelection::HasSelectedEvents() const
 void
 TimelineSelection::HighlightTrackEvent(uint64_t track_id, uint64_t event_id)
 {
-    if(m_selected_event_ids.count(event_id) > 0)
-    {
-        UnselectTrackEvent(track_id, event_id);
-    }
-
     if(m_highlighted_event_ids.count(event_id) == 0)
     {
         m_highlighted_event_ids.insert(event_id);
         SendEventHighlightChanged(event_id, track_id, true);
     }
+    m_highlight_timer_start  = std::chrono::steady_clock::now();
+    m_highlight_timer_active = true;
 }
 
 void
@@ -247,6 +240,7 @@ void
 TimelineSelection::UnhighlightAllEvents()
 {
     m_highlighted_event_ids.clear();
+    m_highlight_timer_active = false;
     SendEventHighlightChanged(INVALID_SELECTION_ID, INVALID_SELECTION_ID, false, true);
 }
 
@@ -254,6 +248,21 @@ bool
 TimelineSelection::HasHighlightedEvents() const
 {
     return !m_highlighted_event_ids.empty();
+}
+
+void
+TimelineSelection::UpdateHighlightTimer()
+{
+    if(m_highlight_timer_active)
+    {
+        auto elapsed = std::chrono::steady_clock::now() - m_highlight_timer_start;
+        double elapsed_s =
+            std::chrono::duration<double>(elapsed).count();
+        if(elapsed_s >= HIGHLIGHT_TIMEOUT_S)
+        {
+            UnhighlightAllEvents();
+        }
+    }
 }
 
 void

@@ -8,6 +8,7 @@
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include <array>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -18,12 +19,14 @@ namespace View
 
 class SettingsManager;
 class TableDataEvent;
+class TimelineSelection;
 
 class InfiniteScrollTable : public RocWidget
 {
 public:
     InfiniteScrollTable(DataProvider& dp, TableType table_type,
-                        const std::string& no_data_text = "");
+                        const std::string& no_data_text = "",
+                        std::shared_ptr<TimelineSelection> timeline_selection = nullptr);
     virtual ~InfiniteScrollTable();
 
     virtual void Update() override;
@@ -84,8 +87,9 @@ protected:
     TableType m_table_type;  // Type of table (e.g., EventTable, SampleTable)
     rocprofvis_controller_table_type_t m_req_table_type;
 
-    DataProvider&    m_data_provider;
-    SettingsManager& m_settings;
+    DataProvider&                      m_data_provider;
+    SettingsManager&                   m_settings;
+    std::shared_ptr<TimelineSelection> m_timeline_selection;
 
     uint64_t m_fetch_chunk_size;
 

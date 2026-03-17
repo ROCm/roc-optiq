@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <chrono>
 #include <cstdint>
 #include <limits>
 #include <unordered_map>
@@ -47,6 +48,7 @@ public:
     bool EventHighlighted(uint64_t event_id) const;
     void UnhighlightAllEvents();
     bool HasHighlightedEvents() const;
+    void UpdateHighlightTimer();
 
     static constexpr double INVALID_SELECTION_TIME =
         std::numeric_limits<double>::lowest();
@@ -70,6 +72,10 @@ private:
 
     std::unordered_set<uint64_t> m_selected_event_ids;
     std::unordered_set<uint64_t> m_highlighted_event_ids;
+
+    static constexpr double                          HIGHLIGHT_TIMEOUT_S = 10.0;
+    bool                                             m_highlight_timer_active;
+    std::chrono::steady_clock::time_point            m_highlight_timer_start;
 };
 
 }  // namespace View

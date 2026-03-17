@@ -184,7 +184,7 @@ This section provides an interface for multiple data perspectives, offering gran
     :align: center
 
   - **Aggregate by Column**: A drop-down menu that groups the results by the selected column. Click **Submit** to group the results. To remove the grouping, select **-- None --** from the drop-down menu, then click **Submit**.
-  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` filters all events shorter than 2000 ns. Click **Submit** to filter the data.
+  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` filters all events larger than 2000 ns. Click **Submit** to filter the data.
   
   .. tip::
 

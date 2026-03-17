@@ -1,10 +1,12 @@
 .. meta::
-  :description: Learn how to view ROCm Compute Profiler analysis data in ROCm Optiq
+  :description: Learn how to view ROCm Compute Profiler analysis data in ROCm Optiq.
   :keywords: Optiq, ROCm, analysis, profiler, data,
 
-****************************************
-View ROCm Compute Profiler analysis data
-****************************************
+.. _view-analysis:
+
+******************************************************
+View ROCm Compute Profiler analysis data in ROCm Optiq
+******************************************************
 
 .. |scroll| image:: ../images/scroll-to.png
 .. |eye| image:: ../images/eye.png
@@ -36,7 +38,7 @@ To generate profiling data in a compatible format, run the CLI analysis with the
 
 ``rocprof-compute analyze --output-name your-datafile-name --output-format db -p </path/to/workload>`` 
 
-Once you open a ROCm Compute Profiler analysis database file, you can view its data populated in :ref:`analysis-summary`, :ref:`kernel-details`, :ref:`analysis-table`, :ref:`analysis-workload`.
+Once you open a ROCm Compute Profiler analysis database file, you can view its data populated in :ref:`analysis-summary`, :ref:`kernel-details`, :ref:`analysis-table`, and :ref:`analysis-workload`.
 
 .. _analysis-summary:
 
@@ -63,11 +65,11 @@ The pie chart plots:
 
 .. tip::
    
-   The kernel name and duration are displayed when you hold your cursor- over a section of the pie chart. 
+   The kernel name and duration are displayed when you hold your cursor over a section of the pie chart. 
 
 The bar chart displays per-kernel metrics including Invocation(s), Total, Min, Max, Mean and Median Duration data. 
 
-Selected kernels are highlighted white in bar chart and pie chart.  
+Selected kernels are highlighted white in both charts.  
 
 Summary View Roofline Chart
 ---------------------------

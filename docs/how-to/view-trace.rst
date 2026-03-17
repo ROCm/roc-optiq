@@ -1,10 +1,12 @@
 .. meta::
-  :description: Learn how to view your trace data in ROCm Optiq
+  :description: Learn how to view ROCm systems Profiler trace data in ROCm Optiq.
   :keywords: Optiq, ROCm, trace, data, events, tracks, timeline
 
-*****************************
-View trace data in ROCm Optiq
-*****************************
+.. _view-systems:
+
+***************************************************
+View ROCm systems Profiler trace data in ROCm Optiq
+***************************************************
 
 .. |scroll| image:: ../images/scroll-to.png
 .. |eye| image:: ../images/eye.png

@@ -28,15 +28,14 @@ Key views include:
 - :ref:`summary-view`: Displays the top 10 kernels by execution time using pie charts, bar charts, or tables.
 - :ref:`minimap`: Provides a compact overview of event density and counter values across the entire trace, enabling rapid navigation of large datasets.
 
-Analyze profiling data
-======================
+Analyze ROCm Compute Profile data
+=================================
 
 Use ROCm Optiq to visualize profiling analysis data to rapidly identify performance bottlenecks and explore kernel-level metrics for a profiled workload. 
 
 Key features include: 
 
-- **Summary View**: High-level overview of the captured compute profiling data. 
-- **Kernel Details**: Focuses on individual kernels.  
-- **Table View**: Complete list of available metrics for the selected kernel. Metrics are grouped by category. 
-- **Workload Details**: Contextual information about the profiled workload, including system information and profiling configuration. 
-
+- :ref:`analysis-summary`: High-level overview of the captured compute profiling data. 
+- :ref:`kernel-details`: Focuses on individual kernels.  
+- :ref:`analysis-table`: Complete list of available metrics for the selected kernel. Metrics are grouped by category. 
+- :ref:`analysis-workload`: Contextual information about the profiled workload, including system information and profiling configuration. 

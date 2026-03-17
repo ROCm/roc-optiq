@@ -233,10 +233,12 @@ namespace DataModel
         std::mutex m_mutex;
         std::map<uint32_t, std::map<uint32_t, std::string>> m_metric_id_lookup;
         std::map<uint32_t, std::vector<std::pair<std::string, uint32_t>>> m_metric_uuid_lookup;
+        std::map<uint32_t, uint32_t> m_kernel_workload_lookup;
         uint32_t m_last_matrix_workload_id;
         std::string m_last_top_kernels_query;
 
         static int CallbackGetComputeGeneric(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        static int CallbackGetComputeKernelWorkloadLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeRooflineCeiling(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeKernelMetricsMatrix(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt, char** azColName);

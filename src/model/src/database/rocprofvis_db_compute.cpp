@@ -456,84 +456,66 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 
     std::string ComputeQueryFactory::GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
 		std::string query;
-		std::set<std::string> metric_ids;
+		std::set<uint32_t> metric_ids;
 		std::set<std::string> kernel_ids;
+		uint32_t workload_id = 0;
 		for (int i = 0; i < num; i++)
 		{
 			if (params[i].param_type == kRPVComputeParamKernelId)
 			{
 				kernel_ids.insert(params[i].param_str);
+				workload_id = m_db->m_kernel_workload_lookup[std::atol(params[i].param_str)];
 			} else
 			if (params[i].param_type == kRPVComputeParamMetricId)
 			{
-				metric_ids.insert(params[i].param_str);
-			} 
+				std::string metric_str = params[i].param_str;
+				//x.x.x format
+				if (2 == std::count(metric_str.begin(), metric_str.end(), '.'))
+				{
+					for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
+					{
+
+						if (metric.first == metric_str)
+						{
+							metric_ids.insert(metric.second);
+						}
+					}
+				}
+				else
+				{
+					for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
+					{
+						if (metric.first.find(metric_str+".") == 0)
+						{
+							metric_ids.insert(metric.second);
+						}
+					}
+				}
+			}
 		}
 		if (metric_ids.size() > 0 && kernel_ids.size() > 0)
 		{
-			bool use_in_clause_for_metric_ids = true;
-
-			if (metric_ids.size() > 1)
-			{
-				for (auto metric_id : metric_ids)
-				{
-					MetricIdFormat f = ClassifyMetricIdFormat(metric_id);
-					if (f == MetricIdFormat::Other)
-					{
-						spdlog::debug("Invalid metric format {}", metric_id);
-						return query;
-					}
-					else
-						if (f != MetricIdFormat::XYZ)
-						{
-							use_in_clause_for_metric_ids = false;
-							break;
-						}
-				}
-			}
-			else
-			{
-				use_in_clause_for_metric_ids = false;
-			}
-
 			query = "SELECT metric_id, metric_name, kernel_uuid, value_name, value from ";
 			query += (IsVersionGreaterOrEqual("1.3.0")) ? "compute_kernel_metric_view " : "compute_metric_view ";
-			query += "WHERE(";
-			if (use_in_clause_for_metric_ids)
+			query += "WHERE ";
+			int count = 0;
+			if (metric_ids.size() < m_db->m_metric_uuid_lookup[workload_id].size())
 			{
-				query += "metric_id IN (";
-				int count = 0;
+				query += "metric_uuid IN(";
 				for (auto metric_id : metric_ids)
 				{
 					if (count > 0)
 					{
 						query += ",";
 					}
-					query += "'";
-					query += metric_id;
-					query += "'";
+					query += std::to_string(metric_id);
 					count++;
 				}
-				query += ")";
-			}
-			else
-			{
-				int count = 0;
-				for (auto metric_id : metric_ids)
-				{
-					if (count > 0)
-					{
-						query += " OR ";
-					}
-					query += "metric_id LIKE '";
-					query += metric_id;
-					query += "%' ";
-					count++;
-				}
+				query += ") AND ";
 			}
 
-			query += ") AND kernel_uuid IN (";
-			int count = 0;
+			count = 0;
+			query += "kernel_uuid IN (";
 			for (auto kernel_id : kernel_ids)
 			{
 				if (count > 0)
@@ -612,6 +594,9 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 			
 			std::string store_metrics_lookup_table_query = "SELECT workload_id, metric_uuid, metric_id FROM compute_metric_definition";
 			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, store_metrics_lookup_table_query.c_str(), CallbackStoreMetricsLookupTable)) break;
+
+			std::string store_kernels_lookup_table_query = "SELECT kernel_uuid, workload_id FROM compute_kernel";
+			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, store_kernels_lookup_table_query.c_str(), CallbackGetComputeKernelWorkloadLookupTable)) break;
 
 			return future->SetPromise(kRocProfVisDmResultSuccess);
 		}
@@ -708,8 +693,7 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 			RpvSqliteExecuteQueryCallback callback = nullptr;
 			switch (use_case)
 			{
-				case kRPVComputeFetchListOfWorkloads:
-				
+				case kRPVComputeFetchListOfWorkloads:				
 				case kRPVComputeFetchWorkloadKernelsList:
 				case kRPVComputeFetchKernelRooflineIntensities:
 				case kRPVComputeFetchWorkloadMetricsDefinition:
@@ -742,6 +726,7 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 							m_kernel_stats.clear();
 							query = temp_query.c_str();
 							callback = CallbackGetComputeWorkloadTopKernels;
+							m_last_top_kernels_query = temp_query;
 						}
 						else
 						{
@@ -842,6 +827,19 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 				break;
 			}
 		}
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+	int ComputeDatabase::CallbackGetComputeKernelWorkloadLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		void* func = (void*)&CallbackGetComputeKernelWorkloadLookupTable;
+		if (callback_params->future->Interrupted()) return 1;
+		uint32_t kernel_id = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
+		uint32_t workload_id = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
+		db->m_kernel_workload_lookup[kernel_id] = workload_id;
 		callback_params->future->CountThisRow();
 		return 0;
 	}
@@ -1306,8 +1304,16 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 			}
 			default:
 			{
-				return ascending ? a.metrics[sort_column_index - kRpvColumnMetrics] < b.metrics[sort_column_index - kRpvColumnMetrics] :
-					a.metrics[sort_column_index - kRpvColumnMetrics] > b.metrics[sort_column_index - kRpvColumnMetrics];
+				uint32_t metrics_column_index = sort_column_index - kRpvColumnMetrics;
+				if (metrics_column_index < a.metrics.size() && metrics_column_index < b.metrics.size())
+				{
+					return ascending ? a.metrics[metrics_column_index] < b.metrics[metrics_column_index] :
+						a.metrics[metrics_column_index] > b.metrics[metrics_column_index];
+				}
+				else
+				{
+					return false;
+				}
 			}
 			}
 			});

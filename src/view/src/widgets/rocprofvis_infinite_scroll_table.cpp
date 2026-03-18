@@ -7,6 +7,7 @@
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -26,7 +27,8 @@ constexpr const char* DURATION_COLUMN_NAME           = "duration";
 constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
-                                         const std::string& no_data_text)
+                                         const std::string& no_data_text,
+                                         std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
@@ -49,6 +51,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_selected_column(-1)
 , m_hovered_row(-1)
 , m_no_data_text(no_data_text)
+, m_timeline_selection(timeline_selection)
 , m_horizontal_scroll(0.0f)
 , m_time_column_indices(
       { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
@@ -736,7 +739,6 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
             SelectedRowToTrackID(track_id_column_index, stream_id_column_index);
         if(target_track_id != INVALID_UINT64_INDEX)
         {
-            // get start time and duration
             std::pair<uint64_t, uint64_t> time_range = SelectedRowToTimeRange();
             if(time_range.first != INVALID_UINT64_INDEX &&
                time_range.second != INVALID_UINT64_INDEX)
@@ -753,6 +755,14 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
                 EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
                     static_cast<int>(RocEvents::kSetViewRange), view_range.start_ns,
                     view_range.end_ns, m_data_provider.GetTraceFilePath()));
+            }
+
+            if(m_timeline_selection &&
+               m_important_column_idxs[kUUId] != INVALID_UINT64_INDEX)
+            {
+                uint64_t uuid = std::stoull(
+                    table_data[m_selected_row][m_important_column_idxs[kUUId]]);
+                m_timeline_selection->HighlightTrackEvent(target_track_id, uuid);
             }
         }
         else

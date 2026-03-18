@@ -20,6 +20,7 @@ enum class RocEvents
     kTabSelected,
     kTimelineTrackSelectionChanged,
     kTimelineEventSelectionChanged,
+    kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
     kStickyNoteEdited,
@@ -48,6 +49,7 @@ enum class RocEventType
     kTabEvent,
     kTimelineTrackSelectionChangedEvent,
     kTimelineEventSelectionChangedEvent,
+    kTimelineEventHighlightChangedEvent,
     kScrollToTrackEvent,
     kStickyNoteEvent,
     kRangeEvent,
@@ -265,6 +267,23 @@ private:
     uint64_t    m_event_track_id;
     bool        m_selected;
     bool        m_is_batch;
+};
+
+class EventHighlightChangedEvent : public RocEvent
+{
+public:
+    EventHighlightChangedEvent(uint64_t event_id, uint64_t track_id, bool highlighted,
+                               const std::string& source_id, bool batch = false);
+    uint64_t GetEventID() const;
+    uint64_t GetEventTrackID() const;
+    bool     EventHighlighted() const;
+    bool     IsBatch() const;
+
+private:
+    uint64_t m_event_id;
+    uint64_t m_event_track_id;
+    bool     m_highlighted;
+    bool     m_is_batch;
 };
 
 class RangeEvent : public RocEvent

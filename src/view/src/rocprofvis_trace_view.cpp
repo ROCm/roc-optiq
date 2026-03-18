@@ -175,6 +175,11 @@ TraceView::Update()
     auto last_state = m_data_provider.GetState();
     m_data_provider.Update();
 
+    if(m_timeline_selection)
+    {
+        m_timeline_selection->UpdateHighlightTimer();
+    }
+
     if(!m_view_created)
     {
         CreateView();
@@ -233,7 +238,7 @@ TraceView::CreateView()
     m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection, m_annotations);
-    m_event_search          = std::make_shared<EventSearch>(m_data_provider);
+    m_event_search          = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
@@ -506,6 +511,14 @@ TraceView::RenderEditMenuOptions()
         if(m_timeline_selection)
         {
             m_timeline_selection->UnselectAllEvents();
+        }
+    }
+    if(ImGui::MenuItem("Unhighlight All Events", nullptr, false,
+                       m_timeline_selection && m_timeline_selection->HasHighlightedEvents()))
+    {
+        if(m_timeline_selection)
+        {
+            m_timeline_selection->UnhighlightAllEvents();
         }
     }
     ImGui::Separator();

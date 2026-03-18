@@ -8,16 +8,7 @@
 View ROCm Compute Profiler analysis data in ROCm Optiq
 ******************************************************
 
-.. |scroll| image:: ../images/scroll-to.png
 .. |eye| image:: ../images/eye.png
-.. |grip| image:: ../images/grip.png
-.. |views| image:: ../images/summary-views-tabs.png
-.. |pie| image:: ../images/pie-view.png
-.. |bar| image:: ../images/bar-view.png
-.. |table| image:: ../images/table-view.png
-.. |node| image:: ../images/node-menu.png
-.. |gpu| image:: ../images/gpu-menu.png
-.. |mini| image:: ../images/minimap-icon.png
 
 ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel- and metric-level analysis. 
 It enables rapid identification of performance hotspots and interactive exploration of kernel level metrics for a profiled workload.
@@ -52,7 +43,7 @@ The **Summary View** displays a high-level overview of the captured data.
 Table
 -----
  
-The **Table** in **Summary View** lists the top 10 longest-running kernels sorted by Total Execution Time. 
+The table in **Summary View** lists the top 10 longest-running kernels sorted by Total Execution Time. 
 The table displays kernel names, the number of invocations, and statistics including Total, Min, Max, Mean, Median Durations.  
 
 .. image:: ../images/summary-view-table.png

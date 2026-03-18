@@ -304,8 +304,10 @@ TimelineView::ScrollToTrack(const uint64_t& track_id)
 {
     if(m_track_position_y.count(track_id) > 0)
     {
+        float track_y = m_track_position_y[track_id];
         m_scroll_position_y =
-            std::min(m_content_max_y_scroll, m_track_position_y[track_id]);
+            std::clamp(track_y - m_tpt->GetGraphSizeY() * 0.5f, 0.0f,
+                       m_content_max_y_scroll);
         ImGui::SetScrollY(m_scroll_position_y);
     }
 }

@@ -1118,10 +1118,6 @@ ProfileDatabase::BuildTableQuery(
             }
         }
         
-        if(slice_query_map_array[i].empty())
-        {
-            return kRocProfVisDmResultSuccess;
-        }
     }
     query = "";
 

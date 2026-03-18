@@ -55,6 +55,10 @@ Table
 The **Table** in **Summary View** lists the top 10 longest-running kernels sorted by Total Execution Time. 
 The table displays kernel names, the number of invocations, and statistics including Total, Min, Max, Mean, Median Durations.  
 
+.. image:: ../images/summary-view-table.png
+   :width: 800
+   :align: center
+
 Charts
 ------
 
@@ -65,11 +69,19 @@ The pie chart plots:
 - **Total Duration**: The total duration as a percentage for the kernels. 
 - **Invocation(s)**: The number of invocations as a percentage for the kernels. 
 
+.. image:: ../images/summary-view-pie-chart.png
+   :width: 800
+   :align: center
+
 .. tip::
    
    The kernel name and duration are displayed when you hold your cursor over a section of the pie chart. 
 
 The bar chart displays per-kernel metrics including Invocation(s), Total, Min, Max, Mean and Median Duration data. 
+
+.. image:: ../images/summary-view-bar-chart.png
+   :width: 800
+   :align: center
 
 Selected kernels are highlighted white in both charts.  
 
@@ -78,6 +90,10 @@ Summary View Roofline Chart
 
 The chart plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels. 6
 By showing where kernels are positioned relative to these rooflines, it helps determine whether performance is memory-bound or compute-bound, and identify the most impactful optimization direction. 
+
+.. image:: ../images/summary-view-roofline-analysis.png
+   :width: 800
+   :align: center
 
 Kernel performance at each cache level is displayed as individual dots in the roofline chart.  
 The size of each dot represents the duration of the kernel. 
@@ -106,6 +122,10 @@ Kernel Selection Table
 
 The **Kernel Selection Table** displays kernel information, including names and GPU metrics.  
 
+.. image:: ../images/kernel-selection-table.png
+   :width: 800
+   :align: center
+
 - Click **Add Metric** to select additional GPU metrics as columns. 
 - The search box below each column's header allows you to enter statements to filter the data, ensuring targeted analysis. Click **Apply Filters** to execute. You can search for a kernel by name or metric equation (for example, metricA > threshold).  
 
@@ -123,6 +143,11 @@ Memory Chart
 ------------
 
 The **Memory Chart** displays memory transactions and throughput on each cache hierarchical level. 
+
+.. image:: ../images/memory-chart.png
+   :width: 800
+   :align: center
+
 This visual diagram displays counter values and calculations you can use to understand which cache level each memory transaction corresponds to and how they interact with each other.  
 
 Select a kernel in the **Kernel Selection Table** or the kernel selector drop-down to view the memory chart of the selected kernel. 
@@ -131,6 +156,10 @@ System Speed-of-Light
 ---------------------
 
 The **System Speed-of-Light** displays key kernel-level performance metrics to show the overall compute performance and hardware utilization.  
+
+.. image:: ../images/speed-of-light.png
+   :width: 800
+   :align: center
 
 Kernel Roofline Chart
 ---------------------
@@ -146,6 +175,10 @@ Table View
 ==========
 
 The **Table View** displays a complete list of available metrics for the selected kernel. 
+
+.. image:: ../images/analysis-table-view.png
+   :width: 800
+   :align: center
 
 Metrics are grouped into tabs that match compute categories, including: 
 
@@ -174,3 +207,7 @@ Workload Details
 
 - **System information**: Hardware details of the system at the time the profiling data was collected. 
 - **Profiling configuration**: ROCm Compute Profiler parameters and settings used when the data was captured. 
+
+.. image:: ../images/workload-details.png
+   :width: 800
+   :align: center

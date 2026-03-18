@@ -15,7 +15,7 @@ Visualize ROCm Systems Profiler traces
 
 Use ROCm Optiq to inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage, and system telemetry data for applications running on the ROCm stack. 
 
-.. image:: ../images/optiq-systems.png
+.. image:: /images/optiq-systems.png
    :width: 800
    :align: center
 
@@ -35,7 +35,7 @@ Analyze ROCm Compute Profile data
 
 Use ROCm Optiq to visualize profiling analysis data to rapidly identify performance bottlenecks and explore kernel-level metrics for a profiled workload. 
 
-.. image:: ../images/optiq-compute.png
+.. image:: /images/optiq-compute.png
    :width: 800
    :align: center
   

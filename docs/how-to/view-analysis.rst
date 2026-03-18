@@ -137,7 +137,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
   - You can combine multiple filters to narrow down the analysis. 
 
 - Selecting a kernel through the **Kernel Selection Table** or kernel selector drop-down updates the Memory Chart, System Speed-of-Light, Kernel-level Roofline Analysis, and Table View accordingly. 
-- You can hide this table using the eye icon to maximize space for charts.
+- You can hide this table using the |eye| icon to maximize space for charts.
 
 Memory Chart
 ------------

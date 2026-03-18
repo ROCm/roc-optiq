@@ -1119,6 +1119,19 @@ ProfileDatabase::BuildTableQuery(
         }
         
     }
+    bool slice_query_map_empty = true;
+    for(slice_query_map_t& query_map : slice_query_map_array)
+    {
+        if(!query_map.empty())
+        {
+            slice_query_map_empty = false;
+            break;
+        }
+    }
+    if(slice_query_map_empty)
+    {
+        return kRocProfVisDmResultSuccess;    
+    }
     query = "";
 
     size_t thread_count = std::thread::hardware_concurrency();

@@ -1118,10 +1118,19 @@ ProfileDatabase::BuildTableQuery(
             }
         }
         
-        if(slice_query_map_array[i].empty())
+    }
+    bool slice_query_map_empty = true;
+    for(slice_query_map_t& query_map : slice_query_map_array)
+    {
+        if(!query_map.empty())
         {
-            return kRocProfVisDmResultSuccess;
+            slice_query_map_empty = false;
+            break;
         }
+    }
+    if(slice_query_map_empty)
+    {
+        return kRocProfVisDmResultSuccess;    
     }
     query = "";
 

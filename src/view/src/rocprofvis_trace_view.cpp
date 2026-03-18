@@ -36,7 +36,6 @@ TraceView::TraceView()
 , m_popup_info({ false, "", "" })
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_event_selection_changed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
-, m_event_highlight_changed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
@@ -151,14 +150,6 @@ TraceView::TraceView()
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         event_selection_handler);
 
-    auto event_highlight_handler = [this](std::shared_ptr<RocEvent> e) {
-        (void)e;
-    };
-
-    m_event_highlight_changed_event_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
-        event_highlight_handler);
-
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("TraceView");
 }
@@ -176,9 +167,6 @@ TraceView::~TraceView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         m_event_selection_changed_event_token);
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
-        m_event_highlight_changed_event_token);
 }
 
 void

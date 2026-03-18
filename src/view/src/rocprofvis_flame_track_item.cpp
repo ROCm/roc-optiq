@@ -304,8 +304,7 @@ FlameTrackItem::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
     {
         for(ChartItem& item : m_chart_items)
         {
-            item.selected    = m_timeline_selection->EventSelected(item.event.m_id.uuid);
-            item.highlighted = m_timeline_selection->EventHighlighted(item.event.m_id.uuid);
+            item.selected = m_timeline_selection->EventSelected(item.event.m_id.uuid);
         }
     }
 }
@@ -321,7 +320,6 @@ FlameTrackItem::HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e)
         for(ChartItem& item : m_chart_items)
         {
             item.highlighted = m_timeline_selection->EventHighlighted(item.event.m_id.uuid);
-            item.selected    = m_timeline_selection->EventSelected(item.event.m_id.uuid);
         }
     }
 }

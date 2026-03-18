@@ -576,7 +576,8 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
                 Builder::QParam("end", Builder::END_SERVICE_NAME),
                 Builder::QParam("(end-start)", Builder::DURATION_PUBLIC_NAME),
                 Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
-                Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME) },
+                Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
+                Builder::QParam("0", Builder::NODE_ID_SERVICE_NAME)},
                 { Builder::From("rocpd_api", MultiNode::No) } }));
         }
         case kRocProfVisDmOperationDispatch:
@@ -591,7 +592,8 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
                 Builder::QParam("end", Builder::END_SERVICE_NAME),
                 Builder::QParam("(end-start)", Builder::DURATION_PUBLIC_NAME),
                 Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
-                Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME) },
+                Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("0", Builder::NODE_ID_SERVICE_NAME) },
                 { Builder::From("rocpd_op", MultiNode::No) } }));
         }
         case kRocProfVisDmOperationNoOp:

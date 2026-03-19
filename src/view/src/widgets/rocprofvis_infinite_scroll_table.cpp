@@ -752,30 +752,10 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
                         table_data[m_selected_row][m_important_column_idxs[kUUId]]);
                 }
 
-                if(m_timeline_selection)
-                {
-                    m_timeline_selection->NavigateToEvent(
-                        target_track_id, uuid,
-                        static_cast<double>(time_range.first),
-                        static_cast<double>(time_range.second - time_range.first));
-                }
-                else
-                {
-                    ViewRangeNS view_range = calculate_adaptive_view_range(
-                        static_cast<double>(time_range.first),
-                        static_cast<double>(time_range.second - time_range.first));
-                    EventManager::GetInstance()->AddEvent(
-                        std::make_shared<ScrollToTrackEvent>(
-                            static_cast<int>(
-                                RocEvents::kHandleUserGraphNavigationEvent),
-                            target_track_id,
-                            m_data_provider.GetTraceFilePath()));
-                    EventManager::GetInstance()->AddEvent(
-                        std::make_shared<RangeEvent>(
-                            static_cast<int>(RocEvents::kSetViewRange),
-                            view_range.start_ns, view_range.end_ns,
-                            m_data_provider.GetTraceFilePath()));
-                }
+                m_timeline_selection->NavigateToEvent(
+                    target_track_id, uuid,
+                    static_cast<double>(time_range.first),
+                    static_cast<double>(time_range.second - time_range.first));
             }
         }
         else

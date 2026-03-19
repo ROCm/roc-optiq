@@ -342,6 +342,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
     rocprofvis_db_flow_data_t record;
 
     record.id.bitfield.event_op = db->Sqlite3ColumnInt(func, stmt, azColName,0 );
+    record.id.bitfield.event_node = callback_params->db_instance->GuidIndex();
     if (db->TrackTracker()->FindTrack(
         kRocProfVisDmEventTrack, 
         db->Sqlite3ColumnInt(func, stmt, azColName,4), 

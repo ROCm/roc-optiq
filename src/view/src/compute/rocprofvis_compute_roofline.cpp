@@ -585,92 +585,50 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
     float menus_width     = region.x * 0.25f;
     float btn_size        = ImGui::GetFrameHeightWithSpacing();
     float inner_pad       = plot_style.PlotPadding.x;
+    float pad_y_top = plot_style.PlotBorderSize + 2 * plot_style.PlotPadding.y;
 
-    ImVec2 win_pos   = ImGui::GetWindowPos();
-    ImVec2 plot_min  = ImVec2(m_plot_area_screen_pos.x - win_pos.x,
-                              m_plot_area_screen_pos.y - win_pos.y);
-    ImVec2 plot_max  = ImVec2(plot_min.x + m_plot_area_size.x,
-                              plot_min.y + m_plot_area_size.y);
-    float  pad_y_top = plot_style.PlotBorderSize + 2 * plot_style.PlotPadding.y;
+    ImVec2 win_pos  = ImGui::GetWindowPos();
+    ImVec2 plot_min = ImVec2(m_plot_area_screen_pos.x - win_pos.x,
+                             m_plot_area_screen_pos.y - win_pos.y);
+    ImVec2 plot_max = ImVec2(plot_min.x + m_plot_area_size.x,
+                             plot_min.y + m_plot_area_size.y);
 
-    float max_menus_height;
+    float max_menus_height =
+        m_menus_overlap
+            ? m_plot_area_size.y - 2 * inner_pad
+            : (region.y - pad_y_top) - 3 * ImGui::GetFontSize() -
+                  5 * plot_style.PlotPadding.y - plot_style.PlotBorderSize;
+
+    ImVec2 area_min, area_max;
     if(m_menus_overlap)
     {
-        max_menus_height = m_plot_area_size.y - 2 * inner_pad;
+        area_min = ImVec2(plot_min.x + inner_pad, plot_min.y + inner_pad);
+        area_max = ImVec2(plot_max.x - inner_pad, plot_max.y - inner_pad);
     }
     else
     {
-        float avail_from_top = region.y - pad_y_top;
-        max_menus_height     = avail_from_top - 3 * ImGui::GetFontSize() -
-                           5 * plot_style.PlotPadding.y - plot_style.PlotBorderSize;
+        float bottom =
+            region.y - btn_size - plot_style.PlotPadding.y - plot_style.PlotBorderSize;
+        area_min = menus_on_right ? ImVec2(0.75f * region.x, pad_y_top)
+                                  : ImVec2(0.0f, pad_y_top);
+        area_max = menus_on_right ? ImVec2(region.x, bottom)
+                                  : ImVec2(0.25f * region.x, bottom);
     }
 
-    float menus_x, menus_y;
-    if(m_menus_overlap)
-    {
-        menus_x = menus_on_right ? plot_max.x - menus_width - inner_pad
-                                 : plot_min.x + inner_pad;
-        if(menus_on_bottom)
-        {
-            float used_h = std::max(m_menus_rendered_height, btn_size * 2.0f);
-            menus_y      = plot_max.y - used_h - inner_pad;
-        }
-        else
-        {
-            menus_y = plot_min.y + inner_pad;
-        }
-    }
-    else
-    {
-        menus_x = menus_on_right ? 0.75f * region.x : 0.0f;
-        if(menus_on_bottom)
-        {
-            float chart_bottom_y =
-                region.y - btn_size - plot_style.PlotPadding.y - plot_style.PlotBorderSize;
-            float used_h = std::max(m_menus_rendered_height, btn_size * 2.0f);
-            menus_y      = chart_bottom_y - used_h;
-        }
-        else
-        {
-            menus_y = pad_y_top;
-        }
-    }
-
+    float  menus_x = menus_on_right ? area_max.x - menus_width : area_min.x;
+    float  used_h  = std::max(m_menus_rendered_height, btn_size * 2.0f);
+    float  menus_y = menus_on_bottom ? area_max.y - used_h : area_min.y;
     ImVec2 window_pos = ImVec2(menus_x, menus_y);
 
     ImVec2 button_pos;
-    if(m_menus_overlap)
-    {
-        if(menus_on_bottom && !m_show_menus)
-            button_pos.y = plot_max.y - inner_pad - btn_size;
-        else
-            button_pos.y = menus_y;
-
-        if(menus_on_right)
-            button_pos.x =
-                m_show_menus ? menus_x - btn_size : plot_max.x - inner_pad - btn_size;
-        else
-            button_pos.x =
-                m_show_menus ? menus_x + menus_width : plot_min.x + inner_pad;
-    }
-    else
-    {
-        float chart_bottom_y =
-            region.y - btn_size - plot_style.PlotPadding.y - plot_style.PlotBorderSize;
-        button_pos.y =
-            menus_on_bottom && !m_show_menus ? chart_bottom_y - btn_size : menus_y;
-
-        if(menus_on_right)
-            button_pos.x = m_show_menus ? menus_x - btn_size : region.x - btn_size;
-        else
-            button_pos.x = m_show_menus ? menus_x + menus_width : 0;
-    }
-
-    ImGuiDir arrow_dir;
+    button_pos.y = menus_on_bottom && !m_show_menus ? area_max.y - btn_size : menus_y;
     if(menus_on_right)
-        arrow_dir = m_show_menus ? ImGuiDir_Right : ImGuiDir_Left;
+        button_pos.x = m_show_menus ? menus_x - btn_size : area_max.x - btn_size;
     else
-        arrow_dir = m_show_menus ? ImGuiDir_Left : ImGuiDir_Right;
+        button_pos.x = m_show_menus ? menus_x + menus_width : area_min.x;
+
+    ImGuiDir arrow_dir = menus_on_right ? (m_show_menus ? ImGuiDir_Right : ImGuiDir_Left)
+                                        : (m_show_menus ? ImGuiDir_Left : ImGuiDir_Right);
 
     ImGui::SetCursorPos(button_pos);
     if(ImGui::ArrowButton("toggle_menus", arrow_dir))

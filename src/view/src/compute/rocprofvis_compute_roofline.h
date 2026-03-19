@@ -41,6 +41,13 @@ private:
         Legend,
         Options
     };
+    enum MenusCorner
+    {
+        TopLeft,
+        TopRight,
+        BottomLeft,
+        BottomRight
+    };
     struct ItemModel
     {
         enum Type
@@ -98,12 +105,16 @@ private:
     std::vector<PresetModel> m_presets;
 
     // User options...
-    bool      m_show_menus;
-    bool      m_menus_overlap;
-    MenusMode m_menus_mode;
-    bool      m_scale_intensity;
+    bool        m_show_menus;
+    bool        m_menus_overlap;
+    MenusMode   m_menus_mode;
+    MenusCorner m_menus_corner;
+    bool        m_scale_intensity;
+    float       m_menus_rendered_height;
 
     // Internal state...
+    ImVec2                m_plot_area_screen_pos;
+    ImVec2                m_plot_area_size;
     bool                  m_workload_changed;
     const WorkloadInfo*   m_workload;
     uint32_t              m_requested_workload_id;

@@ -61,7 +61,9 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_show_menus(true)
 , m_menus_mode(Legend)
 , m_menus_overlap(true)
+, m_menus_corner(TopRight)
 , m_scale_intensity(true)
+, m_menus_rendered_height(0.0f)
 , m_hovered_item_distance(FLT_MAX)
 , m_workload_changed(false)
 , m_kernel_changed(false)
@@ -350,9 +352,19 @@ Roofline::Render()
                                m_settings.GetColor(Colors::kTransparent));
         ImPlot::PushColormap(m_settings.GetFlameColormapName());
         ImGui::PushID(m_workload->id);
+        bool menus_left_separate =
+            !m_menus_overlap && m_show_menus &&
+            (m_menus_corner == TopLeft || m_menus_corner == BottomLeft);
+        bool menus_right_separate =
+            !m_menus_overlap && m_show_menus &&
+            (m_menus_corner == TopRight || m_menus_corner == BottomRight);
+        if(menus_left_separate)
+        {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + region.x * 0.25f);
+        }
         if(ImPlot::BeginPlot(
                "plot",
-               ImVec2(m_menus_overlap ? -1 : (m_show_menus ? 0.75f * region.x : -1), -1),
+               ImVec2(menus_right_separate ? 0.75f * region.x : -1, -1),
                ImPlotFlags_NoTitle | ImPlotFlags_NoFrame | ImPlotFlags_NoLegend |
                    ImPlotFlags_NoMenus | ImPlotFlags_Crosshairs))
         {
@@ -532,23 +544,11 @@ Roofline::Render()
                     ImGui::PopID();
                 }
             }
+            m_plot_area_screen_pos = ImPlot::GetPlotPos();
+            m_plot_area_size       = ImPlot::GetPlotSize();
             ImPlot::EndPlot();
         }
         ImGui::PopID();
-        if(m_show_menus && !m_menus_overlap)
-        {
-            // Fill empty space when menus is not overlapped...
-            ImGui::SameLine();
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                ImGui::GetCursorScreenPos() +
-                    ImVec2(-plot_style.PlotPadding.x, plot_style.PlotPadding.y),
-                ImGui::GetCursorScreenPos() +
-                    ImVec2(region.x * 0.25f - plot_style.PlotPadding.x,
-                           region.y - ImGui::GetFrameHeightWithSpacing() -
-                               plot_style.LabelPadding.y * 4.0f -
-                               plot_style.PlotPadding.y - plot_style.PlotBorderSize),
-                ImGui::GetColorU32(plot_style.Colors[ImPlotCol_PlotBg]));
-        }
         bool menus_item_hovered = false;
         RenderMenus(region, style, plot_style, menus_item_hovered);
         if(!menus_item_hovered)
@@ -580,21 +580,107 @@ void
 Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
                       const ImPlotStyle& plot_style, bool& item_hovered)
 {
-    ImVec2 window_pos = ImVec2(0.75f * region.x - 2 * plot_style.PlotPadding.x,
-                               plot_style.PlotBorderSize + 2 * plot_style.PlotPadding.y);
-    ImVec2 button_pos = window_pos;
-    button_pos.x      = m_show_menus ? window_pos.x - ImGui::GetFrameHeightWithSpacing()
-                                     : region.x - 2 * plot_style.PlotPadding.x -
-                                      ImGui::GetFrameHeightWithSpacing();
+    bool  menus_on_right  = (m_menus_corner == TopRight || m_menus_corner == BottomRight);
+    bool  menus_on_bottom = (m_menus_corner == BottomLeft || m_menus_corner == BottomRight);
+    float menus_width     = region.x * 0.25f;
+    float btn_size        = ImGui::GetFrameHeightWithSpacing();
+    float inner_pad       = plot_style.PlotPadding.x;
+
+    ImVec2 win_pos   = ImGui::GetWindowPos();
+    ImVec2 plot_min  = ImVec2(m_plot_area_screen_pos.x - win_pos.x,
+                              m_plot_area_screen_pos.y - win_pos.y);
+    ImVec2 plot_max  = ImVec2(plot_min.x + m_plot_area_size.x,
+                              plot_min.y + m_plot_area_size.y);
+    float  pad_y_top = plot_style.PlotBorderSize + 2 * plot_style.PlotPadding.y;
+
+    float max_menus_height;
+    if(m_menus_overlap)
+    {
+        max_menus_height = m_plot_area_size.y - 2 * inner_pad;
+    }
+    else
+    {
+        float avail_from_top = region.y - pad_y_top;
+        max_menus_height     = avail_from_top - 3 * ImGui::GetFontSize() -
+                           5 * plot_style.PlotPadding.y - plot_style.PlotBorderSize;
+    }
+
+    float menus_x, menus_y;
+    if(m_menus_overlap)
+    {
+        menus_x = menus_on_right ? plot_max.x - menus_width - inner_pad
+                                 : plot_min.x + inner_pad;
+        if(menus_on_bottom)
+        {
+            float used_h = std::max(m_menus_rendered_height, btn_size * 2.0f);
+            menus_y      = plot_max.y - used_h - inner_pad;
+        }
+        else
+        {
+            menus_y = plot_min.y + inner_pad;
+        }
+    }
+    else
+    {
+        menus_x = menus_on_right ? 0.75f * region.x : 0.0f;
+        if(menus_on_bottom)
+        {
+            float chart_bottom_y =
+                region.y - btn_size - plot_style.PlotPadding.y - plot_style.PlotBorderSize;
+            float used_h = std::max(m_menus_rendered_height, btn_size * 2.0f);
+            menus_y      = chart_bottom_y - used_h;
+        }
+        else
+        {
+            menus_y = pad_y_top;
+        }
+    }
+
+    ImVec2 window_pos = ImVec2(menus_x, menus_y);
+
+    ImVec2 button_pos;
+    if(m_menus_overlap)
+    {
+        if(menus_on_bottom && !m_show_menus)
+            button_pos.y = plot_max.y - inner_pad - btn_size;
+        else
+            button_pos.y = menus_y;
+
+        if(menus_on_right)
+            button_pos.x =
+                m_show_menus ? menus_x - btn_size : plot_max.x - inner_pad - btn_size;
+        else
+            button_pos.x =
+                m_show_menus ? menus_x + menus_width : plot_min.x + inner_pad;
+    }
+    else
+    {
+        float chart_bottom_y =
+            region.y - btn_size - plot_style.PlotPadding.y - plot_style.PlotBorderSize;
+        button_pos.y =
+            menus_on_bottom && !m_show_menus ? chart_bottom_y - btn_size : menus_y;
+
+        if(menus_on_right)
+            button_pos.x = m_show_menus ? menus_x - btn_size : region.x - btn_size;
+        else
+            button_pos.x = m_show_menus ? menus_x + menus_width : 0;
+    }
+
+    ImGuiDir arrow_dir;
+    if(menus_on_right)
+        arrow_dir = m_show_menus ? ImGuiDir_Right : ImGuiDir_Left;
+    else
+        arrow_dir = m_show_menus ? ImGuiDir_Left : ImGuiDir_Right;
+
     ImGui::SetCursorPos(button_pos);
-    if(ImGui::ArrowButton("toggle_menus", m_show_menus ? ImGuiDir_Right : ImGuiDir_Left))
+    if(ImGui::ArrowButton("toggle_menus", arrow_dir))
     {
         m_show_menus = !m_show_menus;
     }
     if(m_show_menus)
     {
         ImGui::SetCursorPos(button_pos +
-                            ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing()));
+                            ImVec2(0.0f, btn_size));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
         if(ImGui::Button(m_menus_mode == Legend ? ICON_GEAR : ICON_LIST))
         {
@@ -609,10 +695,6 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
         }
         ImGui::PopFont();
         ImGui::SetCursorPos(window_pos);
-        float menus_width      = region.x * 0.25f;
-        float max_menus_height = ImGui::GetContentRegionAvail().y -
-                                 3 * ImGui::GetFontSize() - 5 * plot_style.PlotPadding.y -
-                                 plot_style.PlotBorderSize;
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(menus_width, ImGui::GetFrameHeightWithSpacing() * 2.0f),
             ImVec2(menus_width, max_menus_height));
@@ -776,8 +858,22 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
                            true);
                 ImGui::PopID();
             }
+            ImGui::PushID("menus_corner");
+            constexpr const char* corner_names[] = {
+                "Top Left", "Top Right", "Bottom Left", "Bottom Right"
+            };
+            ElidedText("Legend position", ImGui::GetContentRegionAvail().x,
+                       region.x * 0.5f, false, true);
+            ImGui::SetNextItemWidth(-1.0f);
+            int corner_idx = static_cast<int>(m_menus_corner);
+            if(ImGui::Combo("##corner", &corner_idx, corner_names, 4))
+            {
+                m_menus_corner = static_cast<MenusCorner>(corner_idx);
+            }
+            ImGui::PopID();
         }
         ImGui::EndChild();
+        m_menus_rendered_height = ImGui::GetItemRectSize().y;
         ImGui::PopStyleColor();
         ImGui::PopStyleVar();
         ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);

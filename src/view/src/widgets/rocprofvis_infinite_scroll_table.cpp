@@ -752,10 +752,13 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
                         table_data[m_selected_row][m_important_column_idxs[kUUId]]);
                 }
 
-                m_timeline_selection->NavigateToEvent(
-                    target_track_id, uuid,
-                    static_cast<double>(time_range.first),
-                    static_cast<double>(time_range.second - time_range.first));
+                if(m_timeline_selection)
+                {
+                    m_timeline_selection->NavigateToEvent(
+                        target_track_id, uuid,
+                        static_cast<double>(time_range.first),
+                        static_cast<double>(time_range.second - time_range.first));
+                }
             }
         }
         else

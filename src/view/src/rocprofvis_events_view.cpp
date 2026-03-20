@@ -26,6 +26,8 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_settings(SettingsManager::GetInstance())
 , m_timeline_selection(timeline_selection)
 , m_event_item_id(0)
+, m_context_menu_flow_index(-1)
+, m_context_menu_flow_column(-1)
 {}
 
 EventsView::~EventsView() {}
@@ -256,7 +258,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                 const auto& time_format =
                     m_settings.GetUserSettings().unit_settings.time_format;
 
-                auto flow_cell = [&](int col, const char* text, const char* id)
+                auto flow_cell = [&](int col, const char* text, const char* id, int row)
                 {
                     if(col > 0)
                         ImGui::TableSetColumnIndex(col);
@@ -266,7 +268,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                                             false, false);
                     if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
                     {
-                        m_context_menu_flow_index  = m_current_flow_row;
+                        m_context_menu_flow_index  = row;
                         m_context_menu_flow_column = col;
                         ImGui::OpenPopup("##FlowContextMenu");
                     }
@@ -279,7 +281,6 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
                         const auto& flow = event_data->flow_info[i];
-                        m_current_flow_row = i;
                         std::string row_str = std::to_string(i);
 
                         ImGui::TableNextRow();
@@ -313,12 +314,12 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         std::string level_str     = std::to_string(flow.level);
                         std::string dir_str       = std::to_string(flow.direction);
 
-                        flow_cell(0, id_str.c_str(),        ("##id_" + row_str).c_str());
-                        flow_cell(1, flow.name.c_str(),     ("##name_" + row_str).c_str());
-                        flow_cell(2, timestamp_str.c_str(), ("##ts_" + row_str).c_str());
-                        flow_cell(3, track_str.c_str(),     ("##tid_" + row_str).c_str());
-                        flow_cell(4, level_str.c_str(),     ("##lvl_" + row_str).c_str());
-                        flow_cell(5, dir_str.c_str(),       ("##dir_" + row_str).c_str());
+                        flow_cell(0, id_str.c_str(),        ("##id_" + row_str).c_str(), i);
+                        flow_cell(1, flow.name.c_str(),     ("##name_" + row_str).c_str(), i);
+                        flow_cell(2, timestamp_str.c_str(), ("##ts_" + row_str).c_str(), i);
+                        flow_cell(3, track_str.c_str(),     ("##tid_" + row_str).c_str(), i);
+                        flow_cell(4, level_str.c_str(),     ("##lvl_" + row_str).c_str(), i);
+                        flow_cell(5, dir_str.c_str(),       ("##dir_" + row_str).c_str(), i);
 
                         if(row_hovered &&
                            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))

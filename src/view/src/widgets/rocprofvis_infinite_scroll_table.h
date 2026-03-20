@@ -98,6 +98,7 @@ protected:
 
     std::vector<ColumnFilter> m_column_filters;
     std::vector<ColumnFilter> m_pending_column_filters;
+    std::vector<bool>         m_column_is_numeric;
     bool                      m_enable_column_filters;
 
     std::vector<int> m_hidden_column_indices;  // This must be sorted in increasing order.

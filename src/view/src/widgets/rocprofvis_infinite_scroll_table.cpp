@@ -661,6 +661,12 @@ InfiniteScrollTable::IndexColumns()
             m_pending_column_filters.assign(num_columns, ColumnFilter());
             m_column_filters.assign(num_columns, ColumnFilter());
         }
+
+        m_column_is_numeric.resize(num_columns, false);
+        for(size_t i = 0; i < num_columns; i++)
+        {
+            m_column_is_numeric[i] = IsNumericColumn(static_cast<int>(i));
+        }
     }
 }
 
@@ -920,7 +926,11 @@ InfiniteScrollTable::RenderColumnFilter(int column_index,
 
     ColumnFilter& filter = m_pending_column_filters[column_index];
 
-    bool is_numeric = IsNumericColumn(column_index);
+    bool is_numeric = false;
+    if(column_index < m_column_is_numeric.size())
+    {
+        is_numeric = m_column_is_numeric[column_index];
+    }
     const char* hint = is_numeric ? ">, <, =, >=, <=, !=" : "LIKE %text%";
 
     ImGui::PushID(column_index);
@@ -950,7 +960,11 @@ InfiniteScrollTable::ApplyColumnFilters()
         if(!column_names[i].empty() && column_names[i][0] == '_')
             continue;
 
-        bool is_text = !IsNumericColumn(static_cast<int>(i));
+        bool is_text = true;
+        if(i < m_column_is_numeric.size())
+        {
+            is_text = !m_column_is_numeric[i];
+        }
         if(!ValidateColumnFilterExpression(filter.filter_text, is_text))
         {
             spdlog::warn("Invalid filter for column '{}': {}", column_names[i],

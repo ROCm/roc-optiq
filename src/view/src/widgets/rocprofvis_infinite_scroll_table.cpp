@@ -734,7 +734,6 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
     }
     else
     {
-        // Handle navigation
         uint64_t target_track_id =
             SelectedRowToTrackID(track_id_column_index, stream_id_column_index);
         if(target_track_id != INVALID_UINT64_INDEX)
@@ -743,26 +742,23 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
             if(time_range.first != INVALID_UINT64_INDEX &&
                time_range.second != INVALID_UINT64_INDEX)
             {
-                ViewRangeNS view_range = calculate_adaptive_view_range(
-                    static_cast<double>(time_range.first),
-                    static_cast<double>(time_range.second - time_range.first));
-                spdlog::debug("Navigating to track ID: {} from row: {}", target_track_id,
-                             m_selected_row);
-                EventManager::GetInstance()->AddEvent(
-                    std::make_shared<ScrollToTrackEvent>(
-                        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                        target_track_id, m_data_provider.GetTraceFilePath()));
-                EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
-                    static_cast<int>(RocEvents::kSetViewRange), view_range.start_ns,
-                    view_range.end_ns, m_data_provider.GetTraceFilePath()));
-            }
+                spdlog::debug("Navigating to track ID: {} from row: {}",
+                              target_track_id, m_selected_row);
 
-            if(m_timeline_selection &&
-               m_important_column_idxs[kUUId] != INVALID_UINT64_INDEX)
-            {
-                uint64_t uuid = std::stoull(
-                    table_data[m_selected_row][m_important_column_idxs[kUUId]]);
-                m_timeline_selection->HighlightTrackEvent(target_track_id, uuid);
+                uint64_t uuid = TimelineSelection::INVALID_SELECTION_ID;
+                if(m_important_column_idxs[kUUId] != INVALID_UINT64_INDEX)
+                {
+                    uuid = std::stoull(
+                        table_data[m_selected_row][m_important_column_idxs[kUUId]]);
+                }
+
+                if(m_timeline_selection)
+                {
+                    m_timeline_selection->NavigateToEvent(
+                        target_track_id, uuid,
+                        static_cast<double>(time_range.first),
+                        static_cast<double>(time_range.second - time_range.first));
+                }
             }
         }
         else

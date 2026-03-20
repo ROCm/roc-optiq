@@ -43,7 +43,9 @@ public:
     bool HasSelectedEvents() const;
     bool GetSelectedEventsTimeRange(double& start_ts_out, double& end_ts_out) const;
 
-    void     HighlightTrackEvent(uint64_t track_id, uint64_t event_id);
+    void NavigateToEvent(uint64_t track_id, uint64_t event_uuid, double start_ns,
+                         double duration_ns);
+    void HighlightTrackEvent(uint64_t track_id, uint64_t event_id);
     void     UnhighlightTrackEvent(uint64_t track_id, uint64_t event_id);
     bool     EventHighlighted(uint64_t event_id) const;
     void     UnhighlightAllEvents();

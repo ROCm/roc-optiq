@@ -4,6 +4,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_track_item.h"
+#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include <algorithm>
 
@@ -207,6 +208,25 @@ bool
 TimelineSelection::HasSelectedEvents() const
 {
     return !m_selected_event_ids.empty();
+}
+
+void
+TimelineSelection::NavigateToEvent(uint64_t track_id, uint64_t event_uuid,
+                                   double start_ns, double duration_ns)
+{
+    ViewRangeNS view_range = calculate_adaptive_view_range(start_ns, duration_ns);
+
+    EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
+        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent), track_id,
+        m_data_provider.GetTraceFilePath()));
+    EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
+        static_cast<int>(RocEvents::kSetViewRange), view_range.start_ns, view_range.end_ns,
+        m_data_provider.GetTraceFilePath()));
+
+    if(event_uuid != INVALID_SELECTION_ID)
+    {
+        HighlightTrackEvent(track_id, event_uuid);
+    }
 }
 
 void

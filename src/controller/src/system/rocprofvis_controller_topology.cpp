@@ -188,6 +188,11 @@ TopologyNode::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t
                     *value = kRPVControllerProcessorTypeCPU;
                     result = kRocProfVisResultSuccess;
                 }
+                else if (strcmp(prop_string, "NIC") == 0)
+                {
+                    *value = kRPVControllerProcessorTypeNIC;
+                    result = kRocProfVisResultSuccess;
+                }
                 else
                 {
                     result = kRocProfVisResultUnknownError;

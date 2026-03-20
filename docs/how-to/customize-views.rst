@@ -22,8 +22,6 @@ Change display settings
 
 Select **Edit** > **Preferences** to adjust these global display settings for ROCm Optiq from the **Settings** menu: 
 
-.. image:: ../images/navigate-settings.png
-
 - The application theme display (Light or Dark mode).
 - The font scaling: either automatic based on the display DPI, or customized using the font size control:
 

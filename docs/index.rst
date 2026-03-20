@@ -7,7 +7,7 @@ ROCm Optiq documentation
 ************************
 
 :doc:`ROCm Optiq <what-is-optiq>` is a unified visualization and analysis tool for performance data collected by ROCm profiling tools, specifically `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_. 
-The tool provides deep insights into both systemlevel behavior and kernellevel performance for applications running on the ROCm stack. 
+The tool provides deep insights into both system-level behavior and kernel-level performance for applications running on the ROCm stack. 
 
 ROCm Optiq enables developers to visualize execution traces and profiling analysis data in a single interface, helping to identify performance bottlenecks, understand hardware utilization, optimize workloads and efficiently scale applications across CPUs and GPUs. 
 

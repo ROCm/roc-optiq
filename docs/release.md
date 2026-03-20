@@ -28,7 +28,7 @@ ROCm Optiq for visualizing ROCm Compute Profiler's data. New features include:
 
 - **Kernel Details**: displays details of each kernel. 
 
-  - **Kernel Selection Table**: Lists kernels with GPU metrics. Use **Add Metric** to append additional GPU metric columns. Per-column search box accepts names or metric expressions (e.g., `metric > threshold`). Click **Apply Filters** to execute; combine multiple filters to narrow the analysis. 
+  - **Kernel Selection Table**: Lists kernels with GPU metrics. Use **Add Metric** to append additional GPU metric columns. Per-column search box accepts names or metric expressions (for example, `metric > threshold`). Click **Apply Filters** to execute; combine multiple filters to narrow the analysis. 
   - **Memory Chart**: Shows memory transactions and throughput per cache hierarchy level for the selected kernel. 
   - **System Speed-of-Light**: Displays key kernel-level performance metrics with unit, average, peak, and percentage of peak values. 
   - **Kernel Roofline Chart**: Shows a kernel-specific roofline analysis to determine whether a kernel is compute-bound or memory-bound. Click the gear icon to access customization options. 
@@ -43,7 +43,7 @@ Changes in ROCm Optiq for visualizing ROCm System Profiler traces:
 - System Topology tree was restructured to show hardware and software topologies. 
 - Memory allocation activity tracks are now displayed in Timeline and System Topology Views. 
 - RPD files populate Topology. 
-- **Multinode support**: Time normalization for multi-node configurations. 
+- Multinode support: Time normalization for multi-node configurations. 
 
 ## ROCm Optiq (Beta) 0.2.0
 

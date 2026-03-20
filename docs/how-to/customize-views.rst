@@ -15,12 +15,43 @@ Customize your ROCm Optiq project
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
 
-You can customize the data views of an open trace file in ROCm Optiq, including display settings, saved trace selections, added bookmarks/annotations, and more.
+You can adjust the display settings in your ROCm Compute Profiler and Systems Profiler projects.
+
+Change display settings
+=======================
+
+Select **Edit** > **Preferences** to adjust these global display settings for ROCm Optiq from the **Settings** menu: 
+
+.. image:: ../images/navigate-settings.png
+
+- The application theme display (Light or Dark mode).
+- The font scaling: either automatic based on the display DPI, or customized using the font size control:
+
+  .. image:: ../images/settings.png
+     :width: 600
+
+- The time unit settings displayed on the **Timeline View**.
+
+  .. image:: ../images/units.png
+     :width: 600
+
+Show/hide panels
+================
+
+The **View** menu can be used to show and hide application panels.
+
+.. image:: ../images/view.png
+  :width: 300
+
+Customize your ROCm Systems Profiler project
+============================================
+
+You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, saved trace selections, added bookmarks/annotations, and more.
 
 .. _time-range-filter:
 
 Set a time range filter
-=======================
+-----------------------
 
 Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
 
@@ -47,7 +78,7 @@ To clear the time range selection, press **Esc** or right-click and select **Rem
 |remove|
 
 Save trace selections
----------------------
+~~~~~~~~~~~~~~~~~~~~~
 
 When there's an active time range filter, select **Edit** > **Save Trace Selection** to trim the trace:
 
@@ -59,7 +90,7 @@ This creates a new trace file containing only the events in the filter.
 .. _annotation:
 
 Add an annotation
-=================
+-----------------
 
 Annotations are customized notes you can add to any area of the :ref:`timeline`.
 
@@ -90,7 +121,7 @@ To add an annotation:
   - Clicking on a row in the annotations list brings the selected annotation into view.
 
 Create bookmarks
-================
+----------------
 
 The current view on the timeline (scroll and zoom position) can be saved to a bookmark for quick navigation.
 
@@ -105,28 +136,10 @@ Or:
 2.	Press any key from **0** - **9** to restore the view to a stored bookmark from that index number shortcut. For example, if you save a bookmark using **Ctrl** + **1**, pressing **1** restores that bookmark.
 
 Delete bookmarks
-----------------
+~~~~~~~~~~~~~~~~
 
 - To delete a bookmark, click **X** to delete a bookmark from the |book| menu. 
 - Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
-
-Change display settings
-=======================
-
-Select **Edit** > **Preferences** to adjust these global display settings for ROCm Optiq from the **Settings** menu: 
-
-.. image:: ../images/navigate-settings.png
-
-- The application theme display (Light or Dark mode).
-- The font scaling: either automatic based on the display DPI, or customized using the font size control:
-
-  .. image:: ../images/settings.png
-     :width: 600
-
-- The time unit settings displayed on the **Timeline View**.
-
-  .. image:: ../images/units.png
-     :width: 600
 
 Customize timeline display options
 ----------------------------------
@@ -159,7 +172,7 @@ Customize display options for each track by clicking the gear icon in the track'
      :width: 400
 
 Set the flow rendering display mode
-===================================
+-----------------------------------
 
 Use the **Flow** buttons on the **Toolbar** to show and hide flow information on the :ref:`timeline`, or change the flow display mode from Render (fan) to Chain mode. 
 
@@ -179,16 +192,8 @@ Render mode shows events in a fan-out style, highlighting parallelism and branch
 
   Chain mode and Render mode are visualization modes for relations; they don't represent the actual kernel scheduling flow.
 
-Show/hide panels
-================
-
-The **View** menu can be used to show and hide application panels.
-
-.. image:: ../images/view.png
-  :width: 300
-
 Save a project file
-===================
+-------------------
 
 Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project (``.rpv`` file). 
 

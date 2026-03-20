@@ -79,7 +79,7 @@ Selected kernels are highlighted white in both charts.
 Summary View Roofline Chart
 ---------------------------
 
-The chart plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels. 6
+The chart plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels.
 By showing where kernels are positioned relative to these rooflines, it helps determine whether performance is memory-bound or compute-bound, and identify the most impactful optimization direction. 
 
 .. image:: ../images/summary-view-roofline-analysis.png
@@ -118,22 +118,20 @@ The **Kernel Selection Table** displays kernel information, including names and 
    :align: center
 
 - Click **Add Metric** to select additional GPU metrics as columns. 
-- The search box below each column's header allows you to enter statements to filter the data, ensuring targeted analysis. Click **Apply Filters** to execute. You can search for a kernel by name or metric equation (for example, metricA > threshold).  
+- The search box below each column's header allows you to enter statements to filter the data, ensuring targeted analysis. Click **Apply Filters** to execute. You can search for a kernel by name or metric equation.  
 
   - For the **Name** column, use this format: ``LIKE %text%``. 
   - For all other metrics, use: ``>,<,=,>=,<=,!= number``. For example, ``metricA>threshold``. 
-
-- The Duration column enables you to sort (ascending or descending).  
-  
   - You can combine multiple filters to narrow down the analysis. 
 
+- The Duration column enables you to sort (ascending or descending).  
 - Selecting a kernel through the **Kernel Selection Table** or kernel selector drop-down updates the Memory Chart, System Speed-of-Light, Kernel-level Roofline Analysis, and Table View accordingly. 
 - You can hide this table using the |eye| icon to maximize space for charts.
 
 Memory Chart
 ------------
 
-The **Memory Chart** displays memory transactions and throughput on each cache hierarchical level. 
+The **Memory Chart** displays memory transactions and throughput at each cache hierarchy level. Each cache level presents its associated counter values and derived metrics, helping users understand memory behavior across the hardware memory hierarchy.
 
 .. image:: ../images/memory-chart.png
    :width: 800

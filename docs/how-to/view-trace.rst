@@ -1,11 +1,11 @@
 .. meta::
-  :description: Learn how to view ROCm systems Profiler trace data in ROCm Optiq.
+  :description: Learn how to view ROCm Systems Profiler trace data in ROCm Optiq.
   :keywords: Optiq, ROCm, trace, data, events, tracks, timeline
 
 .. _view-systems:
 
 ***************************************************
-View ROCm systems Profiler trace data in ROCm Optiq
+View ROCm Systems Profiler trace data in ROCm Optiq
 ***************************************************
 
 .. |scroll| image:: ../images/scroll-to.png
@@ -81,7 +81,7 @@ Once you open a trace file, you can view its data from the :ref:`topology` and t
 System Topology View
 --------------------
 
-The **System Topology View** displays a hierarchical representation of the hardware or system components such as nodes, processes and the GPU queues, memory operations, threads, and more that belong to them.
+The **System Topology View** displays a hierarchical representation of the hardware and software components including processors, queues, counters, processes, streams, threads, and sampled threads.
 
 .. image:: ../images/topology.png
    :width: 800
@@ -186,7 +186,7 @@ This section provides an interface for multiple data perspectives, offering gran
     :align: center
 
   - **Aggregate by Column**: A drop-down menu that groups the results by the selected column. Click **Submit** to group the results. To remove the grouping, select **-- None --** from the drop-down menu, then click **Submit**.
-  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` filters all events larger than 2000 ns. Click **Submit** to filter the data.
+  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` displays all events greater than 2000 ns. Click **Submit** to filter the data.
   
   .. tip::
 

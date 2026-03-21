@@ -22,6 +22,7 @@ namespace Controller
 ComputeTrace::ComputeTrace(const std::string& filename)
 : Trace(__kRPVControllerComputePropertiesFirst, __kRPVControllerComputePropertiesLast,
         filename)
+, m_async_fetch_counter(0)
 , m_kernel_metric_table(nullptr)
 {}
 
@@ -656,7 +657,12 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t db, r
             if(db_future)
             {
                 rocprofvis_dm_table_id_t table_id = 0;
-                result = rocprofvis_db_execute_compute_query_async(db, use_case, query, db_future, &table_id);
+                std::string async_fetch_query;
+                if(controller_future)
+                {
+                    async_fetch_query = std::string(query) + " /* " + std::to_string(m_async_fetch_counter ++) + " */";
+                }
+                result = rocprofvis_db_execute_compute_query_async(db, use_case, async_fetch_query.empty() ? query : async_fetch_query.c_str(), db_future, &table_id);
                 if(result == kRocProfVisDmResultSuccess)
                 {
                     if(controller_future)

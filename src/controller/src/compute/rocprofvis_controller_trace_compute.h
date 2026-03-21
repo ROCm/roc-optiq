@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_c_interface.h"
+#include <atomic>
 #include <functional>
 #include <optional>
 #include <unordered_map>
@@ -87,6 +88,7 @@ private:
     std::vector<Workload*> m_workloads;
     QueryArgumentStore m_query_arguments;
     QueryDataStore m_query_output;
+    std::atomic<uint64_t> m_async_fetch_counter;
 
     ComputePivotTable* m_kernel_metric_table;
 };

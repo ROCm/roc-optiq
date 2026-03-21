@@ -104,7 +104,6 @@ protected:
     bool m_horizontal_scroll;
 
 private:
-    void RenderLoadingIndicator() const;
     void RenderCell(const std::string* cell_text, int row, int column);
     void RenderFirstColumnCell(const std::string* cell_text, int row);
     void ProcessSortOrFilterRequest(rocprofvis_controller_sort_order_t sort_order,

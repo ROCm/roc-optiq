@@ -7,6 +7,7 @@
 #include "rocprofvis_click_manager.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <algorithm>
@@ -269,7 +270,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     // Cover hover case for input control
     ImVec2 sticky_max =
         ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
-    if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) && !ImGui::GetIO().KeyCtrl)
+    if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) && !HotkeyManager::GetInstance().IsActionHeld("modifier.region_select"))
     {
         TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
     }
@@ -351,7 +352,7 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     // Only allow drag if no other note is being dragged or this is the one
     if((dragged_id == -1 || dragged_id == m_id) && !m_dragging &&
        ImGui::IsMouseHoveringRect(drag_pos, drag_max) &&
-       ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyCtrl)
+       ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !HotkeyManager::GetInstance().IsActionHeld("modifier.region_select"))
     {
         m_dragging    = true;
         m_drag_offset = ImVec2(mouse_pos.x - drag_pos.x, mouse_pos.y - drag_pos.y);
@@ -433,7 +434,7 @@ StickyNote::HandleResize(const ImVec2&                       window_position,
     draw_list->AddRectFilled(handle_pos, handle_max, handle_color, 3.0f);
 
     if(!m_resizing && ImGui::IsMouseHoveringRect(handle_pos, handle_max) &&
-       ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyCtrl)
+       ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !HotkeyManager::GetInstance().IsActionHeld("modifier.region_select"))
     {
         m_resizing      = true;
         m_resize_offset = ImVec2(mouse_pos.x - sticky_max.x, mouse_pos.y - sticky_max.y);

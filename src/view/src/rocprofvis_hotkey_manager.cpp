@@ -108,6 +108,10 @@ HotkeyManager::RegisterDefaultActions()
     RegisterAction("edit.cancel", "Cancel Edit", "Editing",
                    {ImGuiKey_Escape, ImGuiKey_None},
                    ActionType::kPress, true);
+
+    RegisterAction("search.execute", "Execute Search", "Search",
+                   {ImGuiKey_Enter, ImGuiKey_None},
+                   ActionType::kPress, true);
 }
 
 bool

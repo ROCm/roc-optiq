@@ -929,7 +929,7 @@ TraceView::RenderEventSearch()
         {
             m_event_search->Show();
         }
-        if(ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter))
+        if(ImGui::IsItemFocused() && HotkeyManager::GetInstance().WasActionTriggered("search.execute"))
         {
             m_event_search->Search();
         }

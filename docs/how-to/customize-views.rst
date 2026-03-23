@@ -1,5 +1,5 @@
 .. meta::
-  :description: Learn how to customize your ROCm Optiq project
+  :description: Learn how to customize your ROCm Optiq project.
   :keywords: Optiq, ROCm, customize, filter, bookmarks, annotations
 
 .. _customize:
@@ -15,10 +15,12 @@ Customize your ROCm Optiq project
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
 
-You can adjust the display settings in your ROCm Compute Profiler and Systems Profiler projects.
+You can customize your projects in ROCm Optiq such as display settings, filters, bookmarks, and more.
 
 Change display settings
 =======================
+
+You can adjust the display settings in your ROCm Compute Profiler and Systems Profiler projects.
 
 Select **Edit** > **Preferences** to adjust these global display settings for ROCm Optiq from the **Settings** menu: 
 
@@ -41,10 +43,14 @@ The **View** menu can be used to show and hide application panels.
 .. image:: ../images/view.png
   :width: 300
 
-Customize your ROCm Systems Profiler project
-============================================
+Customize ROCm Optiq projects for ROCm Systems Profiler traces
+==============================================================
 
 You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, saved trace selections, added bookmarks/annotations, and more.
+
+.. note::
+
+   These settings *only* apply to ROCm Systems Profiler trace projects, *not* ROCm Compute Profiler projects.
 
 .. _time-range-filter:
 

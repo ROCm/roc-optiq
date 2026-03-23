@@ -167,6 +167,8 @@ MetricTableCache::Empty() const
     return m_rows.empty();
 }
 
+//---------------------------------------------------------
+
 MetricTableWidget::MetricTableWidget(DataProvider& data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection,
                                      uint32_t category_id, uint32_t table_id)
@@ -232,6 +234,61 @@ MetricTableWidget::UpdateTable()
     m_table.Populate(tree.at(m_category_id).tables.at(m_table_id), [&](uint32_t eid) {
         return model.GetMetricValue(m_client_id, kernel_id, m_category_id, m_table_id, eid);
     });
+}
+
+//---------------------------------------------------------
+
+CustomTable::CustomTable(DataProvider&                     data_provider,
+                         std::shared_ptr<ComputeSelection> compute_selection,
+                         uint64_t                          client_id)
+: m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
+, m_client_id(client_id)
+{ 
+    m_columns.push_back("Metric ID");
+    m_columns.push_back("Metric");
+    m_columns.push_back("Value");
+    m_last_column = "Unit";
+}
+
+void
+CustomTable::UpdateValues()
+{
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    } //TODO: bad way to process it, figure out something better
+
+    auto& model = m_data_provider.ComputeModel();
+    for (auto& metric_id : m_metric_ids)
+    {
+        auto metric_value =
+            model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
+                                 metric_id.table_id, metric_id.entry_id);
+
+        const auto& tree = model.GetWorkloads().at(workload_id).available_metrics.tree;
+
+        auto table = tree.at(metric_id.category_id).tables.at(metric_id.table_id);
+
+        for(const auto& name : table.value_names)
+            m_columns.push_back(name);
+    }
+}
+
+void
+CustomTable::AddRow(MetricId metric)
+{
+    m_metric_ids.push_back(metric);
+    UpdateValues();
+}
+
+void
+CustomTable::Render() 
+{
+
 }
 
 }  // namespace View

@@ -17,6 +17,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
+, m_custom_table(data_provider, compute_selection, m_client_id)
 {
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
@@ -59,13 +60,15 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
     m_widget_name = GenUniqueName("ComputeTableView");
 
     if(m_compute_selection->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID)
-    {
+    { //TODO: All code under this if statement never reached
         RebuildTabs();
         if(m_compute_selection->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID)
         {
             FetchAllMetrics();
         }
     }
+
+    m_custom_table.AddRow({2, 1, 0});
 }
 
 ComputeTableView::~ComputeTableView()
@@ -99,6 +102,10 @@ ComputeTableView::RebuildTabs()
     const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
     m_tabs->SetAllowToolTips(true);
+    //TODO:Add custom tab here
+    auto widget =
+        std::make_shared<RocCustomWidget>([this]() { m_custom_table.Render(); });
+    m_tabs->AddTab({ "Custom Table", "Custom Table", widget, false });
     for(const auto* cat : workload.available_metrics.ordered_categories)
     {
         auto widget = std::make_shared<RocCustomWidget>(

@@ -41,12 +41,13 @@ private:
         Legend,
         Options
     };
-    enum MenusCorner
+    enum MenusPlacement
     {
-        TopLeft,
-        TopRight,
-        BottomLeft,
-        BottomRight
+        InsideTopLeft,
+        InsideTopRight,
+        InsideBottomLeft,
+        InsideBottomRight,
+        Outside
     };
     struct ItemModel
     {
@@ -105,12 +106,11 @@ private:
     std::vector<PresetModel> m_presets;
 
     // User options...
-    bool        m_show_menus;
-    bool        m_menus_overlap;
-    MenusMode   m_menus_mode;
-    MenusCorner m_menus_corner;
-    bool        m_scale_intensity;
-    float       m_menus_rendered_height;
+    bool           m_show_menus;
+    MenusMode      m_menus_mode;
+    MenusPlacement m_menus_placement;
+    bool           m_scale_intensity;
+    float          m_menus_rendered_height;
 
     // Internal state...
     ImVec2                m_plot_area_screen_pos;

@@ -5,6 +5,8 @@
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "rocprofvis_widget.h"
 
+#include <map>
+
 namespace RocProfVis
 {
 namespace View
@@ -67,6 +69,35 @@ private:
     uint64_t m_client_id;
 
     MetricTableCache m_table;
+};
+
+class CustomTable
+{
+public:
+    struct MetricId
+    {
+        uint32_t category_id;
+        uint32_t table_id;
+        uint32_t entry_id;
+    };
+
+    CustomTable(DataProvider&                     data_provider,
+                std::shared_ptr<ComputeSelection> compute_selection, uint64_t client_id);
+    void AddRow(MetricId metric);
+    void Render();
+    bool Empty();
+
+private:
+    void UpdateValues();
+    std::vector<std::string>              m_columns;
+    std::string                           m_last_column;
+    std::vector<std::vector<std::string>> m_rows;
+    std::vector<MetricId>                 m_metric_ids;
+    uint64_t                              m_client_id;
+
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+    DataProvider& m_data_provider;
+
 };
 
 }  // namespace View

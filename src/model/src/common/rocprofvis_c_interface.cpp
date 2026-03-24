@@ -253,15 +253,15 @@ rocprofvis_dm_result_t rocprofvis_db_read_metadata_async(
 * 
 ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_db_cleanup_async(
-    rocprofvis_dm_database_t database, 
-    rocprofvis_db_future_t object,
-    bool ultimate_mode){
+                                       rocprofvis_dm_database_t database, 
+                                       rocprofvis_db_future_t object,
+                                       bool rebuild){
     PROFILE;
     ROCPROFVIS_ASSERT_MSG_RETURN(database,
         RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
         kRocProfVisDmResultInvalidParameter);
     RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
-    return db->CleanupAsync(object, ultimate_mode);
+    return db->CleanupAsync(object, rebuild);
 }
 
 /****************************************************************************************************

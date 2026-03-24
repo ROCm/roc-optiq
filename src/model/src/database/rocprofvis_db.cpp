@@ -54,12 +54,12 @@ rocprofvis_dm_result_t Database::BindTrace(
 }
 
 rocprofvis_dm_result_t  Database::CleanupAsync(
-    rocprofvis_db_future_t object, bool ultimate_mode){
+    rocprofvis_db_future_t object, bool rebuild){
     Future* future = (Future*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
     try {
-        future->SetWorker(std::move(std::thread(Database::CleanupStatic, this, future, ultimate_mode)));
+        future->SetWorker(std::move(std::thread(Database::CleanupStatic, this, future, rebuild)));
     }
     catch (std::exception ex)
     {
@@ -277,8 +277,8 @@ rocprofvis_dm_result_t  Database::ExecuteComputeQueryAsync(
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t  Database::CleanupStatic(Database* db, Future* future, bool ultimate_mode) {
-    return db->Cleanup(future, ultimate_mode);
+rocprofvis_dm_result_t  Database::CleanupStatic(Database* db, Future* future, bool rebuild) {
+    return db->Cleanup(future, rebuild);
 }
 
 rocprofvis_dm_result_t  Database::ReadTraceMetadataStatic(

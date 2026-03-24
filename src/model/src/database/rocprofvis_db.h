@@ -120,7 +120,7 @@ class Database
         rocprofvis_dm_db_bind_struct *  BindObject() {return m_binding_info;}
         // Method to cleanup database
         // @return status of operation
-        rocprofvis_dm_result_t  CleanupAsync(rocprofvis_db_future_t object, bool ultimate_mode);
+        rocprofvis_dm_result_t  CleanupAsync(rocprofvis_db_future_t object, bool rebuild);
         // Asynchronously read trace metadata from database
         // @param object - future object providing asynchronous execution mechanism
         // @return status of operation
@@ -331,7 +331,7 @@ class Database
                                                                rocprofvis_dm_string_t file_path,
                                                                Future* future);
 
-        static rocprofvis_dm_result_t  CleanupStatic(Database* db, Future* future, bool ultimate_mode);
+        static rocprofvis_dm_result_t  CleanupStatic(Database* db, Future* future, bool rebuild);
 
     /************************pure virtual worker methods to be implemented in derived classes**********************/
 
@@ -428,7 +428,7 @@ class Database
                                                                 rocprofvis_dm_charptr_t file_path,
                                                                 Future* future);
 
-        virtual rocprofvis_dm_result_t  Cleanup(Future* future, bool ultimate_mode) { return kRocProfVisDmResultSuccess; };
+        virtual rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) { return kRocProfVisDmResultSuccess; };
 
     private:
         // pointer to a binding information structure physically located in Trace object and passed to Database object during binding

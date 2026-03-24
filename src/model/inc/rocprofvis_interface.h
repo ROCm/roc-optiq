@@ -110,8 +110,9 @@ rocprofvis_dm_result_t rocprofvis_db_read_metadata_async(
 * 
 ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_db_cleanup_async(
-    rocprofvis_dm_database_t, 
-    rocprofvis_db_future_t);
+                                    rocprofvis_dm_database_t, 
+                                    rocprofvis_db_future_t,
+                                    bool);
 
 /****************************************************************************************************
  * @brief Asynchronous call to read time slice of records for provided time frame and tracks selection

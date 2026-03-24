@@ -155,7 +155,7 @@ namespace DataModel
         return result;
     }
 
-    rocprofvis_dm_result_t MetadataVersionControl::CleanupDatabase(Future* future, bool ultimate_mode)
+    rocprofvis_dm_result_t MetadataVersionControl::CleanupDatabase(Future* future, bool rebuild)
     {
         rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
         for (auto& file_node : m_db->m_db_nodes)
@@ -169,7 +169,7 @@ namespace DataModel
                 result = m_db->DropSQLIndex(index.c_str(), file_node->node_id);
                 if (kRocProfVisDmResultSuccess != result) return result;
             }
-            if (ultimate_mode)
+            if (rebuild)
             {
                 result = m_db->ExecuteSQLQuery(future, &db_instance, "VACUUM;");
             }

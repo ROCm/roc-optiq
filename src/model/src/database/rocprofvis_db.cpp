@@ -53,6 +53,21 @@ rocprofvis_dm_result_t Database::BindTrace(
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t  Database::CleanupAsync(
+    rocprofvis_db_future_t object, bool ultimate_mode){
+    Future* future = (Future*) object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    try {
+        future->SetWorker(std::move(std::thread(Database::CleanupStatic, this, future, ultimate_mode)));
+    }
+    catch (std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
@@ -260,6 +275,10 @@ rocprofvis_dm_result_t  Database::ExecuteComputeQueryAsync(
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t  Database::CleanupStatic(Database* db, Future* future, bool ultimate_mode) {
+    return db->Cleanup(future, ultimate_mode);
 }
 
 rocprofvis_dm_result_t  Database::ReadTraceMetadataStatic(

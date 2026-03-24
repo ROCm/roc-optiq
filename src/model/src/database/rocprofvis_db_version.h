@@ -89,6 +89,8 @@ namespace DataModel
 
         MetadataVersionControl(ProfileDatabase* db): m_db(db), m_rebuild_all(false) {}
         rocprofvis_dm_result_t VerifyRocOptiqTablesVersions(Future* future);
+        rocprofvis_dm_result_t DropAllRocOtiqTables(Future* future, uint32_t file_node_id);
+        rocprofvis_dm_result_t CleanupDatabase(Future* future, bool ultimate_mode);
         bool MustRebuild(uint32_t file_node_id, uint8_t id) { return m_rebuild_all || m_roc_optiq_table_properties[id].rebuild[file_node_id]; };
         const char* GetTableName(uint8_t id) { return m_roc_optiq_table_properties[id].name.c_str(); }
         bool DisposeTableWhenTrimming(std::string table_name);

@@ -133,6 +133,51 @@ namespace DataModel
         return it != m_roc_optiq_table_properties.end();
     }
 
+    rocprofvis_dm_result_t MetadataVersionControl::DropAllRocOtiqTables(Future* future, uint32_t file_node_id) {
+        rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
+        rocprofvis_db_sqlite_trim_parameters tables_to_delete;
+        TemporaryDbInstance db_instance(file_node_id);
+        std::string query;
+        for (auto name : s_pre_metadata_base_names)
+        {
+            query = std::string("SELECT name, sql FROM sqlite_master WHERE type='table' AND name LIKE '") + name + "%'";
+            result = m_db->ExecuteSQLQuery(future, &db_instance, query.c_str(), "", (rocprofvis_dm_handle_t)&tables_to_delete, &m_db->CallbackTrimTableQuery);
+        }
+        for (auto prop : m_roc_optiq_table_properties)
+        {
+            query = std::string("SELECT name, sql FROM sqlite_master WHERE type='table' AND name LIKE '") + prop.name + "%'";
+            result = m_db->ExecuteSQLQuery(future, &db_instance, query.c_str(), "", (rocprofvis_dm_handle_t)&tables_to_delete, &m_db->CallbackTrimTableQuery);
+        }
+        for (auto table : tables_to_delete.tables)
+        {
+            m_db->DropSQLTable(table.first.c_str(), file_node_id);
+        }
+        return result;
+    }
+
+    rocprofvis_dm_result_t MetadataVersionControl::CleanupDatabase(Future* future, bool ultimate_mode)
+    {
+        rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
+        for (auto& file_node : m_db->m_db_nodes)
+        {
+            TemporaryDbInstance db_instance(file_node->node_id);
+            result = DropAllRocOtiqTables(future, file_node->node_id);
+            if (kRocProfVisDmResultSuccess != result) return result;
+            auto indexes = m_db->GetRocpdIndexes(file_node->node_id);
+            for (auto& index : indexes)
+            {
+                result = m_db->DropSQLIndex(index.c_str(), file_node->node_id);
+                if (kRocProfVisDmResultSuccess != result) return result;
+            }
+            if (ultimate_mode)
+            {
+                result = m_db->ExecuteSQLQuery(future, &db_instance, "VACUUM;");
+            }
+        }
+        return result;
+    }
+  
+
 	rocprofvis_dm_result_t MetadataVersionControl::VerifyRocOptiqTablesVersions(Future* future) {
         rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
         std::string query = "SELECT * from ";
@@ -163,21 +208,7 @@ namespace DataModel
             bool update_metadata_table = false;
             if (false == m_db->CheckTableExists(metadata_table_name, file_node->node_id))
             {             
-                rocprofvis_db_sqlite_trim_parameters tables_to_delete;
-                for (auto name : s_pre_metadata_base_names)
-                {
-                    query = std::string("SELECT name, sql FROM sqlite_master WHERE type='table' AND name LIKE '") + name + "%'";
-                    result = m_db->ExecuteSQLQuery(future, &db_instance, query.c_str(), "", (rocprofvis_dm_handle_t)&tables_to_delete, &m_db->CallbackTrimTableQuery);
-                }
-                for (auto prop : m_roc_optiq_table_properties)
-                {
-                    query = std::string("SELECT name, sql FROM sqlite_master WHERE type='table' AND name LIKE '") + prop.name + "%'";
-                    result = m_db->ExecuteSQLQuery(future, &db_instance, query.c_str(), "", (rocprofvis_dm_handle_t)&tables_to_delete, &m_db->CallbackTrimTableQuery);
-                }
-                for (auto table : tables_to_delete.tables)
-                {
-                    m_db->DropSQLTable(table.first.c_str(), file_node->node_id);
-                }
+                result = DropAllRocOtiqTables(future, file_node->node_id);
                 update_metadata_table=true;
                 m_rebuild_all = true;
             }

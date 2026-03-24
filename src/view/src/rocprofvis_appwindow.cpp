@@ -650,6 +650,49 @@ AppWindow::RenderFileMenu(Project* project)
             HandleSaveAsFile();
         }
         ImGui::Separator();
+
+        {
+            TraceView* trace_view = nullptr;
+            bool       has_trace  = false;
+            bool       cleanup_pending = false;
+            if(project && project->GetTraceType() == Project::System)
+            {
+                trace_view = dynamic_cast<TraceView*>(project->GetView().get());
+                has_trace  = (trace_view != nullptr);
+                if(has_trace)
+                {
+                    cleanup_pending = trace_view->IsCleanupPending();
+                }
+            }
+
+            auto start_cleanup = [this, trace_view](bool rebuild) {
+                m_disable_app_interaction = true;
+                trace_view->CleanupDatabase(rebuild, [this]() {
+                    m_disable_app_interaction = false;
+                });
+            };
+
+            bool submenu_enabled = has_trace && !cleanup_pending;
+            if(ImGui::BeginMenu("Database", submenu_enabled))
+            {
+                if(ImGui::MenuItem("Fast Cleanup"))
+                {
+                    start_cleanup(false);
+                }
+                if(ImGui::MenuItem("Full Cleanup (Rebuild)..."))
+                {
+                    ShowConfirmationDialog(
+                        "Full Database Cleanup",
+                        "This will remove service tables, indexes, and rebuild "
+                        "(VACUUM) the database file. This may take a while.\n\n"
+                        "Continue?",
+                        [start_cleanup]() { start_cleanup(true); });
+                }
+                ImGui::EndMenu();
+            }
+        }
+
+        ImGui::Separator();
         const std::list<std::string>& recent_files =
             SettingsManager::GetInstance().GetInternalSettings().recent_files;
         if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))

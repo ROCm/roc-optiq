@@ -132,6 +132,8 @@ enum class Colors
     __kLastColor
 };
 
+constexpr float kIdleDimAlpha = 0.7f;
+
 constexpr const char* JSON_KEY_VERSION = "version";
 
 constexpr const char* JSON_KEY_GROUP_SETTINGS             = "settings";

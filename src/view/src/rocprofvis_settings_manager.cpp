@@ -48,9 +48,9 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(224, 62, 62, 255),    // kAccentRed
     IM_COL32(255, 140, 140, 255),  // kAccentRedHover
     IM_COL32(181, 40, 40, 255),    // kAccentRedActive
-    IM_COL32(170, 74, 86, 255),    // kTabAccent
-    IM_COL32(198, 98, 110, 255),   // kTabAccentHover
-    IM_COL32(144, 56, 68, 255),    // kTabAccentActive
+    IM_COL32(215, 85, 85, 255),    // kTabAccent
+    IM_COL32(235, 115, 115, 255),  // kTabAccentHover
+    IM_COL32(185, 65, 68, 255),    // kTabAccentActive
     IM_COL32(80, 80, 90, 255),     // kBorderGray
     IM_COL32(235, 235, 240, 255),  // kTextMain
     IM_COL32(170, 170, 180, 255),  // kTextDim
@@ -121,9 +121,9 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(242, 90, 70, 255),    // Colors::kAccentRed
     IM_COL32(255, 140, 120, 255),  // Colors::kAccentRedHover
     IM_COL32(255, 110, 90, 255),   // Colors::kAccentRedActive
-    IM_COL32(208, 104, 94, 255),   // Colors::kTabAccent
-    IM_COL32(228, 128, 118, 255),  // Colors::kTabAccentHover
-    IM_COL32(182, 86, 78, 255),    // Colors::kTabAccentActive
+    IM_COL32(218, 48, 55, 255),    // Colors::kTabAccent
+    IM_COL32(238, 85, 85, 255),    // Colors::kTabAccentHover
+    IM_COL32(185, 38, 45, 255),    // Colors::kTabAccentActive
     IM_COL32(230, 225, 220, 255),  // Colors::kBorderGray
     IM_COL32(40, 30, 25, 255),     // Colors::kTextMain
     IM_COL32(150, 130, 120, 255),  // Colors::kTextDim
@@ -167,18 +167,16 @@ constexpr std::array LIGHT_THEME_COLORS = {
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> DARK_FLAME_COLORS = {
-    IM_COL32(196, 74, 74, 224),   IM_COL32(210, 104, 72, 224),
-    IM_COL32(226, 154, 64, 224),  IM_COL32(178, 92, 138, 224),
-    IM_COL32(76, 132, 214, 224),  IM_COL32(62, 168, 160, 224),
-    IM_COL32(202, 82, 112, 224),  IM_COL32(142, 166, 82, 224),
-    IM_COL32(116, 98, 204, 224),  IM_COL32(232, 132, 84, 224)
+    IM_COL32(235, 98, 98, 215),   IM_COL32(72, 188, 180, 215),
+    IM_COL32(185, 168, 55, 215),  IM_COL32(68, 152, 98, 215),
+    IM_COL32(185, 115, 72, 215),  IM_COL32(52, 138, 142, 215),
+    IM_COL32(108, 128, 52, 215),  IM_COL32(178, 95, 105, 215)
 };
 const std::vector<ImU32> LIGHT_FLAME_COLORS = {
-    IM_COL32(184, 62, 62, 236),   IM_COL32(198, 92, 58, 236),
-    IM_COL32(204, 144, 48, 236),  IM_COL32(164, 84, 128, 236),
-    IM_COL32(58, 110, 194, 236),  IM_COL32(48, 146, 138, 236),
-    IM_COL32(188, 72, 102, 236),  IM_COL32(126, 148, 70, 236),
-    IM_COL32(100, 84, 184, 236),  IM_COL32(212, 112, 70, 236)
+    IM_COL32(58, 155, 92, 220),   IM_COL32(218, 48, 55, 220),
+    IM_COL32(222, 152, 15, 220),  IM_COL32(38, 138, 158, 220),
+    IM_COL32(185, 178, 148, 220), IM_COL32(138, 155, 62, 220),
+    IM_COL32(42, 148, 135, 220),  IM_COL32(225, 108, 55, 220)
 };
 inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
 inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
@@ -263,12 +261,10 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_TableRowBgAlt]     = tableRowBgAlt;
 
     // Scrollbar
-    style.Colors[ImGuiCol_ScrollbarBg]   = scrollBg;
-    style.Colors[ImGuiCol_ScrollbarGrab] = scrollGrab;
-    style.Colors[ImGuiCol_ScrollbarGrabHovered] =
-        ImVec4(96.0f / 255.0f, 96.0f / 255.0f, 96.0f / 255.0f, 1.0f);
-    style.Colors[ImGuiCol_ScrollbarGrabActive] =
-        ImVec4(128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
+    style.Colors[ImGuiCol_ScrollbarBg]          = scrollBg;
+    style.Colors[ImGuiCol_ScrollbarGrab]        = scrollGrab;
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = buttonHovered;
+    style.Colors[ImGuiCol_ScrollbarGrabActive]  = buttonActive;
 
     // Checkboxes, radio buttons
     style.Colors[ImGuiCol_CheckMark] = accentRed;
@@ -280,7 +276,7 @@ SettingsManager::ApplyColorStyling()
     // Buttons
     style.Colors[ImGuiCol_Button]        = button;
     style.Colors[ImGuiCol_ButtonHovered] = buttonHovered;
-    style.Colors[ImGuiCol_ButtonActive]  = buttonActive;
+    style.Colors[ImGuiCol_ButtonActive]  = accentRedActive;
 
     // Tabs
     style.Colors[ImGuiCol_Tab]                = bgPanel;
@@ -554,7 +550,8 @@ SettingsManager::InitStyling()
     style.GrabRounding      = 6.0f;
     style.TabRounding       = 6.0f;
     style.WindowRounding    = 8.0f;
-    style.ScrollbarRounding = 8.0f;
+    style.ScrollbarRounding = 12.0f;
+    style.ScrollbarSize     = 12.0f;
     style.FramePadding  = ImVec2(10, 6);
     style.ItemSpacing   = ImVec2(10, 8);
     style.WindowPadding = ImVec2(4, 4);
@@ -570,7 +567,7 @@ SettingsManager::InitStyling()
         {
             colormap.push_back(255 << IM_COL32_A_SHIFT | flame_color);
         }
-        colormap.push_back(IM_COL32(220, 50, 50, 255));
+        colormap.push_back(IM_COL32(235, 98, 98, 255));
         ImPlot::AddColormap(name, colormap.data(), static_cast<int>(colormap.size()));
     };
 

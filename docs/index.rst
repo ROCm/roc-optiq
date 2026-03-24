@@ -7,9 +7,9 @@ ROCm Optiq documentation
 ************************
 
 :doc:`ROCm Optiq <what-is-optiq>` is a unified visualization and analysis tool for performance data collected by ROCm profiling tools, specifically `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_. 
-The tool provides deep insights into both system-level behavior and kernel-level performance for applications running on the ROCm stack. 
+It provides deep insights into both system-level behavior and kernel-level performance for applications running on the ROCm stack. 
 
-ROCm Optiq enables developers to visualize execution traces and profiling analysis data in a single interface, helping to identify performance bottlenecks, understand hardware utilization, optimize workloads and efficiently scale applications across CPUs and GPUs. 
+ROCm Optiq enables developers to visualize execution traces and profiling analysis data in a single interface, helping to identify performance bottlenecks, understand hardware utilization, optimize workloads, and efficiently scale applications across CPUs and GPUs. 
 
 The component public repository is located at `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_.
 
@@ -29,7 +29,7 @@ ROCm Optiq for visualizing ROCm Compute Profiler's data. New features include:
 
 - **Summary View**: Shows a high-level overview of the captured data.  
 
-  - **Table**: lists the top 10 longest-running kernels sorted by Total Execution Time. 
+  - **Table**: lists the ten longest-running kernels sorted by Total Execution Time. 
   - **Charts**: Plot duration and invocation statistics across kernels. 
   - **Roofline Chart**: plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels.
 
@@ -48,10 +48,10 @@ Changed
 
 Changes in ROCm Optiq for visualizing ROCm System Profiler traces: 
 
-- System Topology tree was restructured to show hardware and software topologies. 
+- System Topology tree was restructured to show both hardware and software topologies. 
 - Memory allocation activity tracks are now displayed in Timeline and System Topology Views. 
 - RPD files populate Topology. 
-- Multinode support: Time normalization for multi-node configurations. 
+- Multi-node support: Time normalization for multi-node configurations. 
 
 .. tip::
 

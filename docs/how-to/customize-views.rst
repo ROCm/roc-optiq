@@ -15,17 +15,17 @@ Customize your ROCm Optiq project
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
 
-You can customize your projects in ROCm Optiq such as display settings, filters, bookmarks, and more.
+You can customize display settings, filters, bookmarks, and more in your ROCm Optiq projects.
 
 Change display settings
 =======================
 
-You can adjust the display settings in your ROCm Compute Profiler and Systems Profiler projects.
+You can adjust the display settings in your ROCm Compute Profiler and ROCm Systems Profiler projects.
 
 Select **Edit** > **Preferences** to adjust these global display settings for ROCm Optiq from the **Settings** menu: 
 
 - The application theme display (Light or Dark mode).
-- The font scaling: either automatic based on the display DPI, or customized using the font size control:
+- The font scaling: automatic based on the display DPI, or customized using the font size control:
 
   .. image:: ../images/settings.png
      :width: 600
@@ -38,7 +38,7 @@ Select **Edit** > **Preferences** to adjust these global display settings for RO
 Show/hide panels
 ================
 
-The **View** menu can be used to show and hide application panels.
+Use the **View** menu to show and hide application panels.
 
 .. image:: ../images/view.png
   :width: 300
@@ -50,7 +50,7 @@ You can customize the data views of an open ROCm Systems Profiler trace file in 
 
 .. note::
 
-   These settings *only* apply to ROCm Systems Profiler trace projects, *not* ROCm Compute Profiler projects.
+   These settings only apply to ROCm Systems Profiler trace projects. They don't apply to ROCm Compute Profiler projects.
 
 .. _time-range-filter:
 
@@ -59,7 +59,7 @@ Set a time range filter
 
 Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
 
-To set a time range filter, press and hold **Ctrl** while dragging your mouse in the in the **Timeline View** to select a range.
+To set a time range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
 
 .. image:: ../images/filter.png
    :width: 600
@@ -75,7 +75,7 @@ Selecting this will set a time range filter with boundaries at the event's start
 
 .. tip::
 
-   You can press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
+   Press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
 
 To clear the time range selection, press **Esc** or right-click and select **Remove Selection**:
 
@@ -122,7 +122,7 @@ To add an annotation:
   - Edit or delete the annotation by clicking |pen|.
   - View the complete list of annotations in the **Annotations** tab of the :ref:`advanced` section.
   - Check the **Visibility** option in the **Annotations** tab to toggle the visibility of individual annotations.
-  - Clicking on a row in the annotations list brings the selected annotation into view.
+  - Clicking a row in the annotations list displays the selected annotation.
 
 Create bookmarks
 ----------------
@@ -194,12 +194,12 @@ Render mode shows events in a fan-out style, highlighting parallelism and branch
 
 .. note::
 
-  Chain mode and Render mode are visualization modes for relations; they don't represent the actual kernel scheduling flow.
+  Chain mode and Render mode are visualization modes for relations. They don't represent the actual kernel scheduling flow.
 
 Save a project file
 -------------------
 
-Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project (``.rpv`` file). 
+Persist the customizations made to tracks, bookmarks, and annotations by saving the session as a project  (``.rpv`` file). 
 
 - Select **File** > **Save As** to create a new project.
 - Select **File** > **Save** to overwrite the currently opened project.

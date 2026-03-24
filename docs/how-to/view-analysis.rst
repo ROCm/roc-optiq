@@ -9,9 +9,10 @@ View ROCm Compute Profiler analysis data in ROCm Optiq
 ******************************************************
 
 .. |eye| image:: ../images/eye.png
+.. |gear| image:: ../images/gear.png
 
 ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel- and metric-level analysis. 
-It enables rapid identification of performance hotspots and interactive exploration of kernel level metrics for a profiled workload.
+It enables rapid identification of performance hotspots and interactive exploration of kernel-level metrics for a profiled workload.
 
 Open a ROCm Compute Profiler database file
 ==========================================
@@ -19,12 +20,12 @@ Open a ROCm Compute Profiler database file
 ROCm Optiq supports the ROCm Compute Profiler analysis database format (``.db``).  
 
 Select **File** > **Open** to open a database file. 
-You can also open files by dragging and dropping them onto the application window. 
+You can also open files by dragging them into the application window. 
 
 Troubleshooting
 ---------------
 
-If the analysis database file doesn't open, it may be in an unsupported format. 
+If the analysis database file doesn't open, it might be in an unsupported format. 
 To generate profiling data in a compatible format, run the CLI analysis with the ``--output-format`` option set to the ROCm Compute analysis database format: 
 
 .. code:: 
@@ -44,7 +45,7 @@ Table
 -----
  
 The table in **Summary View** lists the top 10 longest-running kernels sorted by Total Execution Time. 
-The table displays kernel names, the number of invocations, and statistics including Total, Min, Max, Mean, Median Durations.  
+The table displays kernel names, the number of invocations, and statistics including Total, Min, Max, Mean, Median durations.  
 
 .. image:: ../images/summary-view-table.png
    :width: 800
@@ -53,7 +54,7 @@ The table displays kernel names, the number of invocations, and statistics inclu
 Charts
 ------
 
-Charts are displayed as either a bar or pie chart.
+Charts display as bar or pie charts.
 
 The pie chart plots: 
 
@@ -68,7 +69,7 @@ The pie chart plots:
    
    The kernel name and duration are displayed when you hold your cursor over a section of the pie chart. 
 
-The bar chart displays per-kernel metrics including Invocation(s), Total, Min, Max, Mean and Median Duration data. 
+The bar chart displays per-kernel metrics the number of invocations, Total, Min, Max, Mean, and Median duration data. 
 
 .. image:: ../images/summary-view-bar-chart.png
    :width: 800
@@ -80,16 +81,16 @@ Summary View Roofline Chart
 ---------------------------
 
 The chart plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels.
-By showing where kernels are positioned relative to these rooflines, it helps determine whether performance is memory-bound or compute-bound, and identify the most impactful optimization direction. 
+Showing where kernels are positioned relative to these rooflines helps determine whether performance is memory-bound or compute-bound, and identify the most impactful optimization direction. 
 
 .. image:: ../images/summary-view-roofline-analysis.png
    :width: 800
    :align: center
 
 Kernel performance at each cache level is displayed as individual dots in the roofline chart.  
-The size of each dot represents the duration of the kernel. 
+The size of each dot represents the kernel's duration. 
 
-Click the gear in the menu to show or hide rooflines or arithmetic intensity points. 
+Click |gear| in the menu to show or hide rooflines or arithmetic intensity points. 
 
 Hold your cursor over a dot to view detailed information about the kernel it represents. 
 The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
@@ -105,8 +106,8 @@ Kernel Details
 
 - **Kernel Selection Table**: Helps you identify and choose a kernel of interest for further analysis.  
 - **Memory Chart**: Displays a visual diagram of the hardware with overlapping per-block metrics. 
-- **System Speed-of-Light**: A table view of kernel metrics with their unit, average, peak and percentage of peak values.  
-- **Roofline analysis**: Displays kernel performance against the system capabilities for the selected kernel. 
+- **System Speed-of-Light**: A table view of kernel metrics with their unit, average, peak, and percentage of peak values.  
+- **Roofline analysis**: Displays kernel performance relative to the system's capabilities for the selected kernel. 
 
 Kernel Selection Table
 ----------------------
@@ -118,7 +119,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
    :align: center
 
 - Click **Add Metric** to select additional GPU metrics as columns. 
-- The search box below each column's header allows you to enter statements to filter the data, ensuring targeted analysis. Click **Apply Filters** to execute. You can search for a kernel by name or metric equation.  
+- The search box below each column's header allows you to enter statements to filter the data, enabling targeted analysis. Click **Apply Filters** to execute. You can search for a kernel by name or metric equation.  
 
   - For the **Name** column, use this format: ``LIKE %text%``. 
   - For all other metrics, use: ``>,<,=,>=,<=,!= number``. For example, ``metricA>threshold``. 
@@ -126,7 +127,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
 
 - The Duration column enables you to sort (ascending or descending).  
 - Selecting a kernel through the **Kernel Selection Table** or kernel selector drop-down updates the Memory Chart, System Speed-of-Light, Kernel-level Roofline Analysis, and Table View accordingly. 
-- You can hide this table using the |eye| icon to maximize space for charts.
+- You can hide this table clicking |eye| to maximize space for charts.
 
 Memory Chart
 ------------
@@ -137,7 +138,7 @@ The **Memory Chart** displays memory transactions and throughput at each cache h
    :width: 800
    :align: center
 
-This visual diagram displays counter values and calculations you can use to understand which cache level each memory transaction corresponds to and how they interact with each other.  
+This visual diagram displays counter values and calculations to help you understand which cache level each memory transaction corresponds to and how they interact.  
 
 Select a kernel in the **Kernel Selection Table** or the kernel selector drop-down to view the memory chart of the selected kernel. 
 
@@ -153,9 +154,9 @@ The **System Speed-of-Light** displays key kernel-level performance metrics to s
 Kernel Roofline Chart
 ---------------------
 
-The **Kernel Roofline Chart** displays a kernel-specific roofline analysis which helps you determine whether the kernel is compute-bound or memory-bound. 
+The **Kernel Roofline Chart** displays a kernel-specific roofline analysis, which helps you determine whether the kernel is compute-bound or memory-bound. 
 
-- Click the gear icon to show or hide rooflines or arithmetic intensity points. 
+- Click |gear| to show or hide rooflines or arithmetic intensity points. 
 - Hold your cursor over a dot to view detailed information of the kernel. 
 
 .. _analysis-table:

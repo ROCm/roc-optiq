@@ -3,12 +3,15 @@
 
 #pragma once
 #include "rocprofvis_annotations.h"
+#include "rocprofvis_bottleneck_detector.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_insight_panel.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_timeline_view.h"
 #include "widgets/rocprofvis_split_containers.h"
+#include <future>
 #include <unordered_map>
 
 namespace RocProfVis
@@ -27,6 +30,7 @@ class SettingsManager;
 class EventSearch;
 class SummaryView;
 class Minimap;
+class InsightPanel;
 
 class SystemTraceProjectSettings : public ProjectSetting
 {
@@ -87,6 +91,7 @@ private:
     std::shared_ptr<EventSearch>       m_event_search;
     std::shared_ptr<SummaryView>       m_summary_view;
     std::shared_ptr<Minimap>           m_minimap;
+    std::unique_ptr<InsightPanel>      m_insight_panel;
 
     LayoutItem::Ptr m_sidebar_item;
     LayoutItem::Ptr m_analysis_item;
@@ -103,6 +108,8 @@ private:
 
     popup_info_t                        m_popup_info;
     bool                                m_show_minimap_popup;
+    bool                                m_show_insight_popup;
+    std::future<std::vector<Insight>>   m_insight_future;
     std::unordered_map<int, ViewCoords> m_bookmarks;
 
     std::shared_ptr<AnnotationsManager> m_annotations;

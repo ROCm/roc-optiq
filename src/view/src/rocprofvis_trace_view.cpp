@@ -7,8 +7,10 @@
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_bottleneck_detector.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_event_search.h"
+#include "rocprofvis_insight_panel.h"
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_sidebar.h"
@@ -31,6 +33,7 @@ TraceView::TraceView()
 , m_horizontal_split_container(nullptr)
 , m_view_created(false)
 , m_show_minimap_popup(false)
+, m_show_insight_popup(false)
 , m_timeline_selection(nullptr)
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
@@ -227,6 +230,16 @@ TraceView::Update()
     {
         m_minimap->UpdateData();
     }
+
+    // Poll the async bottleneck analysis future (non-blocking).
+    if(m_insight_future.valid() &&
+       m_insight_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+    {
+        if(m_insight_panel)
+        {
+            m_insight_panel->SetResults(m_insight_future.get());
+        }
+    }
 }
 
 void
@@ -241,6 +254,7 @@ TraceView::CreateView()
     m_event_search          = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
+    m_insight_panel         = std::make_unique<InsightPanel>();
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
         [this]() { m_timeline_view->RenderHistogram(); });
 
@@ -287,6 +301,7 @@ void
 TraceView::DestroyView()
 {
     m_minimap                    = nullptr;
+    m_insight_panel              = nullptr;
     m_timeline_view              = nullptr;
     m_sidebar_item->m_item       = nullptr;
     m_horizontal_split_container = nullptr;
@@ -336,6 +351,24 @@ TraceView::Render()
         }
         ImGui::End();
         popup_style.PopStyles();
+    }
+
+    if(m_show_insight_popup && m_insight_panel)
+    {
+        PopUpStyle insight_style;
+        insight_style.PushPopupStyles();
+        insight_style.PushTitlebarColors();
+
+        float dpi = SettingsManager::GetInstance().GetDPI();
+        ImGui::SetNextWindowSizeConstraints(ImVec2(400.0f * dpi, 300.0f * dpi),
+                                            ImVec2(700.0f * dpi, 600.0f * dpi));
+        if(ImGui::Begin("Performance Insights", &m_show_insight_popup,
+                        ImGuiWindowFlags_NoCollapse))
+        {
+            m_insight_panel->Render();
+        }
+        ImGui::End();
+        insight_style.PopStyles();
     }
 
     if(m_popup_info.show_popup)
@@ -608,6 +641,34 @@ TraceView::RenderToolbar()
     if(ImGui::IsItemHovered())
     {
         SetTooltipStyled("Show Minimap");
+    }
+    VerticalSeparator(&m_settings_manager);
+
+    ImGui::PushFont(icon_font);
+    if(ImGui::Button(ICON_CHART_BAR))
+    {
+        m_show_insight_popup = true;
+
+        // Launch async analysis if not already running
+        if(m_insight_panel &&
+           m_insight_panel->GetState() != InsightPanel::State::kRunning)
+        {
+            auto snapshot = BottleneckDetector::CaptureSnapshot(
+                m_data_provider.DataModel().GetTimeline());
+
+            m_insight_panel->SetRunning();
+            m_insight_future = std::async(std::launch::async,
+                                          [snap = std::move(snapshot)]() {
+                                              BottleneckDetector detector(std::move(snap));
+                                              return detector.Analyze();
+                                          });
+        }
+    }
+    ImGui::PopFont();
+
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Analyze trace for performance bottlenecks");
     }
     VerticalSeparator(&m_settings_manager);
 

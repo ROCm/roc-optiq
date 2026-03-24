@@ -174,6 +174,7 @@ namespace DataModel
                 result = m_db->ExecuteSQLQuery(future, &db_instance, "VACUUM;");
             }
         }
+        future->SetPromise(result);
         return result;
     }
   

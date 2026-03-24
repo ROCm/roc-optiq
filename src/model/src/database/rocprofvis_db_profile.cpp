@@ -344,7 +344,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
     record.id.bitfield.event_op = db->Sqlite3ColumnInt(func, stmt, azColName,0 );
     record.id.bitfield.event_node = callback_params->db_instance->GuidIndex();
     if (db->TrackTracker()->FindTrack(
-        kRocProfVisDmEventTrack, 
+        db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)record.id.bitfield.event_op), 
         db->Sqlite3ColumnInt(func, stmt, azColName,4), 
         db->Sqlite3ColumnInt(func, stmt, azColName,5), 
         callback_params->db_instance->GuidIndex(), record.track_id))
@@ -480,8 +480,8 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
     if (service_data.op == kRocProfVisDmOperationLaunch || 
         service_data.op == kRocProfVisDmOperationLaunchSample || 
         !db->TrackTracker()->FindTrack(kRocProfVisDmStreamTrack, 
+            service_data.pid,
             service_data.stream_id,
-            -1,
             callback_params->db_instance->GuidIndex(),
             track_id))
     {
@@ -626,6 +626,10 @@ ProfileDatabase::CollectTrackServiceData(
     else if(column_name == Builder::THREAD_ID_SERVICE_NAME)
     {
         service_data.sub_process_id = db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
+    }
+    else if(column_name == Builder::PID_SERVICE_NAME)
+    {
+        service_data.pid = db->Sqlite3ColumnInt(func, stmt, azColName, column_index);
     }
 }
 

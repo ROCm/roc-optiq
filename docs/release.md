@@ -133,7 +133,7 @@ If a metric expression contains ``None``, ROCm Compute Profiler may ignore the m
   - LDS Latency 
   - Bank Conflicts/Access 
 - Scalar L1 Data Cache (1400) 
-  - Cache Hit Rate (appears twice; likely different subsections) 
+  - Cache Hit Rate
 - Vector L1 Data Cache (1600) 
   - Hit rate 
   - Utilization 
@@ -172,6 +172,6 @@ If a metric expression contains ``None``, ROCm Compute Profiler may ignore the m
   - Write - HBM Stall 
   - Write - Credit Starvation 
 
-### ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-format`` 
+### ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-directory`` 
 
-When you profile with the ``--output-format`` option, the ``workload_name`` column in ``sysinfo.csv`` might be empty. This can prevent views in the ROCm Compute Profiler analysis database from joining tables based on ``workload_name``, which makes system information unavailable. 
+When you profile with the ``--output-directory`` option, the ``workload_name`` column in ``sysinfo.csv`` might be empty. This can prevent views in the ROCm Compute Profiler analysis database from joining tables based on ``workload_name``, which makes system information unavailable. 

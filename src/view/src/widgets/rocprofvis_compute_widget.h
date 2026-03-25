@@ -83,14 +83,19 @@ public:
 
     CustomTable(DataProvider&                     data_provider,
                 std::shared_ptr<ComputeSelection> compute_selection, uint64_t client_id);
-    void AddRow(MetricId metric);
+    void AddRow(MetricId metric_id);
     void Render();
     bool Empty();
 
 private:
-    void UpdateValues();
-    std::vector<std::string>              m_columns;
-    std::string                           m_last_column;
+    void UpdateColumns(const std::vector<std::string>& value_names);
+    void FillTableRow(const AvailableMetrics::Table& table, const MetricId& metric_id);
+    void FillCommonColumns(const MetricId&                metric_id,
+                           const AvailableMetrics::Table& table,
+                           std::vector<std::string>&      row);
+    bool                                  IsColumnExist(const std::string& column_name);
+    std::map<uint32_t, std::string>       m_columns;
+    uint32_t                              m_last_column_index;
     std::vector<std::vector<std::string>> m_rows;
     std::vector<MetricId>                 m_metric_ids;
     uint64_t                              m_client_id;

@@ -67,8 +67,6 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
             FetchAllMetrics();
         }
     }
-
-    m_custom_table.AddRow({2, 1, 0});
 }
 
 ComputeTableView::~ComputeTableView()
@@ -98,6 +96,7 @@ ComputeTableView::RebuildTabs()
     const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();
     if(!workloads.count(workload_id))
         return;
+
 
     const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
@@ -183,6 +182,11 @@ ComputeTableView::RebuildTableDataCache()
 {
     m_table_widgets.clear();
 
+    m_custom_table.AddRow({ 2, 1, 0 });
+    m_custom_table.AddRow({ 5, 1, 0 });
+    // STUB: add some dummy metric to make sure the custom table is
+                       // shown, will remove it later when we have a better way to
+                       // determine whether to show the custom table tab
     auto&    model       = m_data_provider.ComputeModel();
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();

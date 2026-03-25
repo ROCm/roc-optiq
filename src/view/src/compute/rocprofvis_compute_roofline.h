@@ -96,8 +96,9 @@ private:
         std::vector<size_t> item_indices;
     };
 
-    void RenderMenus(const ImVec2 region, const ImGuiStyle& style,
-                     const ImPlotStyle& plot_style, bool& item_hovered);
+    void RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
+                     const ImGuiStyle& style, const ImPlotStyle& plot_style,
+                     bool& item_hovered);
     void PlotHoverIdx();
     void ApplyPreset(PresetModel::Type type);
 
@@ -110,11 +111,8 @@ private:
     MenusMode      m_menus_mode;
     MenusPlacement m_menus_placement;
     bool           m_scale_intensity;
-    float          m_menus_rendered_height;
 
     // Internal state...
-    ImVec2                m_plot_area_screen_pos;
-    ImVec2                m_plot_area_size;
     bool                  m_workload_changed;
     const WorkloadInfo*   m_workload;
     uint32_t              m_requested_workload_id;
@@ -125,6 +123,7 @@ private:
     bool                  m_options_changed;
     std::optional<size_t> m_hovered_item_idx;
     float                 m_hovered_item_distance;
+    float                 m_menus_rendered_height;
 
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;

@@ -248,7 +248,7 @@ CustomTable::CustomTable(DataProvider&                     data_provider,
     m_columns[0] = "Metric ID";
     m_columns[1] = "Metric";
     m_columns[2] = "Value";
-    m_last_column_index                             = 2;
+    m_lust_column_index                             = 3;
     m_columns[std::numeric_limits<uint32_t>::max()] = "Unit";
 }
 
@@ -257,14 +257,16 @@ CustomTable::UpdateColumns(const std::vector<std::string>& value_names)
 {
     for(const auto& name : value_names)
     {
-        if(!IsColumnExist(name))
-            m_columns[++m_last_column_index] = name;
+        if (GetColumnIndex(name) == std::nullopt)
+            m_columns[m_lust_column_index++] = name;
     }
 }
 
 void
 CustomTable::FillTableRow(const AvailableMetrics::Table& table, const MetricId& metric_id)
 {
+    std::map<uint32_t, std::string> row;
+
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
     if(kernel_id == ComputeSelection::INVALID_SELECTION_ID)
     {
@@ -274,52 +276,63 @@ CustomTable::FillTableRow(const AvailableMetrics::Table& table, const MetricId& 
     auto metric_value =
         model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
                              metric_id.table_id, metric_id.entry_id);
-    std::vector<std::string> row;
 
-    FillCommonColumns(metric_id, table, row);
-    // row.push_back(entrie.description);
+    FillCommons(metric_id, table, row, metric_value);
 
     char buf[64];
     for(const auto& value_name : table.value_names)
     {
-        if(metric_value && metric_value->entry && metric_value->values.count(value_name))
+        if (auto index = GetColumnIndex(value_name); index.has_value())
         {
-            snprintf(buf, sizeof(buf), "%.2f", metric_value->values.at(value_name));
-            row.push_back(buf);
+            if(metric_value && metric_value->entry &&
+               metric_value->values.count(value_name))
+            {
+                snprintf(buf, sizeof(buf), "%.2f", metric_value->values.at(value_name));
+                row[index.value()] = buf;
+            }
         }
-        else
-        {
-            row.emplace_back();
-        }
+
     }
+
+
+
+
+
+
+
 
     m_rows.push_back(std::move(row));
 }
 
 void
-CustomTable::FillCommonColumns(const MetricId&                metric_id,
-                               const AvailableMetrics::Table& table,
-                               std::vector<std::string>&      row)
+CustomTable::FillCommons(const MetricId& metric_id, const AvailableMetrics::Table& table,
+                         std::map<uint32_t, std::string>& row,
+                         std::shared_ptr<MetricValue>     metric_value)
 {
     auto entrie =
         table.entries.find(metric_id.entry_id)->second;  // TODO: Process if not found
+
     auto id = std::to_string(entrie.category_id) + "." + std::to_string(entrie.table_id) +
               "." + std::to_string(entrie.id);
-    row.push_back(id);
-    row.push_back(entrie.name);
-
-    //row.push_back(entrie.unit);
+    row[0] = id;
+    row[1] = entrie.name;
+    if(metric_value && !metric_value->values.empty())
+    {
+        row[2] = std::to_string(metric_value->values.begin()->second);
+    }
+    
+    row[std::numeric_limits<uint32_t>::max()] = entrie.unit;
 }
 
-bool
-CustomTable::IsColumnExist(const std::string& column_name)
+std::optional<uint32_t>
+CustomTable::GetColumnIndex(const std::string& column_name)
 {
     for(auto column : m_columns)
     {
         if(column.second == column_name)
-            return true;
+            return column.first;
     }
-    return false;
+    return std::nullopt;
 }
 
 void
@@ -358,7 +371,7 @@ CustomTable::Render()
 
     int num_columns = static_cast<int>(m_columns.size());
 
-    SectionTitle("custom table");
+    SectionTitle("Custom table");
     if(!ImGui::BeginTable("custom table", num_columns, ImGuiTableFlags_Borders))
         return;
 
@@ -366,24 +379,61 @@ CustomTable::Render()
         ImGui::TableSetupColumn(column.second.c_str());
     ImGui::TableHeadersRow();
 
+
     uint32_t row_idx = 0;
     for (auto row : m_rows)
     {
         ImGui::PushID(row_idx++);
         ImGui::TableNextRow();
 
-        ImGui::TableNextColumn();
-        //TODO: Thing about table structure, avoid to use directly indexes
-        CopyableTextUnformatted(row[0].c_str(), "##mid", COPY_DATA_NOTIFICATION,
-                                false, true);
+        RenderCommonColumns(row);
+        for(auto index = 3; index < m_columns.size() - 1; index++)
+        {
+            ImGui::TableNextColumn();
+            auto it = row.find(index);
+            if (it == row.end())
+            {
+                ImGui::TextDisabled("N/A");
+            }
+            else
+            {
+                CopyableTextUnformatted(row[index].c_str(), "##value",
+                                        COPY_DATA_NOTIFICATION, false, true);
+            }
+        }
 
         ImGui::TableNextColumn();
-        CopyableTextUnformatted(row[1].c_str(), "##name", COPY_DATA_NOTIFICATION, false,
+        CopyableTextUnformatted(row[std::numeric_limits<uint32_t>::max()].c_str(),
+                                "##name", COPY_DATA_NOTIFICATION, false,
                                 true);
         ImGui::PopID();
     }
 
     ImGui::EndTable();
+
+}
+
+void
+CustomTable::RenderCommonColumns(std::map<uint32_t, std::string>& row)
+{
+    ImGui::TableNextColumn();
+    CopyableTextUnformatted(row[0].c_str(), "##metric_id", COPY_DATA_NOTIFICATION, false, true);
+
+    ImGui::TableNextColumn();
+    CopyableTextUnformatted(row[1].c_str(), "##name", COPY_DATA_NOTIFICATION, false,
+                            true);
+
+    ImGui::TableNextColumn();
+    auto it = row.find(2); //TODO: think should I check index each time?
+    if(it == row.end())
+    {
+        ImGui::TextDisabled("N/A");
+    }
+    else
+    {
+        CopyableTextUnformatted(row[2].c_str(), "##name", COPY_DATA_NOTIFICATION, false,
+                                true);
+    }
 
 }
 

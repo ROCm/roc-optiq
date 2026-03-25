@@ -183,7 +183,10 @@ ComputeTableView::RebuildTableDataCache()
     m_table_widgets.clear();
 
     m_custom_table.AddRow({ 2, 1, 0 });
-    m_custom_table.AddRow({ 5, 1, 0 });
+    //m_custom_table.AddRow({ 5, 1, 0 });
+    //m_custom_table.AddRow({ 6, 1, 0 });
+    m_custom_table.AddRow({ 18, 1, 0 });
+
     // STUB: add some dummy metric to make sure the custom table is
                        // shown, will remove it later when we have a better way to
                        // determine whether to show the custom table tab

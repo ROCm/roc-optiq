@@ -90,15 +90,16 @@ public:
 private:
     void UpdateColumns(const std::vector<std::string>& value_names);
     void FillTableRow(const AvailableMetrics::Table& table, const MetricId& metric_id);
-    void FillCommonColumns(const MetricId&                metric_id,
-                           const AvailableMetrics::Table& table,
-                           std::vector<std::string>&      row);
-    bool                                  IsColumnExist(const std::string& column_name);
-    std::map<uint32_t, std::string>       m_columns;
-    uint32_t                              m_last_column_index;
-    std::vector<std::vector<std::string>> m_rows;
-    std::vector<MetricId>                 m_metric_ids;
-    uint64_t                              m_client_id;
+    void FillCommons(const MetricId&                  metric_id,
+                           const AvailableMetrics::Table&   table,
+                           std::map<uint32_t, std::string>& row, std::shared_ptr<MetricValue>);
+    std::optional<uint32_t> GetColumnIndex(const std::string& column_name);
+    void RenderCommonColumns(std::map<uint32_t, std::string>& row);
+    std::map<uint32_t, std::string>              m_columns;
+    std::uint32_t                                m_lust_column_index;
+    std::vector<std::map<uint32_t, std::string>> m_rows;
+    std::vector<MetricId>                        m_metric_ids;
+    uint64_t                                     m_client_id;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     DataProvider& m_data_provider;

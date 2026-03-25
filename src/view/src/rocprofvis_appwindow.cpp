@@ -665,10 +665,12 @@ AppWindow::RenderFileMenu(Project* project)
                 }
             }
 
-            auto start_cleanup = [this, trace_view](bool rebuild) {
+            std::string project_id = has_trace ? project->GetID() : "";
+            auto start_cleanup = [this, trace_view, project_id](bool rebuild) {
                 m_disable_app_interaction = true;
-                trace_view->CleanupDatabase(rebuild, [this]() {
+                trace_view->CleanupDatabase(rebuild, [this, project_id]() {
                     m_disable_app_interaction = false;
+                    m_tab_container->RemoveTab(project_id);
                 });
             };
 

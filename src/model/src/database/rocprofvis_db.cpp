@@ -25,7 +25,7 @@ rocprofvis_dm_result_t Database::AddTrackProperties(
     try {
         m_track_properties.push_back(std::make_unique<rocprofvis_dm_track_params_t>(props));
     }
-    catch (std::exception ex)
+    catch (const std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, kRocProfVisDmResultAllocFailure);
     }
@@ -61,7 +61,7 @@ rocprofvis_dm_result_t  Database::CleanupAsync(
     try {
         future->SetWorker(std::move(std::thread(Database::CleanupStatic, this, future, rebuild)));
     }
-    catch (std::exception ex)
+    catch (const std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
@@ -76,7 +76,7 @@ rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
     try {
         future->SetWorker(std::move(std::thread(Database::ReadTraceMetadataStatic, this, future)));
     }
-    catch (std::exception ex)
+    catch (const std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }

@@ -245,49 +245,145 @@ CustomTable::CustomTable(DataProvider&                     data_provider,
 , m_compute_selection(compute_selection)
 , m_client_id(client_id)
 { 
-    m_columns.push_back("Metric ID");
-    m_columns.push_back("Metric");
-    m_columns.push_back("Value");
-    m_last_column = "Unit";
+    m_columns[0] = "Metric ID";
+    m_columns[1] = "Metric";
+    m_columns[2] = "Value";
+    m_last_column_index                             = 2;
+    m_columns[std::numeric_limits<uint32_t>::max()] = "Unit";
 }
 
 void
-CustomTable::UpdateValues()
+CustomTable::UpdateColumns(const std::vector<std::string>& value_names)
 {
+    for(const auto& name : value_names)
+    {
+        if(!IsColumnExist(name))
+            m_columns[++m_last_column_index] = name;
+    }
+}
+
+void
+CustomTable::FillTableRow(const AvailableMetrics::Table& table, const MetricId& metric_id)
+{
+    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+    if(kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+    auto& model = m_data_provider.ComputeModel();
+    auto metric_value =
+        model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
+                             metric_id.table_id, metric_id.entry_id);
+    std::vector<std::string> row;
+
+    FillCommonColumns(metric_id, table, row);
+    // row.push_back(entrie.description);
+
+    char buf[64];
+    for(const auto& value_name : table.value_names)
+    {
+        if(metric_value && metric_value->entry && metric_value->values.count(value_name))
+        {
+            snprintf(buf, sizeof(buf), "%.2f", metric_value->values.at(value_name));
+            row.push_back(buf);
+        }
+        else
+        {
+            row.emplace_back();
+        }
+    }
+
+    m_rows.push_back(std::move(row));
+}
+
+void
+CustomTable::FillCommonColumns(const MetricId&                metric_id,
+                               const AvailableMetrics::Table& table,
+                               std::vector<std::string>&      row)
+{
+    auto entrie =
+        table.entries.find(metric_id.entry_id)->second;  // TODO: Process if not found
+    auto id = std::to_string(entrie.category_id) + "." + std::to_string(entrie.table_id) +
+              "." + std::to_string(entrie.id);
+    row.push_back(id);
+    row.push_back(entrie.name);
+
+    //row.push_back(entrie.unit);
+}
+
+bool
+CustomTable::IsColumnExist(const std::string& column_name)
+{
+    for(auto column : m_columns)
+    {
+        if(column.second == column_name)
+            return true;
+    }
+    return false;
+}
+
+void
+CustomTable::AddRow(MetricId metric_id)
+{
+    m_metric_ids.push_back(metric_id);
+
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
        kernel_id == ComputeSelection::INVALID_SELECTION_ID)
     {
         return;
-    } //TODO: bad way to process it, figure out something better
+    }  // TODO: bad way to process it, figure out something better
 
-    auto& model = m_data_provider.ComputeModel();
-    for (auto& metric_id : m_metric_ids)
-    {
-        auto metric_value =
-            model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
-                                 metric_id.table_id, metric_id.entry_id);
 
-        const auto& tree = model.GetWorkloads().at(workload_id).available_metrics.tree;
+    // TODO: may be I need to add some getters to data provider,
+    // to avoid so long chains of calls to get the data, and also
+    // to avoid direct access to the model from the widget
+    const auto& tree = m_data_provider.ComputeModel()
+                           .GetWorkloads()
+                           .at(workload_id)
+                           .available_metrics.tree;
+    const auto& table = tree.at(metric_id.category_id).tables.at(metric_id.table_id);
 
-        auto table = tree.at(metric_id.category_id).tables.at(metric_id.table_id);
+    UpdateColumns(table.value_names);
 
-        for(const auto& name : table.value_names)
-            m_columns.push_back(name);
-    }
-}
-
-void
-CustomTable::AddRow(MetricId metric)
-{
-    m_metric_ids.push_back(metric);
-    UpdateValues();
+    FillTableRow(table, metric_id);
 }
 
 void
 CustomTable::Render() 
 {
+    if(m_rows.empty())
+        return;
+
+    int num_columns = static_cast<int>(m_columns.size());
+
+    SectionTitle("custom table");
+    if(!ImGui::BeginTable("custom table", num_columns, ImGuiTableFlags_Borders))
+        return;
+
+    for(const auto& column : m_columns)
+        ImGui::TableSetupColumn(column.second.c_str());
+    ImGui::TableHeadersRow();
+
+    uint32_t row_idx = 0;
+    for (auto row : m_rows)
+    {
+        ImGui::PushID(row_idx++);
+        ImGui::TableNextRow();
+
+        ImGui::TableNextColumn();
+        //TODO: Thing about table structure, avoid to use directly indexes
+        CopyableTextUnformatted(row[0].c_str(), "##mid", COPY_DATA_NOTIFICATION,
+                                false, true);
+
+        ImGui::TableNextColumn();
+        CopyableTextUnformatted(row[1].c_str(), "##name", COPY_DATA_NOTIFICATION, false,
+                                true);
+        ImGui::PopID();
+    }
+
+    ImGui::EndTable();
 
 }
 

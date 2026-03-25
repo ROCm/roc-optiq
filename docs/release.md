@@ -72,3 +72,106 @@ Initial release of ROCm Optiq (Beta).
 - **Histogram**: Shows the event density across all visible tracks and highlights the zoomed-in region to quickly identify hotspots.
 - **Time Range Filtering**: Select a specific time interval to filter events and counter samples for focused analysis.
 - **Event Search**: Quickly locate target events.
+
+## Known issues
+
+### Metrics that reference ``None`` return N/A
+
+If a metric expression contains ``None``, ROCm Compute Profiler may ignore the metric value even when it isn't ``None``. As a result, ROCm-Optiq displays **N/A** for affected metrics. 
+
+- System Speed of Light (0200) 
+  - VALU Active Threads 
+  - LDS Bank Conflicts/Access 
+  - vL1D Cache Hit Rate 
+  - L2 Cache Hit Rate 
+  - L2-Fabric Read Latency 
+  - L2-Fabric Write Latency 
+  - sL1D Cache Hit Rate 
+  - L1I Fetch Latency 
+- Memory Chart (0300) 
+  - LDS Latency 
+  - VL1 Hit 
+  - VL1 Lat 
+  - VL1 Coalesce 
+  - VL1 Stall 
+  - sL1D Hit 
+  - sL1D Lat 
+  - IL1 Lat 
+  - L2 Rd Lat 
+  - L2 Wr Lat 
+- Command Processor CPC/CPF (0500) 
+  - CPF Utilization 
+  - CPF Stall 
+  - CPF-L2 Utilization 
+  - CPF-L2 Stall 
+  - CPF-UTCL1 Stall 
+  - CPC SYNC FIFO Full Rate 
+  - CPC CANE Stall Rate 
+  - CPC ADC Utilization 
+  - CPC Utilization 
+  - CPC Stall Rate 
+  - CPC Packet Decoding Utilization 
+  - CPC-Workgroup Manager Utilization 
+  - CPC-L2 Utilization 
+  - CPC-UTCL1 Stall 
+  - CPC-UTCL2 Utilization 
+- Workgroup Manager SPI (0600) 
+  - VGPR Writes 
+  - SGPR Writes 
+  - Not-scheduled Rate (Workgroup Manager) 
+  - Not-scheduled Rate (Scheduler-Pipe) 
+  - Scheduler-Pipe FIFO Full Rate 
+  - Scheduler-Pipe Stall Rate 
+  - Scratch Stall Rate 
+- Compute Units Compute Pipeline (1100) 
+  - VALU Active Threads 
+  - MFMA Instruction Cycles 
+  - VMEM Latency 
+  - SMEM Latency 
+- Local Data Share LDS (1200) 
+  - Bank Conflict Rate 
+  - LDS Latency 
+  - Bank Conflicts/Access 
+- Scalar L1 Data Cache (1400) 
+  - Cache Hit Rate (appears twice; likely different subsections) 
+- Vector L1 Data Cache (1600) 
+  - Hit rate 
+  - Utilization 
+  - Coalescing 
+  - Stalled on L2 Data 
+  - Stalled on L2 Req 
+  - Stalled on Address 
+  - Stalled on Data 
+  - Stalled on Latency FIFO 
+  - Stalled on Request FIFO 
+  - Stalled on Read Return 
+  - Tag RAM Stall (Read) 
+  - Tag RAM Stall (Write) 
+  - Tag RAM Stall (Atomic) 
+  - Cache Hit Rate 
+  - Hit Ratio 
+- L2 Cache (1700) 
+  - HBM Read Traffic 
+  - Remote Read Traffic 
+  - Uncached Read Traffic 
+  - HBM Write and Atomic Traffic 
+  - Remote Write and Atomic Traffic 
+  - Atomic Traffic 
+  - Uncached Write and Atomic Traffic 
+  - Read Latency 
+  - Write and Atomic Latency 
+  - Atomic Latency 
+  - Read Stall 
+  - Write Stall 
+  - Cache Hit 
+  - Read - PCIe Stall 
+  - Read - Infinity Fabric Stall 
+  - Read - HBM Stall 
+  - Write - PCIe Stall 
+  - Write - Infinity Fabric Stall 
+  - Write - HBM Stall 
+  - Write - Credit Starvation 
+
+### ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-format`` 
+
+When you profile with the ``--output-format`` option, the ``workload_name`` column in ``sysinfo.csv`` might be empty. This can prevent views in the ROCm Compute Profiler analysis database from joining tables based on ``workload_name``, which makes system information unavailable. 

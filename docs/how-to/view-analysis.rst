@@ -69,7 +69,7 @@ The pie chart plots:
    
    The kernel name and duration are displayed when you hold your cursor over a section of the pie chart. 
 
-The bar chart displays per-kernel metrics the number of invocations, Total, Min, Max, Mean, and Median duration data. 
+The bar chart displays per-kernel metrics including the number of invocations, Total, Min, Max, Mean, and Median duration data. 
 
 .. image:: ../images/summary-view-bar-chart.png
    :width: 800

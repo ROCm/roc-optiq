@@ -7,10 +7,15 @@
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_requests.h"
 
+#include "widgets/rocprofvis_notification_manager.h"
+
+
 namespace RocProfVis
 {
 namespace View
 {
+MetricTableCache::MetricTableCache(std::function<void(MetricId)> add_row_func) 
+: m_add_row_to_custom(add_row_func){}
 
 void
 MetricTableCache::Populate(const AvailableMetrics::Table& table,
@@ -41,9 +46,8 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
         uint32_t eid = entry->id;
 
         Row row;
-        row.metric_id   = std::to_string(entry->category_id) + "." +
-                          std::to_string(entry->table_id) + "." +
-                          std::to_string(eid);
+
+        row.metric_id   = { entry->category_id, entry->table_id, eid};
         row.name        = entry->name;
         row.description = entry->description;
         row.unit        = entry->unit.empty() ? "N/A" : entry->unit;
@@ -101,19 +105,38 @@ MetricTableCache::Render() const
     int row_idx = 0;
     for(const auto& row : m_rows)
     {
+        auto menu_func = [&](const char* value_to_copy) {
+            if(ImGui::BeginPopupContextItem())
+            {
+                if(ImGui::MenuItem("Copy cell value"))
+                {
+                    ImGui::SetClipboardText(value_to_copy);
+                    NotificationManager::GetInstance().Show(
+                            COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+                }
+                if(ImGui::MenuItem("Add to custom table"))
+                {
+                    m_add_row_to_custom({ row.metric_id.category_id,
+                                          row.metric_id.table_id,
+                                          row.metric_id.entry_id });
+                }
+                ImGui::EndPopup();
+            }
+        };
         ImGui::PushID(row_idx++);
         ImGui::TableNextRow();
 
         ImGui::TableNextColumn();
-        CopyableTextUnformatted(row.metric_id.c_str(), "##mid",
-                                COPY_DATA_NOTIFICATION, false, true);
+        CopyableTextUnformatted(row.metric_id.ToString().c_str(), "##mid",
+                                COPY_DATA_NOTIFICATION,
+                                false, true, menu_func);
 
         ImGui::TableNextColumn();
-        CopyableTextUnformatted(row.name.c_str(), "##name",
-                                COPY_DATA_NOTIFICATION, false, true);
+        CopyableTextUnformatted(row.name.c_str(), "##name", COPY_DATA_NOTIFICATION, false,
+                                true, menu_func);
         if(!row.description.empty() && ImGui::IsItemHovered())
         {
-            constexpr float kTooltipMaxWidth = 400.0f;
+            constexpr float kTooltipMaxWidth = 400.0f; //TODO: move to constant
             ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
                                                 ImVec2(kTooltipMaxWidth, FLT_MAX));
             BeginTooltipStyled();
@@ -130,7 +153,7 @@ MetricTableCache::Render() const
             {
                 CopyableTextUnformatted(row.values[vi].c_str(),
                                         std::string("##v") + std::to_string(vi),
-                                        COPY_DATA_NOTIFICATION, false, true);
+                                        COPY_DATA_NOTIFICATION, false, true, menu_func);
             }
             else
             {
@@ -141,8 +164,8 @@ MetricTableCache::Render() const
         ImGui::TableNextColumn();
         if(row.unit != "N/A")
         {
-            CopyableTextUnformatted(row.unit.c_str(), "##unit",
-                                    COPY_DATA_NOTIFICATION, false, true);
+            CopyableTextUnformatted(row.unit.c_str(), "##unit", COPY_DATA_NOTIFICATION,
+                                    false, true, menu_func);
         }
         else
         {
@@ -293,14 +316,6 @@ CustomTable::FillTableRow(const AvailableMetrics::Table& table, const MetricId& 
         }
 
     }
-
-
-
-
-
-
-
-
     m_rows.push_back(std::move(row));
 }
 
@@ -312,9 +327,7 @@ CustomTable::FillCommons(const MetricId& metric_id, const AvailableMetrics::Tabl
     auto entrie =
         table.entries.find(metric_id.entry_id)->second;  // TODO: Process if not found
 
-    auto id = std::to_string(entrie.category_id) + "." + std::to_string(entrie.table_id) +
-              "." + std::to_string(entrie.id);
-    row[0] = id;
+    row[0]  = metric_id.ToString();
     row[1] = entrie.name;
     if(metric_value && !metric_value->values.empty())
     {

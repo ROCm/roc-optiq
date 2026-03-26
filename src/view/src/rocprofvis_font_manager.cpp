@@ -56,8 +56,8 @@ FontManager::GetDPIScaledFontIndex()
     int best_index = 0;
     for(int i = 1; i < m_all_fonts.size(); i++)
     {
-        if(std::abs(m_all_fonts[i]->FontSize - scaled_size) <
-           std::abs(m_all_fonts[i - 1]->FontSize - scaled_size))
+        if(std::abs(m_all_fonts[i]->LegacySize - scaled_size) <
+           std::abs(m_all_fonts[i - 1]->LegacySize - scaled_size))
             best_index = i;
     }
 
@@ -175,7 +175,8 @@ FontManager::Init()
         m_all_icon_fonts[sz] = icon_font;
     }
 
-    return io.Fonts->Build();
+    // Don't call Build() - ImGui 1.92+ backend handles font atlas building automatically
+    return true;
 }
 
 const std::vector<ImFont*>

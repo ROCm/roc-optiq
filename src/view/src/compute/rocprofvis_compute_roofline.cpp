@@ -688,7 +688,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
         ImGui::BeginChild("menus_window", ImVec2(menus_width, 0.0f),
-                          ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY);
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         float menus_content_width =
             ImGui::GetWindowWidth() - 2.0f * style.WindowPadding.x;
         float scroll_bar_width = ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f;

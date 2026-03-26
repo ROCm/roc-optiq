@@ -182,10 +182,10 @@ ComputeTableView::RebuildTableDataCache()
 {
     m_table_widgets.clear();
 
-    m_custom_table.AddRow({ 2, 1, 0 });
+    //m_custom_table.AddRow({ 2, 1, 0 });
     //m_custom_table.AddRow({ 5, 1, 0 });
     //m_custom_table.AddRow({ 6, 1, 0 });
-    m_custom_table.AddRow({ 18, 1, 0 });
+    //m_custom_table.AddRow({ 18, 1, 0 });
 
     // STUB: add some dummy metric to make sure the custom table is
                        // shown, will remove it later when we have a better way to
@@ -211,8 +211,10 @@ ComputeTableView::RebuildTableDataCache()
             TableKey key{};
             key.fields.category_id = cat->id;
             key.fields.table_id    = tbl->id;
-
-            MetricTableCache widget;
+            auto add_row_func = [this](MetricId metric_id) {
+                m_custom_table.AddRow(metric_id);
+            };
+            MetricTableCache widget(add_row_func);
             widget.Populate(*tbl, [&](uint32_t eid) {
                 return model.GetMetricValue(
                     m_client_id, kernel_id, cat->id, tbl->id, eid);

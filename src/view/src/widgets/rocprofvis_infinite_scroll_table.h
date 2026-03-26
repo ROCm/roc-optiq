@@ -63,6 +63,13 @@ protected:
         char        filter[FILTER_SIZE];
     };
 
+    struct ColumnFilter
+    {
+        char filter_text[256];
+        bool is_active;
+        ColumnFilter() : filter_text{0}, is_active(false) {}
+    };
+
     virtual void FormatData() const;
     virtual void IndexColumns();
     virtual void RowSelected(const ImGuiMouseButton mouse_button);
@@ -77,9 +84,22 @@ protected:
                                                            size_t stream_id_column_index) const;
     void                          ExportToFile() const;
 
+    void        RenderColumnFilter(int column_index, const std::vector<std::string>& column_names);
+    void        ApplyColumnFilters();
+    void        ClearAllColumnFilters();
+    std::string BuildFilterExpressionFromColumns(const std::vector<std::string>& column_names) const;
+    size_t      GetActiveColumnFilterCount() const;
+    bool        ValidateColumnFilterExpression(const char* expr, bool is_text_column);
+    bool        IsNumericColumn(int column_index) const;
+
     FilterOptions            m_filter_options;
     FilterOptions            m_pending_filter_options;
     std::vector<size_t>      m_important_column_idxs;
+
+    std::vector<ColumnFilter> m_column_filters;
+    std::vector<ColumnFilter> m_pending_column_filters;
+    std::vector<bool>         m_column_is_numeric;
+    bool                      m_enable_column_filters;
 
     std::vector<int> m_hidden_column_indices;  // This must be sorted in increasing order.
     std::array<size_t, kNumTimeColumns> m_time_column_indices;

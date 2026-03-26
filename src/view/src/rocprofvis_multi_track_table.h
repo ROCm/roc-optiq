@@ -32,7 +32,6 @@ private:
     void IndexColumns() override;
     void RowSelected(const ImGuiMouseButton mouse_button) override;
     void RenderContextMenu();
-    bool XButton(const char* id) const;
     void CopyCellToClipboard(bool use_formatted_data);
 
     bool m_defer_track_selection_changed;
@@ -40,12 +39,7 @@ private:
     // Keep track of currently selected tracks for this table type
     std::vector<uint64_t> m_selected_tracks;
 
-    std::vector<std::string> m_group_by_choices;
-    std::vector<const char*> m_group_by_choices_ptr;
-    int                      m_group_by_selection_index;
-
     bool m_open_context_menu;
-    char m_filter_store[FILTER_SIZE];
 };
 
 }  // namespace View

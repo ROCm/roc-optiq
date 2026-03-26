@@ -26,6 +26,11 @@ constexpr const char* END_TS_COLUMN_NAME             = "end";
 constexpr const char* DURATION_COLUMN_NAME           = "duration";
 constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
+constexpr std::string_view FILTER_HINT_TEXT    = "LIKE %text%";
+constexpr std::string_view FILTER_HINT_NUMERIC = ">, <, =, >=, <=, !=";
+constexpr float FILTER_MIN_CHAR_WIDTH = static_cast<float>(
+    std::max(FILTER_HINT_TEXT.length(), FILTER_HINT_NUMERIC.length()));
+
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
                                          const std::string& no_data_text,
                                          std::shared_ptr<TimelineSelection> timeline_selection)
@@ -53,6 +58,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_no_data_text(no_data_text)
 , m_timeline_selection(timeline_selection)
 , m_horizontal_scroll(0.0f)
+, m_enable_column_filters(false)
 , m_time_column_indices(
       { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
 , m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
@@ -250,7 +256,13 @@ InfiniteScrollTable::Render()
                 ImGui::SetScrollY(0.0f);
             }
 
-            ImGui::TableSetupScrollFreeze(0, 1);  // Freeze header row
+            ImGui::TableSetupScrollFreeze(0, m_enable_column_filters ? 2 : 1);
+
+            float char_width = ImGui::CalcTextSize("M").x;
+            float filter_min_width = m_enable_column_filters
+                                         ? char_width * FILTER_MIN_CHAR_WIDTH
+                                         : 0.0f;
+
             int j = 0;
             for(int i = 0; i < column_names.size(); i++)
             {
@@ -269,7 +281,19 @@ InfiniteScrollTable::Render()
                         j++;
                     }
                 }
-                ImGui::TableSetupColumn(column_names[i].c_str(), col_flags);
+
+                if(m_enable_column_filters && !(col_flags & ImGuiTableColumnFlags_DefaultHide))
+                {
+                    float name_width = ImGui::CalcTextSize(column_names[i].c_str()).x;
+                    float min_width = std::max(name_width, filter_min_width);
+                    ImGui::TableSetupColumn(column_names[i].c_str(),
+                                            col_flags | ImGuiTableColumnFlags_WidthFixed,
+                                            min_width);
+                }
+                else
+                {
+                    ImGui::TableSetupColumn(column_names[i].c_str(), col_flags);
+                }
             }
 
             // Get sort specs
@@ -287,6 +311,16 @@ InfiniteScrollTable::Render()
             }
 
             ImGui::TableHeadersRow();
+
+            if(m_enable_column_filters)
+            {
+                ImGui::TableNextRow();
+                for(int i = 0; i < static_cast<int>(column_names.size()); i++)
+                {
+                    ImGui::TableSetColumnIndex(i);
+                    RenderColumnFilter(i, column_names);
+                }
+            }
 
             // Calculate the height of the top spacer based on the start row
             float top_spacer_height = (float) start_row * row_height;
@@ -557,10 +591,6 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
     {
         FilterOptions& filter =
             m_filter_requested ? m_pending_filter_options : m_filter_options;
-        if(filter.group_by == "")
-        {
-            filter.group_columns[0] = '\0';
-        }
         // check that sort order and column index actually are different from the
         // current values before fetching
         if(m_filter_requested || sort_order != table_params->m_sort_order ||
@@ -570,8 +600,6 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
             table_params->m_sort_column_index = sort_column_index;
             table_params->m_sort_order        = sort_order;
             table_params->m_filter            = filter.filter;
-            table_params->m_group = filter.group_by;
-            table_params->m_group_columns = filter.group_columns;
 
             // if filtering changed reset the start row as current row
             // may be beyond result length causing an assertion in controller
@@ -622,6 +650,22 @@ InfiniteScrollTable::IndexColumns()
         else if(column_names[i] == DURATION_COLUMN_NAME)
         {
             m_time_column_indices[kDurationNs] = i;
+        }
+    }
+
+    if(m_enable_column_filters)
+    {
+        size_t num_columns = column_names.size();
+        if(m_pending_column_filters.size() != num_columns)
+        {
+            m_pending_column_filters.assign(num_columns, ColumnFilter());
+            m_column_filters.assign(num_columns, ColumnFilter());
+        }
+
+        m_column_is_numeric.resize(num_columns, false);
+        for(size_t i = 0; i < num_columns; i++)
+        {
+            m_column_is_numeric[i] = IsNumericColumn(static_cast<int>(i));
         }
     }
 }
@@ -836,6 +880,190 @@ InfiniteScrollTable::ExportToFile() const
                     NotificationLevel::Info);
             }
         });
+}
+
+bool
+InfiniteScrollTable::IsNumericColumn(int column_index) const
+{
+    const std::vector<std::vector<std::string>>& table_data =
+        m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
+
+    for(size_t row = 0; row < std::min(table_data.size(), static_cast<size_t>(5)); row++)
+    {
+        if(column_index < static_cast<int>(table_data[row].size()))
+        {
+            const std::string& val = table_data[row][column_index];
+            if(!val.empty())
+            {
+                char first = val[0];
+                return std::isdigit(first) || first == '-' || first == '.';
+            }
+        }
+    }
+    return false;
+}
+
+void
+InfiniteScrollTable::RenderColumnFilter(int column_index,
+                                        const std::vector<std::string>& column_names)
+{
+    size_t total_columns = column_names.size();
+    if(m_pending_column_filters.size() != total_columns)
+    {
+        m_pending_column_filters.resize(total_columns);
+    }
+
+    if(column_index < 0 || column_index >= static_cast<int>(total_columns))
+        return;
+
+    // Skip hidden/internal columns
+    if(!column_names[column_index].empty() && column_names[column_index][0] == '_')
+        return;
+
+    ColumnFilter& filter = m_pending_column_filters[column_index];
+
+    bool is_numeric = false;
+    if(column_index < m_column_is_numeric.size())
+    {
+        is_numeric = m_column_is_numeric[column_index];
+    }
+    const char* hint = is_numeric ? ">, <, =, >=, <=, !=" : "LIKE %text%";
+
+    ImGui::PushID(column_index);
+    ImGui::SetNextItemWidth(-1);
+
+    if(ImGui::InputTextWithHint("##col_filter", hint, filter.filter_text,
+                                sizeof(filter.filter_text)))
+    {
+        filter.is_active = (strlen(filter.filter_text) > 0);
+    }
+
+    ImGui::PopID();
+}
+
+void
+InfiniteScrollTable::ApplyColumnFilters()
+{
+    const std::vector<std::string>& column_names =
+        m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
+
+    for(size_t i = 0; i < m_pending_column_filters.size(); i++)
+    {
+        const ColumnFilter& filter = m_pending_column_filters[i];
+        if(!filter.is_active || strlen(filter.filter_text) == 0)
+            continue;
+
+        if(!column_names[i].empty() && column_names[i][0] == '_')
+            continue;
+
+        bool is_text = true;
+        if(i < m_column_is_numeric.size())
+        {
+            is_text = !m_column_is_numeric[i];
+        }
+        if(!ValidateColumnFilterExpression(filter.filter_text, is_text))
+        {
+            spdlog::warn("Invalid filter for column '{}': {}", column_names[i],
+                         filter.filter_text);
+            NotificationManager::GetInstance().Show(
+                "Invalid filter for \"" + column_names[i] +
+                    "\": " + std::string(filter.filter_text),
+                NotificationLevel::Error);
+            return;
+        }
+    }
+
+    m_column_filters = m_pending_column_filters;
+    std::string expr = BuildFilterExpressionFromColumns(column_names);
+    snprintf(m_pending_filter_options.filter, FILTER_SIZE, "%s", expr.c_str());
+    m_filter_requested = true;
+}
+
+void
+InfiniteScrollTable::ClearAllColumnFilters()
+{
+    size_t num_columns = m_pending_column_filters.size();
+    m_pending_column_filters.assign(num_columns, ColumnFilter());
+    m_column_filters.assign(num_columns, ColumnFilter());
+    m_pending_filter_options.filter[0] = '\0';
+    m_filter_requested = true;
+}
+
+std::string
+InfiniteScrollTable::BuildFilterExpressionFromColumns(
+    const std::vector<std::string>& column_names) const
+{
+    std::string expression;
+    for(size_t i = 0; i < m_column_filters.size() && i < column_names.size(); i++)
+    {
+        const ColumnFilter& filter = m_column_filters[i];
+        if(!filter.is_active || strlen(filter.filter_text) == 0)
+            continue;
+
+        if(!column_names[i].empty() && column_names[i][0] == '_')
+            continue;
+
+        if(!expression.empty())
+        {
+            expression += " AND ";
+        }
+
+        std::string filter_text(filter.filter_text);
+        std::string trimmed = filter_text;
+        trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+        trimmed.erase(trimmed.find_last_not_of(" \t") + 1);
+
+        expression += column_names[i] + " " + trimmed;
+    }
+    return expression;
+}
+
+size_t
+InfiniteScrollTable::GetActiveColumnFilterCount() const
+{
+    size_t count = 0;
+    for(const auto& filter : m_column_filters)
+    {
+        if(filter.is_active && strlen(filter.filter_text) > 0)
+            count++;
+    }
+    return count;
+}
+
+bool
+InfiniteScrollTable::ValidateColumnFilterExpression(const char* expr, bool is_text_column)
+{
+    std::string trimmed(expr);
+    trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
+    trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
+
+    if(trimmed.empty())
+        return true;
+
+    if(is_text_column)
+    {
+        std::string lower = trimmed.substr(0, 4);
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        return lower == "like";
+    }
+    else
+    {
+        static const std::vector<std::string> ops = { ">=", "<=", "!=", "<>",
+                                                      ">",  "<",  "=" };
+        for(const auto& op : ops)
+        {
+            if(trimmed.find(op) == 0)
+            {
+                std::string value = trimmed.substr(op.length());
+                value.erase(0, value.find_first_not_of(" \t"));
+                value.erase(value.find_last_not_of(" \t") + 1);
+                return !value.empty() &&
+                       (std::isdigit(value[0]) || value[0] == '-' || value[0] == '.');
+            }
+        }
+        return !trimmed.empty() &&
+               (std::isdigit(trimmed[0]) || trimmed[0] == '-' || trimmed[0] == '.');
+    }
 }
 
 void

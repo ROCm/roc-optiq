@@ -122,6 +122,7 @@ private:
 
     EventManager::SubscriptionToken m_new_table_data_token;
     EventManager::SubscriptionToken m_format_changed_token;
+    EventManager::SubscriptionToken m_request_progress_update_token;
 };
 
 }  // namespace View

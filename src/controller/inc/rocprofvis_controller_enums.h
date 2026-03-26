@@ -174,10 +174,6 @@ typedef enum rocprofvis_controller_system_properties_t : uint32_t
     kRPVControllerSystemTrackById,
     // Notify controller when user select the trace
     kRPVControllerSystemNotifySelected,
-    // Get last stored data-model message
-    kRPVControllerSystemGetDmMessage,
-    // Get last stored data-model progress in percent
-    kRPVControllerSystemGetDmProgress,
     // Get histogram number of bucket
     kRPVControllerSystemGetHistogramBucketsNumber,
     // Get histogram bucket size
@@ -659,10 +655,10 @@ typedef enum rocprofvis_controller_future_properties_t : uint32_t
     __kRPVControllerFuturePropertiesFirst = 0xB0000000,
     // Result code
     kRPVControllerFutureResult = __kRPVControllerFuturePropertiesFirst,
-    // Data object
-    kRPVControllerFutureObject,
-    // Type of object, see rocprofvis_controller_object_type_t
-    kRPVControllerFutureType,
+    // Progress percentage
+    kRPVControllerFutureProgressPercentage,
+    // Progress message
+    kRPVControllerFutureProgressMessage,
     __kRPVControllerFuturePropertiesLast
 } rocprofvis_controller_future_properties_t;
 

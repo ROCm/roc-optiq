@@ -364,7 +364,7 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
 
     if (result == kRocProfVisResultSuccess)
     {
-        rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+        rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(Future::ProgressCallback, future);
         if(object2wait)
         {
             rocprofvis_dm_database_t db    = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);

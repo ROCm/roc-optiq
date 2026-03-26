@@ -78,6 +78,19 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
                 success ? "Exported: " + file_path : "Failed to export: " + file_path,
                 success ? NotificationLevel::Success : NotificationLevel::Error);
         });
+
+    auto request_progress_update_handler = [](std::shared_ptr<RocEvent> e) {
+        auto event = std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
+        if(event && event->GetRequestType() == RequestType::kTableExport)
+        {
+            NotificationManager::GetInstance().UpdateProgress(
+                EXPORT_PENDING_NOTIFICATION_ID, event->GetProgressPercent(),
+                event->GetMessage());
+        }
+    };
+    m_request_progress_update_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        request_progress_update_handler);
 }
 
 InfiniteScrollTable::~InfiniteScrollTable()
@@ -86,6 +99,9 @@ InfiniteScrollTable::~InfiniteScrollTable()
                                              m_new_table_data_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimeFormatChanged), m_format_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        m_request_progress_update_token);
 }
 
 uint64_t

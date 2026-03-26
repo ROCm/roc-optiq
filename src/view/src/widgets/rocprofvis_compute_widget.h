@@ -12,6 +12,18 @@ namespace RocProfVis
 namespace View
 {
 
+struct MetricId
+{
+    std::string ToString() const
+    {
+        return std::to_string(category_id) + "." + std::to_string(table_id) + "." +
+               std::to_string(entry_id);
+    };
+    uint32_t category_id;
+    uint32_t table_id;
+    uint32_t entry_id;
+};
+
 class MetricTableCache
 {
 public:
@@ -19,12 +31,15 @@ public:
 
     struct Row
     {
-        std::string              metric_id;
+        MetricId                 metric_id;
         std::string              name;
         std::string              description;
         std::vector<std::string> values;
         std::string              unit;
     };
+
+    MetricTableCache() = default;
+    MetricTableCache(std::function<void(MetricId)> add_row_func);
 
     void Populate(const AvailableMetrics::Table& table,
                   const MetricValueLookup&       get_value);
@@ -35,10 +50,11 @@ public:
     bool Empty() const;
 
 private:
-    std::string              m_title;
-    std::string              m_table_id;
-    std::vector<std::string> m_column_names;
-    std::vector<Row>         m_rows;
+    std::string                   m_title;
+    std::string                   m_table_id;
+    std::vector<std::string>      m_column_names;
+    std::vector<Row>              m_rows;
+    std::function<void(MetricId)> m_add_row_to_custom;
 };
 
 constexpr uint32_t METRIC_CAT_SOL   = 2;
@@ -74,13 +90,6 @@ private:
 class CustomTable
 {
 public:
-    struct MetricId
-    {
-        uint32_t category_id;
-        uint32_t table_id;
-        uint32_t entry_id;
-    };
-
     CustomTable(DataProvider&                     data_provider,
                 std::shared_ptr<ComputeSelection> compute_selection, uint64_t client_id);
     void AddRow(MetricId metric_id);

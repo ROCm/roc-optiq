@@ -1,5 +1,5 @@
 .. meta::
-  :description: Learn how to customize your ROCm Optiq project
+  :description: Learn how to customize your ROCm Optiq project.
   :keywords: Optiq, ROCm, customize, filter, bookmarks, annotations
 
 .. _customize:
@@ -15,16 +15,51 @@ Customize your ROCm Optiq project
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
 
-You can customize the data views of an open trace file in ROCm Optiq, including display settings, saved trace selections, added bookmarks/annotations, and more.
+You can customize display settings, filters, bookmarks, and more in your ROCm Optiq projects.
+
+Change display settings
+=======================
+
+You can adjust the display settings in your ROCm Compute Profiler and ROCm Systems Profiler projects.
+
+Select **Edit** > **Preferences** to adjust these global display settings for ROCm Optiq from the **Settings** menu: 
+
+- The application theme display (Light or Dark mode).
+- The font scaling: automatic based on the display DPI, or customized using the font size control:
+
+  .. image:: ../images/settings.png
+     :width: 600
+
+- The time unit settings displayed on the **Timeline View**.
+
+  .. image:: ../images/units.png
+     :width: 600
+
+Show/hide panels
+================
+
+Use the **View** menu to show and hide application panels.
+
+.. image:: ../images/view.png
+  :width: 300
+
+Customize ROCm Optiq projects for ROCm Systems Profiler traces
+==============================================================
+
+You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, saved trace selections, added bookmarks/annotations, and more.
+
+.. note::
+
+   These settings only apply to ROCm Systems Profiler trace projects. They don't apply to ROCm Compute Profiler projects.
 
 .. _time-range-filter:
 
 Set a time range filter
-=======================
+-----------------------
 
 Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
 
-To set a time range filter, press and hold **Ctrl** while dragging your mouse in the in the **Timeline View** to select a range.
+To set a time range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
 
 .. image:: ../images/filter.png
    :width: 600
@@ -40,14 +75,14 @@ Selecting this will set a time range filter with boundaries at the event's start
 
 .. tip::
 
-   You can press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
+   Press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
 
 To clear the time range selection, press **Esc** or right-click and select **Remove Selection**:
 
 |remove|
 
 Save trace selections
----------------------
+~~~~~~~~~~~~~~~~~~~~~
 
 When there's an active time range filter, select **Edit** > **Save Trace Selection** to trim the trace:
 
@@ -59,7 +94,7 @@ This creates a new trace file containing only the events in the filter.
 .. _annotation:
 
 Add an annotation
-=================
+-----------------
 
 Annotations are customized notes you can add to any area of the :ref:`timeline`.
 
@@ -87,10 +122,10 @@ To add an annotation:
   - Edit or delete the annotation by clicking |pen|.
   - View the complete list of annotations in the **Annotations** tab of the :ref:`advanced` section.
   - Check the **Visibility** option in the **Annotations** tab to toggle the visibility of individual annotations.
-  - Clicking on a row in the annotations list brings the selected annotation into view.
+  - Clicking a row in the annotations list displays the selected annotation.
 
 Create bookmarks
-================
+----------------
 
 The current view on the timeline (scroll and zoom position) can be saved to a bookmark for quick navigation.
 
@@ -105,26 +140,10 @@ Or:
 2.	Press any key from **0** - **9** to restore the view to a stored bookmark from that index number shortcut. For example, if you save a bookmark using **Ctrl** + **1**, pressing **1** restores that bookmark.
 
 Delete bookmarks
-----------------
+~~~~~~~~~~~~~~~~
 
 - To delete a bookmark, click **X** to delete a bookmark from the |book| menu. 
 - Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
-
-Change display settings
-=======================
-
-You can change these global display settings for ROCm Optiq from the **Settings** menu:
-
-- The application theme display (Light or Dark mode).
-- The font scaling: either automatic based on the display DPI, or customized using the font size control:
-
-  .. image:: ../images/settings.png
-     :width: 600
-
-- The time unit settings displayed on the **Timeline View**.
-
-  .. image:: ../images/units.png
-     :width: 600
 
 Customize timeline display options
 ----------------------------------
@@ -157,7 +176,7 @@ Customize display options for each track by clicking the gear icon in the track'
      :width: 400
 
 Set the flow rendering display mode
-===================================
+-----------------------------------
 
 Use the **Flow** buttons on the **Toolbar** to show and hide flow information on the :ref:`timeline`, or change the flow display mode from Render (fan) to Chain mode. 
 
@@ -175,20 +194,12 @@ Render mode shows events in a fan-out style, highlighting parallelism and branch
 
 .. note::
 
-  Chain mode and Render mode are visualization modes for relations; they don't represent the actual kernel scheduling flow.
-
-Show/hide panels
-================
-
-The **View** menu can be used to show and hide application panels.
-
-.. image:: ../images/view.png
-  :width: 300
+  Chain mode and Render mode are visualization modes for relations. They don't represent the actual kernel scheduling flow.
 
 Save a project file
-===================
+-------------------
 
-Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project (``.rpv`` file). 
+Persist the customizations made to tracks, bookmarks, and annotations by saving the session as a project  (``.rpv`` file). 
 
 - Select **File** > **Save As** to create a new project.
 - Select **File** > **Save** to overwrite the currently opened project.

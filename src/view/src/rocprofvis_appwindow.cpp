@@ -15,6 +15,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_utils.h"
@@ -308,6 +309,7 @@ AppWindow::Update()
 #ifdef USE_NATIVE_FILE_DIALOG
     UpdateNativeFileDialog();
 #endif
+    HotkeyManager::GetInstance().ProcessInput();
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();

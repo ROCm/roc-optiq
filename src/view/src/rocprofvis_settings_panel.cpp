@@ -5,6 +5,7 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_font_manager.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
@@ -87,6 +88,10 @@ SettingsPanel::Render()
             {
                 m_category = Other;
             }
+            if(ImGui::Selectable("Hotkeys", m_category == Hotkeys))
+            {
+                m_category = Hotkeys;
+            }
             ImGui::EndChild();
 
             ImGui::SameLine();
@@ -108,8 +113,13 @@ SettingsPanel::Render()
                 case Other:
                 {
                     RenderOtherSettings();
+                    break;
                 }
-                break;
+                case Hotkeys:
+                {
+                    RenderHotkeySettings();
+                    break;
+                }
             }
             ImGui::EndChild();
 
@@ -132,6 +142,11 @@ SettingsPanel::Render()
                         ResetUnitOptions();
                         break;
                     }
+                    case Hotkeys:
+                    {
+                        ResetHotkeySettings();
+                        break;
+                    }
                     break;
                 }
             }
@@ -151,6 +166,11 @@ SettingsPanel::Render()
                 m_settings_changed   = true;
                 m_settings_confirmed = true;
                 m_should_open        = false;
+                if(m_hotkeys_changed)
+                {
+                    m_settings.SaveHotkeySettings();
+                    m_hotkeys_changed = false;
+                }
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -159,6 +179,11 @@ SettingsPanel::Render()
                 auto temp_currentsettings = m_usersettings;
                 m_usersettings            = m_usersettings_initial;
                 m_settings.ApplyUserSettings(temp_currentsettings, false);
+                if(m_hotkeys_changed)
+                {
+                    HotkeyManager::GetInstance().ResetAllBindings();
+                    m_hotkeys_changed = false;
+                }
                 m_settings_changed = true;
                 m_should_open      = false;
                 ImGui::CloseCurrentPopup();
@@ -348,6 +373,139 @@ SettingsPanel::ResetButton()
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
     return clicked;
+}
+
+void
+SettingsPanel::RenderHotkeySettings()
+{
+    auto& hk = HotkeyManager::GetInstance();
+    const auto& actions = hk.GetActions();
+
+    ImGui::TextUnformatted("Keyboard Shortcuts");
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if(ImGui::BeginTable("##hotkeys_table", 4,
+                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                             ImGuiTableFlags_ScrollY,
+                         ImVec2(0, kContentHeight - 60.0f)))
+    {
+        ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+        ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Primary", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn("Alternate", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableHeadersRow();
+
+        for(const auto& action : actions)
+        {
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(action.category.c_str());
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(action.display_name.c_str());
+
+            ImGui::TableSetColumnIndex(2);
+            {
+                std::string label = HotkeyManager::KeyChordToString(action.current_binding.primary);
+                bool is_capturing = (!m_rebinding_action_id.empty() &&
+                                     m_rebinding_action_id == action.id && m_rebinding_primary);
+                if(is_capturing)
+                    label = "Press a key...";
+
+                ImGui::PushID((action.id + "_primary").c_str());
+                if(ImGui::Button(label.c_str(), ImVec2(-FLT_MIN, 0)))
+                {
+                    m_rebinding_action_id = action.id;
+                    m_rebinding_primary   = true;
+                }
+                ImGui::PopID();
+            }
+
+            ImGui::TableSetColumnIndex(3);
+            {
+                std::string label = HotkeyManager::KeyChordToString(action.current_binding.alternate);
+                bool is_capturing = (!m_rebinding_action_id.empty() &&
+                                     m_rebinding_action_id == action.id && !m_rebinding_primary);
+                if(is_capturing)
+                    label = "Press a key...";
+
+                ImGui::PushID((action.id + "_alt").c_str());
+                if(ImGui::Button(label.c_str(), ImVec2(-FLT_MIN, 0)))
+                {
+                    m_rebinding_action_id = action.id;
+                    m_rebinding_primary   = false;
+                }
+                ImGui::PopID();
+            }
+        }
+        ImGui::EndTable();
+    }
+
+    if(!m_rebinding_action_id.empty())
+    {
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape))
+        {
+            m_rebinding_action_id.clear();
+        }
+        else
+        {
+            ImGuiKeyChord captured = ImGuiKey_None;
+            for(int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k)
+            {
+                ImGuiKey key = static_cast<ImGuiKey>(k);
+                if(key == ImGuiKey_LeftCtrl || key == ImGuiKey_RightCtrl ||
+                   key == ImGuiKey_LeftShift || key == ImGuiKey_RightShift ||
+                   key == ImGuiKey_LeftAlt || key == ImGuiKey_RightAlt)
+                    continue;
+
+                if(ImGui::IsKeyPressed(key, false))
+                {
+                    captured = key;
+                    const ImGuiIO& io = ImGui::GetIO();
+                    if(io.KeyCtrl)  captured |= ImGuiMod_Ctrl;
+                    if(io.KeyShift) captured |= ImGuiMod_Shift;
+                    if(io.KeyAlt)   captured |= ImGuiMod_Alt;
+                    break;
+                }
+            }
+
+            if(captured == ImGuiKey_None)
+            {
+                const ImGuiIO& io = ImGui::GetIO();
+                if(ImGui::IsKeyPressed(ImGuiKey_LeftCtrl) || ImGui::IsKeyPressed(ImGuiKey_RightCtrl))
+                    captured = ImGuiMod_Ctrl;
+                else if(ImGui::IsKeyPressed(ImGuiKey_LeftShift) || ImGui::IsKeyPressed(ImGuiKey_RightShift))
+                    captured = ImGuiMod_Shift;
+                else if(ImGui::IsKeyPressed(ImGuiKey_LeftAlt) || ImGui::IsKeyPressed(ImGuiKey_RightAlt))
+                    captured = ImGuiMod_Alt;
+            }
+
+            if(captured != ImGuiKey_None)
+            {
+                auto* target = hk.FindAction(m_rebinding_action_id);
+                if(target)
+                {
+                    HotkeyBinding binding = target->current_binding;
+                    if(m_rebinding_primary)
+                        binding.primary = captured;
+                    else
+                        binding.alternate = captured;
+                    hk.SetBinding(m_rebinding_action_id, binding);
+                    m_hotkeys_changed = true;
+                }
+                m_rebinding_action_id.clear();
+            }
+        }
+    }
+}
+
+void
+SettingsPanel::ResetHotkeySettings()
+{
+    HotkeyManager::GetInstance().ResetAllBindings();
+    m_hotkeys_changed = true;
 }
 
 }  // namespace View

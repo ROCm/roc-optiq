@@ -26,6 +26,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include <cmath>
 #include <filesystem>
 #include <sstream>
 
@@ -103,6 +104,7 @@ AppWindow::AppWindow()
 , m_is_native_file_dialog_open(false)
 #endif
 , m_disable_app_interaction(false)
+, m_cleanup_in_progress(false)
 , m_restore_fullscreen_later(false)
 {}
 
@@ -388,6 +390,7 @@ AppWindow::Render()
     // render notifications last
     NotificationManager::GetInstance().Render();
 
+    RenderCleanupAnimation();
     RenderDisableScreen();
 }
 
@@ -597,6 +600,75 @@ AppWindow::HandleOpenRecentFile(const std::string& file_path)
 }
 
 void
+AppWindow::RenderCleanupAnimation()
+{
+    if(!m_cleanup_in_progress)
+        return;
+
+    ImDrawList* draw    = ImGui::GetForegroundDrawList();
+    ImVec2      display = ImGui::GetIO().DisplaySize;
+    float       t       = static_cast<float>(ImGui::GetTime());
+    const float PI      = 3.14159265f;
+
+    draw->AddRectFilled(ImVec2(0, 0), display, IM_COL32(10, 10, 10, 255));
+
+    ImVec2      center(display.x * 0.5f, display.y * 0.42f);
+    const float ring_r = 130.0f;
+
+    draw->AddCircle(center, ring_r, IM_COL32(237, 28, 36, 60), 64, 1.5f);
+
+    float sweep = std::fmod(t * 1.4f, 2.0f * PI);
+    for(int i = 10; i >= 0; i--)
+    {
+        float seg   = 0.22f;
+        float start = sweep - static_cast<float>(i) * seg;
+        int   alpha = static_cast<int>(255.0f * (1.0f - static_cast<float>(i) / 11.0f));
+        draw->PathClear();
+        draw->PathArcTo(center, ring_r, start, start + seg + 0.02f, 6);
+        draw->PathStroke(IM_COL32(237, 28, 36, alpha), 0, 3.0f);
+    }
+
+    if(m_amd_logo.Valid())
+    {
+        constexpr unsigned char BG_THRESH = 240;
+        float logo_w = 180.0f;
+        float logo_h = logo_w * static_cast<float>(m_amd_logo.GetHeight()) /
+                       static_cast<float>(m_amd_logo.GetWidth());
+        float scale  = logo_w / static_cast<float>(m_amd_logo.GetWidth());
+        ImVec2 logo_pos(center.x - logo_w * 0.5f, center.y - logo_h * 0.5f);
+
+        for(int y = 0; y < m_amd_logo.GetHeight(); ++y)
+        {
+            for(int x = 0; x < m_amd_logo.GetWidth(); ++x)
+            {
+                const unsigned char* px = m_amd_logo.GetPixel(x, y);
+                if(!px || px[3] == 0) continue;
+                if(px[0] >= BG_THRESH && px[1] >= BG_THRESH && px[2] >= BG_THRESH)
+                    continue;
+                draw->AddRectFilled(
+                    ImVec2(logo_pos.x + x * scale, logo_pos.y + y * scale),
+                    ImVec2(logo_pos.x + (x + 1) * scale, logo_pos.y + (y + 1) * scale),
+                    IM_COL32(255, 255, 255, px[3]));
+            }
+        }
+    }
+
+    int  dots = (static_cast<int>(t * 2.0f)) % 4;
+    char text_buf[64];
+    snprintf(text_buf, sizeof(text_buf), "Cleaning Database%.*s", dots, "...");
+    ImVec2 text_sz = ImGui::CalcTextSize(text_buf);
+    draw->AddText(
+        ImVec2(center.x - text_sz.x * 0.5f, center.y + ring_r + 24.0f),
+        IM_COL32(255, 255, 255, 255), text_buf);
+
+    const char* subtitle = "Please wait. Do not force quit or the database may be left in an inconsistent state.";
+    ImVec2 sub_sz = ImGui::CalcTextSize(subtitle);
+    draw->AddText(
+        ImVec2(center.x - sub_sz.x * 0.5f, center.y + ring_r + 44.0f),
+        IM_COL32(255, 255, 255, 100), subtitle);
+}
+
+void
 AppWindow::RenderDisableScreen()
 {
     if(m_disable_app_interaction)
@@ -649,6 +721,53 @@ AppWindow::RenderFileMenu(Project* project)
         {
             HandleSaveAsFile();
         }
+        ImGui::Separator();
+
+        {
+            TraceView* trace_view = nullptr;
+            bool       has_trace  = false;
+            bool       cleanup_pending = false;
+            if(project && project->GetTraceType() == Project::System)
+            {
+                trace_view = dynamic_cast<TraceView*>(project->GetView().get());
+                has_trace  = (trace_view != nullptr);
+                if(has_trace)
+                {
+                    cleanup_pending = trace_view->IsCleanupPending();
+                }
+            }
+
+            std::string project_id = has_trace ? project->GetID() : "";
+            auto start_cleanup = [this, trace_view, project_id](bool rebuild) {
+                m_disable_app_interaction = true;
+                m_cleanup_in_progress     = true;
+                trace_view->CleanupDatabase(rebuild, [this, project_id]() {
+                    m_cleanup_in_progress     = false;
+                    m_disable_app_interaction = false;
+                    m_tab_container->RemoveTab(project_id);
+                });
+            };
+
+            bool submenu_enabled = has_trace && !cleanup_pending;
+            if(ImGui::BeginMenu("Database", submenu_enabled))
+            {
+                if(ImGui::MenuItem("Fast Cleanup"))
+                {
+                    start_cleanup(false);
+                }
+                if(ImGui::MenuItem("Full Cleanup (Rebuild)..."))
+                {
+                    ShowConfirmationDialog(
+                        "Full Database Cleanup",
+                        "This will remove service tables, indexes, and rebuild "
+                        "(VACUUM) the database file. This may take a while.\n\n"
+                        "Continue?",
+                        [start_cleanup]() { start_cleanup(true); });
+                }
+                ImGui::EndMenu();
+            }
+        }
+
         ImGui::Separator();
         const std::list<std::string>& recent_files =
             SettingsManager::GetInstance().GetInternalSettings().recent_files;

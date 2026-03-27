@@ -62,6 +62,8 @@ public:
     bool IsTrimSaveAllowed() const;
 
     bool                               SaveSelection(const std::string& file_path);
+    bool                               CleanupDatabase(bool rebuild, std::function<void()> on_complete = nullptr);
+    bool                               IsCleanupPending() const;
     void                               RenderBookmarkControls();
     std::shared_ptr<TimelineSelection> GetTimelineSelection() const;
     std::shared_ptr<RocWidget>         GetToolbar() override;

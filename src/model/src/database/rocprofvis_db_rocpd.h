@@ -158,6 +158,8 @@ private:
         return &m_metadata_version_control; 
     };
 
+    rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) override { return m_metadata_version_control.CleanupDatabase(future, rebuild); };
+
     private:
         rocprofvis_dm_result_t CreateIndexes();
 

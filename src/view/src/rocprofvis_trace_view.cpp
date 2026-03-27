@@ -161,6 +161,7 @@ TraceView::~TraceView()
     m_data_provider.SetTableDataReadyCallback(nullptr);
     m_data_provider.SetTraceLoadedCallback(nullptr);
     m_data_provider.SetSaveTraceCallback(nullptr);
+    m_data_provider.SetCleanupDatabaseCallback(nullptr);
 
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
@@ -476,6 +477,55 @@ TraceView::SaveSelection(const std::string& file_path)
         spdlog::warn("Timeline selection is not initialized.");
     }
     return false;
+}
+
+bool
+TraceView::CleanupDatabase(bool rebuild, std::function<void()> on_complete)
+{
+    if(m_data_provider.IsRequestPending(DataProvider::CLEANUP_DATABASE_REQUEST_ID))
+    {
+        spdlog::debug("Database cleanup already in progress.");
+        return false;
+    }
+
+    m_data_provider.FreeRequests();
+
+    m_data_provider.SetCleanupDatabaseCallback(
+        [this, on_complete](bool success) {
+            NotificationManager::GetInstance().Hide("cleanup_database");
+            if(success)
+            {
+                NotificationManager::GetInstance().Show(
+                    "Database cleanup completed successfully.",
+                    NotificationLevel::Success);
+            }
+            else
+            {
+                NotificationManager::GetInstance().Show(
+                    "Database cleanup failed.", NotificationLevel::Error);
+            }
+            if(on_complete)
+            {
+                on_complete();
+            }
+        });
+
+    if(m_data_provider.CleanupDatabase(rebuild))
+    {
+        NotificationManager::GetInstance().ShowPersistent(
+            "cleanup_database",
+            rebuild ? "Cleaning and rebuilding database..." : "Cleaning database...",
+            NotificationLevel::Info);
+        return true;
+    }
+
+    return false;
+}
+
+bool
+TraceView::IsCleanupPending() const
+{
+    return m_data_provider.IsRequestPending(DataProvider::CLEANUP_DATABASE_REQUEST_ID);
 }
 
 std::shared_ptr<TimelineSelection>

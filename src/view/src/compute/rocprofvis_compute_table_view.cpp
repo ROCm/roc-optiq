@@ -17,6 +17,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
+, m_custom_table(data_provider, compute_selection, m_client_id)
 {
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
@@ -59,7 +60,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
     m_widget_name = GenUniqueName("ComputeTableView");
 
     if(m_compute_selection->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID)
-    {
+    { //TODO: All code under this if statement never reached
         RebuildTabs();
         if(m_compute_selection->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID)
         {
@@ -96,9 +97,14 @@ ComputeTableView::RebuildTabs()
     if(!workloads.count(workload_id))
         return;
 
+
     const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
     m_tabs->SetAllowToolTips(true);
+    //TODO:Add custom tab here
+    auto widget =
+        std::make_shared<RocCustomWidget>([this]() { m_custom_table.Render(); });
+    m_tabs->AddTab({ "Custom Table", "Custom Table", widget, false });
     for(const auto* cat : workload.available_metrics.ordered_categories)
     {
         auto widget = std::make_shared<RocCustomWidget>(
@@ -176,6 +182,14 @@ ComputeTableView::RebuildTableDataCache()
 {
     m_table_widgets.clear();
 
+    //m_custom_table.AddRow({ 2, 1, 0 });
+    //m_custom_table.AddRow({ 5, 1, 0 });
+    //m_custom_table.AddRow({ 6, 1, 0 });
+    //m_custom_table.AddRow({ 18, 1, 0 });
+
+    // STUB: add some dummy metric to make sure the custom table is
+                       // shown, will remove it later when we have a better way to
+                       // determine whether to show the custom table tab
     auto&    model       = m_data_provider.ComputeModel();
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
@@ -197,8 +211,10 @@ ComputeTableView::RebuildTableDataCache()
             TableKey key{};
             key.fields.category_id = cat->id;
             key.fields.table_id    = tbl->id;
-
-            MetricTableCache widget;
+            auto add_row_func = [this](MetricId metric_id) {
+                m_custom_table.AddRow(metric_id);
+            };
+            MetricTableCache widget(add_row_func);
             widget.Populate(*tbl, [&](uint32_t eid) {
                 return model.GetMetricValue(
                     m_client_id, kernel_id, cat->id, tbl->id, eid);

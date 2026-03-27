@@ -7,10 +7,15 @@
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_requests.h"
 
+#include "widgets/rocprofvis_notification_manager.h"
+
+
 namespace RocProfVis
 {
 namespace View
 {
+MetricTableCache::MetricTableCache(std::function<void(MetricId)> add_row_func) 
+: m_add_row_to_custom(add_row_func){}
 
 void
 MetricTableCache::Populate(const AvailableMetrics::Table& table,
@@ -41,9 +46,8 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
         uint32_t eid = entry->id;
 
         Row row;
-        row.metric_id   = std::to_string(entry->category_id) + "." +
-                          std::to_string(entry->table_id) + "." +
-                          std::to_string(eid);
+
+        row.metric_id   = { entry->category_id, entry->table_id, eid};
         row.name        = entry->name;
         row.description = entry->description;
         row.unit        = entry->unit.empty() ? "N/A" : entry->unit;
@@ -101,19 +105,38 @@ MetricTableCache::Render() const
     int row_idx = 0;
     for(const auto& row : m_rows)
     {
+        auto menu_func = [&](const char* value_to_copy) {
+            if(ImGui::BeginPopupContextItem())
+            {
+                if(ImGui::MenuItem("Copy cell value"))
+                {
+                    ImGui::SetClipboardText(value_to_copy);
+                    NotificationManager::GetInstance().Show(
+                            COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+                }
+                if(ImGui::MenuItem("Add to custom table"))
+                {
+                    m_add_row_to_custom({ row.metric_id.category_id,
+                                          row.metric_id.table_id,
+                                          row.metric_id.entry_id });
+                }
+                ImGui::EndPopup();
+            }
+        };
         ImGui::PushID(row_idx++);
         ImGui::TableNextRow();
 
         ImGui::TableNextColumn();
-        CopyableTextUnformatted(row.metric_id.c_str(), "##mid",
-                                COPY_DATA_NOTIFICATION, false, true);
+        CopyableTextUnformatted(row.metric_id.ToString().c_str(), "##mid",
+                                COPY_DATA_NOTIFICATION,
+                                false, true, menu_func);
 
         ImGui::TableNextColumn();
-        CopyableTextUnformatted(row.name.c_str(), "##name",
-                                COPY_DATA_NOTIFICATION, false, true);
+        CopyableTextUnformatted(row.name.c_str(), "##name", COPY_DATA_NOTIFICATION, false,
+                                true, menu_func);
         if(!row.description.empty() && ImGui::IsItemHovered())
         {
-            constexpr float kTooltipMaxWidth = 400.0f;
+            constexpr float kTooltipMaxWidth = 400.0f; //TODO: move to constant
             ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
                                                 ImVec2(kTooltipMaxWidth, FLT_MAX));
             BeginTooltipStyled();
@@ -130,7 +153,7 @@ MetricTableCache::Render() const
             {
                 CopyableTextUnformatted(row.values[vi].c_str(),
                                         std::string("##v") + std::to_string(vi),
-                                        COPY_DATA_NOTIFICATION, false, true);
+                                        COPY_DATA_NOTIFICATION, false, true, menu_func);
             }
             else
             {
@@ -141,8 +164,8 @@ MetricTableCache::Render() const
         ImGui::TableNextColumn();
         if(row.unit != "N/A")
         {
-            CopyableTextUnformatted(row.unit.c_str(), "##unit",
-                                    COPY_DATA_NOTIFICATION, false, true);
+            CopyableTextUnformatted(row.unit.c_str(), "##unit", COPY_DATA_NOTIFICATION,
+                                    false, true, menu_func);
         }
         else
         {
@@ -166,6 +189,8 @@ MetricTableCache::Empty() const
 {
     return m_rows.empty();
 }
+
+//---------------------------------------------------------
 
 MetricTableWidget::MetricTableWidget(DataProvider& data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection,
@@ -232,6 +257,259 @@ MetricTableWidget::UpdateTable()
     m_table.Populate(tree.at(m_category_id).tables.at(m_table_id), [&](uint32_t eid) {
         return model.GetMetricValue(m_client_id, kernel_id, m_category_id, m_table_id, eid);
     });
+}
+
+//---------------------------------------------------------
+
+CustomTable::CustomTable(DataProvider&                     data_provider,
+                         std::shared_ptr<ComputeSelection> compute_selection,
+                         uint64_t                          client_id)
+: m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
+, m_client_id(client_id)
+{ 
+    SetDefaultColumns();
+}
+
+void
+CustomTable::SetDefaultColumns()
+{
+    m_columns[0]                                    = "Metric ID";
+    m_columns[1]                                    = "Metric";
+    m_columns[2]                                    = "Value";
+    m_lust_column_index                             = 3;
+    m_columns[std::numeric_limits<uint32_t>::max()] = "Unit";
+}
+
+void
+CustomTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
+{
+    if(ImGui::BeginPopupContextItem())
+    {
+        if(ImGui::MenuItem("Copy cell value"))
+        {
+            ImGui::SetClipboardText(value_to_copy);
+            NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+                                                    NotificationLevel::Info);
+        }
+        if(ImGui::MenuItem("Delete row from table"))
+        {
+            m_id_to_delete = id_to_delete;
+        }
+        ImGui::EndPopup();
+    }
+}
+
+const AvailableMetrics::Table&
+CustomTable::GetTable(const MetricId& metric_id)
+{
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+/*    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    } */ // TODO: bad way to process it, figure out something better
+
+    // TODO: may be I need to add some getters to data provider,
+    // to avoid so long chains of calls to get the data, and also
+    // to avoid direct access to the model from the widget
+    const auto& tree = m_data_provider.ComputeModel()
+                           .GetWorkloads()
+                           .at(workload_id)
+                           .available_metrics.tree;
+    return tree.at(metric_id.category_id).tables.at(metric_id.table_id);
+}
+
+void
+CustomTable::UpdateColumns(MetricId metric_id)
+{
+    if(m_columns.empty())
+        SetDefaultColumns();
+
+    for(const auto& name : GetTable(metric_id).value_names)
+    {
+        if (GetColumnIndex(name) == std::nullopt)
+            m_columns[m_lust_column_index++] = name;
+    }
+}
+
+void
+CustomTable::FillTableRow(const MetricId& metric_id)
+{
+    std::map<uint32_t, std::string> row;
+
+    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+    if(kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+    auto& model = m_data_provider.ComputeModel();
+    auto metric_value =
+        model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
+                             metric_id.table_id, metric_id.entry_id);
+
+    const auto& table = GetTable(metric_id);
+    FillCommons(metric_id, table, row, metric_value);
+
+    char buf[64];
+    for(const auto& value_name : table.value_names)
+    {
+        if (auto index = GetColumnIndex(value_name); index.has_value())
+        {
+            if(metric_value && metric_value->entry &&
+               metric_value->values.count(value_name))
+            {
+                snprintf(buf, sizeof(buf), "%.2f", metric_value->values.at(value_name));
+                row[index.value()] = buf;
+            }
+        }
+
+    }
+    m_rows[metric_id] = std::move(row);
+}
+
+void
+CustomTable::FillCommons(const MetricId& metric_id, const AvailableMetrics::Table& table,
+                         std::map<uint32_t, std::string>& row,
+                         std::shared_ptr<MetricValue>     metric_value)
+{
+    auto entrie =
+        table.entries.find(metric_id.entry_id)->second;  // TODO: Process if not found
+
+    row[0]  = metric_id.ToString();
+    row[1] = entrie.name;
+    if(metric_value && !metric_value->values.empty())
+    {
+        row[2] = std::to_string(metric_value->values.begin()->second);
+    }
+    
+    row[std::numeric_limits<uint32_t>::max()] = entrie.unit;
+}
+
+std::optional<uint32_t>
+CustomTable::GetColumnIndex(const std::string& column_name)
+{
+    for(auto column : m_columns)
+    {
+        if(column.second == column_name)
+            return column.first;
+    }
+    return std::nullopt;
+}
+
+void
+CustomTable::AddRow(MetricId metric_id)
+{
+    m_metric_ids.push_back(metric_id);
+
+    UpdateColumns(metric_id);
+
+    FillTableRow(metric_id);
+}
+
+void
+CustomTable::RemoveDeletedRow()
+{
+    if (m_id_to_delete.has_value())
+    {
+        m_rows.erase(m_id_to_delete.value());
+
+        m_columns.clear();
+        m_lust_column_index = 0;
+        for(const auto& [metric_id, row] : m_rows)
+        {
+            UpdateColumns(metric_id);
+        }
+        m_id_to_delete = std::nullopt;
+    }
+}
+
+void
+CustomTable::Render() 
+{
+    if(m_rows.empty())
+        return;
+
+    RemoveDeletedRow(); //TODO: Think about to move it to update function and about update function
+
+    int num_columns = static_cast<int>(m_columns.size());
+
+    SectionTitle("Custom table");
+    if(!ImGui::BeginTable("custom table", num_columns, ImGuiTableFlags_Borders))
+        return;
+
+    for(const auto& column : m_columns)
+        ImGui::TableSetupColumn(column.second.c_str());
+    ImGui::TableHeadersRow();
+
+
+    uint32_t row_idx = 0;
+    for (auto& row : m_rows)
+    {
+        auto menu_func = [&](const char* value_to_copy) {
+            this->ContextMenu(value_to_copy, row.first);
+        };
+        ImGui::PushID(row_idx++);
+        ImGui::TableNextRow();
+
+        RenderCommonColumns(row);
+        for(auto index = 3; index < m_columns.size() - 1; index++)
+        {
+            ImGui::TableNextColumn();
+            auto it = row.second.find(index);
+            if(it == row.second.end())
+            {
+                ImGui::TextDisabled("N/A");
+            }
+            else
+            {
+                CopyableTextUnformatted(row.second[index].c_str(), "##value",
+                                        COPY_DATA_NOTIFICATION, false, true, menu_func);
+            }
+        }
+
+        ImGui::TableNextColumn();
+        if (row.second[std::numeric_limits<uint32_t>::max()].empty())
+        {
+            ImGui::TextDisabled("N/A");
+        }
+        else
+        {
+            CopyableTextUnformatted(
+                row.second[std::numeric_limits<uint32_t>::max()].c_str(), "##name",
+                COPY_DATA_NOTIFICATION, false, true, menu_func);
+        }
+        
+        ImGui::PopID();
+    }
+
+    ImGui::EndTable();
+
+}
+
+void
+CustomTable::RenderCommonColumns(
+    const std::pair<MetricId, std::map<uint32_t, std::string>>& row)
+{
+    auto menu_func = [&](const char* value_to_copy) {
+        this->ContextMenu(value_to_copy, row.first);
+    };
+    ImGui::TableNextColumn();
+    CopyableTextUnformatted(row.second.at(0).c_str(), "##metric_id",
+                            COPY_DATA_NOTIFICATION, false, true, menu_func);
+
+    ImGui::TableNextColumn();
+    CopyableTextUnformatted(row.second.at(1).c_str(), "##name", COPY_DATA_NOTIFICATION, false, true, menu_func);
+
+    ImGui::TableNextColumn();
+    auto it = row.second.find(2); //TODO: think should I check index each time?
+    if(it == row.second.end())
+    {
+        ImGui::TextDisabled("N/A");
+    }
+    else
+    {
+        CopyableTextUnformatted(row.second.at(2).c_str(), "##name", COPY_DATA_NOTIFICATION, false, true, menu_func);
+    }
 }
 
 }  // namespace View

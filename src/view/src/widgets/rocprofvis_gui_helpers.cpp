@@ -179,6 +179,39 @@ RenderLoadingIndicatorDots(float dot_radius, int num_dots,
     }
 }
 
+void
+RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int num_dots,
+                       float dot_spacing, float anim_speed)
+{
+    ImVec2 pos = ImGui::GetCursorPos();
+
+    if(window_id)
+    {
+        // Create an overlay child window to display the loading indicator if requested
+        ImGui::SetCursorPos(ImVec2(0, 0));
+        // set transparent background for the overlay window
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+        ImGui::BeginChild(window_id, ImGui::GetWindowSize(), ImGuiChildFlags_None);
+    }
+
+    ImVec2 dot_size   = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
+    ImVec2 window_pos = ImGui::GetWindowPos();
+    ImVec2 view_rect  = ImGui::GetWindowSize();
+    ImVec2 center_pos = ImVec2(window_pos.x + (view_rect.x - dot_size.x) * 0.5f,
+                               window_pos.y + (view_rect.y - dot_size.y) * 0.5f);
+
+    ImGui::SetCursorScreenPos(center_pos);
+    RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing, color, anim_speed);
+
+    if(window_id)
+    {
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::SetCursorPos(pos);
+}
+
 bool
 IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
            const char* tooltip, ImVec2 tooltip_padding, bool frameless,

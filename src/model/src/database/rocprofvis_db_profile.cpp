@@ -1375,7 +1375,7 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
                             {
                                 rocprofvis_db_record_data_t record; 
                                 auto db_instance = (DbInstance*)props->track_indentifiers.db_instance;
-                                record.pmc.timestamp = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()];
+                                record.pmc.timestamp = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()]-TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
                                 record.pmc.value = future->GetRuntimeStorageValue<double>(kRPVFutureStorageSampleValue,0);
 
                                 if (BindObject()->FuncAddRecord(slices[*tracks], record) != kRocProfVisDmResultSuccess)

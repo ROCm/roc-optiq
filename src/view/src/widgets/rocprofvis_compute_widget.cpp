@@ -268,17 +268,64 @@ CustomTable::CustomTable(DataProvider&                     data_provider,
 , m_compute_selection(compute_selection)
 , m_client_id(client_id)
 { 
-    m_columns[0] = "Metric ID";
-    m_columns[1] = "Metric";
-    m_columns[2] = "Value";
+    SetDefaultColumns();
+}
+
+void
+CustomTable::SetDefaultColumns()
+{
+    m_columns[0]                                    = "Metric ID";
+    m_columns[1]                                    = "Metric";
+    m_columns[2]                                    = "Value";
     m_lust_column_index                             = 3;
     m_columns[std::numeric_limits<uint32_t>::max()] = "Unit";
 }
 
 void
-CustomTable::UpdateColumns(const std::vector<std::string>& value_names)
+CustomTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
 {
-    for(const auto& name : value_names)
+    if(ImGui::BeginPopupContextItem())
+    {
+        if(ImGui::MenuItem("Copy cell value"))
+        {
+            ImGui::SetClipboardText(value_to_copy);
+            NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+                                                    NotificationLevel::Info);
+        }
+        if(ImGui::MenuItem("Delete row from table"))
+        {
+            m_id_to_delete = id_to_delete;
+        }
+        ImGui::EndPopup();
+    }
+}
+
+const AvailableMetrics::Table&
+CustomTable::GetTable(const MetricId& metric_id)
+{
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+/*    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    } */ // TODO: bad way to process it, figure out something better
+
+    // TODO: may be I need to add some getters to data provider,
+    // to avoid so long chains of calls to get the data, and also
+    // to avoid direct access to the model from the widget
+    const auto& tree = m_data_provider.ComputeModel()
+                           .GetWorkloads()
+                           .at(workload_id)
+                           .available_metrics.tree;
+    return tree.at(metric_id.category_id).tables.at(metric_id.table_id);
+}
+
+void
+CustomTable::UpdateColumns(MetricId metric_id)
+{
+    if(m_columns.empty())
+        SetDefaultColumns();
+
+    for(const auto& name : GetTable(metric_id).value_names)
     {
         if (GetColumnIndex(name) == std::nullopt)
             m_columns[m_lust_column_index++] = name;
@@ -286,7 +333,7 @@ CustomTable::UpdateColumns(const std::vector<std::string>& value_names)
 }
 
 void
-CustomTable::FillTableRow(const AvailableMetrics::Table& table, const MetricId& metric_id)
+CustomTable::FillTableRow(const MetricId& metric_id)
 {
     std::map<uint32_t, std::string> row;
 
@@ -300,6 +347,7 @@ CustomTable::FillTableRow(const AvailableMetrics::Table& table, const MetricId& 
         model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
                              metric_id.table_id, metric_id.entry_id);
 
+    const auto& table = GetTable(metric_id);
     FillCommons(metric_id, table, row, metric_value);
 
     char buf[64];
@@ -316,7 +364,7 @@ CustomTable::FillTableRow(const AvailableMetrics::Table& table, const MetricId& 
         }
 
     }
-    m_rows.push_back(std::move(row));
+    m_rows[metric_id] = std::move(row);
 }
 
 void
@@ -353,27 +401,26 @@ CustomTable::AddRow(MetricId metric_id)
 {
     m_metric_ids.push_back(metric_id);
 
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
-       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    UpdateColumns(metric_id);
+
+    FillTableRow(metric_id);
+}
+
+void
+CustomTable::RemoveDeletedRow()
+{
+    if (m_id_to_delete.has_value())
     {
-        return;
-    }  // TODO: bad way to process it, figure out something better
+        m_rows.erase(m_id_to_delete.value());
 
-
-    // TODO: may be I need to add some getters to data provider,
-    // to avoid so long chains of calls to get the data, and also
-    // to avoid direct access to the model from the widget
-    const auto& tree = m_data_provider.ComputeModel()
-                           .GetWorkloads()
-                           .at(workload_id)
-                           .available_metrics.tree;
-    const auto& table = tree.at(metric_id.category_id).tables.at(metric_id.table_id);
-
-    UpdateColumns(table.value_names);
-
-    FillTableRow(table, metric_id);
+        m_columns.clear();
+        m_lust_column_index = 0;
+        for(const auto& [metric_id, row] : m_rows)
+        {
+            UpdateColumns(metric_id);
+        }
+        m_id_to_delete = std::nullopt;
+    }
 }
 
 void
@@ -381,6 +428,8 @@ CustomTable::Render()
 {
     if(m_rows.empty())
         return;
+
+    RemoveDeletedRow(); //TODO: Think about to move it to update function and about update function
 
     int num_columns = static_cast<int>(m_columns.size());
 
@@ -394,8 +443,11 @@ CustomTable::Render()
 
 
     uint32_t row_idx = 0;
-    for (auto row : m_rows)
+    for (auto& row : m_rows)
     {
+        auto menu_func = [&](const char* value_to_copy) {
+            this->ContextMenu(value_to_copy, row.first);
+        };
         ImGui::PushID(row_idx++);
         ImGui::TableNextRow();
 
@@ -403,22 +455,30 @@ CustomTable::Render()
         for(auto index = 3; index < m_columns.size() - 1; index++)
         {
             ImGui::TableNextColumn();
-            auto it = row.find(index);
-            if (it == row.end())
+            auto it = row.second.find(index);
+            if(it == row.second.end())
             {
                 ImGui::TextDisabled("N/A");
             }
             else
             {
-                CopyableTextUnformatted(row[index].c_str(), "##value",
-                                        COPY_DATA_NOTIFICATION, false, true);
+                CopyableTextUnformatted(row.second[index].c_str(), "##value",
+                                        COPY_DATA_NOTIFICATION, false, true, menu_func);
             }
         }
 
         ImGui::TableNextColumn();
-        CopyableTextUnformatted(row[std::numeric_limits<uint32_t>::max()].c_str(),
-                                "##name", COPY_DATA_NOTIFICATION, false,
-                                true);
+        if (row.second[std::numeric_limits<uint32_t>::max()].empty())
+        {
+            ImGui::TextDisabled("N/A");
+        }
+        else
+        {
+            CopyableTextUnformatted(
+                row.second[std::numeric_limits<uint32_t>::max()].c_str(), "##name",
+                COPY_DATA_NOTIFICATION, false, true, menu_func);
+        }
+        
         ImGui::PopID();
     }
 
@@ -427,27 +487,29 @@ CustomTable::Render()
 }
 
 void
-CustomTable::RenderCommonColumns(std::map<uint32_t, std::string>& row)
+CustomTable::RenderCommonColumns(
+    const std::pair<MetricId, std::map<uint32_t, std::string>>& row)
 {
+    auto menu_func = [&](const char* value_to_copy) {
+        this->ContextMenu(value_to_copy, row.first);
+    };
     ImGui::TableNextColumn();
-    CopyableTextUnformatted(row[0].c_str(), "##metric_id", COPY_DATA_NOTIFICATION, false, true);
+    CopyableTextUnformatted(row.second.at(0).c_str(), "##metric_id",
+                            COPY_DATA_NOTIFICATION, false, true, menu_func);
 
     ImGui::TableNextColumn();
-    CopyableTextUnformatted(row[1].c_str(), "##name", COPY_DATA_NOTIFICATION, false,
-                            true);
+    CopyableTextUnformatted(row.second.at(1).c_str(), "##name", COPY_DATA_NOTIFICATION, false, true, menu_func);
 
     ImGui::TableNextColumn();
-    auto it = row.find(2); //TODO: think should I check index each time?
-    if(it == row.end())
+    auto it = row.second.find(2); //TODO: think should I check index each time?
+    if(it == row.second.end())
     {
         ImGui::TextDisabled("N/A");
     }
     else
     {
-        CopyableTextUnformatted(row[2].c_str(), "##name", COPY_DATA_NOTIFICATION, false,
-                                true);
+        CopyableTextUnformatted(row.second.at(2).c_str(), "##name", COPY_DATA_NOTIFICATION, false, true, menu_func);
     }
-
 }
 
 }  // namespace View

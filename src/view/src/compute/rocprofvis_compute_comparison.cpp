@@ -380,12 +380,11 @@ ComputeComparisonView::UpdateMetrics()
                             row_value_names[0].emplace_back("Difference (%)##" +
                                                             value_name);
                             row_value_data[0].emplace_back(
-                                valid_match && baseline_value && target_value
+                                valid_match && baseline_value && target_value &&
+                                        *baseline_value != 0.0
                                     ? std::make_optional(
                                           (*target_value - *baseline_value) /
-                                          (*baseline_value == 0.0 ? 1.0
-                                                                  : *baseline_value) *
-                                          100)
+                                          *baseline_value * 100)
                                     : std::nullopt);
                             if(!valid_match && row_entry.count(1) > 0)
                             {

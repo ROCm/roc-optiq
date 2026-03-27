@@ -12,6 +12,7 @@
 #include "rocprofvis_controller_table_compute_pivot.h"
 #include "json.h"
 #include <algorithm>
+#include <cstdlib>
 #include <set>
 
 namespace RocProfVis
@@ -768,6 +769,7 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t db, r
                 }
             }           
         }        
+        free(query);
     }    
     return result;
 }

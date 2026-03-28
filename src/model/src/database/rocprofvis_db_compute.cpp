@@ -804,7 +804,7 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 				break;
 			}
 			if (kRocProfVisDmResultSuccess != result) break;
-			ShowProgress(100, "Query successfully executed!",kRPVDbSuccess, future);
+			ShowProgress(100, it->second.c_str(), kRPVDbSuccess, future);
 			return future->SetPromise(kRocProfVisDmResultSuccess);
 		}
 		ShowProgress(0, "Query could not be executed!", kRPVDbError, future );

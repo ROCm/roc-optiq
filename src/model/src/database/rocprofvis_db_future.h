@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_common_types.h"
+#include <atomic>
 #include <future>
 #include <thread>
 #include <variant>
@@ -38,6 +39,8 @@ class Future
         ~Future();
         // @return callback method pointer
         rocprofvis_db_progress_callback_t   ProgressCallback() { return m_progress_callback;}
+        // @return unique identifier for this future
+        uint64_t                            Id() const { return m_id; }
         // @return current progress in percents
         double                              Progress() { return m_progress; }
         // waits for thread completion for specified number of milliseconds. If timeouts, sends command to end the thread as soon as possible.
@@ -110,6 +113,9 @@ class Future
         rocprofvis_dm_result_t              WaitAndDeleteSubFuture(Future* sub_future);
 
     private:
+        static std::atomic<uint64_t> s_counter;
+        // unique identifier for this future
+        uint64_t m_id;
         // stdlib promise object
         std::promise<rocprofvis_dm_result_t> m_promise;
         // stdlib future object

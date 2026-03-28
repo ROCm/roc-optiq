@@ -374,7 +374,7 @@ EndTooltipStyled()
 
 void
 ElidedText(const char* text, float available_width, float tooltip_width,
-           bool right_justify, bool imgui_AlignTextToFramePadding)
+           Alignment alignment, bool imgui_AlignTextToFramePadding)
 {
     ImGuiStyle       style      = ImGui::GetStyle();
     SettingsManager& settings   = SettingsManager::GetInstance();
@@ -405,9 +405,13 @@ ElidedText(const char* text, float available_width, float tooltip_width,
                                        ImGui::GetFrameHeightWithSpacing()),
                             true);
     }
-    else if(right_justify)
+    else if(alignment == Alignment_Right)
     {
         ImGui::SetCursorPosX(available_width - text_width);
+    }
+    else if(alignment == Alignment_Center)
+    {
+        CenterNextTextItem(text);
     }
     ImGui::TextUnformatted(text);
     if(elide)

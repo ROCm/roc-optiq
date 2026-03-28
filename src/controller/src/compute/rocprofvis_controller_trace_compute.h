@@ -70,7 +70,7 @@ private:
     } QueryDataStore;
     typedef std::function<void(const QueryDataStore&)> QueryCallback;
 
-    rocprofvis_result_t LoadRocpd();
+    rocprofvis_result_t LoadRocpd(Future* future);
     
     rocprofvis_result_t    SetObjectProperty(rocprofvis_handle_t*  object,
                                              rocprofvis_property_t property, uint64_t index,

@@ -61,11 +61,10 @@ rocprofvis_result_t ComputeTrace::Load(RocProfVis::Controller::Future& future)
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     future.Set(JobSystem::Get().IssueJob([this](Future* future) -> rocprofvis_result_t
         {
-            (void) future;
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(m_trace_file.find(".db", m_trace_file.size() - 3) != std::string::npos)
             {
-                result = LoadRocpd();
+                result = LoadRocpd(future);
             }
             else
             {
@@ -309,7 +308,7 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Table& table, Arguments& args, Futu
     return error;
 }
 
-rocprofvis_result_t ComputeTrace::LoadRocpd()
+rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     m_dm_handle = rocprofvis_dm_create_trace();
@@ -318,11 +317,12 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
         rocprofvis_dm_database_t db = rocprofvis_db_open_database(m_trace_file.c_str(), kComputeSqlite);
         if (nullptr != db && kRocProfVisDmResultSuccess == rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
         {
-            rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Trace::ProgressCallback, this);
+            rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
             if (nullptr != object2wait)
             {
                 if (kRocProfVisDmResultSuccess == rocprofvis_db_read_metadata_async(db, object2wait))
                 {
+                    future->AddDependentFuture(object2wait);
                     if (kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object2wait, UINT64_MAX))
                     {
                         m_query_arguments.clear();
@@ -336,6 +336,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                             }, 
                             {} 
                         };
+                        future->ResetProgress();
                         rocprofvis_dm_result_t dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchListOfWorkloads, m_query_arguments, m_query_output, [this](const QueryDataStore& data_store){
                             m_workloads.resize(data_store.rows.size());
                             rocprofvis_property_t property;
@@ -404,6 +405,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                         {} 
                                     };
                                     std::set<std::pair<uint32_t, uint32_t>> unique_tables;
+                                    future->ResetProgress();
                                     dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadMetricsDefinition, m_query_arguments, m_query_output, [this, &workload, &unique_tables](const QueryDataStore& data_store){
                                         workload->SetUInt64(kRPVControllerWorkloadNumAvailableMetrics, 0, data_store.rows.size());
                                         rocprofvis_property_t property;
@@ -440,6 +442,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                 { { kRPVComputeColumnMetricValueName, std::nullopt } },
                                                 {}
                                             };
+                                            future->ResetProgress();
                                             dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadMetricValueNames, m_query_arguments, m_query_output,
                                                 [&workload, &value_names_count, cat_id, tbl_id](const QueryDataStore& data_store){
                                                     for(size_t i = 0; i < data_store.rows.size(); i++)
@@ -471,6 +474,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                             }, 
                                             {} 
                                         };
+                                        future->ResetProgress();
                                         dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadTopKernels, m_query_arguments, m_query_output, [this, &workload, &kernel_ids](const QueryDataStore& data_store){
                                             workload->SetUInt64(kRPVControllerWorkloadNumKernels, 0, data_store.rows.size());
                                             rocprofvis_property_t property;
@@ -513,6 +517,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                                 }, 
                                                 {} 
                                             };
+                                            future->ResetProgress();
                                             dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelRooflineIntensities, m_query_arguments, m_query_output, [&roofline, &id, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
                                                 if(data_store.rows.size() == 1)
                                                 {
@@ -558,6 +563,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                                         min_intensity_y = min_intensity_y ? min_intensity_y.value() / 10 : min_intensity_y;
                                         m_query_arguments = { {kRPVComputeParamWorkloadId, std::to_string(id)} };
                                         m_query_output = { {}, {} };
+                                        future->ResetProgress();
                                         dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadRooflineCeiling, m_query_arguments, m_query_output, [&roofline, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
                                             if(data_store.rows.size() == 1)
                                             {
@@ -618,6 +624,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd()
                             }
                         }
                         result = (dm_result == kRocProfVisDmResultSuccess) ? result : kRocProfVisResultUnknownError;
+                        future->RemoveDependentFuture(object2wait);
                     }
                 }
                 rocprofvis_db_future_free(object2wait);

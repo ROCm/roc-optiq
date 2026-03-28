@@ -109,6 +109,7 @@ private:
 
     EventManager::SubscriptionToken m_tabselected_event_token;
     EventManager::SubscriptionToken m_event_selection_changed_event_token;
+    EventManager::SubscriptionToken m_progress_update_event_token;
 
     std::string m_save_notification_id;
 

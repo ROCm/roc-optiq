@@ -24,7 +24,6 @@ constexpr uint64_t    FETCH_CHUNK_SIZE               = 1000;
 constexpr const char* START_TS_COLUMN_NAME           = "start";
 constexpr const char* END_TS_COLUMN_NAME             = "end";
 constexpr const char* DURATION_COLUMN_NAME           = "duration";
-constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
                                          const std::string& no_data_text,
@@ -51,6 +50,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_selected_column(-1)
 , m_hovered_row(-1)
 , m_no_data_text(no_data_text)
+, m_export_notification_id(dp.GetTraceFilePath())
 , m_timeline_selection(timeline_selection)
 , m_horizontal_scroll(0.0f)
 , m_time_column_indices(
@@ -73,11 +73,25 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 
     m_data_provider.SetExportTableCallback(
         [this](const std::string& file_path, bool success) {
-            NotificationManager::GetInstance().Hide(EXPORT_PENDING_NOTIFICATION_ID);
+            NotificationManager::GetInstance().Hide(m_export_notification_id);
             NotificationManager::GetInstance().Show(
                 success ? "Exported: " + file_path : "Failed to export: " + file_path,
                 success ? NotificationLevel::Success : NotificationLevel::Error);
         });
+
+    auto request_progress_update_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto event = std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
+        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath() &&
+           event->GetRequestType() == RequestType::kTableExport)
+        {
+            NotificationManager::GetInstance().UpdateProgress(m_export_notification_id,
+                                                              event->GetProgressPercent(),
+                                                              event->GetMessage());
+        }
+    };
+    m_request_progress_update_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        request_progress_update_handler);
 }
 
 InfiniteScrollTable::~InfiniteScrollTable()
@@ -86,6 +100,9 @@ InfiniteScrollTable::~InfiniteScrollTable()
                                              m_new_table_data_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimeFormatChanged), m_format_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        m_request_progress_update_token);
 }
 
 uint64_t
@@ -823,7 +840,7 @@ InfiniteScrollTable::ExportToFile() const
                    table_params->m_sort_order, file_path)))
             {
                 NotificationManager::GetInstance().ShowPersistent(
-                    EXPORT_PENDING_NOTIFICATION_ID, "Exporting: " + file_path,
+                    m_export_notification_id, "Exporting: " + file_path,
                     NotificationLevel::Info);
             }
         });

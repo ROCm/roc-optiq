@@ -119,6 +119,7 @@ private:
     ImVec2   m_last_table_size;
 
     std::string m_no_data_text;
+    std::string m_export_notification_id;
 
     EventManager::SubscriptionToken m_new_table_data_token;
     EventManager::SubscriptionToken m_format_changed_token;

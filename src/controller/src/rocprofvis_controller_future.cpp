@@ -16,6 +16,7 @@ Future::Future()
 : Handle(__kRPVControllerFuturePropertiesFirst, __kRPVControllerFuturePropertiesLast)
 , m_job(nullptr)
 , m_cancelled(false)
+, m_progress_percentage(0)
 {}
 
 Future::~Future()
@@ -123,17 +124,13 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
                 }
                 break;
             }
-            case kRPVControllerFutureType:
+            case kRPVControllerFutureProgressPercentage:
             {
-                *value = m_object.GetType();
+                std::lock_guard lock(m_mutex);
+                *value = m_progress_percentage;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerFutureObject:
-            {
-                result = m_object.GetUInt64(value);
-                break;
-            }
             default:
             {
                 result = UnhandledProperty(property);
@@ -143,71 +140,53 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
     }
     return result;
 }
-rocprofvis_result_t Future::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        switch(property)
-        {
-            case kRPVControllerFutureObject:
-            {
-                result = m_object.GetDouble(value);
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
-        }
-    }
-    return result;
-}
-rocprofvis_result_t Future::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        switch(property)
-        {
-            case kRPVControllerFutureObject:
-            {
-                result = m_object.GetObject(value);
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
-        }
-    }
-    return result;
-}
+
 rocprofvis_result_t Future::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
 {
     (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
+    switch(property)
     {
-        switch(property)
+        case kRPVControllerFutureProgressMessage:
         {
-            case kRPVControllerFutureObject:
-            {
-                result = m_object.GetString(value, length);
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
+            std::lock_guard lock(m_mutex);
+            result = GetStdStringImpl(value, length, m_progress_message);
+            break;
+        }
+        default:
+        {
+            result = UnhandledProperty(property);
+            break;
         }
     }
     return result;
+}
+
+void Future::ResetProgress()
+{
+    std::lock_guard lock(m_mutex);
+    m_progress_map.clear();
+    m_progress_percentage = 0;
+}
+
+void Future::ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_db_future_id_t db_future_id, rocprofvis_db_progress_percent_t progress_percent, rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data)
+{
+    (void) db_filename;
+    (void) status;
+    ROCPROFVIS_ASSERT(user_data);
+    Future* future = (Future*)user_data;
+    if(future)
+    {
+        std::lock_guard lock(future->m_mutex);
+        future->m_progress_map[db_future_id] = progress_percent;
+        future->m_progress_percentage = 0;
+        for (const std::pair<const uint64_t, uint16_t>& progress : future->m_progress_map)
+        {
+            future->m_progress_percentage += progress.second;
+        }
+        future->m_progress_percentage /= future->m_progress_map.size();
+        future->m_progress_message = message ? message : "";
+    }
 }
 
 }

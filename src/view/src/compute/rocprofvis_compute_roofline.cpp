@@ -835,13 +835,13 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                 ImGui::Checkbox("", &m_scale_intensity);
                 ImGui::SameLine();
                 ElidedText("Scale kernel marker size to duration",
-                           ImGui::GetContentRegionAvail().x, plot_size.x * 0.5f, false,
-                           true);
+                           ImGui::GetContentRegionAvail().x, plot_size.x * 0.5f,
+                           Alignment_Left, true);
                 ImGui::PopID();
             }
             ImGui::PushID("menus_placement");
             ElidedText("Menus position", ImGui::GetContentRegionAvail().x,
-                       plot_size.x * 0.5f, false, true);
+                       plot_size.x * 0.5f, Alignment_Left, true);
             ImGui::SetNextItemWidth(-1.0f);
             int placement_idx = static_cast<int>(m_menus_placement);
             if(ImGui::Combo("##placement", &placement_idx,

@@ -611,7 +611,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                         ImGui::GetFontSize() * 0.5f));
                 ElidedText(m_kernels[i]->name.c_str(),
                            y_axis_width - plot_style.LabelPadding.x,
-                           ImGui::GetContentRegionAvail().x * 0.5f, true);
+                           ImGui::GetContentRegionAvail().x * 0.5f, Alignment_Right);
                 if(i == m_hovered_idx)
                 {
                     ImPlot::PushColormap(m_settings.GetContrastColormapName());

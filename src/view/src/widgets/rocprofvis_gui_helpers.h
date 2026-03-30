@@ -53,9 +53,17 @@ BeginItemTooltipStyled();
 void
 EndTooltipStyled();
 
+enum Alignment
+{
+    Alignment_Left,
+    Alignment_Center,
+    Alignment_Right,
+};
+
 void
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
-           bool right_justify = false, bool imgui_AlignTextToFramePadding = false);
+           Alignment alignment                     = Alignment_Left,
+           bool      imgui_AlignTextToFramePadding = false);
 
 class EmbeddedImage
 {

@@ -26,13 +26,18 @@ void SampleLOD::CalculateChildValues(void)
     m_child_max_timestamp       = DBL_MIN;
     uint64_t            entries = 0;
     std::vector<double> values;
+    double total_duration = 0;
     for(Sample* sample : m_children)
     {
         if(sample)
         {
             double timestamp = 0;
+            double end_timestamp = 0;
             double value     = 0;
+            double duration = 0;
             rocprofvis_result_t result = sample->GetDouble( kRPVControllerSampleTimestamp, 0, &timestamp);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            result = sample->GetDouble( kRPVControllerSampleEndTimestamp, 0, &end_timestamp);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             result = sample->GetDouble(kRPVControllerSampleValue, 0, &value);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -41,7 +46,9 @@ void SampleLOD::CalculateChildValues(void)
                 m_child_max_timestamp = std::max(m_child_max_timestamp, timestamp);
                 m_child_min           = std::min(m_child_min, value);
                 m_child_max           = std::max(m_child_max, value);
-                m_child_mean += value;
+                duration = end_timestamp - timestamp;
+                m_child_mean += value*duration;
+                total_duration += duration;
                 entries++;
                 values.push_back(value);
             }
@@ -59,7 +66,7 @@ void SampleLOD::CalculateChildValues(void)
 
         m_child_median = (values[lower] + values[upper]) / 2;
     }
-    m_child_mean /= entries;
+    m_child_mean /= total_duration;
     auto result = SetDouble(kRPVControllerSampleValue, 0, m_child_mean);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 }

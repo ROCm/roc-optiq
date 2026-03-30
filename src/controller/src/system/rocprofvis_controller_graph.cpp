@@ -388,7 +388,6 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
         double sample_last_ts = 0.0;
         double sample_last_value = 0.0;
         uint64_t type = 0;
-        const uint32_t sample_lod_min_limit = 10;
 
         for(auto& data : entries)
         {
@@ -418,7 +417,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 {
                     if (sample_start < end_ts && sample_next > start_ts)
                     {
-                        if (sample_start >= min_ts && sample_start <= max_ts && entries.size() > sample_lod_min_limit) 
+                        if (sample_start >= min_ts && sample_start <= max_ts) 
                         {
                             // Merge into the current sample
                             samples.push_back(sample);

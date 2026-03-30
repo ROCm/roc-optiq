@@ -125,11 +125,6 @@ AppWindow::Init()
     static std::string    ini_path_str = ini_path.string();
     io.IniFilename                     = ini_path_str.c_str();
 
-    // Enable ImGui docking (ImGui 1.92+ docking branch)
-    // Note: ViewportsEnable requires UpdatePlatformWindows()/RenderPlatformWindowsDefault()
-    // in the main loop, which our Vulkan backend doesn't fully support yet.
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-
     ImPlot::CreateContext();
 
     SettingsManager& settings = SettingsManager::GetInstance();

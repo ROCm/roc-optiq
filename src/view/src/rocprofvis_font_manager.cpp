@@ -56,8 +56,8 @@ FontManager::GetDPIScaledFontIndex()
     int best_index = 0;
     for(int i = 1; i < m_all_fonts.size(); i++)
     {
-        if(std::abs(m_all_fonts[i]->LegacySize - scaled_size) <
-           std::abs(m_all_fonts[i - 1]->LegacySize - scaled_size))
+        if(std::abs(m_all_fonts[i]->FontSize - scaled_size) <
+           std::abs(m_all_fonts[i - 1]->FontSize - scaled_size))
             best_index = i;
     }
 

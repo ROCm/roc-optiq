@@ -126,13 +126,19 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImU32 accent_red        = m_settings.GetColor(Colors::kAccentRed);
 
     int hovered_idx = -1;
-    for(size_t i = 0; i < m_data.size(); ++i)
+    size_t data_len = m_data.size();
+    for(size_t i = 0; i < data_len; ++i)
     {
         ImVec2 point_start = MapToUI(m_data[i].m_start_ts, m_data[i].m_value,
                                      cursor_position, content_size, scale_y);
         ImVec2 point_end = MapToUI(m_data[i].m_end_ts, m_data[i].m_value, cursor_position,
                                    content_size, scale_y);
-        point_end.x = std::max(point_end.x, point_start.x + 1.0f);
+
+        if(data_len == 1)
+        {
+            // If there is only one box, make sure it is visible by giving it a minimum width
+            point_end.x = std::max(point_end.x, point_start.x + 1.0f);
+        }
 
         ImU32 fill_color = (!m_show_boxplot)                          ? transparent_color
                            : (m_show_boxplot_stripes && (i % 2 == 0)) ? alt_fill_color

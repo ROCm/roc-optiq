@@ -64,7 +64,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
         return;
     }
 
-    SetTrackName(track_info);
+    m_name = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
     SetDefaultPillLabel(track_info);
 }
@@ -682,81 +682,6 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         default:
         {
             m_meta_area_label = m_name;
-            break;
-        }
-    }
-}
-
-void
-TrackItem::SetTrackName(const TrackInfo* track_info)
-{
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
-
-    std::string       device_type_label;
-    const DeviceInfo* device_info = tdm.GetDevice(track_info->agent_or_pid);
-    const ProcessInfo* process_info = tdm.GetProcess(track_info->topology.process_id);
-
-    if(device_info)
-    {
-        tdm.GetDeviceTypeLabel(*device_info, device_type_label);
-    }
-
-    switch(track_info->topology.type)
-    {
-        case TrackInfo::TrackType::Queue:
-        {
-            // If the category is not "GPU Queue", use it as the name
-            // For example, "Memory Copy", "Memory Allocation", etc
-            if(track_info->category != "GPU Queue")
-            {
-                m_name = track_info->category;
-
-            }
-            else
-            {
-                m_name = track_info->sub_name;
-            }
-            if (process_info && tdm.ProcessCount() > 1)
-            {
-                m_name += " (PID:" + std::to_string(process_info->id) + ")";
-            }
-            break;
-        }
-        case TrackInfo::TrackType::Stream:
-        {
-            m_name = track_info->main_name;
-            if(device_info)
-            {
-                m_name +=
-                    " (" + device_type_label + ": " + device_info->product_name + ")";
-            }
-            break;
-        }
-        case TrackInfo::TrackType::InstrumentedThread:
-        {
-            m_name = track_info->sub_name;
-            break;
-        }
-        case TrackInfo::TrackType::SampledThread:
-        {
-            m_name = track_info->sub_name + " (S)";
-            break;
-        }
-        case TrackInfo::TrackType::Counter:
-        {
-            // Get Processor (device) type label from using track's agent_or_pid, ex:
-            // "GPU0".
-            m_name = track_info->sub_name;
-            if (process_info && tdm.ProcessCount() > 1)
-            {
-                m_name += " (PID:" + std::to_string(process_info->id) + ")";
-            }
-            break;
-        }
-        default:
-        {
-            m_name = track_info->category + ":" + track_info->main_name + ":" +
-                     track_info->sub_name;
             break;
         }
     }

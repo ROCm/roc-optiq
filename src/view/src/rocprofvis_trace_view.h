@@ -75,7 +75,6 @@ private:
     void RenderToolbar();
     void RenderFlowControls();
     void RenderAnnotationControls();
-    void RenderSeparator();
     void RenderEventSearch();
 
     std::shared_ptr<TimelineView>      m_timeline_view;

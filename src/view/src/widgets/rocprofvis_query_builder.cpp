@@ -4,6 +4,7 @@
 #include "rocprofvis_query_builder.h"
 #include "imgui.h"
 #include "rocprofvis_settings_manager.h"
+#include "model/compute/rocprofvis_compute_data_model.h"
 
 namespace RocProfVis
 {
@@ -29,8 +30,11 @@ QueryBuilder::SetWorkload(const WorkloadInfo* workload)
 }
 
 void
-QueryBuilder::Open()
+QueryBuilder::Show(std::function<void(const std::string&)> on_confirm_callback,
+                    std::function<void()> on_cancel_callback)
 {
+    m_on_confirm  = on_confirm_callback;
+    m_on_cancel   = on_cancel_callback;
     m_should_open = true;
 }
 
@@ -104,11 +108,18 @@ QueryBuilder::Render()
             (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
         bool query_complete = !m_value_name.empty();
         if(!query_complete) ImGui::BeginDisabled();
-        if(ImGui::Button("Add", ImVec2(button_width, 0))) ImGui::CloseCurrentPopup();
+        if(ImGui::Button("Add", ImVec2(button_width, 0)))
+        {
+            if(m_on_confirm)
+                m_on_confirm(GetQueryString());
+            ImGui::CloseCurrentPopup();
+        }
         if(!query_complete) ImGui::EndDisabled();
         ImGui::SameLine();
         if(ImGui::Button("Cancel", ImVec2(button_width, 0)))
         {
+            if(m_on_cancel)
+                m_on_cancel();
             ClearFrom(LEVEL_CATEGORY);
             ImGui::CloseCurrentPopup();
         }
@@ -119,8 +130,7 @@ QueryBuilder::Render()
 void
 QueryBuilder::RenderTags()
 {
-    SettingsManager& settings = SettingsManager::GetInstance();
-    int              clear    = -1;
+    int clear = -1;
 
     ImGui::BeginChild("##tags", ImVec2(-1, ImGui::GetFrameHeightWithSpacing()),
                       ImGuiChildFlags_FrameStyle, ImGuiWindowFlags_HorizontalScrollbar);
@@ -131,16 +141,8 @@ QueryBuilder::RenderTags()
         if(clear >= 0 || i > 0) ImGui::SameLine();
 
         ImGui::PushID(i);
-        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccentRed));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              settings.GetColor(Colors::kAccentRedHover));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              settings.GetColor(Colors::kAccentRedActive));
-
         std::string tag = m_selections[i]->label + "  X";
         if(ImGui::SmallButton(tag.c_str())) clear = i;
-
-        ImGui::PopStyleColor(3);
         ImGui::PopID();
     }
 
@@ -185,8 +187,8 @@ QueryBuilder::GetItems() const
 
     if(m_level == LEVEL_CATEGORY)
     {
-        for(const auto& [id, cat] : workload.available_metrics.tree)
-            items.push_back({ id, std::to_string(id), cat.name });
+        for(const auto* cat : workload.available_metrics.ordered_categories)
+            items.push_back({ cat->id, std::to_string(cat->id), cat->name });
         return items;
     }
 
@@ -198,8 +200,8 @@ QueryBuilder::GetItems() const
 
     if(m_level == LEVEL_TABLE)
     {
-        for(const auto& [id, tbl] : category.tables)
-            items.push_back({ id, std::to_string(id), tbl.name });
+        for(const auto* tbl : category.ordered_tables)
+            items.push_back({ tbl->id, std::to_string(tbl->id), tbl->name });
         return items;
     }
 
@@ -211,8 +213,8 @@ QueryBuilder::GetItems() const
 
     if(m_level == LEVEL_ENTRY)
     {
-        for(const auto& [id, entry] : table.entries)
-            items.push_back({ id, std::to_string(id), entry.name });
+        for(const auto* entry : table.ordered_entries)
+            items.push_back({ entry->id, std::to_string(entry->id), entry->name });
         return items;
     }
 
@@ -260,8 +262,34 @@ QueryBuilder::GetQueryString() const
     if(m_selections[LEVEL_ENTRY])
         result += "." + std::to_string(m_selections[LEVEL_ENTRY]->id);
     if(!m_value_name.empty())
-        result += ": " + m_value_name;
+        result += ":" + m_value_name;
     return result;
+}
+
+std::string
+QueryBuilder::GetMetricName() const
+{
+    if(m_selections[LEVEL_ENTRY]) return m_selections[LEVEL_ENTRY]->label;
+    return "";
+}
+
+std::string
+QueryBuilder::GetValueName() const
+{
+    return m_value_name;
+}
+
+const AvailableMetrics::Entry*
+QueryBuilder::GetSelectedMetricInfo() const
+{
+    if(m_workload && m_selections[LEVEL_ENTRY] && m_selections[LEVEL_TABLE] &&
+       m_selections[LEVEL_CATEGORY])
+    {
+        return ComputeDataModel::GetMetricInfo(
+            *m_workload, m_selections[LEVEL_CATEGORY]->id, m_selections[LEVEL_TABLE]->id,
+            m_selections[LEVEL_ENTRY]->id);
+    }
+    return nullptr;
 }
 
 }  // namespace View

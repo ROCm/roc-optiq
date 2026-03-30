@@ -10,6 +10,11 @@ namespace RocProfVis
 namespace DataModel
 {
     const char* g_select_str = "SELECT ";
+    std::string Builder::Select(rocprofvis_db_sqlite_mem_act_subquery_format params)
+    {
+        return BuildQuery("(SELECT ", params.NUM_PARAMS, params.parameters, params.from,
+            ")");
+    }
     std::string Builder::Select(rocprofvis_db_sqlite_track_query_format params)
     {
         return BuildTrackQuery(params.NUM_PARAMS, params.parameters,
@@ -310,29 +315,9 @@ namespace DataModel
 
     std::string Builder::LevelTable(std::string operation, std::string guid)
     {
-        return std::string("event_levels_")+ operation + "_v" + std::to_string(LEVEL_CALCULATION_VERSION) + (guid.empty() ? "" : "_" + guid);
+        return std::string("roc_optiq_event_levels_") + operation + (guid.empty() ? "" : "_" + guid);
     }
 
-
-    void Builder::OldLevelTables(std::string operation, std::vector<std::string> & table_list, std::string guid)
-    {
-        std::string base = std::string("event_levels_");
-        if (guid.empty())
-        {
-            table_list.push_back(base + operation);
-            for (int i = 1; i <= LAST_SINGLE_NODE_LEVEL_CALCULATION_VERSION; i++)
-            {
-                table_list.push_back(base + operation + "_v" + std::to_string(i));
-            }
-        }
-        else
-        {
-            for (int i = FIRST_MULTINODE_NODE_LEVEL_CALCULATION_VERSION; i < LEVEL_CALCULATION_VERSION; i++)
-            {
-                table_list.push_back(base + operation + "_v" + std::to_string(i) + "_" + guid);
-            }
-        }
-    }
 
     const char* Builder::IntToTypeEnum(int val, std::vector<std::string>& lookup) {
         return lookup[val].c_str();

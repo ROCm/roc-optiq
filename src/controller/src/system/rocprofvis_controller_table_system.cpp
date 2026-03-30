@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_future.h"
+#include <cstdlib>
 
 namespace RocProfVis
 {
@@ -197,6 +198,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
         }
         future->RemoveDependentFuture(object2wait);
         rocprofvis_db_future_free(object2wait);
+        free(fetch_query);
     }
     else
     {
@@ -395,6 +397,7 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
             
             future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
+            free(query);
         }
         else
         {

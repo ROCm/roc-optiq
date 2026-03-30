@@ -10,6 +10,8 @@ namespace RocProfVis
 namespace View
 {
 
+class SettingsManager;
+
 constexpr float PI = 3.14159265358979323846f;  // Define PI constant
 
 void
@@ -17,6 +19,11 @@ RenderLoadingIndicatorDots(float dot_radius, int num_dots, float spacing,
                            ImU32 color, float speed);
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots, float spacing);
+
+void
+RenderLoadingIndicator(ImU32 color, const char* window_id = nullptr,
+                       float dot_radius = 5.0f, int num_dots = 3,
+                       float dot_spacing = 5.0f, float anim_speed = 5.0f);
 
 bool
 IconButton(const char* icon, ImFont* icon_font, ImVec2 size = ImVec2(0, 0),
@@ -48,15 +55,46 @@ EndTooltipStyled();
 
 void
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
-           bool imgui_AlignTextToFramePadding = false);
+           bool right_justify = false, bool imgui_AlignTextToFramePadding = false);
 
-/* 
- * Center the next text item horizontally with respect to the available 
- * content region.
- * @param text The text to be rendered next.
- */
+class EmbeddedImage
+{
+public:
+    EmbeddedImage(const unsigned char* data, int data_len);
+    ~EmbeddedImage();
+
+    EmbeddedImage(const EmbeddedImage&)            = delete;
+    EmbeddedImage& operator=(const EmbeddedImage&) = delete;
+
+    bool                 Valid() const;
+    int                  GetWidth() const;
+    int                  GetHeight() const;
+    const unsigned char* GetPixel(int x, int y) const;
+    unsigned char*       GetPixels();
+
+    void Render(ImVec2 top_left, float target_width, bool invert_colors = false) const;
+
+private:
+    int            m_width  = 0;
+    int            m_height = 0;
+    unsigned char* m_pixels = nullptr;
+};
+
 void
 CenterNextTextItem(const char* text);
+
+void
+CenterNextItem(float width);
+
+bool
+XButton(const char* id = nullptr, const char* tool_tip_label = nullptr,
+        SettingsManager* settings = nullptr);
+
+void
+SectionTitle(const char* text, bool large = true, SettingsManager* settings = nullptr);
+
+void
+VerticalSeparator(SettingsManager* settings = nullptr);
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void

@@ -1,7 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_db.h"
+#include "rocprofvis_db_profile.h"
 
 namespace RocProfVis
 {
@@ -71,6 +71,30 @@ namespace DataModel
             [track_id](std::unique_ptr<rocprofvis_dm_track_params_t>& params) {
                 return params.get()->track_indentifiers.track_id == track_id;
             });
+    }
+
+    rocprofvis_dm_track_category_t TrackLookup::SearchCategoryMaskLookup(rocprofvis_dm_event_operation_t op)
+    {
+        rocprofvis_dm_track_category_t cat = kRocProfVisDmProcessTrack;
+        switch (op)
+        {
+        case kRocProfVisDmOperationLaunchSample:
+            cat = kRocProfVisDmRegionSampleTrack;
+            break;
+        case kRocProfVisDmOperationLaunch:
+            cat = ((ProfileDatabase*)m_db)->GetRegionTrackCategory();
+            break;
+        case kRocProfVisDmOperationDispatch:
+            cat = kRocProfVisDmKernelDispatchTrack;
+            break;
+        case kRocProfVisDmOperationMemoryCopy:
+            cat = kRocProfVisDmMemoryCopyTrack;
+            break;
+        case kRocProfVisDmOperationMemoryAllocate:
+            cat = kRocProfVisDmMemoryAllocationTrack;
+            break;
+        }
+        return cat;
     }
 
     TrackLookup::TrackKey TrackLookup::MakeKey(const rocprofvis_dm_track_identifiers_t & ids, uint32_t db_instance)

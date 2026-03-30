@@ -31,7 +31,7 @@ constexpr float    SIDEBAR_WIDTH_MAX             = 600.0f;
 constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
 constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
-constexpr uint64_t DEFAULT_LOADING_TIMER         = 800;  // milliseconds
+constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 30.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
@@ -304,8 +304,10 @@ TimelineView::ScrollToTrack(const uint64_t& track_id)
 {
     if(m_track_position_y.count(track_id) > 0)
     {
+        float track_y = m_track_position_y[track_id];
         m_scroll_position_y =
-            std::min(m_content_max_y_scroll, m_track_position_y[track_id]);
+            std::clamp(track_y - m_tpt->GetGraphSizeY() * 0.5f, 0.0f,
+                       m_content_max_y_scroll);
         ImGui::SetScrollY(m_scroll_position_y);
     }
 }
@@ -890,7 +892,6 @@ TimelineView::GetGraphs()
 void
 TimelineView::CalculateGridInterval()
 {
-    // measure the size of the label to determine the step size
     std::string label =
         nanosecond_to_formatted_str(
             m_tpt->GetRangeX(), m_settings.GetUserSettings().unit_settings.time_format,
@@ -898,32 +899,11 @@ TimelineView::CalculateGridInterval()
         "gap";
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
-    // calculate the number of intervals based on the graph width and label width
-    int interval_count =
-        label_size.x > 0 ? static_cast<int>(m_tpt->GetGraphSizeX() / label_size.x) : 0;
+    FittedGraphAxisInterval fitted_interval = fit_graph_axis_interval(
+        m_tpt->GetVWidth(), m_tpt->GetGraphSizeX(), label_size.x, false, 3);
 
-    double interval_ns  = calculate_nice_interval(m_tpt->GetVWidth(), interval_count);
-    double step_size_px = interval_ns * m_tpt->GetPixelsPerNs();
-
-    int pad_amount = 2;  // +2 for the first and last label
-
-    // If the step size is smaller than the label size, try to adjust the interval
-    // count
-    while(step_size_px < label_size.x)
-    {
-        interval_count--;
-        interval_ns  = calculate_nice_interval(m_tpt->GetVWidth(), interval_count);
-        step_size_px = interval_ns * m_tpt->GetPixelsPerNs();
-        // If the interval count is too small break out and pad it
-        if(interval_count <= 3)
-        {
-            pad_amount++;
-            break;
-        }
-    }
-
-    m_grid_interval_ns    = interval_ns;
-    m_grid_interval_count = interval_count + pad_amount;
+    m_grid_interval_ns    = fitted_interval.interval_ns;
+    m_grid_interval_count = fitted_interval.interval_count;
 }
 
 void
@@ -1039,7 +1019,6 @@ TimelineView::RenderGraphView()
     float temp_scroll_position = ImGui::GetScrollY();
     if(m_previous_scroll_position != temp_scroll_position)
     {
-        m_loading_timer.Restart();
         m_previous_scroll_position = temp_scroll_position;
         m_scroll_position_y        = temp_scroll_position;
     }
@@ -1556,44 +1535,19 @@ TimelineView::RenderHistogram()
     ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
     float       label_font_size = font->LegacySize;
 
-    // Interval calculation
-    // measure the size of the label to determine the step size
     std::string label =
         nanosecond_to_formatted_str(m_tpt->GetRangeX(), time_format, true) + "gap";
     ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
-    // calculate the number of intervals based on the graph width and label width
-    // reserve space for first and last label
-    int interval_count =
-        static_cast<int>((ruler_width - label_size.x * 2.0f) / label_size.x);
-    if(interval_count < 1) interval_count = 1;
+    FittedGraphAxisInterval fitted_interval =
+        fit_graph_axis_interval(m_tpt->GetRangeX(), ruler_width, label_size.x, true, 0);
 
     double pixels_per_ns = m_tpt->GetGraphSizeX() / m_tpt->GetRangeX();
-    double interval_ns   = calculate_nice_interval(m_tpt->GetRangeX(), interval_count);
-    double step_size_px  = interval_ns * pixels_per_ns;
-    int    pad_amount    = 2;  // +2 for the first and last label
+    ImVec2 window_pos    = ImGui::GetWindowPos();
 
-    // If the step size is smaller than the label size, try to adjust the interval
-    // count
-    while(step_size_px < label_size.x)
+    for(int i = 0; i < fitted_interval.interval_count; i++)
     {
-        interval_count--;
-        interval_ns  = calculate_nice_interval(m_tpt->GetRangeX(), interval_count);
-        step_size_px = interval_ns * pixels_per_ns;
-        // If the interval count is too small break out
-        if(interval_count <= 0)
-        {
-            break;
-        }
-    }
-
-    const int num_ticks          = interval_count + pad_amount;
-    double    grid_line_start_ns = 0;
-    ImVec2    window_pos         = ImGui::GetWindowPos();
-
-    for(int i = 0; i < num_ticks; i++)
-    {
-        double tick_ns = grid_line_start_ns + (i * interval_ns);
+        double tick_ns = i * fitted_interval.interval_ns;
         // calculate x pos avoiding tpt related functions because histogram does not
         // use zoom/pan logic
         float       tick_x = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);

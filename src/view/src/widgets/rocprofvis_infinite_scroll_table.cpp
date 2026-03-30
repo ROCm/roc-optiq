@@ -7,6 +7,7 @@
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -26,7 +27,8 @@ constexpr const char* DURATION_COLUMN_NAME           = "duration";
 constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
-                                         const std::string& no_data_text)
+                                         const std::string& no_data_text,
+                                         std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
@@ -49,6 +51,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_selected_column(-1)
 , m_hovered_row(-1)
 , m_no_data_text(no_data_text)
+, m_timeline_selection(timeline_selection)
 , m_horizontal_scroll(0.0f)
 , m_time_column_indices(
       { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
@@ -458,16 +461,7 @@ InfiniteScrollTable::Render()
 
     if(show_loading_indicator)
     {
-        // Show a loading indicator if the data is being fetched
-        // Create an overlay child window to display the loading indicator
-        ImGui::SetCursorPos(ImVec2(0, 0));
-        // set transparent background for the overlay window
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-        ImGui::BeginChild(m_widget_name.c_str(), ImGui::GetWindowSize(),
-                          ImGuiChildFlags_None);
-        RenderLoadingIndicator();
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
+        RenderLoadingIndicator(m_settings.GetColor(Colors::kTextMain));
     }
 
     ImGui::EndChild();
@@ -731,28 +725,31 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
     }
     else
     {
-        // Handle navigation
         uint64_t target_track_id =
             SelectedRowToTrackID(track_id_column_index, stream_id_column_index);
         if(target_track_id != INVALID_UINT64_INDEX)
         {
-            // get start time and duration
             std::pair<uint64_t, uint64_t> time_range = SelectedRowToTimeRange();
             if(time_range.first != INVALID_UINT64_INDEX &&
                time_range.second != INVALID_UINT64_INDEX)
             {
-                ViewRangeNS view_range = calculate_adaptive_view_range(
-                    static_cast<double>(time_range.first),
-                    static_cast<double>(time_range.second - time_range.first));
-                spdlog::debug("Navigating to track ID: {} from row: {}", target_track_id,
-                             m_selected_row);
-                EventManager::GetInstance()->AddEvent(
-                    std::make_shared<ScrollToTrackEvent>(
-                        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                        target_track_id, m_data_provider.GetTraceFilePath()));
-                EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
-                    static_cast<int>(RocEvents::kSetViewRange), view_range.start_ns,
-                    view_range.end_ns, m_data_provider.GetTraceFilePath()));
+                spdlog::debug("Navigating to track ID: {} from row: {}",
+                              target_track_id, m_selected_row);
+
+                uint64_t uuid = TimelineSelection::INVALID_SELECTION_ID;
+                if(m_important_column_idxs[kUUId] != INVALID_UINT64_INDEX)
+                {
+                    uuid = std::stoull(
+                        table_data[m_selected_row][m_important_column_idxs[kUUId]]);
+                }
+
+                if(m_timeline_selection)
+                {
+                    m_timeline_selection->NavigateToEvent(
+                        target_track_id, uuid,
+                        static_cast<double>(time_range.first),
+                        static_cast<double>(time_range.second - time_range.first));
+                }
             }
         }
         else
@@ -830,31 +827,6 @@ InfiniteScrollTable::ExportToFile() const
                     NotificationLevel::Info);
             }
         });
-}
-
-void
-InfiniteScrollTable::RenderLoadingIndicator() const
-{
-    float dot_radius  = 5.0f;
-    int   num_dots    = 3;
-    float dot_spacing = 5.0f;
-    float anim_speed  = 5.0f;
-
-    ImVec2 dot_size = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
-
-    ImVec2 window_pos = ImGui::GetWindowPos();
-    ImVec2 view_rect  = ImGui::GetWindowSize();
-    ImVec2 pos        = ImGui::GetCursorPos();
-    ImVec2 center_pos = ImVec2(window_pos.x + (view_rect.x - dot_size.x) * 0.5f,
-                               window_pos.y + (view_rect.y - dot_size.y) * 0.5f);
-
-    ImGui::SetCursorScreenPos(center_pos);
-
-    RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                               m_settings.GetColor(Colors::kTextMain), anim_speed);
-
-    // Reset cursor position after rendering spinner
-    ImGui::SetCursorPos(pos);
 }
 
 }  // namespace View

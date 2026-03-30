@@ -51,6 +51,9 @@ public:
     const std::string& GetTraceFilePath() const { return m_trace_file_path; }
     void SetTraceFilePath(const std::string& path) { m_trace_file_path = path; }
 
+    // Build display name for a track from topology/timeline data
+    std::string BuildTrackName(uint64_t track_id) const;
+
     // Clear all data
     void Clear();
 

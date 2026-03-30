@@ -21,7 +21,6 @@
 #include "system/rocprofvis_controller_summary.h"
 #include "system/rocprofvis_controller_summary_metrics.h"
 #ifdef COMPUTE_UI_SUPPORT
-#include "compute/rocprofvis_controller_plot.h"
 #include "compute/rocprofvis_controller_metrics_container.h"
 #include "compute/rocprofvis_controller_trace_compute.h"
 #endif
@@ -48,7 +47,6 @@ typedef Reference<rocprofvis_controller_summary_metrics_t, SummaryMetrics, kRPVC
 #ifdef COMPUTE_UI_SUPPORT
 typedef Reference<rocprofvis_controller_t, ComputeTrace, kRPVControllerObjectTypeControllerCompute> ComputeTraceRef;
 typedef Reference<rocprofvis_controller_t, MetricsContainer, kRPVControllerObjectTypeMetricsContainer> MetricsContainerRef;
-typedef Reference<rocprofvis_controller_plot_t, Plot, kRPVControllerObjectTypePlot> PlotRef;
 #endif
 }
 }
@@ -181,15 +179,6 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename)
                 case kComputeSqlite:
                 {
                     trace = new RocProfVis::Controller::ComputeTrace(filename);                  
-                    break;
-                }
-                default:
-                {
-                    size_t len = strlen(filename);
-                    if (len > 4 && strcmp(filename + len - 4, ".csv") == 0)
-                    {
-                        trace = new RocProfVis::Controller::ComputeTrace(filename); 
-                    }
                     break;
                 }
 #endif
@@ -361,10 +350,14 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::SystemTraceRef system_trace(controller);
-#ifdef COMPUTE_UI_SUPPORT
-    RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
-#endif
+    
+    // Determine actual controller type first to avoid ambiguous reference validation
+    rocprofvis_controller_object_type_t controller_type;
+    if(rocprofvis_controller_get_object_type(controller, &controller_type) != kRocProfVisResultSuccess)
+    {
+        return error;
+    }
+    
     RocProfVis::Controller::TableRef table_ref(table);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);
@@ -372,14 +365,22 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
 
     if (table_ref.IsValid() && args_ref.IsValid() && future.IsValid() && array.IsValid())
     {
-        if (system_trace.IsValid())
+        if (controller_type == kRPVControllerObjectTypeControllerSystem)
         {
-            error = system_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+            RocProfVis::Controller::SystemTraceRef system_trace(controller);
+            if(system_trace.IsValid())
+            {
+                error = system_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+            }
         }
 #ifdef COMPUTE_UI_SUPPORT
-        else if (compute_trace.IsValid())
+        else if (controller_type == kRPVControllerObjectTypeControllerCompute)
         {
-            error = compute_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+            RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
+            if(compute_trace.IsValid())
+            {
+                error = compute_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
+            }
         }
 #endif
     }
@@ -464,25 +465,6 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(
     if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && container.IsValid())
     {
         error = trace->AsyncFetch(*args_ref, *future, *container);
-    }
-    return error;
-}
-
-rocprofvis_result_t rocprofvis_controller_plot_fetch_async(
-    rocprofvis_controller_t* controller, rocprofvis_controller_plot_t* plot,
-    rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result,
-    rocprofvis_controller_array_t* output)
-{
-    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::ComputeTraceRef trace(controller);
-    RocProfVis::Controller::PlotRef plot_ref(plot);
-    RocProfVis::Controller::ArgumentsRef args_ref(args);
-    RocProfVis::Controller::FutureRef future(result);
-    RocProfVis::Controller::ArrayRef array(output);
-    if (trace.IsValid() && plot_ref.IsValid() && args_ref.IsValid() && future.IsValid() &&
-        array.IsValid())
-    {
-        error = trace->AsyncFetch(*plot_ref, *args_ref, *future, *array);
     }
     return error;
 }

@@ -30,8 +30,7 @@ constexpr const char* FOUND_ENTRIES_TEXT = "Found %llu item(s) on %llu track(s)"
 MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
                                  std::shared_ptr<TimelineSelection> timeline_selection,
                                  TableType                          table_type)
-: InfiniteScrollTable(dp, table_type, NO_DATA_TEXT)
-, m_timeline_selection(timeline_selection)
+: InfiniteScrollTable(dp, table_type, NO_DATA_TEXT, timeline_selection)
 , m_defer_track_selection_changed(false)
 , m_open_context_menu(false)
 , m_group_by_selection_index(0)
@@ -388,22 +387,7 @@ MultiTrackTable::RowSelected(const ImGuiMouseButton mouse_button)
 bool
 MultiTrackTable::XButton(const char* id) const
 {
-    bool clicked = false;
-    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-    ImGui::PushID(id);
-    clicked = ImGui::SmallButton(ICON_X_CIRCLED);
-    ImGui::PopID();
-    ImGui::PopFont();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
-    if(ImGui::IsItemHovered())
-        SetTooltipStyled("Clear");
+    bool clicked = RocProfVis::View::XButton(id, "Clear", &m_settings);
     return clicked;
 }
 

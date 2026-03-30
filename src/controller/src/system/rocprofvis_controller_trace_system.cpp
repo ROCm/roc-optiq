@@ -17,12 +17,6 @@
 #include "rocprofvis_controller_topology.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
-#ifdef COMPUTE_UI_SUPPORT
-#include "compute/rocprofvis_controller_trace_compute.h"
-#include "compute/rocprofvis_controller_plot.h"
-#include <filesystem>
-#endif
-
 #include <cfloat>
 #include <cstdint>
 #include <cstring>

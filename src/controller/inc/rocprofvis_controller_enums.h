@@ -104,24 +104,21 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeSummaryMetrics = 22,
     // Extended data object
     kRPVControllerObjectTypeEventArgument = 23,
+    // Topology node object
+    kRPVControllerObjectTypeTopologyNode = 24,
 #ifdef COMPUTE_UI_SUPPORT
     // Compute trace controller object
-    kRPVControllerObjectTypeControllerCompute = 24,
+    kRPVControllerObjectTypeControllerCompute = 100,
     // Workload object
-    kRPVControllerObjectTypeWorkload = 25,
+    kRPVControllerObjectTypeWorkload = 101,
     // Kernel object
-    kRPVControllerObjectTypeKernel = 26,
+    kRPVControllerObjectTypeKernel = 102,
     // Metrics container object
-    kRPVControllerObjectTypeMetricsContainer = 27,
+    kRPVControllerObjectTypeMetricsContainer = 103,
     // Roofline object
-    kRPVControllerObjectTypeRoofline = 28,
-    // Plot object
-    kRPVControllerObjectTypePlot = 29,
-    // Plot series object
-    kRPVControllerObjectTypePlotSeries = 30,
+    kRPVControllerObjectTypeRoofline = 104,
 #endif
-    // Topology node object
-    kRPVControllerObjectTypeTopologyNode = 27,
+
 } rocprofvis_controller_object_type_t;
 
 /*
@@ -926,6 +923,12 @@ typedef enum rocprofvis_controller_compute_pivot_table_arguments_t : uint32_t
     kRPVControllerCPTArgsSortColumnIndex,
     // Optional sort order (rocprofvis_controller_sort_order_t) - 0=ascending, 1=descending (default = descending)
     kRPVControllerCPTArgsSortOrder,
+    // Number of column filters (uint64)
+    kRPVControllerCPTArgsNumColumnFilters,
+    // Indexed filter column index (uint64)
+    kRPVControllerCPTArgsFilterColumnIndexIndexed,
+    // Indexed filter expression string (e.g., "> 1000", "LIKE '%kernel%'")
+    kRPVControllerCPTArgsFilterExpressionIndexed,
 } rocprofvis_controller_compute_pivot_table_arguments_t;
 
 /*
@@ -1018,186 +1021,4 @@ typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
     kRPVControllerRooflineKernelIntensityTypeL2,
     kRPVControllerRooflineKernelIntensityTypeL1,
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
-
-#pragma region Deprecated
-/*
- * Identifiers for each table in a compute trace.
- */
-typedef enum rocprofvis_controller_compute_table_types_t
-{
-    kRPVControllerComputeTableTypeKernelList = 0x1A000000,
-    kRPVControllerComputeTableTypeDispatchList,
-    kRPVControllerComputeTableTypeSysInfo,
-    kRPVControllerComputeTableTypeSpeedOfLight,
-    kRPVControllerComputeTableTypeMemoryChart,
-    kRPVControllerComputeTableTypeCPFetcher,
-    kRPVControllerComputeTableTypeCPPacketProcessor,
-    kRPVControllerComputeTableTypeWorkgroupMngrUtil,
-    kRPVControllerComputeTableTypeWorkgroupMngrRescAlloc,
-    kRPVControllerComputeTableTypeWavefrontLaunch,
-    kRPVControllerComputeTableTypeWavefrontRuntime,
-    kRPVControllerComputeTableTypeInstrMix,
-    kRPVControllerComputeTableTypeVALUInstrMix,
-    kRPVControllerComputeTableTypeVMEMInstrMix,
-    kRPVControllerComputeTableTypeMFMAInstrMix,
-    kRPVControllerComputeTableTypeCUSpeedOfLight,
-    kRPVControllerComputeTableTypeCUPipelineStats,
-    kRPVControllerComputeTableTypeCUOps,
-    kRPVControllerComputeTableTypeLDSSpeedOfLight,
-    kRPVControllerComputeTableTypeLDSStats,
-    kRPVControllerComputeTableTypeInstrCacheSpeedOfLight,
-    kRPVControllerComputeTableTypeInstrCacheAccesses,
-    kRPVControllerComputeTableTypeInstrCacheL2Interface,
-    kRPVControllerComputeTableTypeSL1CacheSpeedOfLight,
-    kRPVControllerComputeTableTypeSL1CacheAccesses,
-    kRPVControllerComputeTableTypeSL1CacheL2Transactions,
-    kRPVControllerComputeTableTypeAddrProcessorStats,
-    kRPVControllerComputeTableTypeAddrProcessorReturnPath,
-    kRPVControllerComputeTableTypeVL1CacheSpeedOfLight,
-    kRPVControllerComputeTableTypeVL1CacheStalls,
-    kRPVControllerComputeTableTypeVL1CacheAccesses,
-    kRPVControllerComputeTableTypeVL1CacheL2Transactions,
-    kRPVControllerComputeTableTypeVL1CacheAddrTranslations,
-    kRPVControllerComputeTableTypeL2CacheSpeedOfLight,
-    kRPVControllerComputeTableTypeL2CacheFabricTransactions,
-    kRPVControllerComputeTableTypeL2CacheAccesses,
-    kRPVControllerComputeTableTypeL2CacheFabricStalls,
-    kRPVControllerComputeTableTypeL2CacheFabricTransactionsDetailed,
-    kRPVControllerComputeTableTypeL2CacheStats,
-    kRPVControllerComputeTableTypeL2CacheHitRate,
-    kRPVControllerComputeTableTypeL2CacheReqs1,
-    kRPVControllerComputeTableTypeL2CacheReqs2,
-    kRPVControllerComputeTableTypeL2CacheFabricReqs,
-    kRPVControllerComputeTableTypeL2CacheFabricRdLat,
-    kRPVControllerComputeTableTypeL2CacheFabricWrAtomLat,
-    kRPVControllerComputeTableTypeL2CacheFabricAtomLat,
-    kRPVControllerComputeTableTypeL2CacheRdStalls,
-    kRPVControllerComputeTableTypeL2CacheWrAtomStalls,
-    kRPVControllerComputeTableTypeL2Cache128Reqs,
-    kRPVControllerComputeTableTypeRooflineBenchmarks,
-    kRPVControllerComputeTableTypeRooflineCounters,
-    kRPVControllerComputeTableTypeCount
-} rocprofvis_controller_compute_table_types_t;
-
-/*
- * Identifiers for each plot in a compute trace.
- */
-typedef enum rocprofvis_controller_compute_plot_types_t
-{
-    kRPVControllerComputePlotTypeKernelDurationPercentage =
-        kRPVControllerComputeTableTypeCount + 1,
-    kRPVControllerComputePlotTypeKernelDuration,
-    kRPVControllerComputePlotTypeL2CacheSpeedOfLight,
-    kRPVControllerComputePlotTypeL2CacheFabricSpeedOfLight,
-    kRPVControllerComputePlotTypeL2CacheFabricStallsRead,
-    kRPVControllerComputePlotTypeL2CacheFabricStallsWrite,
-    kRPVControllerComputePlotTypeInstrMix,
-    kRPVControllerComputePlotTypeCUOps,
-    kRPVControllerComputePlotTypeSL1CacheSpeedOfLight,
-    kRPVControllerComputePlotTypeInstrCacheSpeedOfLight,
-    kRPVControllerComputePlotTypeVL1CacheSpeedOfLight,
-    kRPVControllerComputePlotTypeVL1CacheL2NCTransactions,
-    kRPVControllerComputePlotTypeVL1CacheL2UCTransactions,
-    kRPVControllerComputePlotTypeVL1CacheL2RWTransactions,
-    kRPVControllerComputePlotTypeVL1CacheL2CCTransactions,
-    kRPVControllerComputePlotTypeVALUInstrMix,
-    kRPVControllerComputePlotTypeLDSSpeedOfLight,
-    kRPVControllerComputePlotTypeRooflineFP64,
-    kRPVControllerComputePlotTypeRooflineFP32,
-    kRPVControllerComputePlotTypeRooflineFP16,
-    kRPVControllerComputePlotTypeRooflineINT8,
-    kRPVControllerComputePlotTypeCount,
-} rocprofvis_controller_compute_plot_types_t;
-
-/*
- * Identifiers for individual metrics in a compute trace.
- */
-typedef enum rocprofvis_controller_compute_metric_types_t
-{
-    kRPVControllerComputeMetricTypeL2CacheRd = kRPVControllerComputePlotTypeCount + 1,
-    kRPVControllerComputeMetricTypeL2CacheWr,
-    kRPVControllerComputeMetricTypeL2CacheAtomic,
-    kRPVControllerComputeMetricTypeL2CacheHitRate,
-    kRPVControllerComputeMetricTypeFabricRd,
-    kRPVControllerComputeMetricTypeFabricWr,
-    kRPVControllerComputeMetricTypeFabricAtomic,
-    kRPVControllerComputeMetricTypeSL1CacheHitRate,
-    kRPVControllerComputeMetricTypeInstrCacheHitRate,
-    kRPVControllerComputeMetricTypeInstrCacheLat,
-    kRPVControllerComputeMetricTypeVL1CacheHitRate,
-    kRPVControllerComputeMetricTypeVL1CacheCoales,
-    kRPVControllerComputeMetricTypeVL1CacheStall,
-    kRPVControllerComputeMetricTypeLDSUtil,
-    kRPVControllerComputeMetricTypeLDSLat,
-    kRPVcontrollerComputeMetricTypeLDSAlloc,
-    kRPVControllerComputeMetricTypeVGPR,
-    kRPVControllerComputeMetricTypeSGPR,
-    kRPVControllerComputeMetricTypeScratchAlloc,
-    kRPVControllerComputeMetricTypeWavefronts,
-    kRPVControllerComputeMetricTypeWorkgroups,
-    kRPVControllerComputeMetricTypeFabric_HBMRd,
-    kRPVControllerComputeMetricTypeFabric_HBMWr,
-    kRPVControllerComputeMetricTypeL2_FabricRd,
-    kRPVControllerComputeMetricTypeL2_FabricWr,
-    kRPVControllerComputeMetricTypeL2_FabricAtomic,
-    kRPVControllerComputeMetricTypeVL1_L2Rd,
-    kRPVControllerComputeMetricTypeVL1_L2Wr,
-    kRPVControllerComputeMetricTypeVL1_L2Atomic,
-    kRPVControllerComputeMetricTypeSL1_L2Rd,
-    kRPVControllerComputeMetricTypeSL1_L2Wr,
-    kRPVControllerComputeMetricTypeSL1_L2Atomic,
-    kRPVControllerComputeMetricTypeInst_L2Req,
-    kRPVControllerComputeMetricTypeCU_LDSReq,
-    kRPVControllerComputeMetricTypeCU_VL1Rd,
-    kRPVControllerComputeMetricTypeCU_VL1Wr,
-    kRPVControllerComputeMetricTypeCU_VL1Atomic,
-    kRPVControllerComputeMetricTypeCU_SL1Rd,
-    kRPVControllerComputeMetricTypeCU_InstrReq,
-    kRPVControllerComputeMetricTypeCount
-} rocprofvis_controller_compute_metric_types_t;
-
-/*
- * Properties of a Plot object
- */
-typedef enum rocprofvis_controller_plot_properties_t : uint32_t
-{
-    __kRPVControllerPlotPropertiesFirst = 0x1B000000,
-    // Id for the plot
-    kRPVControllerPlotId = __kRPVControllerPlotPropertiesFirst,
-    // Number of data series
-    kRPVControllerPlotNumSeries,
-    // Number of x axis tick labels
-    kRPVControllerPlotNumXAxisLabels,
-    // Number of y axis tick labels
-    kRPVControllerPlotNumYAxisLabels,
-    // Indexed x axis tick labels
-    kRPVControllerPlotXAxisLabelsIndexed,
-    // Indexed y axis tick labels
-    kRPVControllerPlotYAxisLabelsIndexed,
-    // X axis title
-    kRPVControllerPlotXAxisTitle,
-    // Y axis title
-    kRPVControllerPlotYAxisTitle,
-    // Plot title
-    kRPVControllerPlotTitle,
-    __kRPVControllerPlotPropertiesLast,
-} rocprofvis_controller_plot_properties_t;
-
-/*
- * Properties of a PlotSeries object
- */
-typedef enum rocprofvis_controller_plot_series_properties_t : uint32_t
-{
-    __kRPVControllerPlotSeriesPropertiesFirst = 0x1C000000,
-    // Number of x,y pairs in the series
-    kRPVControllerPlotSeriesNumValues = __kRPVControllerPlotSeriesPropertiesFirst,
-    // Indexed x values
-    kRPVControllerPlotSeriesXValuesIndexed,
-    // Indexed y values
-    kRPVControllerPlotSeriesYValuesIndexed,
-    // Series name
-    kRPVControllerPlotSeriesName,
-    __kRPVControllerPlotSeriesPropertiesLast
-} rocprofvis_controller_plot_series_properties_t;
-#pragma endregion
 #endif

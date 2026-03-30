@@ -114,9 +114,10 @@ TrackDataEvent::GetResponseCode() const
     return m_response_code;
 }
 
-TableDataEvent::TableDataEvent(const std::string& source_id, uint64_t request_id)
+TableDataEvent::TableDataEvent(const std::string& source_id, uint64_t request_id, uint64_t response_code)
 : RocEvent(static_cast<int>(RocEvents::kNewTableData), source_id)
 , m_request_id(request_id)
+, m_response_code(response_code)
 {
     m_event_type = RocEventType::kTableDataEvent;
 }
@@ -125,6 +126,12 @@ uint64_t
 TableDataEvent::GetRequestID() const
 {
     return m_request_id;
+}
+
+uint64_t
+TableDataEvent::GetResponseCode() const
+{
+    return m_response_code;
 }
 
 #ifdef COMPUTE_UI_SUPPORT
@@ -252,6 +259,43 @@ EventSelectionChangedEvent::EventSelected() const
 
 bool
 EventSelectionChangedEvent::IsBatch() const
+{
+    return m_is_batch;
+}
+
+EventHighlightChangedEvent::EventHighlightChangedEvent(uint64_t event_id,
+                                                       uint64_t track_id, bool highlighted,
+                                                       const std::string& source_id,
+                                                       bool               batch)
+: RocEvent(static_cast<int>(RocEvents::kTimelineEventHighlightChanged), source_id)
+, m_event_id(event_id)
+, m_event_track_id(track_id)
+, m_highlighted(highlighted)
+, m_is_batch(batch)
+{
+    m_event_type = RocEventType::kTimelineEventHighlightChangedEvent;
+}
+
+uint64_t
+EventHighlightChangedEvent::GetEventID() const
+{
+    return m_event_id;
+}
+
+uint64_t
+EventHighlightChangedEvent::GetEventTrackID() const
+{
+    return m_event_track_id;
+}
+
+bool
+EventHighlightChangedEvent::EventHighlighted() const
+{
+    return m_highlighted;
+}
+
+bool
+EventHighlightChangedEvent::IsBatch() const
 {
     return m_is_batch;
 }

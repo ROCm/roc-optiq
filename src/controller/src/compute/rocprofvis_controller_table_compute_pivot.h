@@ -38,6 +38,8 @@ private:
     // Stored arguments from Setup()
     uint64_t m_workload_id;
     std::vector<std::string> m_metric_selectors;  // Format: "metric_id:value_name"
+    std::unordered_map<uint64_t, std::string>
+        m_column_filters;  // column_index → expression
 };
 
 }

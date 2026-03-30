@@ -15,7 +15,7 @@ namespace View
 class EventSearch : public InfiniteScrollTable
 {
 public:
-    EventSearch(DataProvider& dp);
+    EventSearch(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
     void Update() override;
     void Render() override;
 

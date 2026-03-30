@@ -22,8 +22,9 @@ constexpr const char* ID_COLUMN_NAME        = "__uuid";
 constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 
-EventSearch::EventSearch(DataProvider& dp)
-: InfiniteScrollTable(dp, TableType::kEventSearchTable)
+EventSearch::EventSearch(DataProvider& dp,
+                         std::shared_ptr<TimelineSelection> timeline_selection)
+: InfiniteScrollTable(dp, TableType::kEventSearchTable, "", timeline_selection)
 , m_should_open(false)
 , m_should_close(false)
 , m_open_context_menu(false)

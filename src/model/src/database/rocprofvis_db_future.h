@@ -20,6 +20,7 @@ typedef enum  rocprofvis_db_future_runtime_storage_t
 {
     kRPVFutureStorageSampleValue,
     kRPVFutureStorageEventId,
+    kRPVFutureStorageTrackId,
 
     kRPVFutureRuntimeStorageSize
 }rocprofvis_db_future_runtime_storage_t;

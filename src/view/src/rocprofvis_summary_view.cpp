@@ -23,10 +23,6 @@ constexpr double PIE_CHART_RADIUS                = 1.0;
 constexpr double BAR_CHART_THICKNESS             = 0.67;
 constexpr ImVec2 CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
 constexpr float  FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
-constexpr float  LOADING_DOT_SIZE                = 5.0f;
-constexpr float  LOADING_DOT_SPACING             = 5.0f;
-constexpr int    LOADING_DOT_COUNT               = 3;
-constexpr float  LOADING_DOT_SPEED               = 5.0f;
 constexpr ImVec2 INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
 constexpr float  INITIAL_RELATIVE_SIZE           = 0.8f;
 
@@ -109,14 +105,7 @@ SummaryView::Render()
         if(m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID) ||
            m_data_provider.GetState() == ProviderState::kLoading)
         {
-            ImGui::SetCursorPos(
-                (ImGui::GetWindowContentRegionMax() -
-                 MeasureLoadingIndicatorDots(LOADING_DOT_SIZE, LOADING_DOT_COUNT,
-                                             LOADING_DOT_SPACING)) *
-                0.5f);
-            RenderLoadingIndicatorDots(
-                LOADING_DOT_SIZE, LOADING_DOT_COUNT, LOADING_DOT_SPACING,
-                m_settings.GetColor(Colors::kTextMain), LOADING_DOT_SPEED);
+            RenderLoadingIndicator(m_settings.GetColor(Colors::kTextMain));
         }
         else
         {
@@ -520,7 +509,7 @@ TopKernels::Render()
             int        hovered_idx = -1;
             TimeFormat time_format =
                 m_settings.GetUserSettings().unit_settings.time_format;
-            ImPlot::PushColormap("flame");
+            ImPlot::PushColormap(m_settings.GetFlameColormapName());
             switch(m_display_mode)
             {
                 case Pie:
@@ -675,7 +664,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
             });
         if(m_hovered_idx)
         {
-            ImPlot::PushColormap("white");
+            ImPlot::PushColormap(m_settings.GetContrastColormapName());
             ImGui::PushID(1);
             ImPlot::PlotPieChart(
                 &m_kernel_pie.labels[m_hovered_idx.value()],
@@ -747,7 +736,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
         {
             if(i == m_hovered_idx)
             {
-                ImPlot::PushColormap("white");
+                ImPlot::PushColormap(m_settings.GetContrastColormapName());
             }
             ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(i));
             ImPlot::PlotBars((*m_kernels)[i].name.c_str(), &(*m_kernels)[i].exec_time_sum,
@@ -945,8 +934,8 @@ TopKernels::PlotHoverIdx() const
             {
                 for(size_t i = 0; i < m_kernels->size(); i++)
                 {
-                    if(mouse_pos.x >= static_cast<double>(i) - PIE_CHART_RADIUS / 2.0 &&
-                       mouse_pos.x <= static_cast<double>(i) + PIE_CHART_RADIUS / 2.0 &&
+                    if(mouse_pos.x >= static_cast<double>(i) - BAR_CHART_THICKNESS / 2.0 &&
+                       mouse_pos.x <= static_cast<double>(i) + BAR_CHART_THICKNESS / 2.0 &&
                        mouse_pos.y >= 0.0 && mouse_pos.y <= (*m_kernels)[i].exec_time_sum)
                     {
                         idx = i;

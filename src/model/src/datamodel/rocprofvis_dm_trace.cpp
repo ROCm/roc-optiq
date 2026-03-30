@@ -13,8 +13,7 @@ namespace DataModel
 Trace::Trace()
 {
     m_db = nullptr;
-    m_parameters.start_time=0;
-    m_parameters.end_time=0;
+    m_parameters.trace_duration = 0;
     m_parameters.metadata_loaded=false;
 }
 

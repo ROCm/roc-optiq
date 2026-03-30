@@ -20,6 +20,7 @@ enum class RocEvents
     kTabSelected,
     kTimelineTrackSelectionChanged,
     kTimelineEventSelectionChanged,
+    kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
     kStickyNoteEdited,
@@ -48,6 +49,7 @@ enum class RocEventType
     kTabEvent,
     kTimelineTrackSelectionChangedEvent,
     kTimelineEventSelectionChangedEvent,
+    kTimelineEventHighlightChangedEvent,
     kScrollToTrackEvent,
     kStickyNoteEvent,
     kRangeEvent,
@@ -164,11 +166,13 @@ private:
 class TableDataEvent : public RocEvent
 {
 public:
-    TableDataEvent(const std::string& source_id, uint64_t request_id);
+    TableDataEvent(const std::string& source_id, uint64_t request_id, uint64_t response_code);
     uint64_t           GetRequestID() const;
+    uint64_t           GetResponseCode() const;
 
 private:
     uint64_t    m_request_id;
+    uint64_t    m_response_code;
 };
 
 class StickyNoteEvent : public RocEvent
@@ -263,6 +267,23 @@ private:
     uint64_t    m_event_track_id;
     bool        m_selected;
     bool        m_is_batch;
+};
+
+class EventHighlightChangedEvent : public RocEvent
+{
+public:
+    EventHighlightChangedEvent(uint64_t event_id, uint64_t track_id, bool highlighted,
+                               const std::string& source_id, bool batch = false);
+    uint64_t GetEventID() const;
+    uint64_t GetEventTrackID() const;
+    bool     EventHighlighted() const;
+    bool     IsBatch() const;
+
+private:
+    uint64_t m_event_id;
+    uint64_t m_event_track_id;
+    bool     m_highlighted;
+    bool     m_is_batch;
 };
 
 class RangeEvent : public RocEvent

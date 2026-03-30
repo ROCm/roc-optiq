@@ -132,6 +132,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
                                      cursor_position, content_size, scale_y);
         ImVec2 point_end = MapToUI(m_data[i].m_end_ts, m_data[i].m_value, cursor_position,
                                    content_size, scale_y);
+        point_end.x = std::max(point_end.x, point_start.x + 1.0f);
 
         ImU32 fill_color = (!m_show_boxplot)                          ? transparent_color
                            : (m_show_boxplot_stripes && (i % 2 == 0)) ? alt_fill_color

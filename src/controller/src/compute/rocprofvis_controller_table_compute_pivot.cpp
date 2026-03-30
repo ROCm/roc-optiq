@@ -10,6 +10,7 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
+#include <cstdlib>
 
 namespace RocProfVis
 {
@@ -73,6 +74,27 @@ ComputePivotTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Futur
                                ? kRPVControllerSortOrderAscending
                                : kRPVControllerSortOrderDescending;
         }
+
+        // Extract column filters
+        uint64_t num_filters = 0;
+        args.GetUInt64(kRPVControllerCPTArgsNumColumnFilters, 0, &num_filters);
+
+        m_column_filters.clear();
+        for(uint64_t i = 0; i < num_filters; i++)
+        {
+            uint64_t column_index = 0;
+            if(args.GetUInt64(kRPVControllerCPTArgsFilterColumnIndexIndexed, i,
+                              &column_index) != kRocProfVisResultSuccess)
+                continue;
+
+            char     filter_expr[256];
+            uint32_t expr_length = sizeof(filter_expr);
+            if(args.GetString(kRPVControllerCPTArgsFilterExpressionIndexed, i,
+                              filter_expr, &expr_length) != kRocProfVisResultSuccess)
+                continue;
+
+            m_column_filters[column_index] = std::string(filter_expr);
+        }
     }
     else
     {
@@ -102,8 +124,9 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
 
     // Reserve capacity to prevent reallocations that would invalidate pointers
     // Fixed params: workload_id, sort_column_index, sort_order
+    // Filter params: 2 per filter (column_index + expression)
     const size_t fixed_params_count = 3;
-    param_storage.reserve(fixed_params_count + m_metric_selectors.size());
+    param_storage.reserve(fixed_params_count + m_metric_selectors.size() + (2 * m_column_filters.size()));
 
     // Add workload ID
     param_storage.push_back(std::to_string(m_workload_id));
@@ -123,6 +146,16 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
     // Add sort order
     param_storage.push_back((m_sort_order == kRPVControllerSortOrderAscending) ? "ASC" : "DESC");
     params.push_back({ kRPVComputeParamSortColumnOrder, param_storage.back().c_str() });
+
+    // Add column filters
+    for(const auto& [column_index, filter_expr] : m_column_filters)
+    {
+        param_storage.push_back(std::to_string(column_index));
+        params.push_back({ kRPVComputeParamFilterColumnIndex, param_storage.back().c_str() });
+
+        param_storage.push_back(filter_expr);
+        params.push_back({ kRPVComputeParamFilterExpression, param_storage.back().c_str() });
+    }
 
     rocprofvis_dm_database_t db =
         rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
@@ -222,6 +255,7 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
                 future->RemoveDependentFuture(db_future);
             }
         }
+        free(query);
     }
 
     result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, m_rows.size());

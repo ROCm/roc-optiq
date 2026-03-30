@@ -55,6 +55,15 @@ public:
     std::shared_ptr<MetricValue> GetMetricValue(uint64_t store_id, uint32_t kernel_id, uint32_t category_id, uint32_t table_id, uint32_t entry_id) const;     
     std::shared_ptr<MetricValue> GetMetricValue(uint64_t store_id, uint32_t kernel_id, uint64_t metric_key) const;
 
+    const AvailableMetrics::Entry* GetMetricInfo(uint32_t workload_id,
+                                                 uint32_t category_id, uint32_t table_id,
+                                                 uint32_t entry_id) const;
+
+    static const AvailableMetrics::Entry* GetMetricInfo(const WorkloadInfo& workload,
+                                                        uint32_t            category_id,
+                                                        uint32_t            table_id,
+                                                        uint32_t            entry_id);
+
     MetricValuesByEntryId* GetMetricValuesByTable(uint64_t store_id, uint32_t kernel_id,
                                                   uint32_t category_id,
                                                   uint32_t table_id);
@@ -77,6 +86,8 @@ public:
     const KernelInfo* GetKernelInfo(uint32_t workload_id, uint32_t kernel_id) const;
 
 private:
+    void OrderAvailableMetrics(WorkloadInfo& workload);
+
     std::unordered_map<uint32_t, WorkloadInfo> m_workloads;
     
     struct MetricStore

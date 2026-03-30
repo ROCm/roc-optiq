@@ -27,7 +27,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // kTransparent
     IM_COL32(224, 62, 62, 255),    // kTextError
     IM_COL32(90, 200, 120, 255),   // kTextSuccess
-    IM_COL32(200, 200, 210, 255),  // kFlameChartColor
+    IM_COL32(186, 154, 160, 255),  // kFlameChartColor
     IM_COL32(180, 180, 190, 60),   // kGridColor
     IM_COL32(224, 62, 62, 255),    // kGridRed
     IM_COL32(255, 120, 120, 255),  // kSelectionBorder
@@ -44,10 +44,13 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(90, 90, 100, 255),    // kSplitterColor
     IM_COL32(28, 30, 34, 255),     // kBgMain
     IM_COL32(38, 40, 44, 255),     // kBgPanel
-    IM_COL32(52, 54, 58, 255),     // kBgFrame
+    IM_COL32(44, 46, 50, 255),     // kBgFrame
     IM_COL32(224, 62, 62, 255),    // kAccentRed
     IM_COL32(255, 140, 140, 255),  // kAccentRedHover
     IM_COL32(181, 40, 40, 255),    // kAccentRedActive
+    IM_COL32(170, 74, 86, 255),    // kTabAccent
+    IM_COL32(198, 98, 110, 255),   // kTabAccentHover
+    IM_COL32(144, 56, 68, 255),    // kTabAccentActive
     IM_COL32(80, 80, 90, 255),     // kBorderGray
     IM_COL32(235, 235, 240, 255),  // kTextMain
     IM_COL32(170, 170, 180, 255),  // kTextDim
@@ -58,7 +61,8 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(62, 64, 68, 255),     // kTableBorderLight
     IM_COL32(52, 54, 58, 255),     // kTableRowBg
     IM_COL32(58, 60, 64, 255),     // kTableRowBgAlt
-    IM_COL32(0, 200, 255, 160),    // kEventHighlight
+    IM_COL32(255, 128, 110, 220),  // kEventHighlight
+    IM_COL32(50, 220, 100, 240),   // kEventSearchHighlight
     IM_COL32(235, 235, 240, 69),  // kLineChartColor
     IM_COL32(100, 100, 110, 255),  // kButton
     IM_COL32(130, 130, 140, 255),  // kButtonHovered
@@ -96,7 +100,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(242, 90, 70, 255),    // Colors::kTextError
     IM_COL32(60, 170, 60, 255),    // Colors::kTextSuccess
-    IM_COL32(170, 140, 120, 255),  // Colors::kFlameChartColor
+    IM_COL32(198, 150, 138, 255),  // Colors::kFlameChartColor
     IM_COL32(220, 210, 200, 80),   // Colors::kGridColor
     IM_COL32(242, 90, 70, 255),    // Colors::kGridRed
     IM_COL32(242, 90, 70, 255),    // Colors::kSelectionBorder
@@ -117,6 +121,9 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(242, 90, 70, 255),    // Colors::kAccentRed
     IM_COL32(255, 140, 120, 255),  // Colors::kAccentRedHover
     IM_COL32(255, 110, 90, 255),   // Colors::kAccentRedActive
+    IM_COL32(208, 104, 94, 255),   // Colors::kTabAccent
+    IM_COL32(228, 128, 118, 255),  // Colors::kTabAccentHover
+    IM_COL32(182, 86, 78, 255),    // Colors::kTabAccentActive
     IM_COL32(230, 225, 220, 255),  // Colors::kBorderGray
     IM_COL32(40, 30, 25, 255),     // Colors::kTextMain
     IM_COL32(150, 130, 120, 255),  // Colors::kTextDim
@@ -127,7 +134,8 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(240, 235, 230, 255),  // Colors::kTableBorderLight
     IM_COL32(255, 253, 250, 255),  // Colors::kTableRowBg
     IM_COL32(252, 250, 248, 255),  // Colors::kTableRowBgAlt
-    IM_COL32(0, 140, 200, 180),    // Colors::kEventHighlight
+    IM_COL32(224, 94, 78, 210),    // Colors::kEventHighlight
+    IM_COL32(30, 180, 80, 230),    // Colors::kEventSearchHighlight
     IM_COL32(0, 0, 0, 69),        // Colors::kLineChartColor
     IM_COL32(230, 230, 230, 255),  // Colors::kButton
     IM_COL32(210, 210, 210, 255),  // Colors::kButtonHovered
@@ -158,15 +166,25 @@ constexpr std::array LIGHT_THEME_COLORS = {
 
     // This must follow the ordering of Colors enum.
 };
-const std::vector<ImU32> FLAME_COLORS = {
-    IM_COL32(0, 114, 188, 204),   IM_COL32(0, 158, 115, 204),
-    IM_COL32(240, 228, 66, 204),  IM_COL32(204, 121, 167, 204),
-    IM_COL32(86, 180, 233, 204),  IM_COL32(213, 94, 0, 204),
-    IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
-    IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
+const std::vector<ImU32> DARK_FLAME_COLORS = {
+    IM_COL32(196, 74, 74, 224),   IM_COL32(210, 104, 72, 224),
+    IM_COL32(226, 154, 64, 224),  IM_COL32(178, 92, 138, 224),
+    IM_COL32(76, 132, 214, 224),  IM_COL32(62, 168, 160, 224),
+    IM_COL32(202, 82, 112, 224),  IM_COL32(142, 166, 82, 224),
+    IM_COL32(116, 98, 204, 224),  IM_COL32(232, 132, 84, 224)
 };
+const std::vector<ImU32> LIGHT_FLAME_COLORS = {
+    IM_COL32(184, 62, 62, 236),   IM_COL32(198, 92, 58, 236),
+    IM_COL32(204, 144, 48, 236),  IM_COL32(164, 84, 128, 236),
+    IM_COL32(58, 110, 194, 236),  IM_COL32(48, 146, 138, 236),
+    IM_COL32(188, 72, 102, 236),  IM_COL32(126, 148, 70, 236),
+    IM_COL32(100, 84, 184, 236),  IM_COL32(212, 112, 70, 236)
+};
+inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
+inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
+inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
+inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
-inline constexpr size_t       RECENT_FILES_LIMIT = 5;
 inline constexpr float        EVENT_LEVEL_HEIGHT = 40.0f;
 inline constexpr float        COMPACT_EVENT_HEIGHT = 6.0f;
 
@@ -192,6 +210,11 @@ SettingsManager::ApplyColorStyling()
         ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedHover));
     ImVec4 accentRedActive =
         ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedActive));
+    ImVec4 tabAccent = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccent));
+    ImVec4 tabAccentHover =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccentHover));
+    ImVec4 tabAccentActive =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccentActive));
     ImVec4 borderGray = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBorderGray));
     ImVec4 textMain   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTextMain));
     ImVec4 textDim    = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTextDim));
@@ -261,10 +284,12 @@ SettingsManager::ApplyColorStyling()
 
     // Tabs
     style.Colors[ImGuiCol_Tab]                = bgPanel;
-    style.Colors[ImGuiCol_TabHovered]         = accentRedHover;
-    style.Colors[ImGuiCol_TabActive]          = accentRed;
+    style.Colors[ImGuiCol_TabHovered]         = tabAccentHover;
+    style.Colors[ImGuiCol_TabActive]          = tabAccent;
     style.Colors[ImGuiCol_TabUnfocused]       = bgPanel;
-    style.Colors[ImGuiCol_TabUnfocusedActive] = accentRedActive;
+    style.Colors[ImGuiCol_TabUnfocusedActive] = tabAccentActive;
+    style.Colors[ImGuiCol_TabSelectedOverline] = tabAccentHover;
+    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = tabAccentActive;
 
     // Headers (collapsing, selectable, etc)
     style.Colors[ImGuiCol_Header]        = accentRed;
@@ -448,9 +473,24 @@ SettingsManager::GetColor(Colors color) const
 }
 
 const std::vector<ImU32>&
-SettingsManager::GetColorWheel()
+SettingsManager::GetColorWheel() const
 {
-    return FLAME_COLORS;
+    return m_usersettings.display_settings.use_dark_mode ? DARK_FLAME_COLORS
+                                                         : LIGHT_FLAME_COLORS;
+}
+
+const char*
+SettingsManager::GetFlameColormapName() const
+{
+    return m_usersettings.display_settings.use_dark_mode ? FLAME_DARK_COLORMAP_NAME
+                                                         : FLAME_LIGHT_COLORMAP_NAME;
+}
+
+const char*
+SettingsManager::GetContrastColormapName() const
+{
+    return m_usersettings.display_settings.use_dark_mode ? CONTRAST_DARK_COLORMAP_NAME
+                                                         : CONTRAST_LIGHT_COLORMAP_NAME;
 }
 
 SettingsManager::SettingsManager()
@@ -522,15 +562,31 @@ SettingsManager::InitStyling()
  
     m_default_style = style;  // Store the our customized style
 
-    std::vector<ImU32> colormap;
-    for(const ImU32& flame_color : GetColorWheel())
-    {
-        colormap.push_back(255 << IM_COL32_A_SHIFT | flame_color);
-    }
-    colormap.push_back(IM_COL32(220, 50, 50, 255));
-    ImPlot::AddColormap("flame", colormap.data(), colormap.size());
-    colormap = { IM_COL32(255, 255, 255, 255), IM_COL32(255, 255, 255, 255) };
-    ImPlot::AddColormap("white", colormap.data(), colormap.size());
+    const auto add_flame_colormap = [](const char* name,
+                                       const std::vector<ImU32>& flame_colors) {
+        std::vector<ImU32> colormap;
+        colormap.reserve(flame_colors.size() + 1);
+        for(const ImU32& flame_color : flame_colors)
+        {
+            colormap.push_back(255 << IM_COL32_A_SHIFT | flame_color);
+        }
+        colormap.push_back(IM_COL32(220, 50, 50, 255));
+        ImPlot::AddColormap(name, colormap.data(), static_cast<int>(colormap.size()));
+    };
+
+    add_flame_colormap(FLAME_DARK_COLORMAP_NAME, DARK_FLAME_COLORS);
+    add_flame_colormap(FLAME_LIGHT_COLORMAP_NAME, LIGHT_FLAME_COLORS);
+
+    const std::vector<ImU32> contrast_dark_colormap = {
+        IM_COL32(255, 255, 255, 255), IM_COL32(255, 255, 255, 255)
+    };
+    const std::vector<ImU32> contrast_light_colormap = {
+        IM_COL32(25, 25, 25, 255), IM_COL32(25, 25, 25, 255)
+    };
+    ImPlot::AddColormap(CONTRAST_DARK_COLORMAP_NAME, contrast_dark_colormap.data(),
+                        static_cast<int>(contrast_dark_colormap.size()));
+    ImPlot::AddColormap(CONTRAST_LIGHT_COLORMAP_NAME, contrast_light_colormap.data(),
+                        static_cast<int>(contrast_light_colormap.size()));
 }
 
 const ImGuiStyle&
@@ -562,7 +618,7 @@ SettingsManager::AddRecentFile(const std::string& file_path)
 {
     RemoveRecentFile(file_path);
     m_internalsettings.recent_files.emplace_front(file_path);
-    if(m_internalsettings.recent_files.size() > RECENT_FILES_LIMIT)
+    if(m_internalsettings.recent_files.size() > MAX_RECENT_FILES)
     {
         m_internalsettings.recent_files.pop_back();
     }

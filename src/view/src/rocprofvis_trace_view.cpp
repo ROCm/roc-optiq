@@ -91,9 +91,9 @@ TraceView::TraceView()
     });
 
     m_data_provider.SetTableDataReadyCallback(
-        [](const std::string& trace_path, uint64_t request_id) {
+        [](const std::string& trace_path, uint64_t request_id, uint64_t response_code) {
             EventManager::GetInstance()->AddEvent(
-                std::make_shared<TableDataEvent>(trace_path, request_id));
+                std::make_shared<TableDataEvent>(trace_path, request_id, response_code));
         });
 
     m_data_provider.SetTraceLoadedCallback(
@@ -175,6 +175,11 @@ TraceView::Update()
     auto last_state = m_data_provider.GetState();
     m_data_provider.Update();
 
+    if(m_timeline_selection)
+    {
+        m_timeline_selection->UpdateHighlightTimer();
+    }
+
     if(!m_view_created)
     {
         CreateView();
@@ -233,7 +238,7 @@ TraceView::CreateView()
     m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection, m_annotations);
-    m_event_search          = std::make_shared<EventSearch>(m_data_provider);
+    m_event_search          = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
@@ -508,6 +513,14 @@ TraceView::RenderEditMenuOptions()
             m_timeline_selection->UnselectAllEvents();
         }
     }
+    if(ImGui::MenuItem("Unhighlight All Events", nullptr, false,
+                       m_timeline_selection && m_timeline_selection->HasHighlightedEvents()))
+    {
+        if(m_timeline_selection)
+        {
+            m_timeline_selection->UnhighlightAllEvents();
+        }
+    }
     ImGui::Separator();
     if(ImGui::MenuItem("Save Trace Selection", nullptr, false, IsTrimSaveAllowed()))
     {
@@ -575,13 +588,13 @@ TraceView::RenderToolbar()
     // Toolbar Controls
     ImGui::BeginGroup();
     RenderFlowControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderAnnotationControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderEventSearch();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderBookmarkControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     
     ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
@@ -596,7 +609,7 @@ TraceView::RenderToolbar()
     {
         SetTooltipStyled("Show Minimap");
     }
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
 
     if(ImGui::Button("Reset View"))
     {
@@ -623,23 +636,6 @@ TraceView::RenderToolbar()
     ImGui::EndChild();
     // pop child window style
     ImGui::PopStyleVar(2);
-}
-
-void
-TraceView::RenderSeparator()
-{
-    auto style = m_settings_manager.GetDefaultStyle();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
-    ImGui::SameLine();
-
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    float       height    = ImGui::GetFrameHeight();
-    ImVec2      p         = ImGui::GetCursorScreenPos();
-    draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + height),
-                       m_settings_manager.GetColor(Colors::kMetaDataSeparator), 2.0f);
-    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
-    ImGui::SameLine();
 }
 
 void

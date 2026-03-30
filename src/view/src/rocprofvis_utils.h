@@ -182,6 +182,28 @@ timeformat_sufix(TimeFormat format);
 double
 calculate_nice_interval(double view_range, int target_divisions);
 
+typedef struct FittedGraphAxisInterval
+{
+    double interval_ns;
+    int    interval_count;
+} FittedGraphAxisInterval;
+
+/**
+ * @brief Calculates an axis interval that is fitted to the axis label width without
+ * labels overlap.
+ *
+ * @param max_ns             Max axis value.
+ * @param available_width    Axis width.
+ * @param label_width        Width of axis label.
+ * @param pad_first_and_last If true, reserves 2 label_width of space for first/last
+ * labels.
+ * @param min_intervals      Floor number of intervals.
+ * @return FittedGraphAxisInterval struct with interval count and size.
+ */
+FittedGraphAxisInterval
+fit_graph_axis_interval(double max_ns, float available_width, float label_width,
+                        bool pad_first_and_last, int min_intervals);
+
 typedef struct ViewRangeNS
 {
     double start_ns;

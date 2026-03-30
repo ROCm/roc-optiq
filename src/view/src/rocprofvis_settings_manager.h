@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <list>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -82,6 +83,9 @@ enum class Colors
     kAccentRed,
     kAccentRedHover,
     kAccentRedActive,
+    kTabAccent,
+    kTabAccentHover,
+    kTabAccentActive,
     kBorderGray,
     kTextMain,
     kTextDim,
@@ -93,6 +97,7 @@ enum class Colors
     kTableRowBg,
     kTableRowBgAlt,
     kEventHighlight,
+    kEventSearchHighlight,
     kLineChartColor,
     kButton,
     kButtonHovered,
@@ -142,6 +147,7 @@ constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
+constexpr size_t      MAX_RECENT_FILES                       = 5;
 
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
@@ -163,7 +169,9 @@ public:
 
     // Styling
     ImU32                     GetColor(Colors color) const;
-    const std::vector<ImU32>& GetColorWheel();
+    const std::vector<ImU32>& GetColorWheel() const;
+    const char*               GetFlameColormapName() const;
+    const char*               GetContrastColormapName() const;
     /**
      * Returns the default ImGui style.
      */

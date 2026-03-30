@@ -6,6 +6,7 @@
 #include "implot/implot.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <algorithm>
 #include <cfloat>
@@ -54,15 +55,18 @@ constexpr const char* DISPLAY_NAMES_PRESET[] = {
     "FP64",  // PresetModel::Type::FP64
 };
 
-Roofline::Roofline(DataProvider& data_provider)
+Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 : m_data_provider(data_provider)
 , m_settings(SettingsManager::GetInstance())
 , m_show_menus(true)
 , m_menus_mode(Legend)
+, m_menus_placement(InsideTopRight)
 , m_scale_intensity(true)
+, m_menus_rendered_height(0.0f)
 , m_hovered_item_distance(FLT_MAX)
 , m_workload_changed(false)
 , m_kernel_changed(false)
+, m_kernel_mode(kernel_mode)
 , m_options_changed(false)
 , m_workload(nullptr)
 , m_requested_workload_id(0)
@@ -107,6 +111,7 @@ Roofline::Update()
 {
     if(m_workload_changed)
     {
+        m_workload = nullptr;
         const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
             m_data_provider.ComputeModel().GetWorkloads();
         if(workloads.count(m_requested_workload_id) > 0)
@@ -215,7 +220,8 @@ Roofline::Update()
             for(const std::pair<const uint32_t, KernelInfo>& kernel : m_workload->kernels)
             {
                 kernel_duration_scale =
-                    std::max(kernel_duration_scale, kernel.second.duration_total);
+                    std::max(kernel_duration_scale,
+                             kernel.second.dispatch_metrics[KernelInfo::DurationTotal]);
             }
             ItemModel::Type       model_type = ItemModel::Intensity;
             ItemModel::SubType    model_subtype;
@@ -237,7 +243,9 @@ Roofline::Update()
                             DISPLAY_NAMES_KERNEL_INTENSITY[intensity.second.type]) +
                             ": " + kernel.second.name,
                         static_cast<float>(
-                            static_cast<double>(kernel.second.duration_total) /
+                            static_cast<double>(
+                                kernel.second
+                                    .dispatch_metrics[KernelInfo::DurationTotal]) /
                             static_cast<double>(kernel_duration_scale)) });
                 }
             }
@@ -245,9 +253,10 @@ Roofline::Update()
         }
         m_workload_changed = false;
     }
-    if(m_kernel_changed && m_workload)
+    if(m_kernel_changed)
     {
-        if(m_workload->kernels.count(m_requested_kernel_id) > 0)
+        m_kernel = nullptr;
+        if(m_workload && m_workload->kernels.count(m_requested_kernel_id) > 0)
         {
             m_kernel = &m_workload->kernels.at(m_requested_kernel_id);
         }
@@ -311,242 +320,237 @@ Roofline::Update()
 void
 Roofline::Render()
 {
-    if(m_workload)
+    SectionTitle("Roofline Analysis");
+    ImGui::BeginChild("roofline");
+    const ImVec2       region     = ImGui::GetContentRegionAvail();
+    const ImGuiStyle&  style      = ImGui::GetStyle();
+    const ImPlotStyle& plot_style = ImPlot::GetStyle();
+    if(!m_workload ||
+       (m_workload->roofline.ceiling_bandwidth.empty() ||
+        m_workload->roofline.ceiling_compute.empty()) ||
+       m_kernel_mode == SingleKernel &&
+           (!m_kernel || m_kernel->roofline.intensities.empty()))
     {
-        ImGui::BeginChild("roofline", ImVec2(ImGui::GetContentRegionAvail().x,
-                                             ImGui::GetContentRegionAvail().x * 0.5f));
-        const ImVec2       region     = ImGui::GetContentRegionAvail();
-        const ImGuiStyle&  style      = ImGui::GetStyle();
-        const ImPlotStyle& plot_style = ImPlot::GetStyle();
-        ImGui::SetCursorPos(ImVec2(region.x * 0.5f - plot_style.PlotBorderSize -
-                                       ImGui::CalcTextSize("Roofline Analysis").x * 0.5f,
-                                   plot_style.PlotPadding.y));
-        ImGui::TextUnformatted("Roofline Analysis");
-        if(m_workload->roofline.ceiling_bandwidth.empty() ||
-           m_workload->roofline.ceiling_compute.empty() ||
-           (m_kernel && m_kernel->roofline.intensities.empty()))
+        ImGui::GetWindowDrawList()->AddRect(
+            ImGui::GetCursorScreenPos() +
+                ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
+                       plot_style.PlotBorderSize + plot_style.PlotPadding.y),
+            ImGui::GetCursorScreenPos() + region -
+                ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
+                       plot_style.PlotBorderSize + plot_style.PlotPadding.y +
+                           ImGui::GetFrameHeightWithSpacing()),
+            ImGui::GetColorU32(style.Colors[ImGuiCol_TableBorderStrong]));
+        ImGui::SetCursorPos((region - ImGui::CalcTextSize("No data available.")) * 0.5f);
+        ImGui::TextDisabled("No data available.");
+    }
+    else
+    {
+        ImPlot::PushStyleColor(ImPlotCol_PlotBg,
+                               ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+        ImPlot::PushStyleColor(ImPlotCol_FrameBg,
+                               m_settings.GetColor(Colors::kTransparent));
+        ImPlot::PushColormap(m_settings.GetFlameColormapName());
+        ImGui::PushID(m_workload->id);
+        bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
+        ImVec2 plot_pos;
+        ImVec2 plot_size;
+        if(ImPlot::BeginPlot("plot", ImVec2(menus_outside ? 0.75f * region.x : -1, -1),
+                             ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
+                                 ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
+                                 ImPlotFlags_Crosshairs))
         {
-            ImGui::GetWindowDrawList()->AddRect(
-                ImGui::GetCursorScreenPos() +
-                    ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                           plot_style.PlotBorderSize + plot_style.PlotPadding.y),
-                ImGui::GetCursorScreenPos() + region -
-                    ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                           plot_style.PlotBorderSize + plot_style.PlotPadding.y),
-                ImGui::GetColorU32(style.Colors[ImGuiCol_TableBorderStrong]));
-            ImGui::SetCursorPos((region - ImGui::CalcTextSize("No data available.")) *
-                                0.5f);
-            ImGui::TextDisabled("No data available.");
-        }
-        else
-        {
-            ImPlot::PushStyleColor(ImPlotCol_PlotBg,
-                                   ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-            ImPlot::PushStyleColor(ImPlotCol_FrameBg,
-                                   m_settings.GetColor(Colors::kTransparent));
-            ImPlot::PushColormap("flame");
-            if(ImPlot::BeginPlot("plot", ImVec2(-1, -1),
-                                 ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
-                                     ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
-                                     ImPlotFlags_Crosshairs))
+            ImPlot::SetupAxis(ImAxis_X1, "Arithmetic Intensity (FLOP/Byte)",
+                              ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+            ImPlot::SetupAxis(ImAxis_Y1, "Performance (GFLOP/s)",
+                              ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+            ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
+            ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
+            ImPlot::SetupAxisLimits(ImAxis_X1, m_workload->roofline.min.x,
+                                    m_workload->roofline.max.x);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, m_workload->roofline.min.y / 10,
+                                    m_workload->roofline.max.y * 10);
+            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, m_workload->roofline.min.x,
+                                               m_workload->roofline.max.x);
+            ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, m_workload->roofline.min.y / 10,
+                                               m_workload->roofline.max.y * 10);
+            PlotHoverIdx();
+            for(size_t i = 0; i < m_items.size(); i++)
             {
-                ImPlot::SetupAxis(ImAxis_X1, "Arithmetic Intensity (FLOP/Byte)",
-                                  ImPlotAxisFlags_NoSideSwitch |
-                                      ImPlotAxisFlags_NoHighlight);
-                ImPlot::SetupAxis(ImAxis_Y1, "Performance (GFLOP/s)",
-                                  ImPlotAxisFlags_NoSideSwitch |
-                                      ImPlotAxisFlags_NoHighlight);
-                ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
-                ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
-                ImPlot::SetupAxisLimits(ImAxis_X1, m_workload->roofline.min.x,
-                                        m_workload->roofline.max.x);
-                ImPlot::SetupAxisLimits(ImAxis_Y1, m_workload->roofline.min.y / 10,
-                                        m_workload->roofline.max.y * 10);
-                ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, m_workload->roofline.min.x,
-                                                   m_workload->roofline.max.x);
-                ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1,
-                                                   m_workload->roofline.min.y / 10,
-                                                   m_workload->roofline.max.y * 10);
-                PlotHoverIdx();
-                for(size_t i = 0; i < m_items.size(); i++)
+                bool display = false;
+                switch(m_items[i].type)
                 {
-                    bool display = false;
+                    case ItemModel::Type::CeilingCompute:
+                    case ItemModel::Type::CeilingBandwidth:
+                    {
+                        display = m_items[i].info.ceiling;
+                        break;
+                    }
+                    case ItemModel::Type::Intensity:
+                    {
+                        display =
+                            m_items[i].info.intensity &&
+                            (m_kernel ? m_items[i].parent_info.kernel == m_kernel : true);
+                    }
+                }
+                display &= m_items[i].visible;
+                if(display)
+                {
+                    ImGui::PushID(i);
+                    bool hovered = m_hovered_item_idx && m_hovered_item_idx.value() == i;
                     switch(m_items[i].type)
                     {
                         case ItemModel::Type::CeilingCompute:
                         case ItemModel::Type::CeilingBandwidth:
                         {
-                            display = m_items[i].info.ceiling;
+                            ImPlot::SetNextLineStyle(ImPlot::GetColormapColor(i),
+                                                     hovered
+                                                         ? plot_style.LineWeight * 3.0f
+                                                         : plot_style.LineWeight);
+                            ImPlot::PlotLineG(
+                                "",
+                                [](int idx, void* user_data) -> ImPlotPoint {
+                                    const WorkloadInfo::Roofline::Line* line =
+                                        static_cast<const WorkloadInfo::Roofline::Line*>(
+                                            user_data);
+                                    ImPlotPoint point(-1.0, -1.0);
+                                    if(line)
+                                    {
+                                        if(idx == 0)
+                                        {
+                                            point.x = line->p1.x;
+                                            point.y = line->p1.y;
+                                        }
+                                        else
+                                        {
+                                            point.x = line->p2.x;
+                                            point.y = line->p2.y;
+                                        }
+                                    }
+                                    return point;
+                                },
+                                (void*) &m_items[i].info.ceiling->position, 2);
                             break;
                         }
                         case ItemModel::Type::Intensity:
                         {
-                            display =
-                                m_items[i].info.intensity &&
-                                (m_kernel ? m_items[i].parent_info.kernel == m_kernel
-                                          : true);
+                            ImPlot::SetNextMarkerStyle(
+                                IMPLOT_AUTO,
+                                plot_style.MarkerSize +
+                                    (m_scale_intensity && m_kernel_mode == AllKernels
+                                         ? m_items[i].weight
+                                         : 0.0f) *
+                                        2.0f * plot_style.MarkerSize +
+                                    (hovered ? plot_style.MarkerSize : 0.0f),
+                                ImPlot::GetColormapColor(i), IMPLOT_AUTO,
+                                ImPlot::GetColormapColor(i));
+                            ImPlot::PlotScatter(
+                                "", &m_items[i].info.intensity->position.x,
+                                &m_items[i].info.intensity->position.y, 1);
+                            break;
                         }
                     }
-                    display &= m_items[i].visible;
-                    if(display)
+                    if(hovered)
                     {
-                        ImGui::PushID(i);
-                        bool hovered =
-                            m_hovered_item_idx && m_hovered_item_idx.value() == i;
-                        switch(m_items[i].type)
+                        ImGui::PushStyleVar(
+                            ImGuiStyleVar_WindowPadding,
+                            m_settings.GetDefaultIMGUIStyle().WindowPadding);
+                        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                                            m_settings.GetDefaultStyle().FrameRounding);
+                        if(ImGui::BeginItemTooltip())
                         {
-                            case ItemModel::Type::CeilingCompute:
-                            case ItemModel::Type::CeilingBandwidth:
+                            switch(m_items[i].type)
                             {
-                                ImPlot::SetNextLineStyle(ImPlot::GetColormapColor(i),
-                                                         hovered ? plot_style.LineWeight *
-                                                                       3.0f
-                                                                 : plot_style.LineWeight);
-                                ImPlot::PlotLineG(
-                                    "",
-                                    [](int idx, void* user_data) -> ImPlotPoint {
-                                        const WorkloadInfo::Roofline::Line* line =
-                                            static_cast<
-                                                const WorkloadInfo::Roofline::Line*>(
-                                                user_data);
-                                        ImPlotPoint point(-1.0, -1.0);
-                                        if(line)
-                                        {
-                                            if(idx == 0)
-                                            {
-                                                point.x = line->p1.x;
-                                                point.y = line->p1.y;
-                                            }
-                                            else
-                                            {
-                                                point.x = line->p2.x;
-                                                point.y = line->p2.y;
-                                            }
-                                        }
-                                        return point;
-                                    },
-                                    (void*) &m_items[i].info.ceiling->position, 2);
-                                break;
-                            }
-                            case ItemModel::Type::Intensity:
-                            {
-                                ImPlot::SetNextMarkerStyle(
-                                    IMPLOT_AUTO,
-                                    plot_style.MarkerSize +
-                                        (m_scale_intensity ? m_items[i].weight : 0.0f) *
-                                            2.0f * plot_style.MarkerSize +
-                                        (hovered ? plot_style.MarkerSize : 0.0f),
-                                    ImPlot::GetColormapColor(i), IMPLOT_AUTO,
-                                    ImPlot::GetColormapColor(i));
-                                ImPlot::PlotScatter(
-                                    "", &m_items[i].info.intensity->position.x,
-                                    &m_items[i].info.intensity->position.y, 1);
-                                break;
-                            }
-                        }
-                        if(hovered)
-                        {
-                            ImGui::PushStyleVar(
-                                ImGuiStyleVar_WindowPadding,
-                                m_settings.GetDefaultIMGUIStyle().WindowPadding);
-                            ImGui::PushStyleVar(
-                                ImGuiStyleVar_WindowRounding,
-                                m_settings.GetDefaultStyle().FrameRounding);
-                            if(ImGui::BeginItemTooltip())
-                            {
-                                switch(m_items[i].type)
+                                case ItemModel::Type::CeilingCompute:
                                 {
-                                    case ItemModel::Type::CeilingCompute:
-                                    {
-                                        ImGui::GetWindowDrawList()->AddRectFilled(
-                                            ImGui::GetCursorScreenPos(),
-                                            ImGui::GetCursorScreenPos() +
-                                                ImGui::CalcTextSize(
-                                                    m_items[i].label.c_str()),
-                                            ImGui::GetColorU32(
-                                                ImPlot::GetColormapColor(i)));
-                                        ImGui::TextUnformatted(m_items[i].label.c_str());
-                                        ImGui::Text(
-                                            "%.0f GFLOP/s",
-                                            std::round(
-                                                m_items[i].info.ceiling->throughput));
-                                        break;
-                                    }
-                                    case ItemModel::Type::CeilingBandwidth:
-                                    {
-                                        ImGui::GetWindowDrawList()->AddRectFilled(
-                                            ImGui::GetCursorScreenPos(),
-                                            ImGui::GetCursorScreenPos() +
-                                                ImGui::CalcTextSize(
-                                                    m_items[i].label.c_str()),
-                                            ImGui::GetColorU32(
-                                                ImPlot::GetColormapColor(i)));
-                                        ImGui::TextUnformatted(m_items[i].label.c_str());
-                                        ImGui::Text(
-                                            "%.0f GB/s",
-                                            std::round(
-                                                m_items[i].info.ceiling->throughput));
-                                        break;
-                                    }
-                                    case ItemModel::Type::Intensity:
-                                    {
-                                        ImGui::BeginGroup();
-                                        ImGui::GetWindowDrawList()->AddRectFilled(
-                                            ImGui::GetCursorScreenPos(),
-                                            ImGui::GetCursorScreenPos() +
-                                                ImGui::CalcTextSize(
-                                                    DISPLAY_NAMES_KERNEL_INTENSITY
-                                                        [m_items[i].subtype.intensity]),
-                                            ImGui::GetColorU32(
-                                                ImPlot::GetColormapColor(i)));
-                                        ImGui::TextUnformatted(
-                                            DISPLAY_NAMES_KERNEL_INTENSITY
-                                                [m_items[i].subtype.intensity]);
-                                        ImVec2 reserved_pos = ImGui::GetCursorPos();
-                                        ImGui::NewLine();
-                                        ImGui::Text(
-                                            "Inovcation(s): %u",
-                                            m_items[i]
-                                                .parent_info.kernel->invocation_count);
-                                        ImGui::Text(
-                                            "Duration: %llu",
-                                            m_items[i]
-                                                .parent_info.kernel->duration_total);
-                                        ImGui::Text(
-                                            "Arithmetic Intensity: %f FLOP/Byte",
-                                            m_items[i].info.intensity->position.x);
-                                        ImGui::Text(
-                                            "Performance: %f GFLOP/s",
-                                            m_items[i].info.intensity->position.y);
-                                        ImGui::EndGroup();
-                                        ImGui::SetCursorPos(reserved_pos);
-                                        ElidedText(
-                                            m_items[i].parent_info.kernel->name.c_str(),
-                                            ImGui::GetItemRectSize().x);
-                                        break;
-                                    }
+                                    ImGui::GetWindowDrawList()->AddRectFilled(
+                                        ImGui::GetCursorScreenPos(),
+                                        ImGui::GetCursorScreenPos() +
+                                            ImGui::CalcTextSize(m_items[i].label.c_str()),
+                                        ImGui::GetColorU32(ImPlot::GetColormapColor(i)));
+                                    ImGui::TextUnformatted(m_items[i].label.c_str());
+                                    ImGui::Text(
+                                        "%.0f GFLOP/s",
+                                        std::round(m_items[i].info.ceiling->throughput));
+                                    break;
                                 }
-                                ImGui::EndTooltip();
+                                case ItemModel::Type::CeilingBandwidth:
+                                {
+                                    ImGui::GetWindowDrawList()->AddRectFilled(
+                                        ImGui::GetCursorScreenPos(),
+                                        ImGui::GetCursorScreenPos() +
+                                            ImGui::CalcTextSize(m_items[i].label.c_str()),
+                                        ImGui::GetColorU32(ImPlot::GetColormapColor(i)));
+                                    ImGui::TextUnformatted(m_items[i].label.c_str());
+                                    ImGui::Text(
+                                        "%.0f GB/s",
+                                        std::round(m_items[i].info.ceiling->throughput));
+                                    break;
+                                }
+                                case ItemModel::Type::Intensity:
+                                {
+                                    ImGui::BeginGroup();
+                                    ImGui::GetWindowDrawList()->AddRectFilled(
+                                        ImGui::GetCursorScreenPos(),
+                                        ImGui::GetCursorScreenPos() +
+                                            ImGui::CalcTextSize(
+                                                DISPLAY_NAMES_KERNEL_INTENSITY
+                                                    [m_items[i].subtype.intensity]),
+                                        ImGui::GetColorU32(ImPlot::GetColormapColor(i)));
+                                    ImGui::TextUnformatted(
+                                        DISPLAY_NAMES_KERNEL_INTENSITY
+                                            [m_items[i].subtype.intensity]);
+                                    ImVec2 reserved_pos = ImGui::GetCursorPos();
+                                    ImGui::NewLine();
+                                    ImGui::Text(
+                                        "Invocation(s): %u",
+                                        m_items[i].parent_info.kernel->dispatch_metrics
+                                            [KernelInfo::InvocationCount]);
+                                    ImGui::Text(
+                                        "Duration: %s",
+                                        nanosecond_to_formatted_str(
+                                            static_cast<double>(
+                                                m_items[i]
+                                                    .parent_info.kernel->dispatch_metrics
+                                                        [KernelInfo::DurationTotal]),
+                                            m_settings.GetUserSettings()
+                                                .unit_settings.time_format,
+                                            true)
+                                            .c_str());
+                                    ImGui::Text("Arithmetic Intensity: %f FLOP/Byte",
+                                                m_items[i].info.intensity->position.x);
+                                    ImGui::Text("Performance: %f GFLOP/s",
+                                                m_items[i].info.intensity->position.y);
+                                    ImGui::EndGroup();
+                                    ImGui::SetCursorPos(reserved_pos);
+                                    ElidedText(
+                                        m_items[i].parent_info.kernel->name.c_str(),
+                                        ImGui::GetItemRectSize().x);
+                                    break;
+                                }
                             }
-                            ImGui::PopStyleVar(2);
+                            ImGui::EndTooltip();
                         }
-                        ImGui::PopID();
+                        ImGui::PopStyleVar(2);
                     }
+                    ImGui::PopID();
                 }
-                ImPlot::EndPlot();
             }
-            bool menus_item_hovered = false;
-            RenderMenus(region, style, plot_style, menus_item_hovered);
-            if(!menus_item_hovered)
-            {
-                m_hovered_item_idx      = std::nullopt;
-                m_hovered_item_distance = FLT_MAX;
-            }
-            ImPlot::PopColormap();
-            ImPlot::PopStyleColor(2);
+            plot_pos  = ImPlot::GetPlotPos();
+            plot_size = ImPlot::GetPlotSize();
+            ImPlot::EndPlot();
         }
-        ImGui::EndChild();
+        ImGui::PopID();
+        bool menus_item_hovered = false;
+        RenderMenus(region, plot_pos, plot_size, style, plot_style, menus_item_hovered);
+        if(!menus_item_hovered)
+        {
+            m_hovered_item_idx      = std::nullopt;
+            m_hovered_item_distance = FLT_MAX;
+        }
+        ImPlot::PopColormap();
+        ImPlot::PopStyleColor(2);
     }
+    ImGui::EndChild();
 }
 
 void
@@ -564,29 +568,108 @@ Roofline::SetKernel(uint32_t id)
 }
 
 void
-Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
-                      const ImPlotStyle& plot_style, bool& item_hovered)
+Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
+                       const ImGuiStyle& style, const ImPlotStyle& plot_style,
+                       bool& item_hovered)
 {
-    ImVec2 window_pos = ImVec2(0.75f * region.x - 2 * plot_style.PlotPadding.x,
-                               ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                                   3 * plot_style.PlotPadding.y);
-    ImVec2 button_pos =
-        m_show_menus ? window_pos - ImVec2(ImGui::GetFrameHeightWithSpacing(), 0.0f)
-                     : ImVec2(region.x - 2 * plot_style.PlotPadding.x -
-                                  ImGui::GetFrameHeightWithSpacing(),
-                              ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                                  3 * plot_style.PlotPadding.y);
+    plot_pos -= ImGui::GetWindowPos();
+    float menus_width      = region.x * 0.25f;
+    float max_menus_height = plot_size.y - plot_style.PlotPadding.y * 2.0f -
+                             ImGui::GetFrameHeightWithSpacing();
+    float button_size = ImGui::GetFrameHeightWithSpacing();
+
+    bool menus_on_right = m_menus_placement == InsideTopRight ||
+                          m_menus_placement == InsideBottomRight ||
+                          m_menus_placement == Outside;
+    bool menus_on_bottom =
+        m_menus_placement == InsideBottomLeft || m_menus_placement == InsideBottomRight;
+
+    ImVec2 window_pos;
+    ImVec2 button_pos;
+
+    switch(m_menus_placement)
+    {
+        case InsideTopLeft:
+        {
+            window_pos.x = plot_pos.x + plot_style.PlotPadding.x;
+            window_pos.y =
+                plot_pos.y + plot_style.PlotBorderSize + plot_style.PlotPadding.y;
+            button_pos.x = m_show_menus ? window_pos.x + menus_width
+                                        : plot_pos.x + plot_style.PlotPadding.x;
+            button_pos.y = window_pos.y;
+            break;
+        }
+        case InsideTopRight:
+        {
+            window_pos.x =
+                plot_pos.x + plot_size.x - plot_style.PlotPadding.x - menus_width;
+            window_pos.y =
+                plot_pos.y + plot_style.PlotBorderSize + plot_style.PlotPadding.y;
+            button_pos.x = m_show_menus ? window_pos.x - button_size
+                                        : plot_pos.x + plot_size.x -
+                                              plot_style.PlotPadding.x - button_size;
+            button_pos.y = window_pos.y;
+            break;
+        }
+        case InsideBottomLeft:
+        {
+            window_pos.x = plot_pos.x + plot_style.PlotPadding.x;
+            window_pos.y = plot_pos.y + plot_size.y - plot_style.PlotPadding.y -
+                           m_menus_rendered_height;
+            button_pos.x = m_show_menus ? window_pos.x + menus_width
+                                        : plot_pos.x + plot_style.PlotPadding.x;
+            button_pos.y = window_pos.y + m_menus_rendered_height - button_size;
+            break;
+        }
+        case InsideBottomRight:
+        {
+            window_pos.x =
+                plot_pos.x + plot_size.x - plot_style.PlotPadding.x - menus_width;
+            window_pos.y = plot_pos.y + plot_size.y - plot_style.PlotPadding.y -
+                           m_menus_rendered_height - ImGui::GetFrameHeightWithSpacing();
+            button_pos.x = m_show_menus ? window_pos.x - button_size
+                                        : plot_pos.x + plot_size.x -
+                                              plot_style.PlotPadding.x - button_size;
+            button_pos.y = window_pos.y + m_menus_rendered_height - button_size;
+            break;
+        }
+        default:
+        {
+            window_pos.x = region.x - 2 * plot_style.PlotPadding.x -
+                           plot_style.PlotBorderSize - menus_width;
+            window_pos.y = plot_style.PlotBorderSize + 2 * plot_style.PlotPadding.y;
+            button_pos.x = m_show_menus
+                               ? window_pos.x - button_size
+                               : region.x - 2 * plot_style.PlotPadding.x - button_size;
+            button_pos.y = window_pos.y;
+            break;
+        }
+    }
+
+    ImGuiDir arrow_dir = menus_on_right ? (m_show_menus ? ImGuiDir_Right : ImGuiDir_Left)
+                                        : (m_show_menus ? ImGuiDir_Left : ImGuiDir_Right);
+
     ImGui::SetCursorPos(button_pos);
-    if(ImGui::ArrowButton("toggle_menus", m_show_menus ? ImGuiDir_Right : ImGuiDir_Left))
+    if(ImGui::ArrowButton("toggle_menus", arrow_dir))
     {
         m_show_menus = !m_show_menus;
     }
     if(m_show_menus)
     {
+        if(m_menus_placement == Outside)
+        {
+            // Fill empty space...
+            ImGui::SetCursorPos(plot_pos + ImVec2(plot_size.x, 0.0f));
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImGui::GetCursorScreenPos(),
+                ImGui::GetCursorScreenPos() + ImVec2(menus_width, plot_size.y),
+                ImGui::GetColorU32(plot_style.Colors[ImPlotCol_PlotBg]));
+        }
         ImGui::SetCursorPos(button_pos +
-                            ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing()));
+                            ImVec2(0.0f, menus_on_bottom ? -button_size : button_size));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-        if(ImGui::Button(m_menus_mode == Legend ? ICON_GEAR : ICON_LIST))
+        if(ImGui::Button(m_menus_mode == Legend ? ICON_GEAR : ICON_LIST,
+                         ImVec2(button_size, button_size)))
         {
             if(m_menus_mode == Legend)
             {
@@ -599,13 +682,9 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
         }
         ImGui::PopFont();
         ImGui::SetCursorPos(window_pos);
-        float menus_width      = region.x * 0.25f;
-        float max_menus_height = ImGui::GetContentRegionAvail().y -
-                                 3 * ImGui::GetFontSize() - 5 * plot_style.PlotPadding.y -
-                                 plot_style.PlotBorderSize;
-        ImGui::SetNextWindowSizeConstraints(
-            ImVec2(menus_width, ImGui::GetFrameHeightWithSpacing() * 2.0f),
-            ImVec2(menus_width, max_menus_height));
+
+        ImGui::SetNextWindowSizeConstraints(ImVec2(menus_width, button_size * 2.0f),
+                                            ImVec2(menus_width, max_menus_height));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
         ImGui::BeginChild("menus_window", ImVec2(menus_width, 0.0f),
@@ -633,8 +712,8 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
         ImGui::EndGroup();
         float header_height = ImGui::GetItemRectSize().y + 2 * style.WindowPadding.y;
         float footer_height =
-            m_kernel ? 0.0f
-                     : 2 * ImGui::GetFrameHeightWithSpacing() + 2 * style.WindowPadding.y;
+            (m_kernel_mode == AllKernels ? 4 : 3) * ImGui::GetFrameHeightWithSpacing() +
+            2 * style.WindowPadding.y;
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(menus_content_width, 0),
             ImVec2(menus_content_width,
@@ -726,7 +805,7 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
                     ImGui::SameLine();
                 }
                 ElidedText(m_items[i].label.c_str(), ImGui::GetContentRegionAvail().x,
-                           region.x * 0.5f);
+                           plot_size.x * 0.5f);
                 ImGui::EndDisabled();
                 if(row_hovered)
                 {
@@ -747,14 +826,36 @@ Roofline::RenderMenus(const ImVec2 region, const ImGuiStyle& style,
         }
         ImGui::EndChild();
         ImGui::EndChild();
-        if(m_menus_mode == Options && !m_kernel)
+        if(m_menus_mode == Options)
         {
             ImGui::SeparatorText("Options");
-            ImGui::Checkbox("##scale_intensity", &m_scale_intensity);
-            ImGui::SameLine();
-            ElidedText("Scale kernel marker size to duration",
-                       ImGui::GetContentRegionAvail().x, region.x * 0.5f, true);
+            if(m_kernel_mode == AllKernels)
+            {
+                ImGui::PushID("kernel_scale");
+                ImGui::Checkbox("", &m_scale_intensity);
+                ImGui::SameLine();
+                ElidedText("Scale kernel marker size to duration",
+                           ImGui::GetContentRegionAvail().x, plot_size.x * 0.5f, false,
+                           true);
+                ImGui::PopID();
+            }
+            ImGui::PushID("menus_placement");
+            ElidedText("Menus position", ImGui::GetContentRegionAvail().x,
+                       plot_size.x * 0.5f, false, true);
+            ImGui::SetNextItemWidth(-1.0f);
+            int placement_idx = static_cast<int>(m_menus_placement);
+            if(ImGui::Combo("##placement", &placement_idx,
+                            "Inside, Top Left\0"
+                            "Inside, Top Right\0"
+                            "Inside, Bottom Left\0"
+                            "Inside, Bottom Right\0"
+                            "Outside\0\0"))
+            {
+                m_menus_placement = static_cast<MenusPlacement>(placement_idx);
+            }
+            ImGui::PopID();
         }
+        m_menus_rendered_height = ImGui::GetWindowHeight();
         ImGui::EndChild();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar();

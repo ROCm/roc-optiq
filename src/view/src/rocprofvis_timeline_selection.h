@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <chrono>
 #include <cstdint>
 #include <limits>
 #include <unordered_map>
@@ -42,6 +43,17 @@ public:
     bool HasSelectedEvents() const;
     bool GetSelectedEventsTimeRange(double& start_ts_out, double& end_ts_out) const;
 
+    void NavigateToEvent(uint64_t track_id, uint64_t event_uuid, double start_ns,
+                         double duration_ns);
+    void HighlightTrackEvent(uint64_t track_id, uint64_t event_id);
+    void     UnhighlightTrackEvent(uint64_t track_id, uint64_t event_id);
+    bool     EventHighlighted(uint64_t event_id) const;
+    void     UnhighlightAllEvents();
+    bool     HasHighlightedEvents() const;
+    void     UpdateHighlightTimer();
+    uint64_t GetLastHighlightedEventId() const;
+    double   GetHighlightElapsedSeconds() const;
+
     static constexpr double INVALID_SELECTION_TIME =
         std::numeric_limits<double>::lowest();
     static constexpr uint64_t INVALID_SELECTION_ID = std::numeric_limits<uint64_t>::max();
@@ -52,6 +64,8 @@ private:
      */
     void SendEventSelectionChanged(uint64_t event_id, uint64_t track_id, bool selected,
                                    bool all = false);
+    void SendEventHighlightChanged(uint64_t event_id, uint64_t track_id, bool highlighted,
+                                   bool all = false);
     void SendTrackSelectionChanged(uint64_t track_id, bool selected);
 
     DataProvider& m_data_provider;
@@ -61,6 +75,12 @@ private:
     double                       m_selected_range_end;
 
     std::unordered_set<uint64_t> m_selected_event_ids;
+    std::unordered_set<uint64_t> m_highlighted_event_ids;
+
+    static constexpr double                          HIGHLIGHT_TIMEOUT_S = 10.0;
+    bool                                             m_highlight_timer_active;
+    std::chrono::steady_clock::time_point            m_highlight_timer_start;
+    uint64_t                                         m_last_highlighted_event_id;
 };
 
 }  // namespace View

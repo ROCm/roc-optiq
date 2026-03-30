@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <array>
 
 namespace RocProfVis
 {
@@ -33,6 +34,7 @@ struct AvailableMetrics
         uint32_t                             id;
         std::string                          name;
         std::unordered_map<uint32_t, Entry&> entries;
+        std::vector<const Entry*>            ordered_entries;  // built from map values; never null
         std::vector<std::string>             value_names;
     };
     struct Category
@@ -40,9 +42,11 @@ struct AvailableMetrics
         uint32_t                            id;
         std::string                         name;
         std::unordered_map<uint32_t, Table> tables;
+        std::vector<const Table*>           ordered_tables;   // built from map values; never null
     };
     std::vector<Entry>                     list;
     std::unordered_map<uint32_t, Category> tree;
+    std::vector<const Category*>           ordered_categories;  // built from map values; never null
 };
 
 struct Point
@@ -53,6 +57,16 @@ struct Point
 
 struct KernelInfo
 {
+    enum DispatchMetric
+    {
+        InvocationCount,
+        DurationTotal,
+        DurationMin,
+        DurationMax,
+        DurationMean,
+        DurationMedian,
+        NumMetrics
+    };
     struct Roofline
     {
         struct Intensity
@@ -64,15 +78,10 @@ struct KernelInfo
                            Intensity>
             intensities;
     };
-    uint32_t    id;
-    std::string name;
-    uint32_t    invocation_count;
-    uint64_t    duration_total;
-    uint32_t    duration_min;
-    uint32_t    duration_max;
-    uint32_t    duration_mean;
-    uint32_t    duration_median;
-    Roofline    roofline;
+    uint32_t                         id;
+    std::string                      name;
+    std::array<uint64_t, NumMetrics> dispatch_metrics;
+    Roofline                         roofline;
 };
 
 struct WorkloadInfo

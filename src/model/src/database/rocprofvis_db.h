@@ -6,6 +6,7 @@
 #include "rocprofvis_db_future.h"
 #include "rocprofvis_db_cache.h"
 #include "rocprofvis_db_track.h"
+#include "rocprofvis_db_version.h"
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -64,59 +65,26 @@ class Database;
 // Helper class to lock processes in order of database instances
 class OrderedMutex {
 public:
-    explicit OrderedMutex() : m_current_id(0), m_db_instances(nullptr) {}
-
-    void Init(guid_list_t& guid_list) { m_current_id = 0; m_db_instances = &guid_list; }
+    void init(uint32_t num_instances) { for (int i = 0; i < num_instances; i++) { m_instances.insert(i); } }
 
     void lock(uint32_t id) {
         std::unique_lock<std::mutex> lock(m_lock);
-        m_cv.wait(lock, [&] { return id == m_current_id; });  // Wait for your turn
+        m_cv.wait(lock, [&] { return id == *m_instances.begin(); }); 
     }
 
-    void lock(std::string guid) {
-        std::unique_lock<std::mutex> lock(m_lock);
-        m_cv.wait(lock, [&] { return guid == m_db_instances[0][m_current_id].second; });  // Wait for your turn
+    void unlock(uint32_t id) {
+        {
+            std::lock_guard<std::mutex> lock(m_lock);
+            m_instances.erase(id);
+        }
+        m_cv.notify_all();
     }
 
-    void unlock() {
-        std::lock_guard<std::mutex> lock(m_lock);
-        ++m_current_id;      // Next thread in sequence can proceed
-        m_cv.notify_all();   // Wake up waiting threads
-    }
-
-    void reset() { m_current_id = 0; }
 
 private:
+    std::set<uint32_t> m_instances;
     std::mutex m_lock;
     std::condition_variable m_cv;
-    uint32_t m_current_id;
-    guid_list_t* m_db_instances;
-};
-
-
-class DatabaseVersion
-{
-public:
-
-    void SetVersion(const char* version);
-    bool IsVersionEqual(const char*);
-    bool IsVersionGreaterOrEqual(const char*);
-
-    uint32_t GetMajorVersion()
-    {
-        return m_db_version.size() > 0 ? m_db_version[0] : 0;
-    }
-    uint32_t GetMinorVersion()
-    {
-        return m_db_version.size() > 1 ? m_db_version[1] : 0;
-    }
-    uint32_t GetPatchVersion()
-    {
-        return m_db_version.size() > 2 ? m_db_version[2] : 0;
-    }
-private:
-    std::vector<uint32_t>  ConvertVersionStringToInt(const char* version);
-    std::vector<uint32_t> m_db_version;
 };
 
 class Database

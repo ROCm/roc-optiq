@@ -662,6 +662,14 @@ SettingsManager::SerializeInternalSettings(jt::Json& json)
     {
         is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES][i++] = file;
     }
+    if(!m_internalsettings.ai_api_key.empty())
+    {
+        is[JSON_KEY_SETTINGS_INTERNAL_AI_API_KEY] = m_internalsettings.ai_api_key;
+    }
+    if(!m_internalsettings.ai_user_id.empty())
+    {
+        is[JSON_KEY_SETTINGS_INTERNAL_AI_USER_ID] = m_internalsettings.ai_user_id;
+    }
 }
 
 void
@@ -677,6 +685,14 @@ SettingsManager::DeserializeInternalSettings(jt::Json& json)
                 m_internalsettings.recent_files.emplace_back(entry.getString());
             }
         }
+    }
+    if(is[JSON_KEY_SETTINGS_INTERNAL_AI_API_KEY].isString())
+    {
+        m_internalsettings.ai_api_key = is[JSON_KEY_SETTINGS_INTERNAL_AI_API_KEY].getString();
+    }
+    if(is[JSON_KEY_SETTINGS_INTERNAL_AI_USER_ID].isString())
+    {
+        m_internalsettings.ai_user_id = is[JSON_KEY_SETTINGS_INTERNAL_AI_USER_ID].getString();
     }
 }
 

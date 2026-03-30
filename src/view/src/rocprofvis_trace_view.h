@@ -73,6 +73,8 @@ public:
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
 
+    const DataProvider& GetDataProvider() const { return m_data_provider; }
+
 private:
     void HandleHotKeys();
     void RenderToolbar();

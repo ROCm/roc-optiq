@@ -20,6 +20,10 @@
 #include "rocprofvis_utils.h"
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_trace_view.h"
+#include "model/rocprofvis_trace_data_model.h"
+#include "model/rocprofvis_summary_model.h"
+#include "model/rocprofvis_timeline_model.h"
+#include "model/rocprofvis_model_types.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
@@ -27,8 +31,16 @@
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <utility>
+
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#include <winhttp.h>
+#pragma comment(lib, "winhttp.lib")
+#endif
 
 namespace RocProfVis
 {
@@ -91,6 +103,10 @@ AppWindow::AppWindow()
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
+, m_open_api_key_dialog(false)
+, m_open_analysis_results(false)
+, m_analysis_in_progress(false)
+, m_show_analysis_status(false)
 , m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 #ifdef ROCPROFVIS_DEVELOPER_MODE
@@ -114,7 +130,23 @@ AppWindow::AppWindow()
 , m_exit_notification_sent(false)
 , m_restore_fullscreen_later(false)
 , m_next_provider_cleanup_id(0)
-{}
+{
+    const InternalSettings& is = SettingsManager::GetInstance().GetInternalSettings();
+    strncpy(m_api_key_buffer, is.ai_api_key.c_str(), sizeof(m_api_key_buffer) - 1);
+    m_api_key_buffer[sizeof(m_api_key_buffer) - 1] = '\0';
+
+    if(!is.ai_user_id.empty())
+    {
+        strncpy(m_user_id_buffer, is.ai_user_id.c_str(), sizeof(m_user_id_buffer) - 1);
+    }
+    else
+    {
+        const char* username = std::getenv("USERNAME");
+        if(!username) username = std::getenv("USER");
+        strncpy(m_user_id_buffer, username ? username : "", sizeof(m_user_id_buffer) - 1);
+    }
+    m_user_id_buffer[sizeof(m_user_id_buffer) - 1] = '\0';
+}
 
 AppWindow::~AppWindow()
 {
@@ -555,6 +587,16 @@ AppWindow::Update()
     }
 
     HotkeyManager::GetInstance().ProcessInput();
+
+    if(m_analysis_in_progress && m_analysis_future.valid() &&
+       m_analysis_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+    {
+        m_analysis_result_text  = m_analysis_future.get();
+        m_analysis_in_progress  = false;
+        m_analysis_status_text  = "Analysis complete. Opening results...";
+        m_open_analysis_results = true;
+    }
+
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
@@ -598,6 +640,7 @@ AppWindow::Render()
         RenderFileMenu(project);
         RenderEditMenu(project);
         RenderViewMenu(project);
+        RenderAIAnalysisMenu();
         RenderHelpMenu();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         RenderDeveloperMenu();
@@ -616,7 +659,28 @@ AppWindow::Render()
         ImGui::OpenPopup(ABOUT_DIALOG_NAME);
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
-    RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
+    RenderAboutDialog();
+
+    if(m_open_api_key_dialog)
+    {
+        ImGui::OpenPopup("API Key##_dialog");
+        m_open_api_key_dialog = false;
+    }
+    RenderAPIKeyDialog();
+
+    if(m_show_analysis_status)
+    {
+        ImGui::OpenPopup("AI Analysis Status##_status");
+    }
+    RenderAnalysisStatusPopup();
+
+    if(m_open_analysis_results)
+    {
+        m_open_analysis_results = false;
+        m_show_analysis_status  = false;
+        OpenAnalysisResultsInBrowser();
+    }
+
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
     m_settings_panel->Render();
@@ -1134,6 +1198,674 @@ AppWindow::RenderHelpMenu()
         }
         ImGui::EndMenu();
     }
+}
+
+void
+AppWindow::RenderAIAnalysisMenu()
+{
+    if(ImGui::BeginMenu("AI Analysis"))
+    {
+        if(ImGui::MenuItem("API Key"))
+        {
+            m_open_api_key_dialog = true;
+        }
+
+        bool has_key     = strlen(m_api_key_buffer) > 0;
+        bool has_project = GetCurrentProject() != nullptr;
+        if(ImGui::MenuItem("Start Analysis", nullptr, false,
+                           has_key && has_project && !m_analysis_in_progress))
+        {
+            StartAIAnalysis();
+        }
+        if(m_analysis_in_progress)
+        {
+            ImGui::MenuItem("Analysis in progress...", nullptr, false, false);
+        }
+        ImGui::EndMenu();
+    }
+}
+
+void
+AppWindow::RenderAPIKeyDialog()
+{
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+
+    ImGui::SetNextWindowSize(ImVec2(480, 0));
+
+    if(ImGui::BeginPopupModal("API Key##_dialog", nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize |
+                                  ImGuiWindowFlags_NoMove))
+    {
+        ImGui::TextUnformatted("User ID:");
+        ImGui::SetNextItemWidth(-1);
+        ImGui::InputText("##user_id_input", m_user_id_buffer,
+                         IM_ARRAYSIZE(m_user_id_buffer));
+
+        ImGui::Spacing();
+
+        ImGui::TextUnformatted("API Key:");
+        ImGui::SetNextItemWidth(-1);
+        ImGui::InputText("##api_key_input", m_api_key_buffer,
+                         IM_ARRAYSIZE(m_api_key_buffer),
+                         ImGuiInputTextFlags_Password);
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float save_width =
+            ImGui::CalcTextSize("Save").x + ImGui::GetStyle().FramePadding.x * 2;
+        float cancel_width =
+            ImGui::CalcTextSize("Cancel").x + ImGui::GetStyle().FramePadding.x * 2;
+        float total_width = save_width + cancel_width + ImGui::GetStyle().ItemSpacing.x;
+
+        ImGui::SetCursorPosX(
+            ImGui::GetWindowSize().x - total_width - ImGui::GetStyle().ItemSpacing.x);
+
+        if(ImGui::Button("Save"))
+        {
+            InternalSettings& is = SettingsManager::GetInstance().GetInternalSettings();
+            is.ai_api_key = std::string(m_api_key_buffer);
+            is.ai_user_id = std::string(m_user_id_buffer);
+            SettingsManager::GetInstance().ApplyUserSettings(
+                SettingsManager::GetInstance().GetUserSettings(), true);
+            spdlog::info("API key and user ID saved to settings");
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("Cancel"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+    popup_style.PopStyles();
+}
+
+void
+AppWindow::RenderAnalysisStatusPopup()
+{
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+
+    ImGui::SetNextWindowSize(ImVec2(400, 0));
+
+    if(ImGui::BeginPopupModal("AI Analysis Status##_status", nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize |
+                                  ImGuiWindowFlags_NoMove))
+    {
+        ImGui::Spacing();
+
+        if(m_analysis_in_progress)
+        {
+            float spinner_radius = 8.0f;
+            ImU32 spinner_color  = IM_COL32(224, 62, 62, 255);
+            float t = static_cast<float>(ImGui::GetTime());
+
+            ImVec2 pos = ImGui::GetCursorScreenPos();
+            float cx = pos.x + spinner_radius + 4.0f;
+            float cy = pos.y + spinner_radius + 2.0f;
+
+            int segments = 12;
+            for(int i = 0; i < segments; i++)
+            {
+                float angle = (static_cast<float>(i) / segments) * 2.0f * 3.14159f + t * 4.0f;
+                float alpha = (static_cast<float>(i) / segments);
+                float x = cx + cosf(angle) * spinner_radius;
+                float y = cy + sinf(angle) * spinner_radius;
+                ImGui::GetWindowDrawList()->AddCircleFilled(
+                    ImVec2(x, y), 2.5f,
+                    IM_COL32(
+                        (spinner_color >> 0)  & 0xFF,
+                        (spinner_color >> 8)  & 0xFF,
+                        (spinner_color >> 16) & 0xFF,
+                        static_cast<int>(alpha * 255)));
+            }
+
+            ImGui::Dummy(ImVec2(spinner_radius * 2 + 8, spinner_radius * 2 + 4));
+            ImGui::SameLine();
+            ImGui::TextUnformatted(m_analysis_status_text.c_str());
+        }
+        else
+        {
+            ImGui::TextColored(ImVec4(0.35f, 0.78f, 0.47f, 1.0f), "Done!");
+            ImGui::SameLine();
+            ImGui::TextUnformatted(m_analysis_status_text.c_str());
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float btn_width =
+            ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2;
+        ImGui::SetCursorPosX(
+            ImGui::GetWindowSize().x - btn_width - ImGui::GetStyle().ItemSpacing.x);
+        if(ImGui::Button("Close"))
+        {
+            m_show_analysis_status = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+    popup_style.PopStyles();
+}
+
+void
+AppWindow::OpenAnalysisResultsInBrowser()
+{
+    std::string config_path = get_application_config_path(true);
+    std::filesystem::path html_path =
+        std::filesystem::path(config_path) / "ai_analysis_results.html";
+
+    auto escape_html = [](const std::string& s) -> std::string {
+        std::string out;
+        out.reserve(s.size());
+        for(char c : s)
+        {
+            switch(c)
+            {
+                case '&':  out += "&amp;"; break;
+                case '<':  out += "&lt;"; break;
+                case '>':  out += "&gt;"; break;
+                case '"':  out += "&quot;"; break;
+                default:   out += c; break;
+            }
+        }
+        return out;
+    };
+
+    auto markdown_to_html = [&escape_html](const std::string& md) -> std::string {
+        std::istringstream stream(md);
+        std::string line;
+        std::string html;
+        bool in_table = false;
+        bool first_table_row = true;
+        bool in_list = false;
+        bool in_olist = false;
+
+        auto close_lists = [&]() {
+            if(in_list)  { html += "</ul>\n"; in_list = false; }
+            if(in_olist) { html += "</ol>\n"; in_olist = false; }
+        };
+
+        auto trim = [](const std::string& s) -> std::string {
+            size_t a = s.find_first_not_of(" \t");
+            size_t b = s.find_last_not_of(" \t");
+            return (a == std::string::npos) ? "" : s.substr(a, b - a + 1);
+        };
+
+        auto is_separator_row = [](const std::string& l) -> bool {
+            for(char c : l)
+                if(c != '|' && c != '-' && c != ':' && c != ' ') return false;
+            return l.find('-') != std::string::npos;
+        };
+
+        auto inline_fmt = [&escape_html](const std::string& l) -> std::string {
+            std::string out;
+            size_t i = 0, len = l.size();
+            while(i < len)
+            {
+                if(i + 1 < len && l[i] == '*' && l[i + 1] == '*')
+                {
+                    size_t e = l.find("**", i + 2);
+                    if(e != std::string::npos)
+                    {
+                        out += "<strong>" + escape_html(l.substr(i + 2, e - i - 2)) + "</strong>";
+                        i = e + 2;
+                        continue;
+                    }
+                }
+                if(l[i] == '`')
+                {
+                    size_t e = l.find('`', i + 1);
+                    if(e != std::string::npos)
+                    {
+                        out += "<code>" + escape_html(l.substr(i + 1, e - i - 1)) + "</code>";
+                        i = e + 1;
+                        continue;
+                    }
+                }
+                std::string ch(1, l[i]);
+                out += escape_html(ch);
+                i++;
+            }
+            return out;
+        };
+
+        while(std::getline(stream, line))
+        {
+            std::string t = trim(line);
+
+            if(t.empty())
+            {
+                if(in_table) { html += "</tbody></table>\n"; in_table = false; }
+                close_lists();
+                html += "<br>\n";
+                continue;
+            }
+
+            if(t.find('|') != std::string::npos)
+            {
+                int pipes = 0;
+                for(char c : t) if(c == '|') pipes++;
+                if(pipes >= 2)
+                {
+                    if(is_separator_row(t)) continue;
+
+                    std::vector<std::string> cells;
+                    size_t s = (t[0] == '|') ? 1 : 0;
+                    size_t e = t.size();
+                    if(e > 0 && t[e-1] == '|') e--;
+                    std::istringstream cs(t.substr(s, e - s));
+                    std::string cell;
+                    while(std::getline(cs, cell, '|'))
+                        cells.push_back(trim(cell));
+
+                    if(!in_table)
+                    {
+                        close_lists();
+                        html += "<table><thead><tr>";
+                        for(const auto& c : cells)
+                            html += "<th>" + inline_fmt(c) + "</th>";
+                        html += "</tr></thead><tbody>\n";
+                        in_table = true;
+                        first_table_row = true;
+                        continue;
+                    }
+
+                    html += "<tr>";
+                    for(const auto& c : cells)
+                        html += "<td>" + inline_fmt(c) + "</td>";
+                    html += "</tr>\n";
+                    continue;
+                }
+            }
+
+            if(in_table) { html += "</tbody></table>\n"; in_table = false; }
+
+            if(t.rfind("### ", 0) == 0)
+            {
+                close_lists();
+                html += "<h3>" + inline_fmt(t.substr(4)) + "</h3>\n";
+            }
+            else if(t.rfind("## ", 0) == 0)
+            {
+                close_lists();
+                html += "<h2>" + inline_fmt(t.substr(3)) + "</h2>\n";
+            }
+            else if(t.rfind("# ", 0) == 0)
+            {
+                close_lists();
+                html += "<h1>" + inline_fmt(t.substr(2)) + "</h1>\n";
+            }
+            else if(t == "---" || t == "***" || t == "___")
+            {
+                close_lists();
+                html += "<hr>\n";
+            }
+            else if(t.rfind("> ", 0) == 0)
+            {
+                close_lists();
+                html += "<blockquote>" + inline_fmt(t.substr(2)) + "</blockquote>\n";
+            }
+            else if(t.rfind("- ", 0) == 0 || t.rfind("* ", 0) == 0)
+            {
+                if(in_olist) { html += "</ol>\n"; in_olist = false; }
+                if(!in_list) { html += "<ul>\n"; in_list = true; }
+                html += "<li>" + inline_fmt(t.substr(2)) + "</li>\n";
+            }
+            else if(t.size() > 2 && t[0] >= '0' && t[0] <= '9' &&
+                    t.find(". ") != std::string::npos)
+            {
+                if(in_list) { html += "</ul>\n"; in_list = false; }
+                if(!in_olist) { html += "<ol>\n"; in_olist = true; }
+                size_t dot = t.find(". ");
+                html += "<li>" + inline_fmt(t.substr(dot + 2)) + "</li>\n";
+            }
+            else
+            {
+                close_lists();
+                html += "<p>" + inline_fmt(t) + "</p>\n";
+            }
+        }
+
+        if(in_table) html += "</tbody></table>\n";
+        close_lists();
+        return html;
+    };
+
+    std::string body_html = markdown_to_html(m_analysis_result_text);
+
+    std::ofstream out(html_path);
+    if(!out.is_open())
+    {
+        ShowMessageDialog("AI Analysis", "Failed to save HTML report.");
+        return;
+    }
+
+    out << R"(<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROCm Optiq - AI Analysis Results</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #1a1b1e; color: #d4d4d8; margin: 0; padding: 0;
+    line-height: 1.7;
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 32px; }
+  .header {
+    text-align: center; padding-bottom: 24px;
+    border-bottom: 2px solid #e03e3e; margin-bottom: 32px;
+  }
+  .header h1 { color: #e03e3e; margin: 0 0 4px 0; font-size: 1.8em; }
+  .header .subtitle { color: #888; font-size: 0.9em; }
+  h1 { color: #e03e3e; font-size: 1.5em; border-bottom: 1px solid #333; padding-bottom: 8px; margin-top: 32px; }
+  h2 { color: #60a5fa; font-size: 1.3em; margin-top: 28px; }
+  h3 { color: #93c5fd; font-size: 1.1em; margin-top: 20px; }
+  p { margin: 8px 0; }
+  strong { color: #f0f0f0; }
+  code {
+    background: #2d2d30; color: #c8dcb4; padding: 2px 6px;
+    border-radius: 4px; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 0.9em;
+  }
+  blockquote {
+    border-left: 3px solid #e03e3e; margin: 12px 0; padding: 8px 16px;
+    background: #222; color: #aaa; border-radius: 0 6px 6px 0;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+    background: #222; border-radius: 8px; overflow: hidden;
+  }
+  th {
+    background: #2a4a7a; color: #93c5fd; text-align: left;
+    padding: 10px 14px; font-weight: 600; font-size: 0.9em;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  td { padding: 8px 14px; border-bottom: 1px solid #333; }
+  tr:hover td { background: #2a2a2e; }
+  ul, ol { padding-left: 24px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  li::marker { color: #e03e3e; }
+  hr { border: none; border-top: 1px solid #444; margin: 24px 0; }
+  .timestamp { color: #666; font-size: 0.8em; text-align: center; margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>ROCm Optiq &mdash; AI Analysis</h1>
+    <div class="subtitle">Automated profiling analysis powered by LLM</div>
+  </div>
+)" << body_html << R"(
+  <div class="timestamp">Generated by ROCm Optiq on )" << __DATE__ << R"(</div>
+</div>
+</body>
+</html>)";
+
+    out.close();
+
+#ifdef _WIN32
+    ShellExecuteW(nullptr, L"open", html_path.wstring().c_str(),
+                  nullptr, nullptr, SW_SHOWNORMAL);
+#endif
+    spdlog::info("AI Analysis report saved to: {}", html_path.string());
+}
+
+std::string
+AppWindow::BuildAnalysisPrompt()
+{
+    std::stringstream ss;
+    ss << "You are a performance analysis expert for GPU computing workloads. "
+       << "Analyze the following ROCm profiling trace data and provide a detailed summary of:\n"
+       << "1. GPU Usage - utilization, top kernels by execution time\n"
+       << "2. Memory Usage - GPU memory utilization patterns\n"
+       << "3. CPU Usage - host-side activity if available\n"
+       << "4. Performance recommendations\n\n";
+
+    Project* project = GetCurrentProject();
+    if(!project) return ss.str();
+
+    auto trace_view = std::dynamic_pointer_cast<TraceView>(project->GetView());
+    if(!trace_view) return ss.str();
+
+    const DataProvider& provider = trace_view->GetDataProvider();
+    const TraceDataModel& model = provider.DataModel();
+
+    ss << "=== Trace File ===\n"
+       << "Path: " << model.GetTraceFilePath() << "\n\n";
+
+    const SummaryModel& summary = model.GetSummary();
+    const SummaryInfo::AggregateMetrics& root = summary.GetSummaryData();
+
+    std::function<void(const SummaryInfo::AggregateMetrics&, int)> dump_metrics;
+    dump_metrics = [&](const SummaryInfo::AggregateMetrics& m, int depth) {
+        std::string indent(depth * 2, ' ');
+        if(m.name.has_value())
+            ss << indent << "Name: " << m.name.value() << "\n";
+        if(m.id.has_value())
+            ss << indent << "ID: " << m.id.value() << "\n";
+
+        if(m.gpu.gfx_utilization.has_value())
+            ss << indent << "GPU GFX Utilization: "
+               << m.gpu.gfx_utilization.value() * 100.0f << "%\n";
+        if(m.gpu.mem_utilization.has_value())
+            ss << indent << "GPU Memory Utilization: "
+               << m.gpu.mem_utilization.value() * 100.0f << "%\n";
+
+        if(m.gpu.kernel_exec_time_total > 0)
+            ss << indent << "Total Kernel Exec Time: "
+               << m.gpu.kernel_exec_time_total << " ns\n";
+
+        if(!m.gpu.top_kernels.empty())
+        {
+            ss << indent << "Top Kernels:\n";
+            for(const auto& k : m.gpu.top_kernels)
+            {
+                ss << indent << "  - " << k.name
+                   << " | invocations=" << k.invocations
+                   << " | total=" << k.exec_time_sum << "ns"
+                   << " | min=" << k.exec_time_min << "ns"
+                   << " | max=" << k.exec_time_max << "ns"
+                   << " | pct=" << k.exec_time_pct * 100.0f << "%\n";
+            }
+        }
+
+        for(const auto& sub : m.sub_metrics)
+            dump_metrics(sub, depth + 1);
+    };
+
+    ss << "=== Summary Metrics ===\n";
+    dump_metrics(root, 0);
+
+    const TimelineModel& timeline = model.GetTimeline();
+    ss << "\n=== Timeline ===\n"
+       << "Start Time: " << timeline.GetStartTime() << " ns\n"
+       << "End Time: " << timeline.GetEndTime() << " ns\n"
+       << "Duration: " << (timeline.GetEndTime() - timeline.GetStartTime()) << " ns\n"
+       << "Track Count: " << timeline.GetTrackCount() << "\n";
+
+    ss << "\nProvide your analysis in a clear, structured format.";
+    return ss.str();
+}
+
+#ifdef _WIN32
+std::string
+AppWindow::CallLLMApi(const std::string& api_key, const std::string& prompt)
+{
+    std::string user_id(m_user_id_buffer);
+
+    std::string escaped_prompt;
+    for(char c : prompt)
+    {
+        switch(c)
+        {
+            case '"':  escaped_prompt += "\\\""; break;
+            case '\\': escaped_prompt += "\\\\"; break;
+            case '\n': escaped_prompt += "\\n"; break;
+            case '\r': escaped_prompt += "\\r"; break;
+            case '\t': escaped_prompt += "\\t"; break;
+            default:   escaped_prompt += c; break;
+        }
+    }
+
+    std::string body =
+        R"({"model":"GPT-oss-20B","max_completion_tokens":2048,"temperature":0.7,"messages":[)"
+        R"({"role":"system","content":"You are a performance analysis expert for GPU computing workloads."},)"
+        R"({"role":"user","content":")" + escaped_prompt + R"("}]})";
+
+    HINTERNET session = WinHttpOpen(L"ROCm-Optiq/1.0",
+                                     WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                                     WINHTTP_NO_PROXY_NAME,
+                                     WINHTTP_NO_PROXY_BYPASS, 0);
+    if(!session) return "Error: Failed to open HTTP session.";
+
+    HINTERNET connect = WinHttpConnect(session, L"llm-api.amd.com",
+                                        INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if(!connect)
+    {
+        WinHttpCloseHandle(session);
+        return "Error: Failed to connect to llm-api.amd.com.";
+    }
+
+    HINTERNET request = WinHttpOpenRequest(connect, L"POST",
+                                            L"/OnPrem/chat/completions",
+                                            nullptr, WINHTTP_NO_REFERER,
+                                            WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                            WINHTTP_FLAG_SECURE);
+    if(!request)
+    {
+        WinHttpCloseHandle(connect);
+        WinHttpCloseHandle(session);
+        return "Error: Failed to create HTTP request.";
+    }
+
+    std::wstring headers = L"Content-Type: application/json\r\n";
+    headers += L"Ocp-Apim-Subscription-Key: " +
+               std::wstring(api_key.begin(), api_key.end()) + L"\r\n";
+    headers += L"user: " +
+               std::wstring(user_id.begin(), user_id.end()) + L"\r\n";
+
+    WinHttpAddRequestHeaders(request, headers.c_str(), -1L,
+                              WINHTTP_ADDREQ_FLAG_ADD);
+
+    BOOL sent = WinHttpSendRequest(request,
+                                    WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                                    (LPVOID)body.c_str(),
+                                    static_cast<DWORD>(body.size()),
+                                    static_cast<DWORD>(body.size()), 0);
+    if(!sent)
+    {
+        WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connect);
+        WinHttpCloseHandle(session);
+        return "Error: Failed to send request. Check your network connection.";
+    }
+
+    BOOL received = WinHttpReceiveResponse(request, nullptr);
+    if(!received)
+    {
+        WinHttpCloseHandle(request);
+        WinHttpCloseHandle(connect);
+        WinHttpCloseHandle(session);
+        return "Error: No response from server.";
+    }
+
+    DWORD status_code = 0;
+    DWORD size        = sizeof(status_code);
+    WinHttpQueryHeaders(request,
+                        WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                        WINHTTP_HEADER_NAME_BY_INDEX, &status_code, &size,
+                        WINHTTP_NO_HEADER_INDEX);
+
+    std::string response_body;
+    DWORD bytes_available = 0;
+    do
+    {
+        WinHttpQueryDataAvailable(request, &bytes_available);
+        if(bytes_available > 0)
+        {
+            std::vector<char> buffer(bytes_available + 1, 0);
+            DWORD bytes_read = 0;
+            WinHttpReadData(request, buffer.data(), bytes_available, &bytes_read);
+            response_body.append(buffer.data(), bytes_read);
+        }
+    } while(bytes_available > 0);
+
+    WinHttpCloseHandle(request);
+    WinHttpCloseHandle(connect);
+    WinHttpCloseHandle(session);
+
+    if(status_code != 200)
+    {
+        return "Error: API returned status " + std::to_string(status_code) +
+               "\n\n" + response_body;
+    }
+
+    auto parse_result = jt::Json::parse(response_body);
+    if(parse_result.first == jt::Json::success)
+    {
+        jt::Json& json = parse_result.second;
+        if(json["choices"].isArray() && json["choices"][0].isObject())
+        {
+            jt::Json& message = json["choices"][0]["message"];
+            if(message["content"].isString())
+            {
+                return message["content"].getString();
+            }
+        }
+    }
+
+    return "Error: Failed to parse API response.\n\n" + response_body;
+}
+#else
+std::string
+AppWindow::CallLLMApi(const std::string& /*api_key*/, const std::string& /*prompt*/)
+{
+    return "Error: AI Analysis is only supported on Windows.";
+}
+#endif
+
+void
+AppWindow::StartAIAnalysis()
+{
+    std::string api_key(m_api_key_buffer);
+    if(api_key.empty())
+    {
+        ShowMessageDialog("AI Analysis", "Please set your API key first via AI Analysis > API Key.");
+        return;
+    }
+
+    Project* project = GetCurrentProject();
+    if(!project)
+    {
+        ShowMessageDialog("AI Analysis", "Please open a trace file before starting analysis.");
+        return;
+    }
+
+    m_analysis_in_progress  = true;
+    m_show_analysis_status  = true;
+    m_analysis_status_text  = "Extracting profiling data from trace...";
+    m_analysis_result_text.clear();
+
+    std::string prompt = BuildAnalysisPrompt();
+    m_analysis_status_text = "Sending data to LLM gateway...";
+
+    m_analysis_future = std::async(std::launch::async,
+        [this, api_key, prompt]() -> std::string {
+            return CallLLMApi(api_key, prompt);
+        });
 }
 
 void

@@ -52,6 +52,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
             if(evt->GetClientId() == m_client_id)
                 RebuildTableDataCache();
         }
+        m_custom_table.RefillTable();
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
@@ -151,6 +152,8 @@ ComputeTableView::Update()
 {
     if(m_tabs)
         m_tabs->Update();
+
+    m_custom_table.Update();
 }
 
 void

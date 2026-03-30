@@ -89,8 +89,8 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
 void
 MetricTableCache::Render() const
 {
-    if(m_rows.empty())
-        return;
+    //if(m_rows.empty())
+    //    return;
 
     int num_columns = static_cast<int>(m_column_names.size());
 
@@ -116,7 +116,7 @@ MetricTableCache::Render() const
                 }
                 if (m_add_row_to_custom)
                 {
-                    if(ImGui::MenuItem("Add to custom table"))
+                    if(ImGui::MenuItem("Pin metric"))
                     {
                         m_add_row_to_custom({ row.metric_id.category_id,
                                               row.metric_id.table_id,
@@ -279,8 +279,8 @@ CustomTable::SetDefaultColumns()
 {
     m_columns[0]                                    = "Metric ID";
     m_columns[1]                                    = "Metric";
-    m_columns[2]                                    = "Value";
-    m_lust_column_index                             = 3;
+    //m_columns[2]                                    = "Value";
+    m_lust_column_index                             = 2;
     m_columns[std::numeric_limits<uint32_t>::max()] = "Unit";
 }
 
@@ -295,7 +295,7 @@ CustomTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
             NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
                                                     NotificationLevel::Info);
         }
-        if(ImGui::MenuItem("Delete row from table"))
+        if(ImGui::MenuItem("Unpin metric"))
         {
             m_id_to_delete = id_to_delete;
         }
@@ -381,11 +381,6 @@ CustomTable::FillCommons(const MetricId& metric_id, const AvailableMetrics::Tabl
     row[0].value = metric_id.ToString();
     row[1].value = entrie.name;
     row[1].tooltip = entrie.description;
-    if(metric_value && !metric_value->values.empty())
-    {
-        row[2].value = std::to_string(metric_value->values.begin()->second);
-    }
-    
     row[std::numeric_limits<uint32_t>::max()].value = entrie.unit;
 }
 
@@ -403,10 +398,7 @@ CustomTable::GetColumnIndex(const std::string& column_name)
 void
 CustomTable::AddRow(MetricId metric_id)
 {
-    m_metric_ids.push_back(metric_id);
-
     UpdateColumns(metric_id);
-
     FillTableRow(metric_id);
 }
 
@@ -430,14 +422,15 @@ CustomTable::RemoveDeletedRow()
 void
 CustomTable::Render() 
 {
-    RemoveDeletedRow(); //TODO: Think about to move it to update function and about update function
-    if(m_rows.empty())
+    SectionTitle("Pined metric");
+    if (m_rows.empty())
+    {
+        ImGui::TextDisabled("Pin the metric to see it here");
         return;
+    }
 
     int num_columns = static_cast<int>(m_columns.size());
-
-    SectionTitle("Custom table");
-    if(!ImGui::BeginTable("custom table", num_columns, ImGuiTableFlags_Borders))
+    if(!ImGui::BeginTable("pined metric", num_columns, ImGuiTableFlags_Borders))
         return;
 
     for(const auto& column : m_columns)
@@ -538,6 +531,24 @@ CustomTable::RenderTooltip(const RowValue& row)
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }
+}
+
+void
+CustomTable::RefillTable()
+{
+    m_columns.clear();
+    m_lust_column_index = 0;
+    SetDefaultColumns();
+    for(const auto& [metric_id, row] : m_rows)
+    {
+        AddRow(metric_id);
+    }
+}
+
+void
+CustomTable::Update()
+{
+    RemoveDeletedRow();
 }
 
 }  // namespace View

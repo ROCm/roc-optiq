@@ -37,11 +37,11 @@ struct MetricIdHash
 {
     size_t operator()(const MetricId& id) const noexcept
     {
-        uint64_t v = (static_cast<uint64_t>(id.category_id) << 48) ^
+        uint64_t value = (static_cast<uint64_t>(id.category_id) << 48) ^
                      (static_cast<uint64_t>(id.table_id) << 16) ^
                      static_cast<uint64_t>(id.entry_id);
 
-        return std::hash<uint64_t>{}(v);
+        return std::hash<uint64_t>{}(value);
     }
 };
 
@@ -108,7 +108,7 @@ private:
     MetricTableCache m_table;
 };
 
-class CustomTable
+class CustomTable: public RocWidget
 {
 public:
     struct RowValue
@@ -122,6 +122,8 @@ public:
     void AddRow(MetricId metric_id);
     void RemoveDeletedRow();
     void Render();
+    void RefillTable();
+    void Update();
     bool Empty();
 
 private:
@@ -139,11 +141,10 @@ private:
         const std::pair<MetricId, Row>& row);
     void RenderTooltip(const RowValue& row);
 
-    std::map<uint32_t, std::string>              m_columns;
-    std::uint32_t                                m_lust_column_index;
+    std::map<uint32_t, std::string>                 m_columns;
+    std::uint32_t                                   m_lust_column_index;
     std::unordered_map<MetricId, Row, MetricIdHash> m_rows;
-    std::vector<MetricId> m_metric_ids;  // delete this
-    uint64_t                                     m_client_id;
+    uint64_t                                        m_client_id;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     DataProvider&                     m_data_provider;

@@ -221,6 +221,10 @@ target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
+if(WIN32)
+  target_link_libraries(${TARGET_NAME} PRIVATE winhttp)
+endif()
+
 if(APPLE)
     set_target_properties(${TARGET_NAME} PROPERTIES
         BUILD_RPATH "@executable_path/../Frameworks"

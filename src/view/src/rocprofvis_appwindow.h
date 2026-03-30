@@ -11,12 +11,10 @@
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
 
-#ifdef USE_NATIVE_FILE_DIALOG
 #include <atomic>
 #include <future>
 #include <thread>
 #include <chrono>
-#endif
 
 namespace RocProfVis
 {
@@ -81,6 +79,13 @@ private:
     void RenderEditMenu(Project* project);
     void RenderViewMenu(Project* project);
     void RenderHelpMenu();
+    void RenderAIAnalysisMenu();
+    void RenderAPIKeyDialog();
+    void OpenAnalysisResultsInBrowser();
+    void RenderAnalysisStatusPopup();
+    void StartAIAnalysis();
+    std::string BuildAnalysisPrompt();
+    std::string CallLLMApi(const std::string& api_key, const std::string& prompt);
 
     void RenderFileDialog();
     void RenderAboutDialog();
@@ -129,6 +134,17 @@ private:
     bool         m_show_provider_test_widow;
 #endif
     bool m_open_about_dialog;
+    bool m_open_api_key_dialog;
+    char m_api_key_buffer[256];
+    char m_user_id_buffer[128];
+
+    bool                     m_open_analysis_results;
+    bool                     m_analysis_in_progress;
+    bool                     m_show_analysis_status;
+    std::string              m_analysis_status_text;
+    std::string              m_analysis_result_text;
+    std::future<std::string> m_analysis_future;
+
     bool m_disable_app_interaction;
 
 #ifndef USE_NATIVE_FILE_DIALOG

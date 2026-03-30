@@ -43,6 +43,8 @@ typedef struct UserSettings
 typedef struct InternalSettings
 {
     std::list<std::string> recent_files;
+    std::string            ai_api_key;
+    std::string            ai_user_id;
 } InternalSettings;
 
 typedef struct AppWindowSettings
@@ -147,6 +149,8 @@ constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
+constexpr const char* JSON_KEY_SETTINGS_INTERNAL_AI_API_KEY  = "ai_api_key";
+constexpr const char* JSON_KEY_SETTINGS_INTERNAL_AI_USER_ID = "ai_user_id";
 constexpr size_t      MAX_RECENT_FILES                       = 5;
 
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";

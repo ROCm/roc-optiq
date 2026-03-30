@@ -101,10 +101,6 @@ ComputeTableView::RebuildTabs()
     const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
     m_tabs->SetAllowToolTips(true);
-    //TODO:Add custom tab here
-    auto widget =
-        std::make_shared<RocCustomWidget>([this]() { m_custom_table.Render(); });
-    m_tabs->AddTab({ "Custom Table", "Custom Table", widget, false });
     for(const auto* cat : workload.available_metrics.ordered_categories)
     {
         auto widget = std::make_shared<RocCustomWidget>(
@@ -173,6 +169,8 @@ ComputeTableView::Render()
         return;
     }
 
+    m_custom_table.Render();
+
     if(m_tabs)
         m_tabs->Render();
 }
@@ -181,15 +179,6 @@ void
 ComputeTableView::RebuildTableDataCache()
 {
     m_table_widgets.clear();
-
-    //m_custom_table.AddRow({ 2, 1, 0 });
-    //m_custom_table.AddRow({ 5, 1, 0 });
-    //m_custom_table.AddRow({ 6, 1, 0 });
-    //m_custom_table.AddRow({ 18, 1, 0 });
-
-    // STUB: add some dummy metric to make sure the custom table is
-                       // shown, will remove it later when we have a better way to
-                       // determine whether to show the custom table tab
     auto&    model       = m_data_provider.ComputeModel();
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();

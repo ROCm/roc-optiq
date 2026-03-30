@@ -11,6 +11,7 @@ namespace RocProfVis
 {
 namespace View
 {
+inline constexpr float TABLE_TOOLTIP_MAX_WIDTH = 400.0f;
 
 struct MetricId
 {
@@ -77,8 +78,8 @@ private:
     std::function<void(MetricId)> m_add_row_to_custom;
 };
 
-constexpr uint32_t METRIC_CAT_SOL   = 2;
-constexpr uint32_t METRIC_TABLE_SOL = 1;
+inline constexpr uint32_t METRIC_CAT_SOL   = 2;
+inline constexpr uint32_t METRIC_TABLE_SOL = 1;
 
 class DataProvider;
 class ComputeSelection;
@@ -110,6 +111,12 @@ private:
 class CustomTable
 {
 public:
+    struct RowValue
+    {
+        std::string value;
+        std::string tooltip;
+    };
+    using Row = std::map<uint32_t, RowValue>;
     CustomTable(DataProvider&                     data_provider,
                 std::shared_ptr<ComputeSelection> compute_selection, uint64_t client_id);
     void AddRow(MetricId metric_id);
@@ -118,23 +125,23 @@ public:
     bool Empty();
 
 private:
-    const AvailableMetrics::Table& GetTable(const MetricId& metric_id);
-    void UpdateColumns(MetricId metric_id);
-    void FillTableRow(const MetricId& metric_id);
-    void FillCommons(const MetricId&                  metric_id,
-                     const AvailableMetrics::Table&   table,
-                     std::map<uint32_t, std::string>& row,
-                     std::shared_ptr<MetricValue>     metric_value);
+    const AvailableMetrics::Table& GetTable(const MetricId& metric_id, uint32_t workload_id);
+    void                           UpdateColumns(MetricId metric_id);
+    void                           FillTableRow(const MetricId& metric_id);
+    void                           SetDefaultColumns();
+    void ContextMenu(const char* value_to_copy, MetricId id_to_delete);
 
     std::optional<uint32_t> GetColumnIndex(const std::string& column_name);
-    void RenderCommonColumns(const std::pair<MetricId, std::map<uint32_t, std::string>>& row);
-    void SetDefaultColumns();
-    void                    ContextMenu(const char* value_to_copy, MetricId id_to_delete);
-
+    void FillCommons(const MetricId& metric_id, const AvailableMetrics::Table& table,
+                     Row& row,
+                     std::shared_ptr<MetricValue>     metric_value);
+    void RenderCommonColumns(
+        const std::pair<MetricId, Row>& row);
+    void RenderTooltip(const RowValue& row);
 
     std::map<uint32_t, std::string>              m_columns;
     std::uint32_t                                m_lust_column_index;
-    std::unordered_map<MetricId, std::map<uint32_t, std::string>, MetricIdHash> m_rows;
+    std::unordered_map<MetricId, Row, MetricIdHash> m_rows;
     std::vector<MetricId> m_metric_ids;  // delete this
     uint64_t                                     m_client_id;
 

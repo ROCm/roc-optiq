@@ -442,6 +442,8 @@ typedef enum rocprofvis_controller_callstack_properties_t : uint32_t
     kRPVControllerCallstackName,
     kRPVControllerCallstackLineName,
     kRPVControllerCallstackLineAddress,
+    kRPVControllerCallstackDepth,
+    kRPVControllerCallstackRegionId,
     __kRPVControllerCallstackPropertiesLast
 } rocprofvis_controller_callstack_properties_t;
 

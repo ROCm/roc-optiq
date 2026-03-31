@@ -19,8 +19,8 @@ class StackFrameRecord
         // @param args - stack frame method arguments
         // @param line - stack frame code line
         // @param depth - stack frame depth
-        StackFrameRecord(rocprofvis_dm_charptr_t symbol, rocprofvis_dm_charptr_t args, rocprofvis_dm_charptr_t line, uint32_t depth):
-            m_symbol(symbol), m_args(args), m_code_line(line), m_depth(depth) {};
+        StackFrameRecord(rocprofvis_dm_charptr_t symbol, rocprofvis_dm_charptr_t args, rocprofvis_dm_charptr_t line, uint32_t depth, uint32_t id):
+            m_symbol(symbol), m_args(args), m_code_line(line), m_depth(depth), m_id(id) {};
         // Returns pointer to symbol string
         rocprofvis_dm_charptr_t         Symbol() {return m_symbol.c_str();}
         // Returns pointer to argument string
@@ -29,6 +29,8 @@ class StackFrameRecord
         rocprofvis_dm_charptr_t         CodeLine() {return m_code_line.c_str();}
         // returns stack frame depth
         uint32_t                        Depth() {return m_depth;}
+        // returns region id
+        uint32_t                        RegionId() {return m_id;}
     private:
         // stack frame symbol string
         rocprofvis_dm_string_t           m_symbol;
@@ -38,6 +40,8 @@ class StackFrameRecord
         rocprofvis_dm_string_t           m_code_line;
         // stack frame depth
         uint32_t                         m_depth;
+        // region id
+        uint32_t                         m_id;
 };
 
 }  // namespace DataModel

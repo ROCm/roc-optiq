@@ -11,12 +11,14 @@ namespace Controller
 
 typedef Reference<rocprofvis_controller_callstack_t, CallStack, kRPVControllerObjectTypeCallstack> CallStackRef;
 
-CallStack::CallStack(const char* file, const char* pc, const char* name, const char* line_name, const char* line_address)
+CallStack::CallStack(uint64_t region_id, uint64_t depth, const char* file, const char* pc, const char* name, const char* line_name, const char* line_address)
 : m_file(file)
 , m_pc(pc)
 , m_name(name)
 , m_line_name(line_name)
 , m_line_address(line_address)
+, m_id(region_id)
+, m_depth(depth)
 , Handle(__kRPVControllerCallstackPropertiesFirst,
          __kRPVControllerCallstackPropertiesLast)
 {}
@@ -37,6 +39,12 @@ rocprofvis_result_t CallStack::GetUInt64(rocprofvis_property_t property, uint64_
     {
         switch(property)
         {
+            case kRPVControllerCallstackDepth:
+                result = m_depth.GetUInt64(value);
+                break;
+            case kRPVControllerCallstackRegionId:
+                result = m_id.GetUInt64(value);
+                break;
             case kRPVControllerCommonMemoryUsageInclusive:
             case kRPVControllerCommonMemoryUsageExclusive:
             {

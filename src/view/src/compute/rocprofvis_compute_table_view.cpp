@@ -98,7 +98,6 @@ ComputeTableView::RebuildTabs()
     if(!workloads.count(workload_id))
         return;
 
-
     const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
     m_tabs->SetAllowToolTips(true);
@@ -182,6 +181,7 @@ void
 ComputeTableView::RebuildTableDataCache()
 {
     m_table_widgets.clear();
+
     auto&    model       = m_data_provider.ComputeModel();
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();

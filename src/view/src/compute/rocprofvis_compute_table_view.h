@@ -36,12 +36,11 @@ private:
     bool                              m_fetch_pending = false;
     std::shared_ptr<TabContainer>     m_tabs;
     std::unordered_map<uint64_t, MetricTableCache> m_table_widgets;
+    PinedMetricTable                               m_pined_metric_table;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_metrics_fetched_token;
-
-    PinedMetricTable m_pined_metric_table;
 };
 
 }  // namespace View

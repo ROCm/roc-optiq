@@ -125,22 +125,27 @@ public:
     void Update();
 
 private:
+    void UpdateColumns(MetricId metric_id);
+    void FillTableRow(const MetricId& metric_id);
+    void FillMandatoryColumns(const MetricId&                metric_id,
+                              const AvailableMetrics::Table& table, Row& row,
+                              std::shared_ptr<MetricValue> metric_value);
+    void FillDefaultColumns();
+
     const AvailableMetrics::Table& GetTable(const MetricId& metric_id, uint32_t workload_id);
     float GetTableHight() const;
-    void                           UpdateColumns(MetricId metric_id);
-    void                           FillTableRow(const MetricId& metric_id);
-    void                           SetDefaultColumns();
-    void ContextMenu(const char* value_to_copy, MetricId id_to_delete);
+
 
     std::optional<uint32_t> GetColumnIndex(const std::string& column_name);
-    void FillCommons(const MetricId& metric_id, const AvailableMetrics::Table& table,
-                     Row& row,
-                     std::shared_ptr<MetricValue>     metric_value);
+
+
     void RenderTooltip(const RowValue& row);
     void RenderRowValues(uint32_t index, const std::pair<MetricId, Row>& row,
                    std::function<void(const char* value_to_copy)> menu_func);
     void RenderUnitValue(const std::pair<MetricId, Row>& row,
                          std::function<void(const char* value_to_copy)> menu_func);
+    void ContextMenu(const char* value_to_copy, MetricId id_to_delete);
+
 
     std::map<uint32_t, std::string>                 m_columns;
     std::uint32_t                                   m_lust_column_index;

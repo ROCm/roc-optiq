@@ -9,7 +9,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
-
 namespace RocProfVis
 {
 namespace View
@@ -118,9 +117,12 @@ MetricTableCache::Render() const
                 {
                     if(ImGui::MenuItem("Pin metric"))
                     {
-                        m_add_row_to_custom({ row.metric_id.category_id,
-                                              row.metric_id.table_id,
-                                              row.metric_id.entry_id });
+                        m_add_row_to_custom(
+                            {
+                              row.metric_id.category_id,
+                              row.metric_id.table_id,
+                              row.metric_id.entry_id
+                            });
                     }
                 }
 
@@ -271,15 +273,14 @@ PinedMetricTable::PinedMetricTable(DataProvider&                     data_provid
 , m_compute_selection(compute_selection)
 , m_client_id(client_id)
 { 
-    SetDefaultColumns();
+    FillDefaultColumns();
 }
 
 void
-PinedMetricTable::SetDefaultColumns()
+PinedMetricTable::FillDefaultColumns()
 {
     m_columns[0]                                    = "Metric ID";
     m_columns[1]                                    = "Metric";
-    //m_columns[2]                                    = "Value";
     m_lust_column_index                             = 2;
     m_columns[std::numeric_limits<uint32_t>::max()] = "Unit";
 }
@@ -303,23 +304,50 @@ PinedMetricTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
     }
 }
 
-const AvailableMetrics::Table&
-PinedMetricTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
-{
-    const auto& tree = m_data_provider.ComputeModel()
-                           .GetWorkloads()
-                           .at(workload_id)
-                           .available_metrics.tree;
-    return tree.at(metric_id.category_id).tables.at(metric_id.table_id);
-}
-
 float
 PinedMetricTable::GetTableHight() const
 {
     const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
     float             line_height =
         ImGui::GetTextLineHeightWithSpacing() + style.CellPadding.y * 2.0f;
-    return style.ScrollbarSize + line_height + (m_rows.size() * line_height);
+    auto max_rows = m_rows.size() < 7 ? m_rows.size() : 7;
+    return style.ScrollbarSize + line_height + (max_rows * line_height);
+}
+
+void
+PinedMetricTable::FillMandatoryColumns(const MetricId&                metric_id,
+                                       const AvailableMetrics::Table& table,
+                         Row& row,
+                         std::shared_ptr<MetricValue>     metric_value)
+{
+    if(auto entrie = table.entries.find(metric_id.entry_id); entrie != table.entries.end())
+    {
+        row[0].value                                    = metric_id.ToString();
+
+        row[1].value                                    = entrie->second.name;
+        row[1].tooltip                                  = entrie->second.description;
+
+        row[std::numeric_limits<uint32_t>::max()].value = entrie->second.unit;
+    }
+}
+
+void
+PinedMetricTable::RefillTable()
+{
+    m_columns.clear();
+    m_lust_column_index = 0;
+    FillDefaultColumns();
+    for(const auto& [metric_id, row] : m_rows)
+    {
+        AddRow(metric_id);
+    }
+}
+
+void
+PinedMetricTable::AddRow(MetricId metric_id)
+{
+    UpdateColumns(metric_id);
+    FillTableRow(metric_id);
 }
 
 void
@@ -332,64 +360,23 @@ PinedMetricTable::UpdateColumns(MetricId metric_id)
     }
 
     if(m_columns.empty())
-        SetDefaultColumns();
+        FillDefaultColumns();
 
     for(const auto& name : GetTable(metric_id, workload_id).value_names)
     {
-        if (GetColumnIndex(name) == std::nullopt)
+        if(GetColumnIndex(name) == std::nullopt)
             m_columns[m_lust_column_index++] = name;
     }
 }
 
-void
-PinedMetricTable::FillTableRow(const MetricId& metric_id)
+const AvailableMetrics::Table&
+PinedMetricTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
 {
-    Row row;
-
-    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload(); 
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID || kernel_id ==
-       ComputeSelection::INVALID_SELECTION_ID)
-    {
-        return;
-    }
-    auto& model = m_data_provider.ComputeModel();
-    auto metric_value =
-        model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
-                             metric_id.table_id, metric_id.entry_id);
-
-    const auto& table = GetTable(metric_id, workload_id);
-    FillCommons(metric_id, table, row, metric_value);
-
-    char buf[64];
-    for(const auto& value_name : table.value_names)
-    {
-        if (auto index = GetColumnIndex(value_name); index.has_value())
-        {
-            if(metric_value && metric_value->entry &&
-               metric_value->values.count(value_name))
-            {
-                snprintf(buf, sizeof(buf), "%.2f", metric_value->values.at(value_name));
-                row[index.value()].value = buf;
-            }
-        }
-    }
-    m_rows[metric_id] = std::move(row);
-}
-
-void
-PinedMetricTable::FillCommons(const MetricId& metric_id, const AvailableMetrics::Table& table,
-                         Row& row,
-                         std::shared_ptr<MetricValue>     metric_value)
-{
-    auto entrie = table.entries.find(metric_id.entry_id);
-    if(entrie != table.entries.end())
-    {
-        row[0].value                                    = metric_id.ToString();
-        row[1].value                                    = entrie->second.name;
-        row[1].tooltip                                  = entrie->second.description;
-        row[std::numeric_limits<uint32_t>::max()].value = entrie->second.unit;
-    }
+    const auto& tree = m_data_provider.ComputeModel()
+                           .GetWorkloads()
+                           .at(workload_id)
+                           .available_metrics.tree;
+    return tree.at(metric_id.category_id).tables.at(metric_id.table_id);
 }
 
 std::optional<uint32_t>
@@ -404,10 +391,39 @@ PinedMetricTable::GetColumnIndex(const std::string& column_name)
 }
 
 void
-PinedMetricTable::AddRow(MetricId metric_id)
+PinedMetricTable::FillTableRow(const MetricId& metric_id)
 {
-    UpdateColumns(metric_id);
-    FillTableRow(metric_id);
+    Row row;
+
+    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+    auto& model = m_data_provider.ComputeModel();
+    auto  metric_value =
+        model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
+                             metric_id.table_id, metric_id.entry_id);
+
+    const auto& table = GetTable(metric_id, workload_id);
+    FillMandatoryColumns(metric_id, table, row, metric_value);
+
+    char buf[64];
+    for(const auto& value_name : table.value_names)
+    {
+        if(auto index = GetColumnIndex(value_name); index.has_value())
+        {
+            if(metric_value && metric_value->entry &&
+               metric_value->values.count(value_name))
+            {
+                snprintf(buf, sizeof(buf), "%.2f", metric_value->values.at(value_name));
+                row[index.value()].value = buf;
+            }
+        }
+    }
+    m_rows[metric_id] = std::move(row);
 }
 
 void
@@ -427,7 +443,8 @@ PinedMetricTable::Render()
         ImGuiTableFlags table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                                       ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollX;
         int num_columns = static_cast<int>(m_columns.size());
-        if(!ImGui::BeginTable("pined metric", num_columns, table_flags)) return;
+        if(!ImGui::BeginTable("pined metric", num_columns, table_flags))
+            return;
 
         for(const auto& column : m_columns)
             ImGui::TableSetupColumn(column.second.c_str());
@@ -462,8 +479,7 @@ PinedMetricTable::RenderRowValues(uint32_t index, const std::pair<MetricId, Row>
                        std::function<void(const char* value_to_copy)> menu_func)
 {
     ImGui::TableNextColumn();
-    auto it = row.second.find(index);
-    if(it == row.second.end())
+    if(auto it = row.second.find(index); it == row.second.end())
     {
         ImGui::TextDisabled("N/A");
     }
@@ -508,18 +524,6 @@ PinedMetricTable::RenderTooltip(const RowValue& row)
         ImGui::TextUnformatted(tooltip_text.c_str());
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
-    }
-}
-
-void
-PinedMetricTable::RefillTable()
-{
-    m_columns.clear();
-    m_lust_column_index = 0;
-    SetDefaultColumns();
-    for(const auto& [metric_id, row] : m_rows)
-    {
-        AddRow(metric_id);
     }
 }
 

@@ -121,9 +121,9 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(242, 90, 70, 255),    // Colors::kAccentRed
     IM_COL32(255, 140, 120, 255),  // Colors::kAccentRedHover
     IM_COL32(255, 110, 90, 255),   // Colors::kAccentRedActive
-    IM_COL32(218, 48, 55, 255),    // Colors::kTabAccent
-    IM_COL32(238, 85, 85, 255),    // Colors::kTabAccentHover
-    IM_COL32(185, 38, 45, 255),    // Colors::kTabAccentActive
+    IM_COL32(242, 90, 70, 255),    // Colors::kTabAccent
+    IM_COL32(255, 140, 120, 255),  // Colors::kTabAccentHover
+    IM_COL32(255, 110, 90, 255),   // Colors::kTabAccentActive
     IM_COL32(230, 225, 220, 255),  // Colors::kBorderGray
     IM_COL32(40, 30, 25, 255),     // Colors::kTextMain
     IM_COL32(150, 130, 120, 255),  // Colors::kTextDim

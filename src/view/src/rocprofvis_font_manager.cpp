@@ -56,8 +56,8 @@ FontManager::GetDPIScaledFontIndex()
     int best_index = 0;
     for(int i = 1; i < m_all_fonts.size(); i++)
     {
-        if(std::abs(m_all_fonts[i]->FontSize - scaled_size) <
-           std::abs(m_all_fonts[i - 1]->FontSize - scaled_size))
+        if(std::abs(m_all_fonts[i]->LegacySize - scaled_size) <
+           std::abs(m_all_fonts[i - 1]->LegacySize - scaled_size))
             best_index = i;
     }
 
@@ -86,7 +86,9 @@ FontManager::SetFontSize(int idx)
         m_icon_fonts[i] = m_all_icon_fonts[font_idx];
     }
 
-    ImGui::GetIO().FontDefault = m_fonts[static_cast<int>(FontType::kDefault)];
+    ImFont* default_font       = m_fonts[static_cast<int>(FontType::kDefault)];
+    ImGui::GetIO().FontDefault = default_font;
+    ImGui::GetStyle()._NextFrameFontSizeBase = default_font->LegacySize;
     EventManager::GetInstance()->AddEvent(
         std::make_shared<RocEvent>(static_cast<int>(RocEvents::kFontSizeChanged)));
 }

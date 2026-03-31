@@ -1533,7 +1533,7 @@ TimelineView::RenderHistogram()
     float       ruler_width     = m_tpt->GetGraphSizeX();
     float       tick_top        = ruler_pos.y + 2.0f;
     ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
-    float       label_font_size = font->FontSize;
+    float       label_font_size = font->LegacySize;
 
     std::string label =
         nanosecond_to_formatted_str(m_tpt->GetRangeX(), time_format, true) + "gap";

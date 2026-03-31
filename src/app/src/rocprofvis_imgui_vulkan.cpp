@@ -394,7 +394,7 @@ rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* wind
                     backend_data->m_instance, backend_data->m_physical_device,
                     backend_data->m_device, wd, backend_data->m_queue_family,
                     backend_data->m_allocator, width, height,
-                    backend_data->m_min_image_count);
+                    backend_data->m_min_image_count, 0);
 
                 bOk = true;
             }
@@ -428,9 +428,9 @@ rocprofvis_imgui_backend_vk_config(rocprofvis_imgui_backend_t* backend, void* wi
         init_info.Queue                     = backend_data->m_queue;
         init_info.PipelineCache             = backend_data->m_pipeline_cache;
         init_info.DescriptorPool            = backend_data->m_descriptor_pool;
-        init_info.RenderPass  = backend_data->m_window_data.RenderPass;
-        init_info.Subpass     = 0;
-        init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        init_info.PipelineInfoMain.RenderPass  = backend_data->m_window_data.RenderPass;
+        init_info.PipelineInfoMain.Subpass     = 0;
+        init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
         init_info.MinImageCount             = backend_data->m_min_image_count;
         init_info.ImageCount                = backend_data->m_window_data.ImageCount;
         init_info.Allocator                 = backend_data->m_allocator;
@@ -461,7 +461,7 @@ rocprofvis_imgui_backend_vk_update_framebuffer(rocprofvis_imgui_backend_t* backe
                 backend_data->m_instance, backend_data->m_physical_device,
                 backend_data->m_device, &backend_data->m_window_data,
                 backend_data->m_queue_family, backend_data->m_allocator, fb_width,
-                fb_height, backend_data->m_min_image_count);
+                fb_height, backend_data->m_min_image_count, 0);
             backend_data->m_window_data.FrameIndex = 0;
             backend_data->m_swapchain_rebuild      = false;
         }

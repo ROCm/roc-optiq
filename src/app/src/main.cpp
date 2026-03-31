@@ -118,6 +118,7 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
     bool result = true;
     result &= cli_parser.AddOption("v", "version", "Print application version", false);
     result &= cli_parser.AddOption("f", "file", "Open file", true);
+    result &= cli_parser.AddOption("b", "backend", "Force rendering backend: 'vulkan' or 'opengl' (default: auto with fallback)", true);
     result &= cli_parser.AddOption("h", "help", "Help the user with commands", false);
     ROCPROFVIS_ASSERT(result);
 
@@ -125,14 +126,12 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
 
     if(cli_parser.WasOptionFound("help"))
     {
-        RocProfVis::View::CLIParser::AttachToConsole();
         std::cout << cli_parser.GetHelp() << std::endl;
         exit_app = true;
     }
 
     if(!exit_app && cli_parser.WasOptionFound("version"))
     {
-        RocProfVis::View::CLIParser::AttachToConsole();
         print_version();
 
         if(cli_parser.GetOptionCount() == 1)
@@ -148,9 +147,7 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
         fflush(stdout);
         fflush(stderr);
     }
-    // Always detach from console if attached
-    // (don't want to spam log to console output on windows)
-    RocProfVis::View::CLIParser::DetachFromConsole();    
+ 
 }
 
 int
@@ -158,6 +155,7 @@ main(int argc, char** argv)
 {
     int app_result_code = 0;
 
+    RocProfVis::View::CLIParser::AttachToConsole();
     RocProfVis::View::CLIParser cli_parser;
     bool                        exit_app = false;
     parse_command_line_args(argc, argv, cli_parser, exit_app);
@@ -177,10 +175,31 @@ main(int argc, char** argv)
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
 
+    // Parse backend preference from command line
+    RocProfVisBackendPreference backend_pref = RocProfVisBackendPreference::Auto;
+    if(cli_parser.WasOptionFound("backend"))
+    {
+        std::string backend_str = cli_parser.GetOptionValue("backend");
+        if(backend_str == "vulkan")
+        {
+            backend_pref = RocProfVisBackendPreference::ForceVulkan;
+        }
+        else if(backend_str == "opengl")
+        {
+            backend_pref = RocProfVisBackendPreference::ForceOpenGL;
+        }
+        else
+        {
+            spdlog::error("Invalid backend '{}'. Valid options: vulkan, opengl", backend_str);
+            return 1;
+        }
+    }
+
     glfwSetErrorCallback(glfw_error_callback);
     if(glfwInit())
     {
-        // First, try to create window with Vulkan (GLFW_NO_API)
+        // Create initial window with Vulkan hint (GLFW_NO_API) by default
+        // The backend setup will recreate the window if OpenGL is needed
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 #if defined(GLFW_SCALE_TO_MONITOR)  // GLFW 3.3+
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
@@ -193,8 +212,11 @@ main(int argc, char** argv)
         if(window && rocprofvis_imgui_backend_setup_with_fallback(&backend, &window,
                                                                   RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
                                                                   RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
-                                                                  APP_NAME))
+                                                                  APP_NAME,
+                                                                  backend_pref))
         {
+            RocProfVis::View::CLIParser::DetachFromConsole();
+
             // Re-setup callbacks after potential window recreation
             glfwSetDropCallback(window, drop_callback);
             glfwSetWindowContentScaleCallback(window, content_scale_callback);

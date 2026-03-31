@@ -8,6 +8,14 @@ struct ImDrawData;
 
 typedef struct rocprofvis_imgui_backend_t rocprofvis_imgui_backend_t;
 
+// Backend selection preference for initialization
+enum class RocProfVisBackendPreference
+{
+    Auto,        // Try Vulkan first, fallback to OpenGL on failure
+    ForceVulkan, // Only use Vulkan, fail if it doesn't work
+    ForceOpenGL  // Only use OpenGL, fail if it doesn't work
+};
+
 typedef bool (*rocprofvis_imgui_backend_init_t)(rocprofvis_imgui_backend_t* backend, void* window);
 typedef bool (*rocprofvis_imgui_backend_config_t)(rocprofvis_imgui_backend_t* backend, void* window);
 typedef void (*rocprofvis_imgui_backend_update_framebuffer_t)(rocprofvis_imgui_backend_t* backend, int32_t fb_width, int32_t fb_height);
@@ -32,8 +40,12 @@ typedef struct rocprofvis_imgui_backend_t
 
 bool rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* window);
 
-// Extended setup function that can recreate window if needed for OpenGL fallback
-bool rocprofvis_imgui_backend_setup_with_fallback(rocprofvis_imgui_backend_t* backend,
-                                                   GLFWwindow** window,
-                                                   int width, int height,
-                                                   const char* title);
+// Setup function with backend preference and window recreation support
+// preference: Auto (with fallback), ForceVulkan (no fallback), or ForceOpenGL (no fallback)
+// Returns false if the requested/preferred backend fails to initialize
+bool rocprofvis_imgui_backend_setup_with_fallback(
+    rocprofvis_imgui_backend_t* backend,
+    GLFWwindow** window,
+    int width, int height,
+    const char* title,
+    RocProfVisBackendPreference preference = RocProfVisBackendPreference::Auto);

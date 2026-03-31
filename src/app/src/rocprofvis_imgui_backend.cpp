@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_imgui_backend.h"
+#include "spdlog/spdlog.h"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 
@@ -21,128 +22,143 @@ rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* 
         // Try Vulkan first if supported
         if(glfwVulkanSupported())
         {
-            fprintf(stderr, "[rpv] Vulkan is supported, attempting Vulkan backend...\n");
+            spdlog::info("[rpv] Vulkan is supported, attempting Vulkan backend...");
             bOk = rocprofvis_imgui_backend_setup_vulkan(backend, window);
 
             // If Vulkan setup failed, fall back to OpenGL
             if(!bOk)
             {
-                fprintf(stderr,
-                        "[rpv] Vulkan backend initialization failed, falling back to "
-                        "OpenGL...\n");
+                spdlog::warn("[rpv] Vulkan backend initialization failed, falling back to OpenGL...");
                 bOk = rocprofvis_imgui_backend_setup_opengl(backend, window);
             }
         }
         else
         {
             // Vulkan not supported, use OpenGL directly
-            fprintf(stderr,
-                    "[rpv] Vulkan not supported by GLFW, using OpenGL backend...\n");
+            spdlog::info("[rpv] Vulkan not supported by GLFW, using OpenGL backend...");
             bOk = rocprofvis_imgui_backend_setup_opengl(backend, window);
         }
 
         if(!bOk)
         {
-            fprintf(stderr, "[rpv] Error: Failed to initialize graphics backend\n");
+            spdlog::error("[rpv] Error: Failed to initialize graphics backend");
         }
     }
 
     return bOk;
 }
 
+static bool
+setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend,
+                                 GLFWwindow** window,
+                                 int width, int height,
+                                 const char* title)
+{
+    glfwDefaultWindowHints();
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+#if defined(GLFW_SCALE_TO_MONITOR)
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+#endif
+#if defined(__APPLE__)
+    // GL 3.2 + GLSL 150
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#else
+    // GL 3.0 + GLSL 130
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+#endif
+
+    *window = glfwCreateWindow(width, height, title, nullptr, nullptr);
+    if(!*window)
+    {
+        spdlog::error("[rpv] Error: Failed to create window for OpenGL backend");
+        return false;
+    }
+
+    return rocprofvis_imgui_backend_setup_opengl(backend, *window);
+}
+
 bool
-rocprofvis_imgui_backend_setup_with_fallback(rocprofvis_imgui_backend_t* backend,
-                                             GLFWwindow** window,
-                                             int width, int height,
-                                             const char* title)
+rocprofvis_imgui_backend_setup_with_fallback(
+    rocprofvis_imgui_backend_t* backend,
+    GLFWwindow** window,
+    int width, int height,
+    const char* title,
+    RocProfVisBackendPreference preference)
 {
     bool bOk = false;
 
-    if(backend && window)
+    if(!backend || !window)
     {
-        // Try Vulkan first if supported
-        if(glfwVulkanSupported())
-        {
-            fprintf(stderr, "[rpv] Vulkan is supported, attempting Vulkan backend...\n");
-            bOk = rocprofvis_imgui_backend_setup_vulkan(backend, *window);
+        return false;
+    }
 
-            // If Vulkan setup failed, we need to recreate the window for OpenGL
+    switch(preference)
+    {
+        case RocProfVisBackendPreference::ForceOpenGL:
+            // User explicitly requested OpenGL only
+            spdlog::info("[rpv] Force using OpenGL backend");
+            glfwDestroyWindow(*window);
+            bOk = setup_opengl_window_and_backend(backend, window, width, height, title);
             if(!bOk)
             {
-                fprintf(stderr,
-                        "[rpv] Vulkan backend initialization failed, recreating window for "
-                        "OpenGL fallback...\n");
-
-                // Destroy the Vulkan-configured window
-                glfwDestroyWindow(*window);
-
-                // Reset window hints and create OpenGL-compatible window
-                glfwDefaultWindowHints();
-                glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
-#if defined(GLFW_SCALE_TO_MONITOR)
-                glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
-#endif
-#if defined(__APPLE__)
-                // GL 3.2 + GLSL 150
-                glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-                glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-                glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-                glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#else
-                // GL 3.0 + GLSL 130
-                glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-                glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-#endif
-                *window = glfwCreateWindow(width, height, title, nullptr, nullptr);
-
-                if(*window)
-                {
-                    bOk = rocprofvis_imgui_backend_setup_opengl(backend, *window);
-                }
-                else
-                {
-                    fprintf(stderr, "[rpv] Error: Failed to recreate window for OpenGL\n");
-                }
+                spdlog::error("[rpv] Error: Failed to initialize forced OpenGL backend");
             }
-        }
-        else
-        {
-            // Vulkan not supported, recreate window for OpenGL
-            fprintf(stderr,
-                    "[rpv] Vulkan not supported by GLFW, recreating window for OpenGL...\n");
+            break;
 
-            glfwDestroyWindow(*window);
-
-            glfwDefaultWindowHints();
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
-#if defined(GLFW_SCALE_TO_MONITOR)
-            glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
-#endif
-#if defined(__APPLE__)
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#else
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-#endif
-            *window = glfwCreateWindow(width, height, title, nullptr, nullptr);
-
-            if(*window)
+        case RocProfVisBackendPreference::ForceVulkan:
+            // User explicitly requested Vulkan only
+            spdlog::info("[rpv] Force using Vulkan backend");
+            if(!glfwVulkanSupported())
             {
-                bOk = rocprofvis_imgui_backend_setup_opengl(backend, *window);
+                spdlog::error("[rpv] Error: Vulkan not supported by GLFW, cannot use forced Vulkan backend");
+                bOk = false;
             }
             else
             {
-                fprintf(stderr, "[rpv] Error: Failed to create window for OpenGL\n");
+                bOk = rocprofvis_imgui_backend_setup_vulkan(backend, *window);
+                if(!bOk)
+                {
+                    spdlog::error("[rpv] Error: Failed to initialize forced Vulkan backend");
+                }
             }
-        }
+            break;
 
-        if(!bOk)
-        {
-            fprintf(stderr, "[rpv] Error: Failed to initialize graphics backend\n");
-        }
+        case RocProfVisBackendPreference::Auto:
+        default:
+            // Auto mode: Try Vulkan first, fallback to OpenGL on failure
+            if(glfwVulkanSupported())
+            {
+                spdlog::info("[rpv] Vulkan is supported, attempting Vulkan backend...");
+                bOk = rocprofvis_imgui_backend_setup_vulkan(backend, *window);
+
+                // If Vulkan setup failed, fallback to OpenGL
+                if(!bOk)
+                {
+                    spdlog::warn("[rpv] Vulkan backend initialization failed, recreating window for OpenGL fallback...");
+
+                    glfwDestroyWindow(*window);
+                    bOk = setup_opengl_window_and_backend(backend, window, width, height, title);
+                }
+            }
+            else
+            {
+                // Vulkan not supported, use OpenGL directly
+                spdlog::info("[rpv] Vulkan not supported by GLFW, recreating window for OpenGL...");
+
+
+                glfwDestroyWindow(*window);
+                bOk = setup_opengl_window_and_backend(backend, window, width, height, title);
+            }
+            break;
+    }
+
+    if(!bOk)
+    {
+        spdlog::error("[rpv] Error: Failed to initialize graphics backend");
     }
 
     return bOk;

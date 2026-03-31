@@ -6,7 +6,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_requests.h"
-
+#include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
 
@@ -306,14 +306,20 @@ CustomTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
 const AvailableMetrics::Table&
 CustomTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
 {
-    // TODO: may be I need to add some getters to data provider,
-    // to avoid so long chains of calls to get the data, and also
-    // to avoid direct access to the model from the widget
     const auto& tree = m_data_provider.ComputeModel()
                            .GetWorkloads()
                            .at(workload_id)
                            .available_metrics.tree;
     return tree.at(metric_id.category_id).tables.at(metric_id.table_id);
+}
+
+float
+CustomTable::GetTableHight() const
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    float             line_height =
+        ImGui::GetTextLineHeightWithSpacing() + style.CellPadding.y * 2.0f;
+    return style.ScrollbarSize + line_height + (m_rows.size() * line_height);
 }
 
 void
@@ -323,7 +329,8 @@ CustomTable::UpdateColumns(MetricId metric_id)
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
         return;
-    }  // TODO: bad way to process it, figure out something better
+    }
+
     if(m_columns.empty())
         SetDefaultColumns();
 
@@ -345,7 +352,7 @@ CustomTable::FillTableRow(const MetricId& metric_id)
        ComputeSelection::INVALID_SELECTION_ID)
     {
         return;
-    }// TODO: bad way to process it, figure out something better
+    }
     auto& model = m_data_provider.ComputeModel();
     auto metric_value =
         model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
@@ -375,13 +382,14 @@ CustomTable::FillCommons(const MetricId& metric_id, const AvailableMetrics::Tabl
                          Row& row,
                          std::shared_ptr<MetricValue>     metric_value)
 {
-    auto entrie =
-        table.entries.find(metric_id.entry_id)->second;  // TODO: Process if not found
-
-    row[0].value = metric_id.ToString();
-    row[1].value = entrie.name;
-    row[1].tooltip = entrie.description;
-    row[std::numeric_limits<uint32_t>::max()].value = entrie.unit;
+    auto entrie = table.entries.find(metric_id.entry_id);
+    if(entrie != table.entries.end())
+    {
+        row[0].value                                    = metric_id.ToString();
+        row[1].value                                    = entrie->second.name;
+        row[1].tooltip                                  = entrie->second.description;
+        row[std::numeric_limits<uint32_t>::max()].value = entrie->second.unit;
+    }
 }
 
 std::optional<uint32_t>
@@ -403,23 +411,6 @@ CustomTable::AddRow(MetricId metric_id)
 }
 
 void
-CustomTable::RemoveDeletedRow()
-{
-    if (m_id_to_delete.has_value())
-    {
-        m_rows.erase(m_id_to_delete.value());
-
-        m_columns.clear();
-        m_lust_column_index = 0;
-        for(const auto& [metric_id, row] : m_rows)
-        {
-            UpdateColumns(metric_id);
-        }
-        m_id_to_delete = std::nullopt;
-    }
-}
-
-void
 CustomTable::Render() 
 {
     SectionTitle("Pined metric");
@@ -429,90 +420,77 @@ CustomTable::Render()
         return;
     }
 
-    int num_columns = static_cast<int>(m_columns.size());
-    if(!ImGui::BeginTable("pined metric", num_columns, ImGuiTableFlags_Borders))
-        return;
-
-    for(const auto& column : m_columns)
-        ImGui::TableSetupColumn(column.second.c_str());
-    ImGui::TableHeadersRow();
-
-
-    uint32_t row_idx = 0;
-    for (auto& row : m_rows)
+    if(ImGui::BeginChild("pined_metric_table_content", ImVec2(0, GetTableHight()),
+                         false,
+                         ImGuiWindowFlags_HorizontalScrollbar))
     {
-        auto menu_func = [&](const char* value_to_copy) {
-            this->ContextMenu(value_to_copy, row.first);
-        };
-        ImGui::PushID(row_idx++);
-        ImGui::TableNextRow();
+        ImGuiTableFlags table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                                      ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollX;
+        int num_columns = static_cast<int>(m_columns.size());
+        if(!ImGui::BeginTable("pined metric", num_columns, table_flags)) return;
 
-        RenderCommonColumns(row);
-        for(auto index = 3; index < m_columns.size() - 1; index++)
+        for(const auto& column : m_columns)
+            ImGui::TableSetupColumn(column.second.c_str());
+
+        ImGui::TableHeadersRow();
+
+        uint32_t row_idx = 0;
+        for(auto& row : m_rows)
         {
-            ImGui::TableNextColumn();
-            auto it = row.second.find(index);
-            if(it == row.second.end())
+            auto menu_func = [&](const char* value_to_copy) {
+                this->ContextMenu(value_to_copy, row.first);
+            };
+            ImGui::PushID(row_idx++);
+            ImGui::TableNextRow();
+
+            for(auto index = 0; index < m_columns.size() - 1; index++)
             {
-                ImGui::TextDisabled("N/A");
+                RenderRowValues(index, row, menu_func);
             }
-            else
-            {
-                CopyableTextUnformatted(row.second[index].value.c_str(),
-                                        "##value" + std::to_string(index),
-                                        COPY_DATA_NOTIFICATION, false, true, menu_func);
-                RenderTooltip(row.second[index]);
-            }
+            RenderUnitValue(row, menu_func);
+            ImGui::PopID();
         }
-
-        ImGui::TableNextColumn();
-        if (row.second[std::numeric_limits<uint32_t>::max()].value.empty())
-        {
-            ImGui::TextDisabled("N/A");
-        }
-        else
-        {
-            CopyableTextUnformatted(
-                row.second[std::numeric_limits<uint32_t>::max()].value.c_str(), "##metric_unit",
-                COPY_DATA_NOTIFICATION, false, true, menu_func);
-            RenderTooltip(row.second[std::numeric_limits<uint32_t>::max()]);
-        }
-
-        ImGui::PopID();
+        ImGui::EndTable();
     }
-
-    ImGui::EndTable();
+    ImGui::EndChild();
 
     SectionTitle("All metric tables");
-
 }
 
 void
-CustomTable::RenderCommonColumns(
-    const std::pair<MetricId, Row>& row)
+CustomTable::RenderRowValues(uint32_t index, const std::pair<MetricId, Row>& row,
+                       std::function<void(const char* value_to_copy)> menu_func)
 {
-    auto menu_func = [&](const char* value_to_copy) {
-        this->ContextMenu(value_to_copy, row.first);
-    };
     ImGui::TableNextColumn();
-    CopyableTextUnformatted(row.second.at(0).value.c_str(), "##metric_id",
-                            COPY_DATA_NOTIFICATION, false, true, menu_func);
-    RenderTooltip(row.second.at(0));
-
-    ImGui::TableNextColumn();
-    CopyableTextUnformatted(row.second.at(1).value.c_str(), "##metric_name", COPY_DATA_NOTIFICATION, false, true, menu_func);
-    RenderTooltip(row.second.at(1));
-
-    ImGui::TableNextColumn();
-    auto it = row.second.find(2); //TODO: think should I check index each time?
+    auto it = row.second.find(index);
     if(it == row.second.end())
     {
         ImGui::TextDisabled("N/A");
     }
     else
     {
-        CopyableTextUnformatted(row.second.at(2).value.c_str(), "##metric_value", COPY_DATA_NOTIFICATION, false, true, menu_func);
-        RenderTooltip(row.second.at(2));
+        CopyableTextUnformatted(row.second.at(index).value.c_str(),
+                                "##value" + std::to_string(index), COPY_DATA_NOTIFICATION,
+                                false, true, menu_func);
+        RenderTooltip(row.second.at(index));
+    }
+}
+
+void
+CustomTable::RenderUnitValue(const std::pair<MetricId, Row>&                row,
+                             std::function<void(const char* value_to_copy)> menu_func)
+{
+    ImGui::TableNextColumn();
+    if(row.second.at(std::numeric_limits<uint32_t>::max()).value.empty())
+    {
+        ImGui::TextDisabled("N/A");
+    }
+    else
+    {
+        CopyableTextUnformatted(
+            row.second.at(std::numeric_limits<uint32_t>::max()).value.c_str(),
+            "##metric_unit", COPY_DATA_NOTIFICATION, false, true, menu_func);
+        RenderTooltip(row.second.at(std::numeric_limits<uint32_t>::max()));
     }
 }
 
@@ -548,7 +526,18 @@ CustomTable::RefillTable()
 void
 CustomTable::Update()
 {
-    RemoveDeletedRow();
+    if(m_id_to_delete.has_value())
+    {
+        m_rows.erase(m_id_to_delete.value());
+
+        m_columns.clear();
+        m_lust_column_index = 0;
+        for(const auto& [metric_id, row] : m_rows)
+        {
+            UpdateColumns(metric_id);
+        }
+        m_id_to_delete = std::nullopt;
+    }
 }
 
 }  // namespace View

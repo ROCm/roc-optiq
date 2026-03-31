@@ -578,15 +578,15 @@ TraceView::RenderToolbar()
     ImGui::PushStyleColor(ImGuiCol_Border,
                           ImGui::ColorConvertU32ToFloat4(
                               m_settings_manager.GetColor(Colors::kBorderColor)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 5));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
 
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 5));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 6));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(7, 5));
     ImGui::AlignTextToFramePadding();
 
     // Toolbar Controls

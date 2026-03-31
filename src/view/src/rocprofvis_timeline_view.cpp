@@ -1723,7 +1723,7 @@ TimelineView::RenderTraceView()
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
     ImGui::SameLine();
 
-    float  available_width = m_tpt->GetGraphSizeX();
+    float  available_width = subcomponent_size_main.x - m_sidebar_size;
     double view_width      = std::min(m_tpt->GetVWidth(), m_tpt->GetRangeX());
     double max_offset      = m_tpt->GetRangeX() - view_width;
     float  view_offset =

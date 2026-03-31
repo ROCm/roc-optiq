@@ -247,8 +247,6 @@ TrackItem::RenderMetaArea()
         }
 
         // Reordering grip decoration
-        bool meta_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_None);
-        
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
         float arrow_width       = ImGui::GetTextLineHeight();
 
@@ -257,16 +255,8 @@ TrackItem::RenderMetaArea()
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
 
-        if(!meta_hovered)
-        {
-            ImVec4 dim = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kTextDim));
-            dim.w *= kIdleDimAlpha;
-            ImGui::PushStyleColor(ImGuiCol_Text, dim);
-        }
         ImGui::TextUnformatted(ICON_GRID);
         float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
-        if(!meta_hovered) ImGui::PopStyleColor();
       
         ImGui::PopFont();
 
@@ -329,16 +319,8 @@ TrackItem::RenderMetaArea()
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
                                    m_metadata_padding.y));
-        if(!meta_hovered)
-        {
-            ImVec4 dim = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kTextDim));
-            dim.w *= kIdleDimAlpha;
-            ImGui::PushStyleColor(ImGuiCol_Text, dim);
-        }
         IconButton(ICON_GEAR,
                    m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-        if(!meta_hovered) ImGui::PopStyleColor();
         if(ImGui::IsItemHovered())
             SetTooltipStyled("Track Options");
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,

@@ -167,16 +167,18 @@ constexpr std::array LIGHT_THEME_COLORS = {
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> DARK_FLAME_COLORS = {
-    IM_COL32(235, 98, 98, 215),   IM_COL32(72, 188, 180, 215),
-    IM_COL32(185, 168, 55, 215),  IM_COL32(68, 152, 98, 215),
-    IM_COL32(185, 115, 72, 215),  IM_COL32(52, 138, 142, 215),
-    IM_COL32(108, 128, 52, 215),  IM_COL32(178, 95, 105, 215)
+    IM_COL32(50, 145, 210, 215),  IM_COL32(0, 158, 115, 215),
+    IM_COL32(240, 228, 66, 215),  IM_COL32(204, 121, 167, 215),
+    IM_COL32(86, 180, 233, 215),  IM_COL32(235, 130, 45, 215),
+    IM_COL32(0, 204, 102, 215),   IM_COL32(230, 159, 0, 215),
+    IM_COL32(153, 153, 255, 215), IM_COL32(255, 153, 51, 215)
 };
 const std::vector<ImU32> LIGHT_FLAME_COLORS = {
-    IM_COL32(58, 155, 92, 220),   IM_COL32(218, 48, 55, 220),
-    IM_COL32(222, 152, 15, 220),  IM_COL32(38, 138, 158, 220),
-    IM_COL32(185, 178, 148, 220), IM_COL32(138, 155, 62, 220),
-    IM_COL32(42, 148, 135, 220),  IM_COL32(225, 108, 55, 220)
+    IM_COL32(50, 145, 210, 220),  IM_COL32(0, 158, 115, 220),
+    IM_COL32(240, 228, 66, 220),  IM_COL32(204, 121, 167, 220),
+    IM_COL32(86, 180, 233, 220),  IM_COL32(235, 130, 45, 220),
+    IM_COL32(0, 204, 102, 220),   IM_COL32(230, 159, 0, 220),
+    IM_COL32(153, 153, 255, 220), IM_COL32(255, 153, 51, 220)
 };
 inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
 inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";

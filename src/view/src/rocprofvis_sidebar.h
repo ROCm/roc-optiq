@@ -66,7 +66,7 @@ private:
                                    const std::string&                collapsable_header,
                                    EyeButtonState parent_eye_button_state);
 
-    EyeButtonState DrawEyeButton(EyeButtonState eye_button_state, bool dim = false);
+    EyeButtonState DrawEyeButton(EyeButtonState eye_button_state);
     bool           IsEyeButtonVisible();
 
     SettingsManager&                                 m_settings;

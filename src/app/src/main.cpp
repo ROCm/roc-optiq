@@ -222,25 +222,25 @@ main(int argc, char** argv)
         {
             RocProfVis::View::CLIParser::DetachFromConsole();
 
-            // Re-setup callbacks after potential window recreation
-            glfwSetDropCallback(window, drop_callback);
-            glfwSetWindowContentScaleCallback(window, content_scale_callback);
+            if(rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
+                   &backend, &window, RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
+                   RocProfVis::View::DEFAULT_WINDOWED_HEIGHT, APP_NAME, backend_pref))
             {
-                float xs, ys;
-                glfwGetWindowContentScale(window, &xs, &ys);
-                content_scale_callback(window, xs, ys);
-            }
-            glfwSetWindowCloseCallback(window, close_callback);
-            glfwSetWindowSizeCallback(window, window_size_change_callback);
-            glfwSetKeyCallback(window, key_callback);
+                // After init: window may be recreated (e.g. Vulkan -> OpenGL fallback)
+                glfwSetDropCallback(window, drop_callback);
+                glfwSetWindowContentScaleCallback(window, content_scale_callback);
+                {
+                    float xs, ys;
+                    glfwGetWindowContentScale(window, &xs, &ys);
+                    content_scale_callback(window, xs, ys);
+                }
+                glfwSetWindowCloseCallback(window, close_callback);
+                glfwSetWindowSizeCallback(window, window_size_change_callback);
+                glfwSetKeyCallback(window, key_callback);
 
-            // Re-initialize fullscreen state after potential window recreation
-            RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
+                RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
+                glfwShowWindow(window);
 
-            glfwShowWindow(window);
-
-            if(backend.m_init(&backend, window))
-            {
                 IMGUI_CHECKVERSION();
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
@@ -321,8 +321,17 @@ main(int argc, char** argv)
 
                 backend.m_destroy(&backend);
             }
+            else
+            {
+                spdlog::error(
+                    "GLFW: Failed to initialize graphics device (Vulkan and/or OpenGL)");
+                app_result_code = 1;
+            }
 
-            glfwDestroyWindow(window);
+            if(window)
+            {
+                glfwDestroyWindow(window);
+            }
         }
         else
         {

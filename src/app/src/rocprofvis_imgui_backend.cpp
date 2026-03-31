@@ -11,6 +11,7 @@ bool rocprofvis_imgui_backend_setup_vulkan(rocprofvis_imgui_backend_t* backend,
                                            GLFWwindow* window);
 bool rocprofvis_imgui_backend_setup_opengl(rocprofvis_imgui_backend_t* backend,
                                            GLFWwindow* window);
+bool rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* window);
 
 
 static bool
@@ -127,4 +128,56 @@ rocprofvis_imgui_backend_setup_with_fallback(
     }
 
     return bOk;
+}
+
+bool
+rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
+    rocprofvis_imgui_backend_t*           backend,
+    GLFWwindow**                          window,
+    int                                   width,
+    int                                   height,
+    const char*                           title,
+    rocprofvis_imgui_backend_preference_t preference)
+{
+    if(!backend || !window || !*window)
+    {
+        return false;
+    }
+
+    const bool was_vulkan = (backend->m_init == rocprofvis_imgui_backend_vk_init);
+
+    if(backend->m_init(backend, *window))
+    {
+        return true;
+    }
+
+    if(preference != kRPVBackendAuto || !was_vulkan)
+    {
+        return false;
+    }
+
+    spdlog::warn("[rpv] Vulkan initialization failed, falling back to OpenGL...");
+
+    glfwDestroyWindow(*window);
+    *window = nullptr;
+
+    if(!setup_opengl_window_and_backend(backend, window, width, height, title))
+    {
+        spdlog::error("[rpv] Error: OpenGL fallback failed to create window or backend");
+        return false;
+    }
+
+    if(!backend->m_init(backend, *window))
+    {
+        spdlog::error("[rpv] Error: OpenGL initialization failed after Vulkan fallback");
+        if(*window)
+        {
+            glfwDestroyWindow(*window);
+            *window = nullptr;
+        }
+        backend->m_destroy(backend);
+        return false;
+    }
+
+    return true;
 }

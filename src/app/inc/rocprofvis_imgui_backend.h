@@ -47,3 +47,13 @@ bool rocprofvis_imgui_backend_setup_with_fallback(
     int width, int height,
     const char* title,
     rocprofvis_imgui_backend_preference_t preference = kRPVBackendAuto);
+
+// After setup_with_fallback(), call this instead of backend->m_init alone. When preference is
+// Auto and Vulkan init fails (e.g. no ICD), tears down Vulkan and retries with OpenGL.
+bool rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
+    rocprofvis_imgui_backend_t* backend,
+    GLFWwindow** window,
+    int width,
+    int height,
+    const char* title,
+    rocprofvis_imgui_backend_preference_t preference);

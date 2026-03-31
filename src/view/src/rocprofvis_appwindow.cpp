@@ -883,11 +883,11 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
 void
 AppWindow::RenderAboutDialog()
 {
-    static constexpr char* NAME_LABEL = "ROCm (TM) Optiq";
-    static constexpr char* COPYRIGHT_LABEL =
+    static constexpr const char* NAME_LABEL = "ROCm (TM) Optiq";
+    static constexpr const char* COPYRIGHT_LABEL =
         "Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.";
-    static constexpr char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
-    static constexpr char* DOC_URL =
+    static constexpr const char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
+    static constexpr const char* DOC_URL =
         "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/";
     static const std::string VERSION_LABEL = []() {
         std::stringstream ss;

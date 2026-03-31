@@ -27,6 +27,8 @@
 #include "imgui_impl_opengl3_loader.h"
 #endif
 
+#include "spdlog/spdlog.h"
+
 typedef struct rocprofvis_imgui_gl_data_t
 {
     GLFWwindow* m_window = nullptr;
@@ -188,12 +190,11 @@ rocprofvis_imgui_backend_setup_opengl(rocprofvis_imgui_backend_t* backend,
             backend->m_destroy            = &rocprofvis_imgui_backend_gl_destroy;
             bOk                           = true;
 
-            fprintf(stderr, "[rpv] Using OpenGL backend (GLSL version: %s)\n",
-                    backend_data->m_glsl_version);
+            spdlog::info("[rpv] Using OpenGL backend (GLSL version: {})", backend_data->m_glsl_version);
         }
         else
         {
-            fprintf(stderr, "[rpv] Error: Couldn't allocate OpenGL ImGui backend\n");
+            spdlog::error("[rpv] Error: Couldn't allocate OpenGL ImGui backend");
         }
     }
 

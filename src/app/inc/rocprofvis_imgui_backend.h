@@ -31,3 +31,9 @@ typedef struct rocprofvis_imgui_backend_t
 } rocprofvis_imgui_backend_t;
 
 bool rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* window);
+
+// Extended setup function that can recreate window if needed for OpenGL fallback
+bool rocprofvis_imgui_backend_setup_with_fallback(rocprofvis_imgui_backend_t* backend,
+                                                   GLFWwindow** window,
+                                                   int width, int height,
+                                                   const char* title);

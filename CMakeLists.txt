@@ -154,14 +154,18 @@ endif(WIN32)
 
 if(APPLE)
     add_executable(${TARGET_NAME} MACOSX_BUNDLE
+        src/app/src/rocprofvis_imgui_backend.cpp
         src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/rocprofvis_imgui_opengl.cpp
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
         ${VIEW_FILES})
 else()
     add_executable(${TARGET_NAME}
+        src/app/src/rocprofvis_imgui_backend.cpp
         src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/rocprofvis_imgui_opengl.cpp
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
@@ -263,6 +267,10 @@ endif()
 
 # === Vulkan ===
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")
+
+# === OpenGL (fallback when Vulkan fails) ===
+find_package(OpenGL REQUIRED)
+target_link_libraries(${TARGET_NAME} PRIVATE OpenGL::GL)
 
 # CPACK Packaging Enabling
 set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})

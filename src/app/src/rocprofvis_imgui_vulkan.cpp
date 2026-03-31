@@ -654,52 +654,50 @@ rocprofvis_imgui_backend_vk_destroy(rocprofvis_imgui_backend_t* backend)
 }
 
 bool
-rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* window)
+rocprofvis_imgui_backend_setup_vulkan(rocprofvis_imgui_backend_t* backend,
+                                      GLFWwindow* window)
 {
     (void) window;
     bool bOk = false;
+
     if(backend)
     {
-        if(glfwVulkanSupported())
+        rocprofvis_imgui_vk_data_t* backend_data =
+            (rocprofvis_imgui_vk_data_t*) calloc(1,
+                                                 sizeof(rocprofvis_imgui_vk_data_t));
+        if(backend_data)
         {
-            rocprofvis_imgui_vk_data_t* backend_data =
-                (rocprofvis_imgui_vk_data_t*) calloc(1,
-                                                     sizeof(rocprofvis_imgui_vk_data_t));
-            if(backend_data)
-            {
-                backend_data->m_window_data       = ImGui_ImplVulkanH_Window();
-                backend_data->m_allocator         = nullptr;
-                backend_data->m_instance          = VK_NULL_HANDLE;
-                backend_data->m_physical_device   = VK_NULL_HANDLE;
-                backend_data->m_device            = VK_NULL_HANDLE;
-                backend_data->m_queue_family      = (uint32_t) -1;
-                backend_data->m_queue             = VK_NULL_HANDLE;
-                backend_data->m_pipeline_cache    = VK_NULL_HANDLE;
-                backend_data->m_descriptor_pool   = VK_NULL_HANDLE;
-                backend_data->m_debug_report      = VK_NULL_HANDLE;
-                backend_data->m_min_image_count   = 2;
-                backend_data->m_swapchain_rebuild = false;
-                backend->m_private_data           = backend_data;
-                backend->m_init                   = &rocprofvis_imgui_backend_vk_init;
-                backend->m_config                 = &rocprofvis_imgui_backend_vk_config;
-                backend->m_update_framebuffer =
-                    &rocprofvis_imgui_backend_vk_update_framebuffer;
-                backend->m_new_frame = &rocprofvis_imgui_backend_vk_new_frame;
-                backend->m_render    = &rocprofvis_imgui_backend_vk_render;
-                backend->m_present   = &rocprofvis_imgui_backend_vk_present;
-                backend->m_shutdown  = &rocprofvis_imgui_backend_vk_shutdown;
-                backend->m_destroy   = &rocprofvis_imgui_backend_vk_destroy;
-                bOk                  = true;
-            }
-            else
-            {
-                fprintf(stderr, "[rpv] Error: Couldn't allocate ImGui backend\n");
-            }
+            backend_data->m_window_data       = ImGui_ImplVulkanH_Window();
+            backend_data->m_allocator         = nullptr;
+            backend_data->m_instance          = VK_NULL_HANDLE;
+            backend_data->m_physical_device   = VK_NULL_HANDLE;
+            backend_data->m_device            = VK_NULL_HANDLE;
+            backend_data->m_queue_family      = (uint32_t) -1;
+            backend_data->m_queue             = VK_NULL_HANDLE;
+            backend_data->m_pipeline_cache    = VK_NULL_HANDLE;
+            backend_data->m_descriptor_pool   = VK_NULL_HANDLE;
+            backend_data->m_debug_report      = VK_NULL_HANDLE;
+            backend_data->m_min_image_count   = 2;
+            backend_data->m_swapchain_rebuild = false;
+            backend->m_private_data           = backend_data;
+            backend->m_init                   = &rocprofvis_imgui_backend_vk_init;
+            backend->m_config                 = &rocprofvis_imgui_backend_vk_config;
+            backend->m_update_framebuffer =
+                &rocprofvis_imgui_backend_vk_update_framebuffer;
+            backend->m_new_frame = &rocprofvis_imgui_backend_vk_new_frame;
+            backend->m_render    = &rocprofvis_imgui_backend_vk_render;
+            backend->m_present   = &rocprofvis_imgui_backend_vk_present;
+            backend->m_shutdown  = &rocprofvis_imgui_backend_vk_shutdown;
+            backend->m_destroy   = &rocprofvis_imgui_backend_vk_destroy;
+            bOk                  = true;
+
+            fprintf(stderr, "[rpv] Using Vulkan backend\n");
         }
         else
         {
-            fprintf(stderr, "[GLFW] Error: Vulkan Not Supported\n");
+            fprintf(stderr, "[rpv] Error: Couldn't allocate Vulkan ImGui backend\n");
         }
     }
+
     return bOk;
 }

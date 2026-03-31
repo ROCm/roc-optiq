@@ -180,6 +180,7 @@ main(int argc, char** argv)
     glfwSetErrorCallback(glfw_error_callback);
     if(glfwInit())
     {
+        // First, try to create window with Vulkan (GLFW_NO_API)
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 #if defined(GLFW_SCALE_TO_MONITOR)  // GLFW 3.3+
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
@@ -189,28 +190,26 @@ main(int argc, char** argv)
                                               APP_NAME, nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
-        // Initialize fullscreen state with actual window position and size
-        RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
-
-        // Drop file callback
-        glfwSetDropCallback(window, drop_callback);
-        // DPI scaling callback
-        glfwSetWindowContentScaleCallback(window, content_scale_callback);
-        // Initialize once (callback may not fire immediately on some platforms)
+        if(window && rocprofvis_imgui_backend_setup_with_fallback(&backend, &window,
+                                                                  RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
+                                                                  RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
+                                                                  APP_NAME))
         {
-            float xs, ys;
-            glfwGetWindowContentScale(window, &xs, &ys);
-            content_scale_callback(window, xs, ys);
-        }
-        // Window close callback
-        glfwSetWindowCloseCallback(window, close_callback);
-        // Window size change callback
-        glfwSetWindowSizeCallback(window, window_size_change_callback);
-        // Keyboard callback for fullscreen toggle
-        glfwSetKeyCallback(window, key_callback);
+            // Re-setup callbacks after potential window recreation
+            glfwSetDropCallback(window, drop_callback);
+            glfwSetWindowContentScaleCallback(window, content_scale_callback);
+            {
+                float xs, ys;
+                glfwGetWindowContentScale(window, &xs, &ys);
+                content_scale_callback(window, xs, ys);
+            }
+            glfwSetWindowCloseCallback(window, close_callback);
+            glfwSetWindowSizeCallback(window, window_size_change_callback);
+            glfwSetKeyCallback(window, key_callback);
 
-        if(window && rocprofvis_imgui_backend_setup(&backend, window))
-        {
+            // Re-initialize fullscreen state after potential window recreation
+            RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
+
             glfwShowWindow(window);
 
             if(backend.m_init(&backend, window))

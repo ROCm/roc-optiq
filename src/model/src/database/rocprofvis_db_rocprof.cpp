@@ -691,7 +691,7 @@ rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
 
     std::vector<std::pair<std::string, std::string>> info_table_list = {
         {"Node", "SELECT * from rocpd_info_node_%GUID%;"},
-        {"Agent", "SELECT id,guid,nid,pid,coalesce(type,'NIC') as type,absolute_index,logical_index,type_index,uuid,name,model_name,vendor_name,product_name,user_name,extdata from rocpd_info_agent_%GUID%;"},
+        {"Agent", "SELECT id,guid,nid,pid,coalesce(type,'NIC') as type,absolute_index,logical_index,type_index,uuid,name,model_name,vendor_name,product_name,extdata from rocpd_info_agent_%GUID%;"},
         {"Queue", "SELECT * from rocpd_info_queue_%GUID%;"},
         {"Stream", "SELECT * from rocpd_info_stream_%GUID%;"},
         {"Process", "SELECT * from rocpd_info_process_%GUID%;"},
@@ -1914,7 +1914,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(
                     " roc_optiq_event_levels_launch" :
                     " roc_optiq_event_levels_launch_sample";
                 std::string callstack_params = m_query_factory.IsVersionGreaterOrEqual("4") ? 
-                    " 4 as version, R.id, L.parent_id, R.name_id, PC.function as p1, PC.file as p2, CODE.line as p3" : 
+                    " 4 as version, R.id, L.parent_id, R.name_id, PC.function as p1, PC.file as p2, CODE.line_number as p3" : 
                     " 3 as version, R.id, L.parent_id, R.name_id, E.call_stack as p1, E.line_info as p2, 0 as p3 ";
                 std::stringstream callstack_tables; 
                 callstack_tables << " rocpd_region_%GUID% R ";

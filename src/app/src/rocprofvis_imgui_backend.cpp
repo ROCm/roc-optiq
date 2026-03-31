@@ -12,41 +12,6 @@ bool rocprofvis_imgui_backend_setup_vulkan(rocprofvis_imgui_backend_t* backend,
 bool rocprofvis_imgui_backend_setup_opengl(rocprofvis_imgui_backend_t* backend,
                                            GLFWwindow* window);
 
-bool
-rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* window)
-{
-    bool bOk = false;
-
-    if(backend)
-    {
-        // Try Vulkan first if supported
-        if(glfwVulkanSupported())
-        {
-            spdlog::info("[rpv] Vulkan is supported, attempting Vulkan backend...");
-            bOk = rocprofvis_imgui_backend_setup_vulkan(backend, window);
-
-            // If Vulkan setup failed, fall back to OpenGL
-            if(!bOk)
-            {
-                spdlog::warn("[rpv] Vulkan backend initialization failed, falling back to OpenGL...");
-                bOk = rocprofvis_imgui_backend_setup_opengl(backend, window);
-            }
-        }
-        else
-        {
-            // Vulkan not supported, use OpenGL directly
-            spdlog::info("[rpv] Vulkan not supported by GLFW, using OpenGL backend...");
-            bOk = rocprofvis_imgui_backend_setup_opengl(backend, window);
-        }
-
-        if(!bOk)
-        {
-            spdlog::error("[rpv] Error: Failed to initialize graphics backend");
-        }
-    }
-
-    return bOk;
-}
 
 static bool
 setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend,
@@ -87,7 +52,7 @@ rocprofvis_imgui_backend_setup_with_fallback(
     GLFWwindow** window,
     int width, int height,
     const char* title,
-    RocProfVisBackendPreference preference)
+    rocprofvis_imgui_backend_preference_t preference)
 {
     bool bOk = false;
 
@@ -98,7 +63,7 @@ rocprofvis_imgui_backend_setup_with_fallback(
 
     switch(preference)
     {
-        case RocProfVisBackendPreference::ForceOpenGL:
+        case kRPVBackendForceOpenGL:
             // User explicitly requested OpenGL only
             spdlog::info("[rpv] Force using OpenGL backend");
             glfwDestroyWindow(*window);
@@ -109,7 +74,7 @@ rocprofvis_imgui_backend_setup_with_fallback(
             }
             break;
 
-        case RocProfVisBackendPreference::ForceVulkan:
+        case kRPVBackendForceVulkan:
             // User explicitly requested Vulkan only
             spdlog::info("[rpv] Force using Vulkan backend");
             if(!glfwVulkanSupported())
@@ -127,7 +92,7 @@ rocprofvis_imgui_backend_setup_with_fallback(
             }
             break;
 
-        case RocProfVisBackendPreference::Auto:
+        case kRPVBackendAuto:
         default:
             // Auto mode: Try Vulkan first, fallback to OpenGL on failure
             if(glfwVulkanSupported())

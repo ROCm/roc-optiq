@@ -9,12 +9,12 @@ struct ImDrawData;
 typedef struct rocprofvis_imgui_backend_t rocprofvis_imgui_backend_t;
 
 // Backend selection preference for initialization
-enum class RocProfVisBackendPreference
+typedef enum rocprofvis_imgui_backend_preference_t
 {
-    Auto,        // Try Vulkan first, fallback to OpenGL on failure
-    ForceVulkan, // Only use Vulkan, fail if it doesn't work
-    ForceOpenGL  // Only use OpenGL, fail if it doesn't work
-};
+    kRPVBackendAuto,         // Try Vulkan first, fallback to OpenGL on failure
+    kRPVBackendForceVulkan,  // Only use Vulkan, fail if it doesn't work
+    kRPVBackendForceOpenGL   // Only use OpenGL, fail if it doesn't work
+} rocprofvis_imgui_backend_preference_t;
 
 typedef bool (*rocprofvis_imgui_backend_init_t)(rocprofvis_imgui_backend_t* backend, void* window);
 typedef bool (*rocprofvis_imgui_backend_config_t)(rocprofvis_imgui_backend_t* backend, void* window);
@@ -38,8 +38,6 @@ typedef struct rocprofvis_imgui_backend_t
     rocprofvis_imgui_backend_destroy_t m_destroy;
 } rocprofvis_imgui_backend_t;
 
-bool rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* window);
-
 // Setup function with backend preference and window recreation support
 // preference: Auto (with fallback), ForceVulkan (no fallback), or ForceOpenGL (no fallback)
 // Returns false if the requested/preferred backend fails to initialize
@@ -48,4 +46,4 @@ bool rocprofvis_imgui_backend_setup_with_fallback(
     GLFWwindow** window,
     int width, int height,
     const char* title,
-    RocProfVisBackendPreference preference = RocProfVisBackendPreference::Auto);
+    rocprofvis_imgui_backend_preference_t preference = kRPVBackendAuto);

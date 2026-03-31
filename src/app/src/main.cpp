@@ -10,9 +10,9 @@
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
 #include "rocprofvis_cli_parser.h"
-#include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -176,17 +176,17 @@ main(int argc, char** argv)
 #endif
 
     // Parse backend preference from command line
-    RocProfVisBackendPreference backend_pref = RocProfVisBackendPreference::Auto;
+    rocprofvis_imgui_backend_preference_t backend_pref = kRPVBackendAuto;
     if(cli_parser.WasOptionFound("backend"))
     {
         std::string backend_str = cli_parser.GetOptionValue("backend");
         if(backend_str == "vulkan")
         {
-            backend_pref = RocProfVisBackendPreference::ForceVulkan;
+            backend_pref = kRPVBackendForceVulkan;
         }
         else if(backend_str == "opengl")
         {
-            backend_pref = RocProfVisBackendPreference::ForceOpenGL;
+            backend_pref = kRPVBackendForceOpenGL;
         }
         else
         {

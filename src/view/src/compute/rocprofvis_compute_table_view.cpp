@@ -17,7 +17,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
-, m_custom_table(data_provider, compute_selection, m_client_id)
+, m_pined_metric_table(data_provider, compute_selection, m_client_id)
 {
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
@@ -52,7 +52,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
             if(evt->GetClientId() == m_client_id)
                 RebuildTableDataCache();
         }
-        m_custom_table.RefillTable();
+        m_pined_metric_table.RefillTable();
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
@@ -153,7 +153,7 @@ ComputeTableView::Update()
     if(m_tabs)
         m_tabs->Update();
 
-    m_custom_table.Update();
+    m_pined_metric_table.Update();
 }
 
 void
@@ -172,7 +172,7 @@ ComputeTableView::Render()
         return;
     }
 
-    m_custom_table.Render();
+    m_pined_metric_table.Render();
 
     if(m_tabs)
         m_tabs->Render();
@@ -204,7 +204,7 @@ ComputeTableView::RebuildTableDataCache()
             key.fields.category_id = cat->id;
             key.fields.table_id    = tbl->id;
             auto add_row_func = [this](MetricId metric_id) {
-                m_custom_table.AddRow(metric_id);
+                m_pined_metric_table.AddRow(metric_id);
             };
             MetricTableCache widget(add_row_func);
             widget.Populate(*tbl, [&](uint32_t eid) {

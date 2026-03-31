@@ -108,7 +108,7 @@ private:
     MetricTableCache m_table;
 };
 
-class CustomTable: public RocWidget
+class PinedMetricTable: public RocWidget
 {
 public:
     struct RowValue
@@ -117,13 +117,12 @@ public:
         std::string tooltip;
     };
     using Row = std::map<uint32_t, RowValue>;
-    CustomTable(DataProvider&                     data_provider,
+    PinedMetricTable(DataProvider&                     data_provider,
                 std::shared_ptr<ComputeSelection> compute_selection, uint64_t client_id);
     void AddRow(MetricId metric_id);
     void Render();
     void RefillTable();
     void Update();
-    bool Empty();
 
 private:
     const AvailableMetrics::Table& GetTable(const MetricId& metric_id, uint32_t workload_id);

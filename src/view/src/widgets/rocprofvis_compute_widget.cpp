@@ -264,7 +264,7 @@ MetricTableWidget::UpdateTable()
 
 //---------------------------------------------------------
 
-CustomTable::CustomTable(DataProvider&                     data_provider,
+PinedMetricTable::PinedMetricTable(DataProvider&                     data_provider,
                          std::shared_ptr<ComputeSelection> compute_selection,
                          uint64_t                          client_id)
 : m_data_provider(data_provider)
@@ -275,7 +275,7 @@ CustomTable::CustomTable(DataProvider&                     data_provider,
 }
 
 void
-CustomTable::SetDefaultColumns()
+PinedMetricTable::SetDefaultColumns()
 {
     m_columns[0]                                    = "Metric ID";
     m_columns[1]                                    = "Metric";
@@ -285,7 +285,7 @@ CustomTable::SetDefaultColumns()
 }
 
 void
-CustomTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
+PinedMetricTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
 {
     if(ImGui::BeginPopupContextItem())
     {
@@ -304,7 +304,7 @@ CustomTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
 }
 
 const AvailableMetrics::Table&
-CustomTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
+PinedMetricTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
 {
     const auto& tree = m_data_provider.ComputeModel()
                            .GetWorkloads()
@@ -314,7 +314,7 @@ CustomTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
 }
 
 float
-CustomTable::GetTableHight() const
+PinedMetricTable::GetTableHight() const
 {
     const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
     float             line_height =
@@ -323,7 +323,7 @@ CustomTable::GetTableHight() const
 }
 
 void
-CustomTable::UpdateColumns(MetricId metric_id)
+PinedMetricTable::UpdateColumns(MetricId metric_id)
 {
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
@@ -342,7 +342,7 @@ CustomTable::UpdateColumns(MetricId metric_id)
 }
 
 void
-CustomTable::FillTableRow(const MetricId& metric_id)
+PinedMetricTable::FillTableRow(const MetricId& metric_id)
 {
     Row row;
 
@@ -378,7 +378,7 @@ CustomTable::FillTableRow(const MetricId& metric_id)
 }
 
 void
-CustomTable::FillCommons(const MetricId& metric_id, const AvailableMetrics::Table& table,
+PinedMetricTable::FillCommons(const MetricId& metric_id, const AvailableMetrics::Table& table,
                          Row& row,
                          std::shared_ptr<MetricValue>     metric_value)
 {
@@ -393,7 +393,7 @@ CustomTable::FillCommons(const MetricId& metric_id, const AvailableMetrics::Tabl
 }
 
 std::optional<uint32_t>
-CustomTable::GetColumnIndex(const std::string& column_name)
+PinedMetricTable::GetColumnIndex(const std::string& column_name)
 {
     for(auto column : m_columns)
     {
@@ -404,14 +404,14 @@ CustomTable::GetColumnIndex(const std::string& column_name)
 }
 
 void
-CustomTable::AddRow(MetricId metric_id)
+PinedMetricTable::AddRow(MetricId metric_id)
 {
     UpdateColumns(metric_id);
     FillTableRow(metric_id);
 }
 
 void
-CustomTable::Render() 
+PinedMetricTable::Render() 
 {
     SectionTitle("Pined metric");
     if (m_rows.empty())
@@ -458,7 +458,7 @@ CustomTable::Render()
 }
 
 void
-CustomTable::RenderRowValues(uint32_t index, const std::pair<MetricId, Row>& row,
+PinedMetricTable::RenderRowValues(uint32_t index, const std::pair<MetricId, Row>& row,
                        std::function<void(const char* value_to_copy)> menu_func)
 {
     ImGui::TableNextColumn();
@@ -477,7 +477,7 @@ CustomTable::RenderRowValues(uint32_t index, const std::pair<MetricId, Row>& row
 }
 
 void
-CustomTable::RenderUnitValue(const std::pair<MetricId, Row>&                row,
+PinedMetricTable::RenderUnitValue(const std::pair<MetricId, Row>&                row,
                              std::function<void(const char* value_to_copy)> menu_func)
 {
     ImGui::TableNextColumn();
@@ -495,7 +495,7 @@ CustomTable::RenderUnitValue(const std::pair<MetricId, Row>&                row,
 }
 
 void
-CustomTable::RenderTooltip(const RowValue& row)
+PinedMetricTable::RenderTooltip(const RowValue& row)
 {
     auto tooltip_text = row.tooltip.empty() ? row.value : row.tooltip;
 
@@ -512,7 +512,7 @@ CustomTable::RenderTooltip(const RowValue& row)
 }
 
 void
-CustomTable::RefillTable()
+PinedMetricTable::RefillTable()
 {
     m_columns.clear();
     m_lust_column_index = 0;
@@ -524,7 +524,7 @@ CustomTable::RefillTable()
 }
 
 void
-CustomTable::Update()
+PinedMetricTable::Update()
 {
     if(m_id_to_delete.has_value())
     {

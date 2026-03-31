@@ -5,7 +5,7 @@
 
 // Include windows.h before GLFW to prevent APIENTRY redefinition warnings
 #if defined(_WIN32)
-#include <windows.h>
+#    include <windows.h>
 #endif
 
 #include "imgui.h"
@@ -20,18 +20,18 @@
 
 // OpenGL loader - use system headers on macOS, ImGui's loader on Windows/Linux
 #if defined(__APPLE__)
-#include <OpenGL/gl.h>
+#    include <OpenGL/gl.h>
 #else
 // Windows/Linux: Use ImGui's built-in OpenGL loader
 // Do NOT include system GL headers (gl/GL.h) - causes conflicts with the loader
-#include "imgui_impl_opengl3_loader.h"
+#    include "imgui_impl_opengl3_loader.h"
 #endif
 
 #include "spdlog/spdlog.h"
 
 typedef struct rocprofvis_imgui_gl_data_t
 {
-    GLFWwindow* m_window = nullptr;
+    GLFWwindow* m_window       = nullptr;
     const char* m_glsl_version = nullptr;
 } rocprofvis_imgui_gl_data_t;
 
@@ -156,7 +156,7 @@ rocprofvis_imgui_backend_gl_destroy(rocprofvis_imgui_backend_t* backend)
 
 bool
 rocprofvis_imgui_backend_setup_opengl(rocprofvis_imgui_backend_t* backend,
-                                      GLFWwindow* window)
+                                      GLFWwindow*                 window)
 {
     (void) window;
     bool bOk = false;
@@ -179,18 +179,20 @@ rocprofvis_imgui_backend_setup_opengl(rocprofvis_imgui_backend_t* backend,
             backend_data->m_glsl_version = "#version 130";
 #endif
 
-            backend->m_private_data       = backend_data;
-            backend->m_init               = &rocprofvis_imgui_backend_gl_init;
-            backend->m_config             = &rocprofvis_imgui_backend_gl_config;
-            backend->m_update_framebuffer = &rocprofvis_imgui_backend_gl_update_framebuffer;
-            backend->m_new_frame          = &rocprofvis_imgui_backend_gl_new_frame;
-            backend->m_render             = &rocprofvis_imgui_backend_gl_render;
-            backend->m_present            = &rocprofvis_imgui_backend_gl_present;
-            backend->m_shutdown           = &rocprofvis_imgui_backend_gl_shutdown;
-            backend->m_destroy            = &rocprofvis_imgui_backend_gl_destroy;
-            bOk                           = true;
+            backend->m_private_data = backend_data;
+            backend->m_init         = &rocprofvis_imgui_backend_gl_init;
+            backend->m_config       = &rocprofvis_imgui_backend_gl_config;
+            backend->m_update_framebuffer =
+                &rocprofvis_imgui_backend_gl_update_framebuffer;
+            backend->m_new_frame = &rocprofvis_imgui_backend_gl_new_frame;
+            backend->m_render    = &rocprofvis_imgui_backend_gl_render;
+            backend->m_present   = &rocprofvis_imgui_backend_gl_present;
+            backend->m_shutdown  = &rocprofvis_imgui_backend_gl_shutdown;
+            backend->m_destroy   = &rocprofvis_imgui_backend_gl_destroy;
+            bOk                  = true;
 
-            spdlog::info("[rpv] Using OpenGL backend (GLSL version: {})", backend_data->m_glsl_version);
+            spdlog::info("[rpv] Using OpenGL backend (GLSL version: {})",
+                         backend_data->m_glsl_version);
         }
         else
         {

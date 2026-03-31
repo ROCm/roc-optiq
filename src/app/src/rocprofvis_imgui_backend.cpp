@@ -7,18 +7,18 @@
 #include <stdio.h>
 
 // Forward declarations for backend-specific setup functions
-bool rocprofvis_imgui_backend_setup_vulkan(rocprofvis_imgui_backend_t* backend,
-                                           GLFWwindow* window);
-bool rocprofvis_imgui_backend_setup_opengl(rocprofvis_imgui_backend_t* backend,
-                                           GLFWwindow* window);
-bool rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* window);
-
+bool
+rocprofvis_imgui_backend_setup_vulkan(rocprofvis_imgui_backend_t* backend,
+                                      GLFWwindow*                 window);
+bool
+rocprofvis_imgui_backend_setup_opengl(rocprofvis_imgui_backend_t* backend,
+                                      GLFWwindow*                 window);
+bool
+rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* window);
 
 static bool
-setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend,
-                                 GLFWwindow** window,
-                                 int width, int height,
-                                 const char* title)
+setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend, GLFWwindow** window,
+                                int width, int height, const char* title)
 {
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
@@ -49,11 +49,8 @@ setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend,
 
 bool
 rocprofvis_imgui_backend_setup_with_fallback(
-    rocprofvis_imgui_backend_t* backend,
-    GLFWwindow** window,
-    int width, int height,
-    const char* title,
-    rocprofvis_imgui_backend_preference_t preference)
+    rocprofvis_imgui_backend_t* backend, GLFWwindow** window, int width, int height,
+    const char* title, rocprofvis_imgui_backend_preference_t preference)
 {
     bool bOk = false;
 
@@ -80,7 +77,8 @@ rocprofvis_imgui_backend_setup_with_fallback(
             spdlog::info("[rpv] Force using Vulkan backend");
             if(!glfwVulkanSupported())
             {
-                spdlog::error("[rpv] Error: Vulkan not supported by GLFW, cannot use forced Vulkan backend");
+                spdlog::error("[rpv] Error: Vulkan not supported by GLFW, cannot use "
+                              "forced Vulkan backend");
                 bOk = false;
             }
             else
@@ -88,7 +86,8 @@ rocprofvis_imgui_backend_setup_with_fallback(
                 bOk = rocprofvis_imgui_backend_setup_vulkan(backend, *window);
                 if(!bOk)
                 {
-                    spdlog::error("[rpv] Error: Failed to initialize forced Vulkan backend");
+                    spdlog::error(
+                        "[rpv] Error: Failed to initialize forced Vulkan backend");
                 }
             }
             break;
@@ -104,20 +103,21 @@ rocprofvis_imgui_backend_setup_with_fallback(
                 // If Vulkan setup failed, fallback to OpenGL
                 if(!bOk)
                 {
-                    spdlog::warn("[rpv] Vulkan backend initialization failed, recreating window for OpenGL fallback...");
-
+                    spdlog::warn("[rpv] Vulkan backend initialization failed, recreating "
+                                 "window for OpenGL fallback...");
                     glfwDestroyWindow(*window);
-                    bOk = setup_opengl_window_and_backend(backend, window, width, height, title);
+                    bOk = setup_opengl_window_and_backend(backend, window, width, height,
+                                                          title);
                 }
             }
             else
             {
                 // Vulkan not supported, use OpenGL directly
-                spdlog::info("[rpv] Vulkan not supported by GLFW, recreating window for OpenGL...");
-
-
+                spdlog::info("[rpv] Vulkan not supported by GLFW, recreating window for "
+                             "OpenGL...");
                 glfwDestroyWindow(*window);
-                bOk = setup_opengl_window_and_backend(backend, window, width, height, title);
+                bOk = setup_opengl_window_and_backend(backend, window, width, height,
+                                                      title);
             }
             break;
     }
@@ -132,12 +132,8 @@ rocprofvis_imgui_backend_setup_with_fallback(
 
 bool
 rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
-    rocprofvis_imgui_backend_t*           backend,
-    GLFWwindow**                          window,
-    int                                   width,
-    int                                   height,
-    const char*                           title,
-    rocprofvis_imgui_backend_preference_t preference)
+    rocprofvis_imgui_backend_t* backend, GLFWwindow** window, int width, int height,
+    const char* title, rocprofvis_imgui_backend_preference_t preference)
 {
     if(!backend || !window || !*window)
     {

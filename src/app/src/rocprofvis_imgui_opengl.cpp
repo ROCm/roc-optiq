@@ -23,7 +23,9 @@
 #if defined(__APPLE__)
 #include <OpenGL/gl.h>
 #else
-// Linux and others will use the loader from imgui_impl_opengl3_loader.h
+// Linux: GLFW_INCLUDE_NONE — no GL from GLFW. Use ImGui's loader declarations only
+// (implementation lives in imgui_impl_opengl3.cpp; do not define IMGL3W_IMPL here).
+#include "imgui_impl_opengl3_loader.h"
 #endif
 
 typedef struct rocprofvis_imgui_gl_data_t

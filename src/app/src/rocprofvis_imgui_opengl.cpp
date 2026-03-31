@@ -3,10 +3,9 @@
 
 #include "rocprofvis_imgui_backend.h"
 
-// Include windows.h before any OpenGL/GLFW headers to prevent APIENTRY redefinition (C4005)
+// Include windows.h before GLFW to prevent APIENTRY redefinition warnings
 #if defined(_WIN32)
 #include <windows.h>
-#include <gl/GL.h>
 #endif
 
 #include "imgui.h"
@@ -19,12 +18,12 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
-// OpenGL loader will be included by imgui_impl_opengl3.cpp
+// OpenGL loader - use system headers on macOS, ImGui's loader on Windows/Linux
 #if defined(__APPLE__)
 #include <OpenGL/gl.h>
 #else
-// Linux: GLFW_INCLUDE_NONE — no GL from GLFW. Use ImGui's loader declarations only
-// (implementation lives in imgui_impl_opengl3.cpp; do not define IMGL3W_IMPL here).
+// Windows/Linux: Use ImGui's built-in OpenGL loader
+// Do NOT include system GL headers (gl/GL.h) - causes conflicts with the loader
 #include "imgui_impl_opengl3_loader.h"
 #endif
 

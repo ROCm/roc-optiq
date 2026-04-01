@@ -18,7 +18,9 @@ class ComputeSelection;
 class ComputeTableView: public RocWidget
 {
 public:
-    ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
+    ComputeTableView(DataProvider&                     data_provider,
+                     std::shared_ptr<ComputeSelection> compute_selection,
+        std::function<void(MetricId metric_id, const std::string&)> set_query_callback);
     ~ComputeTableView();
 
     void Update() override;

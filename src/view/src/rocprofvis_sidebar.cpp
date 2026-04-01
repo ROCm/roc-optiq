@@ -579,7 +579,7 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
     {
         if(processor.info)
         {
-            ImGui::PushID(static_cast<int>(processor.info->id.fields.id));
+            ImGui::PushID(static_cast<int>(processor.info->id.value));
 
             EyeButtonState current_eye_button_state = parent_eye_button_state;
             if(show_eye_button)

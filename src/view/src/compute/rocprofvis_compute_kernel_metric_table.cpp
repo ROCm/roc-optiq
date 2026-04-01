@@ -224,25 +224,8 @@ KernelMetricTable::Render()
                          m_workload_id == ComputeSelection::INVALID_SELECTION_ID);
     if(ImGui::Button("Add Metric"))
     {
-        m_query_builder.Show([this](const std::string& query) {
-            m_metrics_params.push_back(query);
-            const AvailableMetrics::Entry* entry =
-                m_query_builder.GetSelectedMetricInfo();
-            m_metrics_info.push_back({ entry ? *entry : AvailableMetrics::Entry(),
-                                        m_query_builder.GetValueName() });
-
-            // Add filter slot for the new metric column
-            m_column_filters.push_back(ColumnFilter());
-            m_pending_column_filters.push_back(ColumnFilter());
-
-            if(!m_bar_chart_columns.empty())
-            {
-                int new_col = PERMANENT_COLUMN_COUNT +
-                              static_cast<int>(m_metrics_params.size()) - 1;
-                m_bar_chart_columns.insert(new_col);
-            }
-
-            m_fetch_requested = true;
+        m_query_builder.Show([this](const std::string& query) { 
+            this->SetQuery(query);
         });
     }
     
@@ -681,6 +664,37 @@ KernelMetricTable::Render()
     }
 
     m_query_builder.Render();
+}
+
+void
+KernelMetricTable::SetQuery(const std::string& query)
+{
+    m_metrics_params.push_back(query);
+    const AvailableMetrics::Entry* entry = m_query_builder.GetSelectedMetricInfo();
+    m_metrics_info.push_back(
+        { entry ? *entry : AvailableMetrics::Entry(), m_query_builder.GetValueName() });
+
+    // Add filter slot for the new metric column
+    m_column_filters.push_back(ColumnFilter());
+    m_pending_column_filters.push_back(ColumnFilter());
+
+    m_fetch_requested = true;
+}
+
+void
+KernelMetricTable::SetExternalQuery(MetricId metric_id, const std::string& value_name)
+{
+    auto query = metric_id.ToString() + ":" + value_name;
+    m_metrics_params.push_back(query);
+    auto workload = m_data_provider.ComputeModel().GetWorkload(m_workload_id); //TODO: I can get it from query builder
+    auto entry    = ComputeDataModel::GetMetricInfo(*workload, metric_id.category_id,
+                                                 metric_id.table_id, metric_id.entry_id);
+    m_metrics_info.emplace_back(MetricInfo{ *entry, value_name });
+
+    m_column_filters.emplace_back(ColumnFilter());
+    m_pending_column_filters.emplace_back(ColumnFilter());
+
+    m_fetch_requested = true;
 }
 
 void

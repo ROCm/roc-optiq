@@ -180,6 +180,12 @@ ComputeKernelDetailsView::Update()
 }
 
 void
+ComputeKernelDetailsView::SetQueryFunc(MetricId metric_id, const std::string& value_name)
+{
+    m_kernel_metric_table->SetExternalQuery(metric_id, value_name);
+}
+
+void
 ComputeKernelDetailsView::Render()
 {
     ImGui::BeginChild("kernel_details");

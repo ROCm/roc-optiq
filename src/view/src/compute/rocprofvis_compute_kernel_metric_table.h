@@ -4,6 +4,8 @@
 #pragma once
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_query_builder.h"
+#include "model/compute/rocprofvis_compute_model_types.h"
+
 #include <memory>
 #include <set>
 #include <unordered_map>
@@ -27,6 +29,8 @@ public:
     void ClearData();
     void FetchData(uint32_t workload_id);
     void HandleNewData();
+    void SetQuery(const std::string& query);
+    void SetExternalQuery(MetricId metric_id, const std::string& value_name);
 
 private:
     void RenderColumnFilter(int column_index);

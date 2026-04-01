@@ -310,12 +310,13 @@ WorkloadMetricTableWidget::UpdateTable()
 
 //---------------------------------------------------------
 
-PinedMetricTable::PinedMetricTable(DataProvider&                     data_provider,
-                         std::shared_ptr<ComputeSelection> compute_selection,
-                         uint64_t                          client_id)
+PinedMetricTable::PinedMetricTable(
+    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
+    uint64_t client_id, std::function<void(MetricId metric_id, const std::string&)> set_query_callback)
 : m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(client_id)
+, m_set_query_callback(set_query_callback)
 { 
     FillDefaultColumns();
 }
@@ -330,7 +331,8 @@ PinedMetricTable::FillDefaultColumns()
 }
 
 void
-PinedMetricTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
+PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t index,
+                              const std::pair<MetricId, Row>& row)
 {
     if(ImGui::BeginPopupContextItem())
     {
@@ -342,7 +344,11 @@ PinedMetricTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
         }
         if(ImGui::MenuItem("Unpin metric"))
         {
-            m_id_to_delete = id_to_delete;
+            m_id_to_delete = row.first;
+        }
+        if (ImGui::MenuItem("Set Metric to kernel table"))
+        {
+            if(m_set_query_callback) m_set_query_callback(row.first, m_columns[index]);
         }
         ImGui::EndPopup();
     }
@@ -498,17 +504,19 @@ PinedMetricTable::Render()
         uint32_t row_idx = 0;
         for(auto& row : m_rows)
         {
-            auto menu_func = [&](const char* value_to_copy) {
-                this->ContextMenu(value_to_copy, row.first);
-            };
+
             ImGui::PushID(row_idx++);
             ImGui::TableNextRow();
 
             for(auto index = 0; index < m_columns.size() - 1; index++)
             {
+                auto menu_func = [&](const char* value_to_copy) {
+                    this->ContextMenu(value_to_copy, index, row);
+                };
                 RenderRowValues(index, row, menu_func);
             }
-            RenderUnitValue(row, menu_func);
+
+            RenderUnitValue(row);
             ImGui::PopID();
         }
         ImGui::EndTable();
@@ -537,9 +545,11 @@ PinedMetricTable::RenderRowValues(uint32_t index, const std::pair<MetricId, Row>
 }
 
 void
-PinedMetricTable::RenderUnitValue(const std::pair<MetricId, Row>&                row,
-                             std::function<void(const char* value_to_copy)> menu_func)
+PinedMetricTable::RenderUnitValue(const std::pair<MetricId, Row>& row)
 {
+    auto menu_func = [&](const char* value_to_copy) {
+        this->ContextMenu(value_to_copy, std::numeric_limits<uint32_t>::max(), row);
+    };
     ImGui::TableNextColumn();
     if(row.second.at(std::numeric_limits<uint32_t>::max()).value.empty())
     {

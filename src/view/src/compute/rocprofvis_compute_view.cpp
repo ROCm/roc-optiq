@@ -4,7 +4,6 @@
 #include "rocprofvis_compute_view.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_compute_comparison.h"
-#include "rocprofvis_compute_kernel_details.h"
 #include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_compute_summary.h"
 #include "rocprofvis_compute_table_view.h"
@@ -120,10 +119,20 @@ ComputeView::CreateView()
 {
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
 
+    m_kernel_details_view =
+        std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection);
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{ "Kernel Details", "compute_kernel_details_view",
+                                     m_kernel_details_view, false });
+    m_tab_container->AddTab(
+        TabItem{ "Table View", "compute_table_view",
+                 std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection,
+                     [&](MetricId metric_id, const std::string& value_name)
+                     {
+                         m_kernel_details_view->SetQueryFunc(metric_id, value_name);
+                     }),
+                 false });
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Baseline Comparison", "compute_comparison_view", std::make_shared<ComputeComparisonView>(m_data_provider, m_compute_selection), false});
 #ifdef ROCPROFVIS_DEVELOPER_MODE

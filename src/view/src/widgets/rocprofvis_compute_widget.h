@@ -13,38 +13,6 @@ namespace View
 {
 inline constexpr float TABLE_TOOLTIP_MAX_WIDTH = 400.0f;
 
-struct MetricId
-{
-    std::string ToString() const
-    {
-        return std::to_string(category_id) + "." + std::to_string(table_id) + "." +
-               std::to_string(entry_id);
-    };
-
-    bool operator==(const MetricId& other) const noexcept
-    {
-        return category_id == other.category_id &&
-               table_id == other.table_id &&
-               entry_id == other.entry_id;
-    }
-
-    uint32_t category_id;
-    uint32_t table_id;
-    uint32_t entry_id;
-};
-
-struct MetricIdHash
-{
-    size_t operator()(const MetricId& id) const noexcept
-    {
-        uint64_t value = (static_cast<uint64_t>(id.category_id) << 48) ^
-                     (static_cast<uint64_t>(id.table_id) << 16) ^
-                     static_cast<uint64_t>(id.entry_id);
-
-        return std::hash<uint64_t>{}(value);
-    }
-};
-
 class MetricTableCache
 {
 public:
@@ -129,7 +97,8 @@ public:
     };
     using Row = std::map<uint32_t, RowValue>;
     PinedMetricTable(DataProvider&                     data_provider,
-                std::shared_ptr<ComputeSelection> compute_selection, uint64_t client_id);
+                std::shared_ptr<ComputeSelection> compute_selection, uint64_t client_id,
+        std::function<void(MetricId metric_id, const std::string&)> set_query_callback);
     void AddRow(MetricId metric_id);
     void Render();
     void RefillTable();
@@ -153,9 +122,9 @@ private:
     void RenderTooltip(const RowValue& row);
     void RenderRowValues(uint32_t index, const std::pair<MetricId, Row>& row,
                    std::function<void(const char* value_to_copy)> menu_func);
-    void RenderUnitValue(const std::pair<MetricId, Row>& row,
-                         std::function<void(const char* value_to_copy)> menu_func);
-    void ContextMenu(const char* value_to_copy, MetricId id_to_delete);
+    void RenderUnitValue(const std::pair<MetricId, Row>& row);
+    void ContextMenu(const char* value_to_copy, uint32_t index,
+                     const std::pair<MetricId, Row>& row);
 
 
     std::map<uint32_t, std::string>                 m_columns;
@@ -166,6 +135,9 @@ private:
     std::shared_ptr<ComputeSelection> m_compute_selection;
     DataProvider&                     m_data_provider;
     std::optional<MetricId>           m_id_to_delete;
+
+    std::function<void(MetricId metric_id, const std::string& value_name)>
+        m_set_query_callback;
 
 };
 

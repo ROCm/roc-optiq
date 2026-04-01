@@ -95,7 +95,7 @@ ProfileDatabase::CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
         CALLSTACK_DEPTH,
     };
     uint32_t version  = db->Sqlite3ColumnInt(func, stmt, azColName, CALLSTACK_VERSION);
-    record.id  = db->Sqlite3ColumnInt(func, stmt, azColName, CALLSTACK_REGION_ID);
+    record.id  = db->Sqlite3ColumnInt64(func, stmt, azColName, CALLSTACK_REGION_ID);
     std::string p1 = (char*) db->Sqlite3ColumnText(func, stmt, azColName, CALLSTACK_P1);
     std::string p2 = (char*) db->Sqlite3ColumnText(func, stmt, azColName, CALLSTACK_P2);
     std::string p3 = (char*) db->Sqlite3ColumnText(func, stmt, azColName, CALLSTACK_P3);

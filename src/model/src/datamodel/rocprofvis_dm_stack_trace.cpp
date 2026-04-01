@@ -47,7 +47,7 @@ rocprofvis_dm_result_t StackTrace::GetRecordDepthAt(const rocprofvis_dm_property
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t StackTrace::GetRegionIdAt(const rocprofvis_dm_property_index_t index, uint32_t & id){
+rocprofvis_dm_result_t StackTrace::GetRegionIdAt(const rocprofvis_dm_property_index_t index, uint64_t & id){
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_stack_frames.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     id = m_stack_frames[index].RegionId();
     return kRocProfVisDmResultSuccess;
@@ -65,7 +65,7 @@ rocprofvis_dm_result_t StackTrace::GetPropertyAsUint64(rocprofvis_dm_property_t 
             return GetRecordDepthAt(index, *(uint32_t*)value);
         case kRPVDMFrameRegionIdUInt64Indexed:
             *value = 0;
-            return GetRegionIdAt(index, *(uint32_t*)value);
+            return GetRegionIdAt(index, *value);
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }

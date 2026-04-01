@@ -104,7 +104,7 @@ class StackTrace : public DmBase {
         // @param index - record index
         // @param id - reference to region id value
         // @return status of operation
-        rocprofvis_dm_result_t          GetRegionIdAt(const rocprofvis_dm_property_index_t index, uint32_t & depth);
+        rocprofvis_dm_result_t          GetRegionIdAt(const rocprofvis_dm_property_index_t index, uint64_t & id);
 };
 
 }  // namespace DataModel

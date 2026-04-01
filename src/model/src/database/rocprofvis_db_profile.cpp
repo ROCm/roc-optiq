@@ -436,7 +436,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
     record.id.bitfield.event_op = db->Sqlite3ColumnInt(func, stmt, azColName,0 );
     record.id.bitfield.event_node = callback_params->db_instance->GuidIndex();
     if (db->TrackTracker()->FindTrack(
-        db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)record.id.bitfield.event_op), 
+        db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)record.id.bitfield.event_op),
         db->Sqlite3ColumnInt(func, stmt, azColName,4), 
         db->Sqlite3ColumnInt(func, stmt, azColName,5), 
         callback_params->db_instance->GuidIndex(), record.track_id))

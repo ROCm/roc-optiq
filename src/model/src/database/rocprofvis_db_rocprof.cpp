@@ -548,29 +548,7 @@ RocprofDatabase::CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stm
     callback_params->future->CountThisRow();
     return 0;
 }
-
-int
-RocprofDatabase::CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
-                                       char** azColName)
-{
-    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    void*  func = (void*)&CallbackAddStackTrace;
-    rocprofvis_db_sqlite_callback_parameters* callback_params =
-        (rocprofvis_db_sqlite_callback_parameters*) data;
-    RocprofDatabase*           db = (RocprofDatabase*) callback_params->db;
-    rocprofvis_db_stack_data_t record;
-    if(callback_params->future->Interrupted()) return 1;
-    record.symbol = (char*) db->Sqlite3ColumnText(func, stmt, azColName, 0);
-    record.line   = (char*) db->Sqlite3ColumnText(func, stmt, azColName, 1);
-    record.args   = "";
-    record.depth  = callback_params->future->GetProcessedRowsCount();
-    if(db->BindObject()->FuncAddStackFrame(callback_params->handle, record) !=
-       kRocProfVisDmResultSuccess)
-        return 1;
-    callback_params->future->CountThisRow();
-    return 0;
-}   
+    
 
 rocprofvis_dm_result_t
 RocprofDatabase::CreateIndexes()
@@ -713,7 +691,7 @@ rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
 
     std::vector<std::pair<std::string, std::string>> info_table_list = {
         {"Node", "SELECT * from rocpd_info_node_%GUID%;"},
-        {"Agent", "SELECT id,guid,nid,pid,coalesce(type,'NIC') as type,absolute_index,logical_index,type_index,uuid,name,model_name,vendor_name,product_name,user_name,extdata from rocpd_info_agent_%GUID%;"},
+        {"Agent", "SELECT id,guid,nid,pid,coalesce(type,'NIC') as type,absolute_index,logical_index,type_index,uuid,name,model_name,vendor_name,product_name,extdata from rocpd_info_agent_%GUID%;"},
         {"Queue", "SELECT * from rocpd_info_queue_%GUID%;"},
         {"Stream", "SELECT * from rocpd_info_stream_%GUID%;"},
         {"Process", "SELECT * from rocpd_info_process_%GUID%;"},
@@ -1352,6 +1330,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                             sqlite3_bind_int(
                                 stmt, 3,
                                 m_event_levels[prop.second][guid_info.first.GuidIndex()][index].level_for_stream);
+                            sqlite3_bind_int(
+                                stmt, 4,
+                                m_event_levels[prop.second][guid_info.first.GuidIndex()][index].parent_id);
                         }, guid_info.first.FileIndex());
                     m_event_levels[prop.second][guid_info.first.GuidIndex()].clear();
                     m_event_levels_id_to_index[prop.second][guid_info.first.GuidIndex()].clear();
@@ -1923,28 +1904,47 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(
             BindObject()->FuncAddStackTrace(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(stacktrace, ERROR_EXT_DATA_CANNOT_BE_NULL);
         std::stringstream query;
-        if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
-           event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
-        {
+
             DbInstance* node_ptr = DbInstancePtrAt(event_id.bitfield.event_node);
             ROCPROFVIS_ASSERT_MSG_BREAK(node_ptr, ERROR_NODE_KEY_CANNOT_BE_NULL);
-            query << "SELECT E.call_stack, E.line_info from rocpd_region_%GUID% R INNER JOIN  rocpd_event_%GUID% E ON R.event_id = E.id where R.id == ";
-            query << event_id.bitfield.event_id << ";";
             ShowProgress(0, query.str().c_str(), kRPVDbBusy, future);
-            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.str().c_str(),
-                                                             stacktrace,
-                                                             &CallbackAddStackTrace))
+            if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch || event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
             {
-                break;
+                std::string level_table = event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ?
+                    " roc_optiq_event_levels_launch" :
+                    " roc_optiq_event_levels_launch_sample";
+                std::string callstack_params = m_query_factory.IsVersionGreaterOrEqual("4") ? 
+                    " 4 as version, R.id, L.parent_id, R.name_id, PC.function as p1, PC.file as p2, CODE.line_number as p3" : 
+                    " 3 as version, R.id, L.parent_id, R.name_id, E.call_stack as p1, E.line_info as p2, 0 as p3 ";
+                std::stringstream callstack_tables; 
+                callstack_tables << " rocpd_region_%GUID% R ";
+                callstack_tables << " INNER JOIN " << level_table << "_%GUID% L ON R.id = L.eid ";
+                callstack_tables << " INNER JOIN rocpd_event_%GUID% E ON R.event_id = E.id ";
+                if (m_query_factory.IsVersionGreaterOrEqual("4"))
+                {
+                    callstack_tables << " INNER JOIN rocpd_call_stack_%GUID% CS ON E.stack_id = CS.id ";
+                    callstack_tables << " INNER JOIN rocpd_info_pc_%GUID% PC ON CS.pc_id = PC.id ";
+                    callstack_tables << " INNER JOIN rocpd_line_info_%GUID% LI ON LI.pc_id = CS.pc_id AND E.id = LI.event_id ";
+                    callstack_tables << " INNER JOIN rocpd_info_source_code_%GUID% CODE ON LI.source_code_id = CODE.id ";
+                }
+                query << "WITH RECURSIVE stack_chain AS (SELECT 0 AS depth, " << callstack_params;
+                query << " FROM " << callstack_tables.str();
+                query << " WHERE R.id = " << event_id.bitfield.event_id;
+                query << " UNION SELECT sc.depth + 1, " << callstack_params;
+                query << " FROM " << callstack_tables.str();
+                query << " JOIN stack_chain sc ON sc.parent_id = L.eid) ";
+                query << " SELECT sc.version, sc.id, sc.p1, sc.p2, sc.p3, S.string, sc.depth FROM stack_chain sc ";
+                query << " LEFT JOIN rocpd_string_%GUID% S ON S.id = sc.name_id ";
+                query << " ORDER BY depth DESC;";
+                if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.str().c_str(),
+                    stacktrace,
+                    &CallbackAddStackTrace))
+                {
+                    break;
+                }
             }
-
-        }
-        else
-        {
-            ShowProgress(0, "Stack trace is not available for specified operation type!",
-                         kRPVDbError, future);
-            return future->SetPromise(kRocProfVisDmResultInvalidParameter);
-        }
+            
+            
 
         ShowProgress(100, "Extended data successfully loaded!", kRPVDbSuccess, future);
         return future->SetPromise(kRocProfVisDmResultSuccess);

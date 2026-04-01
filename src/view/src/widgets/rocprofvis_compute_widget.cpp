@@ -88,9 +88,6 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
 void
 MetricTableCache::Render() const
 {
-    //if(m_rows.empty())
-    //    return;
-
     int num_columns = static_cast<int>(m_column_names.size());
 
     SectionTitle(m_title.c_str());

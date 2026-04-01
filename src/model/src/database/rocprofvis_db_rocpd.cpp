@@ -184,24 +184,6 @@ int RocpdDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, c
     }
     callback_params->future->CountThisRow();
     return 0;
-}
-
-
-int RocpdDatabase::CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
-    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc==4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    void* func = (void*)&CallbackAddStackTrace;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
-    rocprofvis_db_stack_data_t record;
-    if(callback_params->future->Interrupted()) return SQLITE_ABORT;
-    record.symbol = (char*)db->Sqlite3ColumnText(func, stmt, azColName, 0);
-    record.args = (char*)db->Sqlite3ColumnText(func, stmt, azColName, 1);
-    record.line = (char*)db->Sqlite3ColumnText(func, stmt, azColName, 2);
-    record.depth = db->Sqlite3ColumnInt(func, stmt, azColName, 3);
-    if (db->BindObject()->FuncAddStackFrame(callback_params->handle,record) != kRocProfVisDmResultSuccess) return 1;
-    callback_params->future->CountThisRow();
-    return 0;
 }       
 
 rocprofvis_dm_result_t
@@ -351,6 +333,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                     sqlite3_bind_int(
                         stmt, 2,
                         m_event_levels[kRocProfVisDmOperationLaunch][DbInstancePtrAt(0)->GuidIndex()][index].level_for_queue);
+                    sqlite3_bind_int64(
+                        stmt, 3,
+                        m_event_levels[kRocProfVisDmOperationLaunch][DbInstancePtrAt(0)->GuidIndex()][index].parent_id);
                 });
             m_event_levels[kRocProfVisDmOperationLaunch].clear();
             m_event_levels_id_to_index[kRocProfVisDmOperationLaunch].clear();
@@ -364,6 +349,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                     sqlite3_bind_int(
                         stmt, 2,
                         m_event_levels[kRocProfVisDmOperationDispatch][DbInstancePtrAt(0)->GuidIndex()][index].level_for_queue);
+                    sqlite3_bind_int64(
+                        stmt, 3,
+                        m_event_levels[kRocProfVisDmOperationDispatch][DbInstancePtrAt(0)->GuidIndex()][index].parent_id);
                 });
             m_event_levels[kRocProfVisDmOperationDispatch][DbInstancePtrAt(0)->GuidIndex()].clear();
             m_event_levels_id_to_index[kRocProfVisDmOperationDispatch][DbInstancePtrAt(0)->GuidIndex()].clear();
@@ -576,7 +564,8 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
                 Builder::QParam("end", Builder::END_SERVICE_NAME),
                 Builder::QParam("(end-start)", Builder::DURATION_PUBLIC_NAME),
                 Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
-                Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME) },
+                Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
+                Builder::QParam("0", Builder::NODE_ID_SERVICE_NAME)},
                 { Builder::From("rocpd_api", MultiNode::No) } }));
         }
         case kRocProfVisDmOperationDispatch:
@@ -591,7 +580,8 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
                 Builder::QParam("end", Builder::END_SERVICE_NAME),
                 Builder::QParam("(end-start)", Builder::DURATION_PUBLIC_NAME),
                 Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
-                Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME) },
+                Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME),
+                Builder::QParam("0", Builder::NODE_ID_SERVICE_NAME) },
                 { Builder::From("rocpd_op", MultiNode::No) } }));
         }
         case kRocProfVisDmOperationNoOp:
@@ -871,26 +861,33 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadStackTraceInfo(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_stacktrace_t stacktrace = BindObject()->FuncAddStackTrace(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(stacktrace, ERROR_STACK_TRACE_CANNOT_BE_NULL);
-#ifdef SUPPORT_OLD_SCHEMA_STACK_TRACE 
-        std::stringstream query;
-        if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch || event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
+        if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
         {
-            query << "select s2.string as hip_api, s3.string as args, s1.string as frame, sf.depth "
-                     "from rocpd_stackframe sf join rocpd_string s1 on sf.name_id=s1.id join rocpd_api ap on "
-                     "sf.api_ptr_id=ap.id join rocpd_string s2 on ap.apiName_id=s2.id join rocpd_string s3 on ap.args_id=s3.id where ap.id  == ";
-            query << event_id.bitfield.event_id << ";";  
-            ShowProgress(0, query.str().c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, query.str().c_str(), stacktrace, &CallbackAddStackTrace)) break;
-        } else
-        {
-            ShowProgress(0, "Stack trace is not available for specified operation type!", kRPVDbError, future );
-            return future->SetPromise(kRocProfVisDmResultInvalidParameter);
-        }
-        ShowProgress(100, "Stack trace successfully loaded!", kRPVDbSuccess, future);
-#else
-        ShowProgress(100, "Stack trace is not supported for old schema database!", kRPVDbSuccess, future);
-#endif
+            std::string level_table = " roc_optiq_event_levels_api";
+            std::string callstack_params = " 0 as version, R.id, L.parent_id, R.apiName_id, R.args_id, NULL as p2, NULL as p3 ";
+            std::stringstream callstack_tables; 
+            std::stringstream query;
+            callstack_tables << " rocpd_api R ";
+            callstack_tables << " INNER JOIN " << level_table << " L ON R.id = L.eid ";
 
+            query << "WITH RECURSIVE stack_chain AS (SELECT 0 AS depth, " << callstack_params;
+            query << " FROM " << callstack_tables.str();
+            query << " WHERE R.id = " << event_id.bitfield.event_id;
+            query << " UNION SELECT sc.depth + 1, " << callstack_params;
+            query << " FROM " << callstack_tables.str();
+            query << " JOIN stack_chain sc ON sc.parent_id = L.eid) ";
+            query << " SELECT sc.version, sc.id, S1.string, sc.p2, sc.p3, S.string, sc.depth FROM stack_chain sc ";
+            query << " LEFT JOIN rocpd_string S ON S.id = sc.apiName_id ";
+            query << " LEFT JOIN rocpd_string S1 ON S1.id = sc.args_id ";
+            query << " ORDER BY depth DESC;";
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, DbInstancePtrAt(0), query.str().c_str(),
+                stacktrace,
+                &CallbackAddStackTrace))
+            {
+                break;
+            }
+        }
+        ShowProgress(100, "Stack trace successfully loaded!",kRPVDbSuccess, future);
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }
     ShowProgress(0, "Stack trace not loaded!", kRPVDbError, future);
@@ -939,7 +936,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
                     Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
                     Builder::SpaceSaver(0), 
                     Builder::QParam("L.level"),
-                    Builder::SpaceSaver(0) },
+                    Builder::SpaceSaver(0),
+                    Builder::SpaceSaver(0)},
                   { Builder::From("rocpd_api", MultiNode::No),
                     Builder::LeftJoin(Builder::LevelTable("api"), "L", "id = L.eid", MultiNode::No) },
                   { Builder::Where(
@@ -986,7 +984,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
                         Builder::SpaceSaver(0),
                         Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
                         Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME),
-                        Builder::SpaceSaver(0), Builder::QParam("L.level"),
+                        Builder::SpaceSaver(0), 
+                        Builder::QParam("L.level"),
+                        Builder::SpaceSaver(0),
                         Builder::SpaceSaver(0) },
                       { Builder::From("rocpd_op", MultiNode::No),
                         Builder::LeftJoin(Builder::LevelTable("op"), "L", "id = L.eid", MultiNode::No) },

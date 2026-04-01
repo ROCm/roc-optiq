@@ -3,378 +3,18 @@
 
 #include "rocprofvis_compute_widget.h"
 #include "compute/rocprofvis_compute_selection.h"
-#include "rocprofvis_core_assert.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_requests.h"
-#include "implot.h"
-#include <algorithm>
-#include <regex>
+#include "rocprofvis_settings_manager.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 namespace RocProfVis
 {
 namespace View
 {
-
-constexpr ImVec2 ITEM_SPACING_DEFAULT = ImVec2(8, 4);
-constexpr ImPlotColormap PLOT_COLOR_MAP = ImPlotColormap_Plasma;
-constexpr float PLOT_COLOR_MAP_WIDTH = 0.1f;
-constexpr double PLOT_BAR_SIZE = 0.67;
-constexpr double TABLE_THRESHOLD_HIGH = 80;
-constexpr double TABLE_THRESHOLD_MID = 50;
-constexpr ImU32 TABLE_COLOR_HIGH = IM_COL32(255, 18, 10, 255);
-constexpr ImU32 TABLE_COLOR_MID = IM_COL32(255, 169, 10, 255);
-constexpr ImU32 TABLE_COLOR_SEARCH = IM_COL32(0, 255, 0, 255);
-constexpr ImVec4 TABLE_COLOR_SEARCH_TEXT = ImVec4(0, 0, 0, 1);
-
-ComputeWidgetLegacy::ComputeWidgetLegacy(std::shared_ptr<ComputeDataProvider> data_provider) 
-: m_data_provider(data_provider)
-, m_id("")
-{
-    ROCPROFVIS_ASSERT(m_data_provider);
-    m_id = GenUniqueName("");
-}
-
-ComputePlotLegacy::ComputePlotLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
-: ComputeWidgetLegacy(data_provider)
-, m_type(type)
-, m_model(nullptr)
-{
-
-}
-
-void ComputePlotLegacy::Update()
-{
-    m_model = m_data_provider->GetPlotModel(m_type);
-}
-
-ComputeTableLegacy::ComputeTableLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_table_types_t type)
-: ComputeWidgetLegacy(data_provider)
-, m_type(type)
-, m_model(nullptr)
-{
-
-}
-
-void ComputeTableLegacy::Update()
-{
-    m_model = m_data_provider->GetTableModel(m_type);
-}
-
-void ComputeTableLegacy::Render()
-{
-    if (m_model)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
-        ImGui::SeparatorText(m_model->m_title.c_str());
-        ImGui::PopStyleVar();
-
-        std::vector<std::vector<ComputeTableCellModel>>& cells = m_model->m_cells;
-        if (ImGui::BeginTable(m_id.c_str(), cells[0].size(), ImGuiTableFlags_Borders))
-        {
-            for (std::string& c : m_model->m_column_names)
-            {
-                ImGui::TableSetupColumn(c.c_str());
-            }
-            ImGui::TableHeadersRow();
-
-            for (int r = 0; r < cells.size(); r ++)
-            {
-                ImGui::TableNextRow();
-                for (int c = 0; c < cells[r].size(); c ++)
-                {
-                    ImGui::TableSetColumnIndex(c);                        
-                    ComputeTableCellModel& cell = cells[r][c];
-                    if (cell.m_highlight)
-                    {
-                        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_SEARCH);
-                    }
-                    else if (cell.m_colorize)
-                    {
-                        double value = 0;
-                        if (cell.m_type == kRPVControllerPrimitiveTypeDouble)
-                        {
-                            value = cell.m_num_value.m_double;
-                        }
-                        else if (cell.m_type == kRPVControllerPrimitiveTypeUInt64)
-                        {
-                            value = cell.m_num_value.m_uint64;
-                        }
-                        if (value > TABLE_THRESHOLD_HIGH)
-                        {
-                            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_HIGH);
-                        }
-                        else if (value > TABLE_THRESHOLD_MID)
-                        {
-                            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, TABLE_COLOR_MID);
-                        }
-                    }
-
-                    ImGui::TextColored(cell.m_highlight ? TABLE_COLOR_SEARCH_TEXT : ImGui::GetStyleColorVec4(ImGuiCol_Text), cell.m_str_value.c_str());
-                }
-            }
-            ImGui::EndTable();
-        }
-    }
-}
-
-void ComputeTableLegacy::Search(const std::string& term)
-{
-    if (m_model)
-    {
-        std::regex exp(term, std::regex_constants::icase);
-        for (std::vector<ComputeTableCellModel>& row : m_model->m_cells)
-        {            
-            bool match = !term.empty() && !(term.length() == 1 && term == " ") && std::regex_search(row[0].m_str_value, exp);
-            for (ComputeTableCellModel& cell : row)
-            {
-                cell.m_highlight = match;
-            }
-        }
-    }
-}
-
-ComputePlotPieLegacy::ComputePlotPieLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
-: ComputePlotLegacy(data_provider, type)
-{
-
-}
-
-void ComputePlotPieLegacy::Render()
-{
-    if (m_model)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
-        ImGui::Separator();
-        ImGui::PopStyleVar();
-
-        const char* title = m_model->m_title.c_str();
-        std::vector<const char*>& series_names = m_model->m_y_axis.m_tick_labels;
-        std::vector<double>& x_values = m_model->m_series[0].m_x_values;
-        std::vector<double>& y_values = m_model->m_series[0].m_y_values;
-
-        ImGui::PushID(m_id.c_str());
-        if (ImPlot::BeginPlot(title, ImVec2(-1, 0), ImPlotFlags_Equal | ImPlotFlags_NoInputs)) {
-            ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
-            ImPlot::SetupAxesLimits(0, 1, 0, 1);
-            double angle = 90;
-            for (int i = 0; i < x_values.size(); i ++)
-            {
-                const char* label[1] = {series_names[i]};
-                double value[1] = {x_values[i] / 100};
-                ImGui::PushID(i);
-                ImPlot::PlotPieChart(label, value, 1, 0.5, 0.5, 0.1, 
-                [](double value, char* buff, int size, void*) -> int 
-                {
-                    //ImplotFormatter callback.
-                    snprintf(buff, size, (value > 0.05) ? "%.1f%%" : "", value * 100);
-                    return 0;
-                },
-                nullptr, angle, ImPlotPieChartFlags_None);
-                ImGui::PopID();
-                angle += x_values[i] / 100 * 360;
-            }
-            ImPlot::EndPlot();
-        }
-        ImGui::PopID();
-    }
-}
-
-ComputePlotBarLegacy::ComputePlotBarLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
-: ComputePlotLegacy(data_provider, type)
-{
-
-}
-
-void ComputePlotBarLegacy::Render()
-{
-    if (m_model)
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ITEM_SPACING_DEFAULT);
-        ImGui::Separator();
-        ImGui::PopStyleVar();
-
-        ImVec2 content_region = ImGui::GetContentRegionAvail();
-        const char* title = m_model->m_title.c_str();
-        const char* x_label = m_model->m_x_axis.m_name.c_str();
-        const char* y_label = m_model->m_y_axis.m_name.c_str();
-        const double& x_min = 0;
-        const double& x_max = m_model->m_x_axis.m_max;
-        std::vector<const char*>& series_names = m_model->m_y_axis.m_tick_labels;
-        std::vector<double>& x_values = m_model->m_series[0].m_x_values;
-        std::vector<double>& y_values = m_model->m_series[0].m_y_values;
-
-        ImGui::PushID(m_id.c_str());
-        if (ImPlot::BeginPlot(title, ImVec2(content_region.x * (1 - PLOT_COLOR_MAP_WIDTH), 0), ImPlotFlags_NoMenus | ImPlotFlags_Crosshairs)) {
-            ImPlot::SetupAxis(ImAxis_X1, x_label, ImPlotAxisFlags_NoInitialFit | ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
-            ImPlot::SetupAxis(ImAxis_Y1, y_label, ImPlotAxisFlags_NoInitialFit | ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
-            ImPlot::SetupAxisLimits(ImAxis_X1, x_min, x_max * 1.01f, ImPlotCond_None);
-            ImPlot::SetupAxisLimits(ImAxis_Y1, -PLOT_BAR_SIZE, series_names.size() - 1 + PLOT_BAR_SIZE, ImPlotCond_None);
-            ImPlot::SetupAxisTicks(ImAxis_Y1, y_values.data(), y_values.size(), series_names.data());
-            ImPlot::PushStyleColor(ImPlotCol_Line, ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Text)));
-            for (int i = 0; i < x_values.size(); i ++)
-            {
-                double& value = x_values[i];
-                ImGui::PushID(i);
-                ImPlot::SetNextFillStyle(ImPlot::SampleColormap(x_max - x_min > 0 ? value / (x_max - x_min) : 0, PLOT_COLOR_MAP));
-                ImPlot::PlotBars("", &value, 1, PLOT_BAR_SIZE, i, ImPlotBarsFlags_Horizontal);
-                ImGui::PopID();
-            }
-            ImPlot::PopStyleColor();
-            ImPlot::EndPlot();
-        }
-        ImGui::PopID();
-        ImGui::SameLine();
-        ImPlot::ColormapScale(x_label, x_min, x_max, ImVec2(content_region.x * PLOT_COLOR_MAP_WIDTH, 0), "%g", ImPlotColormapScaleFlags_None, PLOT_COLOR_MAP);
-    }
-}
-
-ComputeMetricLegacy::ComputeMetricLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit)
-: ComputeWidgetLegacy(data_provider)
-, m_type(type)
-, m_name(label)
-, m_unit(unit)
-{
-
-}
-
-void ComputeMetricLegacy::Update()
-{
-    m_model = m_data_provider->GetMetricModel(m_type);
-    if (m_model)
-    {
-        if (!m_name.empty())
-        {
-            m_formatted_string = m_name + ": ";
-        }       
-        if (m_model->m_type == kRPVControllerPrimitiveTypeDouble)
-        {
-            m_formatted_string += std::to_string(m_model->m_value.m_double);
-        }
-        else if (m_model->m_type == kRPVControllerPrimitiveTypeUInt64)
-        {
-            m_formatted_string += std::to_string(m_model->m_value.m_uint64);
-        }
-        if (!m_unit.empty())
-        {
-            m_formatted_string += " " + m_unit;
-            if (m_unit == "%")
-            {
-                m_formatted_string += "%";
-            }
-        }
-    }
-}
-
-std::string ComputeMetricLegacy::GetFormattedString() const
-{
-    return m_formatted_string;
-}
-
-ComputePlotRooflineLegacy::ComputePlotRooflineLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type)
-: ComputePlotLegacy(data_provider, type)
-, m_group_mode(GroupModeKernel)
-, m_group_dirty(false)
-{
-
-}
-
-void ComputePlotRooflineLegacy::Update()
-{
-    ComputePlotLegacy::Update();
-    m_group_dirty = true;
-    UpdateGroupMode();
-}
-
-void ComputePlotRooflineLegacy::Render()
-{
-    if (m_model && !m_group_dirty)
-    {
-        const char* title = m_model->m_title.c_str();
-        const char* x_label = m_model->m_x_axis.m_name.c_str();
-        const char* y_label = m_model->m_y_axis.m_name.c_str();
-        const double& x_min = m_model->m_x_axis.m_min_non_zero;
-        const double& x_max = m_model->m_x_axis.m_max;
-        const double& y_min = m_model->m_y_axis.m_min_non_zero;
-        const double& y_max = m_model->m_y_axis.m_max;
-
-        if (ImGui::CollapsingHeader(title, ImGuiTreeNodeFlags_DefaultOpen))
-        {            
-            ImGui::PushID(0);
-            if(ImPlot::BeginPlot(title, ImVec2(-1, 500), ImPlotFlags_NoMenus | ImPlotFlags_Crosshairs)) 
-            {
-                ImPlot::SetupAxis(ImAxis_X1, x_label, ImPlotAxisFlags_NoInitialFit | ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
-                ImPlot::SetupAxis(ImAxis_Y1, y_label, ImPlotAxisFlags_NoInitialFit | ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
-                ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
-                ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
-                ImPlot::SetupAxisLimits(ImAxis_X1, x_min * 0.5f, x_max, ImPlotCond_None);
-                ImPlot::SetupAxisLimits(ImAxis_Y1, y_min * 0.5f, y_max * 2, ImPlotCond_None);
-                ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, x_min * 0.5f, x_max);
-                ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, y_min * 0.5f, y_max * 2);
-                ImPlot::SetupLegend(ImPlotLocation_East, ImPlotLegendFlags_Outside);
-                for (int i = 0; i < m_ceilings_names.size(); i ++)
-                {
-                    ImPlot::PlotLine(m_ceilings_names[i], m_ceilings_x[i]->data(), m_ceilings_y[i]->data(), m_ceilings_x[i]->size());
-                }
-                for (int i = 0; i < m_ai_names.size(); i ++)
-                {
-                    ImGui::PushID(i);
-                    ImPlot::PlotScatter(m_ai_names[i], m_ai_x[i]->data(), m_ai_y[i]->data(), m_ai_x[i]->size());
-                    ImGui::PopID();
-                }
-                ImPlot::EndPlot();
-            }
-            ImGui::PopID();
-        }
-    }
-}
-
-void ComputePlotRooflineLegacy::UpdateGroupMode()
-{
-    if (m_group_dirty && m_model)
-    {
-        m_ceilings_names.clear();
-        m_ceilings_x.clear();
-        m_ceilings_y.clear();
-        m_ai_names.clear();
-        m_ai_x.clear();
-        m_ai_y.clear();
-
-        for (ComputePlotSeriesModel& series : m_model->m_series)
-        {
-            bool kernel_series = series.m_name.find("Kernel") != std::string::npos;
-            bool dispatch_series = series.m_name.find("Dispatch") != std::string::npos;
-            bool ai_series = kernel_series || dispatch_series;
-            if (ai_series)
-            {
-                if (m_group_mode == GroupModeKernel && kernel_series || m_group_mode == GroupModeDispatch && dispatch_series)
-                {
-                    m_ai_names.push_back(series.m_name.c_str());
-                    m_ai_x.push_back(&series.m_x_values);
-                    m_ai_y.push_back(&series.m_y_values);
-                }
-            }
-            else
-            {
-                m_ceilings_names.push_back(series.m_name.c_str());
-                m_ceilings_x.push_back(&series.m_x_values);
-                m_ceilings_y.push_back(&series.m_y_values);
-            }
-        }
-        ROCPROFVIS_ASSERT(!m_ceilings_names.empty() && !m_ceilings_x.empty() && !m_ceilings_y.empty() && !m_ai_names.empty() && !m_ai_x.empty() && !m_ai_y.empty());
-        m_group_dirty = false;
-    }
-}
-
-void ComputePlotRooflineLegacy::SetGroupMode(const GroupMode& mode)
-{
-    if (mode != m_group_mode)
-    {
-        m_group_mode = mode;
-        m_group_dirty = true;
-        UpdateGroupMode();
-    }
-}
+MetricTableCache::MetricTableCache(std::function<void(MetricId)> add_row_func) 
+: m_add_row_to_custom(add_row_func){}
 
 void
 MetricTableCache::Populate(const AvailableMetrics::Table& table,
@@ -384,7 +24,7 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
     m_table_id = "##" + table.name;
     m_column_names.clear();
     m_rows.clear();
-    m_rows.reserve(table.entries.size());
+    m_rows.reserve(table.ordered_entries.size());
 
     m_column_names.push_back("Metric ID");
     m_column_names.push_back("Metric");
@@ -400,18 +40,16 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
     m_column_names.push_back("Unit");
 
     char buf[64];
-    for(const auto& entry_pair : table.entries)
+    for(const auto* entry : table.ordered_entries)
     {
-        uint32_t    eid   = entry_pair.first;
-        const auto& entry = entry_pair.second;
+        uint32_t eid = entry->id;
 
         Row row;
-        row.metric_id   = std::to_string(entry.category_id) + "." +
-                          std::to_string(entry.table_id) + "." +
-                          std::to_string(eid);
-        row.name        = entry.name;
-        row.description = entry.description;
-        row.unit        = entry.unit.empty() ? "N/A" : entry.unit;
+
+        row.metric_id   = { entry->category_id, entry->table_id, eid};
+        row.name        = entry->name;
+        row.description = entry->description;
+        row.unit        = entry->unit.empty() ? "N/A" : entry->unit;
 
         auto mv = get_value(eid);
 
@@ -450,9 +88,6 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
 void
 MetricTableCache::Render() const
 {
-    if(m_rows.empty())
-        return;
-
     int num_columns = static_cast<int>(m_column_names.size());
 
     SectionTitle(m_title.c_str());
@@ -466,23 +101,48 @@ MetricTableCache::Render() const
     int row_idx = 0;
     for(const auto& row : m_rows)
     {
+        auto menu_func = [&](const char* value_to_copy) {
+            if(ImGui::BeginPopupContextItem())
+            {
+                if(ImGui::MenuItem("Copy"))
+                {
+                    ImGui::SetClipboardText(value_to_copy);
+                    NotificationManager::GetInstance().Show(
+                            COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+                }
+                if (m_add_row_to_custom)
+                {
+                    if(ImGui::MenuItem("Pin metric"))
+                    {
+                        m_add_row_to_custom(
+                            {
+                              row.metric_id.category_id,
+                              row.metric_id.table_id,
+                              row.metric_id.entry_id
+                            });
+                    }
+                }
+
+                ImGui::EndPopup();
+            }
+        };
         ImGui::PushID(row_idx++);
         ImGui::TableNextRow();
 
         ImGui::TableNextColumn();
-        CopyableTextUnformatted(row.metric_id.c_str(), "##mid",
-                                COPY_DATA_NOTIFICATION, false, true);
+        CopyableTextUnformatted(row.metric_id.ToString().c_str(), "##mid",
+                                COPY_DATA_NOTIFICATION,
+                                false, true, menu_func);
 
         ImGui::TableNextColumn();
-        CopyableTextUnformatted(row.name.c_str(), "##name",
-                                COPY_DATA_NOTIFICATION, false, true);
+        CopyableTextUnformatted(row.name.c_str(), "##name", COPY_DATA_NOTIFICATION, false,
+                                true, menu_func);
         if(!row.description.empty() && ImGui::IsItemHovered())
         {
-            constexpr float kTooltipMaxWidth = 400.0f;
             ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                                ImVec2(kTooltipMaxWidth, FLT_MAX));
+                                                ImVec2(TABLE_TOOLTIP_MAX_WIDTH, FLT_MAX));
             BeginTooltipStyled();
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TABLE_TOOLTIP_MAX_WIDTH);
             ImGui::TextUnformatted(row.description.c_str());
             ImGui::PopTextWrapPos();
             EndTooltipStyled();
@@ -495,7 +155,7 @@ MetricTableCache::Render() const
             {
                 CopyableTextUnformatted(row.values[vi].c_str(),
                                         std::string("##v") + std::to_string(vi),
-                                        COPY_DATA_NOTIFICATION, false, true);
+                                        COPY_DATA_NOTIFICATION, false, true, menu_func);
             }
             else
             {
@@ -506,8 +166,8 @@ MetricTableCache::Render() const
         ImGui::TableNextColumn();
         if(row.unit != "N/A")
         {
-            CopyableTextUnformatted(row.unit.c_str(), "##unit",
-                                    COPY_DATA_NOTIFICATION, false, true);
+            CopyableTextUnformatted(row.unit.c_str(), "##unit", COPY_DATA_NOTIFICATION,
+                                    false, true, menu_func);
         }
         else
         {
@@ -531,6 +191,8 @@ MetricTableCache::Empty() const
 {
     return m_rows.empty();
 }
+
+//---------------------------------------------------------
 
 MetricTableWidget::MetricTableWidget(DataProvider& data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection,
@@ -597,6 +259,286 @@ MetricTableWidget::UpdateTable()
     m_table.Populate(tree.at(m_category_id).tables.at(m_table_id), [&](uint32_t eid) {
         return model.GetMetricValue(m_client_id, kernel_id, m_category_id, m_table_id, eid);
     });
+}
+
+//---------------------------------------------------------
+
+PinedMetricTable::PinedMetricTable(DataProvider&                     data_provider,
+                         std::shared_ptr<ComputeSelection> compute_selection,
+                         uint64_t                          client_id)
+: m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
+, m_client_id(client_id)
+{ 
+    FillDefaultColumns();
+}
+
+void
+PinedMetricTable::FillDefaultColumns()
+{
+    m_columns[0]                                    = "Metric ID";
+    m_columns[1]                                    = "Metric";
+    m_lust_column_index                             = 2;
+    m_columns[std::numeric_limits<uint32_t>::max()] = "Unit";
+}
+
+void
+PinedMetricTable::ContextMenu(const char* value_to_copy, MetricId id_to_delete)
+{
+    if(ImGui::BeginPopupContextItem())
+    {
+        if(ImGui::MenuItem("Copy"))
+        {
+            ImGui::SetClipboardText(value_to_copy);
+            NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+                                                    NotificationLevel::Info);
+        }
+        if(ImGui::MenuItem("Unpin metric"))
+        {
+            m_id_to_delete = id_to_delete;
+        }
+        ImGui::EndPopup();
+    }
+}
+
+float
+PinedMetricTable::GetTableHight() const
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    float             line_height =
+        ImGui::GetTextLineHeightWithSpacing() + style.CellPadding.y * 2.0f;
+    auto max_rows = m_rows.size() < 7 ? m_rows.size() : 7;
+    return style.ScrollbarSize + line_height + (max_rows * line_height);
+}
+
+void
+PinedMetricTable::FillMandatoryColumns(const MetricId&                metric_id,
+                                       const AvailableMetrics::Table& table,
+                         Row& row,
+                         std::shared_ptr<MetricValue>     metric_value)
+{
+    if(auto entrie = table.entries.find(metric_id.entry_id); entrie != table.entries.end())
+    {
+        row[0].value                                    = metric_id.ToString();
+
+        row[1].value                                    = entrie->second.name;
+        row[1].tooltip                                  = entrie->second.description;
+
+        row[std::numeric_limits<uint32_t>::max()].value = entrie->second.unit;
+    }
+}
+
+void
+PinedMetricTable::RefillTable()
+{
+    m_columns.clear();
+    m_lust_column_index = 0;
+    FillDefaultColumns();
+    for(const auto& [metric_id, row] : m_rows)
+    {
+        AddRow(metric_id);
+    }
+}
+
+void
+PinedMetricTable::AddRow(MetricId metric_id)
+{
+    UpdateColumns(metric_id);
+    FillTableRow(metric_id);
+}
+
+void
+PinedMetricTable::UpdateColumns(MetricId metric_id)
+{
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    if(m_columns.empty())
+        FillDefaultColumns();
+
+    for(const auto& name : GetTable(metric_id, workload_id).value_names)
+    {
+        if(GetColumnIndex(name) == std::nullopt)
+            m_columns[m_lust_column_index++] = name;
+    }
+}
+
+const AvailableMetrics::Table&
+PinedMetricTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
+{
+    const auto& tree = m_data_provider.ComputeModel()
+                           .GetWorkloads()
+                           .at(workload_id)
+                           .available_metrics.tree;
+    return tree.at(metric_id.category_id).tables.at(metric_id.table_id);
+}
+
+std::optional<uint32_t>
+PinedMetricTable::GetColumnIndex(const std::string& column_name)
+{
+    for(auto column : m_columns)
+    {
+        if(column.second == column_name)
+            return column.first;
+    }
+    return std::nullopt;
+}
+
+void
+PinedMetricTable::FillTableRow(const MetricId& metric_id)
+{
+    Row row;
+
+    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+    auto& model = m_data_provider.ComputeModel();
+    auto  metric_value =
+        model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
+                             metric_id.table_id, metric_id.entry_id);
+
+    const auto& table = GetTable(metric_id, workload_id);
+    FillMandatoryColumns(metric_id, table, row, metric_value);
+
+    char buf[64];
+    for(const auto& value_name : table.value_names)
+    {
+        if(auto index = GetColumnIndex(value_name); index.has_value())
+        {
+            if(metric_value && metric_value->entry &&
+               metric_value->values.count(value_name))
+            {
+                snprintf(buf, sizeof(buf), "%.2f", metric_value->values.at(value_name));
+                row[index.value()].value = buf;
+            }
+        }
+    }
+    m_rows[metric_id] = std::move(row);
+}
+
+void
+PinedMetricTable::Render() 
+{
+    SectionTitle("Pined metric");
+    if (m_rows.empty())
+    {
+        ImGui::TextDisabled("Pin the metric to see it here");
+        return;
+    }
+
+    if(ImGui::BeginChild("pined_metric_table_content", ImVec2(0, GetTableHight()),
+                         false,
+                         ImGuiWindowFlags_HorizontalScrollbar))
+    {
+        ImGuiTableFlags table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                                      ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollX;
+        int num_columns = static_cast<int>(m_columns.size());
+        if(!ImGui::BeginTable("pined metric", num_columns, table_flags))
+            return;
+
+        for(const auto& column : m_columns)
+            ImGui::TableSetupColumn(column.second.c_str());
+
+        ImGui::TableHeadersRow();
+
+        uint32_t row_idx = 0;
+        for(auto& row : m_rows)
+        {
+            auto menu_func = [&](const char* value_to_copy) {
+                this->ContextMenu(value_to_copy, row.first);
+            };
+            ImGui::PushID(row_idx++);
+            ImGui::TableNextRow();
+
+            for(auto index = 0; index < m_columns.size() - 1; index++)
+            {
+                RenderRowValues(index, row, menu_func);
+            }
+            RenderUnitValue(row, menu_func);
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    ImGui::EndChild();
+
+    SectionTitle("All metric tables");
+}
+
+void
+PinedMetricTable::RenderRowValues(uint32_t index, const std::pair<MetricId, Row>& row,
+                       std::function<void(const char* value_to_copy)> menu_func)
+{
+    ImGui::TableNextColumn();
+    if(auto it = row.second.find(index); it == row.second.end())
+    {
+        ImGui::TextDisabled("N/A");
+    }
+    else
+    {
+        CopyableTextUnformatted(row.second.at(index).value.c_str(),
+                                "##value" + std::to_string(index), COPY_DATA_NOTIFICATION,
+                                false, true, menu_func);
+        RenderTooltip(row.second.at(index));
+    }
+}
+
+void
+PinedMetricTable::RenderUnitValue(const std::pair<MetricId, Row>&                row,
+                             std::function<void(const char* value_to_copy)> menu_func)
+{
+    ImGui::TableNextColumn();
+    if(row.second.at(std::numeric_limits<uint32_t>::max()).value.empty())
+    {
+        ImGui::TextDisabled("N/A");
+    }
+    else
+    {
+        CopyableTextUnformatted(
+            row.second.at(std::numeric_limits<uint32_t>::max()).value.c_str(),
+            "##metric_unit", COPY_DATA_NOTIFICATION, false, true, menu_func);
+        RenderTooltip(row.second.at(std::numeric_limits<uint32_t>::max()));
+    }
+}
+
+void
+PinedMetricTable::RenderTooltip(const RowValue& row)
+{
+    auto tooltip_text = row.tooltip.empty() ? row.value : row.tooltip;
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                            ImVec2(TABLE_TOOLTIP_MAX_WIDTH, FLT_MAX));
+        BeginTooltipStyled();
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TABLE_TOOLTIP_MAX_WIDTH);
+        ImGui::TextUnformatted(tooltip_text.c_str());
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();
+    }
+}
+
+void
+PinedMetricTable::Update()
+{
+    if(m_id_to_delete.has_value())
+    {
+        m_rows.erase(m_id_to_delete.value());
+
+        m_columns.clear();
+        m_lust_column_index = 0;
+        for(const auto& [metric_id, row] : m_rows)
+        {
+            UpdateColumns(metric_id);
+        }
+        m_id_to_delete = std::nullopt;
+    }
 }
 
 }  // namespace View

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_compute.h"
-#include "json.h"
 
 namespace RocProfVis
 {
@@ -101,17 +100,20 @@ namespace DataModel
 		std::string query;
 		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
 		{
-			query = "SELECT ";
-			query += "kernel_uuid, ";
-			query += "kernel_name, ";
-			query += "dispatch_count, ";
-			query += "duration_ns_sum, ";
-			query += "duration_ns_mean, ";
-			query += "duration_ns_min, ";
-			query += "duration_ns_max, ";
-			query += "duration_ns_median ";
-			query += "FROM ";
-			query += "compute_kernel_view WHERE workload_id = ";
+			query =
+				"SELECT "
+				"compute_kernel.kernel_uuid AS kernel_uuid,"
+				"compute_kernel.workload_id AS workload_id,"
+				"compute_workload.name AS workload_name,"
+				"compute_kernel.kernel_name AS kernel_name,"
+				"compute_dispatch.dispatch_id AS dispatch_id,"
+				"(compute_dispatch.end_timestamp - compute_dispatch.start_timestamp) AS duration_ns "
+				"FROM compute_dispatch "
+				"JOIN compute_kernel "
+				"ON compute_dispatch.kernel_uuid = compute_kernel.kernel_uuid "
+				"JOIN compute_workload "
+				"ON compute_kernel.workload_id = compute_workload.workload_id "
+				"WHERE compute_workload.workload_id = ";
 			query += params[0].param_str;
 		}
 		return query;
@@ -159,13 +161,22 @@ namespace DataModel
 			params[0].param_type == kRPVComputeParamWorkloadId &&
 			params[1].param_type == kRPVComputeParamMetricId)
 		{
-			query = "SELECT DISTINCT value_name ";
-			query += "FROM compute_metric_view ";
-			query += "WHERE (metric_id = '";
-			query += params[1].param_str;
-			query += "' OR metric_id LIKE '";
-			query += params[1].param_str;
-			query += ".%')";
+			query = "SELECT DISTINCT value_name FROM ";
+			query += IsVersionGreaterOrEqual("1.3.0") ? "compute_workload_metric_value " : "compute_metric_value ";
+			query += "WHERE metric_uuid IN(";
+			std::string in_query;
+			for (auto& [metric_id, metric_uuid] : m_db->m_metric_uuid_lookup[std::atol(params[0].param_str)])
+			{
+				if (metric_id.find(params[1].param_str) == 0)
+				{
+					if (!in_query.empty())
+					{
+						in_query += ",";
+					}
+					in_query += std::to_string(metric_uuid);
+				}
+			}
+			query += in_query + ")";
 		}
 		return query;
 	}
@@ -184,9 +195,16 @@ namespace DataModel
 			query += " l1_cache_data, ";
 			query += " l2_cache_data, ";
 			query += " hbm_cache_data ";
-			query += " FROM compute_roofline_data CRD ";
+			if (IsVersionGreaterOrEqual("1.3.0"))
+			{
+				query += " FROM compute_kernel_roofline_data CRD ";	
+			}
+			else
+			{
+				query += " FROM compute_roofline_data CRD ";
+			}
 			query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid ";
-			query += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";
+			query += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";	
 		}
 		return query;
 	}
@@ -198,7 +216,14 @@ namespace DataModel
 			query = "SELECT ";
 			query += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
 			query += "table_name ";
-			query += "FROM compute_metric_view ";
+			if (IsVersionGreaterOrEqual("1.3.0"))
+			{
+				query += " FROM compute_kernel_metric_view";
+			}
+			else
+			{
+				query += " FROM compute_metric_view ";
+			}
 			query += "WHERE kernel_uuid = ";
 			query += params[0].param_str;
 			query += " GROUP BY table_name";
@@ -213,7 +238,13 @@ namespace DataModel
 			query = "SELECT ";
 			query += "metric_id as sub_table_id, "; //parsed in callback method
 			query += "sub_table_name ";
-			query += "FROM compute_metric_view ";
+			if (IsVersionGreaterOrEqual("1.3.0"))
+			{
+				query += " FROM compute_kernel_metric_view";
+			}
+			{
+				query += " FROM compute_metric_view ";
+			}
 			query += "WHERE kernel_uuid = ";
 			query += params[0].param_str;
 			query += " AND metric_id LIKE '";
@@ -269,307 +300,222 @@ namespace DataModel
 		return result;
 	}
 
-	std::string ComputeQueryFactory::BuildFilterCondition(const std::string& column_name, const std::string& filter_expr) {
-		// Trim whitespace from filter expression
-		std::string trimmed = filter_expr;
-		trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
-		trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
 
-		if(trimmed.empty()) return "";
+std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
+	rocprofvis_db_num_of_params_t num,
+	rocprofvis_db_compute_params_t params)
+{
+	std::string workload_id;
+	int         sort_column_index = 2;
+	std::string sort_order        = "DESC";
 
-		// Helper lambda to check if string starts with a given prefix (case-insensitive)
-		auto starts_with_ci = [](const std::string& str, const std::string& prefix) {
-			if(str.length() < prefix.length()) return false;
-			return std::equal(prefix.begin(), prefix.end(), str.begin(),
-				[](char a, char b) { return std::tolower(a) == std::tolower(b); });
-		};
+	std::vector<std::pair<std::string,std::string>> metric_selectors;
+	std::unordered_map<size_t,std::string> column_filters;
 
-		// Handle LIKE operator
-		if(starts_with_ci(trimmed, "LIKE"))
+	size_t last_filter_column_index = 0;
+
+	// -----------------------------
+	// Parse parameters
+	// -----------------------------
+	for(size_t i = 0; i < num; i++)
+	{
+		if(params[i].param_type == kRPVComputeParamWorkloadId)
 		{
-			std::string pattern = trimmed.substr(4);
-			// Trim whitespace from pattern
-			pattern.erase(0, pattern.find_first_not_of(" \t\n\r"));
-			pattern.erase(pattern.find_last_not_of(" \t\n\r") + 1);
-
-			// Ensure pattern is quoted
-			if(!pattern.empty() && pattern[0] != '\'' && pattern[0] != '"')
-			{
-				pattern = "'" + pattern + "'";
-			}
-			return column_name + " LIKE " + pattern;
+			workload_id = params[i].param_str;
 		}
-
-		// Handle comparison operators (ordered by length to match >= before >)
-		static const std::vector<std::string> ops = {">=", "<=", "!=", "<>", ">", "<", "="};
-		for(const auto& op : ops)
+		else if(params[i].param_type == kRPVComputeParamMetricSelector)
 		{
-			if(trimmed.find(op) == 0)
-			{
-				std::string value = trimmed.substr(op.length());
-				// Trim whitespace from value
-				value.erase(0, value.find_first_not_of(" \t\n\r"));
-				value.erase(value.find_last_not_of(" \t\n\r") + 1);
+			std::string selector = params[i].param_str;
 
-				// Validate value is numeric for numeric operators
-				if(!value.empty() && (std::isdigit(value[0]) || value[0] == '-' || value[0] == '.'))
-				{
-					return column_name + " " + op + " " + value;
-				}
-				break;
+			size_t colon_pos = selector.find(':');
+			if(colon_pos != std::string::npos)
+			{
+				std::string metric_id  = selector.substr(0, colon_pos);
+				std::string value_name = selector.substr(colon_pos + 1);
+
+				std::transform(value_name.begin(), value_name.end(),
+					value_name.begin(),
+					[](unsigned char c){ return std::tolower(c); });
+
+				metric_selectors.emplace_back(metric_id, value_name);
 			}
 		}
-
-		// If no operator found, assume equality with numeric value
-		if(!trimmed.empty() && (std::isdigit(trimmed[0]) || trimmed[0] == '-' || trimmed[0] == '.'))
+		else if(params[i].param_type == kRPVComputeParamSortColumnIndex)
 		{
-			return column_name + " = " + trimmed;
+			sort_column_index = std::atoi(params[i].param_str);
 		}
+		else if(params[i].param_type == kRPVComputeParamSortColumnOrder)
+		{
+			std::string order = params[i].param_str;
 
-		return "";  // Invalid expression
+			std::transform(order.begin(), order.end(),
+				order.begin(),
+				[](unsigned char c){ return std::toupper(c); });
+
+			sort_order = (order == "ASC") ? "ASC" : "DESC";
+		}
+		else if(params[i].param_type == kRPVComputeParamFilterColumnIndex)
+		{
+			last_filter_column_index = std::stoull(params[i].param_str);
+		}
+		else if(params[i].param_type == kRPVComputeParamFilterExpression)
+		{
+			column_filters[last_filter_column_index] = params[i].param_str;
+		}
 	}
 
-	std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
-        std::string query;
-        std::string workload_id;
-        int         sort_column_index = 2;       // default to duration_ns_sum (index 2)
-        std::string sort_order        = "DESC";  // default to descending
+	if(workload_id.empty())
+		return "";
 
-		// (metric_id, value_name) pairs
-		std::vector<std::pair<std::string, std::string>> metric_selectors;
-        std::vector<std::string> column_names;  // Track column order for sorting
-        std::unordered_map<size_t, std::string> column_filters;  // column_index to expression
-        size_t last_filter_column_index = 0;
 
-        // Parse parameters
-        for(size_t i = 0; i < num; i++)
-        {
-            if(params[i].param_type == kRPVComputeParamWorkloadId)
-            {
-                workload_id = params[i].param_str;
-            }
-            else if(params[i].param_type == kRPVComputeParamMetricSelector)
-            {
-                // Expected format: "metric_id:value_name" e.g., "2.1.4:peak"
-                std::string selector_str = params[i].param_str;
-                size_t      colon_pos    = selector_str.find(':');
-                if(colon_pos != std::string::npos)
-                {
-                    std::string metric_id  = selector_str.substr(0, colon_pos);
-                    std::string value_name = selector_str.substr(colon_pos + 1);
-                    // Convert value_name to lowercase to match SQL LOWER(value_name) comparison
-                    std::transform(value_name.begin(), value_name.end(), value_name.begin(),
-                                   [](unsigned char c) { return std::tolower(c); });
-                    metric_selectors.push_back({ metric_id, value_name });
-                }
-            }
-            else if(params[i].param_type == kRPVComputeParamSortColumnIndex)
-            {
-                // Parse string to integer, TODO: make safer with error handling
-                sort_column_index = std::atoi(params[i].param_str);
-            }
-            else if(params[i].param_type == kRPVComputeParamSortColumnOrder)
-            {
-                std::string sort_order_in = params[i].param_str;
-                // convert to uppercase
-                std::transform(sort_order_in.begin(), sort_order_in.end(),
-                               sort_order_in.begin(),
-                               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-                if(sort_order_in == "ASC")
-                {
-                    sort_order = "ASC";
-                }
-                else
-                {
-                    // Default to DESC if not ASC
-                    sort_order = "DESC";
-                }
-            }
-            else if(params[i].param_type == kRPVComputeParamFilterColumnIndex)
-            {
-                last_filter_column_index = std::stoull(params[i].param_str);
-            }
-            else if(params[i].param_type == kRPVComputeParamFilterExpression)
-            {
-                column_filters[last_filter_column_index] = params[i].param_str;
-            }
-        }
+	std::vector<std::pair<std::string, rocprofvis_db_data_type_t>> column_names = { 
+		{"__id",kRPVDataTypeInt},
+		{"kernel_name",kRPVDataTypeString},
+		{"duration_ns_sum",kRPVDataTypeInt},
+		{"dispatch_count",kRPVDataTypeInt}
+		};
 
-        // Validate required parameters
-        if(workload_id.empty())
-        {
-            return query;  // Return empty on invalid input
-        }
 
-        // Build column name list (index 0 = kernel_uuid, index 1 = kernel_name, index 2 = duration_ns_sum, index 3 = dispatch_count, index
-        // 4+ = metrics)
-        column_names.push_back("kernel_uuid");
-        column_names.push_back("kernel_name");
-        column_names.push_back("duration_ns_sum");
-        column_names.push_back("dispatch_count");
+	for(const auto& [metric_id,value_name] : metric_selectors)
+	{
+		std::string metric_alias = metric_id;
+		std::replace(metric_alias.begin(), metric_alias.end(), '.', '_');
 
-        // Build the SELECT clause
-        query = "SELECT \n";
-        query += "    kernel_uuid AS __id,\n";
-        query += "    kernel_name,\n";
-        query += "    duration_ns_sum,\n";
-        query += "    dispatch_count";
+		std::string sanitized_value_name = SanitizeMetricValueName(value_name);
 
-        // Add CASE statements for each metric selector
-        for(const auto& [metric_id, value_name] : metric_selectors)
-        {
-            query += ",\n    MAX(CASE WHEN LOWER(value_name) = '";
-            query += value_name;
-            query += "' AND metric_id = '";
-            query += metric_id;
-            query += "' THEN value END) AS ";
+		std::string column_name =
+			"metric_" + metric_alias + "_" + sanitized_value_name;
 
-            // Generate column alias by replacing dots with underscores and sanitizing value name
-            std::string metric_alias = metric_id;
-            std::replace(metric_alias.begin(), metric_alias.end(), '.', '_');
-            std::string sanitized_value_name = SanitizeMetricValueName(value_name);
-            std::string column_name = "metric_" + metric_alias + "_" + sanitized_value_name;
-            query += column_name;
+		column_names.push_back({ column_name, kRPVDataTypeDouble});
+	}
 
-            // Track column name for sorting
-            column_names.push_back(column_name);
-        }
+	// -----------------------------
+	// Build JSON plan
+	// -----------------------------
+	jt::Json plan;
+	plan.setObject();
 
-        // Add FROM clause
-        query += "\nFROM compute_kernel_metrics_view\n";
+	plan["type"] = "compute_kernel_metrics_matrix";
+	plan["workload_id"] = std::stoull(workload_id);
+	plan["sort_column_index"] = sort_column_index;
+	plan["sort_order"] = sort_order;
 
-        // Add WHERE clause
-        query += "WHERE workload_id = ";
-        query += workload_id;
-        query += "\n";
+	// metric selectors
+	jt::Json metrics;
+	metrics.setArray();
 
-        // Add GROUP BY clause
-        query += "GROUP BY kernel_uuid\n";
+	for(const auto& [metric_id,value_name] : metric_selectors)
+	{
+		jt::Json m;
+		m.setObject();
 
-        // Add HAVING clause for column filters (applied after aggregation)
-        if(!column_filters.empty())
-        {
-            std::vector<std::string> having_conditions;
+		m["metric_id"]  = metric_id;
+		m["value_name"] = value_name;
 
-            for(const auto& [column_index, filter_expr] : column_filters)
-            {
-                if(column_index < column_names.size())
-                {
-                    std::string column_name = column_names[column_index];
-                    std::string condition = BuildFilterCondition(column_name, filter_expr);
-                    if(!condition.empty())
-                    {
-                        having_conditions.push_back(condition);
-                    }
-                }
-            }
+		metrics.getArray().push_back(std::move(m));
+	}
 
-            if(!having_conditions.empty())
-            {
-                query += "HAVING ";
-                for(size_t i = 0; i < having_conditions.size(); i++)
-                {
-                    if(i > 0) query += " AND ";
-                    query += having_conditions[i];
-                }
-                query += "\n";
-            }
-        }
+	plan["metric_selectors"] = std::move(metrics);
 
-        // Add ORDER BY clause with validated index
-        query += "ORDER BY ";
-        if(sort_column_index >= 0 &&
-           sort_column_index < static_cast<int>(column_names.size()))
-        {
-            query += column_names[sort_column_index];
-        }
-        else
-        {
-            query += "duration_ns_sum";  // fallback to default
-        }
-        query += " " + sort_order;
+	// column names
+	jt::Json cols;
+	cols.setArray();
 
-        return query;
-    }
+	for(const auto& name : column_names)
+	{
+		cols.getArray().push_back(jt::Json(name.first));
+	}
+
+	plan["column_names"] = std::move(cols);
+
+	jt::Json types;
+	types.setArray();
+
+	for(const auto& name : column_names)
+	{
+		types.getArray().push_back(name.second);
+	}
+
+	plan["column_types"] = std::move(types);
+
+	// filters
+	jt::Json filters;
+	filters.setObject();
+
+	for(const auto& [idx,expr] : column_filters)
+	{
+		filters[std::to_string(idx)] = expr;
+	}
+
+	plan["filters"] = std::move(filters);
+
+	return plan.toString();
+}
+
+
 
     std::string ComputeQueryFactory::GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
 		std::string query;
-		std::set<std::string> metric_ids;
+		std::set<uint32_t> metric_ids;
 		std::set<std::string> kernel_ids;
+		uint32_t workload_id = 0;
 		for (int i = 0; i < num; i++)
 		{
 			if (params[i].param_type == kRPVComputeParamKernelId)
 			{
 				kernel_ids.insert(params[i].param_str);
+				workload_id = m_db->m_kernel_workload_lookup[std::atol(params[i].param_str)];
 			} else
 			if (params[i].param_type == kRPVComputeParamMetricId)
 			{
-				metric_ids.insert(params[i].param_str);
-			} 
+				std::string metric_str = params[i].param_str;
+				//x.x.x format
+				if (2 == std::count(metric_str.begin(), metric_str.end(), '.'))
+				{
+					for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
+					{
+
+						if (metric.first == metric_str)
+						{
+							metric_ids.insert(metric.second);
+						}
+					}
+				}
+				else
+				{
+					for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
+					{
+						if (metric.first.find(metric_str+".") == 0)
+						{
+							metric_ids.insert(metric.second);
+						}
+					}
+				}
+			}
 		}
 		if (metric_ids.size() > 0 && kernel_ids.size() > 0)
 		{
-			bool use_in_clause_for_metric_ids = true;
-
-			if (metric_ids.size() > 1)
+			query = "SELECT metric_id, metric_name, kernel_uuid, value_name, value from ";
+			query += (IsVersionGreaterOrEqual("1.3.0")) ? "compute_kernel_metric_view " : "compute_metric_view ";
+			query += "WHERE ";
+			int count = 0;
+			if (metric_ids.size() < m_db->m_metric_uuid_lookup[workload_id].size())
 			{
-				for (auto metric_id : metric_ids)
-				{
-					MetricIdFormat f = ClassifyMetricIdFormat(metric_id);
-					if (f == MetricIdFormat::Other)
-					{
-						spdlog::debug("Invalid metric format {}", metric_id);
-						return query;
-					}
-					else
-						if (f != MetricIdFormat::XYZ)
-						{
-							use_in_clause_for_metric_ids = false;
-							break;
-						}
-				}
-			}
-			else
-			{
-				use_in_clause_for_metric_ids = false;
-			}
-
-			query = "SELECT metric_id, metric_name, kernel_uuid, value_name, value from compute_metric_view WHERE (";
-			if (use_in_clause_for_metric_ids)
-			{
-				query += "metric_id IN (";
-				int count = 0;
+				query += "metric_uuid IN(";
 				for (auto metric_id : metric_ids)
 				{
 					if (count > 0)
 					{
 						query += ",";
 					}
-					query += "'";
-					query += metric_id;
-					query += "'";
+					query += std::to_string(metric_id);
 					count++;
 				}
-				query += ")";
-			}
-			else
-			{
-				int count = 0;
-				for (auto metric_id : metric_ids)
-				{
-					if (count > 0)
-					{
-						query += " OR ";
-					}
-					query += "metric_id LIKE '";
-					query += metric_id;
-					query += "%' ";
-					count++;
-				}
+				query += ") AND ";
 			}
 
-			query += ") AND kernel_uuid IN (";
-			int count = 0;
+			count = 0;
+			query += "kernel_uuid IN (";
 			for (auto kernel_id : kernel_ids)
 			{
 				if (count > 0)
@@ -582,6 +528,34 @@ namespace DataModel
 			query += ")";
 		}
 		return query;		
+	}
+
+	rocprofvis_dm_result_t ComputeDatabase::CreateIndexes()
+	{ 
+		std::vector<std::string> vec;
+		uint32_t file_node_id = 0;
+		rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
+		std::vector<std::thread> threads;
+		auto task = [&](std::vector<std::string> queries, uint32_t db_node_id) {   
+			result = ExecuteTransaction( vec, db_node_id);
+			};
+
+		vec.push_back("CREATE INDEX IF NOT EXISTS idx_dispatch_kernel ON compute_dispatch(kernel_uuid);");
+		vec.push_back("CREATE INDEX IF NOT EXISTS idx_dispatch_kernel_duration ON compute_dispatch(kernel_uuid, end_timestamp - start_timestamp);");
+		if (m_query_factory.IsVersionGreaterOrEqual("1.3.0"))
+		{
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_metric_value_metric_uuid ON compute_workload_metric_value(metric_uuid);");
+		}
+		else
+		{
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_metric_value_metric_uuid ON compute_metric_value(metric_uuid);");
+		}
+		
+	    threads.emplace_back(task, vec, file_node_id);      
+
+		for (auto& t : threads)
+			t.join();
+		return kRocProfVisDmResultSuccess;
 	}
 
 	rocprofvis_dm_result_t  ComputeDatabase::ExecuteQuery(
@@ -614,29 +588,15 @@ namespace DataModel
 		{			
 			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, "SELECT * FROM compute_metadata;", &CallbackParseMetadata)) break;
 			m_query_factory.SetVersion(m_db_version.c_str());
+			if (kRocProfVisDmResultSuccess != CreateIndexes()) break;
 			TraceProperties()->metadata_loaded=true;
 			ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
 			
-			//add "kernel metrics" view to database
-			std::string create_view_query = "CREATE VIEW IF NOT EXISTS compute_kernel_metrics_view AS "
-			"SELECT "
-				"ckv.workload_id, "
-				"ckv.workload_name, "
-				"ckv.kernel_uuid, "
-				"ckv.kernel_name, "
-				"ckv.duration_ns_sum, "
-				"ckv.duration_ns_mean, "
-				"ckv.duration_ns_median, "
-				"ckv.duration_ns_min, "
-				"ckv.duration_ns_max, "
-				"ckv.dispatch_count, "
-				"cmv.metric_id, "
-				"cmv.metric_name, "
-				"cmv.value_name, "
-				"cmv.value "
-			"FROM compute_kernel_view ckv "
-			"LEFT JOIN compute_metric_view cmv ON ckv.kernel_uuid = cmv.kernel_uuid; ";
-			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, create_view_query.c_str(), nullptr)) break;
+			std::string store_metrics_lookup_table_query = "SELECT workload_id, metric_uuid, metric_id FROM compute_metric_definition";
+			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, store_metrics_lookup_table_query.c_str(), CallbackStoreMetricsLookupTable)) break;
+
+			std::string store_kernels_lookup_table_query = "SELECT kernel_uuid, workload_id FROM compute_kernel";
+			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, store_kernels_lookup_table_query.c_str(), CallbackGetComputeKernelWorkloadLookupTable)) break;
 
 			return future->SetPromise(kRocProfVisDmResultSuccess);
 		}
@@ -705,11 +665,16 @@ namespace DataModel
 		}
 	}
 
+
 	rocprofvis_dm_result_t  ComputeDatabase::ExecuteComputeQuery(
 		rocprofvis_db_compute_use_case_enum_t use_case,
 		rocprofvis_dm_charptr_t query,
 		Future* future){
-
+		rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+		std::string temp_query = query;
+		jt::Json kernel_metrics_matrix_plan;
+		bool refresh_cached_data = true;
+		bool refresh_cached_metrics_data = true;
 		ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
 		while (true)
 		{
@@ -718,17 +683,20 @@ namespace DataModel
 			auto it = SupportedUseCases.find(use_case);
 			if (it == SupportedUseCases.end())
 				break;
-			rocprofvis_dm_table_t table = BindObject()->FuncAddTable(BindObject()->trace_object, query, it->second.c_str());
+			rocprofvis_dm_table_t table = nullptr;
+			{
+				std::lock_guard lock(m_mutex);
+				table = BindObject()->FuncAddTable(BindObject()->trace_object, query, it->second.c_str());
+			}
 			TemporaryDbInstance tmp_db_instance(0);
 			ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
 			RpvSqliteExecuteQueryCallback callback = nullptr;
 			switch (use_case)
 			{
-				case kRPVComputeFetchListOfWorkloads:
-				case kRPVComputeFetchWorkloadTopKernels:
+				case kRPVComputeFetchListOfWorkloads:				
 				case kRPVComputeFetchWorkloadKernelsList:
-				case kRPVComputeFetchWorkloadMetricsDefinition:
 				case kRPVComputeFetchKernelRooflineIntensities:
+				case kRPVComputeFetchWorkloadMetricsDefinition:
 				case kRPVComputeFetchKernelMetricCategoriesList:
 				case kRPVComputeFetchMetricCategoryTablesList:
 				case kRPVComputeFetchMetricValues:
@@ -739,17 +707,104 @@ namespace DataModel
 					callback = CallbackGetComputeRooflineCeiling;
 					break;
 				case kRPVComputeFetchKernelMetricsMatrix:
-					callback = CallbackGetComputeKernelMetricsMatrix;
+				{
+					callback = nullptr;
+					auto [status, plan] = jt::Json::parse(query);
+					if (status != jt::Json::success)
+						break;
+					kernel_metrics_matrix_plan = plan;
+					rocprofvis_db_compute_param_t fetch_kernels_params;
+					fetch_kernels_params.param_type = kRPVComputeParamWorkloadId;
+					uint32_t workload_id = plan["workload_id"].getLong();
+					if (m_last_matrix_workload_id != workload_id)
+					{
+						std::string workload_id_str = std::to_string(workload_id);
+						fetch_kernels_params.param_str = workload_id_str.c_str();
+						temp_query = m_query_factory.GetComputeWorkloadTopKernels(1, &fetch_kernels_params);
+						if (m_last_top_kernels_query != temp_query)
+						{
+							m_kernel_stats.clear();
+							query = temp_query.c_str();
+							callback = CallbackGetComputeWorkloadTopKernels;
+							m_last_top_kernels_query = temp_query;
+						}
+						else
+						{
+							refresh_cached_data = false;
+						}
+						m_last_matrix_workload_id = workload_id;
+					}
+					else
+					{
+						refresh_cached_data = false;
+						refresh_cached_metrics_data = false;
+					}
+					break;
+				}
+				case kRPVComputeFetchWorkloadTopKernels:
+					if (m_last_top_kernels_query != query)
+					{
+						m_kernel_stats.clear();
+						callback = CallbackGetComputeWorkloadTopKernels;
+						m_last_top_kernels_query = query;
+					}
+					else
+					{
+						refresh_cached_data = false;
+					}
 					break;
 				default:
 					break;
 			}
-			if (callback == nullptr)
+
+			if (refresh_cached_data)
+			{
+				if (callback == nullptr)
+					break;
+				future->ResetRowCount();
+				if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, query, table, callback))
+					break;
+			}
+			
+			switch (use_case)
+			{
+			case kRPVComputeFetchWorkloadTopKernels:
+				result = ComputeWorkloadTopKernelsMeanAndMedian(table);
 				break;
-			future->ResetRowCount();
-			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, query, table, callback)) 
+			case kRPVComputeFetchKernelMetricsMatrix:
+				if (refresh_cached_metrics_data)
+				{
+					m_metric_rows.clear();
+					future->ResetRowCount();
+					if (m_query_factory.IsVersionGreaterOrEqual("1.3.0"))
+					{
+						temp_query = "SELECT M.kernel_uuid, metric_uuid, LOWER(value_name), value "
+							"FROM compute_kernel_metric_value M "
+							"JOIN compute_kernel K ON M.kernel_uuid = K.kernel_uuid "
+							"WHERE value IS NOT NULL AND K.workload_id = ";
+					}
+					else
+					{
+						temp_query = "SELECT M.kernel_uuid, metric_uuid, LOWER(value_name), value "
+							"FROM compute_metric_value M "
+							"JOIN compute_kernel K ON M.kernel_uuid = K.kernel_uuid "
+							"WHERE value IS NOT NULL AND K.workload_id = ";
+					}
+					temp_query += std::to_string(m_last_matrix_workload_id);
+					result = ExecuteSQLQuery(future, &tmp_db_instance, temp_query.c_str(), table, CallbackGetComputeMetricsData);
+				}
+				else
+				{
+					result = kRocProfVisDmResultSuccess;
+				}
+				if (kRocProfVisDmResultSuccess == result)
+				{
+					result = BuildKernelMetricsMatrix(table, kernel_metrics_matrix_plan);
+				}
 				break;
-			ShowProgress(100, "Query successfully executed!",kRPVDbSuccess, future);
+			}
+			if (kRocProfVisDmResultSuccess != result) break;
+			ShowProgress(100, it->second.c_str(), kRPVDbSuccess, future);
 			return future->SetPromise(kRocProfVisDmResultSuccess);
 		}
 		ShowProgress(0, "Query could not be executed!", kRPVDbError, future );
@@ -772,6 +827,19 @@ namespace DataModel
 				break;
 			}
 		}
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+	int ComputeDatabase::CallbackGetComputeKernelWorkloadLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		void* func = (void*)&CallbackGetComputeKernelWorkloadLookupTable;
+		if (callback_params->future->Interrupted()) return 1;
+		uint32_t kernel_id = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
+		uint32_t workload_id = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
+		db->m_kernel_workload_lookup[kernel_id] = workload_id;
 		callback_params->future->CountThisRow();
 		return 0;
 	}
@@ -928,6 +996,382 @@ namespace DataModel
         callback_params->future->CountThisRow();
         return 0;
     }
+
+	int ComputeDatabase::CallbackGetComputeWorkloadTopKernels(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		void* func = (void*)&CallbackGetComputeWorkloadTopKernels;
+		if (callback_params->future->Interrupted()) return 1;
+		uint32_t kernel_uuid = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
+		std::string kernel_name = db->Sqlite3ColumnText(func, stmt, azColName, 3);
+		uint64_t duration = db->Sqlite3ColumnInt64(func, stmt, azColName, 5);
+		auto& s = db->m_kernel_stats[kernel_uuid];
+		s.count++;
+		s.sum += duration;
+		s.min = std::min(s.min, duration);
+		s.max = std::max(s.max, duration);
+		s.name = kernel_name;
+		s.durations.push_back(duration);
+
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+	int ComputeDatabase::CallbackStoreMetricsLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		void* func = (void*)&CallbackStoreMetricsLookupTable;
+		if (callback_params->future->Interrupted()) return 1;
+		MetricRow m;
+		uint32_t workload_id = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
+		uint32_t metric_uuid = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
+		std::string metric_id = db->Sqlite3ColumnText(func, stmt, azColName, 2);
+		db->m_metric_id_lookup[workload_id][metric_uuid] = metric_id;
+		db->m_metric_uuid_lookup[workload_id].push_back({metric_id, metric_uuid});
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+	int ComputeDatabase::CallbackGetComputeMetricsData(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		void* func = (void*)&CallbackGetComputeMetricsData;
+		if (callback_params->future->Interrupted()) return 1;
+		MetricRow m;
+		m.kernel_uuid = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
+		m.metric_uuid = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
+		m.value_name = db->Sqlite3ColumnText(func, stmt, azColName, 2);
+		m.value = db->Sqlite3ColumnDouble(func, stmt, azColName, 3);
+		db->m_metric_rows.push_back(m);
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+	rocprofvis_dm_result_t ComputeDatabase::ComputeWorkloadTopKernelsMeanAndMedian(rocprofvis_dm_table_t table)
+	{
+		rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+		std::pair<std::string, rocprofvis_db_data_type_t> columns[] = { 
+			{"kernel_uuid",kRPVDataTypeInt},
+			{"kernel_name",kRPVDataTypeString},
+			{"dispatch_count",kRPVDataTypeInt},
+			{"duration_ns_sum",kRPVDataTypeInt},
+			{"duration_ns_mean",kRPVDataTypeDouble},
+			{"duration_ns_min",kRPVDataTypeInt},
+			{"duration_ns_max",kRPVDataTypeInt},
+			{"duration_ns_median",kRPVDataTypeDouble} };
+
+		for (auto& column : columns)
+		{
+			auto it = ColumnNameToEnum.find(column.first);
+			if (it != ColumnNameToEnum.end())
+			{
+				result = BindObject()->FuncAddTableColumn(table, column.first.c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableColumnEnum(table, it->second);
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableColumnType(table, column.second);
+				if (kRocProfVisDmResultSuccess != result) break;
+			}
+		}
+		if (kRocProfVisDmResultSuccess == result)
+		{
+			for (auto& [kernel, s] : m_kernel_stats) {
+				s.mean = static_cast<double>(s.sum) / s.count;
+
+				std::sort(s.durations.begin(), s.durations.end());
+				size_t n = s.durations.size();
+
+				if (n % 2 == 0)
+					s.median = (s.durations[n / 2 - 1] + s.durations[n / 2]) / 2.0;
+				else
+					s.median = s.durations[n / 2];
+				rocprofvis_dm_table_row_t row = BindObject()->FuncAddTableRow(table);
+
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(kernel).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableRowCell(row, s.name.c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(s.count).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(s.sum).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(s.mean).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(s.min).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(s.max).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(s.median).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * @brief Build a kernel metrics matrix for a given workload according to a JSON query plan.
+	 *
+	 * The method interprets the provided JSON @p plan to configure the columns, metric
+	 * selectors and optional filters that define the kernel metrics matrix to be
+	 * returned. It typically performs the following steps:
+	 *  - Extract the workload identifier and requested column names from @p plan.
+	 *  - For each requested column, determine the corresponding data type and any
+	 *    filter expressions specified in the plan.
+	 *  - Construct the set of MetricSelector objects and filter expressions used to
+	 *    query the underlying compute database.
+	 *  - Populate the destination data model table @p table with the resulting
+	 *    kernel metric rows and column metadata.
+	 *
+	 * @param table Destination data model table that will be populated with the
+	 *              kernel metrics matrix (columns and rows).
+	 * @param plan  JSON description of the query plan, including workload_id,
+	 *              column descriptions and optional filter specifications.
+	 *
+	 * @return kRocProfVisDmResultSuccess on success, or an appropriate error
+	 *         code if the plan is invalid or if table population fails.
+	 */
+	rocprofvis_dm_result_t ComputeDatabase::BuildKernelMetricsMatrix(rocprofvis_dm_table_t table, jt::Json& plan)
+	{
+		rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+		std::vector<MetricSelector> selectors;
+
+		struct column_data_t
+		{
+			std::string name;
+			rocprofvis_db_data_type_t type;
+			bool has_filter;
+			FilterExpression filter;
+			FilterExpression::Value eval_value;
+		};
+
+		std::vector<column_data_t> columns;
+
+		uint32_t workload_id = plan["workload_id"].getLong();
+
+		if (plan.contains("column_names"))
+		{
+			auto& arr = plan["column_names"].getArray();
+			columns.resize(arr.size());
+			
+			for (int i=0; i < arr.size(); i++)
+			{
+				columns[i].name = arr[i].getString();
+				columns[i].has_filter = false;
+			}
+		}
+		if (plan.contains("column_types"))
+		{
+			auto& arr = plan["column_types"].getArray();
+			for (int i=0; i < arr.size(); i++)
+			{
+				columns[i].type = (rocprofvis_db_data_type_t)arr[i].getLong();
+			}
+		}
+
+		if (plan.contains("filters"))
+		{
+			auto& obj = plan["filters"].getObject();
+
+			for (auto& s : obj)
+			{
+				size_t column_index = std::atoll(s.first.c_str());
+				columns[column_index].filter = FilterExpression::Parse(columns[column_index].name + " " + s.second.getString());
+				columns[column_index].has_filter = true;
+			}
+		}
+			
+
+		if (plan.contains("metric_selectors"))
+		{
+			auto& arr = plan["metric_selectors"].getArray();
+
+			for (auto& s : arr)
+			{
+				MetricSelector sel;
+				sel.metric_id = s["metric_id"].getString();
+				sel.value_name = s["value_name"].getString();
+
+				selectors.push_back(std::move(sel));
+
+			}
+		}
+
+		size_t metric_count = selectors.size();
+
+		std::unordered_map<uint32_t, KernelMetricsRow> matrix;
+
+		for (const auto& [uuid, stats] : m_kernel_stats)
+		{
+			KernelMetricsRow row;
+			row.kernel_uuid = uuid;
+			row.stats = stats;
+			row.metrics.resize(metric_count, std::numeric_limits<double>::quiet_NaN());
+
+			matrix.emplace(uuid, std::move(row));
+		}
+
+		// -----------------------------
+		// Pivot metrics
+		// -----------------------------
+		for (const auto& m : m_metric_rows)
+		{
+			auto kernel_it = matrix.find(m.kernel_uuid);
+			if (kernel_it == matrix.end())
+				continue;
+
+			for (size_t i = 0; i < selectors.size(); ++i)
+			{
+				if (m_metric_id_lookup[workload_id][m.metric_uuid] == selectors[i].metric_id &&
+					m.value_name == selectors[i].value_name)
+				{
+					kernel_it->second.metrics[i] = m.value;
+				}
+			}
+		}
+
+		// -----------------------------
+		// Filter
+		// -----------------------------
+		std::vector<KernelMetricsRow> metrics_rows;
+		metrics_rows.reserve(matrix.size());
+		for (auto& [uuid, mrow] : matrix)
+		{
+			uint32_t column_index = 0;
+			columns[column_index++].eval_value = (double)mrow.kernel_uuid;
+			columns[column_index++].eval_value = mrow.stats.name;
+			columns[column_index++].eval_value = (double)mrow.stats.sum;
+			columns[column_index++].eval_value = (double)mrow.stats.count;
+
+			for (double value : mrow.metrics)
+			{
+				columns[column_index++].eval_value = value;
+			}
+			bool passed_evaluation = true;
+			for (auto column : columns)
+			{
+				if (column.has_filter)
+				{
+					if (!column.filter.Evaluate({ {column.name, column.eval_value} }))
+					{
+						passed_evaluation = false;
+						break;
+					}
+				}
+			}
+			if (passed_evaluation)
+			{
+				metrics_rows.push_back(std::move(mrow));
+			}
+		}
+
+		int sort_column_index = 0;
+		std::string sort_order = "DESC";
+
+		if(plan.contains("sort_column_index"))
+			sort_column_index = (int)plan["sort_column_index"].getLong();
+
+		if(plan.contains("sort_order"))
+			sort_order = plan["sort_order"].getString();
+
+		bool ascending = (sort_order == "ASC");
+
+		enum column_positions_t
+		{
+			kRpvColumnId,
+			kRpvColumnNames,
+			kRpvColumnDurations,
+			kRpvColumnInvocations,
+			kRpvColumnMetrics
+		};
+
+		std::sort(metrics_rows.begin(), metrics_rows.end(), [&](KernelMetricsRow& a, KernelMetricsRow& b) {
+			switch (sort_column_index)
+			{
+			case kRpvColumnNames:
+			{
+				return ascending ? a.stats.name < b.stats.name : a.stats.name > b.stats.name;
+			}
+			case kRpvColumnDurations:
+			{
+				return ascending ? a.stats.sum < b.stats.sum : a.stats.sum > b.stats.sum;
+			}
+			case kRpvColumnInvocations:
+			{
+				return ascending ? a.stats.count < b.stats.count : a.stats.count > b.stats.count;
+			}
+			default:
+			{
+				uint32_t metrics_column_index = sort_column_index - kRpvColumnMetrics;
+				if (metrics_column_index < a.metrics.size() && metrics_column_index < b.metrics.size())
+				{
+					return ascending ? a.metrics[metrics_column_index] < b.metrics[metrics_column_index] :
+						a.metrics[metrics_column_index] > b.metrics[metrics_column_index];
+				}
+				else
+				{
+					return false;
+				}
+			}
+			}
+			});
+
+		for (auto& column : columns)
+		{
+			auto it = ColumnNameToEnum.find(column.name);
+			rocprofvis_db_compute_column_enum_t enum_id = kRPVComputeColumnDynamicMetricValue;
+			if (it != ColumnNameToEnum.end())
+			{
+				enum_id = it->second;
+			}
+			result = BindObject()->FuncAddTableColumn(table, column.name.c_str());
+			if (kRocProfVisDmResultSuccess != result) break;
+			result = BindObject()->FuncAddTableColumnEnum(table, enum_id);
+			if (kRocProfVisDmResultSuccess != result) break;
+			result = BindObject()->FuncAddTableColumnType(table, column.type);
+			if (kRocProfVisDmResultSuccess != result) break;			
+		}
+
+
+
+		if (kRocProfVisDmResultSuccess == result)
+		{
+			for (auto& mrow : metrics_rows)
+			{
+
+
+				rocprofvis_dm_table_row_t row = BindObject()->FuncAddTableRow(table);
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(mrow.kernel_uuid).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+
+				result = BindObject()->FuncAddTableRowCell(row, mrow.stats.name.c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(mrow.stats.sum).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+
+				result = BindObject()->FuncAddTableRowCell(row, std::to_string(mrow.stats.count).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+
+				for (double value : mrow.metrics)
+				{
+					std::string str;
+					if (!std::isnan(value))
+					{
+						str = std::to_string(value);
+					}
+					result = BindObject()->FuncAddTableRowCell(row,  str.c_str());
+					if (kRocProfVisDmResultSuccess != result) break;
+
+				}
+				if (kRocProfVisDmResultSuccess != result) break;
+			}
+		}
+		return result;
+	}
+
 
 }  // namespace DataModel
 }  // namespace RocProfVis

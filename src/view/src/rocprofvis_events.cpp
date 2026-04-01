@@ -135,19 +135,6 @@ TableDataEvent::GetResponseCode() const
 }
 
 #ifdef COMPUTE_UI_SUPPORT
-ComputeTableSearchEvent::ComputeTableSearchEvent(int event_id, std::string& term)
-: RocEvent(event_id)
-, m_search_term(term)
-{
-    m_event_type = RocEventType::kComputeTableSearchEvent;
-}
-
-const std::string
-RocProfVis::View::ComputeTableSearchEvent::GetSearchTerm()
-{
-    return m_search_term;
-}
-
 ComputeSelectionChangedEvent::ComputeSelectionChangedEvent(int event_id, uint32_t id, const std::string& source_id)
 : RocEvent(event_id, source_id)
 , m_id(id)
@@ -263,6 +250,43 @@ EventSelectionChangedEvent::IsBatch() const
     return m_is_batch;
 }
 
+EventHighlightChangedEvent::EventHighlightChangedEvent(uint64_t event_id,
+                                                       uint64_t track_id, bool highlighted,
+                                                       const std::string& source_id,
+                                                       bool               batch)
+: RocEvent(static_cast<int>(RocEvents::kTimelineEventHighlightChanged), source_id)
+, m_event_id(event_id)
+, m_event_track_id(track_id)
+, m_highlighted(highlighted)
+, m_is_batch(batch)
+{
+    m_event_type = RocEventType::kTimelineEventHighlightChangedEvent;
+}
+
+uint64_t
+EventHighlightChangedEvent::GetEventID() const
+{
+    return m_event_id;
+}
+
+uint64_t
+EventHighlightChangedEvent::GetEventTrackID() const
+{
+    return m_event_track_id;
+}
+
+bool
+EventHighlightChangedEvent::EventHighlighted() const
+{
+    return m_highlighted;
+}
+
+bool
+EventHighlightChangedEvent::IsBatch() const
+{
+    return m_is_batch;
+}
+
 StickyNoteEvent::StickyNoteEvent(int id, const std::string& source_id)
 : RocEvent(static_cast<int>(RocEvents::kStickyNoteEdited), source_id)
 , m_id(id)
@@ -327,4 +351,41 @@ bool
 NavigationEvent::GetCenter() const
 {
     return m_center;
+}
+
+RequestProgressUpdateEvent::RequestProgressUpdateEvent(
+    uint64_t request_id, RequestType request_type,
+    uint64_t progress_percent, const std::string& message,
+    const std::string& source_id)
+: RocEvent(static_cast<int>(RocEvents::kRequestProgressUpdate), source_id)
+, m_request_id(request_id)
+, m_request_type(request_type)
+, m_progress_percent(progress_percent)
+, m_message(message)
+{
+    m_event_type = RocEventType::kRequestProgressUpdateEvent;
+}
+
+uint64_t
+RequestProgressUpdateEvent::GetRequestID() const
+{
+    return m_request_id;
+}
+
+RequestType
+RequestProgressUpdateEvent::GetRequestType() const
+{
+    return m_request_type;
+}
+
+uint64_t
+RequestProgressUpdateEvent::GetProgressPercent() const
+{
+    return m_progress_percent;
+}
+
+const std::string
+RequestProgressUpdateEvent::GetMessage() const
+{
+    return m_message;
 }

@@ -6,9 +6,7 @@
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_version.h"
 #ifdef COMPUTE_UI_SUPPORT
-#    include "compute/rocprofvis_compute_root.h"
 #    include "compute/rocprofvis_compute_view.h"
-#    include "compute/rocprofvis_navigation_manager.h"
 #endif
 #include "widgets/rocprofvis_notification_manager.h"
 #include <fstream>
@@ -105,14 +103,7 @@ Project::SaveAs(const std::string& file_path)
 
 void
 Project::Close()
-{
-#ifdef COMPUTE_UI_SUPPORT
-    if(m_trace_type == Compute)
-    {
-        NavigationManager::GetInstance()->RefreshNavigationTree();
-    }
-#endif
-}
+{}
 
 Project::OpenResult
 Project::OpenProject(std::string& file_path)
@@ -192,22 +183,11 @@ Project::OpenTrace(std::string& file_path)
 #ifdef COMPUTE_UI_SUPPORT
                 else if(type == kRPVControllerObjectTypeControllerCompute)
                 {
-                    if(std::filesystem::path(file_path).extension().string() == ".csv")
-                    {
-                        std::shared_ptr<ComputeRoot> compute_view =
-                            std::make_shared<ComputeRoot>();
-                        trace_result = compute_view->LoadTrace(controller);
-                        view         = compute_view;
-                        NavigationManager::GetInstance()->RefreshNavigationTree();
-                    }
-                    else
-                    {
-                        std::shared_ptr<ComputeView> compute_view =
-                            std::make_shared<ComputeView>();
-                        trace_result = compute_view->LoadTrace(controller, file_path);
-                        view         = compute_view;
-                    }
-                    trace_type = Compute;
+                    std::shared_ptr<ComputeView> compute_view =
+                        std::make_shared<ComputeView>();
+                    trace_result = compute_view->LoadTrace(controller, file_path);
+                    trace_type   = Compute;
+                    view         = compute_view;
                 }
 #endif
             }

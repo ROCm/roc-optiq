@@ -17,6 +17,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
+, m_pined_metric_table(data_provider, compute_selection, m_client_id)
 {
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
@@ -51,6 +52,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
             if(evt->GetClientId() == m_client_id)
                 RebuildTableDataCache();
         }
+        m_pined_metric_table.RefillTable();
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
@@ -59,7 +61,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
     m_widget_name = GenUniqueName("ComputeTableView");
 
     if(m_compute_selection->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID)
-    {
+    { //TODO: All code under this if statement never reached
         RebuildTabs();
         if(m_compute_selection->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID)
         {
@@ -98,13 +100,12 @@ ComputeTableView::RebuildTabs()
 
     const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
-    m_tabs->SetAllowToolTips(false);
-    for(const auto& cp : workload.available_metrics.tree)
+    m_tabs->SetAllowToolTips(true);
+    for(const auto* cat : workload.available_metrics.ordered_categories)
     {
-        const auto& cat    = cp.second;
-        auto        widget = std::make_shared<RocCustomWidget>(
-            [this, &cat]() { RenderCategory(cat); });
-        m_tabs->AddTab({ cat.name, cat.name, widget, false });
+        auto widget = std::make_shared<RocCustomWidget>(
+            [this, cat]() { RenderCategory(*cat); });
+        m_tabs->AddTab({ cat->name, cat->name, widget, false });
     }
 }
 
@@ -130,10 +131,10 @@ ComputeTableView::FetchAllMetrics()
     const auto& workload = workloads.at(workload_id);
     std::vector<uint32_t>                   kernel_ids = { kernel_id };
     std::vector<MetricsRequestParams::MetricID> metric_ids;
-    for(const auto& cp : workload.available_metrics.tree)
+    for(const auto* cat : workload.available_metrics.ordered_categories)
     {
-        for(const auto& tp : cp.second.tables)
-            metric_ids.push_back({ cp.first, tp.first, std::nullopt });
+        for(const auto* tbl : cat->ordered_tables)
+            metric_ids.push_back({ cat->id, tbl->id, std::nullopt });
     }
 
     bool success = m_data_provider.FetchMetrics(
@@ -150,6 +151,8 @@ ComputeTableView::Update()
 {
     if(m_tabs)
         m_tabs->Update();
+
+    m_pined_metric_table.Update();
 }
 
 void
@@ -167,6 +170,8 @@ ComputeTableView::Render()
         ImGui::TextDisabled("Select a kernel from the toolbar.");
         return;
     }
+
+    m_pined_metric_table.Render();
 
     if(m_tabs)
         m_tabs->Render();
@@ -191,18 +196,20 @@ ComputeTableView::RebuildTableDataCache()
         return;
 
     const auto& workload = workloads.at(workload_id);
-    for(const auto& cp : workload.available_metrics.tree)
+    for(const auto* cat : workload.available_metrics.ordered_categories)
     {
-        for(const auto& tp : cp.second.tables)
+        for(const auto* tbl : cat->ordered_tables)
         {
             TableKey key{};
-            key.fields.category_id = cp.first;
-            key.fields.table_id    = tp.first;
-
-            MetricTableCache widget;
-            widget.Populate(tp.second, [&](uint32_t eid) {
+            key.fields.category_id = cat->id;
+            key.fields.table_id    = tbl->id;
+            auto add_row_func = [this](MetricId metric_id) {
+                m_pined_metric_table.AddRow(metric_id);
+            };
+            MetricTableCache widget(add_row_func);
+            widget.Populate(*tbl, [&](uint32_t eid) {
                 return model.GetMetricValue(
-                    m_client_id, kernel_id, cp.first, tp.first, eid);
+                    m_client_id, kernel_id, cat->id, tbl->id, eid);
             });
 
             if(!widget.Empty())
@@ -219,11 +226,11 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
     bool category_has_data = false;
 
     ImGui::BeginChild("scroll", ImVec2(-1, -1));
-    for(const auto& tbl_pair : cat.tables)
+    for(const auto* tbl : cat.ordered_tables)
     {
         TableKey key{};
         key.fields.category_id = cat.id;
-        key.fields.table_id    = tbl_pair.first;
+        key.fields.table_id    = tbl->id;
 
         auto it = m_table_widgets.find(key.id);
         if(it == m_table_widgets.end())

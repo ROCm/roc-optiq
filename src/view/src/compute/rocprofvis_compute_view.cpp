@@ -3,6 +3,7 @@
 
 #include "rocprofvis_compute_view.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
+#include "rocprofvis_compute_comparison.h"
 #include "rocprofvis_compute_kernel_details.h"
 #include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_compute_summary.h"
@@ -11,6 +12,7 @@
 #include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
 #include "implot/implot.h"
@@ -57,10 +59,11 @@ ComputeView::ComputeView()
             }
             else
             {
+#ifdef ROCPROFVIS_DEVELOPER_MODE
                 NotificationManager::GetInstance().Show(
                     "Successfully fetched metrics for client: " + std::to_string(client_id),
                     NotificationLevel::Success);
-
+#endif
                 // trigger metrics fetched event to update the UI
                 EventManager::GetInstance()->AddEvent(
                     std::make_shared<ComputeMetricsFetchedEvent>(client_id, trace_path));
@@ -122,9 +125,11 @@ ComputeView::CreateView()
     m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
-#ifdef DEVELOPER_MODE
+    m_tab_container->AddTab(TabItem{"Baseline Comparison", "compute_comparison_view", std::make_shared<ComputeComparisonView>(m_data_provider, m_compute_selection), false});
+#ifdef ROCPROFVIS_DEVELOPER_MODE
     m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider, m_compute_selection), false});
 #endif
+    m_tab_container->SetAllowToolTips(false);
 }
 
 void
@@ -166,7 +171,7 @@ ComputeView::GetToolbar()
 void
 ComputeView::RenderToolbar()
 {
-    ImGuiStyle& style          = ImGui::GetStyle();
+    const ImGuiStyle& style          = SettingsManager::GetInstance().GetDefaultStyle();
     ImVec2      frame_padding  = style.FramePadding;
     float       frame_rounding = style.FrameRounding;
 
@@ -196,6 +201,8 @@ ComputeView::RenderWorkloadSelection()
         return;
     }
 
+    const ImGuiStyle& style          = SettingsManager::GetInstance().GetDefaultStyle();
+
     const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
         m_data_provider.ComputeModel().GetWorkloads();
 
@@ -220,7 +227,9 @@ ComputeView::RenderWorkloadSelection()
         ImGui::EndCombo();
     }
     ImGui::EndDisabled();
-    ImGui::SameLine();
+    ImGui::SameLine(0, style.ItemSpacing.x);
+    VerticalSeparator();
+    ImGui::SameLine(0, style.ItemSpacing.x);
     ImGui::Text("Kernel:");
     ImGui::SameLine();
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_data_model.h"
+#include <algorithm>
 
 namespace RocProfVis
 {
@@ -72,7 +73,49 @@ ComputeDataModel::GetMetricsData(uint64_t store_id, uint32_t kernel_id) const
 void
 ComputeDataModel::AddWorkload(WorkloadInfo& workload)
 {
-    m_workloads[workload.id] = std::move(workload);
+    uint32_t id = workload.id;
+    m_workloads[id] = std::move(workload);
+    OrderAvailableMetrics(m_workloads[id]);
+}
+
+void
+ComputeDataModel::OrderAvailableMetrics(WorkloadInfo& workload)
+{
+    AvailableMetrics& available_metrics = workload.available_metrics;
+    available_metrics.ordered_categories.clear();
+    available_metrics.ordered_categories.reserve(available_metrics.tree.size());
+    for(std::pair<const uint32_t, AvailableMetrics::Category>& tree_category :
+        available_metrics.tree)
+    {
+        AvailableMetrics::Category& category = tree_category.second;
+        available_metrics.ordered_categories.push_back(&tree_category.second);
+        category.ordered_tables.clear();
+        category.ordered_tables.reserve(category.tables.size());
+        for(std::pair<const uint32_t, AvailableMetrics::Table>& tree_table :
+            category.tables)
+        {
+            AvailableMetrics::Table& table = tree_table.second;
+            category.ordered_tables.push_back(&table);
+            table.ordered_entries.clear();
+            table.ordered_entries.reserve(table.entries.size());
+            for(const std::pair<const uint32_t, AvailableMetrics::Entry&>& tree_entry :
+                table.entries)
+            {
+                table.ordered_entries.push_back(&tree_entry.second);
+            }
+            std::sort(table.ordered_entries.begin(), table.ordered_entries.end(),
+                      [](const AvailableMetrics::Entry* a,
+                         const AvailableMetrics::Entry* b) { return a->id < b->id; });
+        }
+        std::sort(category.ordered_tables.begin(), category.ordered_tables.end(),
+                  [](const AvailableMetrics::Table* a, const AvailableMetrics::Table* b) {
+                      return a->id < b->id;
+                  });
+    }
+    std::sort(available_metrics.ordered_categories.begin(),
+              available_metrics.ordered_categories.end(),
+              [](const AvailableMetrics::Category* a,
+                 const AvailableMetrics::Category* b) { return a->id < b->id; });
 }
 
 bool

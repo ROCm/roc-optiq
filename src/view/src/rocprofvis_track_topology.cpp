@@ -530,6 +530,10 @@ TrackTopology::DeviceTypeString(
         {
             return "CPU";
         }
+        case kRPVControllerProcessorTypeNIC:
+        {
+            return "NIC";
+        }
         default:
         {
             return "Undefined";

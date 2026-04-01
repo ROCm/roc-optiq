@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_db_sqlite.h"
+#include "json.h"
 
 namespace RocProfVis
 {
@@ -16,9 +17,12 @@ namespace DataModel
         Other
     };
 
+    class ComputeDatabase;
+
     class ComputeQueryFactory : public DatabaseVersion
     {
     public:
+        ComputeQueryFactory(ComputeDatabase* db) : m_db(db) {}
         std::string GetComputeListOfWorkloads(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeWorkloadRooflineCeiling(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeWorkloadTopKernels(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
@@ -33,15 +37,45 @@ namespace DataModel
     private:
         MetricIdFormat ClassifyMetricIdFormat(const std::string& s);
         std::string SanitizeMetricValueName(const std::string& name);
-        std::string BuildFilterCondition(const std::string& column_name, const std::string& filter_expr);
+        ComputeDatabase * m_db;
     };
 
+    struct KernelStats {
+        uint64_t count = 0;
+        uint64_t sum = 0;
+        uint64_t min = std::numeric_limits<uint64_t>::max();
+        uint64_t max = 0;
+        double mean = 0;
+        double median = 0;
+        std::string name;
+        std::vector<uint64_t> durations;
+    };
+
+    struct MetricSelector {
+        std::string metric_id;
+        std::string value_name;
+    };
+
+    struct MetricRow {
+        uint32_t kernel_uuid;
+        uint32_t metric_uuid;
+        std::string value_name;
+        double value;
+    };
+
+    struct KernelMetricsRow {
+        uint32_t kernel_uuid;
+        KernelStats stats;
+        std::vector<double> metrics; // pivoted metric columns
+    };
 
     class ComputeDatabase : public SqliteDatabase
     {
     public:
         ComputeDatabase(rocprofvis_db_filename_t path) :
-            SqliteDatabase(path)
+            SqliteDatabase(path),
+            m_query_factory(this),
+            m_last_matrix_workload_id(-1)
         {
             CreateDbNode(path);
         };
@@ -194,17 +228,34 @@ namespace DataModel
 
         ComputeQueryFactory m_query_factory;
         std::string m_db_version;
+        std::unordered_map<uint32_t, KernelStats> m_kernel_stats;
+        std::vector<MetricRow> m_metric_rows;
+        std::mutex m_mutex;
+        std::map<uint32_t, std::map<uint32_t, std::string>> m_metric_id_lookup;
+        std::map<uint32_t, std::vector<std::pair<std::string, uint32_t>>> m_metric_uuid_lookup;
+        std::map<uint32_t, uint32_t> m_kernel_workload_lookup;
+        uint32_t m_last_matrix_workload_id;
+        std::string m_last_top_kernels_query;
 
         static int CallbackGetComputeGeneric(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        static int CallbackGetComputeKernelWorkloadLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeRooflineCeiling(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeKernelMetricsMatrix(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        static int CallbackGetComputeWorkloadTopKernels(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        static int CallbackGetComputeMetricsData(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        static int CallbackStoreMetricsLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        rocprofvis_dm_result_t ComputeWorkloadTopKernelsMeanAndMedian(rocprofvis_dm_table_t table);
+        rocprofvis_dm_result_t BuildKernelMetricsMatrix(rocprofvis_dm_table_t table, jt::Json & plan);
+        rocprofvis_dm_result_t CreateIndexes();
 
         inline static const rocprofvis_null_data_exceptions_skip
             s_null_data_exceptions_skip = {
-                { 
-
-                }
+                { (void*)&CallbackGetComputeMetricsData,
+                    {
+                       "value"
+                    }
+                } 
         };
 
         inline static const rocprofvis_null_data_exceptions_int 
@@ -220,6 +271,7 @@ namespace DataModel
                 }
         };
 
+        friend class ComputeQueryFactory;
     };
 
 }  // namespace DataModel

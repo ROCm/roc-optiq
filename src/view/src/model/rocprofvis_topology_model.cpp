@@ -294,6 +294,9 @@ TopologyDataModel::GetDeviceTypeLabel(const DeviceInfo& device_info,
         case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeGPU:
             label_out = "GPU" + std::to_string(device_info.type_index);
             return true;
+        case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeNIC:
+            label_out = "NIC" + std::to_string(device_info.type_index);
+            return true;
         default: return false;
     }
 }

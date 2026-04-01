@@ -36,6 +36,7 @@ TraceView::TraceView()
 , m_popup_info({ false, "", "" })
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_event_selection_changed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_progress_update_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
@@ -123,6 +124,14 @@ TraceView::TraceView()
         m_save_notification_id = "";
     });
 
+    m_data_provider.SetRequestProgressUpdateCallback(
+        [this](const RequestInfo& request, uint64_t pct, const std::string& message) {
+            EventManager::GetInstance()->AddEvent(
+                std::make_shared<RequestProgressUpdateEvent>(
+                    request.request_id, request.request_type, pct, message,
+                    m_data_provider.GetTraceFilePath()));
+        });
+
     auto event_selection_handler = [this](std::shared_ptr<RocEvent> e) {
         std::shared_ptr<EventSelectionChangedEvent> event =
             std::dynamic_pointer_cast<EventSelectionChangedEvent>(e);
@@ -150,6 +159,23 @@ TraceView::TraceView()
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         event_selection_handler);
 
+    auto request_progress_update_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto event = std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
+        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
+        {
+            if(event->GetRequestType() == RequestType::kSaveTrimmedTrace &&
+               !m_save_notification_id.empty())
+            {
+                NotificationManager::GetInstance().UpdateProgress(
+                    m_save_notification_id, event->GetProgressPercent(),
+                    event->GetMessage());
+            }
+        }
+    };
+    m_progress_update_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        request_progress_update_handler);
+
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("TraceView");
 }
@@ -167,6 +193,9 @@ TraceView::~TraceView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         m_event_selection_changed_event_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        m_progress_update_event_token);
 }
 
 void
@@ -174,6 +203,11 @@ TraceView::Update()
 {
     auto last_state = m_data_provider.GetState();
     m_data_provider.Update();
+
+    if(m_timeline_selection)
+    {
+        m_timeline_selection->UpdateHighlightTimer();
+    }
 
     if(!m_view_created)
     {
@@ -233,7 +267,7 @@ TraceView::CreateView()
     m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection, m_annotations);
-    m_event_search          = std::make_shared<EventSearch>(m_data_provider);
+    m_event_search          = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
@@ -508,6 +542,14 @@ TraceView::RenderEditMenuOptions()
             m_timeline_selection->UnselectAllEvents();
         }
     }
+    if(ImGui::MenuItem("Unhighlight All Events", nullptr, false,
+                       m_timeline_selection && m_timeline_selection->HasHighlightedEvents()))
+    {
+        if(m_timeline_selection)
+        {
+            m_timeline_selection->UnhighlightAllEvents();
+        }
+    }
     ImGui::Separator();
     if(ImGui::MenuItem("Save Trace Selection", nullptr, false, IsTrimSaveAllowed()))
     {
@@ -575,13 +617,13 @@ TraceView::RenderToolbar()
     // Toolbar Controls
     ImGui::BeginGroup();
     RenderFlowControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderAnnotationControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderEventSearch();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderBookmarkControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     
     ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
@@ -596,7 +638,7 @@ TraceView::RenderToolbar()
     {
         SetTooltipStyled("Show Minimap");
     }
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
 
     if(ImGui::Button("Reset View"))
     {
@@ -623,23 +665,6 @@ TraceView::RenderToolbar()
     ImGui::EndChild();
     // pop child window style
     ImGui::PopStyleVar(2);
-}
-
-void
-TraceView::RenderSeparator()
-{
-    auto style = m_settings_manager.GetDefaultStyle();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
-    ImGui::SameLine();
-
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    float       height    = ImGui::GetFrameHeight();
-    ImVec2      p         = ImGui::GetCursorScreenPos();
-    draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + height),
-                       m_settings_manager.GetColor(Colors::kMetaDataSeparator), 2.0f);
-    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
-    ImGui::SameLine();
 }
 
 void

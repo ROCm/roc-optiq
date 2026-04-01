@@ -2,104 +2,47 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "compute/rocprofvis_compute_data_provider.h"
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "rocprofvis_widget.h"
+
+#include <map>
 
 namespace RocProfVis
 {
 namespace View
 {
+inline constexpr float TABLE_TOOLTIP_MAX_WIDTH = 400.0f;
 
-class ComputeWidgetLegacy : public RocWidget
+struct MetricId
 {
-public:
-    ComputeWidgetLegacy(std::shared_ptr<ComputeDataProvider> data_provider);
-    void Update() = 0;
-    void Render() = 0;
-
-protected:
-    std::shared_ptr<ComputeDataProvider> m_data_provider;
-    std::string m_id;
-};
-
-class ComputePlotLegacy : public ComputeWidgetLegacy
-{
-public:
-    ComputePlotLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
-    void Update() override;
-    void Render() = 0;
-
-protected:
-    rocprofvis_controller_compute_plot_types_t m_type;
-    ComputePlotModel* m_model;
-};
-
-class ComputeTableLegacy : public ComputeWidgetLegacy
-{
-public:
-    ComputeTableLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_table_types_t type);
-    void Update() override;
-    void Render() override;
-    void Search(const std::string& term);
-
-private:
-    rocprofvis_controller_compute_table_types_t m_type;
-    ComputeTableModel* m_model;
-};
-
-class ComputePlotPieLegacy : public ComputePlotLegacy
-{
-public:
-    ComputePlotPieLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
-    void Render() override;
-};
-
-class ComputePlotBarLegacy : public ComputePlotLegacy
-{
-public:
-    ComputePlotBarLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
-    void Render() override;
-};
-
-class ComputeMetricLegacy : public ComputeWidgetLegacy
-{
-public:
-    ComputeMetricLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_metric_types_t type, const std::string& label, const std::string& unit);
-    void Update() override;
-    void Render() {};
-    std::string GetFormattedString() const;
-
-private:
-    rocprofvis_controller_compute_metric_types_t m_type;
-    ComputeMetricModel* m_model;
-    std::string m_name;
-    std::string m_unit;
-    std::string m_formatted_string;
-};
-
-class ComputePlotRooflineLegacy : public ComputePlotLegacy
-{
-public:
-    enum GroupMode {
-        GroupModeKernel,
-        GroupModeDispatch
+    std::string ToString() const
+    {
+        return std::to_string(category_id) + "." + std::to_string(table_id) + "." +
+               std::to_string(entry_id);
     };
-    ComputePlotRooflineLegacy(std::shared_ptr<ComputeDataProvider> data_provider, rocprofvis_controller_compute_plot_types_t type);
-    void Update() override;
-    void Render() override;
-    void UpdateGroupMode();
-    void SetGroupMode(const GroupMode& mode);
 
-private:
-    GroupMode m_group_mode;
-    bool m_group_dirty;
-    std::vector<const char*> m_ceilings_names;
-    std::vector<std::vector<double>*> m_ceilings_x;
-    std::vector<std::vector<double>*> m_ceilings_y;
-    std::vector<const char*> m_ai_names;
-    std::vector<std::vector<double>*> m_ai_x;
-    std::vector<std::vector<double>*> m_ai_y;
+    bool operator==(const MetricId& other) const noexcept
+    {
+        return category_id == other.category_id &&
+               table_id == other.table_id &&
+               entry_id == other.entry_id;
+    }
+
+    uint32_t category_id;
+    uint32_t table_id;
+    uint32_t entry_id;
+};
+
+struct MetricIdHash
+{
+    size_t operator()(const MetricId& id) const noexcept
+    {
+        uint64_t value = (static_cast<uint64_t>(id.category_id) << 48) ^
+                     (static_cast<uint64_t>(id.table_id) << 16) ^
+                     static_cast<uint64_t>(id.entry_id);
+
+        return std::hash<uint64_t>{}(value);
+    }
 };
 
 class MetricTableCache
@@ -109,12 +52,15 @@ public:
 
     struct Row
     {
-        std::string              metric_id;
+        MetricId                 metric_id;
         std::string              name;
         std::string              description;
         std::vector<std::string> values;
         std::string              unit;
     };
+
+    MetricTableCache() = default;
+    MetricTableCache(std::function<void(MetricId)> add_row_func);
 
     void Populate(const AvailableMetrics::Table& table,
                   const MetricValueLookup&       get_value);
@@ -125,14 +71,15 @@ public:
     bool Empty() const;
 
 private:
-    std::string              m_title;
-    std::string              m_table_id;
-    std::vector<std::string> m_column_names;
-    std::vector<Row>         m_rows;
+    std::string                   m_title;
+    std::string                   m_table_id;
+    std::vector<std::string>      m_column_names;
+    std::vector<Row>              m_rows;
+    std::function<void(MetricId)> m_add_row_to_custom;
 };
 
-constexpr uint32_t METRIC_CAT_SOL   = 2;
-constexpr uint32_t METRIC_TABLE_SOL = 1;
+inline constexpr uint32_t METRIC_CAT_SOL   = 2;
+inline constexpr uint32_t METRIC_TABLE_SOL = 1;
 
 class DataProvider;
 class ComputeSelection;
@@ -159,6 +106,56 @@ private:
     uint64_t m_client_id;
 
     MetricTableCache m_table;
+};
+
+class PinedMetricTable: public RocWidget
+{
+public:
+    struct RowValue
+    {
+        std::string value;
+        std::string tooltip;
+    };
+    using Row = std::map<uint32_t, RowValue>;
+    PinedMetricTable(DataProvider&                     data_provider,
+                std::shared_ptr<ComputeSelection> compute_selection, uint64_t client_id);
+    void AddRow(MetricId metric_id);
+    void Render();
+    void RefillTable();
+    void Update();
+
+private:
+    void UpdateColumns(MetricId metric_id);
+    void FillTableRow(const MetricId& metric_id);
+    void FillMandatoryColumns(const MetricId&                metric_id,
+                              const AvailableMetrics::Table& table, Row& row,
+                              std::shared_ptr<MetricValue> metric_value);
+    void FillDefaultColumns();
+
+    const AvailableMetrics::Table& GetTable(const MetricId& metric_id, uint32_t workload_id);
+    float GetTableHight() const;
+
+
+    std::optional<uint32_t> GetColumnIndex(const std::string& column_name);
+
+
+    void RenderTooltip(const RowValue& row);
+    void RenderRowValues(uint32_t index, const std::pair<MetricId, Row>& row,
+                   std::function<void(const char* value_to_copy)> menu_func);
+    void RenderUnitValue(const std::pair<MetricId, Row>& row,
+                         std::function<void(const char* value_to_copy)> menu_func);
+    void ContextMenu(const char* value_to_copy, MetricId id_to_delete);
+
+
+    std::map<uint32_t, std::string>                 m_columns;
+    std::uint32_t                                   m_lust_column_index;
+    std::unordered_map<MetricId, Row, MetricIdHash> m_rows;
+    uint64_t                                        m_client_id;
+
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+    DataProvider&                     m_data_provider;
+    std::optional<MetricId>           m_id_to_delete;
+
 };
 
 }  // namespace View

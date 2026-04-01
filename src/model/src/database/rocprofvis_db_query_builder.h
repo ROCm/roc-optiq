@@ -19,6 +19,7 @@ typedef struct rocprofvis_db_sqlite_track_service_data_t
     rocprofvis_dm_event_operation_t op;
     uint64_t                        id;
     uint64_t                        nid;
+    uint64_t                        pid;
     uint32_t                        stream_id;
     uint32_t                        process_id;
     uint32_t                        sub_process_id;
@@ -101,7 +102,7 @@ typedef struct rocprofvis_db_sqlite_memory_copy_table_query_format
 
 typedef struct rocprofvis_db_sqlite_rocpd_table_query_format
 {
-    static constexpr const int NUM_PARAMS = 10;
+    static constexpr const int NUM_PARAMS = 11;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_rocpd_table_query_format;
@@ -132,7 +133,7 @@ typedef struct rocprofvis_db_sqlite_dataflow_query_format
 
 typedef struct rocprofvis_db_sqlite_essential_data_query_format
 {
-    static constexpr const int NUM_PARAMS = 7;
+    static constexpr const int NUM_PARAMS = 8;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
     std::vector<std::string>   where;
@@ -345,7 +346,7 @@ class Builder
             {CATEGORY_REFERENCE_RPD, {CATEGORY_PUBLIC_NAME, ColumnType::Word, SCHEMA_INDEX_CATEGORY_RPD}},
             {EVENT_NAME_REFERENCE, {NAME_PUBLIC_NAME, ColumnType::Dword, SCHEMA_INDEX_EVENT_NAME}},
             {SYMBOL_NAME_REFERENCE, {NAME_PUBLIC_NAME, ColumnType::Dword, SCHEMA_INDEX_EVENT_SYMBOL}},
-            {EVENT_NAME_REFERENCE_RPD, {NAME_PUBLIC_NAME, ColumnType::Dword, SCHEMA_INDEX_EVENT_NAME_RPD}},
+            {EVENT_NAME_REFERENCE_RPD, {NAME_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_NAME_RPD}},
             {M_TYPE_REFERENCE, {NAME_PUBLIC_NAME, ColumnType::Byte, SCHEMA_INDEX_MEM_TYPE}},
             {STREAM_NAME_REFERENCE, {STREAM_PUBLIC_NAME, ColumnType::Word,SCHEMA_INDEX_STREAM_NAME}},
             {QUEUE_NAME_REFERENCE, {QUEUE_PUBLIC_NAME, ColumnType::Byte,SCHEMA_INDEX_QUEUE_NAME}},

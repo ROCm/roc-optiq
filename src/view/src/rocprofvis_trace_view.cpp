@@ -36,6 +36,7 @@ TraceView::TraceView()
 , m_popup_info({ false, "", "" })
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_event_selection_changed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_progress_update_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
@@ -123,6 +124,14 @@ TraceView::TraceView()
         m_save_notification_id = "";
     });
 
+    m_data_provider.SetRequestProgressUpdateCallback(
+        [this](const RequestInfo& request, uint64_t pct, const std::string& message) {
+            EventManager::GetInstance()->AddEvent(
+                std::make_shared<RequestProgressUpdateEvent>(
+                    request.request_id, request.request_type, pct, message,
+                    m_data_provider.GetTraceFilePath()));
+        });
+
     auto event_selection_handler = [this](std::shared_ptr<RocEvent> e) {
         std::shared_ptr<EventSelectionChangedEvent> event =
             std::dynamic_pointer_cast<EventSelectionChangedEvent>(e);
@@ -150,6 +159,23 @@ TraceView::TraceView()
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         event_selection_handler);
 
+    auto request_progress_update_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto event = std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
+        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
+        {
+            if(event->GetRequestType() == RequestType::kSaveTrimmedTrace &&
+               !m_save_notification_id.empty())
+            {
+                NotificationManager::GetInstance().UpdateProgress(
+                    m_save_notification_id, event->GetProgressPercent(),
+                    event->GetMessage());
+            }
+        }
+    };
+    m_progress_update_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        request_progress_update_handler);
+
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("TraceView");
 }
@@ -167,6 +193,9 @@ TraceView::~TraceView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         m_event_selection_changed_event_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        m_progress_update_event_token);
 }
 
 void

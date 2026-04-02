@@ -33,14 +33,28 @@ struct IterableModel
     mutable bool           all_subitems_hidden = false;
 };
 
+struct ProcessorModel;
+
+struct StreamModel
+{
+    const StreamInfo*                           info;
+    InfoTable                                   info_table;
+    std::string                                 header;
+    std::string                                 processor_header;
+    std::vector<ProcessorModel>                   processors;
+    std::unordered_map<uint64_t, ProcessorModel*> processor_lut;
+    uint64_t                                    graph_index;
+    mutable bool                                all_subitems_hidden = false;
+};
+
 struct ProcessModel
 {
     const ProcessInfo*                           info;
     InfoTable                                    info_table;
     std::string                                  header;
     std::string                                  stream_header;
-    std::vector<IterableModel>                   streams;
-    std::unordered_map<uint64_t, IterableModel*> stream_lut;
+    std::vector<StreamModel>                     streams;
+    std::unordered_map<uint64_t, StreamModel*>   stream_lut;
     std::string                                  instrumented_thread_header;
     std::vector<IterableModel>                   instrumented_threads;
     std::unordered_map<uint64_t, IterableModel*> instrumented_thread_lut;

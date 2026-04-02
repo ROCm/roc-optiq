@@ -17,12 +17,6 @@
 #include "rocprofvis_controller_topology.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
-#ifdef COMPUTE_UI_SUPPORT
-#include "compute/rocprofvis_controller_trace_compute.h"
-#include "compute/rocprofvis_controller_plot.h"
-#include <filesystem>
-#endif
-
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
@@ -126,7 +120,7 @@ void SystemTrace::DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int
     }
 }
 
-rocprofvis_result_t SystemTrace::LoadRocpd() {
+rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
     {
@@ -140,7 +134,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
             if(nullptr != db && kRocProfVisDmResultSuccess ==
                                     rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
             {
-                rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Trace::ProgressCallback, this);
+                rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
                 if(nullptr != object2wait)
                 {
                     std::multimap<uint64_t, Track*> queue_to_track;
@@ -152,6 +146,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                     if(kRocProfVisDmResultSuccess ==
                        rocprofvis_db_read_metadata_async(db, object2wait))
                     {
+                        future->AddDependentFuture(object2wait);
                         if(kRocProfVisDmResultSuccess ==
                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
                         {
@@ -439,6 +434,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd() {
                         {
                             result = kRocProfVisResultTimeout;
                         }
+                        future->RemoveDependentFuture(object2wait);
                     }
                     else
                     {
@@ -483,13 +479,12 @@ rocprofvis_result_t SystemTrace::Load(RocProfVis::Controller::Future& future)
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     future.Set(JobSystem::Get().IssueJob([this](Future* future) -> rocprofvis_result_t
         {
-            (void) future;
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(m_trace_file.find(".rpd", m_trace_file.size() - 4) != std::string::npos || 
                 m_trace_file.find(".db", m_trace_file.size() - 3) != std::string::npos ||
                 m_trace_file.find(".yaml", m_trace_file.size() - 5) != std::string::npos)
             {
-                result = LoadRocpd();
+                result = LoadRocpd(future);
             }
             else
             {
@@ -518,7 +513,7 @@ rocprofvis_result_t SystemTrace::SaveTrimmedTrace(Future& future, double start, 
                               rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
                               if (db)
                               {
-                                  rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+                                  rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
                                   if (object2wait)
                                   {
                                     auto error = rocprofvis_db_trim_save_async(db, start, end, path_str.c_str(), object2wait);
@@ -528,8 +523,10 @@ rocprofvis_result_t SystemTrace::SaveTrimmedTrace(Future& future, double start, 
 
                                     if (error == kRocProfVisDmResultSuccess)
                                     {
+                                        future->AddDependentFuture(object2wait);
                                         error = rocprofvis_db_future_wait(object2wait,
                                                                           UINT64_MAX);
+                                        future->RemoveDependentFuture(object2wait);
                                         result = (error == kRocProfVisDmResultSuccess)
                                                      ? kRocProfVisResultSuccess
                                                      : kRocProfVisResultUnknownError;
@@ -824,13 +821,6 @@ rocprofvis_result_t SystemTrace::GetUInt64(rocprofvis_property_t property, uint6
                 result = m_topology_root->GetUInt64(kRPVControllerSystemNumNodes, 0, value);
                 break;
             }
-            case kRPVControllerSystemGetDmProgress:
-            {
-                std::lock_guard lock(m_mutex);
-                *value = m_dm_progress_percent;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
             case kRPVControllerSystemGetHistogramBucketsNumber:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
@@ -938,26 +928,6 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
                 result = UnhandledProperty(property);
                 break;
             }
-        }
-    }
-    return result;
-}
-rocprofvis_result_t SystemTrace::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) 
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        case kRPVControllerSystemGetDmMessage:
-        {
-            std::lock_guard lock(m_mutex);
-            result = m_dm_message.GetString(value, length);
-            break;
-        }
-        default:
-        {
-            result = UnhandledProperty(property);
-            break;
         }
     }
     return result;

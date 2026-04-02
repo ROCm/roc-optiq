@@ -29,12 +29,8 @@ enum class RocEvents
     kGoToTimelineSpot,
     kTimeFormatChanged,
     kTopologyChanged,
+    kRequestProgressUpdate,
 #ifdef COMPUTE_UI_SUPPORT
-    //legacy events
-    kComputeDataDirty,
-    kComputeBlockNavigationChanged,
-    kComputeTableSearchChanged,
-    //new events
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,
     kComputeMetricsFetched,
@@ -54,6 +50,7 @@ enum class RocEventType
     kStickyNoteEvent,
     kRangeEvent,
     kNavigationEvent,
+    kRequestProgressUpdateEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
     kComputeSelectionChangedEvent,
@@ -197,16 +194,6 @@ private:
 };
 
 #ifdef COMPUTE_UI_SUPPORT
-class ComputeTableSearchEvent : public RocEvent
-{
-public:
-    ComputeTableSearchEvent(int event_id, std::string& term);
-    const std::string GetSearchTerm();
-
-private:
-    std::string m_search_term;
-};
-
 class ComputeSelectionChangedEvent : public RocEvent
 {
 public:
@@ -297,6 +284,26 @@ public:
 private:
     double      m_start_ns;
     double      m_end_ns;
+};
+
+enum class RequestType;
+
+class RequestProgressUpdateEvent : public RocEvent
+{
+public:
+    RequestProgressUpdateEvent(uint64_t request_id, RequestType request_type,
+                               uint64_t progress_percent, const std::string& message,
+                               const std::string& source_id);
+    uint64_t           GetRequestID() const;
+    RequestType        GetRequestType() const;
+    uint64_t           GetProgressPercent() const;
+    const std::string  GetMessage() const;
+
+private:
+    uint64_t    m_request_id;
+    RequestType m_request_type;
+    uint64_t    m_progress_percent;
+    std::string m_message;
 };
 
 }  // namespace View

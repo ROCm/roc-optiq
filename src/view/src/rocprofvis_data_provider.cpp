@@ -223,6 +223,13 @@ DataProvider::SetEventDataReadyCallback(
     m_event_data_ready_callback = callback;
 }
 
+void
+DataProvider::SetRequestProgressUpdateCallback(
+    const std::function<void(const RequestInfo&, uint64_t, const std::string&)>& callback)
+{
+    m_request_progress_callback = callback;
+}
+
 bool
 DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
 {
@@ -874,15 +881,43 @@ DataProvider::ParseStreamData(rocprofvis_handle_t* stream_handle, StreamInfo& st
                                                   0, &stream_info.id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         stream_info.name = GetString(stream_handle, kRPVControllerStreamName, 0);
-        rocprofvis_handle_t* processor_handle;
-        result = rocprofvis_controller_get_object(
-            stream_handle, kRPVControllerStreamProcessor, 0, &processor_handle);
+        size_t num_processors = 0;
+        result = rocprofvis_controller_get_uint64(stream_handle, kRPVControllerStreamNumProcessors,
+            0, &num_processors);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        if(processor_handle)
+        ROCPROFVIS_ASSERT(num_processors > 0);
+
+        stream_info.processors.resize(num_processors);
+
+        for(size_t j = 0; j < num_processors; j++)
         {
-            result = rocprofvis_controller_get_uint64(
-                processor_handle, kRPVControllerProcessorId, 0, &stream_info.device_id);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            rocprofvis_handle_t* processor_handle = nullptr;
+
+            result = rocprofvis_controller_get_object(
+                stream_handle, kRPVControllerStreamProcessorIndexed, j, &processor_handle);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && processor_handle);
+            DeviceInfo device_info;
+            ProcessorChildCount device_child_count;
+            if(ParseDeviceData(processor_handle, device_info, device_child_count))
+            {
+                stream_info.processors[j].id = device_info.id.fields.id;
+                // Query queues...
+                for(size_t k = 0; k < device_child_count.queue_count; k++)
+                {
+                    rocprofvis_handle_t* queue_handle = nullptr;
+
+                    result = rocprofvis_controller_get_object(
+                        processor_handle, kRPVControllerProcessorQueueIndexed, k,
+                        &queue_handle);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
+                        queue_handle);
+                    QueueInfo queue_info;
+                    if(ParseQueueData(queue_handle, queue_info))
+                    {
+                        stream_info.processors[j].queue_ids.push_back(queue_info.id);
+                    }
+                }  
+            }
         }
         return true;
     }
@@ -2026,7 +2061,7 @@ DataProvider::HandleRequests()
                 rocprofvis_controller_future_wait(req.request_future, 0);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
                               result == kRocProfVisResultTimeout);
-
+            UpdateRequestProgress(req);
             // the response is ready
             if(result == kRocProfVisResultSuccess)
             {
@@ -2048,21 +2083,54 @@ DataProvider::HandleRequests()
                 ++it;
             }
         }
+    }
+}
 
-        if(m_state == ProviderState::kLoading)
+void
+DataProvider::UpdateRequestProgress(RequestInfo& req)
+{
+    uint64_t percentage = 0;
+    switch(req.request_type)
+    {
+        case RequestType::kSaveTrimmedTrace:
+        case RequestType::kTableExport:
         {
-            uint64_t            progress_percent;
-            rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-                m_trace_controller, kRPVControllerSystemGetDmProgress, 0, &progress_percent);
-            if(result == kRocProfVisResultSuccess)
+            if(m_request_progress_callback && req.request_future &&
+               kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(
+                                               req.request_future,
+                                               kRPVControllerFutureProgressPercentage, 0,
+                                               &percentage))
             {
-                if(progress_percent != m_progress_percent)
+                if(percentage != req.request_progress)
                 {
-                    GetString(m_trace_controller, kRPVControllerSystemGetDmMessage, 0,
+                    req.request_progress = percentage;
+                    m_request_progress_callback(
+                        req, percentage,
+                        GetString(req.request_future, kRPVControllerFutureProgressMessage,
+                                  0));
+                }
+            }
+            break;
+        }
+        case RequestType::kFetchSystemTrace:
+#ifdef COMPUTE_UI_SUPPORT
+        case RequestType::kFetchComputeTrace:
+#endif
+        {
+            if(req.request_future &&
+               kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(
+                                               req.request_future,
+                                               kRPVControllerFutureProgressPercentage, 0,
+                                               &percentage))
+            {
+                if(percentage != m_progress_percent)
+                {
+                    GetString(req.request_future, kRPVControllerFutureProgressMessage, 0,
                               m_progress_mesage);
                 }
-                m_progress_percent = progress_percent;
+                m_progress_percent = percentage;
             }
+            break;
         }
     }
 }

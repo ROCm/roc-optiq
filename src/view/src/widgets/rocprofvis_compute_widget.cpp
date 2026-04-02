@@ -91,92 +91,93 @@ MetricTableCache::Render() const
     int num_columns = static_cast<int>(m_column_names.size());
 
     SectionTitle(m_title.c_str());
-    if(!ImGui::BeginTable(m_table_id.c_str(), num_columns, ImGuiTableFlags_Borders))
-        return;
-
-    for(const auto& col : m_column_names)
-        ImGui::TableSetupColumn(col.c_str());
-    ImGui::TableHeadersRow();
-
-    int row_idx = 0;
-    for(const auto& row : m_rows)
+    if(!m_column_names.empty() &&
+       ImGui::BeginTable(m_table_id.c_str(), num_columns, ImGuiTableFlags_Borders))
     {
-        auto menu_func = [&](const char* value_to_copy) {
-            if(ImGui::BeginPopupContextItem())
-            {
-                if(ImGui::MenuItem("Copy"))
+        for(const auto& col : m_column_names)
+            ImGui::TableSetupColumn(col.c_str());
+        ImGui::TableHeadersRow();
+
+        int row_idx = 0;
+        for(const auto& row : m_rows)
+        {
+            auto menu_func = [&](const char* value_to_copy) {
+                if(ImGui::BeginPopupContextItem())
                 {
-                    ImGui::SetClipboardText(value_to_copy);
-                    NotificationManager::GetInstance().Show(
-                            COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
-                }
-                if (m_add_row_to_custom)
-                {
-                    if(ImGui::MenuItem("Pin metric"))
+                    if(ImGui::MenuItem("Copy"))
                     {
-                        m_add_row_to_custom(
-                            {
-                              row.metric_id.category_id,
-                              row.metric_id.table_id,
-                              row.metric_id.entry_id
-                            });
+                        ImGui::SetClipboardText(value_to_copy);
+                        NotificationManager::GetInstance().Show(
+                                COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
                     }
+                    if (m_add_row_to_custom)
+                    {
+                        if(ImGui::MenuItem("Pin metric"))
+                        {
+                            m_add_row_to_custom(
+                                {
+                                  row.metric_id.category_id,
+                                  row.metric_id.table_id,
+                                  row.metric_id.entry_id
+                                });
+                        }
+                    }
+
+                    ImGui::EndPopup();
                 }
+            };
+            ImGui::PushID(row_idx++);
+            ImGui::TableNextRow();
 
-                ImGui::EndPopup();
-            }
-        };
-        ImGui::PushID(row_idx++);
-        ImGui::TableNextRow();
-
-        ImGui::TableNextColumn();
-        CopyableTextUnformatted(row.metric_id.ToString().c_str(), "##mid",
-                                COPY_DATA_NOTIFICATION,
-                                false, true, menu_func);
-
-        ImGui::TableNextColumn();
-        CopyableTextUnformatted(row.name.c_str(), "##name", COPY_DATA_NOTIFICATION, false,
-                                true, menu_func);
-        if(!row.description.empty() && ImGui::IsItemHovered())
-        {
-            ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                                ImVec2(TABLE_TOOLTIP_MAX_WIDTH, FLT_MAX));
-            BeginTooltipStyled();
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TABLE_TOOLTIP_MAX_WIDTH);
-            ImGui::TextUnformatted(row.description.c_str());
-            ImGui::PopTextWrapPos();
-            EndTooltipStyled();
-        }
-
-        for(int vi = 0; vi < static_cast<int>(row.values.size()); vi++)
-        {
             ImGui::TableNextColumn();
-            if(!row.values[vi].empty())
+            CopyableTextUnformatted(row.metric_id.ToString().c_str(), "##mid",
+                                    COPY_DATA_NOTIFICATION,
+                                    false, true, menu_func);
+
+            ImGui::TableNextColumn();
+            CopyableTextUnformatted(row.name.c_str(), "##name", COPY_DATA_NOTIFICATION, false,
+                                    true, menu_func);
+            if(!row.description.empty() && ImGui::IsItemHovered())
             {
-                CopyableTextUnformatted(row.values[vi].c_str(),
-                                        std::string("##v") + std::to_string(vi),
-                                        COPY_DATA_NOTIFICATION, false, true, menu_func);
+                ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                                    ImVec2(TABLE_TOOLTIP_MAX_WIDTH, FLT_MAX));
+                BeginTooltipStyled();
+                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TABLE_TOOLTIP_MAX_WIDTH);
+                ImGui::TextUnformatted(row.description.c_str());
+                ImGui::PopTextWrapPos();
+                EndTooltipStyled();
+            }
+
+            for(int vi = 0; vi < static_cast<int>(row.values.size()); vi++)
+            {
+                ImGui::TableNextColumn();
+                if(!row.values[vi].empty())
+                {
+                    CopyableTextUnformatted(row.values[vi].c_str(),
+                                            std::string("##v") + std::to_string(vi),
+                                            COPY_DATA_NOTIFICATION, false, true, menu_func);
+                }
+                else
+                {
+                    ImGui::TextDisabled("N/A");
+                }
+            }
+
+            ImGui::TableNextColumn();
+            if(row.unit != "N/A")
+            {
+                CopyableTextUnformatted(row.unit.c_str(), "##unit", COPY_DATA_NOTIFICATION,
+                                        false, true, menu_func);
             }
             else
             {
                 ImGui::TextDisabled("N/A");
             }
-        }
 
-        ImGui::TableNextColumn();
-        if(row.unit != "N/A")
-        {
-            CopyableTextUnformatted(row.unit.c_str(), "##unit", COPY_DATA_NOTIFICATION,
-                                    false, true, menu_func);
+            ImGui::PopID();
         }
-        else
-        {
-            ImGui::TextDisabled("N/A");
-        }
-
-        ImGui::PopID();
+        ImGui::EndTable();
     }
-    ImGui::EndTable();
 }
 
 void

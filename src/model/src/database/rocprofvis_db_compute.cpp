@@ -452,48 +452,57 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 	return plan.toString();
 }
 
+void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t workload_id, std::set<uint32_t>& metric_ids)
+{
+	//x.x.x format
+	if (2 == std::count(metric_str.begin(), metric_str.end(), '.'))
+	{
+		for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
+		{
 
+			if (metric.first == metric_str)
+			{
+				metric_ids.insert(metric.second);
+			}
+		}
+	}
+	else
+	{
+		for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
+		{
+			if (metric.first.find(metric_str+".") == 0)
+			{
+				metric_ids.insert(metric.second);
+			}
+		}
+	}
+}
 
     std::string ComputeQueryFactory::GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
 		std::string query;
 		std::set<uint32_t> metric_ids;
 		std::set<std::string> kernel_ids;
 		uint32_t workload_id = 0;
+		bool workload_detected = false;
 		for (int i = 0; i < num; i++)
 		{
 			if (params[i].param_type == kRPVComputeParamKernelId)
-			{
-				kernel_ids.insert(params[i].param_str);
-				workload_id = m_db->m_kernel_workload_lookup[std::atol(params[i].param_str)];
+			{				
+				uint32_t w_id = m_db->m_kernel_workload_lookup[std::atol(params[i].param_str)];
+				// accept kernels from single workload only
+				if (w_id == workload_id || !workload_detected)
+				{
+					kernel_ids.insert(params[i].param_str);
+					workload_id = w_id;
+					workload_detected = true;
+				}
 			} else
-			if (params[i].param_type == kRPVComputeParamMetricId)
+			if (params[i].param_type == kRPVComputeParamMetricId && workload_detected)
 			{
-				std::string metric_str = params[i].param_str;
-				//x.x.x format
-				if (2 == std::count(metric_str.begin(), metric_str.end(), '.'))
-				{
-					for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
-					{
-
-						if (metric.first == metric_str)
-						{
-							metric_ids.insert(metric.second);
-						}
-					}
-				}
-				else
-				{
-					for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
-					{
-						if (metric.first.find(metric_str+".") == 0)
-						{
-							metric_ids.insert(metric.second);
-						}
-					}
-				}
+				ParseMetricParam(params[i].param_str, workload_id, metric_ids);
 			}
 		}
-		if (metric_ids.size() > 0 && kernel_ids.size() > 0)
+		if (metric_ids.size() > 0 && kernel_ids.size() > 0 && workload_detected)
 		{
 			query = "SELECT metric_id, metric_name, kernel_uuid, value_name, value from ";
 			query += (IsVersionGreaterOrEqual("1.3.0")) ? "compute_kernel_metric_view " : "compute_metric_view ";
@@ -526,6 +535,53 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 				count++;
 			}
 			query += ")";
+		}
+		return query;		
+	}
+
+	std::string ComputeQueryFactory::GetComputeMetricValuesByWorkload(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		std::set<uint32_t> metric_ids;
+		std::set<std::string> workload_ids;
+		uint32_t workload_id = 0;
+		bool workload_detected = false;
+		for (int i = 0; i < num; i++)
+		{
+			if (params[i].param_type == kRPVComputeParamWorkloadId && !workload_detected)
+			{				
+				workload_id = std::atol(params[i].param_str);
+				workload_detected = true;
+			} else
+				if (params[i].param_type == kRPVComputeParamMetricId && workload_detected)
+				{
+					ParseMetricParam(params[i].param_str, workload_id, metric_ids);
+				}
+		}
+		if (metric_ids.size() > 0 && workload_detected)
+		{
+			query = "SELECT metric_id, metric_name, workload_id, workload_name, value_name, value from ";
+			query += "compute_workload_metric_view ";
+			query += "WHERE ";
+			int count = 0;
+			if (metric_ids.size() < m_db->m_metric_uuid_lookup[workload_id].size())
+			{
+				query += "metric_uuid IN(";
+				for (auto metric_id : metric_ids)
+				{
+					if (count > 0)
+					{
+						query += ",";
+					}
+					query += std::to_string(metric_id);
+					count++;
+				}
+				query += ") AND ";
+			}
+
+			count = 0;
+			query += "workload_id = ";
+			query += std::to_string(workload_id);
+
 		}
 		return query;		
 	}
@@ -640,6 +696,9 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 			case kRPVComputeFetchMetricValues:
 				query = m_query_factory.GetComputeMetricValues(num, params);
 				break;
+			case kRPVComputeFetchMetricValuesByWorkload:
+				query = m_query_factory.GetComputeMetricValuesByWorkload(num, params);
+				break;
 			case kRPVComputeFetchKernelMetricsMatrix:
 				query = m_query_factory.GetComputeKernelMetricsMatrix(num, params);
 				break;
@@ -700,6 +759,7 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 				case kRPVComputeFetchKernelMetricCategoriesList:
 				case kRPVComputeFetchMetricCategoryTablesList:
 				case kRPVComputeFetchMetricValues:
+				case kRPVComputeFetchMetricValuesByWorkload:
 				case kRPVComputeFetchWorkloadMetricValueNames:
 					callback = CallbackGetComputeGeneric;
 					break;

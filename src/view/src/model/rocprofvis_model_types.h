@@ -208,9 +208,15 @@ struct QueueInfo : public IterableInfo
     uint64_t device_id;  // ID of owning device.
 };
 
+struct StreamDeviceInfo
+{
+    uint64_t                  id;
+    std::vector<uint64_t>     queue_ids;   // IDs of this process' queues
+};
+
 struct StreamInfo : public IterableInfo
 {
-    uint64_t device_id;  // ID of owning device.
+    std::vector<StreamDeviceInfo> processors;   
 };
 
 struct CounterInfo : public IterableInfo

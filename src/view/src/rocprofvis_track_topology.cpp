@@ -235,31 +235,83 @@ TrackTopology::UpdateTopology()
                             "Streams (" + std::to_string(stream_ids.size()) + ")";
                         for(int k = 0; k < stream_ids.size(); k++)
                         {
-                            m_topology.nodes[i].processes[j].stream_lut[stream_ids[k]] =
-                                &m_topology.nodes[i].processes[j].streams[k];
-                            const StreamInfo* stream_info =
-                                topology_data.GetStream(stream_ids[k]);
+                            StreamModel* stream = &m_topology.nodes[i].processes[j].streams[k];
+                            m_topology.nodes[i].processes[j].stream_lut[stream_ids[k]] = stream;
+                            const StreamInfo* stream_info = topology_data.GetStream(stream_ids[k]);
                             if(stream_info)
                             {
-                                const DeviceInfo* device_info =
-                                    topology_data.GetDevice(stream_info->device_id);
-                                m_topology.nodes[i].processes[j].streams[k].info =
-                                    stream_info;
-                                if(device_info)
+                                m_topology.nodes[i].processes[j].streams[k].info = stream_info;
+                                const std::vector<StreamDeviceInfo>& stream_processors = stream_info->processors;
+                                stream->processors.resize(stream_processors.size());
+                                    
+                                for (int j = 0; j < stream_processors.size(); j++)
                                 {
-                                    m_topology.nodes[i]
-                                        .processes[j]
-                                        .streams[k]
-                                        .info_table = InfoTable{
-                                        { { InfoTable::Cell{
-                                                DeviceTypeString(device_info->type) +
-                                                    " " +
-                                                    std::to_string(
-                                                        device_info->type_index),
-                                                false },
-                                            InfoTable::Cell{ device_info->product_name,
-                                                             false } } }
-                                    };
+                                    stream->processor_lut[processor_ids[j]] = &stream->processors[j];
+                                    const DeviceInfo* processor_info =
+                                        topology_data.GetDevice(processor_ids[j]);
+                                    if (processor_info)
+                                    {
+                                        stream->processors[j].info       = processor_info;
+                                        stream->processors[j].info_table = InfoTable{
+                                            { { InfoTable::Cell{ "Processor type", false },
+                                            InfoTable::Cell{ DeviceTypeString(processor_info->type), false } },
+                                            { InfoTable::Cell{ "Processor index", false },
+                                            InfoTable::Cell{ std::to_string(processor_info->type_index), false } },
+                                            { InfoTable::Cell{ "Product name", false },
+                                            InfoTable::Cell{ processor_info->product_name, false } } }
+                                        };
+                                        stream->processors[j].header = stream_info->name + " >>> " + 
+                                            DeviceTypeString(processor_info->type) +
+                                            std::to_string(processor_info->type_index);
+
+                                        const std::vector<uint64_t>& queue_ids = stream_processors[j].queue_ids;
+                                        stream->processors[j].queues.resize(queue_ids.size());
+                                        for(int k = 0; k < queue_ids.size(); k++)
+                                        {
+                                            stream->processors[j].queue_lut[queue_ids[k]] =
+                                                &stream->processors[j].queues[k];
+                                            const QueueInfo* queue_info =
+                                                topology_data.GetQueue(queue_ids[k]);
+                                            if(queue_info)
+                                            {
+                                                const DeviceInfo* device_info =
+                                                    topology_data.GetDevice(queue_info->device_id);
+                                                stream->processors[j].queues[k].info =
+                                                    queue_info;
+                                                if(device_info)
+                                                {
+                                                    stream->processors[j]
+                                                        .queues[k]
+                                                        .info_table = InfoTable{
+                                                            { { InfoTable::Cell{
+                                                                DeviceTypeString(device_info->type) +
+                                                                " " +
+                                                        std::to_string(
+                                                            device_info->type_index),
+                                                        false },
+                                                        InfoTable::Cell{ device_info->product_name,
+                                                        false } } }
+                                                    };
+                                                }
+
+                                                const auto& track_list = m_data_provider.DataModel().GetTimeline().GetTrackList();
+                                                for (const TrackInfo* track : track_list)
+                                                {
+                                                    if (track)
+                                                    {
+                                                        if (track->topology.type == TrackInfo::TrackType::Queue && 
+                                                            track->topology.id.value == queue_info->id && 
+                                                            track->topology.device_id == queue_info->device_id)
+                                                        {
+                                                            stream->processors[j].queues[k].graph_index = track->index;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                       
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -1514,7 +1514,7 @@ namespace DataModel
                         Builder::InnerJoin("rocpd_region", "R2", "R2.event_id = E2.id"),
                         Builder::InnerJoin("rocpd_track", "T", "T.id = R2.track_id"),
                         Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R2.start_id"),
-                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R2.end_idd"), 
+                        Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R2.end_id"), 
                         Builder::InnerJoin(Builder::LevelTable("launch"), "L","R2.id = L.eid") },
                     { Builder::Where(
                         "R1.id", "==", std::to_string(event_id))
@@ -1528,11 +1528,11 @@ namespace DataModel
                             Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                            Builder::QParam("TS.start"),
+                            Builder::QParam("TS.value"),
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("K.kernel_id"),
                             Builder::QParam("L.level"),
-                            Builder::QParam("TE.end"),
+                            Builder::QParam("TE.value"),
 
                         },
                     { 
@@ -1556,11 +1556,11 @@ namespace DataModel
                             Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("M.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                            Builder::QParam("TS.start"),
+                            Builder::QParam("TS.value"),
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("M.name_id"),
                             Builder::QParam("L.level"),
-                            Builder::QParam("TE.end"),
+                            Builder::QParam("TE.value"),
 
                         },
                     { Builder::From("rocpd_region", "R"),
@@ -1582,11 +1582,11 @@ namespace DataModel
                             Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                            Builder::QParam("TS.start"),
+                            Builder::QParam("TS.value"),
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("E2.category_id"), // This should be name_id, but Alloc table does not have column
                             Builder::QParam("L.level"),
-                            Builder::QParam("TE.end"),
+                            Builder::QParam("TE.value"),
 
                         },
                     { 
@@ -1741,11 +1741,11 @@ namespace DataModel
                             Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                            Builder::QParam("TS.start"),
+                            Builder::QParam("TS.value"),
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("K2.kernel_id"),
                             Builder::QParam("L.level"),
-                            Builder::QParam("TE.end"),
+                            Builder::QParam("TE.value"),
 
                         },
                     {
@@ -1829,11 +1829,11 @@ namespace DataModel
                             Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("T.pid", Builder::PROCESS_ID_SERVICE_NAME),
                             Builder::QParam("T.tid", Builder::THREAD_ID_SERVICE_NAME),
-                            Builder::QParam("TS.start"),
+                            Builder::QParam("TS.value"),
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("R.name_id"),
                             Builder::QParam("L.level"),
-                            Builder::QParam("TE.end"),
+                            Builder::QParam("TE.value"),
 
                         },
                     { 
@@ -1856,11 +1856,11 @@ namespace DataModel
                             Builder::QParam("T.nid", Builder::NODE_ID_SERVICE_NAME),
                             Builder::QParam("M2.dst_agent_id", Builder::AGENT_ID_SERVICE_NAME),
                             Builder::QParam("T.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
-                            Builder::QParam("TS.start"),
+                            Builder::QParam("TS.value"),
                             Builder::QParam("E2.category_id"),
                             Builder::QParam("M2.name_id"),
                             Builder::QParam("L.level"),
-                            Builder::QParam("TE.end"),
+                            Builder::QParam("TE.value"),
 
                         },
                     { 

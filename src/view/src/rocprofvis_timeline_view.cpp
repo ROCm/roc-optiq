@@ -667,12 +667,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // (with no alpha) over their predecessors
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
+    ImGui::SetNextItemAllowOverlap();
     ImGui::BeginChild("Scrubber View",
                       ImVec2(m_tpt->GetGraphSizeX(),
                              m_tpt->GetGraphSizeY() - ARTIFICIAL_SCROLLBAR_HEIGHT),
                       ImGuiChildFlags_None, window_flags);
-
-    ImGui::SetItemAllowOverlap();
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -1534,7 +1533,7 @@ TimelineView::RenderHistogram()
     float       ruler_width     = m_tpt->GetGraphSizeX();
     float       tick_top        = ruler_pos.y + 2.0f;
     ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
-    float       label_font_size = font->FontSize;
+    float       label_font_size = font->LegacySize;
 
     std::string label =
         nanosecond_to_formatted_str(m_tpt->GetRangeX(), time_format, true) + "gap";

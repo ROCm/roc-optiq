@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <cfloat>
 #include <yaml-cpp/yaml.h>
+#include "json.h"
 
 
 namespace RocProfVis
@@ -70,6 +71,97 @@ rocprofvis_dm_event_operation_t ProfileDatabase::GetTableQueryOperation(std::str
     }
     return kRocProfVisDmOperationNoOp;
 }
+
+int
+ProfileDatabase::CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
+    char** azColName)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+    ROCPROFVIS_ASSERT_MSG_RETURN(argc == 7, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
+    void*  func = (void*)&CallbackAddStackTrace;
+    rocprofvis_db_sqlite_callback_parameters* callback_params =
+        (rocprofvis_db_sqlite_callback_parameters*) data;
+    ProfileDatabase*           db = (ProfileDatabase*) callback_params->db;
+    rocprofvis_db_stack_data_t record = {"","","",0,0};
+    static const char * empty_blob = "{}";
+    if(callback_params->future->Interrupted()) return 1;
+    enum sqlite_callstack_param_index {
+        CALLSTACK_VERSION,
+        CALLSTACK_REGION_ID,
+        CALLSTACK_P1,
+        CALLSTACK_P2,
+        CALLSTACK_P3,
+        CALLSTACK_SYMBOL,
+        CALLSTACK_DEPTH,
+    };
+    uint32_t version  = db->Sqlite3ColumnInt(func, stmt, azColName, CALLSTACK_VERSION);
+    record.id  = db->Sqlite3ColumnInt64(func, stmt, azColName, CALLSTACK_REGION_ID);
+    std::string p1 = (char*) db->Sqlite3ColumnText(func, stmt, azColName, CALLSTACK_P1);
+    std::string p2 = (char*) db->Sqlite3ColumnText(func, stmt, azColName, CALLSTACK_P2);
+    std::string p3 = (char*) db->Sqlite3ColumnText(func, stmt, azColName, CALLSTACK_P3);
+    std::string symbol = (char*) db->Sqlite3ColumnText(func, stmt, azColName, CALLSTACK_SYMBOL);
+    record.depth = db->Sqlite3ColumnInt(func, stmt, azColName, CALLSTACK_DEPTH);
+
+    jt::Json json_symbol;
+    jt::Json json_line;
+    std::string symbol_blob;
+    std::string line_blob;
+    if (version >= 4)
+    {
+        if (!p1.empty() && sqlite3_column_type(stmt, CALLSTACK_P1) != SQLITE_NULL && p1 != empty_blob)
+        {
+            json_symbol["name"] = p1;
+        }
+        else
+        {
+            json_symbol["name"] = symbol.c_str();
+        }
+        if (!p2.empty() && sqlite3_column_type(stmt, CALLSTACK_P2) != SQLITE_NULL && p2 != empty_blob)
+        {
+            json_symbol["file"] = p2.c_str();
+        }
+
+        symbol_blob = json_symbol.toString();
+
+        if (!p3.empty() && sqlite3_column_type(stmt, CALLSTACK_P3) != SQLITE_NULL && p3 != empty_blob)
+        {
+            json_line["line_address"] = p3.c_str();
+            line_blob = json_line.toString();
+        }
+    }
+    else
+    {
+        if (version > 0 && !p1.empty() && sqlite3_column_type(stmt, CALLSTACK_P1) != SQLITE_NULL && p1 != empty_blob)
+        {
+            symbol_blob = p1;
+        }
+        else
+        {
+            if (version == 0 && !p1.empty() && sqlite3_column_type(stmt, CALLSTACK_P1) != SQLITE_NULL) //old schema
+            {
+                json_symbol["name"] = (symbol + " : " + p1);
+            }
+            else
+            {
+                json_symbol["name"] = symbol.c_str();
+            }
+            
+            symbol_blob = json_symbol.toString();
+        }
+        if (!p2.empty() && sqlite3_column_type(stmt, CALLSTACK_P2) != SQLITE_NULL && p2 != empty_blob)
+        {
+            line_blob = p2;
+        }
+    }
+    record.symbol = symbol_blob.c_str();
+    record.line = line_blob.c_str();
+
+    if (db->BindObject()->FuncAddStackFrame(callback_params->handle, record) !=
+        kRocProfVisDmResultSuccess)
+        return 1;
+    callback_params->future->CountThisRow();
+    return 0;
+} 
 
 int ProfileDatabase::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
@@ -344,7 +436,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
     record.id.bitfield.event_op = db->Sqlite3ColumnInt(func, stmt, azColName,0 );
     record.id.bitfield.event_node = callback_params->db_instance->GuidIndex();
     if (db->TrackTracker()->FindTrack(
-        db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)record.id.bitfield.event_op), 
+        db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)record.id.bitfield.event_op),
         db->Sqlite3ColumnInt(func, stmt, azColName,4), 
         db->Sqlite3ColumnInt(func, stmt, azColName,5), 
         callback_params->db_instance->GuidIndex(), record.track_id))
@@ -1580,7 +1672,7 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
     ROCPROFVIS_ASSERT_MSG_RETURN(params!=0, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL, 1);
     DbInstance* db_instance = (DbInstance*)params->track_indentifiers.db_instance;
     ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
-
+    uint64_t parent_id = 0;
     auto it = params->m_active_events.begin();
     while(it != params->m_active_events.end())
     {   
@@ -1597,6 +1689,7 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
             }
 
             level = it->level + 1;
+            parent_id = ((rocprofvis_dm_event_id_t*)&it->id)->bitfield.event_id;
         }
         it = next_it;
     }
@@ -1613,7 +1706,7 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
         if(it == db->m_event_levels_id_to_index[op][db_instance->GuidIndex()].end())
         {
             db->m_event_levels_id_to_index[op][db_instance->GuidIndex()][id] = index = db->m_event_levels[op][db_instance->GuidIndex()].size();
-            db->m_event_levels[op][db_instance->GuidIndex()].push_back({id});
+            db->m_event_levels[op][db_instance->GuidIndex()].push_back({id, parent_id,0,0});
         }
         else
         {

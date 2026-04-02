@@ -325,6 +325,8 @@ typedef enum rocprofvis_dm_flowtrace_property_t {
 typedef enum rocprofvis_dm_stacktrace_property_t {
     // Number of frames
 	kRPVDMNumberOfFramesUInt64,
+    // Stack frame region id by specified frame index
+    kRPVDMFrameRegionIdUInt64Indexed,
     // Stack frame depth by specified frame index
 	kRPVDMFrameDepthUInt64Indexed,
     // Stack frame symbol by specified frame index

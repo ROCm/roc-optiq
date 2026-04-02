@@ -35,13 +35,21 @@ private:
         kAllHidden,
         kMixed
     };
+    enum class GraphBanchType
+    {
+        kNoBranches,
+        kProcessorTreeBranch
+    };
     bool RenderTrackItem(const uint64_t& index);
 
-    bool IsAllSubItemsHidden(const std::vector<IterableModel>& container);
-    void HideAllSubItems(const std::vector<IterableModel>& container);
+    template<typename Model>
+    bool IsAllSubItemsHidden(const std::vector<Model>& container);
+    template<typename Model>
+    void HideAllSubItems(const std::vector<Model>& container);
     void HideAllUncategorizedItems(const std::vector<uint64_t>& indices);
     void UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices);
-    void UnhideAllSubItems(const std::vector<IterableModel>& container);
+    template<typename Model>
+    void UnhideAllSubItems(const std::vector<Model>& container);
 
     EyeButtonState DrawTopology(const TopologyModel& topology,
                                 EyeButtonState       parent_eye_button_state,
@@ -60,9 +68,11 @@ private:
 
     EyeButtonState DrawProcessors(const std::vector<ProcessorModel>& processors,
                                  EyeButtonState                   parent_eye_button_state,
-                                 bool                             show_eye_button = true);
+                                 bool                             show_eye_button = true,
+                                 uint64_t                         parent_id = 0);
 
-    EyeButtonState DrawCollapsable(const std::vector<IterableModel>& container,
+    template<typename Model>
+    EyeButtonState DrawCollapsable(const std::vector<Model>& container,
                                    const std::string&                collapsable_header,
                                    EyeButtonState parent_eye_button_state);
 

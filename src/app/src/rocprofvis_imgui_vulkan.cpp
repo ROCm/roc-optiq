@@ -38,7 +38,7 @@ rocprofvis_imgui_backend_vk_check_result(VkResult err)
 {
     if(err != 0)
     {
-        fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
+        spdlog::error("[vulkan] Error: VkResult = {}", static_cast<int>(err));
     }
 }
 
@@ -47,7 +47,7 @@ rocprofvis_imgui_backend_vk_success(VkResult err)
 {
     if(err != 0)
     {
-        fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
+        spdlog::error("[vulkan] Error: VkResult = {}", static_cast<int>(err));
     }
     return (err == 0);
 }
@@ -66,8 +66,8 @@ rocprofvis_imgui_backend_vk_debug_report(VkDebugReportFlagsEXT      flags,
     (void) messageCode;
     (void) pUserData;
     (void) pLayerPrefix;  // Unused arguments
-    fprintf(stderr, "[vulkan] Debug: report from ObjectType: %i\nMessage: %s\n\n",
-            objectType, pMessage);
+    spdlog::error("[vulkan] Debug: report from ObjectType: {}\nMessage: {}\n\n",
+            static_cast<int>(objectType), pMessage);
     return VK_FALSE;
 }
 #endif  // _DEBUG
@@ -123,7 +123,7 @@ rocprofvis_imgui_backend_vk_select_physical_device(
     }
     else
     {
-        fprintf(stderr, "[vulkan] Error: Couldn't enumerate GPUs.\n");
+        spdlog::error("[vulkan] Error: Couldn't enumerate GPUs.");
     }
     return bOk;
 }
@@ -283,20 +283,18 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
                                                  &backend_data->m_queue);
 
                                 // Create Descriptor Pool
-                                // The example only requires a single combined image
-                                // sampler descriptor for the font image and only uses one
-                                // descriptor set (for that) If you wish to load e.g.
-                                // additional textures you may need to alter pools sizes.
+                                // ImGui 1.92+'s dynamic texture system creates many more
+                                // textures, so we need a larger descriptor pool.
                                 {
                                     VkDescriptorPoolSize pool_sizes[] = {
-                                        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 },
+                                        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 },
                                     };
                                     VkDescriptorPoolCreateInfo pool_info = {};
                                     pool_info.sType =
                                         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
                                     pool_info.flags =
                                         VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-                                    pool_info.maxSets = 1;
+                                    pool_info.maxSets = 100;
                                     pool_info.poolSizeCount =
                                         (uint32_t) IM_ARRAYSIZE(pool_sizes);
                                     pool_info.pPoolSizes = pool_sizes;
@@ -417,9 +415,7 @@ rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* wind
                     backend_data->m_allocator, &surface);
             if(err != VK_SUCCESS)
             {
-                fprintf(stderr,
-                        "[vulkan] glfwCreateWindowSurface failed, VkResult = %d\n",
-                        (int) err);
+                spdlog::error("[vulkan] glfwCreateWindowSurface failed, VkResult = {}", static_cast<int>(err));
             }
             else
             {
@@ -456,14 +452,13 @@ rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* wind
                         backend_data->m_instance, backend_data->m_physical_device,
                         backend_data->m_device, wd, backend_data->m_queue_family,
                         backend_data->m_allocator, width, height,
-                        backend_data->m_min_image_count);
+                        backend_data->m_min_image_count, 0);
 
                     bOk = true;
                 }
                 else
                 {
-                    fprintf(stderr,
-                            "[vulkan] Error: no WSI support on physical device\n");
+                    spdlog::error("[vulkan] Error: no WSI support on physical device");
                 }
             }
         }
@@ -497,11 +492,11 @@ rocprofvis_imgui_backend_vk_config(rocprofvis_imgui_backend_t* backend, void* wi
         init_info.Queue                     = backend_data->m_queue;
         init_info.PipelineCache             = backend_data->m_pipeline_cache;
         init_info.DescriptorPool            = backend_data->m_descriptor_pool;
-        init_info.RenderPass                = backend_data->m_window_data.RenderPass;
-        init_info.Subpass                   = 0;
+        init_info.PipelineInfoMain.RenderPass  = backend_data->m_window_data.RenderPass;
+        init_info.PipelineInfoMain.Subpass     = 0;
+        init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
         init_info.MinImageCount             = backend_data->m_min_image_count;
         init_info.ImageCount                = backend_data->m_window_data.ImageCount;
-        init_info.MSAASamples               = VK_SAMPLE_COUNT_1_BIT;
         init_info.Allocator                 = backend_data->m_allocator;
         init_info.CheckVkResultFn           = rocprofvis_imgui_backend_vk_check_result;
         ImGui_ImplVulkan_Init(&init_info);
@@ -530,7 +525,7 @@ rocprofvis_imgui_backend_vk_update_framebuffer(rocprofvis_imgui_backend_t* backe
                 backend_data->m_instance, backend_data->m_physical_device,
                 backend_data->m_device, &backend_data->m_window_data,
                 backend_data->m_queue_family, backend_data->m_allocator, fb_width,
-                fb_height, backend_data->m_min_image_count);
+                fb_height, backend_data->m_min_image_count, 0);
             backend_data->m_window_data.FrameIndex = 0;
             backend_data->m_swapchain_rebuild      = false;
         }

@@ -634,7 +634,7 @@ ComputeComparisonView::RenderBookmarks() const
             ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeightWithSpacing()),
             ImVec2(ImGui::GetContentRegionAvail().x, m_max_bookmark_height));
         ImGui::BeginChild("bookmarks", ImVec2(0.0f, 0.0f),
-                          ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY);
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         if(m_bookmarks.empty())
         {
             CenterNextItem(ImGui::CalcTextSize("Use () to bookmark metrics.").x +

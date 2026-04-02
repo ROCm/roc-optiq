@@ -9,10 +9,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
+#include "spdlog/spdlog.h"
 
 typedef struct rocprofvis_imgui_vk_data_t
 {
@@ -35,11 +38,7 @@ rocprofvis_imgui_backend_vk_check_result(VkResult err)
 {
     if(err != 0)
     {
-        fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
-        if(err < 0)
-        {
-            abort();
-        }
+        spdlog::error("[vulkan] Error: VkResult = {}", static_cast<int>(err));
     }
 }
 
@@ -48,7 +47,7 @@ rocprofvis_imgui_backend_vk_success(VkResult err)
 {
     if(err != 0)
     {
-        fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
+        spdlog::error("[vulkan] Error: VkResult = {}", static_cast<int>(err));
     }
     return (err == 0);
 }
@@ -67,8 +66,8 @@ rocprofvis_imgui_backend_vk_debug_report(VkDebugReportFlagsEXT      flags,
     (void) messageCode;
     (void) pUserData;
     (void) pLayerPrefix;  // Unused arguments
-    fprintf(stderr, "[vulkan] Debug: report from ObjectType: %i\nMessage: %s\n\n",
-            objectType, pMessage);
+    spdlog::error("[vulkan] Debug: report from ObjectType: {}\nMessage: {}\n\n",
+            static_cast<int>(objectType), pMessage);
     return VK_FALSE;
 }
 #endif  // _DEBUG
@@ -124,7 +123,7 @@ rocprofvis_imgui_backend_vk_select_physical_device(
     }
     else
     {
-        fprintf(stderr, "[vulkan] Error: Couldn't enumerate GPUs.\n");
+        spdlog::error("[vulkan] Error: Couldn't enumerate GPUs.");
     }
     return bOk;
 }
@@ -328,6 +327,68 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
     return bResult;
 }
 
+static void
+rocprofvis_imgui_backend_vk_release_after_failed_init(rocprofvis_imgui_backend_t* backend)
+{
+    if(!backend || !backend->m_private_data)
+    {
+        memset(backend, 0, sizeof(*backend));
+        return;
+    }
+
+    rocprofvis_imgui_vk_data_t* backend_data =
+        (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
+
+    if(backend_data->m_instance != VK_NULL_HANDLE &&
+       backend_data->m_device != VK_NULL_HANDLE)
+    {
+        ImGui_ImplVulkanH_DestroyWindow(backend_data->m_instance, backend_data->m_device,
+                                          &backend_data->m_window_data,
+                                          backend_data->m_allocator);
+    }
+    backend_data->m_window_data = ImGui_ImplVulkanH_Window();
+
+    if(backend_data->m_descriptor_pool != VK_NULL_HANDLE &&
+       backend_data->m_device != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorPool(backend_data->m_device, backend_data->m_descriptor_pool,
+                                backend_data->m_allocator);
+    }
+    backend_data->m_descriptor_pool = VK_NULL_HANDLE;
+
+#ifdef _DEBUG
+    if(backend_data->m_debug_report != VK_NULL_HANDLE &&
+       backend_data->m_instance != VK_NULL_HANDLE)
+    {
+        auto f_vkDestroyDebugReportCallbackEXT =
+            (PFN_vkDestroyDebugReportCallbackEXT) vkGetInstanceProcAddr(
+                backend_data->m_instance, "vkDestroyDebugReportCallbackEXT");
+        if(f_vkDestroyDebugReportCallbackEXT)
+        {
+            f_vkDestroyDebugReportCallbackEXT(backend_data->m_instance,
+                                              backend_data->m_debug_report,
+                                              backend_data->m_allocator);
+        }
+    }
+    backend_data->m_debug_report = VK_NULL_HANDLE;
+#endif
+
+    if(backend_data->m_device != VK_NULL_HANDLE)
+    {
+        vkDestroyDevice(backend_data->m_device, backend_data->m_allocator);
+    }
+    backend_data->m_device = VK_NULL_HANDLE;
+
+    if(backend_data->m_instance != VK_NULL_HANDLE)
+    {
+        vkDestroyInstance(backend_data->m_instance, backend_data->m_allocator);
+    }
+    backend_data->m_instance = VK_NULL_HANDLE;
+
+    free(backend_data);
+    memset(backend, 0, sizeof(*backend));
+}
+
 bool
 rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* window)
 {
@@ -348,61 +409,64 @@ rocprofvis_imgui_backend_vk_init(rocprofvis_imgui_backend_t* backend, void* wind
         }
         if(rocprofvis_imgui_backend_vk_setup_vulkan(backend_data, extensions))
         {
-            // Create Window Surface
-            VkSurfaceKHR surface;
-            VkResult     err =
-                glfwCreateWindowSurface(backend_data->m_instance, (GLFWwindow*) window,
-                                        backend_data->m_allocator, &surface);
-            rocprofvis_imgui_backend_vk_check_result(err);
-
-            // Create Framebuffers
-            int width  = 0;
-            int height = 0;
-            glfwGetFramebufferSize((GLFWwindow*) window, &width, &height);
-            ImGui_ImplVulkanH_Window* wd = &backend_data->m_window_data;
-            wd->Surface                  = surface;
-
-            // Check for WSI support
-            VkBool32 res;
-            vkGetPhysicalDeviceSurfaceSupportKHR(backend_data->m_physical_device,
-                                                 backend_data->m_queue_family,
-                                                 wd->Surface, &res);
-            if(res == VK_TRUE)
+            VkSurfaceKHR surface = VK_NULL_HANDLE;
+            VkResult     err     = glfwCreateWindowSurface(
+                    backend_data->m_instance, (GLFWwindow*) window,
+                    backend_data->m_allocator, &surface);
+            if(err != VK_SUCCESS)
             {
-                // Select Surface Format
-                const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM,
-                                                               VK_FORMAT_R8G8B8A8_UNORM,
-                                                               VK_FORMAT_B8G8R8_UNORM,
-                                                               VK_FORMAT_R8G8B8_UNORM };
-                const VkColorSpaceKHR requestSurfaceColorSpace =
-                    VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-                wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(
-                    backend_data->m_physical_device, wd->Surface,
-                    requestSurfaceImageFormat,
-                    (size_t) IM_ARRAYSIZE(requestSurfaceImageFormat),
-                    requestSurfaceColorSpace);
-
-                // Select Present Mode
-                VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
-                wd->PresentMode                  = ImGui_ImplVulkanH_SelectPresentMode(
-                    backend_data->m_physical_device, wd->Surface, &present_modes[0],
-                    IM_ARRAYSIZE(present_modes));
-
-                // Create SwapChain, RenderPass, Framebuffer, etc.
-                IM_ASSERT(backend_data->m_min_image_count >= 2);
-                ImGui_ImplVulkanH_CreateOrResizeWindow(
-                    backend_data->m_instance, backend_data->m_physical_device,
-                    backend_data->m_device, wd, backend_data->m_queue_family,
-                    backend_data->m_allocator, width, height,
-                    backend_data->m_min_image_count, 0);
-
-                bOk = true;
+                spdlog::error("[vulkan] glfwCreateWindowSurface failed, VkResult = {}", static_cast<int>(err));
             }
             else
             {
-                fprintf(stderr, "[vulkan] Error: no WSI support on physical m_device\n");
+                int width  = 0;
+                int height = 0;
+                glfwGetFramebufferSize((GLFWwindow*) window, &width, &height);
+                ImGui_ImplVulkanH_Window* wd = &backend_data->m_window_data;
+                wd->Surface                  = surface;
+
+                VkBool32 res;
+                vkGetPhysicalDeviceSurfaceSupportKHR(backend_data->m_physical_device,
+                                                     backend_data->m_queue_family,
+                                                     wd->Surface, &res);
+                if(res == VK_TRUE)
+                {
+                    const VkFormat requestSurfaceImageFormat[] = {
+                        VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
+                        VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
+                    const VkColorSpaceKHR requestSurfaceColorSpace =
+                        VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+                    wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(
+                        backend_data->m_physical_device, wd->Surface,
+                        requestSurfaceImageFormat,
+                        (size_t) IM_ARRAYSIZE(requestSurfaceImageFormat),
+                        requestSurfaceColorSpace);
+
+                    VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
+                    wd->PresentMode                  = ImGui_ImplVulkanH_SelectPresentMode(
+                        backend_data->m_physical_device, wd->Surface, &present_modes[0],
+                        IM_ARRAYSIZE(present_modes));
+
+                    IM_ASSERT(backend_data->m_min_image_count >= 2);
+                    ImGui_ImplVulkanH_CreateOrResizeWindow(
+                        backend_data->m_instance, backend_data->m_physical_device,
+                        backend_data->m_device, wd, backend_data->m_queue_family,
+                        backend_data->m_allocator, width, height,
+                        backend_data->m_min_image_count, 0);
+
+                    bOk = true;
+                }
+                else
+                {
+                    spdlog::error("[vulkan] Error: no WSI support on physical device");
+                }
             }
         }
+    }
+
+    if(!bOk)
+    {
+        rocprofvis_imgui_backend_vk_release_after_failed_init(backend);
     }
 
     return bOk;
@@ -652,52 +716,50 @@ rocprofvis_imgui_backend_vk_destroy(rocprofvis_imgui_backend_t* backend)
 }
 
 bool
-rocprofvis_imgui_backend_setup(rocprofvis_imgui_backend_t* backend, GLFWwindow* window)
+rocprofvis_imgui_backend_setup_vulkan(rocprofvis_imgui_backend_t* backend,
+                                      GLFWwindow* window)
 {
     (void) window;
     bool bOk = false;
+
     if(backend)
     {
-        if(glfwVulkanSupported())
+        rocprofvis_imgui_vk_data_t* backend_data =
+            (rocprofvis_imgui_vk_data_t*) calloc(1,
+                                                 sizeof(rocprofvis_imgui_vk_data_t));
+        if(backend_data)
         {
-            rocprofvis_imgui_vk_data_t* backend_data =
-                (rocprofvis_imgui_vk_data_t*) calloc(1,
-                                                     sizeof(rocprofvis_imgui_vk_data_t));
-            if(backend_data)
-            {
-                backend_data->m_window_data       = ImGui_ImplVulkanH_Window();
-                backend_data->m_allocator         = nullptr;
-                backend_data->m_instance          = VK_NULL_HANDLE;
-                backend_data->m_physical_device   = VK_NULL_HANDLE;
-                backend_data->m_device            = VK_NULL_HANDLE;
-                backend_data->m_queue_family      = (uint32_t) -1;
-                backend_data->m_queue             = VK_NULL_HANDLE;
-                backend_data->m_pipeline_cache    = VK_NULL_HANDLE;
-                backend_data->m_descriptor_pool   = VK_NULL_HANDLE;
-                backend_data->m_debug_report      = VK_NULL_HANDLE;
-                backend_data->m_min_image_count   = 2;
-                backend_data->m_swapchain_rebuild = false;
-                backend->m_private_data           = backend_data;
-                backend->m_init                   = &rocprofvis_imgui_backend_vk_init;
-                backend->m_config                 = &rocprofvis_imgui_backend_vk_config;
-                backend->m_update_framebuffer =
-                    &rocprofvis_imgui_backend_vk_update_framebuffer;
-                backend->m_new_frame = &rocprofvis_imgui_backend_vk_new_frame;
-                backend->m_render    = &rocprofvis_imgui_backend_vk_render;
-                backend->m_present   = &rocprofvis_imgui_backend_vk_present;
-                backend->m_shutdown  = &rocprofvis_imgui_backend_vk_shutdown;
-                backend->m_destroy   = &rocprofvis_imgui_backend_vk_destroy;
-                bOk                  = true;
-            }
-            else
-            {
-                fprintf(stderr, "[rpv] Error: Couldn't allocate ImGui backend\n");
-            }
+            backend_data->m_window_data       = ImGui_ImplVulkanH_Window();
+            backend_data->m_allocator         = nullptr;
+            backend_data->m_instance          = VK_NULL_HANDLE;
+            backend_data->m_physical_device   = VK_NULL_HANDLE;
+            backend_data->m_device            = VK_NULL_HANDLE;
+            backend_data->m_queue_family      = (uint32_t) -1;
+            backend_data->m_queue             = VK_NULL_HANDLE;
+            backend_data->m_pipeline_cache    = VK_NULL_HANDLE;
+            backend_data->m_descriptor_pool   = VK_NULL_HANDLE;
+            backend_data->m_debug_report      = VK_NULL_HANDLE;
+            backend_data->m_min_image_count   = 2;
+            backend_data->m_swapchain_rebuild = false;
+            backend->m_private_data           = backend_data;
+            backend->m_init                   = &rocprofvis_imgui_backend_vk_init;
+            backend->m_config                 = &rocprofvis_imgui_backend_vk_config;
+            backend->m_update_framebuffer =
+                &rocprofvis_imgui_backend_vk_update_framebuffer;
+            backend->m_new_frame = &rocprofvis_imgui_backend_vk_new_frame;
+            backend->m_render    = &rocprofvis_imgui_backend_vk_render;
+            backend->m_present   = &rocprofvis_imgui_backend_vk_present;
+            backend->m_shutdown  = &rocprofvis_imgui_backend_vk_shutdown;
+            backend->m_destroy   = &rocprofvis_imgui_backend_vk_destroy;
+            bOk                  = true;
+
+            spdlog::info("[rpv] Using Vulkan backend");
         }
         else
         {
-            fprintf(stderr, "[GLFW] Error: Vulkan Not Supported\n");
+            spdlog::error("[rpv] Error: Couldn't allocate Vulkan ImGui backend");
         }
     }
+
     return bOk;
 }

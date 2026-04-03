@@ -28,22 +28,27 @@ public:
     };
 
     MetricTableCache() = default;
-    MetricTableCache(std::function<void(MetricId)> add_row_func);
+    MetricTableCache(
+        std::function<void(MetricId)> add_row_func,
+        std::function<void(MetricId metric_id, const std::string& value_name)> set_to_kernel_table);
 
     void Populate(const AvailableMetrics::Table& table,
                   const MetricValueLookup&       get_value);
 
     void Clear();
-    void Render() const;
+    void Render();
 
     bool Empty() const;
 
 private:
+    void        ContextMenu(const char* value_to_copy, const Row& row, uint32_t index);
     std::string                   m_title;
     std::string                   m_table_id;
     std::vector<std::string>      m_column_names;
     std::vector<Row>              m_rows;
     std::function<void(MetricId)> m_add_row_to_custom;
+    std::function<void(MetricId metric_id, const std::string& value_name)>
+        m_set_to_kernel_table_callback;
 };
 
 inline constexpr uint32_t METRIC_CAT_SOL   = 2;
@@ -85,6 +90,7 @@ public:
         std::string tooltip;
     };
     using Row = std::map<uint32_t, RowValue>;
+    
     PinedMetricTable(DataProvider&                     data_provider,
                 std::shared_ptr<ComputeSelection> compute_selection, uint64_t client_id,
         std::function<void(MetricId metric_id, const std::string&)> set_query_callback);
@@ -126,8 +132,9 @@ private:
     std::optional<MetricId>           m_id_to_delete;
 
     std::function<void(MetricId metric_id, const std::string& value_name)>
-        m_set_query_callback;
+        m_set_to_kernel_table_callback;
 
+    static constexpr uint32_t LAST_INDEX = std::numeric_limits<uint32_t>::max();
 };
 
 }  // namespace View

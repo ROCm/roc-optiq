@@ -13,12 +13,15 @@ namespace View
 
 ComputeTableView::ComputeTableView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
-    std::function<void(MetricId metric_id, const std::string&)> set_query_callback)
+    std::function<void(MetricId metric_id, const std::string&)>
+        set_to_kernel_table_callback)
 : RocWidget()
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
-, m_pined_metric_table(data_provider, compute_selection, m_client_id, set_query_callback)
+, m_set_to_kernel_table_callback(set_to_kernel_table_callback)
+, m_pined_metric_table(data_provider, compute_selection, m_client_id,
+                       set_to_kernel_table_callback)
 {
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
@@ -198,7 +201,7 @@ ComputeTableView::RebuildTableDataCache()
             auto add_row_func = [this](MetricId metric_id) {
                 m_pined_metric_table.AddRow(metric_id);
             };
-            MetricTableCache widget(add_row_func);
+            MetricTableCache widget(add_row_func, m_set_to_kernel_table_callback);
             widget.Populate(*tbl, [&](uint32_t eid) {
                 return model.GetMetricValue(
                     m_client_id, kernel_id, cat->id, tbl->id, eid);

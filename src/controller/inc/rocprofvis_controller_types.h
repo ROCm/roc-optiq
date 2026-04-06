@@ -33,6 +33,7 @@ typedef rocprofvis_handle_t rocprofvis_controller_counter_t;
 typedef rocprofvis_handle_t rocprofvis_controller_summary_t;
 typedef rocprofvis_handle_t rocprofvis_controller_summary_metrics_t;
 typedef rocprofvis_handle_t rocprofvis_controller_topology_node_t;
+typedef rocprofvis_handle_t rocprofvis_profiler_config_t;
 #ifdef COMPUTE_UI_SUPPORT
 typedef rocprofvis_handle_t rocprofvis_controller_workload_t;
 typedef rocprofvis_handle_t rocprofvis_controller_kernel_t;

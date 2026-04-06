@@ -25,6 +25,7 @@ namespace View
 
 class ConfirmationDialog;
 class MessageDialog;
+class ProfilerLauncherDialog;
 class Project;
 
 struct FileFilter
@@ -68,7 +69,8 @@ public:
     void OpenFile(std::string file_path);
 
     void ShowCloseConfirm();
-    
+    void ShowProfilerLauncher();
+
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;
 
@@ -173,6 +175,7 @@ private:
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
+    std::unique_ptr<ProfilerLauncherDialog> m_profiler_launcher_dialog;
 
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;

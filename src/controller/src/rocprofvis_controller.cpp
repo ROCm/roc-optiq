@@ -10,6 +10,7 @@
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_table.h"
 #include "rocprofvis_controller_trace.h"
+#include "rocprofvis_controller_profiler_process.h"
 #include "rocprofvis_core_assert.h"
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_sample.h"
@@ -531,5 +532,191 @@ void rocprofvis_controller_free(rocprofvis_controller_t* object)
     {
         delete trace.Get();
     }
+}
+
+// ==================================================================================
+// Profiler Launcher C API Implementation
+// ==================================================================================
+
+rocprofvis_profiler_config_t* rocprofvis_profiler_config_alloc(void)
+{
+    RocProfVis::Controller::ProfilerConfig* config = new RocProfVis::Controller::ProfilerConfig();
+    return (rocprofvis_profiler_config_t*)config;
+}
+
+void rocprofvis_profiler_config_free(rocprofvis_profiler_config_t* config)
+{
+    if (config)
+    {
+        RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+        delete cfg;
+    }
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_type(rocprofvis_profiler_config_t* config, rocprofvis_profiler_type_t profiler_type)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->SetProfilerType(profiler_type);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_profiler_path(rocprofvis_profiler_config_t* config, char const* profiler_path)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->SetProfilerPath(profiler_path);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_target_executable(rocprofvis_profiler_config_t* config, char const* target_executable)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->SetTargetExecutable(target_executable);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_target_args(rocprofvis_profiler_config_t* config, char const* target_args)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->SetTargetArgs(target_args);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_profiler_args(rocprofvis_profiler_config_t* config, char const* profiler_args)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->SetProfilerArgs(profiler_args);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_profiler_config_t* config, char const* output_directory)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->SetOutputDirectory(output_directory);
+}
+
+rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_config_t* config, rocprofvis_controller_future_t* future)
+{
+    if (config == nullptr || future == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+
+    // Create profiler controller
+    RocProfVis::Controller::ProfilerProcessController* controller = new RocProfVis::Controller::ProfilerProcessController();
+
+    // Launch async
+    rocprofvis_result_t result = controller->LaunchAsync(cfg);
+
+    if (result != kRocProfVisResultSuccess)
+    {
+        delete controller;
+        return result;
+    }
+
+    // Issue job to monitor and complete profiler execution
+    RocProfVis::Controller::FutureRef future_ref(future);
+    if (future_ref.IsValid())
+    {
+        RocProfVis::Controller::Job* job = RocProfVis::Controller::JobSystem::Get().IssueJob(
+            [controller](RocProfVis::Controller::Future* /* future */) -> rocprofvis_result_t 
+            {
+                RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller);
+                return kRocProfVisResultSuccess;
+            }, 
+            future_ref.Get());
+        future_ref->Set(job);
+    }
+
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t rocprofvis_profiler_get_state(rocprofvis_controller_future_t* future, rocprofvis_profiler_state_t* state)
+{
+    if (future == nullptr || state == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::Future* fut = (RocProfVis::Controller::Future*)future;
+
+    // TODO: Need to access job user_data to get ProfilerProcessController
+    // For now, return pending
+    *state = kRPVProfilerStateRunning;
+
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_controller_future_t* future, char* buffer, uint32_t* length)
+{
+    if (future == nullptr || length == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    // TODO: Need to access job user_data to get ProfilerProcessController
+    // For now, return empty
+    if (buffer == nullptr)
+    {
+        *length = 0;
+        return kRocProfVisResultSuccess;
+    }
+
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_controller_future_t* future, char* buffer, uint32_t* length)
+{
+    if (future == nullptr || length == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    // TODO: Need to access job user_data to get ProfilerProcessController
+    // For now, return empty
+    if (buffer == nullptr)
+    {
+        *length = 0;
+        return kRocProfVisResultSuccess;
+    }
+
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t rocprofvis_profiler_cancel(rocprofvis_controller_future_t* future)
+{
+    if (future == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::Future* fut = (RocProfVis::Controller::Future*)future;
+    return fut->Cancel();
 }
 }

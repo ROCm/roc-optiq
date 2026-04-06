@@ -240,6 +240,58 @@ public:
     const TraceDataModel& DataModel() const { return m_model; };
     TraceDataModel&       DataModel() { return m_model; };
 
+    /*
+     * ==================================================================================
+     * Profiler Launcher Methods
+     * ==================================================================================
+     */
+
+    /*
+     * Launches a profiler process asynchronously.
+     * @param profiler_type: Type of profiler to launch
+     * @param profiler_path: Path to the profiler executable
+     * @param target_executable: Path to the target application to profile
+     * @param target_args: Arguments to pass to the target application
+     * @param output_directory: Directory where profiler output should be saved
+     * @param profiler_args: Arguments to pass to the profiler
+     * @return: True if launch was initiated successfully
+     */
+    bool LaunchProfiler(rocprofvis_profiler_type_t profiler_type,
+                        const std::string& profiler_path,
+                        const std::string& target_executable,
+                        const std::string& target_args,
+                        const std::string& output_directory,
+                        const std::string& profiler_args);
+
+    /*
+     * Gets the current state of the profiler execution.
+     * @return: Current profiler state
+     */
+    rocprofvis_profiler_state_t GetProfilerState() const;
+
+    /*
+     * Gets the accumulated profiler output (stdout/stderr).
+     * @return: Profiler output text
+     */
+    std::string GetProfilerOutput();
+
+    /*
+     * Gets the path to the generated trace file (only valid when state = Completed).
+     * @return: Path to trace file, or empty string if not available
+     */
+    std::string GetProfilerTracePath();
+
+    /*
+     * Cancels the running profiler process.
+     * @return: True if cancellation was successful
+     */
+    bool CancelProfiler();
+
+    /*
+     * Closes the profiler and frees associated resources.
+     */
+    void CloseProfiler();
+
 private:
     struct ProcessChildCount
     {
@@ -337,6 +389,10 @@ private:
     std::string m_progress_mesage;
     // Current loading status progress in percents
     uint64_t m_progress_percent;
+
+    // Profiler launcher state
+    rocprofvis_profiler_config_t* m_profiler_config;
+    rocprofvis_controller_future_t* m_profiler_future;
 
 #ifdef COMPUTE_UI_SUPPORT
 public:

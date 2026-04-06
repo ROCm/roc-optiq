@@ -45,6 +45,12 @@ typedef struct InternalSettings
     std::list<std::string> recent_files;
 } InternalSettings;
 
+typedef struct ProfilerSettings
+{
+    std::string profiler_path;
+    std::string profiler_output_directory;
+} ProfilerSettings;
+
 typedef struct AppWindowSettings
 {
     bool show_toolbar;
@@ -159,6 +165,9 @@ constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_PATH = "profiler_path";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
 
 class SettingsManager
 {
@@ -203,11 +212,16 @@ public:
     AppWindowSettings& GetAppWindowSettings();
 
     void SaveHotkeySettings();
+    // Profiler settings
+    ProfilerSettings& GetProfilerSettings();
+    void SaveProfilerSettings();
 
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
 
+    // Convenience static method (alias for GetInstance)
+    static SettingsManager& Get() { return GetInstance(); }
 
 private:
     SettingsManager();
@@ -236,6 +250,8 @@ private:
 
     void SerializeHotkeySettings(jt::Json& json);
     void DeserializeHotkeySettings(jt::Json& json);
+    void SerializeProfilerSettings(jt::Json& json);
+    void DeserializeProfilerSettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
@@ -247,7 +263,7 @@ private:
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
-
+    ProfilerSettings   m_profilersettings;
 
     std::filesystem::path m_json_path;
 };

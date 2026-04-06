@@ -280,7 +280,8 @@ namespace DataModel
 		temp.reserve(name.length() + 10);
 
 		// Check if the name is purely numeric (handles 0-127 case)
-		bool is_numeric = !name.empty() && std::all_of(name.begin(), name.end(), ::isdigit);
+        bool is_numeric = !name.empty() && std::all_of(name.begin(), name.end(),
+			[](unsigned char c) { return std::isdigit(c) != 0; });
 		if (is_numeric) {
 			temp = "mv_" + name; // Prefix numeric names with 'mv_' for "metric value"
 		} else {
@@ -290,8 +291,8 @@ namespace DataModel
 		// Convert to lowercase and replace spaces/special chars with underscores
 		std::string result;
 		result.reserve(temp.length());
-		for (char c : temp) {
-			if (std::isalnum(c)) {
+		for (unsigned char c : temp) {
+          if (std::isalnum(c)) {
 				result += std::tolower(c);
 			} else {
 				result += '_';

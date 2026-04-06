@@ -378,6 +378,7 @@ SettingsManager::SaveSettingsJson()
     SerializeDisplaySettings(settings_json);
     SerializeUnitSettings(settings_json);
     SerializeOtherSettings(settings_json);
+    SerializeProfilerSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -406,6 +407,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeDisplaySettings(result.second);
         DeserializeUnitSettings(result.second);
         DeserializeOtherSettings(result.second);
+        DeserializeProfilerSettings(result.second);
     }
     else
     {
@@ -716,6 +718,40 @@ const float
 SettingsManager::GetEventLevelCompactHeight() const
 {
     return COMPACT_EVENT_HEIGHT;
+}
+
+ProfilerSettings&
+SettingsManager::GetProfilerSettings()
+{
+    return m_profilersettings;
+}
+
+void
+SettingsManager::SaveProfilerSettings()
+{
+    SaveSettingsJson();
+}
+
+void
+SettingsManager::SerializeProfilerSettings(jt::Json& json)
+{
+    jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
+    ps[JSON_KEY_SETTINGS_PROFILER_PATH] = m_profilersettings.profiler_path;
+    ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR] = m_profilersettings.profiler_output_directory;
+}
+
+void
+SettingsManager::DeserializeProfilerSettings(jt::Json& json)
+{
+    jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
+    if(ps[JSON_KEY_SETTINGS_PROFILER_PATH].isString())
+    {
+        m_profilersettings.profiler_path = ps[JSON_KEY_SETTINGS_PROFILER_PATH].getString();
+    }
+    if(ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].isString())
+    {
+        m_profilersettings.profiler_output_directory = ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].getString();
+    }
 }
 
 }  // namespace View

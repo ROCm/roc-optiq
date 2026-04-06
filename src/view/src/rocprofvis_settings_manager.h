@@ -45,6 +45,12 @@ typedef struct InternalSettings
     std::list<std::string> recent_files;
 } InternalSettings;
 
+typedef struct ProfilerSettings
+{
+    std::string profiler_path;
+    std::string profiler_output_directory;
+} ProfilerSettings;
+
 typedef struct AppWindowSettings
 {
     bool show_toolbar;
@@ -152,6 +158,10 @@ constexpr size_t      MAX_RECENT_FILES                       = 5;
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
 
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_PATH = "profiler_path";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
+
 class SettingsManager
 {
 public:
@@ -193,10 +203,16 @@ public:
 
     AppWindowSettings& GetAppWindowSettings();
 
+    // Profiler settings
+    ProfilerSettings& GetProfilerSettings();
+    void SaveProfilerSettings();
+
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
 
+    // Convenience static method (alias for GetInstance)
+    static SettingsManager& Get() { return GetInstance(); }
 
 private:
     SettingsManager();
@@ -223,6 +239,9 @@ private:
     void SerializeOtherSettings(jt::Json& json);
     void DeserializeOtherSettings(jt::Json& json);
 
+    void SerializeProfilerSettings(jt::Json& json);
+    void DeserializeProfilerSettings(jt::Json& json);
+
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
     FontManager        m_font_manager;
@@ -233,7 +252,7 @@ private:
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
-
+    ProfilerSettings   m_profilersettings;
 
     std::filesystem::path m_json_path;
 };

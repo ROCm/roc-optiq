@@ -26,6 +26,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "widgets/rocprofvis_profiler_launcher_dialog.h"
 #include <filesystem>
 #include <sstream>
 
@@ -311,6 +312,10 @@ AppWindow::Update()
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
+    if (m_profiler_launcher_dialog)
+    {
+        m_profiler_launcher_dialog->Update();
+    }
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
@@ -372,6 +377,10 @@ AppWindow::Render()
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
     m_settings_panel->Render();
+    if (m_profiler_launcher_dialog)
+    {
+        m_profiler_launcher_dialog->Render();
+    }
 
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
@@ -648,6 +657,11 @@ AppWindow::RenderFileMenu(Project* project)
                                !is_open_file_dialog_open))
         {
             HandleSaveAsFile();
+        }
+        ImGui::Separator();
+        if(ImGui::MenuItem("Launch Profiler..."))
+        {
+            ShowProfilerLauncher();
         }
         ImGui::Separator();
         const std::list<std::string>& recent_files =
@@ -1325,6 +1339,19 @@ AppWindow::RenderDebugOuput()
     }
 }
 #endif  // ROCPROFVIS_DEVELOPER_MODE
+
+void
+AppWindow::ShowProfilerLauncher()
+{
+    // Create dialog if it doesn't exist (lazy initialization)
+    // Dialog owns its own DataProvider - not tied to any specific trace
+    if (!m_profiler_launcher_dialog)
+    {
+        m_profiler_launcher_dialog = std::make_unique<ProfilerLauncherDialog>(this);
+    }
+
+    m_profiler_launcher_dialog->Show();
+}
 
 }  // namespace View
 }  // namespace RocProfVis

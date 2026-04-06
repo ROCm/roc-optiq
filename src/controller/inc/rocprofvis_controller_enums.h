@@ -1020,3 +1020,35 @@ typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
     kRPVControllerRooflineKernelIntensityTypeL1,
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
 #endif
+
+/*
+ * Profiler types supported by the profiler launcher
+ */
+typedef enum rocprofvis_profiler_type_t
+{
+    // ROCm Systems Profiler - sampling mode (single-stage)
+    kRPVProfilerTypeRocprofSysSample = 0,
+    // ROCm Systems Profiler - instrumentation mode (two-stage: instrument + run)
+    kRPVProfilerTypeRocprofSysInstrument = 1,
+    // ROCm Compute Profiler v2 (rocprof)
+    kRPVProfilerTypeRocprofCompute = 2,
+    // ROCm Compute Profiler v3 (rocprofv3)
+    kRPVProfilerTypeRocprofV3 = 3,
+} rocprofvis_profiler_type_t;
+
+/*
+ * Profiler execution state
+ */
+typedef enum rocprofvis_profiler_state_t
+{
+    // Profiler has not been launched yet
+    kRPVProfilerStateIdle = 0,
+    // Profiler is currently running
+    kRPVProfilerStateRunning = 1,
+    // Profiler completed successfully
+    kRPVProfilerStateCompleted = 2,
+    // Profiler failed with an error
+    kRPVProfilerStateFailed = 3,
+    // Profiler was cancelled by user
+    kRPVProfilerStateCancelled = 4,
+} rocprofvis_profiler_state_t;

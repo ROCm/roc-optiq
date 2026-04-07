@@ -70,14 +70,15 @@ jobs:
           fi
 
           SDK_ROOT="${HOME}/VulkanSDK/${V}"
-          # copy_only=1: install SDK files only (no /usr/local); CMake uses VULKAN_SDK (see LunarG macOS getting started).
+          # Qt IFW: options first, then command, then key=value (see installer --help).
+          # copy_only=1: SDK files only, no /usr/local (LunarG macOS getting started).
           "${INSTALLER}" \
             --root "${SDK_ROOT}" \
-            copy_only=1 \
             --accept-licenses \
             --default-answer \
             --confirm-command \
-            install
+            install \
+            copy_only=1
 
           if [ ! -d "${SDK_ROOT}" ]; then
             echo "❌ SDK root not created: ${SDK_ROOT}"

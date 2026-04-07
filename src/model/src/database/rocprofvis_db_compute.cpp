@@ -17,9 +17,10 @@ namespace DataModel
 		{kRPVComputeFetchKernelRooflineIntensities, "Fetch roofline intensities of a kernel" },
 		{kRPVComputeFetchKernelMetricCategoriesList, "Fetch list of metric categories in a kernel" },
 		{kRPVComputeFetchMetricCategoryTablesList, "Fetch list of tables in a category" },
-		{kRPVComputeFetchMetricValues, "Fetch values of metrics"},
+		{kRPVComputeFetchMetricValues, "Fetch kernel aggregated values of metrics"},
 		{kRPVComputeFetchKernelMetricsMatrix, "Fetch kernel metrics matrix with pivoted metric columns"},
-		{kRPVComputeFetchWorkloadMetricValueNames, "Fetch distinct value names per metric in a workload"}
+		{kRPVComputeFetchWorkloadMetricValueNames, "Fetch distinct value names per metric in a workload"},
+		{kRPVComputeFetchMetricValuesByWorkload, "Fetch workload aggregated values of metrics"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {

@@ -172,16 +172,15 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     uint64_t num_entries = 0;
+    uint64_t uint64_data = 0;
     result = output.GetUInt64(kRPVControllerMetricsContainerNumMetrics, 0, &num_entries);
     if(result == kRocProfVisResultSuccess && num_entries == 0)
     {
-        result = args.GetUInt64(kRPVControllerMetricArgsNumKernels, 0, &num_entries);
-        if(result == kRocProfVisResultSuccess)
+        std::shared_ptr<QueryArgumentStore> query_args = nullptr;
+        rocprofvis_db_compute_use_case_enum_t use_case;
+        if(kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerMetricArgsNumKernels, 0, &num_entries) && num_entries > 0)
         {
-            auto query_args = std::make_shared<QueryArgumentStore>();
-            auto query_out = std::make_shared<QueryDataStore>();
-            
-            uint64_t uint64_data = 0;
+            query_args = std::make_shared<QueryArgumentStore>();            
             for(uint64_t i = 0; i < num_entries; i++)
             {
                 result = args.GetUInt64(kRPVControllerMetricArgsKernelIdIndexed, i, &uint64_data);
@@ -194,62 +193,72 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
                     break;
                 }
             }
+            use_case = kRPVComputeFetchMetricValues;
+        }
+        else if(kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerMetricArgsWorkloadId, 0, &uint64_data))
+        {
+            query_args = std::make_shared<QueryArgumentStore>();
+            query_args->emplace_back(kRPVComputeParamWorkloadId, std::to_string(uint64_data));
+            use_case = kRPVComputeFetchMetricValuesByWorkload;
+        }
+        if(query_args)
+        {
+            std::shared_ptr<QueryDataStore> query_out = std::make_shared<QueryDataStore>();
+            result = args.GetUInt64(kRPVControllerMetricArgsNumMetrics, 0, &num_entries);
             if(result == kRocProfVisResultSuccess)
             {
-                result = args.GetUInt64(kRPVControllerMetricArgsNumMetrics, 0, &num_entries);
-                if(result == kRocProfVisResultSuccess)
+                for(uint64_t i = 0; i < num_entries; i++)
                 {
-                    for(uint64_t i = 0; i < num_entries; i++)
+                    result = args.GetUInt64(kRPVControllerMetricArgsMetricCategoryIdIndexed, i, &uint64_data);
+                    if(result == kRocProfVisResultSuccess)
                     {
-                        result = args.GetUInt64(kRPVControllerMetricArgsMetricCategoryIdIndexed, i, &uint64_data);
+                        MetricID metric_id((uint32_t)uint64_data);
+                        result = args.GetUInt64(kRPVControllerMetricArgsMetricTableIdIndexed, i, &uint64_data);
                         if(result == kRocProfVisResultSuccess)
                         {
-                            MetricID metric_id((uint32_t)uint64_data);
-                            result = args.GetUInt64(kRPVControllerMetricArgsMetricTableIdIndexed, i, &uint64_data);
+                            metric_id.SetTableID((uint32_t)uint64_data);
+                            result = args.GetUInt64(kRPVControllerMetricArgsMetricEntryIdIndexed, i, &uint64_data);
                             if(result == kRocProfVisResultSuccess)
                             {
-                                metric_id.SetTableID((uint32_t)uint64_data);
-                                result = args.GetUInt64(kRPVControllerMetricArgsMetricEntryIdIndexed, i, &uint64_data);
-                                if(result == kRocProfVisResultSuccess)
-                                {
-                                    metric_id.SetEntryID((uint32_t)uint64_data);                                   
-                                }
+                                metric_id.SetEntryID((uint32_t)uint64_data);                                   
                             }
-                            query_args->emplace_back(kRPVComputeParamMetricId, metric_id.ToString());
-                            result = kRocProfVisResultSuccess;
                         }
-                        else
-                        {
-                            break;
-                        }
+                        query_args->emplace_back(kRPVComputeParamMetricId, metric_id.ToString());
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        break;
                     }
                 }
             }
             if(result == kRocProfVisResultSuccess)
             {
-                future.Set(JobSystem::Get().IssueJob([this, &output, query_args, query_out](Future* future) -> rocprofvis_result_t {
+                future.Set(JobSystem::Get().IssueJob([this, use_case, &output, query_args, query_out](Future* future) -> rocprofvis_result_t {
                     rocprofvis_result_t result = kRocProfVisResultUnknownError;
                     *query_out = { 
                         { 
                             { kRPVComputeColumnMetricId, std::nullopt },
                             { kRPVComputeColumnMetricName, std::nullopt },
-                            { kRPVComputeColumnKernelUUID, std::nullopt },
                             { kRPVComputeColumnMetricValueName, std::nullopt },
                             { kRPVComputeColumnMetricValue, std::nullopt },
                         }, 
                         {} 
                     };
                     rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(m_dm_handle, kRPVDMDatabaseHandle, 0);
-                    rocprofvis_dm_result_t dm_result = ExecuteQuery(db, m_dm_handle, nullptr, future, kRPVComputeFetchMetricValues, *query_args, *query_out, [this, &output](const QueryDataStore& data_store){
+                    rocprofvis_dm_result_t dm_result = ExecuteQuery(db, m_dm_handle, nullptr, future, use_case, *query_args, *query_out, [this, &output](const QueryDataStore& data_store){
                         uint64_t valid_results = 0;
                         rocprofvis_property_t property;
                         rocprofvis_controller_primitive_type_t type;
+                        std::optional<int> workload_id_column_idx = data_store.columns.count(kRPVComputeColumnWorkloadId) > 0 ? data_store.columns.at(kRPVComputeColumnWorkloadId) : std::nullopt;
+                        std::optional<int> kernel_id_column_idx = data_store.columns.count(kRPVComputeColumnKernelUUID) > 0 ? data_store.columns.at(kRPVComputeColumnKernelUUID) : std::nullopt;
                         for(size_t i = 0; i < data_store.rows.size(); i++)
                         {
                             const char* metric_id = data_store.rows[i][data_store.columns.at(kRPVComputeColumnMetricId).value()];
-                            const char* kernel_id = data_store.rows[i][data_store.columns.at(kRPVComputeColumnKernelUUID).value()];
+                            const char* workload_id = workload_id_column_idx ? data_store.rows[i][workload_id_column_idx.value()] : "";
+                            const char* kernel_id = kernel_id_column_idx ? data_store.rows[i][kernel_id_column_idx.value()] : "";
                             const char* value = data_store.rows[i][data_store.columns.at(kRPVComputeColumnMetricValue).value()];
-                            if(strlen(metric_id) && strlen(kernel_id) && strlen(value))
+                            if((strlen(kernel_id) || strlen(workload_id)) && strlen(metric_id) && strlen(value))
                             {
                                 output.SetUInt64(kRPVControllerMetricsContainerNumMetrics, 0, valid_results + 1);
                                 for(const std::pair<const rocprofvis_db_compute_column_enum_t, std::optional<int>>& column : data_store.columns)
@@ -278,7 +287,7 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
                     result = kRocProfVisResultSuccess;
                 }
             }
-        }
+        }            
     }
     return result;
 }
@@ -690,50 +699,43 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t db, r
                                 {                               
                                     uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMNumberOfTableColumnsUInt64, 0);
                                     uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMNumberOfTableRowsUInt64, 0);
-                                    if((num_columns == data_store.columns.size() || data_store.columns.empty()) && num_rows > 0)
+
+                                    for(uint64_t i = 0; i < num_columns; i++)
                                     {
-                                        for(uint64_t i = 0; i < num_columns; i++)
+                                        data_store.columns[rocprofvis_db_compute_column_enum_t(rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMExtTableColumnEnumUInt64Indexed, i))] = (int)i;
+                                    }
+                                    for(auto& store_column : data_store.columns)
+                                    {
+                                        if(!store_column.second)
                                         {
-                                            data_store.columns[rocprofvis_db_compute_column_enum_t(rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMExtTableColumnEnumUInt64Indexed, i))] = (int)i;
+                                            result = kRocProfVisDmResultUnknownError;
+                                            break;
                                         }
-                                        for(auto& store_column : data_store.columns)
+                                    }
+                                    if(result == kRocProfVisDmResultSuccess)
+                                    {
+                                        data_store.rows.resize(num_rows);
+                                        for(uint64_t i = 0; i < num_rows; i++)
                                         {
-                                            if(!store_column.second)
+                                            rocprofvis_dm_table_row_t row_handle = rocprofvis_dm_get_property_as_handle(table_handle, kRPVDMExtTableRowHandleIndexed, i);
+                                            if(row_handle)
                                             {
-                                                result = kRocProfVisDmResultUnknownError;
-                                                break;
-                                            }
-                                        }
-                                        if(result == kRocProfVisDmResultSuccess)
-                                        {
-                                            data_store.rows.resize(num_rows);
-                                            for(uint64_t i = 0; i < num_rows; i++)
-                                            {
-                                                rocprofvis_dm_table_row_t row_handle = rocprofvis_dm_get_property_as_handle(table_handle, kRPVDMExtTableRowHandleIndexed, i);
-                                                if(row_handle)
+                                                uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(row_handle, kRPVDMNumberOfTableRowCellsUInt64, 0);
+                                                if(num_cells == num_columns)
                                                 {
-                                                    uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(row_handle, kRPVDMNumberOfTableRowCellsUInt64, 0);
-                                                    if(num_cells == num_columns)
+                                                    data_store.rows[i].resize(num_columns);
+                                                    for(auto& store_column : data_store.columns)
                                                     {
-                                                        data_store.rows[i].resize(num_columns);
-                                                        for(auto& store_column : data_store.columns)
+                                                        const char* cell_data = rocprofvis_dm_get_property_as_charptr(row_handle, kRPVDMExtTableRowCellValueCharPtrIndexed, store_column.second.value());
+                                                        if(cell_data)
                                                         {
-                                                            const char* cell_data = rocprofvis_dm_get_property_as_charptr(row_handle, kRPVDMExtTableRowCellValueCharPtrIndexed, store_column.second.value());
-                                                            if(cell_data)
-                                                            {
-                                                                data_store.rows[i][store_column.second.value()] = cell_data;
-                                                            }
-                                                            else
-                                                            {
-                                                                result = kRocProfVisDmResultUnknownError;
-                                                                break;
-                                                            }
+                                                            data_store.rows[i][store_column.second.value()] = cell_data;
                                                         }
-                                                    }
-                                                    else
-                                                    {
-                                                        result = kRocProfVisDmResultUnknownError;
-                                                        break;
+                                                        else
+                                                        {
+                                                            result = kRocProfVisDmResultUnknownError;
+                                                            break;
+                                                        }
                                                     }
                                                 }
                                                 else
@@ -742,15 +744,16 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t db, r
                                                     break;
                                                 }
                                             }
-                                            if(result == kRocProfVisDmResultSuccess)
+                                            else
                                             {
-                                                callback(data_store);
+                                                result = kRocProfVisDmResultUnknownError;
+                                                break;
                                             }
                                         }
-                                    }
-                                    else
-                                    {
-                                        result = kRocProfVisDmResultUnknownError;
+                                        if(result == kRocProfVisDmResultSuccess)
+                                        {
+                                            callback(data_store);
+                                        }
                                     }
                                 }
                                 rocprofvis_dm_delete_table_at(dm, table_id);

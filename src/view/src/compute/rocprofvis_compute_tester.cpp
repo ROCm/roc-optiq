@@ -424,8 +424,7 @@ ComputeTester::Render()
             ImGui::EndTable();
         }
         ImGui::NewLine();
-        ImGui::BeginDisabled(m_selections.metric_ids.empty() ||
-                             m_selections.kernel_ids.empty());
+        ImGui::BeginDisabled(m_selections.metric_ids.empty());
 
         if(ImGui::Button("Clear all clients"))
         {
@@ -545,7 +544,8 @@ ComputeTester::Render()
                     }
                     for(const std::shared_ptr<MetricValue>& metric : *metrics)
                     {
-                        if(metric && metric->entry && metric->kernel)
+                        if(metric && metric->entry && 
+                            metric->source_type == kRPVControllerMetricSourceTypeKernel && metric->source_info.kernel)
                         {
                             for(const std::pair<const std::string, double>& value :
                                 metric->values)
@@ -557,7 +557,7 @@ ComputeTester::Render()
                                 ImGui::TableNextColumn();
                                 ImGui::Text(metric->entry->name.c_str());
                                 ImGui::TableNextColumn();
-                                ImGui::Text("%u", metric->kernel->id);
+                                ImGui::Text("%u", metric->source_info.kernel->id);
                                 ImGui::TableNextColumn();
                                 ImGui::Text(value.first.c_str());
                                 ImGui::TableNextColumn();
@@ -599,7 +599,8 @@ ComputeTester::Render()
             for(auto it = sol_metrics->begin(); it != sol_metrics->end(); ++it)
             {
                 const std::shared_ptr<MetricValue>& metric = it->second;
-                if(metric && metric->entry && metric->kernel)
+                if(metric && metric->entry && 
+                    metric->source_type == kRPVControllerMetricSourceTypeKernel && metric->source_info.kernel)
                 {
                     for(const std::pair<const std::string, double>& value :
                         metric->values)
@@ -611,7 +612,7 @@ ComputeTester::Render()
                         ImGui::TableNextColumn();
                         ImGui::Text(metric->entry->name.c_str());
                         ImGui::TableNextColumn();
-                        ImGui::Text("%u", metric->kernel->id);
+                        ImGui::Text("%u", metric->source_info.kernel->id);
                         ImGui::TableNextColumn();
                         ImGui::Text(value.first.c_str());
                         ImGui::TableNextColumn();

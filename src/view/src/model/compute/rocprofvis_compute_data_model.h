@@ -48,7 +48,8 @@ public:
     const std::vector<std::shared_ptr<MetricValue>>*  GetMetricsData(uint64_t store_id, uint32_t kernel_id) const;
 
     void AddWorkload(WorkloadInfo& workload);
-    bool AddMetricValue(uint64_t store_id, uint32_t workload_id, uint32_t kernel_id, uint32_t category_id,
+    bool AddMetricValue(uint64_t store_id, rocprofvis_controller_metric_source_type_t source_type, 
+                        uint32_t workload_id, uint32_t kernel_id, uint32_t category_id,
                         uint32_t table_id, uint32_t entry_id, std::string& value_name,
                         double value);
 

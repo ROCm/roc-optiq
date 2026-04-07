@@ -17,6 +17,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     : m_app_window(app_window)
     , m_data_provider()
     , m_should_open(false)
+    , m_show_window(false)
     , m_is_running(false)
     , m_profiler_type_index(0)
     , m_profiler_state(kRPVProfilerStateIdle)
@@ -59,15 +60,22 @@ void ProfilerLauncherDialog::Render()
 {
     if (m_should_open)
     {
-        ImGui::OpenPopup("Launch Profiler");
+        m_show_window = true;
         m_should_open = false;
+        ImGui::SetWindowFocus("Launch Profiler");
+    }
+
+    if (!m_show_window)
+    {
+        return;
     }
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
 
-    if (ImGui::BeginPopupModal("Launch Profiler", nullptr, ImGuiWindowFlags_NoScrollbar))
+    bool window_open = true;
+    if (ImGui::Begin("Launch Profiler", &window_open, ImGuiWindowFlags_NoScrollbar))
     {
         // Profiler type selection
         ImGui::Text("Profiler Type:");
@@ -82,13 +90,18 @@ void ProfilerLauncherDialog::Render()
 
         ImGui::Separator();
 
-        // Profiler path
-        ImGui::Text("Profiler Path:");
+        // Profiler path (optional - defaults to system PATH)
+        ImGui::Text("Profiler Path (optional):");
         ImGui::InputText("##ProfilerPath", m_profiler_path, sizeof(m_profiler_path));
         ImGui::SameLine();
         if (ImGui::Button("Browse##Profiler"))
         {
             OnBrowseProfilerPath();
+        }
+        if (std::strlen(m_profiler_path) == 0)
+        {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(will use system PATH)");
         }
 
         // Target executable
@@ -214,9 +227,15 @@ void ProfilerLauncherDialog::Render()
         if (ImGui::Button("Close", ImVec2(120, 0)))
         {
             OnCloseClicked();
+            m_show_window = false;
         }
+    }
+    ImGui::End();
 
-        ImGui::EndPopup();
+    if (!window_open)
+    {
+        OnCloseClicked();
+        m_show_window = false;
     }
 }
 
@@ -232,12 +251,6 @@ void ProfilerLauncherDialog::Update()
 void ProfilerLauncherDialog::OnLaunchClicked()
 {
     // Validate inputs
-    if (std::strlen(m_profiler_path) == 0)
-    {
-        m_error_message = "Error: Profiler path is required";
-        return;
-    }
-
     if (std::strlen(m_target_executable) == 0)
     {
         m_error_message = "Error: Target executable is required";
@@ -254,31 +267,43 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     m_error_message.clear();
     m_output_text.clear();
 
-    // Map profiler type index to enum
+    // Map profiler type index to enum and determine default executable name
     rocprofvis_profiler_type_t profiler_type;
+    std::string default_profiler_name;
+
     switch (m_profiler_type_index)
     {
         case 0:
             profiler_type = kRPVProfilerTypeRocprofSysSample;
+            default_profiler_name = "rocprof-sys-sample";
             break;
         case 1:
             profiler_type = kRPVProfilerTypeRocprofSysInstrument;
+            default_profiler_name = "rocprof-sys-instrument";
             break;
         case 2:
             profiler_type = kRPVProfilerTypeRocprofCompute;
+            default_profiler_name = "rocprof-compute";
             break;
         case 3:
             profiler_type = kRPVProfilerTypeRocprofV3;
+            default_profiler_name = "rocprofv3";
             break;
         default:
             profiler_type = kRPVProfilerTypeRocprofSysSample;
+            default_profiler_name = "rocprof-sys-sample";
             break;
     }
+
+    // Use specified path or default to executable name (will be found in PATH)
+    std::string profiler_path = std::strlen(m_profiler_path) > 0
+        ? std::string(m_profiler_path)
+        : default_profiler_name;
 
     // Launch profiler via DataProvider
     bool success = m_data_provider.LaunchProfiler(
         profiler_type,
-        std::string(m_profiler_path),
+        profiler_path,
         std::string(m_target_executable),
         std::string(m_target_args),
         std::string(m_output_directory),
@@ -330,8 +355,6 @@ void ProfilerLauncherDialog::OnCloseClicked()
     m_data_provider.CloseProfiler();
     m_is_running = false;
     m_profiler_state = kRPVProfilerStateIdle;
-
-    ImGui::CloseCurrentPopup();
 }
 
 void ProfilerLauncherDialog::OnBrowseProfilerPath()
@@ -349,7 +372,7 @@ void ProfilerLauncherDialog::OnBrowseProfilerPath()
     m_app_window->ShowOpenFileDialog(
         "Choose Profiler Executable",
         filters,
-        ".",
+        "",
         [this](const std::string& path) { OnProfilerPathSelected(path); }
     );
 }
@@ -369,7 +392,7 @@ void ProfilerLauncherDialog::OnBrowseTargetExecutable()
     m_app_window->ShowOpenFileDialog(
         "Choose Target Executable",
         filters,
-        ".",
+        "",
         [this](const std::string& path) { OnTargetExecutableSelected(path); }
     );
 }
@@ -381,12 +404,9 @@ void ProfilerLauncherDialog::OnBrowseOutputDirectory()
         return;
     }
 
-    std::vector<FileFilter> filters;  // Empty for directory picker
-
-    m_app_window->ShowOpenFileDialog(
+    m_app_window->ShowPathPickerDialog(
         "Choose Output Directory",
-        filters,
-        ".",
+        "",
         [this](const std::string& path) { OnOutputDirectorySelected(path); }
     );
 }

@@ -280,6 +280,18 @@ AppWindow::ShowOpenFileDialog(const std::string& title, const std::vector<FileFi
     #endif
 }
 
+void
+AppWindow::ShowPathPickerDialog(const std::string& title, const std::string& initial_path,
+                                std::function<void(std::string)> callback)
+{
+    #ifdef USE_NATIVE_FILE_DIALOG
+    (void)title;
+    ShowNativeFileDialog({}, initial_path, callback, false, true);
+    #else
+    ShowImGuiFileDialog(title, {}, initial_path, false, callback);
+    #endif
+}
+
 Project*
 AppWindow::GetProject(const std::string& id)
 {
@@ -1013,7 +1025,8 @@ void
 AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                                 const std::string&               initial_path,
                                 std::function<void(std::string)> callback,
-                                bool                             save_dialog)
+                                bool                             save_dialog,
+                                bool                             path_picker)
 {
     if(m_is_native_file_dialog_open)
     {
@@ -1059,7 +1072,16 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
 
         nfdresult_t result;
-        if(save_dialog)
+        if(path_picker)
+        {
+            nfdpickfolderu8args_t args = {};
+            if(!initial_path.empty())
+            {
+                args.defaultPath = initial_path.c_str();
+            }
+            result = NFD_PickFolderU8_With(&outPath, &args);
+        }
+        else if(save_dialog)
         {
             nfdsavedialogu8args_t args = {};
             args.filterList            = filters;
@@ -1090,7 +1112,7 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
             {
                 // Append default extension if none provided (used to prevent linux from saving files with no extension).
                 std::filesystem::path p(file_path);
-                if(!p.has_extension())
+                if(!path_picker &&!p.has_extension())
                 {
                     file_path += "." + file_filters[0].m_extensions[0];
                 }

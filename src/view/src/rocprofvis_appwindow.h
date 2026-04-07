@@ -63,6 +63,10 @@ public:
                             const std::string&               initial_path,
                             std::function<void(std::string)> callback);
 
+    void ShowPathPickerDialog(const std::string&               title,
+                            const std::string&               initial_path,
+                            std::function<void(std::string)> callback);
+                            
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();
 
@@ -100,7 +104,8 @@ private:
     void ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback,
-                              bool                             save_dialog);
+                              bool                             save_dialog,
+                              bool                             path_picker = false);
 #else
     void ShowImGuiFileDialog(const std::string&             title,
                         const std::vector<FileFilter>& file_filters,

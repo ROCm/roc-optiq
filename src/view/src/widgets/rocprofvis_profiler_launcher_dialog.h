@@ -47,6 +47,7 @@ private:
     DataProvider m_data_provider;  // Owns its own DataProvider
 
     bool m_should_open;
+    bool m_show_window;
     bool m_is_running;
 
     // Configuration fields (ImGui input buffers)

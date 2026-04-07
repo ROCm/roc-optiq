@@ -337,9 +337,15 @@ install(FILES ${LICENSE_FILE}
        COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
-install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
-        COMPONENT ${RUNTIME_COMP_TYPE} )
+if(APPLE)
+    install(TARGETS ${TARGET_NAME}
+            BUNDLE DESTINATION .
+            COMPONENT ${RUNTIME_COMP_TYPE})
+else()
+    install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            COMPONENT ${RUNTIME_COMP_TYPE} )
+endif()
 
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)

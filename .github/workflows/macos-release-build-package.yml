@@ -85,16 +85,22 @@ jobs:
             exit 1
           fi
 
-          echo "VULKAN_SDK=${SDK_ROOT}" >> "${GITHUB_ENV}"
-          if [ -d "${SDK_ROOT}/macOS/bin" ]; then
-            echo "PATH=${SDK_ROOT}/macOS/bin:${PATH}" >> "${GITHUB_ENV}"
-          elif [ -d "${SDK_ROOT}/bin" ]; then
-            echo "PATH=${SDK_ROOT}/bin:${PATH}" >> "${GITHUB_ENV}"
+          # CMake FindVulkan uses $VULKAN_SDK/include and $VULKAN_SDK/lib. LunarG macOS
+          # SDK places those under .../macOS/, not the versioned root.
+          if [ -f "${SDK_ROOT}/macOS/include/vulkan/vulkan.h" ]; then
+            VULKAN_SDK_FOR_CMAKE="${SDK_ROOT}/macOS"
+          else
+            VULKAN_SDK_FOR_CMAKE="${SDK_ROOT}"
           fi
-          if [ -d "${SDK_ROOT}/macOS/lib" ]; then
-            echo "DYLD_LIBRARY_PATH=${SDK_ROOT}/macOS/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+
+          echo "VULKAN_SDK=${VULKAN_SDK_FOR_CMAKE}" >> "${GITHUB_ENV}"
+          if [ -d "${VULKAN_SDK_FOR_CMAKE}/bin" ]; then
+            echo "PATH=${VULKAN_SDK_FOR_CMAKE}/bin:${PATH}" >> "${GITHUB_ENV}"
           fi
-          echo "✅ Vulkan SDK installed at ${SDK_ROOT}"
+          if [ -d "${VULKAN_SDK_FOR_CMAKE}/lib" ]; then
+            echo "DYLD_LIBRARY_PATH=${VULKAN_SDK_FOR_CMAKE}/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+          fi
+          echo "✅ Vulkan SDK installed at ${SDK_ROOT} (VULKAN_SDK=${VULKAN_SDK_FOR_CMAKE} for CMake)"
 
       - name: Build, Make, and Verify Installation
         run: |

@@ -77,7 +77,6 @@ private:
     ~AppWindow();
 
     void RenderDisableScreen();
-    void RenderCleanupAnimation();
     void RenderFileMenu(Project* project);
     void RenderEditMenu(Project* project);
     void RenderViewMenu(Project* project);
@@ -131,7 +130,6 @@ private:
 #endif
     bool m_open_about_dialog;
     bool m_disable_app_interaction;
-    bool m_cleanup_in_progress;
 
 #ifndef USE_NATIVE_FILE_DIALOG
     bool                             m_init_file_dialog;

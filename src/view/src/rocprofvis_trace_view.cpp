@@ -344,41 +344,46 @@ void
 TraceView::Render()
 {
 
-    if(m_horizontal_split_container &&
-       m_data_provider.GetState() == ProviderState::kReady)
-    {
-        m_horizontal_split_container->Render();
-        HandleHotKeys();
-    }
-
-    if(m_show_minimap_popup && m_minimap)
-    {
-        PopUpStyle popup_style;
-        popup_style.PushPopupStyles();
-        popup_style.PushTitlebarColors();
-
-        float dpi = SettingsManager::GetInstance().GetDPI();
-        ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
-        if(ImGui::Begin("Minimap", &m_show_minimap_popup,
-                        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
-        {
-            m_minimap->Render();
-        }
-        ImGui::End();
-        popup_style.PopStyles();
-    }
-
-    if(m_popup_info.show_popup)
-    {
-        m_popup_info.show_popup = false;
-        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
-                                                    m_popup_info.message);
-    }
-
-    // Render loading overlay if loading
     if(m_data_provider.GetState() == ProviderState::kLoading)
     {
         RenderLoadingScreen(m_data_provider.GetProgressMessage());
+    }
+    else if(IsCleanupPending())
+    {
+        RenderLoadingScreen("Cleaning Database...");
+    }
+    else
+    {
+        if(m_horizontal_split_container &&
+           m_data_provider.GetState() == ProviderState::kReady)
+        {
+            m_horizontal_split_container->Render();
+            HandleHotKeys();
+        }
+
+        if(m_show_minimap_popup && m_minimap)
+        {
+            PopUpStyle popup_style;
+            popup_style.PushPopupStyles();
+            popup_style.PushTitlebarColors();
+
+            float dpi = SettingsManager::GetInstance().GetDPI();
+            ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
+            if(ImGui::Begin("Minimap", &m_show_minimap_popup,
+                            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
+            {
+                m_minimap->Render();
+            }
+            ImGui::End();
+            popup_style.PopStyles();
+        }
+
+        if(m_popup_info.show_popup)
+        {
+            m_popup_info.show_popup = false;
+            AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
+                                                        m_popup_info.message);
+        }
     }
 
     if(m_summary_view)

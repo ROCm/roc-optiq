@@ -129,18 +129,14 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
     bool valid = false;
     if(m_workloads.count(workload_id))
     {
-        MetricValue::Source source_info;
-        WorkloadInfo&       workload = m_workloads.at(workload_id);
+        WorkloadInfo& workload = m_workloads.at(workload_id);
         if(source_type == kRPVControllerMetricSourceTypeWorkload)
         {
-            source_info.workload = &workload;
-            valid                = true;
+            valid = true;
         }
-        else if(source_type == kRPVControllerMetricSourceTypeKernel &&
-                workload.kernels.count(kernel_id) > 0)
+        else if(source_type == kRPVControllerMetricSourceTypeKernel)
         {
-            source_info.kernel = &workload.kernels.at(kernel_id);
-            valid              = true;
+            valid = workload.kernels.count(kernel_id) > 0;
         }
         if(valid)
         {
@@ -165,7 +161,8 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
                 if(source_type == kRPVControllerMetricSourceTypeWorkload)
                 {
                     // Do something...(spdlog header include can be removed after)
-                    spdlog::info("Workload metric: id={}.{}.{} name={} workload={} value_name={} value={}",
+                    spdlog::info("Workload metric: id={}.{}.{} name={} workload={} "
+                                 "value_name={} value={}",
                                  category_id, table_id, entry_id, entry.name,
                                  workload.name, value_name, value);
                 }
@@ -179,7 +176,9 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
                         ms.m_metrics_map[metric_id.id]->values[value_name] = value;
                         ms.m_metrics_map[metric_id.id]->entry              = &entry;
                         ms.m_metrics_map[metric_id.id]->source_type        = source_type;
-                        ms.m_metrics_map[metric_id.id]->source_info        = source_info;
+                        ms.m_metrics_map[metric_id.id]->workload           = nullptr;
+                        ms.m_metrics_map[metric_id.id]->kernel =
+                            &workload.kernels.at(kernel_id);
                     }
                     else
                     {
@@ -187,7 +186,8 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
                         auto metric = std::make_shared<MetricValue>(
                             MetricValue{ &entry,
                                          source_type,
-                                         source_info,
+                                         nullptr,
+                                         &workload.kernels.at(kernel_id),
                                          { { value_name, value } } });
 
                         ms.m_metrics_data.push_back(metric);

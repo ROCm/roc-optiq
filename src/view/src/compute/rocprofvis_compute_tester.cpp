@@ -544,8 +544,7 @@ ComputeTester::Render()
                     }
                     for(const std::shared_ptr<MetricValue>& metric : *metrics)
                     {
-                        if(metric && metric->entry && 
-                            metric->source_type == kRPVControllerMetricSourceTypeKernel && metric->source_info.kernel)
+                        if(metric && metric->entry && metric->kernel)
                         {
                             for(const std::pair<const std::string, double>& value :
                                 metric->values)
@@ -557,7 +556,7 @@ ComputeTester::Render()
                                 ImGui::TableNextColumn();
                                 ImGui::Text(metric->entry->name.c_str());
                                 ImGui::TableNextColumn();
-                                ImGui::Text("%u", metric->source_info.kernel->id);
+                                ImGui::Text("%u", metric->kernel->id);
                                 ImGui::TableNextColumn();
                                 ImGui::Text(value.first.c_str());
                                 ImGui::TableNextColumn();
@@ -599,8 +598,7 @@ ComputeTester::Render()
             for(auto it = sol_metrics->begin(); it != sol_metrics->end(); ++it)
             {
                 const std::shared_ptr<MetricValue>& metric = it->second;
-                if(metric && metric->entry && 
-                    metric->source_type == kRPVControllerMetricSourceTypeKernel && metric->source_info.kernel)
+                if(metric && metric->entry && metric->kernel)
                 {
                     for(const std::pair<const std::string, double>& value :
                         metric->values)
@@ -612,7 +610,7 @@ ComputeTester::Render()
                         ImGui::TableNextColumn();
                         ImGui::Text(metric->entry->name.c_str());
                         ImGui::TableNextColumn();
-                        ImGui::Text("%u", metric->source_info.kernel->id);
+                        ImGui::Text("%u", metric->kernel->id);
                         ImGui::TableNextColumn();
                         ImGui::Text(value.first.c_str());
                         ImGui::TableNextColumn();

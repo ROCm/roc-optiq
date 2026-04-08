@@ -227,8 +227,8 @@ target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(APPLE)
     set_target_properties(${TARGET_NAME} PROPERTIES
-        BUILD_RPATH "@executable_path/../Frameworks"
-        INSTALL_RPATH "@executable_path/../Frameworks"
+        BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
+        INSTALL_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
     )
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
@@ -247,10 +247,7 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             "$<TARGET_FILE_NAME:glfw>"
             "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${Vulkan_LIBRARIES}"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMENT "Staging GLFW and Vulkan dylibs into the app bundle"
+        COMMENT "Staging GLFW dylib into the app bundle"
     )
 endif()
 
@@ -337,9 +334,15 @@ install(FILES ${LICENSE_FILE}
        COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
-install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
-        COMPONENT ${RUNTIME_COMP_TYPE} )
+if(APPLE)
+    install(TARGETS ${TARGET_NAME}
+            BUNDLE DESTINATION .
+            COMPONENT ${RUNTIME_COMP_TYPE})
+else()
+    install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            COMPONENT ${RUNTIME_COMP_TYPE} )
+endif()
 
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)

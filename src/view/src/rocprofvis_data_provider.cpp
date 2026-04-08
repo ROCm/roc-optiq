@@ -881,7 +881,7 @@ DataProvider::ParseStreamData(rocprofvis_handle_t* stream_handle, StreamInfo& st
                                                   0, &stream_info.id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         stream_info.name = GetString(stream_handle, kRPVControllerStreamName, 0);
-        size_t num_processors = 0;
+        uint64_t num_processors = 0;
         result = rocprofvis_controller_get_uint64(stream_handle, kRPVControllerStreamNumProcessors,
             0, &num_processors);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);

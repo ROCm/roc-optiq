@@ -10,6 +10,8 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 
+#include <algorithm>
+
 namespace RocProfVis
 {
 namespace View
@@ -18,6 +20,38 @@ namespace View
 constexpr ImGuiTreeNodeFlags CATEGORY_HEADER_FLAGS =
     ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanLabelWidth;
 constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
+constexpr float  TREE_LINE_W           = 1.5f;
+
+class TreeConnector
+{
+public:
+    explicit TreeConnector(SettingsManager& s)
+    {
+        float indent = ImGui::GetStyle().IndentSpacing;
+        m_draw_list  = ImGui::GetWindowDrawList();
+        m_color      = s.GetColor(Colors::kMetaDataSeparator);
+        m_line_x     = ImGui::GetCursorScreenPos().x - indent * 0.5f;
+        m_branch_len = indent * 0.45f;
+        m_prev_y     = ImGui::GetCursorScreenPos().y;
+    }
+
+    void Branch()
+    {
+        float mid_y = ImGui::GetCursorScreenPos().y + ImGui::GetFrameHeight() * 0.5f;
+        m_draw_list->AddLine(ImVec2(m_line_x, m_prev_y),
+                             ImVec2(m_line_x, mid_y), m_color, TREE_LINE_W);
+        m_draw_list->AddLine(ImVec2(m_line_x, mid_y),
+                             ImVec2(m_line_x + m_branch_len, mid_y), m_color, TREE_LINE_W);
+        m_prev_y = mid_y;
+    }
+
+private:
+    ImDrawList* m_draw_list  = nullptr;
+    ImU32       m_color      = 0;
+    float       m_line_x     = 0;
+    float       m_branch_len = 0;
+    float       m_prev_y     = 0;
+};
 
 SideBar::SideBar(std::shared_ptr<TrackTopology>                   topology,
                  std::shared_ptr<TimelineSelection>               timeline_selection,
@@ -38,21 +72,25 @@ SideBar::Render()
 {
     if(!m_track_topology->Dirty())
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, DEFAULT_WINDOW_PADDING);
-        ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 14.0f);
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                              m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                              m_settings.GetColor(Colors::kTransparent));
+                              ImGui::ColorConvertU32ToFloat4(
+                                  m_settings.GetColor(Colors::kBgFrame)));
 
         const TopologyModel& topology = m_track_topology->GetTopology();
         if(ImGui::TreeNodeEx("Project",
                              CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
         {
+            TreeConnector project_tc(m_settings);
             if(!topology.nodes.empty())
             {
+                project_tc.Branch();
                 m_root_eye_button_state =
-                    DrawTopology(topology, m_root_eye_button_state, false);
+                    DrawTopology(topology, m_root_eye_button_state, true);
 
                 if(m_root_eye_button_state == EyeButtonState::kAllHidden)
                 {
@@ -78,6 +116,7 @@ SideBar::Render()
                 bool header_open = true;
                 if(use_header)
                 {
+                    project_tc.Branch();
                     header_open =
                         ImGui::CollapsingHeader("Uncategorized", CATEGORY_HEADER_FLAGS);
                     ImGui::Indent();
@@ -99,8 +138,8 @@ SideBar::Render()
             }
             ImGui::TreePop();
         }
-        ImGui::PopStyleColor(3);
-        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(4);
     }
 }
 
@@ -121,10 +160,7 @@ SideBar::RenderTrackItem(const uint64_t& index)
 
     ImGui::PushID(static_cast<int>(graph.chart->GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
     bool display = graph.display;
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
     if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
@@ -158,16 +194,13 @@ SideBar::RenderTrackItem(const uint64_t& index)
     ImGui::PopFont();
     if(ImGui::IsItemHovered())
         SetTooltipStyled("Scroll To Track");
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
     ImGui::SameLine();
     bool highlight = graph.selected;
     if(!highlight)
     {
         ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              m_settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              m_settings.GetColor(Colors::kTransparent));
     }
     if(!display)
     {
@@ -184,7 +217,7 @@ SideBar::RenderTrackItem(const uint64_t& index)
     }
     if(!highlight)
     {
-        ImGui::PopStyleColor(3);
+        ImGui::PopStyleColor();
     }
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     // Lets you know if component is in Frame. Dev purpose only.
@@ -352,10 +385,9 @@ SideBar::DrawTopology(const TopologyModel& topology,
         ImGui::SameLine();
     }
 
-    if(ImGui::TreeNodeEx(topology.node_header.c_str(),
-                         CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
+    if(ImGui::TreeNodeEx(topology.node_header.c_str(), CATEGORY_HEADER_FLAGS))
     {
-        new_button_state = DrawNodes(topology.nodes, new_button_state, false);
+        new_button_state = DrawNodes(topology.nodes, new_button_state, true);
         if(new_button_state == EyeButtonState::kAllHidden)
         {
             topology.all_subitems_hidden = true;
@@ -376,15 +408,20 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
     if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
         for(const auto& node : nodes)
-        {
             node.all_subitems_hidden = false;
-        }
+    }
+    else if(parent_eye_button_state == EyeButtonState::kAllHidden)
+    {
+        for(const auto& node : nodes)
+            node.all_subitems_hidden = true;
     }
     EyeButtonState new_button_state = parent_eye_button_state;
+    TreeConnector tc(m_settings);
     for(const NodeModel& node : nodes)
     {
         if(node.info)
         {
+            tc.Branch();
             if(show_eye_button)
             {
                 if(node.all_subitems_hidden)
@@ -399,10 +436,9 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
             }
 
             ImGui::PushID(static_cast<int>(node.info->id));
-            if(ImGui::TreeNodeEx(node.info->host_name.c_str(),
-                                 CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
+            if(ImGui::TreeNodeEx(node.info->host_name.c_str(), CATEGORY_HEADER_FLAGS))
             {
-                new_button_state = DrawNode(node, new_button_state, false);
+                new_button_state = DrawNode(node, new_button_state, true);
                 if(new_button_state == EyeButtonState::kAllHidden)
                 {
                     node.all_subitems_hidden = true;
@@ -424,10 +460,12 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
                   bool show_eye_button)
 {
     if(parent_eye_button_state == EyeButtonState::kAllVisible)
-    {
         node.all_subitems_hidden = false;
-    }
+    else if(parent_eye_button_state == EyeButtonState::kAllHidden)
+        node.all_subitems_hidden = true;
     EyeButtonState new_button_state = parent_eye_button_state;
+
+    TreeConnector tc(m_settings);
 
     if(show_eye_button)
     {
@@ -442,9 +480,8 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
         ImGui::SameLine();
     }
 
-
-    bool open = ImGui::TreeNodeEx(node.processor_header.c_str(),
-        CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
+    tc.Branch();
+    bool open = ImGui::TreeNodeEx(node.processor_header.c_str(), CATEGORY_HEADER_FLAGS);
 
     if(!node.processors.empty() && open)
     {
@@ -461,12 +498,12 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
         ImGui::TreePop();
     }
 
-    open = ImGui::TreeNodeEx(node.process_header.c_str(),
-                                  CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
+    tc.Branch();
+    open = ImGui::TreeNodeEx(node.process_header.c_str(), CATEGORY_HEADER_FLAGS);
 
     if(!node.processes.empty() && open)
     {
-        new_button_state = DrawProcesses(node.processes, new_button_state, false);
+        new_button_state = DrawProcesses(node.processes, new_button_state, true);
         if(new_button_state == EyeButtonState::kAllHidden)
         {
             node.all_subitems_hidden = true;
@@ -488,16 +525,21 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
     if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
         for(const auto& process : processes)
-        {
             process.all_subitems_hidden = false;
-        }
+    }
+    else if(parent_eye_button_state == EyeButtonState::kAllHidden)
+    {
+        for(const auto& process : processes)
+            process.all_subitems_hidden = true;
     }
 
     EyeButtonState all_process_state = EyeButtonState::kAllHidden;
+    TreeConnector tc(m_settings);
     for(const ProcessModel& process : processes)
     {
         if(process.info)
         {
+            tc.Branch();
             EyeButtonState queue_button_state               = parent_eye_button_state;
             EyeButtonState stream_button_state              = parent_eye_button_state;
             EyeButtonState instrumented_thread_button_state = parent_eye_button_state;
@@ -519,22 +561,25 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
                 ImGui::SameLine();
             }
 
-            if(ImGui::TreeNodeEx(process.header.c_str(),
-                                 CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
+            if(ImGui::TreeNodeEx(process.header.c_str(), CATEGORY_HEADER_FLAGS))
             {
+                TreeConnector ps_tc(m_settings);
                 if(!process.streams.empty())
                 {
+                    ps_tc.Branch();
                     stream_button_state = DrawCollapsable(
                         process.streams, process.stream_header, current_eye_button_state);
                 }
                 if(!process.instrumented_threads.empty())
                 {
+                    ps_tc.Branch();
                     instrumented_thread_button_state = DrawCollapsable(
                         process.instrumented_threads, process.instrumented_thread_header,
                         current_eye_button_state);
                 }
                 if(!process.sampled_threads.empty())
                 {
+                    ps_tc.Branch();
                     sampled_thread_button_state = DrawCollapsable(
                         process.sampled_threads, process.sampled_thread_header,
                         current_eye_button_state);
@@ -569,16 +614,21 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
     if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
         for(const auto& process : processors)
-        {
             process.all_subitems_hidden = false;
-        }
+    }
+    else if(parent_eye_button_state == EyeButtonState::kAllHidden)
+    {
+        for(const auto& process : processors)
+            process.all_subitems_hidden = true;
     }
 
     EyeButtonState all_process_state = EyeButtonState::kAllHidden;
+    TreeConnector tc(m_settings);
     for(const ProcessorModel& processor : processors)
     {
         if(processor.info)
         {
+            tc.Branch();
             ImGui::PushID(static_cast<int>(processor.info->id.value));
 
             EyeButtonState current_eye_button_state = parent_eye_button_state;
@@ -590,7 +640,7 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
                 }
                 else
                 {
-                    current_eye_button_state = DrawEyeButton(EyeButtonState::kMixed);
+                    current_eye_button_state = DrawEyeButton(parent_eye_button_state);
                 }
                 ImGui::SameLine();
             }
@@ -601,16 +651,18 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
             EyeButtonState instrumented_thread_button_state = EyeButtonState::kAllHidden;
             EyeButtonState sampled_thread_button_state      = EyeButtonState::kAllHidden;
 
-            if(ImGui::TreeNodeEx(processor.header.c_str(),
-                CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
+            if(ImGui::TreeNodeEx(processor.header.c_str(), CATEGORY_HEADER_FLAGS))
             {
+                TreeConnector proc_tc(m_settings);
                 if(!processor.queues.empty())
                 {
+                    proc_tc.Branch();
                     queue_button_state = DrawCollapsable(
                         processor.queues, processor.queue_header, current_eye_button_state);
                 }
                 if(!processor.counters.empty())
                 {
+                    proc_tc.Branch();
                     counter_button_state =
                         DrawCollapsable(processor.counters, processor.counter_header,
                             current_eye_button_state);
@@ -677,10 +729,12 @@ SideBar::DrawCollapsable(const std::vector<Model>& container,
     }
     if(open)
     {
+        TreeConnector tc(m_settings);
         for(const Model& item : container)
         {
             if(item.info)
             {
+                tc.Branch();
                 if(RenderTrackItem(item.graph_index))
                 {
                     new_button_state = EyeButtonState::kMixed;
@@ -710,10 +764,6 @@ SideBar::EyeButtonState
 SideBar::DrawEyeButton(EyeButtonState eye_button_state)
 {
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          m_settings.GetColor(Colors::kTransparent));
     ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
 
     ImVec2 eye_size = ImGui::CalcTextSize(ICON_EYE);
@@ -738,7 +788,7 @@ SideBar::DrawEyeButton(EyeButtonState eye_button_state)
     ImGui::PopFont();
     if(ImGui::IsItemHovered())
         SetTooltipStyled("Toggle All Track Visibility");
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor();
 
     return new_button_state;
 }

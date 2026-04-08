@@ -199,6 +199,11 @@ KernelMetricTable::Render()
 
     SectionTitle("Kernel Selection Table");
 
+    ComputeKernelSelectionTable& table =
+        m_data_provider.ComputeModel().GetKernelSelectionTable();
+    const std::vector<std::string>&              header = table.GetTableHeader();
+    const std::vector<std::vector<std::string>>& data   = table.GetTableData();
+
     ImGui::AlignTextToFramePadding();
 
     const char* icon = m_show_kernel_table ? ICON_EYE : ICON_EYE_SLASH;
@@ -230,6 +235,13 @@ KernelMetricTable::Render()
             m_column_filters.push_back(ColumnFilter());
             m_pending_column_filters.push_back(ColumnFilter());
 
+            if(!m_bar_chart_columns.empty())
+            {
+                int new_col = PERMANENT_COLUMN_COUNT +
+                              static_cast<int>(m_metrics_params.size()) - 1;
+                m_bar_chart_columns.insert(new_col);
+            }
+
             m_fetch_requested = true;
         });
     }
@@ -245,6 +257,25 @@ KernelMetricTable::Render()
     if(ImGui::Button("Clear All Filters"))
     {
         ClearAllFilters();
+    }
+    ImGui::SameLine(0.0f, item_spacing);
+    if(ImGui::Button(m_bar_chart_columns.empty() ? "Show Bar Charts" : "Hide Bar Charts"))
+    {
+        if(m_bar_chart_columns.empty())
+        {
+            int col_count = static_cast<int>(header.size());
+            for(int c = 0; c < col_count; c++)
+            {
+                if(c != ID_COLUMN_INDEX && c != NAME_COLUMN_INDEX)
+                    m_bar_chart_columns.insert(c);
+            }
+            ComputeColumnMaxValues(data);
+        }
+        else
+        {
+            m_bar_chart_columns.clear();
+            m_column_max_values.clear();
+        }
     }
 
     // Show active filter count
@@ -265,11 +296,6 @@ KernelMetricTable::Render()
     ImGui::EndDisabled();
 
     ImGui::Separator();
-
-    ComputeKernelSelectionTable& table =
-        m_data_provider.ComputeModel().GetKernelSelectionTable();
-    const std::vector<std::string>&              header = table.GetTableHeader();
-    const std::vector<std::vector<std::string>>& data   = table.GetTableData();
 
     bool request_pending =
         m_data_provider.IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID);

@@ -201,7 +201,7 @@ ComputeTableView::RebuildTableDataCache()
             auto add_row_func = [this](MetricId metric_id) {
                 m_pined_metric_table.AddRow(metric_id);
             };
-            MetricTableCache widget(add_row_func, m_set_to_kernel_table_callback);
+            newMetricTableCache widget(add_row_func, m_set_to_kernel_table_callback);
             widget.Populate(*tbl, [&](uint32_t eid) {
                 return model.GetKernelMetricValue(
                     m_client_id, kernel_id, cat->id, tbl->id, eid);

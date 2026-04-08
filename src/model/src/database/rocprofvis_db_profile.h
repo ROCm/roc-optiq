@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_db_sqlite.h"
+#include "rocprofvis_db_version.h"
 #include "rocprofvis_db_table_processor.h"
 
 namespace RocProfVis
@@ -40,7 +41,8 @@ typedef enum rocprofvis_track_load_params
     kRpvDbTrackLoadProcessTag,
     kRpvDbTrackLoadSubprocessTag,
     kRpvDbTrackLoadGuid,
-    kRpvDbTrackLoadNumItems
+    kRpvDbTrackLoadPID,
+    kRpvDbTrackLoadNumItems,
 } rocprofvis_track_load_params;
 
 typedef struct rocprofvis_db_event_level_t
@@ -114,6 +116,7 @@ class ProfileDatabase : public SqliteDatabase
             Future* future) override;
 
         virtual rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) = 0;
+        virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
 
     private:
 
@@ -145,6 +148,9 @@ class ProfileDatabase : public SqliteDatabase
             bool sample_query,
             rocprofvis_dm_string_t& select,
             rocprofvis_dm_string_t& group_by) = 0;
+
+        std::string GetHistogramQueryPrefix(uint64_t bucket_size);
+        std::string GetHistogramQuerySuffix();
 
     protected:
 
@@ -210,6 +216,7 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_charptr_t prefix, 
                             rocprofvis_dm_charptr_t suffix,
                             RpvSqliteExecuteQueryCallback callback, 
+                            std::function<std::string(rocprofvis_dm_track_params_t*, rocprofvis_dm_charptr_t)> func_prepare,
                             std::function<void(rocprofvis_dm_track_params_t*)> func_clear,
                             guid_list_t run_for_db_instances);
         rocprofvis_dm_result_t ExecuteQueriesAsync(
@@ -232,6 +239,13 @@ class ProfileDatabase : public SqliteDatabase
         }
 
     protected:
+    // sqlite3_exec callback to cache specified tables data
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to process track information query and add track object to Trace container
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
@@ -310,7 +324,6 @@ class ProfileDatabase : public SqliteDatabase
             rocprofvis_dm_event_operation_t op, std::string column);
 
     virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
-    virtual const rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
 
     static void CollectTrackServiceData(ProfileDatabase* db,
         sqlite3_stmt* stmt, int column_index, char** azColName,
@@ -319,8 +332,9 @@ class ProfileDatabase : public SqliteDatabase
         int column_index, char** azColName,
         rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices);
     static const rocprofvis_dm_track_search_id_t GetTrackSearchId(rocprofvis_dm_track_category_t category);
-    rocprofvis_dm_result_t SaveTrackProperties(Future* future, uint64_t hash);
+    rocprofvis_dm_result_t SaveTrackProperties(Future* future);
     rocprofvis_dm_result_t BuildHistogram(Future* future, uint32_t desired_bins);
+    uint64_t GetHistogramQueryAndSchemaHash();
 
     virtual int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) = 0;
 
@@ -335,6 +349,19 @@ class ProfileDatabase : public SqliteDatabase
         TableProcessor m_table_processor[kRPVTableDataTypesNum];
         StringTable m_string_table;
         OrderedMutex m_add_track_mutex;
+        std::mutex m_lock;
+
+    private:
+        inline static SQLInsertParams s_histogram_schema_params = { 
+            { "id", "INTEGER PRIMARY KEY" },
+            { "track_number", "INTEGER" },
+            { "bucket_number", "INTEGER" },
+            { "events_count", "INTEGER" },
+            { "bucket_value", "REAL" }
+        };
+
+
+        friend class MetadataVersionControl;
 
 };
 

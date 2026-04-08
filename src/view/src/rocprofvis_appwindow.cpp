@@ -12,16 +12,12 @@
 #endif
 
 #include "rocprofvis_controller.h"
-#include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_utils.h"
-#ifdef COMPUTE_UI_SUPPORT
-#    include "compute/rocprofvis_navigation_manager.h"
-#endif
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_view_module.h"
@@ -106,9 +102,6 @@ AppWindow::~AppWindow()
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
     m_projects.clear();
-#ifdef COMPUTE_UI_SUPPORT
-    NavigationManager::DestroyInstance();
-#endif
 }
 
 bool
@@ -144,9 +137,7 @@ AppWindow::Init()
     m_tab_container->SetEventSourceName(TAB_CONTAINER_SRC_NAME);
     m_tab_container->EnableSendCloseEvent(true);
     m_tab_container->EnableSendChangeEvent(true);
-#ifdef COMPUTE_UI_SUPPORT
-    NavigationManager::GetInstance()->RegisterRootContainer(m_tab_container);
-#endif
+
     main_area_item.m_item = m_tab_container;
 
     std::vector<LayoutItem> layout_items;
@@ -499,7 +490,9 @@ AppWindow::RenderFileMenu(Project* project)
         {
             project->Save();
         }
-        if(ImGui::MenuItem("Save As", nullptr, false, project || !is_open_file_dialog_open))
+        if(ImGui::MenuItem("Save As", nullptr, false,
+                           project && project->GetTraceType() == Project::System &&
+                               !is_open_file_dialog_open))
         {
             HandleSaveAsFile();
         }
@@ -565,7 +558,6 @@ AppWindow::RenderViewMenu(Project* project)
                 tool_bar_item->m_visible = settings.show_toolbar;
             }
         }
-#ifdef COMPUTE_UI_SUPPORT
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
         {
             if(m_notification_callback)
@@ -576,7 +568,6 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::SeparatorText("System Profiler Panels");
-#endif
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))
         {
@@ -610,21 +601,6 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
-
-#ifdef COMPUTE_UI_SUPPORT
-        ImGui::SeparatorText("Compute Profiler Panels");
-        ImGui::MenuItem("Compute View Item");
-#else
-        ImGui::Separator();
-        if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
-        {
-            if(m_notification_callback)
-            {
-                m_notification_callback(
-                    rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen);
-            }
-        }
-#endif
         ImGui::EndMenu();
     }
 }
@@ -654,10 +630,7 @@ AppWindow::HandleOpenFile()
     FileFilter trace_filter;
     trace_filter.m_name = "Traces";
     trace_filter.m_extensions = { "db", "rpd", "yaml" };
-#ifdef COMPUTE_UI_SUPPORT
-    all_filter.m_extensions.push_back("csv");
-    trace_filter.m_extensions.push_back("csv");
-#endif
+
     FileFilter project_filter;
     project_filter.m_name = "Projects";
     project_filter.m_extensions = { "rpv" };
@@ -758,7 +731,7 @@ AppWindow::RenderAboutDialog()
 {
     static constexpr char* NAME_LABEL = "ROCm (TM) Optiq";
     static constexpr char* COPYRIGHT_LABEL =
-        "Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.";
+        "Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.";
     static constexpr char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
     static constexpr char* DOC_URL =
         "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/";

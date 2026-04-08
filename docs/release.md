@@ -43,39 +43,11 @@ Changes in ROCm Optiq for visualizing ROCm System Profiler traces:
 - System Topology tree was restructured to show hardware and software topologies. 
 - Memory allocation activity tracks are now displayed in Timeline and System Topology Views. 
 - RPD files populate Topology. 
-- Multinode support: Time normalization for multi-node configurations. 
+- Multinode support: Time normalization for multi-node configurations.
 
-## ROCm Optiq (Beta) 0.2.0
+### Known issues
 
-### Added
-
-- **Summary View**: Displays the top ten kernels by execution time using pie charts, bar charts, or tables.
-- **Minimap**: Provides a compact overview of event density and counter values across the entire trace, enabling rapid navigation of large datasets.
-
-### Changed
-
-- **Timeline View**: Improved navigation and selection. Added context menu option to create a time range filter from a selected event or events. 
-- **Advanced Details Panel**: **Aggregate by Column** drop-down groups the results by the selected column. Options to size columns to fit in **Event Table** and **Sample Table**. **Event Details** now shows the function call’s arguments, if available.  
-- **Time Range Filtering**: Improved time range selection.
-- **Histogram**: Shows event density in two display modes: "Normalization: All Tracks" and "Normalization: Visible Tracks".
-- **Multi-node**: Multi-node data and a new multi-database yaml file format are supported.
-
-## ROCm Optiq (Beta) 0.1.0
-
-Initial release of ROCm Optiq (Beta).
-
-### Added
-
-- **System Topology View**: Displays a hierarchical representation of the hardware or system components, such as nodes, processes, as well as the GPU queues, memory operations, threads, and more that belong to them.
-- **Timeline View**: Shows CPU and GPU activities, events, and performance metrics in chronological order for a detailed temporal analysis. ROCm Optiq allows you to zoom, filter, and bookmark data for fine-grained inspection. You can correlate GPU workloads with in-application CPU events and performance with hardware resource usage, enabling easy identification and remediation of performance blockers.
-- **Advanced Details Panel**: Provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. It offers SQL-like filters and group-by operations.
-- **Histogram**: Shows the event density across all visible tracks and highlights the zoomed-in region to quickly identify hotspots.
-- **Time Range Filtering**: Select a specific time interval to filter events and counter samples for focused analysis.
-- **Event Search**: Quickly locate target events.
-
-## Known issues
-
-### Metrics that reference ``None`` return N/A
+#### Metrics that reference ``None`` return N/A
 
 If a metric expression contains ``None``, ROCm Compute Profiler may ignore the metric value even when it isn't ``None``. As a result, ROCm-Optiq displays **N/A** for affected metrics. 
 
@@ -172,6 +144,35 @@ If a metric expression contains ``None``, ROCm Compute Profiler may ignore the m
   - Write - HBM Stall 
   - Write - Credit Starvation 
 
-### ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-directory`` 
+#### ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-directory`` 
 
 When you profile with the ``--output-directory`` option, the ``workload_name`` column in ``sysinfo.csv`` might be empty. This can prevent views in the ROCm Compute Profiler analysis database from joining tables based on ``workload_name``, which makes system information unavailable. 
+
+## ROCm Optiq (Beta) 0.2.0
+
+### Added
+
+- **Summary View**: Displays the top ten kernels by execution time using pie charts, bar charts, or tables.
+- **Minimap**: Provides a compact overview of event density and counter values across the entire trace, enabling rapid navigation of large datasets.
+
+### Changed
+
+- **Timeline View**: Improved navigation and selection. Added context menu option to create a time range filter from a selected event or events. 
+- **Advanced Details Panel**: **Aggregate by Column** drop-down groups the results by the selected column. Options to size columns to fit in **Event Table** and **Sample Table**. **Event Details** now shows the function call’s arguments, if available.  
+- **Time Range Filtering**: Improved time range selection.
+- **Histogram**: Shows event density in two display modes: "Normalization: All Tracks" and "Normalization: Visible Tracks".
+- **Multi-node**: Multi-node data and a new multi-database yaml file format are supported.
+
+## ROCm Optiq (Beta) 0.1.0
+
+Initial release of ROCm Optiq (Beta).
+
+### Added
+
+- **System Topology View**: Displays a hierarchical representation of the hardware or system components, such as nodes, processes, as well as the GPU queues, memory operations, threads, and more that belong to them.
+- **Timeline View**: Shows CPU and GPU activities, events, and performance metrics in chronological order for a detailed temporal analysis. ROCm Optiq allows you to zoom, filter, and bookmark data for fine-grained inspection. You can correlate GPU workloads with in-application CPU events and performance with hardware resource usage, enabling easy identification and remediation of performance blockers.
+- **Advanced Details Panel**: Provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. It offers SQL-like filters and group-by operations.
+- **Histogram**: Shows the event density across all visible tracks and highlights the zoomed-in region to quickly identify hotspots.
+- **Time Range Filtering**: Select a specific time interval to filter events and counter samples for focused analysis.
+- **Event Search**: Quickly locate target events.
+

@@ -1,0 +1,80 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
+#pragma once
+#include "rocprofvis_data_provider.h"
+#include "rocprofvis_compute_selection.h"
+#include "widgets/rocprofvis_query_builder.h"
+#include "widgets/rocprofvis_widget.h"
+#include <unordered_map>
+#include <unordered_set>
+
+namespace RocProfVis
+{
+namespace View
+{
+
+class ComputeTester : public RocWidget
+{
+public:
+    ComputeTester(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
+    ~ComputeTester();
+
+    void Update() override;
+    void Render() override;
+
+private:
+
+    struct SelectionState
+    {
+        enum RooflinePreset
+        {
+            FP32,
+            FP64,
+            Custom
+        };
+        bool                         init;
+        uint32_t                     workload_id;
+        std::unordered_set<uint32_t> kernel_ids;
+        std::unordered_map<
+            uint32_t,
+            std::unordered_map<uint32_t, std::pair<bool, std::unordered_set<uint32_t>>>>
+                       metric_ids;
+        RooflinePreset roofline_preset;
+        std::unordered_map<
+            rocprofvis_controller_roofline_ceiling_compute_type_t,
+            std::unordered_set<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>>
+            ceilings_compute;
+        std::unordered_map<
+            rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
+            std::unordered_set<rocprofvis_controller_roofline_ceiling_compute_type_t>>
+            ceilings_bandwidth;
+        std::unordered_map<
+            uint32_t,
+            std::unordered_set<rocprofvis_controller_roofline_kernel_intensity_type_t>>
+            intensities;
+    };
+    struct DisplayStrings
+    {
+        std::unordered_map<rocprofvis_controller_roofline_ceiling_compute_type_t,
+                           const char*>
+            ceiling_compute;
+        std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
+                           const char*>
+            ceiling_bandwidth;
+        std::unordered_map<rocprofvis_controller_roofline_kernel_intensity_type_t,
+                           const char*>
+            intensity;
+    };
+
+    DataProvider&                     m_data_provider;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+    SelectionState                    m_selections;
+    DisplayStrings                    m_display_names;
+    QueryBuilder                      m_query_builder;
+
+    char m_value_names_input[64] = "3.1.2";
+};
+
+}  // namespace View
+}  // namespace RocProfVis

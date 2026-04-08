@@ -4,6 +4,7 @@
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_multi_track_table.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -387,28 +388,7 @@ MultiTrackTable::RowSelected(const ImGuiMouseButton mouse_button)
 bool
 MultiTrackTable::XButton(const char* id) const
 {
-    bool clicked = false;
-    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-    ImGui::PushID(id);
-    clicked = ImGui::SmallButton(ICON_X_CIRCLED);
-    ImGui::PopID();
-    ImGui::PopFont();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        m_settings.GetDefaultIMGUIStyle().WindowPadding);
-    if(ImGui::BeginItemTooltip())
-    {
-        ImGui::TextUnformatted("Clear");
-        ImGui::EndTooltip();
-    }
-    ImGui::PopStyleVar();
+    bool clicked = RocProfVis::View::XButton(id, "Clear", &m_settings);
     return clicked;
 }
 
@@ -430,46 +410,51 @@ MultiTrackTable::RenderContextMenu()
     {
         uint64_t target_track_id = SelectedRowToTrackID(
             m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
-        if(ImGui::MenuItem("Copy Row Data", nullptr, false))
-        {
-            SelectedRowToClipboard();
-        }
-        else if(ImGui::MenuItem(m_table_type == TableType::kSampleTable ? "Go To Sample"
+        if(ImGui::MenuItem(m_table_type == TableType::kSampleTable ? "Go To Sample"
                                                                         : "Go To Event",
                                 nullptr, false, target_track_id != INVALID_UINT64_INDEX))
         {
             SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
                                      m_important_column_idxs[kStreamId]);
+        } 
+        ImGui::Separator();
+        if(ImGui::MenuItem("Copy Row Data", nullptr, false))
+        {
+            SelectedRowToClipboard();
         }
-        else if(ImGui::MenuItem("Export To File", nullptr, false,
+        else if(ImGui::MenuItem("Copy Cell Data", nullptr, false))
+        {
+            CopyCellToClipboard(true);
+        }
+
+        // Only show option to copy unformatted cell data if 
+        // column has formatting applied to it. 
+        bool show_copy_unformatted = false;
+        if(m_selected_column >= 0 && m_selected_column < (int) m_data_provider.DataModel()
+                                                             .GetTables()
+                                                             .GetTableHeader(m_table_type)
+                                                             .size())
+        {
+            const auto& table_model = m_data_provider.DataModel().GetTables();
+            const std::vector<FormattedColumnInfo>& formatted_table_data =
+                table_model.GetFormattedTableData(m_table_type);
+            const auto& col_format_info = formatted_table_data[m_selected_column];
+            show_copy_unformatted = col_format_info.needs_formatting;
+        }
+        if(show_copy_unformatted) 
+        {         
+            if(ImGui::MenuItem("Copy Unformatted Cell Data", nullptr, false))
+            {
+                CopyCellToClipboard(false);
+            }
+        }
+        ImGui::Separator();
+        if(ImGui::MenuItem("Export To File", nullptr, false,
                                 !m_data_provider.IsRequestPending(
                                     DataProvider::TABLE_EXPORT_REQUEST_ID)))
         {
             ExportToFile();
-        }
-        else if(ImGui::MenuItem("Copy Cell Data", nullptr, false))
-        {
-            const std::vector<std::vector<std::string>>& table_data =
-                m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
-            if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
-            {
-                spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
-            }
-            else if(m_selected_column < 0 ||
-                    m_selected_column >= (int) table_data[m_selected_row].size())
-            {
-                spdlog::warn("Selected column index out of bounds: {}",
-                             m_selected_column);
-            }
-            else
-            {
-                std::string cell_text = table_data[m_selected_row][m_selected_column];
-                ImGui::SetClipboardText(cell_text.c_str());
-                NotificationManager::GetInstance().Show("Cell data was copied",
-                                                        NotificationLevel::Info);
-            }
-
-        }
+        }        
         // TODO handle event selection
         // else if(ImGui::MenuItem("Select event", nullptr, false))
         // {
@@ -487,6 +472,46 @@ MultiTrackTable::RenderContextMenu()
     }
     // Pop the style vars for window padding and item spacing
     ImGui::PopStyleVar(2);
+}
+
+void
+MultiTrackTable::CopyCellToClipboard(bool use_formatted_data)
+{
+    const std::vector<std::vector<std::string>>& table_data =
+        m_data_provider.DataModel().GetTables().GetTableData(m_table_type);
+
+    if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
+    {
+        spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
+        return;
+    }
+
+    if(m_selected_column < 0 ||
+       m_selected_column >= (int) table_data[m_selected_row].size())
+    {
+        spdlog::warn("Selected column index out of bounds: {}", m_selected_column);
+        return;
+    }
+
+    std::string cell_text = table_data[m_selected_row][m_selected_column];
+
+    if(use_formatted_data)
+    {
+        const auto& table_model = m_data_provider.DataModel().GetTables();
+        const std::vector<FormattedColumnInfo>& formatted_table_data =
+            table_model.GetFormattedTableData(m_table_type);
+
+        const auto& col_format_info = formatted_table_data[m_selected_column];
+        if(col_format_info.needs_formatting &&
+           m_selected_row < col_format_info.formatted_row_value.size())
+        {
+            cell_text = col_format_info.formatted_row_value[m_selected_row];
+        }
+    }
+
+    ImGui::SetClipboardText(cell_text.c_str());
+    NotificationManager::GetInstance().Show("Cell data was copied",
+                                            NotificationLevel::Info);
 }
 
 }  // namespace View

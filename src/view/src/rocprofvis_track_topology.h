@@ -38,9 +38,6 @@ struct ProcessModel
     const ProcessInfo*                           info;
     InfoTable                                    info_table;
     std::string                                  header;
-    std::string                                  queue_header;
-    std::vector<IterableModel>                   queues;
-    std::unordered_map<uint64_t, IterableModel*> queue_lut;
     std::string                                  stream_header;
     std::vector<IterableModel>                   streams;
     std::unordered_map<uint64_t, IterableModel*> stream_lut;
@@ -50,6 +47,17 @@ struct ProcessModel
     std::string                                  sampled_thread_header;
     std::vector<IterableModel>                   sampled_threads;
     std::unordered_map<uint64_t, IterableModel*> sampled_thread_lut;
+    mutable bool                                 all_subitems_hidden = false;
+
+};
+struct ProcessorModel
+{
+    const DeviceInfo*                           info;
+    InfoTable                                    info_table;
+    std::string                                  header;
+    std::string                                  queue_header;
+    std::vector<IterableModel>                   queues;
+    std::unordered_map<uint64_t, IterableModel*> queue_lut;
     std::string                                  counter_header;
     std::vector<IterableModel>                   counters;
     std::unordered_map<uint64_t, IterableModel*> counter_lut;
@@ -63,6 +71,9 @@ struct NodeModel
     std::string                                 process_header;
     std::vector<ProcessModel>                   processes;
     std::unordered_map<uint64_t, ProcessModel*> process_lut;
+    std::string                                 processor_header;
+    std::vector<ProcessorModel>                   processors;
+    std::unordered_map<uint64_t, ProcessorModel*> processor_lut;
     mutable bool                                all_subitems_hidden = false;
 };
 struct TopologyModel

@@ -10,6 +10,8 @@ namespace RocProfVis
 namespace View
 {
 
+class SettingsManager;
+
 constexpr float PI = 3.14159265358979323846f;  // Define PI constant
 
 void
@@ -33,6 +35,40 @@ std::pair<bool, bool>
 InputTextWithClear(const char* id, const char* hint, char* buf, size_t buf_size,
                    ImFont* icon_font, ImU32 bg_color, const ImGuiStyle& style,
                    float width = 0);
+
+void
+SetTooltipStyled(const char* fmt, ...);
+
+void
+BeginTooltipStyled();
+
+bool
+BeginItemTooltipStyled();
+
+void
+EndTooltipStyled();
+
+void
+ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
+           bool right_justify = false, bool imgui_AlignTextToFramePadding = false);
+
+/* 
+ * Center the next text item horizontally with respect to the available 
+ * content region.
+ * @param text The text to be rendered next.
+ */
+void
+CenterNextTextItem(const char* text);
+
+bool
+XButton(const char* id = nullptr, const char* tool_tip_label = nullptr,
+        SettingsManager* settings = nullptr);
+
+void
+SectionTitle(const char* text, bool large = true, SettingsManager* settings = nullptr);
+
+void
+VerticalSeparator(SettingsManager* settings = nullptr);
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void

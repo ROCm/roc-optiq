@@ -1,14 +1,14 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_db.h"
+#include "rocprofvis_db_profile.h"
 
 namespace RocProfVis
 {
 namespace DataModel
 {
 
-    void TrackLookup::AddTrack(rocprofvis_dm_process_identifiers_t & ids, 
+    void TrackLookup::AddTrack(rocprofvis_dm_track_identifiers_t & ids, 
         uint32_t db_instance,
         uint32_t track)
     {
@@ -38,7 +38,7 @@ namespace DataModel
         return false;
     }
 
-    bool TrackLookup::FindTrack(rocprofvis_dm_process_identifiers_t & ids,
+    bool TrackLookup::FindTrack(rocprofvis_dm_track_identifiers_t & ids,
         uint32_t db_instance,
         uint32_t& out_track)
     {
@@ -60,7 +60,7 @@ namespace DataModel
         return FindTrack(key, category, out_track);
     }
 
-    rocprofvis_dm_track_params_it TrackLookup::FindTrackParamsIterator(rocprofvis_dm_process_identifiers_t& track_indentifiers, uint32_t db_instance) {
+    rocprofvis_dm_track_params_it TrackLookup::FindTrackParamsIterator(rocprofvis_dm_track_identifiers_t& track_indentifiers, uint32_t db_instance) {
         uint32_t track_id;
         if (!FindTrack(track_indentifiers, db_instance,track_id))
         {
@@ -69,11 +69,35 @@ namespace DataModel
         return std::find_if(
             m_db->TrackPropertiesBegin(), m_db->TrackPropertiesEnd(),
             [track_id](std::unique_ptr<rocprofvis_dm_track_params_t>& params) {
-                return params.get()->track_id == track_id;
+                return params.get()->track_indentifiers.track_id == track_id;
             });
     }
 
-    TrackLookup::TrackKey TrackLookup::MakeKey(const rocprofvis_dm_process_identifiers_t & ids, uint32_t db_instance)
+    rocprofvis_dm_track_category_t TrackLookup::SearchCategoryMaskLookup(rocprofvis_dm_event_operation_t op)
+    {
+        rocprofvis_dm_track_category_t cat = kRocProfVisDmProcessTrack;
+        switch (op)
+        {
+        case kRocProfVisDmOperationLaunchSample:
+            cat = kRocProfVisDmRegionSampleTrack;
+            break;
+        case kRocProfVisDmOperationLaunch:
+            cat = ((ProfileDatabase*)m_db)->GetRegionTrackCategory();
+            break;
+        case kRocProfVisDmOperationDispatch:
+            cat = kRocProfVisDmKernelDispatchTrack;
+            break;
+        case kRocProfVisDmOperationMemoryCopy:
+            cat = kRocProfVisDmMemoryCopyTrack;
+            break;
+        case kRocProfVisDmOperationMemoryAllocate:
+            cat = kRocProfVisDmMemoryAllocationTrack;
+            break;
+        }
+        return cat;
+    }
+
+    TrackLookup::TrackKey TrackLookup::MakeKey(const rocprofvis_dm_track_identifiers_t & ids, uint32_t db_instance)
     {
         TrackKey key;
         key.id0 = ids.id[TRACK_ID_PID_OR_AGENT];

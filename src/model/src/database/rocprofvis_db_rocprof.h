@@ -26,6 +26,39 @@ typedef struct rocprofvis_db_string_id_hash_t
     }
 } rocprofvis_db_string_id_hash_t;
 
+typedef enum rocprofvis_db_memalloc_type_t : uint8_t
+{
+    kRPVMemActivityAlloc,
+    kRPVMemActivityFree,
+    kRPVMemActivityRealloc,
+    kRPVMemActivityReclaim,
+    kRPVMemActivityNumTypes
+}rocprofvis_db_memalloc_type_t;
+
+typedef enum rocprofvis_db_memalloc_level_t : uint8_t
+{
+    kRPVMemLevelReal,
+    kRPVMemLevelVirtual,
+    kRPVMemLevelScratch,
+    kRPVMemLevelNumLevels
+}rocprofvis_db_memalloc_level_t;
+
+typedef struct rocprofvis_db_memalloc_activity_t
+{
+    uint64_t start;
+    uint64_t end;
+    uint64_t address;
+    uint64_t size;
+    uint32_t id;
+    uint32_t pid;
+    uint16_t stream_id;
+    uint8_t agent_id;
+    uint8_t queue_id;
+    uint32_t track_id;
+    rocprofvis_db_memalloc_type_t type;
+    rocprofvis_db_memalloc_level_t level;
+}rocprofvis_db_memalloc_activity_t;
+
 class RocprofDatabase : public ProfileDatabase
 {
 
@@ -33,17 +66,21 @@ class RocprofDatabase : public ProfileDatabase
     typedef std::unordered_map<rocprofvis_db_string_id_t, rocprofvis_dm_index_t, rocprofvis_db_string_id_hash_t> string_index_map_t;
     typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_db_string_id_t>> string_id_map_t;
     typedef std::unordered_map<std::string, uint32_t> string_map_t;
+    typedef std::map<uint32_t, std::vector<rocprofvis_db_memalloc_activity_t>> memalloc_activity_t;
+    typedef std::map<uint32_t, std::unordered_map<uint32_t, uint32_t>> mem_free_stream_to_agent_t;
 
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
         ProfileDatabase(path),
-        m_query_factory(this)
+        m_query_factory(this),
+        m_metadata_version_control(this)
     {
         CreateDbNode(path);
     };
     RocprofDatabase(rocprofvis_db_filename_t path, std::vector<std::string> & multinode_files) :
         ProfileDatabase(path),
-        m_query_factory(this)
+        m_query_factory(this),
+        m_metadata_version_control(this)
     {
         CreateDbNodes(multinode_files);
     };
@@ -108,14 +145,14 @@ private:
     // @param argv - pointer to row values
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
-    static int CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
-    // sqlite3_exec callback to cache specified tables data
+    static int CallbackCaptureMemoryActivity(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+    // sqlite3_exec callback to process string list query and add string object to Trace container
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
     // @param argv - pointer to row values
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
-    static int CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
+    static int CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to process stack trace information query and add stack trace
     // object to StackTrace container
     // @param data - pointer to callback caller argument
@@ -143,7 +180,6 @@ private:
     // @return SQLITE_OK if successful
     static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt,
         char** azColName);
-    
     // method to remap string IDs. Main reason for remapping is having strings and kernel symbol names in one array 
     // @param record - event record structure
     // @return status of operation
@@ -168,15 +204,28 @@ private:
     {
         return &s_null_data_exceptions_skip;
     }
-    const rocprofvis_dm_track_category_t GetRegionTrackCategory() override
+    rocprofvis_dm_track_category_t GetRegionTrackCategory() override
     {
         return kRocProfVisDmRegionMainTrack;
     }
-
+    MetadataVersionControl* GetMetadataVersionControl() override 
+    { 
+        return &m_metadata_version_control; 
+    };
 
     private:
         rocprofvis_dm_result_t CreateIndexes();
         rocprofvis_dm_result_t LoadInformationTables(Future* future);
+        rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance);
+        rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
+        rocprofvis_dm_result_t CreateMemoryActivityTable(Future* future);
+        rocprofvis_dm_result_t CreateAgentFriendlyMemoryAllocationTable(Future* future);
+        rocprofvis_dm_result_t LoadMemoryActivityData(Future* future);
+        rocprofvis_dm_result_t GenerateInterdependencyTables(Future* future);
+        rocprofvis_dm_result_t RunCacheQueriesAsync(Future* future, std::vector<std::pair<std::string, std::string>>& info_table_lis);
+    protected:
+        uint64_t GetMemoryActivityTableSchemaHash();
+        std::string GetLevelSchemaHashStr();
         
     private:
         QueryFactory m_query_factory;
@@ -185,8 +234,9 @@ private:
         string_index_map_t m_string_index_map; // id to index
         string_id_map_t m_string_id_map; // index to id
         string_map_t m_string_map; //temporary map to reuse string
-        std::mutex m_lock;
-
+        memalloc_activity_t m_memalloc_activity;
+        mem_free_stream_to_agent_t m_memfree_stream_to_agent;
+        RocprofMetadataVersionControl m_metadata_version_control;
 
         inline static const rocprofvis_event_data_category_map_t
             s_rocprof_categorized_data = {
@@ -277,6 +327,28 @@ private:
             }
 
        };
+        // Define the SQL schema for the memory activity table. Each entry corresponds to a
+        // column in the table that describes a memory allocation/free event and its metadata.
+        inline static SQLInsertParams s_mem_activity_schema_params = { 
+            { "id", "INTEGER PRIMARY KEY" },
+            { "nid", "INTEGER" },
+            { "pid", "INTEGER" },
+            { "agent_id", "INTEGER" },
+            { "queue_id", "INTEGER" },
+            { "stream_id", "INTEGER" },
+            { "pmc_id", "INTEGER" },
+            { "type", "TEXT" },
+            { "level", "TEXT" },
+            { "start", "INTEGER" },
+            { "end", "INTEGER" },
+            { "address", "INTEGER" },
+            { "size", "INTEGER" },
+            { "track_id", "INTEGER" },
+        };
+
+        inline static SQLInsertParams s_level_schema_params = { { "eid", "INTEGER PRIMARY KEY" }, { "level", "INTEGER" } , { "level_for_stream", "INTEGER" } };
+
+        friend class RocprofMetadataVersionControl;
 };
 
 }  // namespace DataModel

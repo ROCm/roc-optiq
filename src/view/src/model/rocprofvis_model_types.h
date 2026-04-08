@@ -37,6 +37,16 @@ struct TrackGraph
 
 };
 
+union TopologyId
+{
+    struct TopologyIDFields
+    {
+        uint64_t id : 54;
+        uint64_t instance : 10;
+    } fields;
+    uint64_t value;
+};
+
 // Track Information
 struct TrackInfo
 {
@@ -52,7 +62,6 @@ struct TrackInfo
 
     uint64_t                           index;  // index of the track in the controller
     uint64_t                           id;     // id of the track in the controller
-    std::string                        name;   // name of the track
     rocprofvis_controller_track_type_t track_type;       // the type of track
     double                             min_ts;           // starting time stamp of track
     double                             max_ts;           // ending time stamp of track
@@ -71,7 +80,7 @@ struct TrackInfo
         uint64_t process_id;  // ID of track's parent process
         uint64_t device_id;   // ID of track's parent device
         TrackType type;
-        uint64_t id;  // ID of queue/stream/thread/counter
+        TopologyId id;         // ID of queue/stream/thread/counter
     } topology;
 };
 
@@ -160,10 +169,12 @@ struct NodeInfo
 
 struct DeviceInfo
 {
-    uint64_t                               id;
+    TopologyId                             id;
     std::string                            product_name;
     rocprofvis_controller_processor_type_t type;        // GPU/CPU
     uint64_t                               type_index;  // GPU0, GPU1...etc
+    std::vector<uint64_t>                  queue_ids;   // IDs of this process' queues
+    std::vector<uint64_t>                  counter_ids; // IDs of this process' counters
 };
 
 struct ProcessInfo
@@ -176,9 +187,7 @@ struct ProcessInfo
     std::vector<uint64_t>
         instrumented_thread_ids;  // IDs of this process' instrumented threads
     std::vector<uint64_t> sampled_thread_ids;  // IDs of this process' sampled threads
-    std::vector<uint64_t> queue_ids;           // IDs of this process' queues
     std::vector<uint64_t> stream_ids;          // IDs of this process' streams
-    std::vector<uint64_t> counter_ids;         // IDs of this process' counters
 };
 
 struct IterableInfo

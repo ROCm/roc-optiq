@@ -119,20 +119,20 @@ FlameTrackItem::RenderMetaAreaExpand()
             RecalculateTrackHeight();
             m_is_expanded = true;
         }
-        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Expand track to see all events");
+        if(ImGui::IsItemHovered()) SetTooltipStyled("Expand track to see all events");
     }
     else if(m_track_height >
             std::max(m_max_level * m_level_height + m_level_height,
-                     m_track_default_height))  // stand-in for default height..
+                     DEFAULT_TRACK_HEIGHT))  // stand-in for default height..
     {
         if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
         {
             m_track_height =
-                m_track_default_height;  // Default track height defined in parent class.
+                DEFAULT_TRACK_HEIGHT;  // Default track height defined in parent class.
             m_track_height_changed = true;
             m_is_expanded          = false;
         }
-        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Contract track to default height");
+        if(ImGui::IsItemHovered()) SetTooltipStyled("Contract track to default height");
     }
     ImGui::PopStyleColor(3);
 }
@@ -590,7 +590,7 @@ void
 FlameTrackItem::RecalculateTrackHeight()
 {
     m_track_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
-                              m_track_default_height);
+                              DEFAULT_TRACK_HEIGHT);
     m_track_height_changed = true;
 }
 
@@ -719,8 +719,7 @@ FlameTrackItem::RenderMetaAreaOptions()
                 RecalculateTrackHeight();
             }
         }
-        if(m_track_height > std::max(m_max_level * m_level_height + m_level_height,
-                                     m_track_default_height))
+        if(m_track_height > std::max(m_max_level * m_level_height + m_level_height, DEFAULT_TRACK_HEIGHT))
         {
             RecalculateTrackHeight();
         }

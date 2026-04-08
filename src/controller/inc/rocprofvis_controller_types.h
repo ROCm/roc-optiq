@@ -4,6 +4,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "rocprofvis_shared_types.h"
 
 typedef uint32_t rocprofvis_property_t;
 typedef struct rocprofvis_handle_t rocprofvis_handle_t;
@@ -31,3 +32,9 @@ typedef rocprofvis_handle_t rocprofvis_controller_stream_t;
 typedef rocprofvis_handle_t rocprofvis_controller_counter_t;
 typedef rocprofvis_handle_t rocprofvis_controller_summary_t;
 typedef rocprofvis_handle_t rocprofvis_controller_summary_metrics_t;
+typedef rocprofvis_handle_t rocprofvis_controller_topology_node_t;
+#ifdef COMPUTE_UI_SUPPORT
+typedef rocprofvis_handle_t rocprofvis_controller_workload_t;
+typedef rocprofvis_handle_t rocprofvis_controller_kernel_t;
+typedef rocprofvis_handle_t rocprofvis_controller_metrics_container_t;
+#endif

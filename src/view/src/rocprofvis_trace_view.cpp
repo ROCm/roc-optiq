@@ -91,9 +91,9 @@ TraceView::TraceView()
     });
 
     m_data_provider.SetTableDataReadyCallback(
-        [](const std::string& trace_path, uint64_t request_id) {
+        [](const std::string& trace_path, uint64_t request_id, uint64_t response_code) {
             EventManager::GetInstance()->AddEvent(
-                std::make_shared<TableDataEvent>(trace_path, request_id));
+                std::make_shared<TableDataEvent>(trace_path, request_id, response_code));
         });
 
     m_data_provider.SetTraceLoadedCallback(
@@ -575,13 +575,13 @@ TraceView::RenderToolbar()
     // Toolbar Controls
     ImGui::BeginGroup();
     RenderFlowControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderAnnotationControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderEventSearch();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     RenderBookmarkControls();
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
     
     ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
@@ -594,9 +594,9 @@ TraceView::RenderToolbar()
 
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Show Minimap");
+        SetTooltipStyled("Show Minimap");
     }
-    RenderSeparator();
+    VerticalSeparator(&m_settings_manager);
 
     if(ImGui::Button("Reset View"))
     {
@@ -609,7 +609,7 @@ TraceView::RenderToolbar()
     }
     if(ImGui::IsItemHovered())
     {
-        ImGui::SetTooltip("Reset view to default zoom and pan");
+        SetTooltipStyled("Reset view to default zoom and pan");
     }
     ImGui::EndGroup();
     float available_width = ImGui::GetContentRegionAvail().x - ImGui::GetItemRectSize().x;
@@ -623,23 +623,6 @@ TraceView::RenderToolbar()
     ImGui::EndChild();
     // pop child window style
     ImGui::PopStyleVar(2);
-}
-
-void
-TraceView::RenderSeparator()
-{
-    auto style = m_settings_manager.GetDefaultStyle();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
-    ImGui::SameLine();
-
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    float       height    = ImGui::GetFrameHeight();
-    ImVec2      p         = ImGui::GetCursorScreenPos();
-    draw_list->AddLine(ImVec2(p.x, p.y), ImVec2(p.x, p.y + height),
-                       m_settings_manager.GetColor(Colors::kMetaDataSeparator), 2.0f);
-    ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
-    ImGui::SameLine();
 }
 
 void
@@ -680,7 +663,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Show Annotation Layer");
+        SetTooltipStyled("Show Annotation Layer");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -705,7 +688,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Hide Annotation Layer");
+        SetTooltipStyled("Hide Annotation Layer");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -731,7 +714,7 @@ TraceView::RenderAnnotationControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Add New Annotation");
+        SetTooltipStyled("Add New Annotation");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopID();
@@ -883,7 +866,7 @@ TraceView::RenderFlowControls()
         if(ImGui::IsItemHovered())
         {
             ImGui::PopFont();
-            ImGui::SetTooltip("%s", flow_tool_tips[i]);
+            SetTooltipStyled("%s", flow_tool_tips[i]);
             ImGui::PushFont(icon_font);
         }
 
@@ -912,7 +895,7 @@ TraceView::RenderFlowControls()
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
-        ImGui::SetTooltip("Flow Render Style");
+        SetTooltipStyled("Flow Render Style");
         ImGui::PushFont(icon_font);
     }
     ImGui::PopFont();

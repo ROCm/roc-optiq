@@ -505,9 +505,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
             if(it == m_lods.end())
             {
                 uint32_t num_segments = static_cast<uint32_t>(ceil((max_ts - min_ts) / segment_duration));
-                SegmentTimeline& segments = m_lods[lod_to_generate];
                 uint64_t         num_items    = 0;
                 m_track->GetUInt64(kRPVControllerTrackNumberOfEntries, 0, &num_items);
+                std::lock_guard lock(m_mutex);
+                SegmentTimeline& segments = m_lods[lod_to_generate];
                 segments.SetContext(this);
                 segments.Init(min_ts, segment_duration, num_segments, num_items);    
                 it = m_lods.find(lod_to_generate);

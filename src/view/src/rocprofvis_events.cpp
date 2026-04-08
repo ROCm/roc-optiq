@@ -114,9 +114,10 @@ TrackDataEvent::GetResponseCode() const
     return m_response_code;
 }
 
-TableDataEvent::TableDataEvent(const std::string& source_id, uint64_t request_id)
+TableDataEvent::TableDataEvent(const std::string& source_id, uint64_t request_id, uint64_t response_code)
 : RocEvent(static_cast<int>(RocEvents::kNewTableData), source_id)
 , m_request_id(request_id)
+, m_response_code(response_code)
 {
     m_event_type = RocEventType::kTableDataEvent;
 }
@@ -125,6 +126,12 @@ uint64_t
 TableDataEvent::GetRequestID() const
 {
     return m_request_id;
+}
+
+uint64_t
+TableDataEvent::GetResponseCode() const
+{
+    return m_response_code;
 }
 
 #ifdef COMPUTE_UI_SUPPORT
@@ -140,6 +147,34 @@ RocProfVis::View::ComputeTableSearchEvent::GetSearchTerm()
 {
     return m_search_term;
 }
+
+ComputeSelectionChangedEvent::ComputeSelectionChangedEvent(int event_id, uint32_t id, const std::string& source_id)
+: RocEvent(event_id, source_id)
+, m_id(id)
+{
+    m_event_type = RocEventType::kComputeSelectionChangedEvent;
+}
+
+uint32_t
+ComputeSelectionChangedEvent::GetId() const
+{
+    return m_id;
+}
+
+ComputeMetricsFetchedEvent::ComputeMetricsFetchedEvent(const uint64_t     client_id,
+                                                       const std::string& source_id)
+: RocEvent(static_cast<int>(RocEvents::kComputeMetricsFetched), source_id)
+, m_client_id(client_id)
+{
+    m_event_type = RocEventType::kComputeMetricsFetchedEvent;
+}
+
+uint64_t
+ComputeMetricsFetchedEvent::GetClientId() const
+{
+    return m_client_id;
+}
+
 #endif
 
 TabEvent::TabEvent(int event_id, const std::string& tab_id, const std::string& source_id)

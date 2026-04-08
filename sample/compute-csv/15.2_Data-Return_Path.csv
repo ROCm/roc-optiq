@@ -1,8 +1,0 @@
-Metric,Avg,Min,Max,Unit
-Data-Return Busy,22.59,0.15,64.59,Pct
-Cache RAM → Data-Return Stall,14.68,0.12,51.77,Pct
-Workgroup manager → Data-Return Stall,0.0,0.0,0.01,Pct
-Coalescable Instructions,446.47,0.0,1063.25,Instructions per wave
-Read Instructions,344.91,0.0,832.0,Instructions per wave
-Write Instructions,299.19,2.0,711.0,Instructions per wave
-Atomic Instructions,0.0,0.0,0.0,Instructions per wave

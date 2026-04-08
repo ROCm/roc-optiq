@@ -29,9 +29,14 @@ enum class RocEvents
     kTimeFormatChanged,
     kTopologyChanged,
 #ifdef COMPUTE_UI_SUPPORT
+    //legacy events
     kComputeDataDirty,
     kComputeBlockNavigationChanged,
     kComputeTableSearchChanged,
+    //new events
+    kComputeWorkloadSelectionChanged,
+    kComputeKernelSelectionChanged,
+    kComputeMetricsFetched,
 #endif
 };
 
@@ -49,6 +54,8 @@ enum class RocEventType
     kNavigationEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
+    kComputeSelectionChangedEvent,
+    kComputeMetricsFetchedEvent,
 #endif
 };
 
@@ -157,11 +164,13 @@ private:
 class TableDataEvent : public RocEvent
 {
 public:
-    TableDataEvent(const std::string& source_id, uint64_t request_id);
+    TableDataEvent(const std::string& source_id, uint64_t request_id, uint64_t response_code);
     uint64_t           GetRequestID() const;
+    uint64_t           GetResponseCode() const;
 
 private:
     uint64_t    m_request_id;
+    uint64_t    m_response_code;
 };
 
 class StickyNoteEvent : public RocEvent
@@ -195,6 +204,28 @@ public:
 private:
     std::string m_search_term;
 };
+
+class ComputeSelectionChangedEvent : public RocEvent
+{
+public:
+    ComputeSelectionChangedEvent(int event_id, uint32_t id, const std::string& source_id);
+    uint32_t GetId() const;
+
+private:
+    uint32_t m_id;
+};
+
+class ComputeMetricsFetchedEvent : public RocEvent
+{
+public:
+    ComputeMetricsFetchedEvent(const uint64_t client_id,
+                               const std::string& source_id);
+    uint64_t GetClientId() const;
+
+private:
+    uint64_t m_client_id;
+};
+
 #endif
 
 class TabEvent : public RocEvent

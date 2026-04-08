@@ -911,6 +911,11 @@ namespace DataModel
                 uint64_t value = 0;
                 table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
             }
+            else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_END || columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_START)
+            {
+                uint64_t value = db->Sqlite3ColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
+                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value - db->TraceProperties()->db_inst_start_time[callback_params->db_instance->GuidIndex()]);
+            }
             else 
             {
                 uint64_t value = db->Sqlite3ColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
@@ -920,9 +925,9 @@ namespace DataModel
         }
 
         uint32_t track_id;
-        if (!db->TrackTracker()->FindTrack(op == kRocProfVisDmOperationLaunchSample ? kRocProfVisDmRegionSampleTrack : kRocProfVisDmProcessTrack,
-            db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.process_index),
-            db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.sub_process_index),
+        if (!db->TrackTracker()->FindTrack(db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op),
+            db->Sqlite3ColumnInt64(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.process_index),
+            db->Sqlite3ColumnInt64(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.sub_process_index),
             callback_params->db_instance->GuidIndex(),
             track_id))
         {
@@ -936,8 +941,8 @@ namespace DataModel
                 op == kRocProfVisDmOperationLaunchSample || 
                 table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index == -1 ||
                 !db->TrackTracker()->FindTrack(kRocProfVisDmStreamTrack,
+                   db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.pid_index),
                 db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index),
-                -1,
                 callback_params->db_instance->GuidIndex(),
                 track_id))
             {

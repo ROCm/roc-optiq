@@ -12,6 +12,7 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_c_interface_types.h"
+#include "rocprofvis_core_assert.h"
 
 namespace RocProfVis
 {
@@ -34,8 +35,10 @@ enum class RequestType
     kTableExport,
     kFetchSystemTrace,
 #ifdef COMPUTE_UI_SUPPORT
-    kFetchComputeTrace
-#endif   
+    kFetchComputeTrace,
+    kFetchMetrics,
+    kFetchMetricPivotTable,
+#endif
 };
 
 enum class RequestState
@@ -45,6 +48,69 @@ enum class RequestState
     kReady,
     kError
 };
+
+
+// Helper class for constructing request IDs with packed fields
+class RequestIdBuilder
+{
+public:
+    static constexpr uint8_t TRACK_CHUNK_OFFSET_BITS = sizeof(uint32_t) * 8;
+    static constexpr uint8_t TRACK_GROUP_OFFSET_BITS =
+        sizeof(uint16_t) * 8 + TRACK_CHUNK_OFFSET_BITS;
+    static constexpr uint8_t REQUEST_TYPE_OFFSET_BITS =
+        sizeof(uint8_t) * 8 + TRACK_GROUP_OFFSET_BITS;
+
+    static uint64_t MakeTrackDataRequestId(uint32_t track_id, uint16_t chunk_index,
+                                           uint8_t group_id, RequestType request_type)
+    {
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+               (static_cast<uint64_t>(group_id) << TRACK_GROUP_OFFSET_BITS) |
+               (static_cast<uint64_t>(chunk_index) << TRACK_CHUNK_OFFSET_BITS) |
+               (static_cast<uint64_t>(track_id));
+    }
+
+    static uint64_t MakeRequestId(RequestType request_type)
+    {
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+               static_cast<uint64_t>(0);
+    }
+
+    static uint64_t MakeClientRequestId(RequestType request_type, uint64_t client_id)
+    {
+        ROCPROFVIS_ASSERT(client_id < (1ULL << REQUEST_TYPE_OFFSET_BITS));
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+               (static_cast<uint64_t>(client_id) & ((1ULL << REQUEST_TYPE_OFFSET_BITS) - 1));
+    }
+};
+
+// Singleton class for creating unique IDs
+class IdGenerator
+{
+public:
+    static IdGenerator& GetInstance()
+    {
+        static IdGenerator instance;
+        return instance;
+    }
+
+    uint64_t GenerateId()
+    {
+        uint64_t id = m_current_id;
+        m_current_id++;
+        if(m_current_id > (1ULL << RequestIdBuilder::REQUEST_TYPE_OFFSET_BITS) - 1)
+        {
+            // Wrap around if we exceed the maximum client ID that can be encoded in the
+            // request ID
+            m_current_id = 0;
+        }
+        return id;
+    }
+
+private:
+    IdGenerator() : m_current_id(0) {}
+    uint64_t m_current_id;
+};
+
 
 class RequestParamsBase
 {
@@ -147,6 +213,59 @@ public:
     : m_event_id(event_id)
     {}
 };
+
+#ifdef COMPUTE_UI_SUPPORT
+class MetricsRequestParams : public RequestParamsBase
+{
+public:
+    struct MetricID
+    {
+        uint32_t                category_id;
+        std::optional<uint32_t> table_id;
+        std::optional<uint32_t> entry_id;
+    };
+    uint32_t              m_workload_id;
+    std::vector<uint32_t> m_kernel_ids;
+    std::vector<MetricID> m_metric_ids;
+    uint64_t              m_client_id;  // ID to identify the requester for the response
+
+    MetricsRequestParams(const MetricsRequestParams& metrics_params)            = default;
+    MetricsRequestParams& operator=(const MetricsRequestParams& metrics_params) = default;
+
+    MetricsRequestParams(uint32_t workload_id, const std::vector<uint32_t>& kernel_ids,
+                         const std::vector<MetricID>& metric_ids, uint64_t client_id)
+    : m_workload_id(workload_id)
+    , m_kernel_ids(kernel_ids)
+    , m_metric_ids(metric_ids)
+    , m_client_id(client_id)
+    {}
+};
+
+class ComputeTableRequestParams : public RequestParamsBase
+{
+public:
+    uint32_t                           m_workload_id;
+    std::vector<std::string>           m_metric_selectors;  // Format: "metric_id:value_name"
+    uint64_t                           m_sort_column_index;
+    rocprofvis_controller_sort_order_t m_sort_order;
+    std::unordered_map<uint64_t, std::string> m_column_filters;  // Column filters by index
+
+    ComputeTableRequestParams(const ComputeTableRequestParams& params) = default;
+    ComputeTableRequestParams& operator=(const ComputeTableRequestParams& params) = default;
+
+    ComputeTableRequestParams(uint32_t workload_id,
+                            const std::vector<std::string>& metric_selectors,
+                            uint64_t sort_column_index = 1,
+                            rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderDescending,
+                            const std::unordered_map<uint64_t, std::string>& column_filters = {})
+    : m_workload_id(workload_id)
+    , m_metric_selectors(metric_selectors)
+    , m_sort_column_index(sort_column_index)
+    , m_sort_order(sort_order)
+    , m_column_filters(column_filters)
+    {}
+};
+#endif
 
 
 struct RequestInfo

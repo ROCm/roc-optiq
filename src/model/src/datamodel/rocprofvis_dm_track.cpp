@@ -25,10 +25,19 @@ std::shared_mutex* Track::Mutex()
     return m_ctx->Mutex();
 }
 
+rocprofvis_dm_timestamp_t  Track::MinTimestamp() { 
+    DbInstance* db_instance = (DbInstance*)m_track_params->track_indentifiers.db_instance;
+    return m_track_params->min_ts-m_ctx->BindingInfo()->trace_properties->db_inst_start_time[db_instance->GuidIndex()];
+}
+rocprofvis_dm_timestamp_t Track::MaxTimestamp() { 
+    DbInstance* db_instance = (DbInstance*)m_track_params->track_indentifiers.db_instance;
+    return m_track_params->max_ts-m_ctx->BindingInfo()->trace_properties->db_inst_start_time[db_instance->GuidIndex()];
+}
+
 rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, nullptr);
-    if(m_track_params->process.category == kRocProfVisDmPmcTrack)
+    if(m_track_params->track_indentifiers.category == kRocProfVisDmPmcTrack)
     {
         try{
             m_slices.push_back(std::make_shared<PmcTrackSlice>(this, start, end));
@@ -149,7 +158,7 @@ rocprofvis_dm_size_t   Track::GetMemoryFootprint()
 
 
 rocprofvis_dm_charptr_t  Track::CategoryString(){
-    switch(m_track_params->process.category)
+    switch(m_track_params->track_indentifiers.category)
     {
         case kRocProfVisDmPmcTrack: return "Counter";
         case kRocProfVisDmRegionTrack: return "CPU Thread";

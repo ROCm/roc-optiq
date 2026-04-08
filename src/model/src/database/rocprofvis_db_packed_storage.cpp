@@ -118,7 +118,7 @@ namespace DataModel
             track = row->Get<uint64_t>(track_column_it->m_offset[op], size);
         }
         ROCPROFVIS_ASSERT_MSG_RETURN(db->IsTrackIndexValid(track), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
-        return (DbInstance*)db->TrackPropertiesAt(track)->db_instance;
+        return (DbInstance*)db->TrackPropertiesAt(track)->track_indentifiers.db_instance;
     }
 
     void PackedTable::PlaceValue(size_t col, double value)
@@ -781,32 +781,6 @@ namespace DataModel
                 RemoveDuplicates();
             }
         }
-    }
-
-
-    uint32_t StringTable::ToInt(const char* str) {
-        std::unique_lock lock(m_mutex);
-
-        auto it = m_str_to_id.find(str);
-        if (it != m_str_to_id.end())
-            return it->second;
-
-        uint32_t id = m_id_to_str.size();
-        m_id_to_str.push_back(str);
-        m_str_to_id[str] = id;
-        return id;
-    }
-
-    const char* StringTable::ToString(uint32_t id) const {
-        std::shared_lock lock(m_mutex);
-        if (id >= m_id_to_str.size()) return "";
-        return m_id_to_str[id].c_str();
-    }
-
-    void StringTable::Clear() {
-        std::unique_lock lock(m_mutex);
-        m_id_to_str.clear();
-        m_str_to_id.clear();
     }
 
 }  // namespace DataModel

@@ -6,6 +6,7 @@
 #include "rocprofvis_db_profile.h"
 
 #include <unordered_map>
+#include <set>
 
 namespace RocProfVis
 {
@@ -19,15 +20,14 @@ class RocpdDatabase : public ProfileDatabase
     typedef std::unordered_map<uint64_t, uint32_t> string_index_map_t;
     typedef std::unordered_map<rocprofvis_dm_index_t, std::vector<rocprofvis_db_string_id_t>> string_id_map_t;
 
-    // map array for fast PMC track ID search
-    typedef std::map<std::string, uint32_t> sub_process_map_pmc_t;
-    typedef std::map<uint32_t, sub_process_map_pmc_t> track_find_pmc_map_t;
+    typedef std::unordered_map<uint64_t, rocprofvis_dm_process_id> queue_pid_map_t;
     
 public:
     // class constructor
     // @param path - database file path
     RocpdDatabase(rocprofvis_db_filename_t path) :
-        ProfileDatabase(path) {
+        ProfileDatabase(path), 
+        m_metadata_version_control(this) {
         CreateDbNode(path);
     }
     // class destructor, not really required, unless declared as virtual
@@ -82,6 +82,8 @@ public:
                                         rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) override;
 
     rocprofvis_dm_string_t GetEventTrackQuery( const rocprofvis_dm_track_category_t category);
+    rocprofvis_dm_string_t GetEventLevelQuery( const rocprofvis_dm_track_category_t category);
+    rocprofvis_dm_string_t GetEventSliceQuery( const rocprofvis_dm_track_category_t category);
 
     int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
     
@@ -105,10 +107,19 @@ private:
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
     static int CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
+    // sqlite3_exec callback to collect Agent/Queue/Process dependency
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallBackAgentToProcess(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
     // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     string_index_map_t m_string_index_map; // id to index
     string_id_map_t m_string_id_map; // index to id
+    queue_pid_map_t m_pid_map;
+    RocpdMetadataVersionControl m_metadata_version_control;
 
     // method to remap string IDs. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     // @param record - event record structure
@@ -137,12 +148,21 @@ private:
     {
         return &s_null_data_exceptions_skip;
     }
-    const rocprofvis_dm_track_category_t GetRegionTrackCategory() override 
+    rocprofvis_dm_track_category_t GetRegionTrackCategory() override 
     {
         return kRocProfVisDmRegionTrack;
     }
+
+    MetadataVersionControl* GetMetadataVersionControl() override 
+    { 
+        return &m_metadata_version_control; 
+    };
+
     private:
         rocprofvis_dm_result_t CreateIndexes();
+
+    protected:
+        std::string GetLevelSchemaHashStr();
 
     private:
 
@@ -192,6 +212,10 @@ private:
             s_null_data_exception_string = {
 
             };
+
+        inline static SQLInsertParams s_level_schema_params = { { "eid", "INTEGER PRIMARY KEY" }, { "level", "INTEGER" } };
+
+        friend class RocpdMetadataVersionControl;
 
 };
 

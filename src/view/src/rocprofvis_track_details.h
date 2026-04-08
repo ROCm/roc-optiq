@@ -5,6 +5,7 @@
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include <list>
+#include <string>
 
 namespace RocProfVis
 {
@@ -15,6 +16,7 @@ class DataProvider;
 class TrackTopology;
 struct NodeModel;
 struct ProcessModel;
+struct ProcessorModel;
 struct IterableModel;
 class TimelineSelection;
 struct InfoTable;
@@ -35,9 +37,10 @@ private:
     {
         const int          id;
         const uint64_t     track_id;
-        const std::string* track_name;
+        std::string        track_name;
         NodeModel*         node;
         ProcessModel*      process;
+        ProcessorModel*    processor;
         IterableModel*     queue;
         IterableModel*     instrumented_thread;
         IterableModel*     sampled_thread;

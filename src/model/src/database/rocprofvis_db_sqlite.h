@@ -19,11 +19,13 @@ namespace DataModel
 
 // type of sqlite3_exec callback function
 typedef int (*RpvSqliteExecuteQueryCallback)(void*, int, sqlite3_stmt*, char**);
-typedef struct SQLInsertParams
+typedef struct SQLInsertParam
 {
     const char* column;
     const char* type;
-} SQLInsertParams;
+} SQLInsertParam;
+
+typedef std::vector<SQLInsertParam>  SQLInsertParams;
 
 typedef enum rocprofvis_db_sqlite_query_type_t
 {
@@ -113,8 +115,7 @@ class SqliteDatabase : public Database
         // @param insert_func - lambda method for data insertion
         // @return status of operation
         rocprofvis_dm_result_t CreateSQLTable(const char* table_name, 
-                                              SQLInsertParams* parameters,
-                                              uint8_t num_cols,
+                                              SQLInsertParams parameters,
                                               size_t num_row,
                                               std::function<void(sqlite3_stmt* stmt, int index)> insert_func,
                                               uint32_t db_node_id=0);
@@ -137,7 +138,6 @@ class SqliteDatabase : public Database
         // @return status of operation
         rocprofvis_dm_result_t ExecuteSQLQuery(Future* future, 
                                                 DbInstance* db_instance,
-                                                uint64_t load_hash,
                                                 uint32_t load_id,
                                                 std::vector<std::string> query, 
                                                 RpvSqliteExecuteQueryCallback find_callback,
@@ -273,7 +273,7 @@ class SqliteDatabase : public Database
 
         sqlite3* GetServiceConnection(uint32_t db_node_id=0);
 
-        rocprofvis_dm_result_t ExecuteTransaction(std::vector<std::string> queries, uint32_t db_node_id=0);
+        rocprofvis_dm_result_t ExecuteTransaction(std::vector<std::string> queries, uint32_t db_node_id = 0);
 
         // method to run SQL query
         // @param db_conn - database connection 
@@ -294,11 +294,16 @@ class SqliteDatabase : public Database
         virtual const rocprofvis_null_data_exceptions_int* GetNullDataExceptionsInt() = 0;
         virtual const rocprofvis_null_data_exceptions_string* GetNullDataExceptionsString() = 0;
         virtual const rocprofvis_null_data_exceptions_skip* GetNullDataExceptionsSkip() = 0;
+        virtual MetadataVersionControl* GetMetadataVersionControl() { return nullptr; };
 
         void CreateDbNodes(std::vector<std::string>& multinode_files);
         void CreateDbNode(rocprofvis_db_filename_t filepath);
 
         std::vector<std::unique_ptr<rocprofvis_db_sqlite_db_node_t>> m_db_nodes;
+        sqlite3* GetConnection(uint32_t db_node_id); 
+
+        void ReleaseConnection(sqlite3* conn);
+        void ReleaseConnection(sqlite3* conn, uint32_t db_node_id);
 
     private:     
       
@@ -311,10 +316,6 @@ class SqliteDatabase : public Database
         int Sqlite3Exec(sqlite3* db, const char* query,
                                         int (*callback)(void*, int, sqlite3_stmt*, char**),
                                         void* user_data);
-        sqlite3* GetConnection(uint32_t db_node_id); 
-        
-        void ReleaseConnection(sqlite3* conn);
-        void ReleaseConnection(sqlite3* conn, uint32_t db_node_id);
         static void ReplaceAllSubstrings(std::string& str, const std::string& from, const std::string& to);
         
 

@@ -8,7 +8,7 @@ project(${TARGET_NAME})
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
-set(PROJECT_VERSION_MINOR 2)
+set(PROJECT_VERSION_MINOR 3)
 set(PROJECT_VERSION_PATCH 0)
 set(PROJECT_VERSION_BUILD 3)
 
@@ -20,7 +20,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
-option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute .CSVs" OFF)
+option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute" ON)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
@@ -106,6 +106,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_minimap.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
+    src/view/src/widgets/rocprofvis_flex_container.cpp
     src/view/src/widgets/rocprofvis_tab_container.cpp
     src/view/src/widgets/rocprofvis_editable_textfield.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
@@ -118,14 +119,18 @@ set(VIEW_FILES
 if(COMPUTE_UI_SUPPORT) 
 list(APPEND VIEW_FILES
     src/view/src/compute/rocprofvis_compute_view.cpp
-    src/view/src/compute/rocprofvis_compute_root.cpp
+    src/view/src/compute/rocprofvis_compute_table_view.cpp
+    src/view/src/compute/rocprofvis_compute_kernel_details.cpp
+    src/view/src/compute/rocprofvis_compute_memory_chart.cpp
+    src/view/src/compute/rocprofvis_compute_selection.cpp
     src/view/src/compute/rocprofvis_compute_summary.cpp
-    src/view/src/compute/rocprofvis_compute_block.cpp
-    src/view/src/compute/rocprofvis_compute_table.cpp
-    src/view/src/compute/rocprofvis_compute_data_provider.cpp
     src/view/src/compute/rocprofvis_compute_roofline.cpp
-    src/view/src/compute/rocprofvis_navigation_manager.cpp
+    src/view/src/compute/rocprofvis_compute_workload_view.cpp
+    src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
+    src/view/src/compute/rocprofvis_compute_tester.cpp
+    src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
+    src/view/src/widgets/rocprofvis_query_builder.cpp
 )
 endif(COMPUTE_UI_SUPPORT)
 
@@ -200,6 +205,7 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
@@ -256,12 +262,6 @@ endif()
 
 # === Vulkan ===
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")
-
-# Csv parser enables coverage in debug builds so we need to enable it too
-if(COMPUTE_UI_SUPPORT AND ((CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang") AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR NOT CMAKE_BUILD_TYPE)))
-    message(STATUS "Adding --coverage to linker flags for roc-optiq due to potential gcov symbols from dependencies.")
-    target_link_options(${TARGET_NAME} PRIVATE --coverage)
-endif()
 
 # CPACK Packaging Enabling
 set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})

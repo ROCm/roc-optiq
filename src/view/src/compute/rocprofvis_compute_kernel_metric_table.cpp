@@ -16,6 +16,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdlib>
 
 namespace RocProfVis
 {
@@ -102,6 +104,8 @@ KernelMetricTable::HandleNewData()
                                          m_metrics_info[i].value_name + " " + "(" +
                                          m_metrics_info[i].entry.unit + ")");
     }
+
+    ComputeColumnMaxValues(table.GetTableData());
 
     m_update_table_selection = true; 
 }
@@ -307,7 +311,7 @@ KernelMetricTable::Render()
             if(ImGui::BeginTable("kernel_selection_table", column_count, table_flags,
                                  outer_size))
             {
-                ImGui::TableSetupScrollFreeze(0, 2);  // Freeze header row and filter row
+                ImGui::TableSetupScrollFreeze(1, 2);  // Freeze Name column and header+filter rows
 
                 // Calculate minimum column widths based on character counts
                 float name_min_width = char_width * COL_NAME_CHAR_LIMIT;
@@ -384,14 +388,17 @@ KernelMetricTable::Render()
                     if(col < PERMANENT_COLUMN_COUNT)
                     {
                         ImGui::TableHeader(ImGui::TableGetColumnName(col));
+                        RenderBarChartContextMenu(col);
                         continue;
                     }
 
                     // Sortable header with X button
                     const char* name = ImGui::TableGetColumnName(col);
                     ImGui::TableHeader(name);
+                    bool header_hovered = ImGui::IsItemHovered();
+                    RenderBarChartContextMenu(col);
                     ImVec2 text_size = ImGui::CalcTextSize(name);
-                    if(ImGui::IsItemHovered())
+                    if(header_hovered)
                     {
                         int index = col - PERMANENT_COLUMN_COUNT;
                         if(index < static_cast<int>(m_metrics_info.size()))
@@ -425,7 +432,8 @@ KernelMetricTable::Render()
                 ImGui::TableNextRow();
                 for(int col = 0; col < column_count; col++)
                 {
-                    ImGui::TableSetColumnIndex(col);
+                    if(!ImGui::TableSetColumnIndex(col))
+                        continue;
                     RenderColumnFilter(col);
                 }
 
@@ -523,6 +531,30 @@ KernelMetricTable::Render()
                                 }
                                 else
                                 {
+                                    if(m_bar_chart_columns.count(col) > 0 && !cell.empty())
+                                    {
+                                        auto it = m_column_max_values.find(col);
+                                        if(it != m_column_max_values.end() && it->second > 0.0)
+                                        {
+                                            char*  end = nullptr;
+                                            double val = std::strtod(cell.c_str(), &end);
+                                            if(end != cell.c_str())
+                                            {
+                                                float ratio = static_cast<float>(
+                                                    std::abs(val) / it->second);
+                                                ratio = std::min(ratio, 1.0f);
+
+                                                ImVec2 pos = ImGui::GetCursorScreenPos();
+                                                float  w   = ImGui::GetContentRegionAvail().x;
+                                                float  h   = ImGui::GetTextLineHeightWithSpacing();
+                                                ImGui::GetWindowDrawList()->AddRectFilled(
+                                                    pos,
+                                                    ImVec2(pos.x + w * ratio, pos.y + h),
+                                                    SettingsManager::GetInstance().GetColor(
+                                                        Colors::kHighlightChart));
+                                            }
+                                        }
+                                    }
                                     ImGui::TextUnformatted(cell.c_str());
                                 }
                             }
@@ -582,6 +614,13 @@ KernelMetricTable::Render()
             m_pending_column_filters.erase(m_pending_column_filters.begin() + filter_index);
         }
 
+        int removed_col = PERMANENT_COLUMN_COUNT + remove_index;
+        m_bar_chart_columns.erase(removed_col);
+        std::set<int> adjusted;
+        for(int c : m_bar_chart_columns)
+            adjusted.insert(c > removed_col ? c - 1 : c);
+        m_bar_chart_columns = adjusted;
+
         m_fetch_requested = true;
         spdlog::debug("Removed metric column at index {}", remove_index);
     }
@@ -611,7 +650,15 @@ KernelMetricTable::RenderColumnFilter(int column_index)
     const char* hint = (column_index == 1) ? FILTER_TEXT_HINT_STR.data() : FILTER_TEXT_HINT_NUMERICAL.data();
 
     ImGui::PushID(column_index);
-    ImGui::SetNextItemWidth(-1);  // Fill column width
+
+    ImVec2 cell_min  = ImGui::GetCursorScreenPos();
+    float  cell_width = ImGui::GetContentRegionAvail().x;
+    ImGui::PushClipRect(
+        cell_min,
+        ImVec2(cell_min.x + cell_width, cell_min.y + ImGui::GetFrameHeightWithSpacing()),
+        true);
+
+    ImGui::SetNextItemWidth(cell_width);
 
     if(ImGui::InputTextWithHint("##filter", hint, filter.filter_text,
                                 sizeof(filter.filter_text)))
@@ -619,6 +666,7 @@ KernelMetricTable::RenderColumnFilter(int column_index)
         filter.is_active = (strlen(filter.filter_text) > 0);
     }
 
+    ImGui::PopClipRect();
     ImGui::PopID();
 }
 
@@ -656,6 +704,62 @@ KernelMetricTable::ClearAllFilters()
     m_pending_column_filters.assign(total_columns, ColumnFilter());
     m_column_filters.assign(total_columns, ColumnFilter());
     m_fetch_requested = true;
+}
+
+void
+KernelMetricTable::ComputeColumnMaxValues(
+    const std::vector<std::vector<std::string>>& data)
+{
+    m_column_max_values.clear();
+    if(data.empty() || m_bar_chart_columns.empty())
+        return;
+
+    for(int col : m_bar_chart_columns)
+    {
+        double max_val = 0.0;
+        for(const auto& row : data)
+        {
+            if(col >= static_cast<int>(row.size()) || row[col].empty())
+                continue;
+            char*  end = nullptr;
+            double val = std::strtod(row[col].c_str(), &end);
+            if(end != row[col].c_str())
+                max_val = std::max(max_val, std::abs(val));
+        }
+        if(max_val > 0.0)
+            m_column_max_values[col] = max_val;
+    }
+}
+
+void
+KernelMetricTable::RenderBarChartContextMenu(int col)
+{
+    if(col == ID_COLUMN_INDEX || col == NAME_COLUMN_INDEX)
+        return;
+
+    ImGui::PushID(col + 10000);
+    if(ImGui::BeginPopupContextItem("##bar_ctx"))
+    {
+        bool has_bars = m_bar_chart_columns.count(col) > 0;
+        if(ImGui::MenuItem(has_bars ? "Hide Bar Chart" : "Show Bar Chart"))
+        {
+            if(has_bars)
+            {
+                m_bar_chart_columns.erase(col);
+                m_column_max_values.erase(col);
+            }
+            else
+            {
+                m_bar_chart_columns.insert(col);
+                ComputeColumnMaxValues(
+                    m_data_provider.ComputeModel()
+                        .GetKernelSelectionTable()
+                        .GetTableData());
+            }
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopID();
 }
 
 bool

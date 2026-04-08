@@ -424,8 +424,7 @@ ComputeTester::Render()
             ImGui::EndTable();
         }
         ImGui::NewLine();
-        ImGui::BeginDisabled(m_selections.metric_ids.empty() ||
-                             m_selections.kernel_ids.empty());
+        ImGui::BeginDisabled(m_selections.metric_ids.empty());
 
         if(ImGui::Button("Clear all clients"))
         {

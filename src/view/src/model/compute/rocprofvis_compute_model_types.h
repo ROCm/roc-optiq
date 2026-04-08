@@ -124,8 +124,10 @@ struct WorkloadInfo
 
 struct MetricValue 
 {
-    AvailableMetrics::Entry* entry;
-    KernelInfo*              kernel;
+    AvailableMetrics::Entry*                   entry;
+    rocprofvis_controller_metric_source_type_t source_type;
+    WorkloadInfo* workload;  // Valid when source_type is workload
+    KernelInfo*   kernel;    // Valid when source_type is kernel
     std::unordered_map<std::string, double> values;
 };
 

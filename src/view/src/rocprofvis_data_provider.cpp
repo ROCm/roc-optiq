@@ -3672,7 +3672,17 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
         rocprofvis_controller_metrics_container_t* output =
             rocprofvis_controller_metrics_container_alloc();
         ROCPROFVIS_ASSERT(future && args && output);
-        rocprofvis_result_t result =
+        rocprofvis_result_t result = rocprofvis_controller_set_uint64(
+            args, kRPVControllerMetricArgsWorkloadId, 0, metrics_params.m_workload_id);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        for(size_t i = 0; i < metrics_params.m_kernel_ids.size(); i++)
+        {
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerMetricArgsKernelIdIndexed, i,
+                static_cast<uint64_t>(metrics_params.m_kernel_ids[i]));
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
+        result =
             rocprofvis_controller_set_uint64(args, kRPVControllerMetricArgsNumKernels, 0,
                                              metrics_params.m_kernel_ids.size());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -4265,20 +4275,40 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
         rocprofvis_controller_metrics_container_t* container = req.request_obj_handle;
         if(req.response_code == kRocProfVisResultSuccess)
         {
-            uint64_t            num_metrics = 0;
-            uint64_t            uint_data;
-            double              double_data;
-            std::string         string_data;
+            uint64_t                                   num_metrics = 0;
+            rocprofvis_controller_metric_source_type_t metric_type;
+            uint64_t                                   uint_data;
+            double                                     double_data;
+            std::string                                string_data;
             rocprofvis_result_t result = rocprofvis_controller_get_uint64(
                 container, kRPVControllerMetricsContainerNumMetrics, 0, &num_metrics);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             for(uint64_t i = 0; i < num_metrics; i++)
             {
                 result = rocprofvis_controller_get_uint64(
-                    container, kRPVControllerMetricsContainerKernelIdIndexed, i,
+                    container, kRPVControllerMetricsContainerMetricSourceTypeIndexed, i,
                     &uint_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                uint32_t kernel_id   = static_cast<uint32_t>(uint_data);
+                metric_type =
+                    static_cast<rocprofvis_controller_metric_source_type_t>(uint_data);
+                if(metric_type == kRPVControllerMetricSourceTypeWorkload)
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        container, kRPVControllerMetricsContainerWorkloadIdIndexed, i,
+                        &uint_data);
+                }
+                else if(metric_type == kRPVControllerMetricSourceTypeKernel)
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        container, kRPVControllerMetricsContainerKernelIdIndexed, i,
+                        &uint_data);
+                }
+                else
+                {
+                    result = kRocProfVisResultInvalidType;
+                }
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                uint32_t source_id   = static_cast<uint32_t>(uint_data);
                 string_data          = GetString(container,
                                                  kRPVControllerMetricsContainerMetricIdIndexed, i);
                 auto category_id_end = string_data.find('.');
@@ -4296,7 +4326,8 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
                     container, kRPVControllerMetricsContainerMetricValueValueIndexed, i,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                m_compute_model.AddMetricValue(request_params->m_client_id, request_params->m_workload_id, kernel_id,
+                m_compute_model.AddMetricValue(request_params->m_client_id, metric_type,
+                                               request_params->m_workload_id, source_id,
                                                category_id, table_id, entry_id,
                                                string_data, double_data);
             }

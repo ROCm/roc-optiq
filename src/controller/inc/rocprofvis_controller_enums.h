@@ -898,6 +898,7 @@ typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
  */
 typedef enum rocprofvis_controller_metric_arguments_t : uint32_t
 {
+    kRPVControllerMetricArgsWorkloadId,
     kRPVControllerMetricArgsNumKernels,
     kRPVControllerMetricArgsKernelIdIndexed,
     kRPVControllerMetricArgsNumMetrics,
@@ -938,11 +939,22 @@ typedef enum rocprofvis_controller_metrics_container_properties_t : uint32_t
     kRPVControllerMetricsContainerNumMetrics = __kRPVControllerMetricsContainerPropertiesFirst,
     kRPVControllerMetricsContainerMetricIdIndexed,
     kRPVControllerMetricsContainerMetricNameIndexed,
+    kRPVControllerMetricsContainerMetricSourceTypeIndexed,
+    kRPVControllerMetricsContainerWorkloadIdIndexed,
     kRPVControllerMetricsContainerKernelIdIndexed,
     kRPVControllerMetricsContainerMetricValueNameIndexed,
     kRPVControllerMetricsContainerMetricValueValueIndexed,
     __kRPVControllerMetricsContainerPropertiesLast
 } rocprofvis_controller_metrics_container_properties_t;
+
+/*
+ * Metric source types.
+ */
+typedef enum rocprofvis_controller_metric_source_type_t : uint32_t
+{
+    kRPVControllerMetricSourceTypeWorkload,
+    kRPVControllerMetricSourceTypeKernel,
+} rocprofvis_controller_metric_aggregation_type_t;
 
 /*
  * Properties for roofline.

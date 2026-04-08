@@ -200,6 +200,9 @@ public:
         const std::function<void(const std::string&, bool)>& callback);
     void SetEventDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, bool)>& callback);
+    void SetRequestProgressUpdateCallback(
+        const std::function<void(const RequestInfo&, uint64_t, const std::string&)>&
+            callback);
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -248,6 +251,7 @@ private:
 
     void HandleLoadTrackMetaData();
     void HandleRequests();
+    void UpdateRequestProgress(RequestInfo& req);
 
     void ProcessRequest(RequestInfo& req);
     void ProcessLoadSystemTrace(RequestInfo& req);
@@ -308,6 +312,9 @@ private:
     std::function<void(bool)> m_cleanup_database_callback;
     // Callback when table export has completed
     std::function<void(const std::string&, bool)> m_table_export_callback;
+    // Callback to update request progress
+    std::function<void(const RequestInfo&, uint64_t, const std::string&)>
+        m_request_progress_callback;
     // Current loading status message retrieved form data model
     std::string m_progress_mesage;
     // Current loading status progress in percents

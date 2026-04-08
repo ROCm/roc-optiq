@@ -24,7 +24,6 @@ constexpr uint64_t    FETCH_CHUNK_SIZE               = 1000;
 constexpr const char* START_TS_COLUMN_NAME           = "start";
 constexpr const char* END_TS_COLUMN_NAME             = "end";
 constexpr const char* DURATION_COLUMN_NAME           = "duration";
-constexpr const char* EXPORT_PENDING_NOTIFICATION_ID = "TableExportNotification";
 
 InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
                                          const std::string& no_data_text,
@@ -51,6 +50,7 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 , m_selected_column(-1)
 , m_hovered_row(-1)
 , m_no_data_text(no_data_text)
+, m_export_notification_id(dp.GetTraceFilePath())
 , m_timeline_selection(timeline_selection)
 , m_horizontal_scroll(0.0f)
 , m_time_column_indices(
@@ -73,11 +73,25 @@ InfiniteScrollTable::InfiniteScrollTable(DataProvider& dp, TableType table_type,
 
     m_data_provider.SetExportTableCallback(
         [this](const std::string& file_path, bool success) {
-            NotificationManager::GetInstance().Hide(EXPORT_PENDING_NOTIFICATION_ID);
+            NotificationManager::GetInstance().Hide(m_export_notification_id);
             NotificationManager::GetInstance().Show(
                 success ? "Exported: " + file_path : "Failed to export: " + file_path,
                 success ? NotificationLevel::Success : NotificationLevel::Error);
         });
+
+    auto request_progress_update_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto event = std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
+        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath() &&
+           event->GetRequestType() == RequestType::kTableExport)
+        {
+            NotificationManager::GetInstance().UpdateProgress(m_export_notification_id,
+                                                              event->GetProgressPercent(),
+                                                              event->GetMessage());
+        }
+    };
+    m_request_progress_update_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        request_progress_update_handler);
 }
 
 InfiniteScrollTable::~InfiniteScrollTable()
@@ -86,6 +100,9 @@ InfiniteScrollTable::~InfiniteScrollTable()
                                              m_new_table_data_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimeFormatChanged), m_format_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        m_request_progress_update_token);
 }
 
 uint64_t
@@ -461,16 +478,7 @@ InfiniteScrollTable::Render()
 
     if(show_loading_indicator)
     {
-        // Show a loading indicator if the data is being fetched
-        // Create an overlay child window to display the loading indicator
-        ImGui::SetCursorPos(ImVec2(0, 0));
-        // set transparent background for the overlay window
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-        ImGui::BeginChild(m_widget_name.c_str(), ImGui::GetWindowSize(),
-                          ImGuiChildFlags_None);
-        RenderLoadingIndicator();
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
+        RenderLoadingIndicator(m_settings.GetColor(Colors::kTextMain));
     }
 
     ImGui::EndChild();
@@ -832,35 +840,10 @@ InfiniteScrollTable::ExportToFile() const
                    table_params->m_sort_order, file_path)))
             {
                 NotificationManager::GetInstance().ShowPersistent(
-                    EXPORT_PENDING_NOTIFICATION_ID, "Exporting: " + file_path,
+                    m_export_notification_id, "Exporting: " + file_path,
                     NotificationLevel::Info);
             }
         });
-}
-
-void
-InfiniteScrollTable::RenderLoadingIndicator() const
-{
-    float dot_radius  = 5.0f;
-    int   num_dots    = 3;
-    float dot_spacing = 5.0f;
-    float anim_speed  = 5.0f;
-
-    ImVec2 dot_size = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
-
-    ImVec2 window_pos = ImGui::GetWindowPos();
-    ImVec2 view_rect  = ImGui::GetWindowSize();
-    ImVec2 pos        = ImGui::GetCursorPos();
-    ImVec2 center_pos = ImVec2(window_pos.x + (view_rect.x - dot_size.x) * 0.5f,
-                               window_pos.y + (view_rect.y - dot_size.y) * 0.5f);
-
-    ImGui::SetCursorScreenPos(center_pos);
-
-    RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                               m_settings.GetColor(Colors::kTextMain), anim_speed);
-
-    // Reset cursor position after rendering spinner
-    ImGui::SetCursorPos(pos);
 }
 
 }  // namespace View

@@ -23,10 +23,6 @@ constexpr double PIE_CHART_RADIUS                = 1.0;
 constexpr double BAR_CHART_THICKNESS             = 0.67;
 constexpr ImVec2 CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
 constexpr float  FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
-constexpr float  LOADING_DOT_SIZE                = 5.0f;
-constexpr float  LOADING_DOT_SPACING             = 5.0f;
-constexpr int    LOADING_DOT_COUNT               = 3;
-constexpr float  LOADING_DOT_SPEED               = 5.0f;
 constexpr ImVec2 INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
 constexpr float  INITIAL_RELATIVE_SIZE           = 0.8f;
 
@@ -109,14 +105,7 @@ SummaryView::Render()
         if(m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID) ||
            m_data_provider.GetState() == ProviderState::kLoading)
         {
-            ImGui::SetCursorPos(
-                (ImGui::GetWindowContentRegionMax() -
-                 MeasureLoadingIndicatorDots(LOADING_DOT_SIZE, LOADING_DOT_COUNT,
-                                             LOADING_DOT_SPACING)) *
-                0.5f);
-            RenderLoadingIndicatorDots(
-                LOADING_DOT_SIZE, LOADING_DOT_COUNT, LOADING_DOT_SPACING,
-                m_settings.GetColor(Colors::kTextMain), LOADING_DOT_SPEED);
+            RenderLoadingIndicator(m_settings.GetColor(Colors::kTextMain));
         }
         else
         {
@@ -796,7 +785,7 @@ TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
             ImGui::TableSetColumnIndex(0);
             if(ImGui::Selectable((*m_kernels)[i].name.c_str(), m_selected_idx == i,
                                  ImGuiSelectableFlags_SpanAllColumns |
-                                     ImGuiSelectableFlags_AllowItemOverlap))
+                                     ImGuiSelectableFlags_AllowOverlap))
             {
                 ToggleSelectKernel(i);
             }
@@ -863,7 +852,7 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
         ImGui::BeginChild("legend", ImVec2(region.x * 0.25f, 0),
-                          ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeY);
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         float legend_width = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
         float icon_width   = ImGui::GetFontSize();
         float scroll_bar_width = ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f;

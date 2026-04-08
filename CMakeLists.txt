@@ -24,7 +24,7 @@ option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute" ON)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
-option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" OFF)
+option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 
 if(APPLE AND USE_NATIVE_FILE_DIALOG)
     set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
@@ -127,6 +127,7 @@ list(APPEND VIEW_FILES
     src/view/src/compute/rocprofvis_compute_roofline.cpp
     src/view/src/compute/rocprofvis_compute_workload_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
+    src/view/src/compute/rocprofvis_compute_comparison.cpp
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
@@ -153,14 +154,18 @@ endif(WIN32)
 
 if(APPLE)
     add_executable(${TARGET_NAME} MACOSX_BUNDLE
+        src/app/src/rocprofvis_imgui_backend.cpp
         src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/rocprofvis_imgui_opengl.cpp
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
         ${VIEW_FILES})
 else()
     add_executable(${TARGET_NAME}
+        src/app/src/rocprofvis_imgui_backend.cpp
         src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/rocprofvis_imgui_opengl.cpp
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
@@ -222,8 +227,8 @@ target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(APPLE)
     set_target_properties(${TARGET_NAME} PROPERTIES
-        BUILD_RPATH "@executable_path/../Frameworks"
-        INSTALL_RPATH "@executable_path/../Frameworks"
+        BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
+        INSTALL_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
     )
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
@@ -242,10 +247,7 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             "$<TARGET_FILE_NAME:glfw>"
             "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${Vulkan_LIBRARIES}"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMENT "Staging GLFW and Vulkan dylibs into the app bundle"
+        COMMENT "Staging GLFW dylib into the app bundle"
     )
 endif()
 
@@ -262,6 +264,10 @@ endif()
 
 # === Vulkan ===
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")
+
+# === OpenGL (fallback when Vulkan fails) ===
+find_package(OpenGL REQUIRED)
+target_link_libraries(${TARGET_NAME} PRIVATE OpenGL::GL)
 
 # CPACK Packaging Enabling
 set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
@@ -328,9 +334,15 @@ install(FILES ${LICENSE_FILE}
        COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
-install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
-        COMPONENT ${RUNTIME_COMP_TYPE} )
+if(APPLE)
+    install(TARGETS ${TARGET_NAME}
+            BUNDLE DESTINATION .
+            COMPONENT ${RUNTIME_COMP_TYPE})
+else()
+    install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            COMPONENT ${RUNTIME_COMP_TYPE} )
+endif()
 
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
@@ -391,12 +403,15 @@ endif()
 include(CPack)
 
 # Copy runtime files to target folder
+# Uses a no-op (cmake -E true) when there are no runtime DLLs (e.g. GLFW_LINK_STATIC=ON)
 if(WIN32)
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_RUNTIME_DLLS:${TARGET_NAME}>"
-            "$<TARGET_FILE_DIR:${TARGET_NAME}>"
+        COMMAND ${CMAKE_COMMAND} -E
+            $<IF:$<BOOL:$<TARGET_RUNTIME_DLLS:${TARGET_NAME}>>,copy_if_different,true>
+            $<TARGET_RUNTIME_DLLS:${TARGET_NAME}>
+            $<$<BOOL:$<TARGET_RUNTIME_DLLS:${TARGET_NAME}>>:$<TARGET_FILE_DIR:${TARGET_NAME}>>
+        COMMAND_EXPAND_LISTS
         COMMENT "Copying dependent DLLs to executable directory"
     )
 endif()

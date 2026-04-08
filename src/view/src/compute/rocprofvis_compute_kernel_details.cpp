@@ -92,7 +92,11 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             {
                 m_roofline->SetWorkload(evt->GetId());
             }
-            m_sol_table->Clear();
+            if(m_sol_table)
+            {
+                m_sol_table->Clear();
+            }
+            
         }
     };
 
@@ -109,6 +113,10 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             {
                 m_roofline->SetKernel(evt->GetId());
             }
+            if(m_sol_table)
+            {
+                m_sol_table->FetchMetrics();
+            }
         }
     };
 
@@ -123,7 +131,6 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             if(m_memory_chart.GetClientId() == evt->GetClientId())
             {
                 m_memory_chart.UpdateMetrics();
-                m_sol_table->FetchMetrics();
             }
             if(m_sol_table->GetClientId() == evt->GetClientId())
             {

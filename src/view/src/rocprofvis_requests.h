@@ -281,6 +281,7 @@ struct RequestInfo
     std::shared_ptr<RequestParamsBase>    custom_params;  // custom request parameters
     std::chrono::steady_clock::time_point request_time;  // time when the request was made
     uint64_t                              response_code;  // response code for the request
+    uint64_t                              request_progress; // progress percentage of the request 
 };
 
 }  // namespace View

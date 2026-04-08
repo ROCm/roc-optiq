@@ -145,6 +145,8 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
 * @param params tracks pointer to array of parameters as rocprofvis_db_compute_param_t structures
 * @param out_query pointer to a string returned to a caller
 * @return status of operation
+* 
+* @note caller is responsible for freeing out_query
 *
 ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
@@ -153,6 +155,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
     char** out_query);
 
 /****************************************************************************************************
+* @note caller is responsible for freeing out_query
 * ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_database_t database, 

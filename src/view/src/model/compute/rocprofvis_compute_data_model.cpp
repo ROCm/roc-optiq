@@ -3,6 +3,7 @@
 
 #include "rocprofvis_compute_data_model.h"
 #include <algorithm>
+#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -119,59 +120,87 @@ ComputeDataModel::OrderAvailableMetrics(WorkloadInfo& workload)
 }
 
 bool
-ComputeDataModel::AddMetricValue(uint64_t store_id, uint32_t workload_id,
-                                 uint32_t kernel_id, uint32_t category_id,
-                                 uint32_t table_id, uint32_t entry_id,
-                                 std::string& value_name, double value)
+ComputeDataModel::AddMetricValue(uint64_t                                   store_id,
+                                 rocprofvis_controller_metric_source_type_t source_type,
+                                 uint32_t workload_id, uint32_t kernel_id,
+                                 uint32_t category_id, uint32_t table_id,
+                                 uint32_t entry_id, std::string& value_name, double value)
 {
     bool valid = false;
     if(m_workloads.count(workload_id))
     {
         WorkloadInfo& workload = m_workloads.at(workload_id);
-        if(workload.kernels.count(kernel_id) &&
-           workload.available_metrics.tree.count(category_id))
+        if(source_type == kRPVControllerMetricSourceTypeWorkload)
         {
-            KernelInfo&                 kernel = workload.kernels.at(kernel_id);
-            AvailableMetrics::Category& category =
-                workload.available_metrics.tree.at(category_id);
-            if(category.tables.count(table_id) &&
-               category.tables.at(table_id).entries.count(entry_id))
+            valid = true;
+        }
+        else if(source_type == kRPVControllerMetricSourceTypeKernel)
+        {
+            valid = workload.kernels.count(kernel_id) > 0;
+        }
+        if(valid)
+        {
+            valid =
+                workload.available_metrics.tree.count(category_id) > 0 &&
+                workload.available_metrics.tree.at(category_id).tables.count(table_id) >
+                    0 &&
+                workload.available_metrics.tree.at(category_id)
+                        .tables.at(table_id)
+                        .entries.count(entry_id) > 0;
+            if(valid)
             {
                 AvailableMetrics::Entry& entry =
-                    category.tables.at(table_id).entries.at(entry_id);
-
+                    workload.available_metrics.tree.at(category_id)
+                        .tables.at(table_id)
+                        .entries.at(entry_id);
                 MetricKey metric_id{};
-
                 metric_id.fields.category_id = category_id;
-                metric_id.fields.table_id = table_id;
-                metric_id.fields.entry_id = entry_id;
-            
-                MetricStore& ms = m_metrics[store_id][kernel_id];
-                // Check if metric value already exists for the given metric ID
-                if (ms.m_metrics_map.count(metric_id.id))
+                metric_id.fields.table_id    = table_id;
+                metric_id.fields.entry_id    = entry_id;
+
+                if(source_type == kRPVControllerMetricSourceTypeWorkload)
                 {
-                    // Update existing metric value
-                    ms.m_metrics_map[metric_id.id]->values[value_name] = value;
-                    ms.m_metrics_map[metric_id.id]->entry = &entry;
-                    ms.m_metrics_map[metric_id.id]->kernel = &kernel;
+                    // Do something...(spdlog header include can be removed after)
+                    spdlog::info("Workload metric: id={}.{}.{} name={} workload={} "
+                                 "value_name={} value={}",
+                                 category_id, table_id, entry_id, entry.name,
+                                 workload.name, value_name, value);
                 }
-                else
+                else if(source_type == kRPVControllerMetricSourceTypeKernel)
                 {
-                    // Create new metric value and add to the map and vector
-                    auto metric = std::make_shared<MetricValue>(
-                        MetricValue{ &entry, &kernel, { { value_name, value } } });
+                    MetricStore& ms = m_metrics[store_id][kernel_id];
+                    // Check if metric value already exists for the given metric ID
+                    if(ms.m_metrics_map.count(metric_id.id))
+                    {
+                        // Update existing metric value
+                        ms.m_metrics_map[metric_id.id]->values[value_name] = value;
+                        ms.m_metrics_map[metric_id.id]->entry              = &entry;
+                        ms.m_metrics_map[metric_id.id]->source_type        = source_type;
+                        ms.m_metrics_map[metric_id.id]->workload           = nullptr;
+                        ms.m_metrics_map[metric_id.id]->kernel =
+                            &workload.kernels.at(kernel_id);
+                    }
+                    else
+                    {
+                        // Create new metric value and add to the map and vector
+                        auto metric = std::make_shared<MetricValue>(
+                            MetricValue{ &entry,
+                                         source_type,
+                                         nullptr,
+                                         &workload.kernels.at(kernel_id),
+                                         { { value_name, value } } });
 
-                    ms.m_metrics_data.push_back(metric);
-                    ms.m_metrics_map[metric_id.id] = metric;
+                        ms.m_metrics_data.push_back(metric);
+                        ms.m_metrics_map[metric_id.id] = metric;
 
-                    // Also add to the table ID map for easy lookup by table
-                    TableKey table_id_union{};
-                    table_id_union.fields.category_id = category_id;
-                    table_id_union.fields.table_id = table_id;
+                        // Also add to the table ID map for easy lookup by table
+                        TableKey table_id_union{};
+                        table_id_union.fields.category_id = category_id;
+                        table_id_union.fields.table_id    = table_id;
 
-                    ms.m_metrics_by_table_id[table_id_union.id][entry_id] = metric;
+                        ms.m_metrics_by_table_id[table_id_union.id][entry_id] = metric;
+                    }
                 }
-                valid = true;
             }
         }
     }

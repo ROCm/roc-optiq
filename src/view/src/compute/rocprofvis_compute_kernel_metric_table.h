@@ -27,8 +27,6 @@ public:
     void HandleNewData();
 
 private:
-
-    void RenderLoadingIndicator() const;
     void RenderColumnFilter(int column_index);
     void ApplyFilters();
     void ClearAllFilters();

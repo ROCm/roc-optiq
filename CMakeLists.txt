@@ -247,10 +247,18 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             "$<TARGET_FILE_NAME:glfw>"
             "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
+        COMMENT "Staging GLFW dylib into the app bundle"
+    )
+
+    # Resolve the real file behind the libvulkan.dylib symlink and copy it
+    # as libvulkan.1.dylib so that the @rpath/libvulkan.1.dylib reference resolves.
+    get_filename_component(_vulkan_real "${Vulkan_LIBRARY}" REALPATH)
+    add_custom_command(
+        TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${Vulkan_LIBRARIES}"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMENT "Staging GLFW and Vulkan dylibs into the app bundle"
+            "${_vulkan_real}"
+            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+        COMMENT "Staging Vulkan loader (libvulkan.1.dylib) into the app bundle"
     )
 endif()
 

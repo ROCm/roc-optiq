@@ -6,6 +6,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_settings_manager.h"
 #include "imgui.h"
+#include <cstdio>
 #include <cstring>
 
 namespace RocProfVis
@@ -38,12 +39,20 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
 
     if (profiler_settings.profiler_path != "")
     {
-        strncpy_s(m_profiler_path, sizeof(m_profiler_path), profiler_settings.profiler_path.c_str(), _TRUNCATE);
+        std::snprintf(
+            m_profiler_path,
+            sizeof(m_profiler_path),
+            "%s",
+            profiler_settings.profiler_path.c_str());
     }
 
     if (profiler_settings.profiler_output_directory != "")
     {
-        strncpy_s(m_output_directory, sizeof(m_output_directory), profiler_settings.profiler_output_directory.c_str(), _TRUNCATE);
+        std::snprintf(
+            m_output_directory,
+            sizeof(m_output_directory),
+            "%s",
+            profiler_settings.profiler_output_directory.c_str());
     }
 }
 
@@ -413,17 +422,17 @@ void ProfilerLauncherDialog::OnBrowseOutputDirectory()
 
 void ProfilerLauncherDialog::OnProfilerPathSelected(const std::string& path)
 {
-    strncpy_s(m_profiler_path, sizeof(m_profiler_path), path.c_str(), _TRUNCATE);
+    std::snprintf(m_profiler_path, sizeof(m_profiler_path), "%s", path.c_str());
 }
 
 void ProfilerLauncherDialog::OnTargetExecutableSelected(const std::string& path)
 {
-    strncpy_s(m_target_executable, sizeof(m_target_executable), path.c_str(), _TRUNCATE);
+    std::snprintf(m_target_executable, sizeof(m_target_executable), "%s", path.c_str());
 }
 
 void ProfilerLauncherDialog::OnOutputDirectorySelected(const std::string& path)
 {
-    strncpy_s(m_output_directory, sizeof(m_output_directory), path.c_str(), _TRUNCATE);
+    std::snprintf(m_output_directory, sizeof(m_output_directory), "%s", path.c_str());
 }
 
 void ProfilerLauncherDialog::PollProfilerState()

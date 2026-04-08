@@ -13,6 +13,169 @@ namespace RocProfVis
 {
 namespace View
 {
+
+MetricTableBase::MetricTableBase(
+    std::function<void(MetricId metric_id, const std::string&)>
+        set_to_kernel_table_callback)
+: m_set_to_kernel_table_callback(set_to_kernel_table_callback)
+{}
+
+void
+MetricTableBase::Render()
+{
+    if(!m_table_title.empty())
+        SectionTitle(m_table_title.c_str());
+
+    if(m_rows.empty())
+    {
+        ImGui::TextDisabled("Pin the metric to see it here");
+        return;
+    }
+
+    if(ImGui::BeginChild(("##" + m_table_title + "layout").c_str(),
+                         ImVec2(0, GetTableHight()), false,
+                         ImGuiWindowFlags_HorizontalScrollbar))
+    {
+
+        int num_columns = static_cast<int>(m_columns.size());
+        if(!ImGui::BeginTable(("##" + m_table_title).c_str(), num_columns,
+                              m_table_flags))
+            return;
+
+        for(const auto& column : m_columns)
+            ImGui::TableSetupColumn(column.second.c_str());
+
+        ImGui::TableHeadersRow();
+
+        uint32_t row_idx = 0;
+        for(auto& row : m_rows)
+        {
+            ImGui::PushID(row_idx++);
+            ImGui::TableNextRow();
+
+            for(auto index = 0; index < m_columns.size() - 1; index++)
+            {
+                auto menu_func = [&](const char* value_to_copy) {
+                    this->ContextMenu(value_to_copy, index, row);
+                };
+                RenderRowValues(index, row, menu_func);
+            }
+
+            RenderUnitValue(row);
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    ImGui::EndChild();
+}
+
+float
+MetricTableBase::GetTableHight() const
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    float             line_height =
+        ImGui::GetTextLineHeightWithSpacing() + style.CellPadding.y * 2.0f;
+
+    uint32_t max_rows = 0;
+    if (m_max_rows_in_table == 0)
+    {
+        max_rows = m_rows.size();
+    }
+    else
+    {
+        max_rows =
+            m_rows.size() < m_max_rows_in_table ? m_rows.size() : m_max_rows_in_table;
+    }
+        
+    return style.ScrollbarSize + line_height + (max_rows * line_height);
+}
+
+void MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t index, const std::pair<MetricId, Row>& row)
+{
+    if(ImGui::BeginPopupContextItem())
+    {
+        if(ImGui::MenuItem("Copy"))
+        {
+            ImGui::SetClipboardText(value_to_copy);
+            NotificationManager::GetInstance().Show(
+                    COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+        }
+        if (m_set_to_kernel_table_callback)
+        {
+            if(ImGui::MenuItem("Show in kernel table"))
+            {
+                m_set_to_kernel_table_callback(row.first, m_columns.at(index));
+            }
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void
+MetricTableBase::RenderRowValues(
+    uint32_t index, const std::pair<MetricId, Row>& row,
+    std::function<void(const char* value_to_copy)> menu_func)
+{
+    ImGui::TableNextColumn();
+    if(auto it = row.second.find(index); it == row.second.end())
+    {
+        ImGui::TextDisabled("N/A");
+    }
+    else
+    {
+        CopyableTextUnformatted(row.second.at(index).value.c_str(),
+                                "##value" + std::to_string(index), COPY_DATA_NOTIFICATION,
+                                false, true, menu_func);
+        RenderTooltip(row.second.at(index));
+    }
+}
+
+void
+MetricTableBase::RenderUnitValue(const std::pair<MetricId, Row>& row)
+{
+    auto menu_func = [&](const char* value_to_copy) {
+        this->ContextMenu(value_to_copy, LAST_INDEX, row);
+    };
+    ImGui::TableNextColumn();
+    if(row.second.at(LAST_INDEX).value.empty())
+    {
+        ImGui::TextDisabled("N/A");
+    }
+    else
+    {
+        CopyableTextUnformatted(row.second.at(LAST_INDEX).value.c_str(), "##metric_unit",
+                                COPY_DATA_NOTIFICATION, false, true, menu_func);
+        RenderTooltip(row.second.at(LAST_INDEX));
+    }
+}
+
+void
+MetricTableBase::RenderTooltip(const RowValue& row)
+{
+    auto tooltip_text = row.tooltip.empty() ? row.value : row.tooltip;
+
+    if(ImGui::IsItemHovered())
+    {
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                            ImVec2(TABLE_TOOLTIP_MAX_WIDTH, FLT_MAX));
+        BeginTooltipStyled();
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TABLE_TOOLTIP_MAX_WIDTH);
+        ImGui::TextUnformatted(tooltip_text.c_str());
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();
+    }
+}
+
+void
+MetricTableBase::FillDefaultColumns()
+{
+    m_columns[0]          = "Metric ID";
+    m_columns[1]          = "Metric";
+    m_lust_column_index   = 2;
+    m_columns[LAST_INDEX] = "Unit";
+}
+
+//---------------------------------------------------------
 MetricTableCache::MetricTableCache(
     std::function<void(MetricId)> add_row_func,
     std::function<void(MetricId metric_id, const std::string& value_name)>
@@ -251,6 +414,124 @@ MetricTableCache::Empty() const
 
 //---------------------------------------------------------
 
+newMetricTableCache::newMetricTableCache(
+    std::function<void(MetricId)> add_row_func,
+    std::function<void(MetricId metric_id, const std::string& value_name)>
+        set_to_kernel_table)
+: MetricTableBase(set_to_kernel_table)
+, m_pin_metric_func(add_row_func)
+{
+}
+
+void
+newMetricTableCache::ContextMenu(const char* value_to_copy, uint32_t index,
+                                 const std::pair<MetricId, Row>& row)
+{
+    if(ImGui::BeginPopupContextItem())
+    {
+        if(ImGui::MenuItem("Copy"))
+        {
+            ImGui::SetClipboardText(value_to_copy);
+            NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+                                                    NotificationLevel::Info);
+        }
+        if(m_pin_metric_func)
+        {
+            if(ImGui::MenuItem("Pin metric"))
+            {
+                m_pin_metric_func(
+                    { row.first.category_id, row.first.table_id, row.first.entry_id });
+            }
+        }
+        if(index != 0 && index != 1)
+        {
+            if(ImGui::MenuItem("Set Metric to kernel table"))
+            {
+                if(m_set_to_kernel_table_callback)
+                {
+                    m_set_to_kernel_table_callback(
+                        { row.first.category_id, row.first.table_id, row.first.entry_id },
+                        m_columns[index]);
+                }
+            }
+        }
+
+        ImGui::EndPopup();
+    }
+}
+
+void
+newMetricTableCache::Populate(const AvailableMetrics::Table& table,
+                           const MetricValueLookup&       get_value)
+{
+    FillDefaultColumns();
+    m_table_title = table.name;
+
+    if (table.value_names.empty())
+    {
+        m_columns[m_lust_column_index++] = "Value";
+    }
+    else
+    {
+        for(const auto& value_name : table.value_names)
+            m_columns[m_lust_column_index++] = value_name;
+    }
+
+    char buf[64];
+    for(const auto* entry : table.ordered_entries)
+    {
+        Row row;
+        MetricId metric_id{ entry->category_id, entry->table_id, entry->id };
+        row[0].value = metric_id.ToString();
+        row[1].value = entry->name;
+        row[1].tooltip = entry->description;
+        row[LAST_INDEX].value = entry->unit.empty() ? "N/A" : entry->unit;
+
+        auto metric_value = get_value(entry->id);
+
+        if(table.value_names.empty())
+        {
+            if(metric_value && metric_value->entry && !metric_value->values.empty())
+            {
+                snprintf(buf, sizeof(buf), "%.2f", metric_value->values.begin()->second);
+                row[2].value = buf;
+            }
+        }
+        else
+        {
+            for(size_t value_index = 0; value_index < table.value_names.size();
+                value_index++)
+            {
+                const auto& value_name = table.value_names[value_index];
+                if(metric_value && metric_value->entry &&
+                   metric_value->values.count(value_name))
+                {
+                    snprintf(buf, sizeof(buf), "%.2f",
+                             metric_value->values.at(value_name));
+                    row[value_index + 2].value = buf;
+                }
+            }
+        }
+        m_rows[metric_id] = std::move(row);
+    }
+}
+
+
+void
+newMetricTableCache::Clear()
+{
+    m_rows.clear();
+    m_columns.clear();
+}
+
+bool
+newMetricTableCache::Empty() const
+{
+    return m_rows.empty();
+}
+
+//---------------------------------------------------------
+
 MetricTableWidget::MetricTableWidget(DataProvider& data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection,
                                      uint32_t category_id, uint32_t table_id)
@@ -322,23 +603,20 @@ MetricTableWidget::UpdateTable()
 
 PinedMetricTable::PinedMetricTable(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
-    uint64_t client_id, std::function<void(MetricId metric_id, const std::string&)> set_query_callback)
-: m_data_provider(data_provider)
+    uint64_t client_id,
+    std::function<void(MetricId metric_id, const std::string&)> set_query_callback)
+: MetricTableBase(set_query_callback)
+, m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(client_id)
-, m_set_to_kernel_table_callback(set_query_callback)
-{ 
+{
     FillDefaultColumns();
+    m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                    ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollX;
+    m_table_title = "Pinned Metrics";
+    m_max_rows_in_table = 7;
 }
 
-void
-PinedMetricTable::FillDefaultColumns()
-{
-    m_columns[0]                                    = "Metric ID";
-    m_columns[1]                                    = "Metric";
-    m_lust_column_index                             = 2;
-    m_columns[LAST_INDEX] = "Unit";
-}
 
 void
 PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t index,
@@ -368,17 +646,6 @@ PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t index,
 
         ImGui::EndPopup();
     }
-}
-
-float
-PinedMetricTable::GetTableHight() const
-{
-    uint32_t max_rows_in_table = 7; // TODO: move to constant
-    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
-    float             line_height =
-        ImGui::GetTextLineHeightWithSpacing() + style.CellPadding.y * 2.0f;
-    auto max_rows = m_rows.size() < max_rows_in_table ? m_rows.size() : max_rows_in_table;
-    return style.ScrollbarSize + line_height + (max_rows * line_height);
 }
 
 void
@@ -491,111 +758,6 @@ PinedMetricTable::FillTableRow(const MetricId& metric_id)
         }
     }
     m_rows[metric_id] = std::move(row);
-}
-
-void
-PinedMetricTable::Render() 
-{
-    SectionTitle("Pined metric");
-    if (m_rows.empty())
-    {
-        ImGui::TextDisabled("Pin the metric to see it here");
-        return;
-    }
-
-    if(ImGui::BeginChild("pined_metric_table_content", ImVec2(0, GetTableHight()),
-                         false,
-                         ImGuiWindowFlags_HorizontalScrollbar))
-    {
-        ImGuiTableFlags table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                      ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollX;
-        int num_columns = static_cast<int>(m_columns.size());
-        if(!ImGui::BeginTable("pined metric", num_columns, table_flags))
-            return;
-
-        for(const auto& column : m_columns)
-            ImGui::TableSetupColumn(column.second.c_str());
-
-        ImGui::TableHeadersRow();
-
-        uint32_t row_idx = 0;
-        for(auto& row : m_rows)
-        {
-
-            ImGui::PushID(row_idx++);
-            ImGui::TableNextRow();
-
-            for(auto index = 0; index < m_columns.size() - 1; index++)
-            {
-                auto menu_func = [&](const char* value_to_copy) {
-                    this->ContextMenu(value_to_copy, index, row);
-                };
-                RenderRowValues(index, row, menu_func);
-            }
-
-            RenderUnitValue(row);
-            ImGui::PopID();
-        }
-        ImGui::EndTable();
-    }
-    ImGui::EndChild();
-
-    SectionTitle("All metric tables");
-}
-
-void
-PinedMetricTable::RenderRowValues(uint32_t index, const std::pair<MetricId, Row>& row,
-                       std::function<void(const char* value_to_copy)> menu_func)
-{
-    ImGui::TableNextColumn();
-    if(auto it = row.second.find(index); it == row.second.end())
-    {
-        ImGui::TextDisabled("N/A");
-    }
-    else
-    {
-        CopyableTextUnformatted(row.second.at(index).value.c_str(),
-                                "##value" + std::to_string(index), COPY_DATA_NOTIFICATION,
-                                false, true, menu_func);
-        RenderTooltip(row.second.at(index));
-    }
-}
-
-void
-PinedMetricTable::RenderUnitValue(const std::pair<MetricId, Row>& row)
-{
-    auto menu_func = [&](const char* value_to_copy) {
-        this->ContextMenu(value_to_copy, LAST_INDEX, row);
-    };
-    ImGui::TableNextColumn();
-    if(row.second.at(LAST_INDEX).value.empty())
-    {
-        ImGui::TextDisabled("N/A");
-    }
-    else
-    {
-        CopyableTextUnformatted(
-            row.second.at(LAST_INDEX).value.c_str(),
-            "##metric_unit", COPY_DATA_NOTIFICATION, false, true, menu_func);
-        RenderTooltip(row.second.at(LAST_INDEX));
-    }
-}
-
-void
-PinedMetricTable::RenderTooltip(const RowValue& row)
-{
-    auto tooltip_text = row.tooltip.empty() ? row.value : row.tooltip;
-
-    if(ImGui::IsItemHovered())
-    {
-        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                            ImVec2(TABLE_TOOLTIP_MAX_WIDTH, FLT_MAX));
-        BeginTooltipStyled();
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TABLE_TOOLTIP_MAX_WIDTH);
-        ImGui::TextUnformatted(tooltip_text.c_str());
-        ImGui::PopTextWrapPos();
-        EndTooltipStyled();
-    }
 }
 
 void

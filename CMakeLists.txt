@@ -227,8 +227,8 @@ target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(APPLE)
     set_target_properties(${TARGET_NAME} PROPERTIES
-        BUILD_RPATH "@executable_path/../Frameworks"
-        INSTALL_RPATH "@executable_path/../Frameworks"
+        BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
+        INSTALL_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
     )
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
@@ -248,17 +248,6 @@ if(APPLE)
             "$<TARGET_FILE_NAME:glfw>"
             "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
         COMMENT "Staging GLFW dylib into the app bundle"
-    )
-
-    # Resolve the real file behind the libvulkan.dylib symlink and copy it
-    # as libvulkan.1.dylib so that the @rpath/libvulkan.1.dylib reference resolves.
-    get_filename_component(_vulkan_real "${Vulkan_LIBRARY}" REALPATH)
-    add_custom_command(
-        TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${_vulkan_real}"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
-        COMMENT "Staging Vulkan loader (libvulkan.1.dylib) into the app bundle"
     )
 endif()
 

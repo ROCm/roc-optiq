@@ -158,9 +158,22 @@ cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --
 
 - Xcode Command Line Tools (`xcode-select --install`)
 - CMake 3.21+
-- Vulkan SDK (LunarG) — required for Vulkan headers/libs
-- Homebrew (for Molten VK)
-- Molten VK
+- Vulkan SDK (LunarG) — required for Vulkan headers/libs at build time
+- Homebrew
+
+### Runtime prerequisites
+
+The Vulkan loader must be installed on the system for the app to launch. Install it via Homebrew:
+
+```bash
+brew install vulkan-loader
+```
+
+For Vulkan rendering (optional — the app falls back to OpenGL if unavailable):
+
+```bash
+brew install molten-vk
+```
 
 ### Install Homebrew
 
@@ -168,17 +181,11 @@ cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 
 ```
 
-### Install Vulkan SDK
+### Install Vulkan SDK (build time)
 
 Download and install the latest Vulkan SDK from LunarG:
 
 - https://vulkan.lunarg.com/sdk/home#mac
-
-### Install Molten VK
-
-```
- brew install molten-vk
-```
 
 ### Build (Release)
 

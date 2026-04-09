@@ -263,6 +263,18 @@ SideBar::IsAllSubItemsHidden(const std::vector<Model>& container)
                 all_hidden = false;
                 break;
             }
+            if constexpr (std::is_same_v<Model, StreamModel>)
+            {
+                for(const auto& proc : elem.processors)
+                {
+                    if(!IsAllSubItemsHidden(proc.queues))
+                    {
+                        all_hidden = false;
+                        break;
+                    }
+                }
+                if(!all_hidden) break;
+            }
         }
     }
     return all_hidden;
@@ -288,6 +300,16 @@ SideBar::HideAllSubItems(const std::vector<Model>& container)
         if(!ids_to_remove.empty())
         {
             m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_remove, false);
+        }
+        if constexpr (std::is_same_v<Model, StreamModel>)
+        {
+            for(const Model& elem : container)
+            {
+                for(const auto& proc : elem.processors)
+                {
+                    HideAllSubItems(proc.queues);
+                }
+            }
         }
     }
 }
@@ -359,6 +381,16 @@ SideBar::UnhideAllSubItems(const std::vector<Model>& container)
         {
             m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_add, true);
         }
+        if constexpr (std::is_same_v<Model, StreamModel>)
+        {
+            for(const Model& elem : container)
+            {
+                for(const auto& proc : elem.processors)
+                {
+                    UnhideAllSubItems(proc.queues);
+                }
+            }
+        }
     }
 }
 
@@ -374,14 +406,13 @@ SideBar::DrawTopology(const TopologyModel& topology,
     EyeButtonState new_button_state = parent_eye_button_state;
     if(show_eye_button)
     {
-        if(topology.all_subitems_hidden)
-        {
-            new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
-        }
-        else
-        {
-            new_button_state = DrawEyeButton(parent_eye_button_state);
-        }
+        EyeButtonState display_state = parent_eye_button_state;
+        if(display_state == EyeButtonState::kMixed && topology.all_subitems_hidden)
+            display_state = EyeButtonState::kAllHidden;
+            
+        ImGui::PushID("TopologyEye");
+        new_button_state = DrawEyeButton(display_state);
+        ImGui::PopID();
         ImGui::SameLine();
     }
 
@@ -397,6 +428,43 @@ SideBar::DrawTopology(const TopologyModel& topology,
             topology.all_subitems_hidden = false;
         }
         ImGui::TreePop();
+    }
+    else if(new_button_state == EyeButtonState::kAllHidden || new_button_state == EyeButtonState::kAllVisible)
+    {
+        bool hide = (new_button_state == EyeButtonState::kAllHidden);
+        for(const auto& node : topology.nodes)
+        {
+            for(const auto& proc : node.processors)
+            {
+                if(hide) { HideAllSubItems(proc.queues); HideAllSubItems(proc.counters); }
+                else     { UnhideAllSubItems(proc.queues); UnhideAllSubItems(proc.counters); }
+                proc.all_subitems_hidden = hide;
+            }
+            for(const auto& process : node.processes)
+            {
+                if(hide)
+                {
+                    HideAllSubItems(process.streams);
+                    HideAllSubItems(process.instrumented_threads);
+                    HideAllSubItems(process.sampled_threads);
+                    for(const auto& stream : process.streams)
+                        for(const auto& sp : stream.processors)
+                            HideAllSubItems(sp.queues);
+                }
+                else
+                {
+                    UnhideAllSubItems(process.streams);
+                    UnhideAllSubItems(process.instrumented_threads);
+                    UnhideAllSubItems(process.sampled_threads);
+                    for(const auto& stream : process.streams)
+                        for(const auto& sp : stream.processors)
+                            UnhideAllSubItems(sp.queues);
+                }
+                process.all_subitems_hidden = hide;
+            }
+            node.all_subitems_hidden = hide;
+        }
+        topology.all_subitems_hidden = hide;
     }
     return new_button_state;
 }
@@ -422,20 +490,20 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
         if(node.info)
         {
             tc.Branch();
+            ImGui::PushID(static_cast<int>(node.info->id));
+            
             if(show_eye_button)
             {
-                if(node.all_subitems_hidden)
-                {
-                    new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
-                }
-                else
-                {
-                    new_button_state = DrawEyeButton(parent_eye_button_state);
-                }
+                EyeButtonState display_state = parent_eye_button_state;
+                if(display_state == EyeButtonState::kMixed && node.all_subitems_hidden)
+                    display_state = EyeButtonState::kAllHidden;
+                    
+                ImGui::PushID("NodesEye");
+                new_button_state = DrawEyeButton(display_state);
+                ImGui::PopID();
                 ImGui::SameLine();
             }
 
-            ImGui::PushID(static_cast<int>(node.info->id));
             if(ImGui::TreeNodeEx(node.info->host_name.c_str(), CATEGORY_HEADER_FLAGS))
             {
                 new_button_state = DrawNode(node, new_button_state, true);
@@ -448,6 +516,39 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
                     node.all_subitems_hidden = false;
                 }
                 ImGui::TreePop();
+            }
+            else if(new_button_state == EyeButtonState::kAllHidden || new_button_state == EyeButtonState::kAllVisible)
+            {
+                bool hide = (new_button_state == EyeButtonState::kAllHidden);
+                for(const auto& proc : node.processors)
+                {
+                    if(hide) { HideAllSubItems(proc.queues); HideAllSubItems(proc.counters); }
+                    else     { UnhideAllSubItems(proc.queues); UnhideAllSubItems(proc.counters); }
+                    proc.all_subitems_hidden = hide;
+                }
+                for(const auto& process : node.processes)
+                {
+                    if(hide)
+                    {
+                        HideAllSubItems(process.streams);
+                        HideAllSubItems(process.instrumented_threads);
+                        HideAllSubItems(process.sampled_threads);
+                        for(const auto& stream : process.streams)
+                            for(const auto& sp : stream.processors)
+                                HideAllSubItems(sp.queues);
+                    }
+                    else
+                    {
+                        UnhideAllSubItems(process.streams);
+                        UnhideAllSubItems(process.instrumented_threads);
+                        UnhideAllSubItems(process.sampled_threads);
+                        for(const auto& stream : process.streams)
+                            for(const auto& sp : stream.processors)
+                                UnhideAllSubItems(sp.queues);
+                    }
+                    process.all_subitems_hidden = hide;
+                }
+                node.all_subitems_hidden = hide;
             }
             ImGui::PopID();
         }
@@ -463,59 +564,120 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
         node.all_subitems_hidden = false;
     else if(parent_eye_button_state == EyeButtonState::kAllHidden)
         node.all_subitems_hidden = true;
-    EyeButtonState new_button_state = parent_eye_button_state;
 
     TreeConnector tc(m_settings);
 
-    if(show_eye_button)
+    EyeButtonState processor_state = parent_eye_button_state;
+    EyeButtonState process_state   = parent_eye_button_state;
+
+    tc.Branch();
+    
+    if(show_eye_button && !node.processors.empty())
     {
-        if(node.all_subitems_hidden)
-        {
-            new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
+        bool all_proc_hidden = true;
+        for(const auto& proc : node.processors) {
+            if(!proc.all_subitems_hidden) { all_proc_hidden = false; break; }
         }
-        else
-        {
-            new_button_state = DrawEyeButton(parent_eye_button_state);
-        }
+        
+        EyeButtonState display_state = parent_eye_button_state;
+        if(display_state == EyeButtonState::kMixed && all_proc_hidden)
+            display_state = EyeButtonState::kAllHidden;
+            
+        ImGui::PushID("ProcessorsEye");
+        processor_state = DrawEyeButton(display_state);
+        ImGui::PopID();
         ImGui::SameLine();
     }
 
-    tc.Branch();
     bool open = ImGui::TreeNodeEx(node.processor_header.c_str(), CATEGORY_HEADER_FLAGS);
 
     if(!node.processors.empty() && open)
     {
-        new_button_state = DrawProcessors(node.processors, new_button_state, true);
-        if(new_button_state == EyeButtonState::kAllHidden)
-        {
-            node.all_subitems_hidden = true;
-        }
-        else
-        {
-            node.all_subitems_hidden = false;
-        }
-
+        processor_state = DrawProcessors(node.processors, processor_state, true);
         ImGui::TreePop();
+    }
+    else if(!node.processors.empty() &&
+            (processor_state == EyeButtonState::kAllHidden ||
+             processor_state == EyeButtonState::kAllVisible))
+    {
+        bool hide = (processor_state == EyeButtonState::kAllHidden);
+        for(const auto& proc : node.processors)
+        {
+            if(hide) { HideAllSubItems(proc.queues); HideAllSubItems(proc.counters); }
+            else     { UnhideAllSubItems(proc.queues); UnhideAllSubItems(proc.counters); }
+            proc.all_subitems_hidden = hide;
+        }
     }
 
     tc.Branch();
+    
+    if(show_eye_button && !node.processes.empty())
+    {
+        bool all_proc_hidden = true;
+        for(const auto& proc : node.processes) {
+            if(!proc.all_subitems_hidden) { all_proc_hidden = false; break; }
+        }
+        
+        EyeButtonState display_state = parent_eye_button_state;
+        if(display_state == EyeButtonState::kMixed && all_proc_hidden)
+            display_state = EyeButtonState::kAllHidden;
+            
+        ImGui::PushID("ProcessesEye");
+        process_state = DrawEyeButton(display_state);
+        ImGui::PopID();
+        ImGui::SameLine();
+    }
+
     open = ImGui::TreeNodeEx(node.process_header.c_str(), CATEGORY_HEADER_FLAGS);
 
     if(!node.processes.empty() && open)
     {
-        new_button_state = DrawProcesses(node.processes, new_button_state, true);
-        if(new_button_state == EyeButtonState::kAllHidden)
-        {
-            node.all_subitems_hidden = true;
-        }
-        else
-        {
-            node.all_subitems_hidden = false;
-        }
-
+        process_state = DrawProcesses(node.processes, process_state, true);
         ImGui::TreePop();
     }
-    return new_button_state;
+    else if(!node.processes.empty() &&
+            (process_state == EyeButtonState::kAllHidden ||
+             process_state == EyeButtonState::kAllVisible))
+    {
+        bool hide = (process_state == EyeButtonState::kAllHidden);
+        for(const auto& process : node.processes)
+        {
+            if(hide)
+            {
+                HideAllSubItems(process.streams);
+                HideAllSubItems(process.instrumented_threads);
+                HideAllSubItems(process.sampled_threads);
+                for(const auto& stream : process.streams)
+                    for(const auto& sp : stream.processors)
+                        HideAllSubItems(sp.queues);
+            }
+            else
+            {
+                UnhideAllSubItems(process.streams);
+                UnhideAllSubItems(process.instrumented_threads);
+                UnhideAllSubItems(process.sampled_threads);
+                for(const auto& stream : process.streams)
+                    for(const auto& sp : stream.processors)
+                        UnhideAllSubItems(sp.queues);
+            }
+            process.all_subitems_hidden = hide;
+        }
+    }
+
+    if((node.processors.empty() || processor_state == EyeButtonState::kAllHidden) &&
+       (node.processes.empty() || process_state == EyeButtonState::kAllHidden))
+    {
+        node.all_subitems_hidden = true;
+        return EyeButtonState::kAllHidden;
+    }
+
+    node.all_subitems_hidden = false;
+    if((node.processors.empty() || processor_state == EyeButtonState::kAllVisible) &&
+       (node.processes.empty() || process_state == EyeButtonState::kAllVisible))
+    {
+        return EyeButtonState::kAllVisible;
+    }
+    return EyeButtonState::kMixed;
 }
 
 SideBar::EyeButtonState
@@ -550,14 +712,13 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
             EyeButtonState current_eye_button_state = parent_eye_button_state;
             if(show_eye_button)
             {
-                if(process.all_subitems_hidden)
-                {
-                    current_eye_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
-                }
-                else
-                {
-                    current_eye_button_state = DrawEyeButton(parent_eye_button_state);
-                }
+                EyeButtonState display_state = parent_eye_button_state;
+                if(display_state == EyeButtonState::kMixed && process.all_subitems_hidden)
+                    display_state = EyeButtonState::kAllHidden;
+                    
+                ImGui::PushID("ProcessEye");
+                current_eye_button_state = DrawEyeButton(display_state);
+                ImGui::PopID();
                 ImGui::SameLine();
             }
 
@@ -585,6 +746,30 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
                         current_eye_button_state);
                 }
                 ImGui::TreePop();
+            }
+            else if(current_eye_button_state == EyeButtonState::kAllHidden)
+            {
+                HideAllSubItems(process.streams);
+                HideAllSubItems(process.instrumented_threads);
+                HideAllSubItems(process.sampled_threads);
+                for(const auto& stream : process.streams)
+                    for(const auto& sp : stream.processors)
+                        HideAllSubItems(sp.queues);
+                stream_button_state              = EyeButtonState::kAllHidden;
+                instrumented_thread_button_state = EyeButtonState::kAllHidden;
+                sampled_thread_button_state      = EyeButtonState::kAllHidden;
+            }
+            else if(current_eye_button_state == EyeButtonState::kAllVisible)
+            {
+                UnhideAllSubItems(process.streams);
+                UnhideAllSubItems(process.instrumented_threads);
+                UnhideAllSubItems(process.sampled_threads);
+                for(const auto& stream : process.streams)
+                    for(const auto& sp : stream.processors)
+                        UnhideAllSubItems(sp.queues);
+                stream_button_state              = EyeButtonState::kAllVisible;
+                instrumented_thread_button_state = EyeButtonState::kAllVisible;
+                sampled_thread_button_state      = EyeButtonState::kAllVisible;
             }
 
             if(queue_button_state == EyeButtonState::kAllHidden &&
@@ -634,14 +819,13 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
             EyeButtonState current_eye_button_state = parent_eye_button_state;
             if(show_eye_button)
             {
-                if(processor.all_subitems_hidden)
-                {
-                    current_eye_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
-                }
-                else
-                {
-                    current_eye_button_state = DrawEyeButton(parent_eye_button_state);
-                }
+                EyeButtonState display_state = parent_eye_button_state;
+                if(display_state == EyeButtonState::kMixed && processor.all_subitems_hidden)
+                    display_state = EyeButtonState::kAllHidden;
+                    
+                ImGui::PushID("ProcessorEye");
+                current_eye_button_state = DrawEyeButton(display_state);
+                ImGui::PopID();
                 ImGui::SameLine();
             }
 
@@ -668,6 +852,20 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
                             current_eye_button_state);
                 }
                 ImGui::TreePop();
+            }
+            else if(current_eye_button_state == EyeButtonState::kAllHidden)
+            {
+                HideAllSubItems(processor.queues);
+                HideAllSubItems(processor.counters);
+                queue_button_state   = EyeButtonState::kAllHidden;
+                counter_button_state = EyeButtonState::kAllHidden;
+            }
+            else if(current_eye_button_state == EyeButtonState::kAllVisible)
+            {
+                UnhideAllSubItems(processor.queues);
+                UnhideAllSubItems(processor.counters);
+                queue_button_state   = EyeButtonState::kAllVisible;
+                counter_button_state = EyeButtonState::kAllVisible;
             }
 
             if(queue_button_state == EyeButtonState::kAllHidden &&
@@ -700,19 +898,14 @@ SideBar::DrawCollapsable(const std::vector<Model>& container,
     if (!collapsable_header.empty())
     {
         ImGui::PushID(collapsable_header.c_str());
-        if (parent_eye_button_state == EyeButtonState::kAllVisible)
-        {
-            UnhideAllSubItems(container);
-        }
         
-        if (IsAllSubItemsHidden(container))
-        {
-            new_button_state = DrawEyeButton(EyeButtonState::kAllHidden);
-        }
-        else
-        {
-            new_button_state = DrawEyeButton(parent_eye_button_state);
-        }
+        EyeButtonState display_state = parent_eye_button_state;
+        if (display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(container))
+            display_state = EyeButtonState::kAllHidden;
+            
+        ImGui::PushID("CollapsableEye");
+        new_button_state = DrawEyeButton(display_state);
+        ImGui::PopID();
 
         if (new_button_state == EyeButtonState::kAllHidden)
         {
@@ -727,6 +920,8 @@ SideBar::DrawCollapsable(const std::vector<Model>& container,
         open = ImGui::TreeNodeEx(collapsable_header.c_str(),
             CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
     }
+    EyeButtonState group_state = new_button_state;
+
     if(open)
     {
         TreeConnector tc(m_settings);
@@ -735,7 +930,8 @@ SideBar::DrawCollapsable(const std::vector<Model>& container,
             if(item.info)
             {
                 tc.Branch();
-                if(RenderTrackItem(item.graph_index))
+                bool track_changed = RenderTrackItem(item.graph_index);
+                if(track_changed)
                 {
                     new_button_state = EyeButtonState::kMixed;
                 }
@@ -743,7 +939,16 @@ SideBar::DrawCollapsable(const std::vector<Model>& container,
                 if constexpr (std::is_same_v<Model, StreamModel>)
                 {
                     ImGui::Indent();
-                    DrawProcessors(item.processors, EyeButtonState::kAllVisible, false, item.info->id);
+                    EyeButtonState pass_state = group_state;
+                    if (track_changed)
+                    {
+                        if (m_graphs && item.graph_index < m_graphs->size())
+                        {
+                            TrackGraph& graph = (*m_graphs)[item.graph_index];
+                            pass_state = graph.display ? EyeButtonState::kAllVisible : EyeButtonState::kAllHidden;
+                        }
+                    }
+                    DrawProcessors(item.processors, pass_state, false, item.info->id);
                     ImGui::Unindent();
 
                 }

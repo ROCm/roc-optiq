@@ -111,3 +111,41 @@ Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwri
 4. Workload Details: Provides contextual information about the workload.
     - System Information: Hardware details of the system where the data was collected.
     - Profiling Configuration: Parameters and settings used during capture.
+
+## ROCProfiler Visualizer - Keyboard Shortcuts
+
+### **Timeline Navigation**
+
+#### Horizontal Panning
+- **A** or **Left Arrow** - Pan left
+- **D** or **Right Arrow** - Pan right
+- **Shift + A/D/Arrows** - Pan faster (2x speed)
+
+#### Vertical Scrolling
+- **Up Arrow** - Scroll up
+- **Down Arrow** - Scroll down
+- **Shift + Up/Down Arrow** - Scroll faster (2x speed)
+
+#### Zoom Controls
+- **W** - Zoom in at cursor position
+- **S** - Zoom out at cursor position
+
+### **Selection & Time Ranges**
+
+- **Ctrl + Left Click** - Start selecting a time range
+- **M** - Mark selected events as a time range (or clear existing time range)
+- **Escape** - Clear time range selection
+- **Ctrl + Click on event** - Multi-select events
+
+### **Bookmarks**
+
+- **0-9** - Restore bookmark (view position, zoom, and scroll)
+- **Ctrl + 0-9** - Save current view as bookmark
+
+---
+
+**Tips**
+
+- Bookmarks save your complete view state including zoom level, pan position, and scroll offset
+- 10 bookmark slots available (0-9) for quick navigation
+- All timeline keyboard shortcuts respect input focus. They won't trigger while typing in text fields or when dialogs are open. Click once in timeline area to ensure it has focus if shortcuts are not responsive.

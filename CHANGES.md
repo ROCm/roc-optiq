@@ -1,3 +1,45 @@
+## Optiq Beta 0.3.1
+
+### Features and Improvements
+
+**Startup and progress**
+- Branded loading and landing screen.
+- Generalized trace-loading progress updates.
+
+**Compute profiling**
+- Side-by-side baseline comparison of compute metrics (baseline kernel vs target kernel).
+- Pinned metric table with configurable rows and columns (including custom metrics).
+- Interface support for metric values grouped by workload; compute database schema 1.3 and related performance improvements.
+- Roofline chart: legend can be repositioned; aspect ratio follows the window; multi-workload chart fixes and top-kernels presentation updates.
+
+**Topology and timeline**
+- Stream topology improvements (naming, processor/instance IDs for UI stability, track mapping fixes).
+- Toggle on device nodes to show or hide all tracks under that device.
+
+**Navigation and inspection**
+- Unified go-to-event behavior across tables and the flow panel: double-click or context menu to open the event on the timeline, with vertical track centering and highlight feedback.
+- Highlight-on-navigate with a dedicated event path, pulsing indicator, and timed auto-clear; selection and highlight handled independently.
+- Callstack experience reworked (including schema version 4 updates).
+
+**Rendering and platform**
+- OpenGL backend as a fallback when Vulkan is unavailable; optional software rendering path; command-line option to force a specific graphics backend.
+- Dear ImGui updated (docking-capable line, ImPlot aligned); Linux session defaults to X11 for compatibility.
+- Windows packages link GLFW statically by default (no separate `glfw.dll` in the installer).
+
+### Fixes
+
+- Metric table cache crash when columns are empty.
+- Counter samples missing or jumping on the timeline; level-of-detail sampling uses a weighted average where appropriate.
+- Minimum width rules for rendered samples (including the single-sample case).
+- RPD trace query validation and related issues.
+- Track detection and mapping issues.
+- Vulkan fallback and related application-window logging cleanup.
+- SQLite updated to 3.51.3.
+
+### Known Issues
+
+- Sidebar hide/show toggle does not work correctly for top level nodes (Processors, Process, Device Nodes)
+
 ## Optiq Beta 0.3.0
 
 ### Features and Improvements

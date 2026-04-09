@@ -4700,6 +4700,18 @@ std::string DataProvider::GetProfilerTracePath()
     return std::string(buffer.data());
 }
 
+int32_t DataProvider::GetProfilerExitCode() const
+{
+    if (m_profiler_future == nullptr)
+    {
+        return -1;
+    }
+
+    int32_t exit_code = -1;
+    rocprofvis_profiler_get_exit_code(m_profiler_future, &exit_code);
+    return exit_code;
+}
+
 bool DataProvider::CancelProfiler()
 {
     if (m_profiler_future == nullptr)
@@ -4715,6 +4727,8 @@ void DataProvider::CloseProfiler()
 {
     if (m_profiler_future != nullptr)
     {
+        rocprofvis_profiler_cancel(m_profiler_future);
+        rocprofvis_controller_future_wait(m_profiler_future, 5.0f);
         rocprofvis_controller_future_free(m_profiler_future);
         m_profiler_future = nullptr;
     }

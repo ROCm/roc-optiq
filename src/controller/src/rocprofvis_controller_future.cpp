@@ -17,10 +17,16 @@ Future::Future()
 , m_job(nullptr)
 , m_cancelled(false)
 , m_progress_percentage(0)
+, m_user_data(nullptr)
 {}
 
 Future::~Future()
 {
+    if (m_user_data && m_user_data_deleter)
+    {
+        m_user_data_deleter(m_user_data);
+        m_user_data = nullptr;
+    }
     delete m_job;
 }
 
@@ -187,6 +193,21 @@ void Future::ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_d
         future->m_progress_percentage /= future->m_progress_map.size();
         future->m_progress_message = message ? message : "";
     }
+}
+
+void Future::SetUserData(void* data, std::function<void(void*)> deleter)
+{
+    if (m_user_data && m_user_data_deleter)
+    {
+        m_user_data_deleter(m_user_data);
+    }
+    m_user_data = data;
+    m_user_data_deleter = std::move(deleter);
+}
+
+void* Future::GetUserData() const
+{
+    return m_user_data;
 }
 
 }

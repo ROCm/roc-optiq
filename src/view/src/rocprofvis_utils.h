@@ -255,5 +255,13 @@ get_executable_name(const std::string& fullPath);
 bool
 is_remote_display_session();
 
+/**
+ * @brief Removes ANSI escape sequences and most C0 control characters from text so it is safe to
+ *        show in ImGui (UTF-8) without replacement glyphs. Newline, carriage return, and tab are
+ *        preserved.
+ */
+std::string
+strip_ansi_for_display(std::string const& text);
+
 }  // namespace View
 }  // namespace RocProfVis

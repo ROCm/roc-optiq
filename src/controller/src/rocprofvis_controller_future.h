@@ -8,6 +8,7 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_c_interface.h"
+#include <functional>
 #include <string>
 #include <unordered_map>
 
@@ -41,6 +42,9 @@ public:
     void ResetProgress();
     static void ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_db_future_id_t db_future_id, rocprofvis_db_progress_percent_t progress_percent, rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data);
 
+    void  SetUserData(void* data, std::function<void(void*)> deleter);
+    void* GetUserData() const;
+
 private:
     Job* m_job;
     std::vector<rocprofvis_db_future_t> m_db_futures;
@@ -49,6 +53,8 @@ private:
     uint16_t m_progress_percentage;
     std::string m_progress_message;
     std::unordered_map<uint64_t, uint16_t> m_progress_map;
+    void*                      m_user_data;
+    std::function<void(void*)> m_user_data_deleter;
 };
 
 }

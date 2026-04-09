@@ -282,6 +282,12 @@ public:
     std::string GetProfilerTracePath();
 
     /*
+     * Gets the exit code of the profiler process (valid after completion/failure).
+     * @return: Process exit code, or -1 if not available
+     */
+    int32_t GetProfilerExitCode() const;
+
+    /*
      * Cancels the running profiler process.
      * @return: True if cancellation was successful
      */

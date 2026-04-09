@@ -85,27 +85,47 @@ jobs:
             exit 1
           fi
 
-          # CMake FindVulkan uses $VULKAN_SDK/include and $VULKAN_SDK/lib. LunarG macOS
-          # SDK places those under .../macOS/, not the versioned root.
-          if [ -f "${SDK_ROOT}/macOS/include/vulkan/vulkan.h" ]; then
-            VULKAN_SDK_FOR_CMAKE="${SDK_ROOT}/macOS"
-          else
-            VULKAN_SDK_FOR_CMAKE="${SDK_ROOT}"
+          # LunarG macOS SDK places headers and libs under .../macOS/, not the versioned root.
+          VULKAN_SDK_DIR="${SDK_ROOT}/macOS"
+          if [ ! -d "${VULKAN_SDK_DIR}" ]; then
+            VULKAN_SDK_DIR="${SDK_ROOT}"
           fi
 
-          echo "VULKAN_SDK=${VULKAN_SDK_FOR_CMAKE}" >> "${GITHUB_ENV}"
-          if [ -d "${VULKAN_SDK_FOR_CMAKE}/bin" ]; then
-            echo "PATH=${VULKAN_SDK_FOR_CMAKE}/bin:${PATH}" >> "${GITHUB_ENV}"
+          # Verify the headers are present.
+          if [ ! -f "${VULKAN_SDK_DIR}/include/vulkan/vulkan.h" ]; then
+            echo "❌ Vulkan headers not found at ${VULKAN_SDK_DIR}/include/vulkan/vulkan.h"
+            find "${SDK_ROOT}" -name 'vulkan.h' 2>/dev/null | head -5
+            exit 1
           fi
-          if [ -d "${VULKAN_SDK_FOR_CMAKE}/lib" ]; then
-            echo "DYLD_LIBRARY_PATH=${VULKAN_SDK_FOR_CMAKE}/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+
+          # Resolve the actual Vulkan loader library. The SDK ships libvulkan.dylib
+          # but may only provide a versioned name (libvulkan.1.dylib). Prefer the
+          # unversioned symlink so CMake's find_library(NAMES vulkan) matches.
+          VULKAN_LIB="${VULKAN_SDK_DIR}/lib/libvulkan.dylib"
+          if [ ! -f "${VULKAN_LIB}" ]; then
+            VULKAN_LIB=$(find "${VULKAN_SDK_DIR}/lib" -maxdepth 1 -name 'libvulkan*.dylib' | sort | head -1)
           fi
-          echo "✅ Vulkan SDK installed at ${SDK_ROOT} (VULKAN_SDK=${VULKAN_SDK_FOR_CMAKE} for CMake)"
+          if [ -z "${VULKAN_LIB}" ] || [ ! -f "${VULKAN_LIB}" ]; then
+            echo "❌ Vulkan library not found under ${VULKAN_SDK_DIR}/lib"
+            ls -la "${VULKAN_SDK_DIR}/lib" || true
+            exit 1
+          fi
+
+          echo "VULKAN_SDK=${VULKAN_SDK_DIR}" >> "${GITHUB_ENV}"
+          echo "Vulkan_INCLUDE_DIR=${VULKAN_SDK_DIR}/include" >> "${GITHUB_ENV}"
+          echo "Vulkan_LIBRARY=${VULKAN_LIB}" >> "${GITHUB_ENV}"
+          if [ -d "${VULKAN_SDK_DIR}/bin" ]; then
+            echo "PATH=${VULKAN_SDK_DIR}/bin:${PATH}" >> "${GITHUB_ENV}"
+          fi
+          if [ -d "${VULKAN_SDK_DIR}/lib" ]; then
+            echo "DYLD_LIBRARY_PATH=${VULKAN_SDK_DIR}/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+          fi
+          echo "✅ Vulkan SDK installed at ${SDK_ROOT} (VULKAN_SDK=${VULKAN_SDK_DIR}, Vulkan_LIBRARY=${VULKAN_LIB})"
 
       - name: Build, Make, and Verify Installation
         run: |
           mkdir -p ${{ env.BUILD_DIR }}
-          cmake -B ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake -B ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" -DVulkan_LIBRARY="$Vulkan_LIBRARY"
           cmake --build ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_BUILD }}" --parallel 4 --target package
 
           if [ -d "${{ env.BUILD_DIR }}/${{ env.VISUALIZER_FILE_NAME }}.app" ]; then

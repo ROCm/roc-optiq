@@ -49,6 +49,7 @@ typedef struct ProfilerSettings
 {
     std::string profiler_path;
     std::string profiler_output_directory;
+    bool        auto_load_trace = true;
 } ProfilerSettings;
 
 typedef struct AppWindowSettings
@@ -161,6 +162,7 @@ constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_be
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
 constexpr const char* JSON_KEY_SETTINGS_PROFILER_PATH = "profiler_path";
 constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD = "auto_load_trace";
 
 class SettingsManager
 {

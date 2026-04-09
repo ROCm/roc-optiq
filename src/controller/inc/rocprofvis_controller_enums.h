@@ -1027,7 +1027,7 @@ typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
 typedef enum rocprofvis_profiler_type_t
 {
     // ROCm Systems Profiler - sampling mode (single-stage)
-    kRPVProfilerTypeRocprofSysSample = 0,
+    kRPVProfilerTypeRocprofSysRun = 0,
     // ROCm Systems Profiler - instrumentation mode (two-stage: instrument + run)
     kRPVProfilerTypeRocprofSysInstrument = 1,
     // ROCm Compute Profiler v2 (rocprof)

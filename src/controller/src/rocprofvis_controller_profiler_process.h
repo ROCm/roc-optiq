@@ -25,6 +25,8 @@ namespace RocProfVis
 namespace Controller
 {
 
+class Future;
+
 /*
  * ProfilerConfig - Configuration for launching a profiler
  * Simple data container, not part of Handle/property system
@@ -129,11 +131,14 @@ public:
     // Gets the path to the generated trace file (only valid when state = Completed)
     std::string GetTracePath() const;
 
+    // Gets the process exit code (only meaningful after state != Running)
+    int GetExitCode() const;
+
     // Cancels the running profiler
     rocprofvis_result_t Cancel();
 
-    // Job execution function (called by JobSystem)
-    static void ExecuteJob(void* user_data);
+    // Job execution function (called by JobSystem worker thread)
+    static void ExecuteJob(ProfilerProcessController* controller, Future* future);
 
 private:
     void UpdateOutput();
@@ -146,6 +151,7 @@ private:
     std::atomic<rocprofvis_profiler_state_t> m_state;
     std::string m_output_text;
     std::string m_trace_path;
+    int m_exit_code;
     std::mutex m_mutex;
 };
 

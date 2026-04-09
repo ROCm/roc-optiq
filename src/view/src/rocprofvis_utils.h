@@ -242,5 +242,13 @@ open_url(const std::string& url);
 std::string
 get_executable_name(const std::string& fullPath);
 
+/**
+ * @brief Removes ANSI escape sequences and most C0 control characters from text so it is safe to
+ *        show in ImGui (UTF-8) without replacement glyphs. Newline, carriage return, and tab are
+ *        preserved.
+ */
+std::string
+strip_ansi_for_display(std::string const& text);
+
 }  // namespace View
 }  // namespace RocProfVis

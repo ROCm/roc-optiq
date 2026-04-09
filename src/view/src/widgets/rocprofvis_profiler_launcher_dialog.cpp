@@ -5,6 +5,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 #include "imgui.h"
 #include <cstdio>
 #include <cstring>
@@ -25,19 +26,18 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     , m_output_text()
     , m_error_message()
     , m_auto_scroll_output(true)
+    , m_auto_load_trace(true)
 {
-    // Initialize input buffers
     std::memset(m_profiler_path, 0, sizeof(m_profiler_path));
     std::memset(m_target_executable, 0, sizeof(m_target_executable));
     std::memset(m_target_args, 0, sizeof(m_target_args));
     std::memset(m_output_directory, 0, sizeof(m_output_directory));
     std::memset(m_profiler_args, 0, sizeof(m_profiler_args));
 
-    // Load settings from SettingsManager
     SettingsManager& settings = SettingsManager::Get();
     ProfilerSettings& profiler_settings = settings.GetProfilerSettings();
 
-    if (profiler_settings.profiler_path != "")
+    if (!profiler_settings.profiler_path.empty())
     {
         std::snprintf(
             m_profiler_path,
@@ -46,7 +46,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
             profiler_settings.profiler_path.c_str());
     }
 
-    if (profiler_settings.profiler_output_directory != "")
+    if (!profiler_settings.profiler_output_directory.empty())
     {
         std::snprintf(
             m_output_directory,
@@ -54,6 +54,8 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
             "%s",
             profiler_settings.profiler_output_directory.c_str());
     }
+
+    m_auto_load_trace = profiler_settings.auto_load_trace;
 }
 
 ProfilerLauncherDialog::~ProfilerLauncherDialog()
@@ -90,10 +92,10 @@ void ProfilerLauncherDialog::Render()
         ImGui::Text("Profiler Type:");
         ImGui::SameLine();
         const char* profiler_types[] = {
-            "ROCm Systems Profiler (Sample)",
+            "ROCm Systems Profiler (Run)",
             "ROCm Systems Profiler (Instrument)",
-            "ROCm Compute Profiler (v2)",
-            "ROCm Compute Profiler (v3)"
+            "ROCm Compute Profiler",
+            "ROCm rocprofv3"
         };
         ImGui::Combo("##ProfilerType", &m_profiler_type_index, profiler_types, IM_ARRAYSIZE(profiler_types));
 
@@ -139,6 +141,8 @@ void ProfilerLauncherDialog::Render()
         ImGui::Text("Profiler Arguments:");
         ImGui::InputText("##ProfilerArgs", m_profiler_args, sizeof(m_profiler_args));
 
+        ImGui::Checkbox("Open trace when profiling completes", &m_auto_load_trace);
+
         ImGui::Separator();
 
         // Output section
@@ -175,6 +179,19 @@ void ProfilerLauncherDialog::Render()
 
         ImGui::SameLine();
         ImGui::Checkbox("Auto-scroll", &m_auto_scroll_output);
+
+        ImGui::SameLine();
+        if (ImGui::Button("Copy output##ProfilerLauncher"))
+        {
+            std::string clip;
+            if (!m_error_message.empty())
+            {
+                clip = m_error_message;
+                clip += "\n\n";
+            }
+            clip += m_output_text;
+            ImGui::SetClipboardText(clip.c_str());
+        }
 
         // Output text area
         ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
@@ -274,6 +291,10 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
     // Clear previous state
     m_error_message.clear();
+    m_output_preamble.clear();
+    m_output_epilogue.clear();
+    m_process_output_raw.clear();
+    m_process_output_stripped.clear();
     m_output_text.clear();
 
     // Map profiler type index to enum and determine default executable name
@@ -283,8 +304,8 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     switch (m_profiler_type_index)
     {
         case 0:
-            profiler_type = kRPVProfilerTypeRocprofSysSample;
-            default_profiler_name = "rocprof-sys-sample";
+            profiler_type = kRPVProfilerTypeRocprofSysRun;
+            default_profiler_name = "rocprof-sys-run";
             break;
         case 1:
             profiler_type = kRPVProfilerTypeRocprofSysInstrument;
@@ -299,8 +320,8 @@ void ProfilerLauncherDialog::OnLaunchClicked()
             default_profiler_name = "rocprofv3";
             break;
         default:
-            profiler_type = kRPVProfilerTypeRocprofSysSample;
-            default_profiler_name = "rocprof-sys-sample";
+            profiler_type = kRPVProfilerTypeRocprofSysRun;
+            default_profiler_name = "rocprof-sys-run";
             break;
     }
 
@@ -323,13 +344,33 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     {
         m_is_running = true;
         m_profiler_state = kRPVProfilerStateRunning;
-        m_output_text = "Profiler launched...\n";
 
-        // Save settings
+        m_output_preamble = "$ " + profiler_path;
+        if (std::strlen(m_profiler_args) > 0)
+        {
+            m_output_preamble += " ";
+            m_output_preamble += m_profiler_args;
+        }
+        if (std::strlen(m_output_directory) > 0)
+        {
+            m_output_preamble += " --output ";
+            m_output_preamble += m_output_directory;
+        }
+        m_output_preamble += " -- ";
+        m_output_preamble += m_target_executable;
+        if (std::strlen(m_target_args) > 0)
+        {
+            m_output_preamble += " ";
+            m_output_preamble += m_target_args;
+        }
+        m_output_preamble += "\n\n";
+        RebuildComposedOutput();
+
         SettingsManager& settings = SettingsManager::Get();
         ProfilerSettings& profiler_settings = settings.GetProfilerSettings();
         profiler_settings.profiler_path = std::string(m_profiler_path);
         profiler_settings.profiler_output_directory = std::string(m_output_directory);
+        profiler_settings.auto_load_trace = m_auto_load_trace;
         settings.SaveProfilerSettings();
     }
     else
@@ -343,7 +384,8 @@ void ProfilerLauncherDialog::OnCancelClicked()
 {
     if (m_data_provider.CancelProfiler())
     {
-        m_output_text += "\nProfiler cancelled by user.\n";
+        m_output_epilogue += "\nProfiler cancelled by user.\n";
+        RebuildComposedOutput();
         m_profiler_state = kRPVProfilerStateCancelled;
         m_is_running = false;
     }
@@ -446,23 +488,39 @@ void ProfilerLauncherDialog::PollProfilerState()
         if (new_state == kRPVProfilerStateCompleted)
         {
             m_is_running = false;
-            m_output_text += "\nProfiler completed successfully.\n";
+            m_output_epilogue += "\nProfiler completed successfully.\n";
 
-            // Get trace path
             std::string trace_path = m_data_provider.GetProfilerTracePath();
             if (!trace_path.empty())
             {
-                m_output_text += "Trace file: " + trace_path + "\n";
+                m_output_epilogue += "Trace file: " + trace_path + "\n";
 
-                // TODO: Optionally auto-load the trace
-                // m_app_window->LoadTrace(trace_path);
+                if (m_auto_load_trace && m_app_window)
+                {
+                    m_app_window->OpenFile(trace_path);
+                }
             }
+            RebuildComposedOutput();
         }
         else if (new_state == kRPVProfilerStateFailed)
         {
             m_is_running = false;
-            m_output_text += "\nProfiler failed.\n";
-            m_error_message = "Profiler execution failed";
+            int32_t exit_code = m_data_provider.GetProfilerExitCode();
+            char exit_msg[128];
+            std::snprintf(exit_msg, sizeof(exit_msg),
+                          "\nProfiler failed (exit code %d).\n", exit_code);
+            m_output_epilogue += exit_msg;
+            RebuildComposedOutput();
+            if (exit_code == 127)
+            {
+                m_error_message = "Profiler executable not found or could not be started (exit code 127)";
+            }
+            else
+            {
+                std::snprintf(exit_msg, sizeof(exit_msg),
+                              "Profiler execution failed (exit code %d)", exit_code);
+                m_error_message = exit_msg;
+            }
         }
         else if (new_state == kRPVProfilerStateCancelled)
         {
@@ -473,12 +531,18 @@ void ProfilerLauncherDialog::PollProfilerState()
 
 void ProfilerLauncherDialog::UpdateOutput()
 {
-    std::string new_output = m_data_provider.GetProfilerOutput();
-
-    if (!new_output.empty() && new_output != m_output_text)
+    std::string new_raw = m_data_provider.GetProfilerOutput();
+    if (new_raw != m_process_output_raw)
     {
-        m_output_text = new_output;
+        m_process_output_raw = std::move(new_raw);
+        m_process_output_stripped = strip_ansi_for_display(m_process_output_raw);
+        RebuildComposedOutput();
     }
+}
+
+void ProfilerLauncherDialog::RebuildComposedOutput()
+{
+    m_output_text = m_output_preamble + m_process_output_stripped + m_output_epilogue;
 }
 
 }  // namespace View

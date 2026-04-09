@@ -425,3 +425,66 @@ RocProfVis::View::get_executable_name(const std::string& fullPath)
         ? fullPath
         : fullPath.substr(pos + 1);
 }
+
+std::string
+RocProfVis::View::strip_ansi_for_display(std::string const& text)
+{
+    std::string out;
+    out.reserve(text.size());
+    size_t i = 0;
+    while (i < text.size())
+    {
+        unsigned char const c = static_cast<unsigned char>(text[i]);
+        if (c == 0x1BU)
+        {
+            if (i + 1 < text.size() && text[i + 1] == '[')
+            {
+                i += 2;
+                while (i < text.size())
+                {
+                    unsigned char const ch = static_cast<unsigned char>(text[i]);
+                    ++i;
+                    if (ch >= 0x40U && ch <= 0x7EU)
+                    {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (i + 1 < text.size() && text[i + 1] == ']')
+            {
+                i += 2;
+                while (i < text.size())
+                {
+                    if (text[i] == '\a')
+                    {
+                        ++i;
+                        break;
+                    }
+                    if (text[i] == '\x1b' && i + 1 < text.size() && text[i + 1] == '\\')
+                    {
+                        i += 2;
+                        break;
+                    }
+                    ++i;
+                }
+                continue;
+            }
+            if (i + 1 < text.size())
+            {
+                i += 2;
+                continue;
+            }
+            ++i;
+            continue;
+        }
+        if (c < 0x20U && c != '\n' && c != '\r' && c != '\t')
+        {
+            ++i;
+            continue;
+        }
+        out.push_back(static_cast<char>(c));
+        ++i;
+    }
+    return out;
+}

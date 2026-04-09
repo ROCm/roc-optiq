@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_profiler_process.h"
+#include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_job_system.h"
+#include "spdlog/spdlog.h"
 #include <sstream>
 #include <filesystem>
 #include <chrono>
@@ -28,7 +30,7 @@ namespace Controller
 // ==================================================================================
 
 ProfilerConfig::ProfilerConfig()
-    : m_profiler_type(kRPVProfilerTypeRocprofSysSample)
+    : m_profiler_type(kRPVProfilerTypeRocprofSysRun)
     , m_profiler_path()
     , m_target_executable()
     , m_target_args()
@@ -437,11 +439,20 @@ bool LocalProcessExecutor::Launch(std::string const& executable_path,
         }
         argv.push_back(nullptr);
 
-        // Execute
         execvp(executable_path.c_str(), argv.data());
 
-        // If we get here, exec failed
-        _exit(1);
+        // execvp only returns on failure — write the error to stderr so the
+        // parent process can capture it in the output pipe.
+        int exec_errno = errno;
+        char err_buf[256];
+        int n = snprintf(err_buf, sizeof(err_buf),
+                         "execvp failed for '%s': %s (errno %d)\n",
+                         executable_path.c_str(), strerror(exec_errno), exec_errno);
+        if (n > 0)
+        {
+            (void)write(STDERR_FILENO, err_buf, static_cast<size_t>(n));
+        }
+        _exit(127);
     }
 
     // Parent process
@@ -603,6 +614,7 @@ ProfilerProcessController::ProfilerProcessController()
     , m_state(kRPVProfilerStateIdle)
     , m_output_text()
     , m_trace_path()
+    , m_exit_code(-1)
 {
 }
 
@@ -614,42 +626,50 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
 {
     if (config == nullptr)
     {
+        spdlog::error("ProfilerProcessController::LaunchAsync: config is null");
         return kRocProfVisResultInvalidArgument;
     }
 
     if (m_state != kRPVProfilerStateIdle)
     {
+        spdlog::error("ProfilerProcessController::LaunchAsync: already running (state={})",
+                      static_cast<int>(m_state.load()));
         return kRocProfVisResultNotSupported;
     }
 
-    // Copy config
     m_config = std::make_unique<ProfilerConfig>(*config);
-
-    // Create executor
     m_executor = std::make_unique<LocalProcessExecutor>();
 
-    // Build command arguments
     std::vector<std::string> args = BuildCommandArgs(config);
 
-    // Launch process
-    std::string working_dir = config->GetOutputDirectory();
-    if (working_dir.empty())
+    // Log the full command line for diagnostics
     {
-        working_dir = std::filesystem::current_path().string();
+        std::ostringstream cmd_log;
+        cmd_log << config->GetProfilerPath();
+        for (auto const& arg : args)
+        {
+            cmd_log << " " << arg;
+        }
+        spdlog::info("Profiler launch: executable='{}' (inherits application working directory)",
+                     config->GetProfilerPath());
+        spdlog::info("Profiler command line: {}", cmd_log.str());
     }
 
     bool launched = m_executor->Launch(
         config->GetProfilerPath(),
         args,
-        working_dir);
+        std::string());
 
     if (!launched)
     {
+        spdlog::error("ProfilerProcessController::LaunchAsync: failed to start process "
+                      "(executable='{}')", config->GetProfilerPath());
         m_state = kRPVProfilerStateFailed;
         m_executor.reset();
         return kRocProfVisResultUnknownError;
     }
 
+    spdlog::info("Profiler process launched successfully");
     m_state = kRPVProfilerStateRunning;
     return kRocProfVisResultSuccess;
 }
@@ -680,6 +700,11 @@ std::string ProfilerProcessController::GetTracePath() const
     return m_trace_path;
 }
 
+int ProfilerProcessController::GetExitCode() const
+{
+    return m_exit_code;
+}
+
 rocprofvis_result_t ProfilerProcessController::Cancel()
 {
     if (m_state != kRPVProfilerStateRunning)
@@ -706,14 +731,18 @@ void ProfilerProcessController::UpdateState()
     if (m_executor && !m_executor->IsRunning())
     {
         int exit_code = m_executor->GetExitCode();
+        m_exit_code = exit_code;
+
         if (exit_code == 0)
         {
             m_state = kRPVProfilerStateCompleted;
             m_trace_path = DetermineTracePath(m_config.get());
+            spdlog::info("Profiler completed successfully, trace_path='{}'", m_trace_path);
         }
         else
         {
             m_state = kRPVProfilerStateFailed;
+            spdlog::error("Profiler process exited with code {}", exit_code);
         }
     }
 }
@@ -731,55 +760,52 @@ std::string ProfilerProcessController::DetermineTracePath(ProfilerConfig const* 
         output_dir = std::filesystem::current_path().string();
     }
 
-    // Look for trace files in output directory based on profiler type
     std::filesystem::path output_path(output_dir);
-
-    switch (config->GetProfilerType())
+    if (!std::filesystem::exists(output_path))
     {
-        case kRPVProfilerTypeRocprofSysSample:
-        case kRPVProfilerTypeRocprofSysInstrument:
+        return "";
+    }
+
+    auto is_trace_extension = [&](std::string const& ext) -> bool
+    {
+        switch (config->GetProfilerType())
         {
-            // Look for *.db or *.rpd files
-            if (std::filesystem::exists(output_path))
-            {
-                for (auto const& entry : std::filesystem::directory_iterator(output_path))
-                {
-                    if (entry.is_regular_file())
-                    {
-                        std::string ext = entry.path().extension().string();
-                        if (ext == ".db" || ext == ".rpd")
-                        {
-                            return entry.path().string();
-                        }
-                    }
-                }
-            }
-            break;
+            case kRPVProfilerTypeRocprofSysRun:
+            case kRPVProfilerTypeRocprofSysInstrument:
+                return (ext == ".db" || ext == ".rpd");
+            case kRPVProfilerTypeRocprofCompute:
+            case kRPVProfilerTypeRocprofV3:
+                return (ext == ".csv" || ext == ".json" || ext == ".db");
+            default:
+                return (ext == ".db" || ext == ".rpd");
+        }
+    };
+
+    std::filesystem::path best_path;
+    std::filesystem::file_time_type best_time{};
+
+    for (auto const& entry : std::filesystem::directory_iterator(output_path))
+    {
+        if (!entry.is_regular_file())
+        {
+            continue;
         }
 
-        case kRPVProfilerTypeRocprofCompute:
-        case kRPVProfilerTypeRocprofV3:
+        std::string ext = entry.path().extension().string();
+        if (!is_trace_extension(ext))
         {
-            // Look for *.csv or *.json files
-            if (std::filesystem::exists(output_path))
-            {
-                for (auto const& entry : std::filesystem::directory_iterator(output_path))
-                {
-                    if (entry.is_regular_file())
-                    {
-                        std::string ext = entry.path().extension().string();
-                        if (ext == ".csv" || ext == ".json")
-                        {
-                            return entry.path().string();
-                        }
-                    }
-                }
-            }
-            break;
+            continue;
+        }
+
+        auto write_time = entry.last_write_time();
+        if (best_path.empty() || write_time > best_time)
+        {
+            best_path = entry.path();
+            best_time = write_time;
         }
     }
 
-    return "";
+    return best_path.string();
 }
 
 std::vector<std::string> ProfilerProcessController::BuildCommandArgs(ProfilerConfig const* config)
@@ -791,10 +817,8 @@ std::vector<std::string> ProfilerProcessController::BuildCommandArgs(ProfilerCon
         return args;
     }
 
-    // Add profiler-specific arguments
     if (!config->GetProfilerArgs().empty())
     {
-        // Simple space-based tokenization
         std::istringstream iss(config->GetProfilerArgs());
         std::string token;
         while (iss >> token)
@@ -803,13 +827,19 @@ std::vector<std::string> ProfilerProcessController::BuildCommandArgs(ProfilerCon
         }
     }
 
-    // Add target executable
+    if (!config->GetOutputDirectory().empty())
+    {
+        args.push_back("--output");
+        args.push_back(config->GetOutputDirectory());
+    }
+
+    // All ROCm profilers use "--" to separate profiler flags from the target
     if (!config->GetTargetExecutable().empty())
     {
+        args.push_back("--");
         args.push_back(config->GetTargetExecutable());
     }
 
-    // Add target arguments
     if (!config->GetTargetArgs().empty())
     {
         std::istringstream iss(config->GetTargetArgs());
@@ -823,24 +853,32 @@ std::vector<std::string> ProfilerProcessController::BuildCommandArgs(ProfilerCon
     return args;
 }
 
-void ProfilerProcessController::ExecuteJob(void* user_data)
+void ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller, Future* future)
 {
-    ProfilerProcessController* controller = static_cast<ProfilerProcessController*>(user_data);
     if (controller == nullptr)
     {
+        spdlog::error("ProfilerProcessController::ExecuteJob: controller is null");
         return;
     }
 
-    // Poll for process completion and output
+    spdlog::info("Profiler monitor job started");
+
     while (controller->m_state == kRPVProfilerStateRunning)
     {
+        if (future && future->IsCancelled())
+        {
+            spdlog::info("Profiler job cancelled by user");
+            controller->Cancel();
+            break;
+        }
+
         controller->GetOutput();
         controller->UpdateState();
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // Final output read
     controller->GetOutput();
+    spdlog::info("Profiler monitor job finished (state={})", static_cast<int>(controller->m_state.load()));
 }
 
 } // namespace Controller

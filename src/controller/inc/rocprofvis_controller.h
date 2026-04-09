@@ -570,6 +570,14 @@ rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_controller_future_
 rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_controller_future_t* future, char* buffer, uint32_t* length);
 
 /*
+* Gets the exit code of a completed profiler process.
+* @param future The future returned from rocprofvis_profiler_launch_async.
+* @param exit_code Output parameter for the process exit code.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_get_exit_code(rocprofvis_controller_future_t* future, int32_t* exit_code);
+
+/*
 * Cancels a running profiler process.
 * @param future The future returned from rocprofvis_profiler_launch_async.
 * @returns kRocProfVisResultSuccess or an error code.

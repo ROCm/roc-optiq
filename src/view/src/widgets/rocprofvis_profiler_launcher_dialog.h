@@ -37,6 +37,7 @@ private:
     void OnBrowseOutputDirectory();
     void PollProfilerState();
     void UpdateOutput();
+    void RebuildComposedOutput();
 
     // File dialog callbacks
     void OnProfilerPathSelected(const std::string& path);
@@ -61,10 +62,15 @@ private:
     // Profiler state
     rocprofvis_profiler_state_t m_profiler_state;
     std::string m_output_text;
+    std::string m_output_preamble;
+    std::string m_output_epilogue;
+    std::string m_process_output_raw;
+    std::string m_process_output_stripped;
     std::string m_error_message;
 
     // UI state
     bool m_auto_scroll_output;
+    bool m_auto_load_trace;
 };
 
 }  // namespace View

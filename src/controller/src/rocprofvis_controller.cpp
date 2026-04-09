@@ -614,28 +614,30 @@ rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_config_
 
     RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
 
-    // Create profiler controller
-    RocProfVis::Controller::ProfilerProcessController* controller = new RocProfVis::Controller::ProfilerProcessController();
+    RocProfVis::Controller::ProfilerProcessController* controller =
+        new RocProfVis::Controller::ProfilerProcessController();
 
-    // Launch async
     rocprofvis_result_t result = controller->LaunchAsync(cfg);
-
     if (result != kRocProfVisResultSuccess)
     {
         delete controller;
         return result;
     }
 
-    // Issue job to monitor and complete profiler execution
     RocProfVis::Controller::FutureRef future_ref(future);
     if (future_ref.IsValid())
     {
+        future_ref->SetUserData(controller, [](void* ptr)
+        {
+            delete static_cast<RocProfVis::Controller::ProfilerProcessController*>(ptr);
+        });
+
         RocProfVis::Controller::Job* job = RocProfVis::Controller::JobSystem::Get().IssueJob(
-            [controller](RocProfVis::Controller::Future* /* future */) -> rocprofvis_result_t 
+            [controller](RocProfVis::Controller::Future* future) -> rocprofvis_result_t
             {
-                RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller);
+                RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller, future);
                 return kRocProfVisResultSuccess;
-            }, 
+            },
             future_ref.Get());
         future_ref->Set(job);
     }
@@ -651,11 +653,14 @@ rocprofvis_result_t rocprofvis_profiler_get_state(rocprofvis_controller_future_t
     }
 
     RocProfVis::Controller::Future* fut = (RocProfVis::Controller::Future*)future;
+    auto* controller = static_cast<RocProfVis::Controller::ProfilerProcessController*>(fut->GetUserData());
+    if (controller == nullptr)
+    {
+        *state = kRPVProfilerStateIdle;
+        return kRocProfVisResultSuccess;
+    }
 
-    // TODO: Need to access job user_data to get ProfilerProcessController
-    // For now, return pending
-    *state = kRPVProfilerStateRunning;
-
+    *state = controller->GetState();
     return kRocProfVisResultSuccess;
 }
 
@@ -666,14 +671,24 @@ rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_controller_future_
         return kRocProfVisResultInvalidArgument;
     }
 
-    // TODO: Need to access job user_data to get ProfilerProcessController
-    // For now, return empty
-    if (buffer == nullptr)
+    RocProfVis::Controller::Future* fut = (RocProfVis::Controller::Future*)future;
+    auto* controller = static_cast<RocProfVis::Controller::ProfilerProcessController*>(fut->GetUserData());
+    if (controller == nullptr)
     {
         *length = 0;
         return kRocProfVisResultSuccess;
     }
 
+    std::string output = controller->GetOutput();
+
+    if (buffer == nullptr || *length == 0)
+    {
+        *length = static_cast<uint32_t>(output.size());
+        return kRocProfVisResultSuccess;
+    }
+
+    uint32_t copy_len = std::min(*length, static_cast<uint32_t>(output.size() + 1));
+    std::strncpy(buffer, output.c_str(), copy_len);
     return kRocProfVisResultSuccess;
 }
 
@@ -684,14 +699,43 @@ rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_controller_fut
         return kRocProfVisResultInvalidArgument;
     }
 
-    // TODO: Need to access job user_data to get ProfilerProcessController
-    // For now, return empty
-    if (buffer == nullptr)
+    RocProfVis::Controller::Future* fut = (RocProfVis::Controller::Future*)future;
+    auto* controller = static_cast<RocProfVis::Controller::ProfilerProcessController*>(fut->GetUserData());
+    if (controller == nullptr)
     {
         *length = 0;
         return kRocProfVisResultSuccess;
     }
 
+    std::string trace_path = controller->GetTracePath();
+
+    if (buffer == nullptr || *length == 0)
+    {
+        *length = static_cast<uint32_t>(trace_path.size());
+        return kRocProfVisResultSuccess;
+    }
+
+    uint32_t copy_len = std::min(*length, static_cast<uint32_t>(trace_path.size() + 1));
+    std::strncpy(buffer, trace_path.c_str(), copy_len);
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t rocprofvis_profiler_get_exit_code(rocprofvis_controller_future_t* future, int32_t* exit_code)
+{
+    if (future == nullptr || exit_code == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::Future* fut = (RocProfVis::Controller::Future*)future;
+    auto* controller = static_cast<RocProfVis::Controller::ProfilerProcessController*>(fut->GetUserData());
+    if (controller == nullptr)
+    {
+        *exit_code = -1;
+        return kRocProfVisResultSuccess;
+    }
+
+    *exit_code = controller->GetExitCode();
     return kRocProfVisResultSuccess;
 }
 
@@ -703,6 +747,15 @@ rocprofvis_result_t rocprofvis_profiler_cancel(rocprofvis_controller_future_t* f
     }
 
     RocProfVis::Controller::Future* fut = (RocProfVis::Controller::Future*)future;
-    return fut->Cancel();
+
+    fut->Cancel();
+
+    auto* controller = static_cast<RocProfVis::Controller::ProfilerProcessController*>(fut->GetUserData());
+    if (controller)
+    {
+        controller->Cancel();
+    }
+
+    return kRocProfVisResultSuccess;
 }
 }

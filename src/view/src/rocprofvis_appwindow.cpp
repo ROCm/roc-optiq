@@ -322,7 +322,7 @@ AppWindow::Render()
     Update();
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
-    DrawInternalBuildBanner();
+    DrawInternalBuildBanner("Evaluation Build");
 #endif
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();

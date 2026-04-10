@@ -557,7 +557,7 @@ KernelMetricTable::Render()
                                         m_compute_selection->SelectKernel(
                                             m_selected_kernel_id_local);
                                     }
-                                }                                
+                                }
                                 selectable_placed = true;
                             }
                             else

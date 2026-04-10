@@ -349,19 +349,19 @@ ComputeTopKernels::Update()
         {
             for(KernelBarModel::MetricSet& metric_set : m_kernel_bar.metric_sets)
             {
-                switch(m_kernel_bar.selected_metric)
+                switch(metric_set.metric)
                 {
                     case KernelInfo::InvocationCount:
                     {
                         metric_set.axis_title =
-                            DISPLAY_STRING_METRICS[m_kernel_bar.selected_metric];
+                            DISPLAY_STRING_METRICS[metric_set.metric];
                         break;
                     }
                     default:
                     {
                         metric_set.axis_title =
                             std::string(
-                                DISPLAY_STRING_METRICS[m_kernel_bar.selected_metric]) +
+                                DISPLAY_STRING_METRICS[metric_set.metric]) +
                             " (" +
                             timeformat_sufix(
                                 m_settings.GetUserSettings().unit_settings.time_format) +

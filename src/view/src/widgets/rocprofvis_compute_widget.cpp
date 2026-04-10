@@ -274,7 +274,7 @@ void
 WorkloadMetricTableWidget::FetchMetrics()
 {
     m_table.Clear();
-    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
+    m_data_provider.ComputeModel().ClearWorkloadMetricValues(m_client_id);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID)

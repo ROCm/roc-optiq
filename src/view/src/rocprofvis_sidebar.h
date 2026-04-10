@@ -44,6 +44,10 @@ private:
 
     template<typename Model>
     bool IsAllSubItemsHidden(const std::vector<Model>& container);
+    bool IsAllSubItemsHidden(const ProcessorModel& processor);
+    bool IsAllSubItemsHidden(const ProcessModel& process);
+    bool IsAllSubItemsHidden(const NodeModel& node);
+    bool IsAllSubItemsHidden(const TopologyModel& topology);
     template<typename Model>
     void HideAllSubItems(const std::vector<Model>& container);
     void HideAllUncategorizedItems(const std::vector<uint64_t>& indices);

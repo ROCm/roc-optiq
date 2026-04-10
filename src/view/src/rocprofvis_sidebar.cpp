@@ -280,6 +280,66 @@ SideBar::IsAllSubItemsHidden(const std::vector<Model>& container)
     return all_hidden;
 }
 
+bool
+SideBar::IsAllSubItemsHidden(const ProcessorModel& processor)
+{
+    return IsAllSubItemsHidden(processor.queues) &&
+           IsAllSubItemsHidden(processor.counters);
+}
+
+bool
+SideBar::IsAllSubItemsHidden(const ProcessModel& process)
+{
+    return IsAllSubItemsHidden(process.streams) &&
+           IsAllSubItemsHidden(process.instrumented_threads) &&
+           IsAllSubItemsHidden(process.sampled_threads);
+}
+
+bool
+SideBar::IsAllSubItemsHidden(const NodeModel& node)
+{
+    for(const auto& processor : node.processors)
+    {
+        if(!IsAllSubItemsHidden(processor))
+        {
+            return false;
+        }
+    }
+    for(const auto& process : node.processes)
+    {
+        if(!IsAllSubItemsHidden(process))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool
+SideBar::IsAllSubItemsHidden(const TopologyModel& topology)
+{
+    for(const auto& node : topology.nodes)
+    {
+        if(!IsAllSubItemsHidden(node))
+        {
+            return false;
+        }
+    }
+
+    if(m_graphs && !m_graphs->empty())
+    {
+        for(const auto& index : topology.uncategorized_graph_indices)
+        {
+            if(index < m_graphs->size() && (*m_graphs)[index].display)
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 template<typename Model>
 void
 SideBar::HideAllSubItems(const std::vector<Model>& container)
@@ -407,7 +467,7 @@ SideBar::DrawTopology(const TopologyModel& topology,
     if(show_eye_button)
     {
         EyeButtonState display_state = parent_eye_button_state;
-        if(display_state == EyeButtonState::kMixed && topology.all_subitems_hidden)
+        if(display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(topology))
             display_state = EyeButtonState::kAllHidden;
             
         ImGui::PushID("TopologyEye");
@@ -495,7 +555,7 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
             if(show_eye_button)
             {
                 EyeButtonState display_state = parent_eye_button_state;
-                if(display_state == EyeButtonState::kMixed && node.all_subitems_hidden)
+                if(display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(node))
                     display_state = EyeButtonState::kAllHidden;
                     
                 ImGui::PushID("NodesEye");
@@ -575,8 +635,13 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
     if(show_eye_button && !node.processors.empty())
     {
         bool all_proc_hidden = true;
-        for(const auto& proc : node.processors) {
-            if(!proc.all_subitems_hidden) { all_proc_hidden = false; break; }
+        for(const auto& proc : node.processors)
+        {
+            if(!IsAllSubItemsHidden(proc))
+            {
+                all_proc_hidden = false;
+                break;
+            }
         }
         
         EyeButtonState display_state = parent_eye_button_state;
@@ -614,8 +679,13 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
     if(show_eye_button && !node.processes.empty())
     {
         bool all_proc_hidden = true;
-        for(const auto& proc : node.processes) {
-            if(!proc.all_subitems_hidden) { all_proc_hidden = false; break; }
+        for(const auto& proc : node.processes)
+        {
+            if(!IsAllSubItemsHidden(proc))
+            {
+                all_proc_hidden = false;
+                break;
+            }
         }
         
         EyeButtonState display_state = parent_eye_button_state;
@@ -713,7 +783,7 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
             if(show_eye_button)
             {
                 EyeButtonState display_state = parent_eye_button_state;
-                if(display_state == EyeButtonState::kMixed && process.all_subitems_hidden)
+                if(display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(process))
                     display_state = EyeButtonState::kAllHidden;
                     
                 ImGui::PushID("ProcessEye");
@@ -796,6 +866,12 @@ SideBar::EyeButtonState
 SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
     EyeButtonState parent_eye_button_state, bool show_eye_button, uint64_t parent_id)
 {
+    if(parent_id != 0)
+    {
+        // Scope repeated processor branches by their parent stream/process item.
+        ImGui::PushID(static_cast<int>(parent_id));
+    }
+
     if(parent_eye_button_state == EyeButtonState::kAllVisible)
     {
         for(const auto& process : processors)
@@ -820,7 +896,7 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
             if(show_eye_button)
             {
                 EyeButtonState display_state = parent_eye_button_state;
-                if(display_state == EyeButtonState::kMixed && processor.all_subitems_hidden)
+                if(display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(processor))
                     display_state = EyeButtonState::kAllHidden;
                     
                 ImGui::PushID("ProcessorEye");
@@ -883,6 +959,10 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
             }
             ImGui::PopID();
         }
+    }
+    if(parent_id != 0)
+    {
+        ImGui::PopID();
     }
     return all_process_state;
 }

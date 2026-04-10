@@ -65,7 +65,8 @@ ComputeDataModel::GetWorkload(uint32_t workload_id) const
 const std::vector<std::shared_ptr<MetricValue>>*
 ComputeDataModel::GetKernelMetricsData(uint64_t store_id, uint32_t kernel_id) const
 {
-    if (m_kernel_metrics.count(store_id) && m_kernel_metrics.at(store_id).count(kernel_id)){
+    if(m_kernel_metrics.count(store_id) && m_kernel_metrics.at(store_id).count(kernel_id))
+    {
         return &m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_data;
     }
     return nullptr;
@@ -161,12 +162,6 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
 
                 if(source_type == kRPVControllerMetricSourceTypeWorkload)
                 {
-                    // Do something...(spdlog header include can be removed after)
-                    spdlog::info("Workload metric: id={}.{}.{} name={} workload={} "
-                                 "value_name={} value={}",
-                                 category_id, table_id, entry_id, entry.name,
-                                 workload.name, value_name, value);
-
                     MetricStore& ms = m_workload_metrics[store_id][workload_id];
                     // Check if metric value already exists for the given metric ID
                     if(ms.m_metrics_map.count(metric_id.id))
@@ -262,8 +257,8 @@ ComputeDataModel::GetMetricInfo(uint32_t workload_id, uint32_t category_id,
 }
 
 const AvailableMetrics::Entry*
-ComputeDataModel::GetMetricInfo(const WorkloadInfo& workload, uint32_t category_id, uint32_t table_id,
-                               uint32_t entry_id)
+ComputeDataModel::GetMetricInfo(const WorkloadInfo& workload, uint32_t category_id,
+                                uint32_t table_id, uint32_t entry_id)
 {
     if(workload.available_metrics.tree.count(category_id))
     {
@@ -380,15 +375,17 @@ ComputeDataModel::GetWorkloadMetricValue(uint64_t store_id, uint32_t workload_id
     return GetWorkloadMetricValue(store_id, workload_id, metric_id.id);
 }
 
-
 std::shared_ptr<MetricValue>
 ComputeDataModel::GetWorkloadMetricValue(uint64_t store_id, uint32_t workload_id,
-                                 uint64_t metric_key) const
+                                         uint64_t metric_key) const
 {
-    if(m_workload_metrics.count(store_id) && m_workload_metrics.at(store_id).count(workload_id) &&
+    if(m_workload_metrics.count(store_id) &&
+       m_workload_metrics.at(store_id).count(workload_id) &&
        m_workload_metrics.at(store_id).at(workload_id).m_metrics_map.count(metric_key))
     {
-        return m_workload_metrics.at(store_id).at(workload_id).m_metrics_map.at(metric_key);
+        return m_workload_metrics.at(store_id)
+            .at(workload_id)
+            .m_metrics_map.at(metric_key);
     }
 
     return nullptr;
@@ -409,9 +406,10 @@ ComputeDataModel::GetKernelMetricValue(uint64_t store_id, uint32_t kernel_id,
 
 std::shared_ptr<MetricValue>
 ComputeDataModel::GetKernelMetricValue(uint64_t store_id, uint32_t kernel_id,
-                                 uint64_t metric_key) const
+                                       uint64_t metric_key) const
 {
-    if(m_kernel_metrics.count(store_id) && m_kernel_metrics.at(store_id).count(kernel_id) &&
+    if(m_kernel_metrics.count(store_id) &&
+       m_kernel_metrics.at(store_id).count(kernel_id) &&
        m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_map.count(metric_key))
     {
         return m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_map.at(metric_key);
@@ -433,12 +431,14 @@ ComputeDataModel::GetKernelMetricValuesByTable(uint64_t store_id, uint32_t kerne
 
 ComputeDataModel::MetricValuesByEntryId*
 ComputeDataModel::GetKernelMetricValuesByTable(uint64_t store_id, uint32_t kernel_id,
-                                         uint64_t table_key)
+                                               uint64_t table_key)
 {
-    if(m_kernel_metrics.count(store_id) && m_kernel_metrics.at(store_id).count(kernel_id) &&
+    if(m_kernel_metrics.count(store_id) &&
+       m_kernel_metrics.at(store_id).count(kernel_id) &&
        m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_by_table_id.count(table_key))
     {
-        return &m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_by_table_id.at(table_key);
+        return &m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_by_table_id.at(
+            table_key);
     }
     return nullptr;
 }

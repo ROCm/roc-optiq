@@ -124,6 +124,7 @@ class SqliteDatabase : public Database
         // @return status of operation
         rocprofvis_dm_result_t DropSQLTable(const char* table_name, uint32_t db_node_id=0);
         rocprofvis_dm_result_t DropSQLIndex(const char* table_name, uint32_t db_node_id=0);
+        std::vector<std::string> GetRocpdIndexes(uint32_t db_node_id);
         // Method for SQL query execution without any callback
         // @param future - future object for asynchronous execution status
         // @param query - SQL query

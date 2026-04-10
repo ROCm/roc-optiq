@@ -570,14 +570,21 @@ KernelMetricTable::Render()
                                                     std::abs(val) / it->second);
                                                 ratio = std::min(ratio, 1.0f);
 
-                                                ImVec2 pos = ImGui::GetCursorScreenPos();
-                                                float  w   = ImGui::GetContentRegionAvail().x;
-                                                float  h   = ImGui::GetTextLineHeightWithSpacing();
-                                                ImGui::GetWindowDrawList()->AddRectFilled(
+                                                ImVec2     pos       = ImGui::GetCursorScreenPos();
+                                                float      w         = ImGui::GetContentRegionAvail().x;
+                                                float      h         = ImGui::GetTextLineHeightWithSpacing();
+                                                ImDrawList* draw_list = ImGui::GetWindowDrawList();
+                                                // Intersect with the current clip rect so the bar is
+                                                // correctly hidden behind frozen rows/columns when the
+                                                // table is scrolled vertically.
+                                                draw_list->PushClipRect(
+                                                    pos, ImVec2(pos.x + w, pos.y + h), true);
+                                                draw_list->AddRectFilled(
                                                     pos,
                                                     ImVec2(pos.x + w * ratio, pos.y + h),
                                                     SettingsManager::GetInstance().GetColor(
                                                         Colors::kHighlightChart));
+                                                draw_list->PopClipRect();
                                             }
                                         }
                                     }

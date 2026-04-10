@@ -671,7 +671,6 @@ TraceView::RenderToolbar()
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     ImGui::AlignTextToFramePadding();
 
     // Toolbar Controls
@@ -731,7 +730,7 @@ TraceView::RenderToolbar()
         m_event_search->SetWidth(m_event_search->Width() + available_width);
     }
 
-    ImGui::PopStyleVar(3);
+    ImGui::PopStyleVar(2);
     ImGui::EndChild();
 
     ImVec2      child_min = ImGui::GetItemRectMin();
@@ -1017,6 +1016,7 @@ TraceView::RenderFlowControls()
             mode = static_cast<FlowDisplayMode>(i);
         }
 
+        ImGui::PopStyleColor(3);
         if(ImGui::IsItemHovered())
         {
             ImGui::PopFont();
@@ -1024,7 +1024,6 @@ TraceView::RenderFlowControls()
             ImGui::PushFont(icon_font);
         }
 
-        ImGui::PopStyleColor(3);
         ImGui::PopID();
         ImGui::SameLine();
     }

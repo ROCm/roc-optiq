@@ -79,6 +79,7 @@ EventSearch::Render()
         ImGui::SetNextWindowPos(
             ImVec2(ImGui::GetItemRectMin().x,
                    ImGui::GetItemRectMax().y + ImGui::GetStyle().FramePadding.y));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         if(ImGui::BeginPopup("event_search", ImGuiWindowFlags_NoFocusOnAppearing))
         {
             if(m_data_provider.IsRequestPending(GetRequestID()) ||
@@ -111,6 +112,7 @@ EventSearch::Render()
             }
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar();
     }
 }
 

@@ -17,10 +17,10 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr ImGuiTreeNodeFlags CATEGORY_HEADER_FLAGS =
-    ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanLabelWidth;
-constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
-constexpr float  TREE_LINE_W           = 1.5f;
+constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_DefaultOpen |
+                                            ImGuiTreeNodeFlags_SpanLabelWidth |
+                                            ImGuiTreeNodeFlags_Framed;
+constexpr float TREE_LINE_W = 1.5f;
 
 class TreeConnector
 {
@@ -82,8 +82,7 @@ SideBar::Render()
                                   m_settings.GetColor(Colors::kBgFrame)));
 
         const TopologyModel& topology = m_track_topology->GetTopology();
-        if(ImGui::TreeNodeEx("Project",
-                             CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
+        if(ImGui::TreeNodeEx("Project", HEADER_FLAGS))
         {
             TreeConnector project_tc(m_settings);
             if(!topology.nodes.empty())
@@ -117,8 +116,7 @@ SideBar::Render()
                 if(use_header)
                 {
                     project_tc.Branch();
-                    header_open =
-                        ImGui::CollapsingHeader("Uncategorized", CATEGORY_HEADER_FLAGS);
+                    header_open = ImGui::CollapsingHeader("Uncategorized", HEADER_FLAGS);
                     ImGui::Indent();
                 }
                 if(header_open)
@@ -385,7 +383,7 @@ SideBar::DrawTopology(const TopologyModel& topology,
         ImGui::SameLine();
     }
 
-    if(ImGui::TreeNodeEx(topology.node_header.c_str(), CATEGORY_HEADER_FLAGS))
+    if(ImGui::TreeNodeEx(topology.node_header.c_str(), HEADER_FLAGS))
     {
         new_button_state = DrawNodes(topology.nodes, new_button_state, true);
         if(new_button_state == EyeButtonState::kAllHidden)
@@ -436,7 +434,7 @@ SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
             }
 
             ImGui::PushID(static_cast<int>(node.info->id));
-            if(ImGui::TreeNodeEx(node.info->host_name.c_str(), CATEGORY_HEADER_FLAGS))
+            if(ImGui::TreeNodeEx(node.info->host_name.c_str(), HEADER_FLAGS))
             {
                 new_button_state = DrawNode(node, new_button_state, true);
                 if(new_button_state == EyeButtonState::kAllHidden)
@@ -481,7 +479,7 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
     }
 
     tc.Branch();
-    bool open = ImGui::TreeNodeEx(node.processor_header.c_str(), CATEGORY_HEADER_FLAGS);
+    bool open = ImGui::TreeNodeEx(node.processor_header.c_str(), HEADER_FLAGS);
 
     if(!node.processors.empty() && open)
     {
@@ -499,7 +497,7 @@ SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
     }
 
     tc.Branch();
-    open = ImGui::TreeNodeEx(node.process_header.c_str(), CATEGORY_HEADER_FLAGS);
+    open = ImGui::TreeNodeEx(node.process_header.c_str(), HEADER_FLAGS);
 
     if(!node.processes.empty() && open)
     {
@@ -561,7 +559,7 @@ SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
                 ImGui::SameLine();
             }
 
-            if(ImGui::TreeNodeEx(process.header.c_str(), CATEGORY_HEADER_FLAGS))
+            if(ImGui::TreeNodeEx(process.header.c_str(), HEADER_FLAGS))
             {
                 TreeConnector ps_tc(m_settings);
                 if(!process.streams.empty())
@@ -651,7 +649,7 @@ SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
             EyeButtonState instrumented_thread_button_state = EyeButtonState::kAllHidden;
             EyeButtonState sampled_thread_button_state      = EyeButtonState::kAllHidden;
 
-            if(ImGui::TreeNodeEx(processor.header.c_str(), CATEGORY_HEADER_FLAGS))
+            if(ImGui::TreeNodeEx(processor.header.c_str(), HEADER_FLAGS))
             {
                 TreeConnector proc_tc(m_settings);
                 if(!processor.queues.empty())
@@ -724,8 +722,7 @@ SideBar::DrawCollapsable(const std::vector<Model>& container,
         }
 
         ImGui::SameLine();
-        open = ImGui::TreeNodeEx(collapsable_header.c_str(),
-            CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
+        open = ImGui::TreeNodeEx(collapsable_header.c_str(), HEADER_FLAGS);
     }
     if(open)
     {

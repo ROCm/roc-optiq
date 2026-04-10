@@ -28,6 +28,8 @@ public:
     void Render() override;
     void Update() override;
 
+    void SetQueryFunc(MetricId metric_id, const std::string& value_name);
+
 private:
 
     void SubscribeToEvents();

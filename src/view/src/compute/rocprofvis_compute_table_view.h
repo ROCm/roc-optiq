@@ -18,7 +18,10 @@ class ComputeSelection;
 class ComputeTableView: public RocWidget
 {
 public:
-    ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
+    ComputeTableView(DataProvider&                     data_provider,
+                     std::shared_ptr<ComputeSelection> compute_selection,
+                     std::function<void(MetricId metric_id, const std::string&)>
+                         set_to_kernel_table_callback);
     ~ComputeTableView();
 
     void Update() override;
@@ -35,12 +38,14 @@ private:
     uint64_t                          m_client_id;
     bool                              m_fetch_pending = false;
     std::shared_ptr<TabContainer>     m_tabs;
-    std::unordered_map<uint64_t, MetricTableCache> m_table_widgets;
+    std::unordered_map<uint64_t, newMetricTableCache> m_table_widgets;
     PinedMetricTable                               m_pined_metric_table;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_metrics_fetched_token;
+    std::function<void(MetricId metric_id, const std::string&)>
+        m_set_to_kernel_table_callback;
 };
 
 }  // namespace View

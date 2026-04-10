@@ -224,7 +224,7 @@ void
 MetricTableWidget::FetchMetrics()
 {
     m_table.Clear();
-    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
@@ -258,7 +258,53 @@ MetricTableWidget::UpdateTable()
         return;
 
     m_table.Populate(tree.at(m_category_id).tables.at(m_table_id), [&](uint32_t eid) {
-        return model.GetMetricValue(m_client_id, kernel_id, m_category_id, m_table_id, eid);
+        return model.GetKernelMetricValue(m_client_id, kernel_id, m_category_id, m_table_id, eid);
+    });
+}
+
+//---------------------------------------------------------
+
+WorkloadMetricTableWidget::WorkloadMetricTableWidget(
+    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
+    uint32_t category_id, uint32_t table_id)
+: MetricTableWidget(data_provider, compute_selection, category_id, table_id)
+{}
+
+void
+WorkloadMetricTableWidget::FetchMetrics()
+{
+    m_table.Clear();
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    m_data_provider.FetchMetrics(MetricsRequestParams(
+        workload_id, {}, { { m_category_id, m_table_id, std::nullopt } }, m_client_id));
+}
+
+void
+WorkloadMetricTableWidget::UpdateTable()
+{
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    auto& model = m_data_provider.ComputeModel();
+    if(!model.GetWorkloads().count(workload_id)) return;
+
+    const auto& tree = model.GetWorkloads().at(workload_id).available_metrics.tree;
+    if(!tree.count(m_category_id) || !tree.at(m_category_id).tables.count(m_table_id))
+        return;
+
+    m_table.Populate(tree.at(m_category_id).tables.at(m_table_id), [&](uint32_t eid) {
+        return model.GetWorkloadMetricValue(m_client_id, workload_id, m_category_id,
+                                            m_table_id, eid);
     });
 }
 
@@ -402,7 +448,7 @@ PinedMetricTable::FillTableRow(const MetricId& metric_id)
     }
     auto& model = m_data_provider.ComputeModel();
     auto  metric_value =
-        model.GetMetricValue(m_client_id, kernel_id, metric_id.category_id,
+        model.GetKernelMetricValue(m_client_id, kernel_id, metric_id.category_id,
                              metric_id.table_id, metric_id.entry_id);
 
     const auto& table = GetTable(metric_id, workload_id);

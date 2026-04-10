@@ -223,10 +223,10 @@ ComputeComparisonView::FetchMetrics()
         std::vector<uint32_t>                       kernel_ids = { baseline_kernel_id };
         std::vector<MetricsRequestParams::MetricID> metric_ids;
         // Fetch baseline...
-        if(!m_data_provider.ComputeModel().GetMetricsData(m_client_id_baseline,
+        if(!m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_baseline,
                                                           baseline_kernel_id))
         {
-            m_data_provider.ComputeModel().ClearMetricValues(m_client_id_baseline);
+            m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id_baseline);
             for(const AvailableMetrics::Category* category :
                 m_data_provider.ComputeModel()
                     .GetWorkload(baseline_workload_id)
@@ -244,10 +244,10 @@ ComputeComparisonView::FetchMetrics()
         kernel_ids = { m_target_kernel_id };
         metric_ids.clear();
         // Fetch target...
-        if(!m_data_provider.ComputeModel().GetMetricsData(m_client_id_target,
+        if(!m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_target,
                                                           m_target_kernel_id))
         {
-            m_data_provider.ComputeModel().ClearMetricValues(m_client_id_target);
+            m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id_target);
             for(const AvailableMetrics::Category* category :
                 m_data_provider.ComputeModel()
                     .GetWorkload(m_target_workload_id)
@@ -270,8 +270,8 @@ ComputeComparisonView::UpdateMetrics()
 {
     // Do nothing unless we have data for baseline + target...
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-    if(m_data_provider.ComputeModel().GetMetricsData(m_client_id_baseline, kernel_id) &&
-       m_data_provider.ComputeModel().GetMetricsData(m_client_id_target,
+    if(m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_baseline, kernel_id) &&
+       m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_target,
                                                      m_target_kernel_id))
     {
         uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
@@ -306,11 +306,11 @@ ComputeComparisonView::UpdateMetrics()
                         category->ordered_tables[i]->ordered_entries.size());
                     // See if this metric is present in baseline and target..
                     ComputeDataModel::MetricValuesByEntryId* baseline_fetched_table =
-                        m_data_provider.ComputeModel().GetMetricValuesByTable(
+                        m_data_provider.ComputeModel().GetKernelMetricValuesByTable(
                             m_client_id_baseline, kernel_id, category->id,
                             category->ordered_tables[i]->id);
                     ComputeDataModel::MetricValuesByEntryId* target_fetched_table =
-                        m_data_provider.ComputeModel().GetMetricValuesByTable(
+                        m_data_provider.ComputeModel().GetKernelMetricValuesByTable(
                             m_client_id_target, m_target_kernel_id, category->id,
                             category->ordered_tables[i]->id);
                     for(size_t j = 0;

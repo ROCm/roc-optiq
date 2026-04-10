@@ -5,12 +5,11 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_flame_track_item.h"
-#include "rocprofvis_font_manager.h"
+#include "rocprofvis_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 
-#include <algorithm>
+#include <unordered_set>
 
 namespace RocProfVis
 {
@@ -19,8 +18,7 @@ namespace View
 
 constexpr ImGuiTreeNodeFlags CATEGORY_HEADER_FLAGS =
     ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanLabelWidth;
-constexpr ImVec2 DEFAULT_WINDOW_PADDING = ImVec2(4.0f, 4.0f);
-constexpr float  TREE_LINE_W           = 1.5f;
+constexpr float TREE_LINE_W = 1.5f;
 
 class TreeConnector
 {
@@ -53,16 +51,15 @@ private:
     float       m_prev_y     = 0;
 };
 
-SideBar::SideBar(std::shared_ptr<TrackTopology>                   topology,
-                 std::shared_ptr<TimelineSelection>               timeline_selection,
+SideBar::SideBar(std::shared_ptr<TrackTopology>         topology,
+                 std::shared_ptr<TimelineSelection>     timeline_selection,
                  std::shared_ptr<std::vector<TrackGraph>> graphs,
-                 DataProvider&                                    dp)
+                 DataProvider&                          dp)
 : m_settings(SettingsManager::GetInstance())
 , m_track_topology(topology)
 , m_timeline_selection(timeline_selection)
 , m_graphs(graphs)
 , m_data_provider(dp)
-, m_root_eye_button_state(EyeButtonState::kMixed)
 {}
 
 SideBar::~SideBar() {}
@@ -81,63 +78,41 @@ SideBar::Render()
                               ImGui::ColorConvertU32ToFloat4(
                                   m_settings.GetColor(Colors::kBgFrame)));
 
-        const TopologyModel& topology = m_track_topology->GetTopology();
+        const SidebarTree& sidebar_tree = m_track_topology->GetSidebarTree();
         if(ImGui::TreeNodeEx("Project",
                              CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
         {
             TreeConnector project_tc(m_settings);
-            if(!topology.nodes.empty())
+            if(sidebar_tree.root)
             {
-                project_tc.Branch();
-                m_root_eye_button_state =
-                    DrawTopology(topology, m_root_eye_button_state, true);
-
-                if(m_root_eye_button_state == EyeButtonState::kAllHidden)
+                for(const auto& child : sidebar_tree.root->children)
                 {
-                    topology.all_subitems_hidden = true;
-                }
-                else
-                {
-                    topology.all_subitems_hidden = false;
-                }
-            }
-            if(m_root_eye_button_state == EyeButtonState::kAllHidden)
-            {
-                HideAllUncategorizedItems(topology.uncategorized_graph_indices);
-            }
-            else if(m_root_eye_button_state == EyeButtonState::kAllVisible)
-            {
-                UnhideAllUncategorizedItems(topology.uncategorized_graph_indices);
-            }
-
-            if(!topology.uncategorized_graph_indices.empty())
-            {
-                bool use_header  = !topology.nodes.empty();
-                bool header_open = true;
-                if(use_header)
-                {
-                    project_tc.Branch();
-                    header_open =
-                        ImGui::CollapsingHeader("Uncategorized", CATEGORY_HEADER_FLAGS);
-                    ImGui::Indent();
-                }
-                if(header_open)
-                {
-                    for(const uint64_t& index : topology.uncategorized_graph_indices)
+                    if(!child)
                     {
-                        if(RenderTrackItem(index))
-                        {
-                            m_root_eye_button_state = EyeButtonState::kMixed;
-                        }
+                        continue;
                     }
-                }
-                if(use_header)
-                {
-                    ImGui::Unindent();
+
+                    if(child->type == NodeType::kUncategorizedList && !child->collapsable)
+                    {
+                        RenderTreeChildren(*child);
+                        continue;
+                    }
+
+                    project_tc.Branch();
+                    if(child->type == NodeType::kNodeList)
+                    {
+                        RenderBranchNode(*child, sidebar_tree.root.get(),
+                                         sidebar_tree.root.get());
+                    }
+                    else
+                    {
+                        RenderTreeNode(*child);
+                    }
                 }
             }
             ImGui::TreePop();
         }
+
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(4);
     }
@@ -152,10 +127,11 @@ SideBar::RenderTrackItem(const uint64_t& index)
 {
     bool state_changed = false;
 
-    if(!m_graphs || m_graphs->empty())
+    if(!m_graphs || index >= m_graphs->size())
     {
         return state_changed;
     }
+
     TrackGraph& graph = (*m_graphs)[index];
 
     ImGui::PushID(static_cast<int>(graph.chart->GetID()));
@@ -168,16 +144,8 @@ SideBar::RenderTrackItem(const uint64_t& index)
         graph.display         = !graph.display;
         graph.display_changed = true;
         state_changed         = true;
-        if(!graph.display)
-        {
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
-                { graph.chart->GetID() }, false);
-        }
-        else
-        {
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
-                { graph.chart->GetID() }, true);
-        }
+        m_data_provider.DataModel().GetTimeline().UpdateHistogram(
+            { graph.chart->GetID() }, graph.display);
     }
 
     ImGui::PopFont();
@@ -220,13 +188,11 @@ SideBar::RenderTrackItem(const uint64_t& index)
         ImGui::PopStyleColor();
     }
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-    // Lets you know if component is in Frame. Dev purpose only.
     if(graph.chart->IsInViewVertical())
     {
         ImGui::TextColored(
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
             "Component Is: ");
-
         ImGui::SameLine();
         ImGui::TextColored(
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
@@ -237,7 +203,6 @@ SideBar::RenderTrackItem(const uint64_t& index)
         ImGui::TextColored(
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
             "Component Is: ");
-
         ImGui::SameLine();
         ImGui::TextColored(
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextError)),
@@ -248,801 +213,206 @@ SideBar::RenderTrackItem(const uint64_t& index)
     return state_changed;
 }
 
-template<typename Model>
-bool
-SideBar::IsAllSubItemsHidden(const std::vector<Model>& container)
-{
-    bool all_hidden = true;
-    if(m_graphs && !m_graphs->empty())
-    {
-        for(const Model& elem : container)
-        {
-            TrackGraph& graph = (*m_graphs)[elem.graph_index];
-            if(graph.display)
-            {
-                all_hidden = false;
-                break;
-            }
-            if constexpr (std::is_same_v<Model, StreamModel>)
-            {
-                for(const auto& proc : elem.processors)
-                {
-                    if(!IsAllSubItemsHidden(proc.queues))
-                    {
-                        all_hidden = false;
-                        break;
-                    }
-                }
-                if(!all_hidden) break;
-            }
-        }
-    }
-    return all_hidden;
-}
-
-bool
-SideBar::IsAllSubItemsHidden(const ProcessorModel& processor)
-{
-    return IsAllSubItemsHidden(processor.queues) &&
-           IsAllSubItemsHidden(processor.counters);
-}
-
-bool
-SideBar::IsAllSubItemsHidden(const ProcessModel& process)
-{
-    return IsAllSubItemsHidden(process.streams) &&
-           IsAllSubItemsHidden(process.instrumented_threads) &&
-           IsAllSubItemsHidden(process.sampled_threads);
-}
-
-bool
-SideBar::IsAllSubItemsHidden(const NodeModel& node)
-{
-    for(const auto& processor : node.processors)
-    {
-        if(!IsAllSubItemsHidden(processor))
-        {
-            return false;
-        }
-    }
-    for(const auto& process : node.processes)
-    {
-        if(!IsAllSubItemsHidden(process))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool
-SideBar::IsAllSubItemsHidden(const TopologyModel& topology)
-{
-    for(const auto& node : topology.nodes)
-    {
-        if(!IsAllSubItemsHidden(node))
-        {
-            return false;
-        }
-    }
-
-    if(m_graphs && !m_graphs->empty())
-    {
-        for(const auto& index : topology.uncategorized_graph_indices)
-        {
-            if(index < m_graphs->size() && (*m_graphs)[index].display)
-            {
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-
-template<typename Model>
-void
-SideBar::HideAllSubItems(const std::vector<Model>& container)
-{
-    if(m_graphs && !m_graphs->empty())
-    {
-        std::vector<uint64_t> ids_to_remove;
-        for(const Model& elem : container)
-        {
-            TrackGraph& graph = (*m_graphs)[elem.graph_index];
-            if(graph.display == true)
-            {
-                graph.display         = false;
-                graph.display_changed = true;
-                ids_to_remove.push_back(graph.chart->GetID());
-            }
-        }
-        if(!ids_to_remove.empty())
-        {
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_remove, false);
-        }
-        if constexpr (std::is_same_v<Model, StreamModel>)
-        {
-            for(const Model& elem : container)
-            {
-                for(const auto& proc : elem.processors)
-                {
-                    HideAllSubItems(proc.queues);
-                }
-            }
-        }
-    }
-}
-
-void
-SideBar::HideAllUncategorizedItems(const std::vector<uint64_t>& indices)
-{
-    if(m_graphs && !m_graphs->empty())
-    {
-        std::vector<uint64_t> ids_to_remove;
-        for(const uint64_t& index : indices)
-        {
-            TrackGraph& graph = (*m_graphs)[index];
-            if(graph.display == true)
-            {
-                graph.display         = false;
-                graph.display_changed = true;
-                ids_to_remove.push_back(graph.chart->GetID());
-            }
-        }
-        if(!ids_to_remove.empty())
-        {
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_remove, false);
-        }
-    }
-}
-
-void
-SideBar::UnhideAllUncategorizedItems(const std::vector<uint64_t>& indices)
-{
-    if(m_graphs && !m_graphs->empty())
-    {
-        std::vector<uint64_t> ids_to_add;
-        for(const uint64_t& index : indices)
-        {
-            TrackGraph& graph = (*m_graphs)[index];
-            if(graph.display == false)
-            {
-                graph.display         = true;
-                graph.display_changed = true;
-                ids_to_add.push_back(graph.chart->GetID());
-            }
-        }
-        if(!ids_to_add.empty())
-        {
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_add, true);
-        }
-    }
-}
-
-template<typename Model>
-void
-SideBar::UnhideAllSubItems(const std::vector<Model>& container)
-{
-    if(m_graphs && !m_graphs->empty())
-    {
-        std::vector<uint64_t> ids_to_add;
-        for(const Model& elem : container)
-        {
-            TrackGraph& graph = (*m_graphs)[elem.graph_index];
-            if(graph.display == false)
-            {
-                graph.display         = true;
-                graph.display_changed = true;
-                ids_to_add.push_back(graph.chart->GetID());
-            }
-        }
-        if(!ids_to_add.empty())
-        {
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram(ids_to_add, true);
-        }
-        if constexpr (std::is_same_v<Model, StreamModel>)
-        {
-            for(const Model& elem : container)
-            {
-                for(const auto& proc : elem.processors)
-                {
-                    UnhideAllSubItems(proc.queues);
-                }
-            }
-        }
-    }
-}
-
-
 SideBar::EyeButtonState
-SideBar::DrawTopology(const TopologyModel& topology,
-                      EyeButtonState parent_eye_button_state, bool show_eye_button)
+SideBar::MergeEyeButtonState(EyeButtonState lhs, EyeButtonState rhs) const
 {
-    if(parent_eye_button_state == EyeButtonState::kAllVisible)
+    if(lhs == rhs)
     {
-        topology.all_subitems_hidden = false;
-    }
-    EyeButtonState new_button_state = parent_eye_button_state;
-    if(show_eye_button)
-    {
-        EyeButtonState display_state = parent_eye_button_state;
-        if(display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(topology))
-            display_state = EyeButtonState::kAllHidden;
-            
-        ImGui::PushID("TopologyEye");
-        new_button_state = DrawEyeButton(display_state);
-        ImGui::PopID();
-        ImGui::SameLine();
-    }
-
-    if(ImGui::TreeNodeEx(topology.node_header.c_str(), CATEGORY_HEADER_FLAGS))
-    {
-        new_button_state = DrawNodes(topology.nodes, new_button_state, true);
-        if(new_button_state == EyeButtonState::kAllHidden)
-        {
-            topology.all_subitems_hidden = true;
-        }
-        else
-        {
-            topology.all_subitems_hidden = false;
-        }
-        ImGui::TreePop();
-    }
-    else if(new_button_state == EyeButtonState::kAllHidden || new_button_state == EyeButtonState::kAllVisible)
-    {
-        bool hide = (new_button_state == EyeButtonState::kAllHidden);
-        for(const auto& node : topology.nodes)
-        {
-            for(const auto& proc : node.processors)
-            {
-                if(hide) { HideAllSubItems(proc.queues); HideAllSubItems(proc.counters); }
-                else     { UnhideAllSubItems(proc.queues); UnhideAllSubItems(proc.counters); }
-                proc.all_subitems_hidden = hide;
-            }
-            for(const auto& process : node.processes)
-            {
-                if(hide)
-                {
-                    HideAllSubItems(process.streams);
-                    HideAllSubItems(process.instrumented_threads);
-                    HideAllSubItems(process.sampled_threads);
-                    for(const auto& stream : process.streams)
-                        for(const auto& sp : stream.processors)
-                            HideAllSubItems(sp.queues);
-                }
-                else
-                {
-                    UnhideAllSubItems(process.streams);
-                    UnhideAllSubItems(process.instrumented_threads);
-                    UnhideAllSubItems(process.sampled_threads);
-                    for(const auto& stream : process.streams)
-                        for(const auto& sp : stream.processors)
-                            UnhideAllSubItems(sp.queues);
-                }
-                process.all_subitems_hidden = hide;
-            }
-            node.all_subitems_hidden = hide;
-        }
-        topology.all_subitems_hidden = hide;
-    }
-    return new_button_state;
-}
-
-SideBar::EyeButtonState
-SideBar::DrawNodes(const std::vector<NodeModel>& nodes,
-                   EyeButtonState parent_eye_button_state, bool show_eye_button)
-{
-    if(parent_eye_button_state == EyeButtonState::kAllVisible)
-    {
-        for(const auto& node : nodes)
-            node.all_subitems_hidden = false;
-    }
-    else if(parent_eye_button_state == EyeButtonState::kAllHidden)
-    {
-        for(const auto& node : nodes)
-            node.all_subitems_hidden = true;
-    }
-    EyeButtonState new_button_state = parent_eye_button_state;
-    TreeConnector tc(m_settings);
-    for(const NodeModel& node : nodes)
-    {
-        if(node.info)
-        {
-            tc.Branch();
-            ImGui::PushID(static_cast<int>(node.info->id));
-            
-            if(show_eye_button)
-            {
-                EyeButtonState display_state = parent_eye_button_state;
-                if(display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(node))
-                    display_state = EyeButtonState::kAllHidden;
-                    
-                ImGui::PushID("NodesEye");
-                new_button_state = DrawEyeButton(display_state);
-                ImGui::PopID();
-                ImGui::SameLine();
-            }
-
-            if(ImGui::TreeNodeEx(node.info->host_name.c_str(), CATEGORY_HEADER_FLAGS))
-            {
-                new_button_state = DrawNode(node, new_button_state, true);
-                if(new_button_state == EyeButtonState::kAllHidden)
-                {
-                    node.all_subitems_hidden = true;
-                }
-                else
-                {
-                    node.all_subitems_hidden = false;
-                }
-                ImGui::TreePop();
-            }
-            else if(new_button_state == EyeButtonState::kAllHidden || new_button_state == EyeButtonState::kAllVisible)
-            {
-                bool hide = (new_button_state == EyeButtonState::kAllHidden);
-                for(const auto& proc : node.processors)
-                {
-                    if(hide) { HideAllSubItems(proc.queues); HideAllSubItems(proc.counters); }
-                    else     { UnhideAllSubItems(proc.queues); UnhideAllSubItems(proc.counters); }
-                    proc.all_subitems_hidden = hide;
-                }
-                for(const auto& process : node.processes)
-                {
-                    if(hide)
-                    {
-                        HideAllSubItems(process.streams);
-                        HideAllSubItems(process.instrumented_threads);
-                        HideAllSubItems(process.sampled_threads);
-                        for(const auto& stream : process.streams)
-                            for(const auto& sp : stream.processors)
-                                HideAllSubItems(sp.queues);
-                    }
-                    else
-                    {
-                        UnhideAllSubItems(process.streams);
-                        UnhideAllSubItems(process.instrumented_threads);
-                        UnhideAllSubItems(process.sampled_threads);
-                        for(const auto& stream : process.streams)
-                            for(const auto& sp : stream.processors)
-                                UnhideAllSubItems(sp.queues);
-                    }
-                    process.all_subitems_hidden = hide;
-                }
-                node.all_subitems_hidden = hide;
-            }
-            ImGui::PopID();
-        }
-    }
-    return new_button_state;
-}
-
-SideBar::EyeButtonState
-SideBar::DrawNode(const NodeModel& node, EyeButtonState parent_eye_button_state,
-                  bool show_eye_button)
-{
-    if(parent_eye_button_state == EyeButtonState::kAllVisible)
-        node.all_subitems_hidden = false;
-    else if(parent_eye_button_state == EyeButtonState::kAllHidden)
-        node.all_subitems_hidden = true;
-
-    TreeConnector tc(m_settings);
-
-    EyeButtonState processor_state = parent_eye_button_state;
-    EyeButtonState process_state   = parent_eye_button_state;
-
-    tc.Branch();
-    
-    if(show_eye_button && !node.processors.empty())
-    {
-        bool all_proc_hidden = true;
-        for(const auto& proc : node.processors)
-        {
-            if(!IsAllSubItemsHidden(proc))
-            {
-                all_proc_hidden = false;
-                break;
-            }
-        }
-        
-        EyeButtonState display_state = parent_eye_button_state;
-        if(display_state == EyeButtonState::kMixed && all_proc_hidden)
-            display_state = EyeButtonState::kAllHidden;
-            
-        ImGui::PushID("ProcessorsEye");
-        processor_state = DrawEyeButton(display_state);
-        ImGui::PopID();
-        ImGui::SameLine();
-    }
-
-    bool open = ImGui::TreeNodeEx(node.processor_header.c_str(), CATEGORY_HEADER_FLAGS);
-
-    if(!node.processors.empty() && open)
-    {
-        processor_state = DrawProcessors(node.processors, processor_state, true);
-        ImGui::TreePop();
-    }
-    else if(!node.processors.empty() &&
-            (processor_state == EyeButtonState::kAllHidden ||
-             processor_state == EyeButtonState::kAllVisible))
-    {
-        bool hide = (processor_state == EyeButtonState::kAllHidden);
-        for(const auto& proc : node.processors)
-        {
-            if(hide) { HideAllSubItems(proc.queues); HideAllSubItems(proc.counters); }
-            else     { UnhideAllSubItems(proc.queues); UnhideAllSubItems(proc.counters); }
-            proc.all_subitems_hidden = hide;
-        }
-    }
-
-    tc.Branch();
-    
-    if(show_eye_button && !node.processes.empty())
-    {
-        bool all_proc_hidden = true;
-        for(const auto& proc : node.processes)
-        {
-            if(!IsAllSubItemsHidden(proc))
-            {
-                all_proc_hidden = false;
-                break;
-            }
-        }
-        
-        EyeButtonState display_state = parent_eye_button_state;
-        if(display_state == EyeButtonState::kMixed && all_proc_hidden)
-            display_state = EyeButtonState::kAllHidden;
-            
-        ImGui::PushID("ProcessesEye");
-        process_state = DrawEyeButton(display_state);
-        ImGui::PopID();
-        ImGui::SameLine();
-    }
-
-    open = ImGui::TreeNodeEx(node.process_header.c_str(), CATEGORY_HEADER_FLAGS);
-
-    if(!node.processes.empty() && open)
-    {
-        process_state = DrawProcesses(node.processes, process_state, true);
-        ImGui::TreePop();
-    }
-    else if(!node.processes.empty() &&
-            (process_state == EyeButtonState::kAllHidden ||
-             process_state == EyeButtonState::kAllVisible))
-    {
-        bool hide = (process_state == EyeButtonState::kAllHidden);
-        for(const auto& process : node.processes)
-        {
-            if(hide)
-            {
-                HideAllSubItems(process.streams);
-                HideAllSubItems(process.instrumented_threads);
-                HideAllSubItems(process.sampled_threads);
-                for(const auto& stream : process.streams)
-                    for(const auto& sp : stream.processors)
-                        HideAllSubItems(sp.queues);
-            }
-            else
-            {
-                UnhideAllSubItems(process.streams);
-                UnhideAllSubItems(process.instrumented_threads);
-                UnhideAllSubItems(process.sampled_threads);
-                for(const auto& stream : process.streams)
-                    for(const auto& sp : stream.processors)
-                        UnhideAllSubItems(sp.queues);
-            }
-            process.all_subitems_hidden = hide;
-        }
-    }
-
-    if((node.processors.empty() || processor_state == EyeButtonState::kAllHidden) &&
-       (node.processes.empty() || process_state == EyeButtonState::kAllHidden))
-    {
-        node.all_subitems_hidden = true;
-        return EyeButtonState::kAllHidden;
-    }
-
-    node.all_subitems_hidden = false;
-    if((node.processors.empty() || processor_state == EyeButtonState::kAllVisible) &&
-       (node.processes.empty() || process_state == EyeButtonState::kAllVisible))
-    {
-        return EyeButtonState::kAllVisible;
+        return lhs;
     }
     return EyeButtonState::kMixed;
 }
 
 SideBar::EyeButtonState
-SideBar::DrawProcesses(const std::vector<ProcessModel>& processes,
-                       EyeButtonState parent_eye_button_state, bool show_eye_button)
+SideBar::GetLeafState(const LeafNode& leaf) const
 {
-    if(parent_eye_button_state == EyeButtonState::kAllVisible)
+    if(!m_graphs || leaf.graph_index >= m_graphs->size())
     {
-        for(const auto& process : processes)
-            process.all_subitems_hidden = false;
-    }
-    else if(parent_eye_button_state == EyeButtonState::kAllHidden)
-    {
-        for(const auto& process : processes)
-            process.all_subitems_hidden = true;
+        return EyeButtonState::kAllHidden;
     }
 
-    EyeButtonState all_process_state = EyeButtonState::kAllHidden;
-    TreeConnector tc(m_settings);
-    for(const ProcessModel& process : processes)
-    {
-        if(process.info)
-        {
-            tc.Branch();
-            EyeButtonState queue_button_state               = parent_eye_button_state;
-            EyeButtonState stream_button_state              = parent_eye_button_state;
-            EyeButtonState instrumented_thread_button_state = parent_eye_button_state;
-            EyeButtonState sampled_thread_button_state      = parent_eye_button_state;
-            EyeButtonState counter_button_state             = parent_eye_button_state;
-            ImGui::PushID(static_cast<int>(process.info->id));
-
-            EyeButtonState current_eye_button_state = parent_eye_button_state;
-            if(show_eye_button)
-            {
-                EyeButtonState display_state = parent_eye_button_state;
-                if(display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(process))
-                    display_state = EyeButtonState::kAllHidden;
-                    
-                ImGui::PushID("ProcessEye");
-                current_eye_button_state = DrawEyeButton(display_state);
-                ImGui::PopID();
-                ImGui::SameLine();
-            }
-
-            if(ImGui::TreeNodeEx(process.header.c_str(), CATEGORY_HEADER_FLAGS))
-            {
-                TreeConnector ps_tc(m_settings);
-                if(!process.streams.empty())
-                {
-                    ps_tc.Branch();
-                    stream_button_state = DrawCollapsable(
-                        process.streams, process.stream_header, current_eye_button_state);
-                }
-                if(!process.instrumented_threads.empty())
-                {
-                    ps_tc.Branch();
-                    instrumented_thread_button_state = DrawCollapsable(
-                        process.instrumented_threads, process.instrumented_thread_header,
-                        current_eye_button_state);
-                }
-                if(!process.sampled_threads.empty())
-                {
-                    ps_tc.Branch();
-                    sampled_thread_button_state = DrawCollapsable(
-                        process.sampled_threads, process.sampled_thread_header,
-                        current_eye_button_state);
-                }
-                ImGui::TreePop();
-            }
-            else if(current_eye_button_state == EyeButtonState::kAllHidden)
-            {
-                HideAllSubItems(process.streams);
-                HideAllSubItems(process.instrumented_threads);
-                HideAllSubItems(process.sampled_threads);
-                for(const auto& stream : process.streams)
-                    for(const auto& sp : stream.processors)
-                        HideAllSubItems(sp.queues);
-                stream_button_state              = EyeButtonState::kAllHidden;
-                instrumented_thread_button_state = EyeButtonState::kAllHidden;
-                sampled_thread_button_state      = EyeButtonState::kAllHidden;
-            }
-            else if(current_eye_button_state == EyeButtonState::kAllVisible)
-            {
-                UnhideAllSubItems(process.streams);
-                UnhideAllSubItems(process.instrumented_threads);
-                UnhideAllSubItems(process.sampled_threads);
-                for(const auto& stream : process.streams)
-                    for(const auto& sp : stream.processors)
-                        UnhideAllSubItems(sp.queues);
-                stream_button_state              = EyeButtonState::kAllVisible;
-                instrumented_thread_button_state = EyeButtonState::kAllVisible;
-                sampled_thread_button_state      = EyeButtonState::kAllVisible;
-            }
-
-            if(queue_button_state == EyeButtonState::kAllHidden &&
-               stream_button_state == EyeButtonState::kAllHidden &&
-               instrumented_thread_button_state == EyeButtonState::kAllHidden &&
-               sampled_thread_button_state == EyeButtonState::kAllHidden &&
-               counter_button_state == EyeButtonState::kAllHidden)
-            {
-                process.all_subitems_hidden = true;
-                all_process_state           = EyeButtonState::kAllHidden;
-            }
-            else
-            {
-                process.all_subitems_hidden = false;
-                all_process_state           = EyeButtonState::kMixed;
-            }
-            ImGui::PopID();
-        }
-    }
-    return all_process_state;
+    return (*m_graphs)[leaf.graph_index].display
+               ? EyeButtonState::kAllVisible
+               : EyeButtonState::kAllHidden;
 }
 
 SideBar::EyeButtonState
-SideBar::DrawProcessors(const std::vector<ProcessorModel>& processors,
-    EyeButtonState parent_eye_button_state, bool show_eye_button, uint64_t parent_id)
+SideBar::GetTreeState(const TreeNode& node) const
 {
-    if(parent_id != 0)
+    bool           has_state = false;
+    EyeButtonState state     = EyeButtonState::kAllHidden;
+
+    if(node.IsLeaf())
     {
-        // Scope repeated processor branches by their parent stream/process item.
-        ImGui::PushID(static_cast<int>(parent_id));
+        state     = GetLeafState(static_cast<const LeafNode&>(node));
+        has_state = true;
     }
 
-    if(parent_eye_button_state == EyeButtonState::kAllVisible)
+    for(const auto& child : node.children)
     {
-        for(const auto& process : processors)
-            process.all_subitems_hidden = false;
-    }
-    else if(parent_eye_button_state == EyeButtonState::kAllHidden)
-    {
-        for(const auto& process : processors)
-            process.all_subitems_hidden = true;
-    }
-
-    EyeButtonState all_process_state = EyeButtonState::kAllHidden;
-    TreeConnector tc(m_settings);
-    for(const ProcessorModel& processor : processors)
-    {
-        if(processor.info)
+        if(!child)
         {
-            tc.Branch();
-            ImGui::PushID(static_cast<int>(processor.info->id.value));
+            continue;
+        }
 
-            EyeButtonState current_eye_button_state = parent_eye_button_state;
-            if(show_eye_button)
-            {
-                EyeButtonState display_state = parent_eye_button_state;
-                if(display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(processor))
-                    display_state = EyeButtonState::kAllHidden;
-                    
-                ImGui::PushID("ProcessorEye");
-                current_eye_button_state = DrawEyeButton(display_state);
-                ImGui::PopID();
-                ImGui::SameLine();
-            }
-
-            EyeButtonState queue_button_state               = current_eye_button_state;
-            EyeButtonState counter_button_state             = current_eye_button_state;
-            EyeButtonState stream_button_state              = EyeButtonState::kAllHidden;
-            EyeButtonState instrumented_thread_button_state = EyeButtonState::kAllHidden;
-            EyeButtonState sampled_thread_button_state      = EyeButtonState::kAllHidden;
-
-            if(ImGui::TreeNodeEx(processor.header.c_str(), CATEGORY_HEADER_FLAGS))
-            {
-                TreeConnector proc_tc(m_settings);
-                if(!processor.queues.empty())
-                {
-                    proc_tc.Branch();
-                    queue_button_state = DrawCollapsable(
-                        processor.queues, processor.queue_header, current_eye_button_state);
-                }
-                if(!processor.counters.empty())
-                {
-                    proc_tc.Branch();
-                    counter_button_state =
-                        DrawCollapsable(processor.counters, processor.counter_header,
-                            current_eye_button_state);
-                }
-                ImGui::TreePop();
-            }
-            else if(current_eye_button_state == EyeButtonState::kAllHidden)
-            {
-                HideAllSubItems(processor.queues);
-                HideAllSubItems(processor.counters);
-                queue_button_state   = EyeButtonState::kAllHidden;
-                counter_button_state = EyeButtonState::kAllHidden;
-            }
-            else if(current_eye_button_state == EyeButtonState::kAllVisible)
-            {
-                UnhideAllSubItems(processor.queues);
-                UnhideAllSubItems(processor.counters);
-                queue_button_state   = EyeButtonState::kAllVisible;
-                counter_button_state = EyeButtonState::kAllVisible;
-            }
-
-            if(queue_button_state == EyeButtonState::kAllHidden &&
-                stream_button_state == EyeButtonState::kAllHidden &&
-                instrumented_thread_button_state == EyeButtonState::kAllHidden &&
-                sampled_thread_button_state == EyeButtonState::kAllHidden &&
-                counter_button_state == EyeButtonState::kAllHidden)
-            {
-                processor.all_subitems_hidden = true;
-            }
-            else
-            {
-                processor.all_subitems_hidden = false;
-                all_process_state           = EyeButtonState::kMixed;
-            }
-            ImGui::PopID();
+        EyeButtonState child_state = GetTreeState(*child);
+        state     = has_state ? MergeEyeButtonState(state, child_state) : child_state;
+        has_state = true;
+        if(state == EyeButtonState::kMixed)
+        {
+            break;
         }
     }
-    if(parent_id != 0)
-    {
-        ImGui::PopID();
-    }
-    return all_process_state;
+
+    return has_state ? state : EyeButtonState::kAllHidden;
 }
 
-template<typename Model>
-SideBar::EyeButtonState
-SideBar::DrawCollapsable(const std::vector<Model>& container,
-                         const std::string&                collapsable_header,
-                         EyeButtonState                    parent_eye_button_state)
+ImGuiTreeNodeFlags
+SideBar::GetTreeNodeFlags(const TreeNode& node) const
 {
-    bool open = true;
-    EyeButtonState new_button_state = parent_eye_button_state;
-    if (!collapsable_header.empty())
+    ImGuiTreeNodeFlags flags = CATEGORY_HEADER_FLAGS;
+    if(node.framed)
     {
-        ImGui::PushID(collapsable_header.c_str());
-        
-        EyeButtonState display_state = parent_eye_button_state;
-        if (display_state == EyeButtonState::kMixed && IsAllSubItemsHidden(container))
-            display_state = EyeButtonState::kAllHidden;
-            
-        ImGui::PushID("CollapsableEye");
-        new_button_state = DrawEyeButton(display_state);
-        ImGui::PopID();
+        flags |= ImGuiTreeNodeFlags_Framed;
+    }
+    return flags;
+}
 
-        if (new_button_state == EyeButtonState::kAllHidden)
+void
+SideBar::ApplyVisibility(const TreeNode& node, bool visible)
+{
+    if(!m_graphs || m_graphs->empty())
+    {
+        return;
+    }
+
+    std::unordered_set<uint64_t> visited_graphs;
+    std::vector<uint64_t>        chart_ids;
+    std::vector<const TreeNode*> stack = { &node };
+
+    while(!stack.empty())
+    {
+        const TreeNode* current = stack.back();
+        stack.pop_back();
+        if(!current)
         {
-            HideAllSubItems(container);
-        }
-        else if (new_button_state == EyeButtonState::kAllVisible)
-        {
-            UnhideAllSubItems(container);
+            continue;
         }
 
+        if(current->IsLeaf())
+        {
+            const LeafNode& leaf = static_cast<const LeafNode&>(*current);
+            if(leaf.graph_index < m_graphs->size() &&
+               visited_graphs.insert(leaf.graph_index).second)
+            {
+                TrackGraph& graph = (*m_graphs)[leaf.graph_index];
+                if(graph.display != visible)
+                {
+                    graph.display         = visible;
+                    graph.display_changed = true;
+                    chart_ids.push_back(graph.chart->GetID());
+                }
+            }
+        }
+
+        for(const auto& child : current->children)
+        {
+            if(child)
+            {
+                stack.push_back(child.get());
+            }
+        }
+    }
+
+    if(!chart_ids.empty())
+    {
+        m_data_provider.DataModel().GetTimeline().UpdateHistogram(chart_ids, visible);
+    }
+}
+
+void
+SideBar::RenderLeafNode(const LeafNode& leaf)
+{
+    ImGui::PushID(static_cast<const void*>(&leaf));
+    RenderTrackItem(leaf.graph_index);
+
+    if(leaf.render_children_inline && !leaf.children.empty())
+    {
+        ImGui::Indent();
+        RenderTreeChildren(leaf);
+        ImGui::Unindent();
+    }
+
+    ImGui::PopID();
+}
+
+void
+SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
+                          const TreeNode* target_node)
+{
+    const TreeNode& state_source = state_node ? *state_node : node;
+    const TreeNode& apply_target = target_node ? *target_node : node;
+
+    ImGui::PushID(static_cast<const void*>(&node));
+    if(node.show_eye_button)
+    {
+        EyeButtonState current_state = GetTreeState(state_source);
+        EyeButtonState new_state     = DrawEyeButton(current_state);
+        if(new_state != current_state && new_state != EyeButtonState::kMixed)
+        {
+            ApplyVisibility(apply_target, new_state == EyeButtonState::kAllVisible);
+        }
         ImGui::SameLine();
-        open = ImGui::TreeNodeEx(collapsable_header.c_str(),
-            CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed);
     }
-    EyeButtonState group_state = new_button_state;
+
+    bool open = true;
+    if(node.collapsable)
+    {
+        open = ImGui::TreeNodeEx(node.label.c_str(), GetTreeNodeFlags(node));
+    }
 
     if(open)
     {
-        TreeConnector tc(m_settings);
-        for(const Model& item : container)
+        RenderTreeChildren(node);
+        if(node.collapsable)
         {
-            if(item.info)
-            {
-                tc.Branch();
-                bool track_changed = RenderTrackItem(item.graph_index);
-                if(track_changed)
-                {
-                    new_button_state = EyeButtonState::kMixed;
-                }
-
-                if constexpr (std::is_same_v<Model, StreamModel>)
-                {
-                    ImGui::Indent();
-                    EyeButtonState pass_state = group_state;
-                    if (track_changed)
-                    {
-                        if (m_graphs && item.graph_index < m_graphs->size())
-                        {
-                            TrackGraph& graph = (*m_graphs)[item.graph_index];
-                            pass_state = graph.display ? EyeButtonState::kAllVisible : EyeButtonState::kAllHidden;
-                        }
-                    }
-                    DrawProcessors(item.processors, pass_state, false, item.info->id);
-                    ImGui::Unindent();
-
-                }
-
-            }
+            ImGui::TreePop();
         }
-        if (collapsable_header.empty())
-        {
-            return new_button_state;
-        }
-        ImGui::TreePop();
     }
     ImGui::PopID();
-    return new_button_state;
+}
+
+void
+SideBar::RenderTreeNode(const TreeNode& node)
+{
+    if(node.IsLeaf())
+    {
+        RenderLeafNode(static_cast<const LeafNode&>(node));
+        return;
+    }
+
+    RenderBranchNode(node);
+}
+
+void
+SideBar::RenderTreeChildren(const TreeNode& node)
+{
+    if(node.children.empty())
+    {
+        return;
+    }
+
+    TreeConnector tc(m_settings);
+    for(const auto& child : node.children)
+    {
+        if(!child)
+        {
+            continue;
+        }
+
+        tc.Branch();
+        RenderTreeNode(*child);
+    }
 }
 
 SideBar::EyeButtonState
@@ -1078,25 +448,5 @@ SideBar::DrawEyeButton(EyeButtonState eye_button_state)
     return new_button_state;
 }
 
-bool
-SideBar::IsEyeButtonVisible()
-{
-    ImVec2 sidebar_min  = ImGui::GetWindowPos();
-    ImVec2 sidebar_size = ImGui::GetWindowSize();
-    ImVec2 sidebar_max =
-        ImVec2(sidebar_min.x + sidebar_size.x, sidebar_min.y + sidebar_size.y);
-
-    ImVec2 line_start = ImGui::GetCursorScreenPos();
-
-    float  line_height = ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.y * 2.0f;
-    ImVec2 line_end = ImVec2(line_start.x + sidebar_size.x, line_start.y + line_height);
-
-    ImVec2 mouse_pos = ImGui::GetMousePos();
-
-    bool mouse_in_sidebar = mouse_pos.x >= sidebar_min.x && mouse_pos.x <= sidebar_max.x;
-    bool mouse_on_line    = mouse_pos.y >= line_start.y && mouse_pos.y <= line_end.y;
-
-    return mouse_in_sidebar && mouse_on_line;
-}
 }  // namespace View
 }  // namespace RocProfVis

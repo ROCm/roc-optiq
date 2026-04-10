@@ -12,6 +12,132 @@ namespace RocProfVis
 namespace View
 {
 
+namespace
+{
+TreeNode*
+AddBranchNode(TreeNode* parent, NodeType type, const std::string& label,
+              bool collapsable = true, bool show_eye_button = true,
+              bool framed = false)
+{
+    auto node = std::make_unique<TreeNode>(type, label, collapsable);
+    node->show_eye_button = show_eye_button;
+    node->framed          = framed;
+    TreeNode* raw         = node.get();
+    if(parent)
+    {
+        parent->AddChild(std::move(node));
+    }
+    return raw;
+}
+
+LeafNode*
+AddLeafNode(TreeNode* parent, const std::vector<const TrackInfo*>& track_list,
+            SidebarTree& sidebar_tree, uint64_t graph_index,
+            const std::string& fallback_label, bool render_children_inline = false)
+{
+    uint64_t    track_id = graph_index;
+    std::string label    = fallback_label;
+
+    if(graph_index < track_list.size() && track_list[graph_index])
+    {
+        track_id = track_list[graph_index]->id;
+        if(label.empty())
+        {
+            label = track_list[graph_index]->main_name;
+        }
+    }
+
+    auto leaf = std::make_unique<LeafNode>(label, graph_index, track_id);
+    leaf->render_children_inline = render_children_inline;
+    LeafNode* raw                = leaf.get();
+    parent->AddChild(std::move(leaf));
+    sidebar_tree.leaf_lookup[graph_index].push_back(raw);
+    return raw;
+}
+
+template <typename Model>
+void
+BuildLeafList(TreeNode* parent, NodeType type, const std::string& label,
+              const std::vector<Model>& items,
+              const std::vector<const TrackInfo*>& track_list,
+              SidebarTree& sidebar_tree)
+{
+    if(items.empty())
+    {
+        return;
+    }
+
+    TreeNode* list_node = AddBranchNode(parent, type, label, true, true, true);
+    for(const auto& item : items)
+    {
+        if(item.info)
+        {
+            AddLeafNode(list_node, track_list, sidebar_tree,
+                        item.graph_index, item.info->name);
+        }
+    }
+}
+
+void
+BuildProcessorTree(TreeNode* parent, const ProcessorModel& processor,
+                   const std::vector<const TrackInfo*>& track_list,
+                   SidebarTree& sidebar_tree, bool show_eye_button)
+{
+    if(!processor.info)
+    {
+        return;
+    }
+
+    TreeNode* processor_node = AddBranchNode(parent, NodeType::kProcessor,
+        processor.header, true, show_eye_button, false);
+    BuildLeafList(processor_node, NodeType::kQueueList, processor.queue_header,
+                  processor.queues, track_list, sidebar_tree);
+    BuildLeafList(processor_node, NodeType::kCounterList, processor.counter_header,
+                  processor.counters, track_list, sidebar_tree);
+}
+
+void
+BuildProcessTree(TreeNode* parent, const ProcessModel& process,
+                 const std::vector<const TrackInfo*>& track_list,
+                 SidebarTree& sidebar_tree)
+{
+    if(!process.info)
+    {
+        return;
+    }
+
+    TreeNode* process_node = AddBranchNode(parent, NodeType::kProcess,
+        process.header, true, true, false);
+
+    if(!process.streams.empty())
+    {
+        TreeNode* stream_list = AddBranchNode(process_node, NodeType::kStreamList,
+            process.stream_header, true, true, true);
+        for(const auto& stream : process.streams)
+        {
+            if(!stream.info)
+            {
+                continue;
+            }
+
+            LeafNode* stream_leaf = AddLeafNode(stream_list, track_list, sidebar_tree,
+                stream.graph_index, stream.info->name, !stream.processors.empty());
+            for(const auto& processor : stream.processors)
+            {
+                BuildProcessorTree(stream_leaf, processor, track_list, sidebar_tree, false);
+            }
+        }
+    }
+
+    BuildLeafList(process_node, NodeType::kInstrumentedThreadList,
+                  process.instrumented_thread_header,
+                  process.instrumented_threads, track_list, sidebar_tree);
+    BuildLeafList(process_node, NodeType::kSampledThreadList,
+                  process.sampled_thread_header,
+                  process.sampled_threads, track_list, sidebar_tree);
+}
+}  // namespace
+
 TrackTopology::TrackTopology(DataProvider& dp)
 : m_data_provider(dp)
 , m_topology_dirty(true)
@@ -68,6 +194,12 @@ const TopologyModel&
 TrackTopology::GetTopology() const
 {
     return m_topology;
+}
+
+const SidebarTree&
+TrackTopology::GetSidebarTree() const
+{
+    return m_sidebar_tree;
 }
 
 void
@@ -607,8 +739,70 @@ TrackTopology::UpdateGraphs()
                 }
             }
         }
+        BuildSidebarTree();
         m_graphs_dirty = false;
     }
+}
+
+void
+TrackTopology::BuildSidebarTree()
+{
+    m_sidebar_tree = {};
+
+    auto root = std::make_unique<TreeNode>(NodeType::kRoot, "Project", true);
+    root->show_eye_button = false;
+    root->framed          = true;
+
+    TreeNode* root_node = root.get();
+    const auto& track_list = m_data_provider.DataModel().GetTimeline().GetTrackList();
+
+    if(!m_topology.nodes.empty())
+    {
+        TreeNode* node_list = AddBranchNode(root_node, NodeType::kNodeList,
+            m_topology.node_header, true, true, false);
+        for(const auto& node : m_topology.nodes)
+        {
+            if(!node.info)
+            {
+                continue;
+            }
+
+            TreeNode* node_branch = AddBranchNode(node_list, NodeType::kNode,
+                node.info->host_name, true, true, false);
+
+            if(!node.processors.empty())
+            {
+                TreeNode* processor_list = AddBranchNode(node_branch,
+                    NodeType::kProcessorList, node.processor_header, true, true, false);
+                for(const auto& processor : node.processors)
+                {
+                    BuildProcessorTree(processor_list, processor, track_list, m_sidebar_tree, true);
+                }
+            }
+
+            if(!node.processes.empty())
+            {
+                TreeNode* process_list = AddBranchNode(node_branch, NodeType::kProcessList,
+                    node.process_header, true, true, false);
+                for(const auto& process : node.processes)
+                {
+                    BuildProcessTree(process_list, process, track_list, m_sidebar_tree);
+                }
+            }
+        }
+    }
+
+    if(!m_topology.uncategorized_graph_indices.empty())
+    {
+        TreeNode* uncategorized = AddBranchNode(root_node, NodeType::kUncategorizedList,
+            "Uncategorized", !m_topology.nodes.empty(), false, false);
+        for(const auto& graph_index : m_topology.uncategorized_graph_indices)
+        {
+            AddLeafNode(uncategorized, track_list, m_sidebar_tree, graph_index, "");
+        }
+    }
+
+    m_sidebar_tree.root = std::move(root);
 }
 
 }  // namespace View

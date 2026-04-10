@@ -32,6 +32,7 @@ enum class NodeType : uint8_t
     kStream,
     kInstrumentedThreadList,
     kSampledThreadList,
+    kUncategorizedList,
     kLeaf
 };
 
@@ -75,6 +76,9 @@ public:
     std::string                             label;
     bool                                    collapsable;
     bool                                    visible = true;
+    bool                                    show_eye_button = true;
+    bool                                    framed = false;
+    bool                                    render_children_inline = false;
     std::vector<TreeNode*>                  parents;
     std::vector<std::unique_ptr<TreeNode>>  children;
 };

@@ -152,6 +152,8 @@ constexpr size_t      MAX_RECENT_FILES                       = 5;
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
 
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
+
 class SettingsManager
 {
 public:
@@ -193,6 +195,8 @@ public:
 
     AppWindowSettings& GetAppWindowSettings();
 
+    void SaveHotkeySettings();
+
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
@@ -222,6 +226,9 @@ private:
 
     void SerializeOtherSettings(jt::Json& json);
     void DeserializeOtherSettings(jt::Json& json);
+
+    void SerializeHotkeySettings(jt::Json& json);
+    void DeserializeHotkeySettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "imgui.h"
 #include "implot.h"
 #include "rocprofvis_core.h"
@@ -376,6 +377,7 @@ SettingsManager::SaveSettingsJson()
     SerializeDisplaySettings(settings_json);
     SerializeUnitSettings(settings_json);
     SerializeOtherSettings(settings_json);
+    SerializeHotkeySettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -404,6 +406,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeDisplaySettings(result.second);
         DeserializeUnitSettings(result.second);
         DeserializeOtherSettings(result.second);
+        DeserializeHotkeySettings(result.second);
     }
     else
     {
@@ -715,6 +718,61 @@ const float
 SettingsManager::GetEventLevelCompactHeight() const
 {
     return COMPACT_EVENT_HEIGHT;
+}
+
+void
+SettingsManager::SerializeHotkeySettings(jt::Json& json)
+{
+    auto& hk_mgr = HotkeyManager::GetInstance();
+    jt::Json& hs = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_HOTKEYS];
+
+    for(const auto& action : hk_mgr.GetActions())
+    {
+        if(action.current_binding.primary != action.default_binding.primary ||
+           action.current_binding.alternate != action.default_binding.alternate)
+        {
+            jt::Json binding;
+            binding["primary"]   = HotkeyManager::KeyChordToString(action.current_binding.primary);
+            binding["alternate"] = HotkeyManager::KeyChordToString(action.current_binding.alternate);
+            hs[action.id.c_str()] = binding;
+        }
+    }
+}
+
+void
+SettingsManager::DeserializeHotkeySettings(jt::Json& json)
+{
+    jt::Json& hs = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_HOTKEYS];
+    if(!hs.isObject())
+        return;
+
+    auto& hk_mgr = HotkeyManager::GetInstance();
+
+    for(auto& [key, value] : hs.getObject())
+    {
+        if(!value.isObject())
+            continue;
+
+        HotkeyBinding binding;
+        if(value["primary"].isString())
+        {
+            std::string primary_str = value["primary"].getString();
+            binding.primary = HotkeyManager::StringToKeyChord(primary_str);
+        }
+        if(value["alternate"].isString())
+        {
+            std::string alt_str = value["alternate"].getString();
+            binding.alternate = HotkeyManager::StringToKeyChord(alt_str);
+        }
+
+        hk_mgr.SetBinding(key, binding);
+    }
+}
+
+void
+SettingsManager::SaveHotkeySettings()
+{
+    SaveSettingsJson();
 }
 
 }  // namespace View

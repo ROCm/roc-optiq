@@ -462,7 +462,7 @@ ComputeTester::Render()
         {
             for(const uint32_t& kernel_id : m_selections.kernel_ids)
             {
-                m_data_provider.ComputeModel().ClearMetricValues(client_id, kernel_id);
+                m_data_provider.ComputeModel().ClearKernelMetricValues(client_id, kernel_id);
             }
         }
         if(do_fetch)
@@ -514,7 +514,7 @@ ComputeTester::Render()
 
                 ImGui::Text("Metrics for Kernel ID: %u", kernel_id);
                 const std::vector<std::shared_ptr<MetricValue>>* metrics =
-                    m_data_provider.ComputeModel().GetMetricsData(c_id, kernel_id);
+                    m_data_provider.ComputeModel().GetKernelMetricsData(c_id, kernel_id);
                 
                 if(metrics == nullptr)
                 {
@@ -578,7 +578,7 @@ ComputeTester::Render()
         TableKey table_key = { 2, 1 }; // SOL
         //assume client id 1 and kernel id 1 for test
         ComputeDataModel::MetricValuesByEntryId* sol_metrics =
-            m_data_provider.ComputeModel().GetMetricValuesByTable(1, 1, table_key.id);
+            m_data_provider.ComputeModel().GetKernelMetricValuesByTable(1, 1, table_key.id);
         if(!sol_metrics || sol_metrics->empty())
         {
             ImGui::TextDisabled("No SOL metrics available for client 1.");

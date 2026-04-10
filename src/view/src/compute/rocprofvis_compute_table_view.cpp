@@ -88,7 +88,7 @@ ComputeTableView::RebuildTabs()
 {
     m_tabs.reset();
     m_table_widgets.clear();
-    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
@@ -112,7 +112,7 @@ ComputeTableView::RebuildTabs()
 void
 ComputeTableView::FetchAllMetrics()
 {
-    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
     m_table_widgets.clear();
     m_fetch_pending = false;
 
@@ -208,7 +208,7 @@ ComputeTableView::RebuildTableDataCache()
             };
             MetricTableCache widget(add_row_func);
             widget.Populate(*tbl, [&](uint32_t eid) {
-                return model.GetMetricValue(
+                return model.GetKernelMetricValue(
                     m_client_id, kernel_id, cat->id, tbl->id, eid);
             });
 

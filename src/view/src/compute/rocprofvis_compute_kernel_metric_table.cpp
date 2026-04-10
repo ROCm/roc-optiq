@@ -38,11 +38,11 @@ constexpr std::string_view FILTER_TEXT_HINT_NUMERICAL = ">, <, =, >=, <=, !=";
 constexpr float            COL_FILTER_CHAR_LIMIT      = static_cast<float>(
     std::max(FILTER_TEXT_HINT_STR.length(), FILTER_TEXT_HINT_NUMERICAL.length()));
 
-constexpr float COL_NAME_CHAR_LIMIT       = 50.0f;
+constexpr float COL_NAME_CHAR_LIMIT       = 40.0f;
 constexpr float COL_DEFAULT_CHAR_LIMIT    = 30.0f;
 constexpr float COL_INVOCATION_CHAR_LIMIT = COL_FILTER_CHAR_LIMIT;
 
-constexpr float kTooltipMaxWidth = 400.0f;
+constexpr float kTooltipMaxWidth = 600.0f;
 
 KernelMetricTable::KernelMetricTable(DataProvider&                     data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection)
@@ -520,6 +520,17 @@ KernelMetricTable::Render()
                             ImGuiTableColumnFlags flags = ImGui::TableGetColumnFlags(col);
                             bool is_visible = (flags & ImGuiTableColumnFlags_IsVisible) != 0;
                             bool is_enabled = (flags & ImGuiTableColumnFlags_IsEnabled) != 0;
+                            bool need_tooltip = false;
+                            if(col == NAME_COLUMN_INDEX)
+                            {
+                                // Measure text and if larger than the cell, use a tooltip
+                                ImVec2 text_size = ImGui::CalcTextSize(cell.c_str());
+                                float available_width = ImGui::GetContentRegionAvail().x;
+                                if(text_size.x > available_width)
+                                {
+                                    need_tooltip = true;
+                                }
+                            }
 
                             if(!selectable_placed && is_visible && is_enabled)
                             {
@@ -570,19 +581,36 @@ KernelMetricTable::Render()
                                                     std::abs(val) / it->second);
                                                 ratio = std::min(ratio, 1.0f);
 
-                                                ImVec2 pos = ImGui::GetCursorScreenPos();
-                                                float  w   = ImGui::GetContentRegionAvail().x;
-                                                float  h   = ImGui::GetTextLineHeightWithSpacing();
-                                                ImGui::GetWindowDrawList()->AddRectFilled(
+                                                ImVec2     pos       = ImGui::GetCursorScreenPos();
+                                                float      w         = ImGui::GetContentRegionAvail().x;
+                                                float      h         = ImGui::GetTextLineHeightWithSpacing();
+                                                ImDrawList* draw_list = ImGui::GetWindowDrawList();
+                                                // Intersect with the current clip rect so the bar is
+                                                // correctly hidden behind frozen rows/columns when the
+                                                // table is scrolled vertically.
+                                                draw_list->PushClipRect(
+                                                    pos, ImVec2(pos.x + w, pos.y + h), true);
+                                                draw_list->AddRectFilled(
                                                     pos,
                                                     ImVec2(pos.x + w * ratio, pos.y + h),
                                                     SettingsManager::GetInstance().GetColor(
                                                         Colors::kHighlightChart));
+                                                draw_list->PopClipRect();
                                             }
                                         }
                                     }
                                     ImGui::TextUnformatted(cell.c_str());
                                 }
+                            }
+                            if(need_tooltip && ImGui::IsItemHovered())
+                            {
+                                ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                                                    ImVec2(kTooltipMaxWidth, FLT_MAX));
+                                BeginTooltipStyled();
+                                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
+                                ImGui::TextUnformatted(cell.c_str());
+                                ImGui::PopTextWrapPos();
+                                EndTooltipStyled();
                             }
                         }
                         ImGui::PopID();  // Pop row ID

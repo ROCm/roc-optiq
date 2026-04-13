@@ -58,6 +58,7 @@ public:
     bool                                    breaks_visibility_chain = false;
     bool                                    framed                  = false;
     bool                                    render_children_inline  = false;
+    mutable uint8_t                         cached_eye_state        = 0;
     std::vector<std::unique_ptr<TreeNode>>  children;
 };
 

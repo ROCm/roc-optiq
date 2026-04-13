@@ -53,12 +53,14 @@ private:
     void               RenderTreeNode(const TreeNode& node);
     void               RenderTreeChildren(const TreeNode& node);
     EyeButtonState     DrawEyeButton(EyeButtonState eye_button_state);
+    void               InvalidateEyeStateCache(const TreeNode& node);
 
     SettingsManager&                         m_settings;
     std::shared_ptr<TrackTopology>           m_track_topology;
     std::shared_ptr<TimelineSelection>       m_timeline_selection;
     std::shared_ptr<std::vector<TrackGraph>> m_graphs;
     DataProvider&                            m_data_provider;
+    bool                                     m_eye_state_dirty = false;
 };
 
 }  // namespace View

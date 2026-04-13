@@ -69,6 +69,13 @@ SideBar::Render()
 {
     if(!m_track_topology->Dirty())
     {
+        const SidebarTree& sidebar_tree = m_track_topology->GetSidebarTree();
+        if(m_eye_state_dirty && sidebar_tree.root)
+        {
+            InvalidateEyeStateCache(*sidebar_tree.root);
+            m_eye_state_dirty = false;
+        }
+
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
@@ -77,8 +84,6 @@ SideBar::Render()
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
                               ImGui::ColorConvertU32ToFloat4(
                                   m_settings.GetColor(Colors::kBgFrame)));
-
-        const SidebarTree& sidebar_tree = m_track_topology->GetSidebarTree();
         if(ImGui::TreeNodeEx("Project",
                              CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
         {
@@ -145,6 +150,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         {
             graph.display         = !graph.display;
             graph.display_changed = true;
+            m_eye_state_dirty     = true;
             m_data_provider.DataModel().GetTimeline().UpdateHistogram(
                 { graph.chart->GetID() }, graph.display);
         }
@@ -258,6 +264,11 @@ SideBar::GetSubtreeEyeState(const TreeNode& node, bool cross_boundaries) const
         return GetLeafState(static_cast<const LeafNode&>(node));
     }
 
+    if(node.cached_eye_state != 0)
+    {
+        return static_cast<EyeButtonState>(node.cached_eye_state - 1);
+    }
+
     bool           has_state = false;
     EyeButtonState state     = EyeButtonState::kAllHidden;
 
@@ -284,7 +295,9 @@ SideBar::GetSubtreeEyeState(const TreeNode& node, bool cross_boundaries) const
         }
     }
 
-    return has_state ? state : EyeButtonState::kAllHidden;
+    EyeButtonState result = has_state ? state : EyeButtonState::kAllHidden;
+    node.cached_eye_state = static_cast<uint8_t>(result) + 1;
+    return result;
 }
 
 ImGuiTreeNodeFlags
@@ -318,6 +331,8 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
         {
             continue;
         }
+
+        current->cached_eye_state = 0;
 
         if(current != &node && current->breaks_visibility_chain)
         {
@@ -437,6 +452,19 @@ SideBar::RenderTreeChildren(const TreeNode& node)
 
         tc.Branch();
         RenderTreeNode(*child);
+    }
+}
+
+void
+SideBar::InvalidateEyeStateCache(const TreeNode& node)
+{
+    node.cached_eye_state = 0;
+    for(const auto& child : node.children)
+    {
+        if(child)
+        {
+            InvalidateEyeStateCache(*child);
+        }
     }
 }
 

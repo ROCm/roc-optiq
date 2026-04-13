@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace RocProfVis
@@ -26,7 +25,6 @@ enum class NodeType : uint8_t
     kProcessList,
     kProcess,
     kStreamList,
-    kStream,
     kInstrumentedThreadList,
     kSampledThreadList,
     kUncategorizedList,
@@ -80,8 +78,7 @@ public:
 
 struct SidebarTree
 {
-    std::unique_ptr<TreeNode>                            root;
-    std::unordered_map<uint64_t, std::vector<LeafNode*>> leaf_lookup;
+    std::unique_ptr<TreeNode> root;
 };
 
 }  // namespace View

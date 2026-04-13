@@ -123,14 +123,12 @@ void
 SideBar::Update()
 {}
 
-bool
+void
 SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 {
-    bool state_changed = false;
-
     if(!m_graphs || index >= m_graphs->size())
     {
-        return state_changed;
+        return;
     }
 
     TrackGraph& graph = (*m_graphs)[index];
@@ -147,7 +145,6 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         {
             graph.display         = !graph.display;
             graph.display_changed = true;
-            state_changed         = true;
             m_data_provider.DataModel().GetTimeline().UpdateHistogram(
                 { graph.chart->GetID() }, graph.display);
         }
@@ -222,7 +219,6 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 #endif
 
     ImGui::PopID();
-    return state_changed;
 }
 
 SideBar::EyeButtonState

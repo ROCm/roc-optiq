@@ -23,13 +23,12 @@ AddBranchNode(TreeNode* parent, NodeType type, const std::string& label,
     auto node             = std::make_unique<TreeNode>(type, label, collapsable);
     node->show_eye_button = show_eye_button;
     node->framed          = framed;
-    return parent ? parent->AddChild(std::move(node)) : node.release();
+    return parent->AddChild(std::move(node));
 }
 
 LeafNode*
 AddLeafNode(TreeNode* parent, const std::vector<const TrackInfo*>& track_list,
-            SidebarTree& sidebar_tree, uint64_t graph_index,
-            const std::string& fallback_label,
+            uint64_t graph_index, const std::string& fallback_label,
             bool render_children_inline = false)
 {
     uint64_t    track_id = graph_index;
@@ -46,9 +45,8 @@ AddLeafNode(TreeNode* parent, const std::vector<const TrackInfo*>& track_list,
 
     auto leaf                    = std::make_unique<LeafNode>(label, graph_index, track_id);
     leaf->render_children_inline = render_children_inline;
-    LeafNode* raw                = leaf.get();
+    LeafNode* raw = leaf.get();
     parent->AddChild(std::move(leaf));
-    sidebar_tree.leaf_lookup[graph_index].push_back(raw);
     return raw;
 }
 
@@ -57,7 +55,7 @@ void
 BuildLeafList(TreeNode* parent, NodeType type, const std::string& label,
               const std::vector<Model>& items,
               const std::vector<const TrackInfo*>& track_list,
-              SidebarTree& sidebar_tree, bool show_list_header = true)
+              bool show_list_header = true)
 {
     if(items.empty())
     {
@@ -73,7 +71,7 @@ BuildLeafList(TreeNode* parent, NodeType type, const std::string& label,
     {
         if(item.info)
         {
-            AddLeafNode(target, track_list, sidebar_tree,
+            AddLeafNode(target, track_list,
                         item.graph_index, item.info->name);
         }
     }
@@ -88,8 +86,7 @@ BuildLeafList(TreeNode* parent, NodeType type, const std::string& label,
 void
 BuildProcessorTree(TreeNode* parent, const ProcessorModel& processor,
                    const std::vector<const TrackInfo*>& track_list,
-                   SidebarTree& sidebar_tree, bool show_controls,
-                   bool breaks_chain = false)
+                   bool show_controls, bool breaks_chain = false)
 {
     if(!processor.info)
     {
@@ -100,15 +97,14 @@ BuildProcessorTree(TreeNode* parent, const ProcessorModel& processor,
                                    processor.header, true, show_controls, false);
     node->breaks_visibility_chain = breaks_chain;
     BuildLeafList(node, NodeType::kQueueList, processor.queue_header,
-                  processor.queues, track_list, sidebar_tree, show_controls);
+                  processor.queues, track_list, show_controls);
     BuildLeafList(node, NodeType::kCounterList, processor.counter_header,
-                  processor.counters, track_list, sidebar_tree, show_controls);
+                  processor.counters, track_list, show_controls);
 }
 
 void
 BuildProcessTree(TreeNode* parent, const ProcessModel& process,
-                 const std::vector<const TrackInfo*>& track_list,
-                 SidebarTree& sidebar_tree)
+                 const std::vector<const TrackInfo*>& track_list)
 {
     if(!process.info)
     {
@@ -130,12 +126,12 @@ BuildProcessTree(TreeNode* parent, const ProcessModel& process,
             }
 
             bool      has_processors = !stream.processors.empty();
-            LeafNode* stream_leaf    = AddLeafNode(stream_list, track_list, sidebar_tree,
+            LeafNode* stream_leaf    = AddLeafNode(stream_list, track_list,
                                                    stream.graph_index, stream.info->name,
                                                    has_processors);
             for(const auto& processor : stream.processors)
             {
-                BuildProcessorTree(stream_leaf, processor, track_list, sidebar_tree,
+                BuildProcessorTree(stream_leaf, processor, track_list,
                                    false, true);
             }
         }
@@ -143,10 +139,10 @@ BuildProcessTree(TreeNode* parent, const ProcessModel& process,
 
     BuildLeafList(process_node, NodeType::kInstrumentedThreadList,
                   process.instrumented_thread_header,
-                  process.instrumented_threads, track_list, sidebar_tree);
+                  process.instrumented_threads, track_list);
     BuildLeafList(process_node, NodeType::kSampledThreadList,
                   process.sampled_thread_header,
-                  process.sampled_threads, track_list, sidebar_tree);
+                  process.sampled_threads, track_list);
 }
 
 }  // namespace
@@ -789,7 +785,7 @@ TrackTopology::BuildSidebarTree()
                     NodeType::kProcessorList, node.processor_header, true, true, false);
                 for(const auto& processor : node.processors)
                 {
-                    BuildProcessorTree(processor_list, processor, track_list, m_sidebar_tree, true);
+                    BuildProcessorTree(processor_list, processor, track_list, true);
                 }
             }
 
@@ -799,7 +795,7 @@ TrackTopology::BuildSidebarTree()
                     node.process_header, true, true, false);
                 for(const auto& process : node.processes)
                 {
-                    BuildProcessTree(process_list, process, track_list, m_sidebar_tree);
+                    BuildProcessTree(process_list, process, track_list);
                 }
             }
         }
@@ -811,7 +807,7 @@ TrackTopology::BuildSidebarTree()
             "Uncategorized", !m_topology.nodes.empty(), false, false);
         for(const auto& graph_index : m_topology.uncategorized_graph_indices)
         {
-            AddLeafNode(uncategorized, track_list, m_sidebar_tree, graph_index, "");
+            AddLeafNode(uncategorized, track_list, graph_index, "");
         }
     }
 

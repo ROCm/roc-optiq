@@ -21,6 +21,13 @@ ComputeTableView::ComputeTableView(
 , m_client_id(IdGenerator::GetInstance().GenerateId())
 , m_set_to_kernel_table_callback(set_to_kernel_table_callback)
 , m_pined_metric_table(data_provider, compute_selection, m_client_id,
+                       [this](MetricId metric_id) {
+                           TableKey key{};
+                           key.fields.category_id = metric_id.category_id;
+                           key.fields.table_id    = metric_id.table_id;
+                           m_table_widgets[key.id].ChangePinState(metric_id);
+                           m_pined_metric_table.RemoveRow(metric_id);
+                       },
                        set_to_kernel_table_callback)
 {
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -198,10 +205,21 @@ ComputeTableView::RebuildTableDataCache()
             TableKey key{};
             key.fields.category_id = cat->id;
             key.fields.table_id    = tbl->id;
-            auto add_row_func = [this](MetricId metric_id) {
-                m_pined_metric_table.AddRow(metric_id);
+            auto& widget           = m_table_widgets[key.id];
+            auto pin_metric_func   = [this, &widget](MetricId metric_id) {
+                if(widget.IsMetricPined(metric_id))
+                {
+                    m_pined_metric_table.RemoveRow(metric_id);
+                }
+                else
+                {
+                    m_pined_metric_table.AddRow(metric_id);
+
+                }
+                widget.ChangePinState(metric_id);
             };
-            newMetricTableCache widget(add_row_func, m_set_to_kernel_table_callback);
+
+            widget = MetricTableCache (pin_metric_func, m_set_to_kernel_table_callback);
             widget.Populate(*tbl, [&](uint32_t eid) {
                 return model.GetKernelMetricValue(
                     m_client_id, kernel_id, cat->id, tbl->id, eid);

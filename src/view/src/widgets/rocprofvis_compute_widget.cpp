@@ -8,17 +8,35 @@
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
 
 namespace RocProfVis
 {
 namespace View
 {
+MetricTableBase::MetricTableBase()
+: m_max_rows_in_table(0)
+, m_set_to_kernel_table_callback(nullptr)
+, m_table_title("")
+, m_lust_column_index(0)
+{
+    m_table_flags =
+        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+}
 
 MetricTableBase::MetricTableBase(
+    std::function<void(MetricId)> pin_metric_clicked,
     std::function<void(MetricId metric_id, const std::string&)>
         set_to_kernel_table_callback)
 : m_set_to_kernel_table_callback(set_to_kernel_table_callback)
-{}
+, m_pin_metric_clicked(pin_metric_clicked)
+, m_max_rows_in_table(0)
+, m_table_title("")
+, m_lust_column_index(0)
+{
+    m_table_flags =
+        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+}
 
 void
 MetricTableBase::Render()
@@ -42,8 +60,18 @@ MetricTableBase::Render()
                               m_table_flags))
             return;
 
-        for(const auto& column : m_columns)
-            ImGui::TableSetupColumn(column.second.c_str());
+        for (const auto& column : m_columns)
+        {
+            if (column.first == 0)
+            {
+                ImGui::TableSetupColumn(column.second.c_str(),
+                                        ImGuiTableColumnFlags_WidthFixed, 30.0f); //Set width dinamicly
+            }
+            else
+            {
+                ImGui::TableSetupColumn(column.second.c_str());
+            }
+        }
 
         ImGui::TableHeadersRow();
 
@@ -53,12 +81,13 @@ MetricTableBase::Render()
             ImGui::PushID(row_idx++);
             ImGui::TableNextRow();
 
-            for(auto index = 0; index < m_columns.size() - 1; index++)
+            for(auto column_index = 0; column_index < m_columns.size() - 1;
+                column_index++)
             {
                 auto menu_func = [&](const char* value_to_copy) {
-                    this->ContextMenu(value_to_copy, index, row);
+                    this->ContextMenu(value_to_copy, column_index, row);
                 };
-                RenderRowValues(index, row, menu_func);
+                RenderRowValues(column_index, row, menu_func);
             }
 
             RenderUnitValue(row);
@@ -67,6 +96,18 @@ MetricTableBase::Render()
         ImGui::EndTable();
     }
     ImGui::EndChild();
+}
+
+void
+MetricTableBase::PinClicked(const MetricId& metric_id)
+{
+    m_pin_metric_clicked(metric_id);
+}
+
+void
+MetricTableBase::ChangePinState(const MetricId& metric_id)
+{
+    m_rows[metric_id].pinned = !m_rows[metric_id].pinned;
 }
 
 float
@@ -90,7 +131,9 @@ MetricTableBase::GetTableHight() const
     return style.ScrollbarSize + line_height + (max_rows * line_height);
 }
 
-void MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t index, const std::pair<MetricId, Row>& row)
+void
+MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
+                             std::pair<const MetricId, Row>& row)
 {
     if(ImGui::BeginPopupContextItem())
     {
@@ -104,7 +147,7 @@ void MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t index, con
         {
             if(ImGui::MenuItem("Show in kernel table"))
             {
-                m_set_to_kernel_table_callback(row.first, m_columns.at(index));
+                m_set_to_kernel_table_callback(row.first, m_columns.at(column_index));
             }
         }
         ImGui::EndPopup();
@@ -112,40 +155,76 @@ void MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t index, con
 }
 
 void
-MetricTableBase::RenderRowValues(
-    uint32_t index, const std::pair<MetricId, Row>& row,
+MetricTableBase::RenderRowValues(uint32_t                        column_index,
+                                 std::pair<const MetricId, Row>& row,
     std::function<void(const char* value_to_copy)> menu_func)
 {
-    ImGui::TableNextColumn();
-    if(auto it = row.second.find(index); it == row.second.end())
+    if (column_index == 0)
     {
-        ImGui::TextDisabled("N/A");
+        bool selected = false;
+        ImGui::TableNextColumn();
+        //if(ImGui::Checkbox("", &row.second.pinned))
+        //{
+        //}
+
+        ImGui::PushStyleColor(ImGuiCol_Button, SettingsManager::GetInstance().GetColor(
+                                                   Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+            SettingsManager::GetInstance().GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+            SettingsManager::GetInstance().GetColor(Colors::kTransparent));
+        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
+            FontType::kDefault));
+        ImVec2 eye_size = ImGui::CalcTextSize(ICON_EYE);
+        float  button_w = eye_size.x + ImGui::GetStyle().FramePadding.x * 2;
+        float  button_h = eye_size.y + ImGui::GetStyle().FramePadding.y * 2;//TODO: Hight is to big, update it by table cell hight
+        if(ImGui::Button(row.second.pinned == true ? ICON_EYE_SLASH : ICON_EYE,
+                         ImVec2(button_w, button_h)))
+        {
+            if (m_pin_metric_clicked)
+            {
+                m_pin_metric_clicked({ row.first.category_id, row.first.table_id,
+                                        row.first.entry_id });
+            }
+        }
+        ImGui::PopFont();
+        ImGui::PopStyleColor(3);
+
     }
     else
     {
-        CopyableTextUnformatted(row.second.at(index).value.c_str(),
-                                "##value" + std::to_string(index), COPY_DATA_NOTIFICATION,
-                                false, true, menu_func);
-        RenderTooltip(row.second.at(index));
+        ImGui::TableNextColumn();
+        if(auto it = row.second.values.find(column_index); it == row.second.values.end())
+        {
+            ImGui::TextDisabled("N/A");
+        }
+        else
+        {
+            CopyableTextUnformatted(row.second.values.at(column_index).value.c_str(),
+                                    "##value" + std::to_string(column_index),
+                                    COPY_DATA_NOTIFICATION, false, true, menu_func);
+            RenderTooltip(row.second.values.at(column_index));
+        }
     }
+
 }
 
 void
-MetricTableBase::RenderUnitValue(const std::pair<MetricId, Row>& row)
+MetricTableBase::RenderUnitValue(std::pair<const MetricId, Row>& row)
 {
     auto menu_func = [&](const char* value_to_copy) {
         this->ContextMenu(value_to_copy, LAST_INDEX, row);
     };
     ImGui::TableNextColumn();
-    if(row.second.at(LAST_INDEX).value.empty())
+    if(row.second.values.at(LAST_INDEX).value.empty())
     {
         ImGui::TextDisabled("N/A");
     }
     else
     {
-        CopyableTextUnformatted(row.second.at(LAST_INDEX).value.c_str(), "##metric_unit",
+        CopyableTextUnformatted(row.second.values.at(LAST_INDEX).value.c_str(), "##metric_unit",
                                 COPY_DATA_NOTIFICATION, false, true, menu_func);
-        RenderTooltip(row.second.at(LAST_INDEX));
+        RenderTooltip(row.second.values.at(LAST_INDEX));
     }
 }
 
@@ -169,263 +248,33 @@ MetricTableBase::RenderTooltip(const RowValue& row)
 void
 MetricTableBase::FillDefaultColumns()
 {
-    m_columns[0]          = "Metric ID";
-    m_columns[1]          = "Metric";
-    m_lust_column_index   = 2;
+    m_columns[0]          = "Pin";
+    m_columns[1]          = "Metric ID";
+    m_columns[2]          = "Metric";
+    m_lust_column_index   = 3;
     m_columns[LAST_INDEX] = "Unit";
 }
 
-//---------------------------------------------------------
-MetricTableCache::MetricTableCache(
-    std::function<void(MetricId)> add_row_func,
-    std::function<void(MetricId metric_id, const std::string& value_name)>
-        set_to_kernel_table)
-: m_add_row_to_custom(add_row_func)
-, m_set_to_kernel_table_callback(set_to_kernel_table)
-{}
-
-void
-MetricTableCache::Populate(const AvailableMetrics::Table& table,
-                           const MetricValueLookup&       get_value)
-{
-    m_title    = table.name;
-    m_table_id = "##" + table.name;
-    m_column_names.clear();
-    m_rows.clear();
-    m_rows.reserve(table.ordered_entries.size());
-
-    m_column_names.push_back("Metric ID");
-    m_column_names.push_back("Metric");
-    if(table.value_names.empty())
-    {
-        m_column_names.push_back("Value");
-    }
-    else
-    {
-        for(const auto& vn : table.value_names)
-            m_column_names.push_back(vn);
-    }
-    m_column_names.push_back("Unit");
-
-    char buf[64];
-    for(const auto* entry : table.ordered_entries)
-    {
-        uint32_t eid = entry->id;
-
-        Row row;
-
-        row.metric_id   = { entry->category_id, entry->table_id, eid};
-        row.name        = entry->name;
-        row.description = entry->description;
-        row.unit        = entry->unit.empty() ? "N/A" : entry->unit;
-
-        auto metric_value = get_value(eid);
-
-        if(table.value_names.empty())
-        {
-            if(metric_value && metric_value->entry && !metric_value->values.empty())
-            {
-                snprintf(buf, sizeof(buf), "%.2f", metric_value->values.begin()->second);
-                row.values.push_back(buf);
-            }
-            else
-            {
-                row.values.emplace_back();
-            }
-        }
-        else
-        {
-            for(const auto& value_name : table.value_names)
-            {
-                if(metric_value && metric_value->entry &&
-                   metric_value->values.count(value_name))
-                {
-                    snprintf(buf, sizeof(buf), "%.2f",
-                             metric_value->values.at(value_name));
-                    row.values.push_back(buf);
-                }
-                else
-                {
-                    row.values.emplace_back();
-                }
-            }
-        }
-
-        m_rows.push_back(std::move(row));
-    }
-}
-
-void
-MetricTableCache::Render()
-{
-    int num_columns = static_cast<int>(m_column_names.size());
-
-    SectionTitle(m_title.c_str());
-    if(!m_column_names.empty() &&
-       ImGui::BeginTable(m_table_id.c_str(), num_columns, ImGuiTableFlags_Borders))
-    {
-        for(const auto& col : m_column_names)
-            ImGui::TableSetupColumn(col.c_str());
-        ImGui::TableHeadersRow();
-
-        int row_idx = 0;
-        for(const auto& row : m_rows)
-        {
-            auto menu_func = [&](const char* value_to_copy) {
-                if(ImGui::BeginPopupContextItem())
-                {
-                    if(ImGui::MenuItem("Copy"))
-                    {
-                        ImGui::SetClipboardText(value_to_copy);
-                        NotificationManager::GetInstance().Show(
-                                COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
-                    }
-                    if (m_add_row_to_custom)
-                    {
-                        if(ImGui::MenuItem("Pin metric"))
-                        {
-                            m_add_row_to_custom(
-                                {
-                                  row.metric_id.category_id,
-                                  row.metric_id.table_id,
-                                  row.metric_id.entry_id
-                                });
-                        }
-                    }
-
-                    ImGui::EndPopup();
-                }
-            };
-            ImGui::PushID(row_idx++);
-            ImGui::TableNextRow();
-
-        ImGui::TableNextColumn();
-
-        //TODO: Ugly lambdas unify it in the future
-        CopyableTextUnformatted(row.metric_id.ToString().c_str(), "##mid",
-                                COPY_DATA_NOTIFICATION, false, true,
-                                [&](const char* value_to_copy) {
-                                    this->ContextMenu(value_to_copy, row, 0);
-                                });
-
-        ImGui::TableNextColumn();
-        CopyableTextUnformatted(row.name.c_str(), "##name", COPY_DATA_NOTIFICATION, false,
-                                true, [&](const char* value_to_copy) {
-                                    this->ContextMenu(value_to_copy, row, 1);
-                                });
-        if(!row.description.empty() && ImGui::IsItemHovered())
-        {
-            ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                                ImVec2(TABLE_TOOLTIP_MAX_WIDTH, FLT_MAX));
-            BeginTooltipStyled();
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TABLE_TOOLTIP_MAX_WIDTH);
-            ImGui::TextUnformatted(row.description.c_str());
-            ImGui::PopTextWrapPos();
-            EndTooltipStyled();
-        }
-
-        for(int value_index = 0; value_index < static_cast<int>(row.values.size());
-            value_index++)
-        {
-            auto menu_func = [&](const char* value_to_copy) {
-                this->ContextMenu(value_to_copy, row, value_index+2);
-            };
-            ImGui::TableNextColumn();
-            if(!row.values[value_index].empty())
-            {
-                CopyableTextUnformatted(row.values[value_index].c_str(),
-                                        std::string("##v") + std::to_string(value_index),
-                                        COPY_DATA_NOTIFICATION, false, true, menu_func);
-            }
-            else
-            {
-                ImGui::TextDisabled("N/A");
-            }
-        }
-
-        ImGui::TableNextColumn();
-        if(row.unit != "N/A")
-        {
-            CopyableTextUnformatted(row.unit.c_str(), "##unit", COPY_DATA_NOTIFICATION,
-                                    false, true, [&](const char* value_to_copy) {
-                                        this->ContextMenu(value_to_copy, row, 0);
-                                    });
-        }
-        else
-        {
-            ImGui::TextDisabled("N/A");
-        }
-
-        ImGui::PopID();
-    }
-    ImGui::EndTable();
-}
-}
-
-void
-MetricTableCache::ContextMenu(const char* value_to_copy, const Row& row, uint32_t index)
-{
-    if(ImGui::BeginPopupContextItem())
-    {
-        if(ImGui::MenuItem("Copy"))
-        {
-            ImGui::SetClipboardText(value_to_copy);
-            NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
-                                                    NotificationLevel::Info);
-        }
-        if(m_add_row_to_custom)
-        {
-            if(ImGui::MenuItem("Pin metric"))
-            {
-                m_add_row_to_custom({ row.metric_id.category_id, row.metric_id.table_id,
-                                      row.metric_id.entry_id });
-            }
-        }
-        if(index != 0 && index != 1)
-        {
-            if(ImGui::MenuItem("Set Metric to kernel table"))
-            {
-                if(m_set_to_kernel_table_callback)
-                {
-                    m_set_to_kernel_table_callback({ row.metric_id.category_id,
-                                                     row.metric_id.table_id,
-                                                     row.metric_id.entry_id },
-                                                   m_column_names[index]);
-                }
-            }
-        }
-
-        ImGui::EndPopup();
-    }
-}
-
-void
-MetricTableCache::Clear()
-{
-    m_rows.clear();
-    m_column_names.clear();
-}
 
 bool
-MetricTableCache::Empty() const
+MetricTableBase::IsMetricPined(MetricId metric_id)
 {
-    return m_rows.empty();
+    return m_rows[metric_id].pinned;
 }
 
 //---------------------------------------------------------
 
-newMetricTableCache::newMetricTableCache(
-    std::function<void(MetricId)> add_row_func,
+MetricTableCache::MetricTableCache(
+    std::function<void(MetricId)> pin_metric_func,
     std::function<void(MetricId metric_id, const std::string& value_name)>
         set_to_kernel_table)
-: MetricTableBase(set_to_kernel_table)
-, m_pin_metric_func(add_row_func)
+: MetricTableBase(pin_metric_func, set_to_kernel_table)
 {
 }
 
 void
-newMetricTableCache::ContextMenu(const char* value_to_copy, uint32_t index,
-                                 const std::pair<MetricId, Row>& row)
+MetricTableCache::ContextMenu(const char* value_to_copy, uint32_t column_index,
+                                 std::pair<const MetricId, Row>& row)
 {
     if(ImGui::BeginPopupContextItem())
     {
@@ -435,15 +284,15 @@ newMetricTableCache::ContextMenu(const char* value_to_copy, uint32_t index,
             NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
                                                     NotificationLevel::Info);
         }
-        if(m_pin_metric_func)
+        if(m_pin_metric_clicked)
         {
             if(ImGui::MenuItem("Pin metric"))
             {
-                m_pin_metric_func(
+                m_pin_metric_clicked(
                     { row.first.category_id, row.first.table_id, row.first.entry_id });
             }
         }
-        if(index != 0 && index != 1)
+        if(column_index != 0 && column_index != 1)
         {
             if(ImGui::MenuItem("Set Metric to kernel table"))
             {
@@ -451,7 +300,7 @@ newMetricTableCache::ContextMenu(const char* value_to_copy, uint32_t index,
                 {
                     m_set_to_kernel_table_callback(
                         { row.first.category_id, row.first.table_id, row.first.entry_id },
-                        m_columns[index]);
+                        m_columns[column_index]);
                 }
             }
         }
@@ -461,7 +310,7 @@ newMetricTableCache::ContextMenu(const char* value_to_copy, uint32_t index,
 }
 
 void
-newMetricTableCache::Populate(const AvailableMetrics::Table& table,
+MetricTableCache::Populate(const AvailableMetrics::Table& table,
                            const MetricValueLookup&       get_value)
 {
     FillDefaultColumns();
@@ -482,10 +331,10 @@ newMetricTableCache::Populate(const AvailableMetrics::Table& table,
     {
         Row row;
         MetricId metric_id{ entry->category_id, entry->table_id, entry->id };
-        row[0].value = metric_id.ToString();
-        row[1].value = entry->name;
-        row[1].tooltip = entry->description;
-        row[LAST_INDEX].value = entry->unit.empty() ? "N/A" : entry->unit;
+        row.values[1].value = metric_id.ToString();
+        row.values[2].value   = entry->name;
+        row.values[2].tooltip = entry->description;
+        row.values[LAST_INDEX].value = entry->unit.empty() ? "N/A" : entry->unit;
 
         auto metric_value = get_value(entry->id);
 
@@ -494,7 +343,7 @@ newMetricTableCache::Populate(const AvailableMetrics::Table& table,
             if(metric_value && metric_value->entry && !metric_value->values.empty())
             {
                 snprintf(buf, sizeof(buf), "%.2f", metric_value->values.begin()->second);
-                row[2].value = buf;
+                row.values[3].value = buf;
             }
         }
         else
@@ -508,7 +357,7 @@ newMetricTableCache::Populate(const AvailableMetrics::Table& table,
                 {
                     snprintf(buf, sizeof(buf), "%.2f",
                              metric_value->values.at(value_name));
-                    row[value_index + 2].value = buf;
+                    row.values[value_index + 3].value = buf;
                 }
             }
         }
@@ -518,14 +367,14 @@ newMetricTableCache::Populate(const AvailableMetrics::Table& table,
 
 
 void
-newMetricTableCache::Clear()
+MetricTableCache::Clear()
 {
     m_rows.clear();
     m_columns.clear();
 }
 
 bool
-newMetricTableCache::Empty() const
+MetricTableCache::Empty() const
 {
     return m_rows.empty();
 }
@@ -649,24 +498,24 @@ WorkloadMetricTableWidget::UpdateTable()
 
 PinedMetricTable::PinedMetricTable(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
-    uint64_t client_id,
-    std::function<void(MetricId metric_id, const std::string&)> set_query_callback)
-: MetricTableBase(set_query_callback)
+    uint64_t client_id, std::function<void(MetricId)> pin_metric_clicked,
+    std::function<void(MetricId metric_id, const std::string&)>
+        set_to_kernel_table_callback)
+: MetricTableBase(pin_metric_clicked, set_to_kernel_table_callback)
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(client_id)
 {
     FillDefaultColumns();
-    m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                    ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollX;
+    m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollX;
     m_table_title = "Pinned Metrics";
     m_max_rows_in_table = 7;
 }
 
 
 void
-PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t index,
-                              const std::pair<MetricId, Row>& row)
+PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
+                              std::pair<const MetricId, Row>& row)
 {
     if(ImGui::BeginPopupContextItem())
     {
@@ -678,15 +527,19 @@ PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t index,
         }
         if(ImGui::MenuItem("Unpin metric"))
         {
-            m_id_to_delete = row.first;
+            if(m_pin_metric_clicked)
+            {
+                m_pin_metric_clicked(
+                    { row.first.category_id, row.first.table_id, row.first.entry_id });
+            }
         }
-        if(index != 0 && index != 1 && index != LAST_INDEX)
+        if(column_index != 0 && column_index != 1 && column_index != LAST_INDEX)
         // not equal MetricId, Metric Name and Metric Unit
         {
             if(ImGui::MenuItem("Set Metric to kernel table"))
             {
                 if(m_set_to_kernel_table_callback)
-                    m_set_to_kernel_table_callback(row.first, m_columns[index]);
+                    m_set_to_kernel_table_callback(row.first, m_columns[column_index]);
             }
         }
 
@@ -702,12 +555,12 @@ PinedMetricTable::FillMandatoryColumns(const MetricId&                metric_id,
 {
     if(auto entrie = table.entries.find(metric_id.entry_id); entrie != table.entries.end())
     {
-        row[0].value                                    = metric_id.ToString();
+        row.values[1].value = metric_id.ToString();
 
-        row[1].value                                    = entrie->second.name;
-        row[1].tooltip                                  = entrie->second.description;
+        row.values[2].value = entrie->second.name;
+        row.values[2].tooltip = entrie->second.description;
 
-        row[LAST_INDEX].value = entrie->second.unit;
+        row.values[LAST_INDEX].value = entrie->second.unit;
     }
 }
 
@@ -728,6 +581,12 @@ PinedMetricTable::AddRow(MetricId metric_id)
 {
     UpdateColumns(metric_id);
     FillTableRow(metric_id);
+}
+
+void
+PinedMetricTable::RemoveRow(MetricId metric_id)
+{
+    m_id_to_delete = metric_id;
 }
 
 void
@@ -774,6 +633,7 @@ void
 PinedMetricTable::FillTableRow(const MetricId& metric_id)
 {
     Row row;
+    row.pinned = true;
 
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
@@ -793,13 +653,13 @@ PinedMetricTable::FillTableRow(const MetricId& metric_id)
     char buf[64];
     for(const auto& value_name : table.value_names)
     {
-        if(auto index = GetColumnIndex(value_name); index.has_value())
+        if(auto column_index = GetColumnIndex(value_name); column_index.has_value())
         {
             if(metric_value && metric_value->entry &&
                metric_value->values.count(value_name))
             {
                 snprintf(buf, sizeof(buf), "%.2f", metric_value->values.at(value_name));
-                row[index.value()].value = buf;
+                row.values[column_index.value()].value = buf;
             }
         }
     }

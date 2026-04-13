@@ -38,7 +38,7 @@ private:
     uint64_t                          m_client_id;
     bool                              m_fetch_pending = false;
     std::shared_ptr<TabContainer>     m_tabs;
-    std::unordered_map<uint64_t, newMetricTableCache> m_table_widgets;
+    std::unordered_map<uint64_t, MetricTableCache> m_table_widgets;
     PinedMetricTable                               m_pined_metric_table;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;

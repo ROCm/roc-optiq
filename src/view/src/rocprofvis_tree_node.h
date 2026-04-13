@@ -77,6 +77,7 @@ public:
     bool                                    collapsable;
     bool                                    visible = true;
     bool                                    show_eye_button = true;
+    bool                                    breaks_visibility_chain = false;
     bool                                    framed = false;
     bool                                    render_children_inline = false;
     std::vector<TreeNode*>                  parents;

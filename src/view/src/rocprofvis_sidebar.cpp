@@ -9,6 +9,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 
+#include <utility>
 #include <unordered_set>
 
 namespace RocProfVis
@@ -123,7 +124,7 @@ SideBar::Update()
 {}
 
 bool
-SideBar::RenderTrackItem(const uint64_t& index)
+SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 {
     bool state_changed = false;
 
@@ -138,33 +139,39 @@ SideBar::RenderTrackItem(const uint64_t& index)
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
     bool display = graph.display;
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-    if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
+    if(show_eye_button)
     {
-        graph.display         = !graph.display;
-        graph.display_changed = true;
-        state_changed         = true;
-        m_data_provider.DataModel().GetTimeline().UpdateHistogram(
-            { graph.chart->GetID() }, graph.display);
-    }
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
+        {
+            graph.display         = !graph.display;
+            graph.display_changed = true;
+            state_changed         = true;
+            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
+                { graph.chart->GetID() }, graph.display);
+        }
 
-    ImGui::PopFont();
-    if(ImGui::IsItemHovered())
-        SetTooltipStyled("Toggle Track Visibility");
-    ImGui::SameLine();
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-    if(ImGui::Button(ICON_ARROWS_SHRINK))
-    {
-        EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
-            static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-            graph.chart->GetID(), m_data_provider.GetTraceFilePath()));
+        ImGui::PopFont();
+        if(ImGui::IsItemHovered())
+            SetTooltipStyled("Toggle Track Visibility");
+        ImGui::SameLine();
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        if(ImGui::Button(ICON_ARROWS_SHRINK))
+        {
+            EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
+                static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+                graph.chart->GetID(), m_data_provider.GetTraceFilePath()));
+        }
+        ImGui::PopFont();
+        if(ImGui::IsItemHovered())
+            SetTooltipStyled("Scroll To Track");
     }
-    ImGui::PopFont();
-    if(ImGui::IsItemHovered())
-        SetTooltipStyled("Scroll To Track");
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
-    ImGui::SameLine();
+    if(show_eye_button)
+    {
+        ImGui::SameLine();
+    }
     bool highlight = graph.selected;
     if(!highlight)
     {
@@ -239,31 +246,49 @@ SideBar::GetLeafState(const LeafNode& leaf) const
 SideBar::EyeButtonState
 SideBar::GetTreeState(const TreeNode& node) const
 {
-    bool           has_state = false;
-    EyeButtonState state     = EyeButtonState::kAllHidden;
+    auto get_state = [this](const auto& self, const TreeNode& current,
+                            bool allow_visibility_boundary_crossing)
+        -> std::pair<bool, EyeButtonState> {
+        bool           has_state = false;
+        EyeButtonState state     = EyeButtonState::kAllHidden;
 
-    if(node.IsLeaf())
-    {
-        state     = GetLeafState(static_cast<const LeafNode&>(node));
-        has_state = true;
-    }
-
-    for(const auto& child : node.children)
-    {
-        if(!child)
+        if(current.IsLeaf())
         {
-            continue;
+            state     = GetLeafState(static_cast<const LeafNode&>(current));
+            has_state = true;
         }
 
-        EyeButtonState child_state = GetTreeState(*child);
-        state     = has_state ? MergeEyeButtonState(state, child_state) : child_state;
-        has_state = true;
-        if(state == EyeButtonState::kMixed)
+        for(const auto& child : current.children)
         {
-            break;
-        }
-    }
+            if(!child)
+            {
+                continue;
+            }
 
+            if(!allow_visibility_boundary_crossing &&
+               child->breaks_visibility_chain)
+            {
+                continue;
+            }
+
+            auto [child_has_state, child_state] = self(self, *child, false);
+            if(!child_has_state)
+            {
+                continue;
+            }
+
+            state     = has_state ? MergeEyeButtonState(state, child_state) : child_state;
+            has_state = true;
+            if(state == EyeButtonState::kMixed)
+            {
+                break;
+            }
+        }
+
+        return { has_state, state };
+    };
+
+    auto [has_state, state] = get_state(get_state, node, true);
     return has_state ? state : EyeButtonState::kAllHidden;
 }
 
@@ -295,6 +320,11 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
         const TreeNode* current = stack.back();
         stack.pop_back();
         if(!current)
+        {
+            continue;
+        }
+
+        if(current != &node && current->breaks_visibility_chain)
         {
             continue;
         }
@@ -334,7 +364,7 @@ void
 SideBar::RenderLeafNode(const LeafNode& leaf)
 {
     ImGui::PushID(static_cast<const void*>(&leaf));
-    RenderTrackItem(leaf.graph_index);
+    RenderTrackItem(leaf.graph_index, leaf.show_eye_button);
 
     if(leaf.render_children_inline && !leaf.children.empty())
     {

@@ -35,7 +35,7 @@ private:
         kMixed
     };
 
-    bool RenderTrackItem(const uint64_t& index);
+    bool RenderTrackItem(const uint64_t& index, bool show_eye_button = true);
     EyeButtonState MergeEyeButtonState(EyeButtonState lhs,
                                        EyeButtonState rhs) const;
     EyeButtonState GetLeafState(const LeafNode& leaf) const;

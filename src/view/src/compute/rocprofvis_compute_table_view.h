@@ -32,14 +32,15 @@ private:
     void RebuildTabs();
     void FetchAllMetrics();
     void RebuildTableDataCache();
+    void AddTable(uint32_t category_id, const AvailableMetrics::Table* table);
 
     DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
     uint64_t                          m_client_id;
     bool                              m_fetch_pending = false;
     std::shared_ptr<TabContainer>     m_tabs;
-    std::unordered_map<uint64_t, MetricTableCache> m_table_widgets;
-    PinedMetricTable                               m_pined_metric_table;
+    std::unordered_map<uint64_t, MetricTable> m_table_widgets;
+    PinedMetricTable                          m_pined_metric_table;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

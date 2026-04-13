@@ -24,18 +24,17 @@ MetricTableBase::MetricTableBase()
         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
 }
 
-MetricTableBase::MetricTableBase(
-    std::function<void(MetricId)> pin_metric_clicked,
-    std::function<void(MetricId metric_id, const std::string&)>
-        set_to_kernel_table_callback)
-: m_set_to_kernel_table_callback(set_to_kernel_table_callback)
-, m_pin_metric_clicked(pin_metric_clicked)
-, m_max_rows_in_table(0)
-, m_table_title("")
-, m_lust_column_index(0)
+void
+MetricTableBase::SetPinMetricCallback(std::function<void(MetricId)> callback)
 {
-    m_table_flags =
-        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+    m_pin_metric_clicked = callback;
+}
+
+void
+MetricTableBase::SetToKernelTableCallback(
+    std::function<void(MetricId metric_id, const std::string&)> callback)
+{
+    m_set_to_kernel_table_callback = callback;
 }
 
 void
@@ -96,12 +95,6 @@ MetricTableBase::Render()
         ImGui::EndTable();
     }
     ImGui::EndChild();
-}
-
-void
-MetricTableBase::PinClicked(const MetricId& metric_id)
-{
-    m_pin_metric_clicked(metric_id);
 }
 
 void
@@ -264,16 +257,8 @@ MetricTableBase::IsMetricPined(MetricId metric_id)
 
 //---------------------------------------------------------
 
-MetricTableCache::MetricTableCache(
-    std::function<void(MetricId)> pin_metric_func,
-    std::function<void(MetricId metric_id, const std::string& value_name)>
-        set_to_kernel_table)
-: MetricTableBase(pin_metric_func, set_to_kernel_table)
-{
-}
-
 void
-MetricTableCache::ContextMenu(const char* value_to_copy, uint32_t column_index,
+MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
                                  std::pair<const MetricId, Row>& row)
 {
     if(ImGui::BeginPopupContextItem())
@@ -310,7 +295,7 @@ MetricTableCache::ContextMenu(const char* value_to_copy, uint32_t column_index,
 }
 
 void
-MetricTableCache::Populate(const AvailableMetrics::Table& table,
+MetricTable::Populate(const AvailableMetrics::Table& table,
                            const MetricValueLookup&       get_value)
 {
     FillDefaultColumns();
@@ -367,14 +352,14 @@ MetricTableCache::Populate(const AvailableMetrics::Table& table,
 
 
 void
-MetricTableCache::Clear()
+MetricTable::Clear()
 {
     m_rows.clear();
     m_columns.clear();
 }
 
 bool
-MetricTableCache::Empty() const
+MetricTable::Empty() const
 {
     return m_rows.empty();
 }
@@ -496,12 +481,10 @@ WorkloadMetricTableWidget::UpdateTable()
 
 //---------------------------------------------------------
 
-PinedMetricTable::PinedMetricTable(
-    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
-    uint64_t client_id, std::function<void(MetricId)> pin_metric_clicked,
-    std::function<void(MetricId metric_id, const std::string&)>
-        set_to_kernel_table_callback)
-: MetricTableBase(pin_metric_clicked, set_to_kernel_table_callback)
+PinedMetricTable::PinedMetricTable(DataProvider&                     data_provider,
+                                   std::shared_ptr<ComputeSelection> compute_selection,
+                                   uint64_t                          client_id)
+: MetricTableBase()
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(client_id)
@@ -511,7 +494,6 @@ PinedMetricTable::PinedMetricTable(
     m_table_title = "Pinned Metrics";
     m_max_rows_in_table = 7;
 }
-
 
 void
 PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,

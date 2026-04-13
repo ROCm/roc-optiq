@@ -13,6 +13,8 @@ namespace RocProfVis
 namespace View
 {
 inline constexpr float TABLE_TOOLTIP_MAX_WIDTH = 400.0f;
+inline constexpr uint32_t METRIC_CAT_SOL       = 2;
+inline constexpr uint32_t METRIC_TABLE_SOL     = 1;
 
 class DataProvider;
 class ComputeSelection;
@@ -31,14 +33,13 @@ public:
         bool                         pinned = false;
     };
     MetricTableBase();
-    MetricTableBase(std::function<void(MetricId)> pin_metric_clicked,
-                    std::function<void(MetricId metric_id, const std::string&)>
-                        set_to_kernel_table_callback);
     virtual ~MetricTableBase() = default;
     void Render() override;
-    void PinClicked(const MetricId& metric_id);
     void ChangePinState(const MetricId& metric_id);
     bool IsMetricPined(MetricId metric_id);
+    void SetPinMetricCallback(std::function<void(MetricId)> callback);
+    void SetToKernelTableCallback(
+        std::function<void(MetricId metric_id, const std::string&)> callback);
 
 protected:
     virtual void ContextMenu(const char* value_to_copy, uint32_t column_index,
@@ -67,17 +68,13 @@ private:
     float GetTableHight() const;
 };
 
-class MetricTableCache : public MetricTableBase
+class MetricTable : public MetricTableBase
 {
 public:
     using MetricValueLookup =
         std::function<std::shared_ptr<MetricValue>(uint32_t entry_id)>;
 
-    MetricTableCache() = default;
-    MetricTableCache(
-        std::function<void(MetricId)> pin_metric_clicked,
-        std::function<void(MetricId metric_id, const std::string& value_name)>
-            set_to_kernel_table);
+    MetricTable() = default;
 
     void Clear();
     bool Empty() const;
@@ -90,54 +87,12 @@ private:
                      std::pair<const MetricId, Row>& row) override;
 };
 
-inline constexpr uint32_t METRIC_CAT_SOL   = 2;
-inline constexpr uint32_t METRIC_TABLE_SOL = 1;
-
-class MetricTableWidget : public RocWidget
-{
-public:
-    MetricTableWidget(DataProvider&                     data_provider,
-                      std::shared_ptr<ComputeSelection> compute_selection,
-                      uint32_t                          category_id,
-                      uint32_t                          table_id);
-
-    void Render() override;
-
-    virtual void     FetchMetrics();
-    virtual void     UpdateTable();
-    void     Clear();
-    uint64_t GetClientId() const { return m_client_id; }
-
-protected:
-    DataProvider& m_data_provider;
-    std::shared_ptr<ComputeSelection> m_compute_selection;
-    uint32_t m_category_id;
-    uint32_t m_table_id;
-    uint64_t m_client_id;
-
-    MetricTableCache m_table;
-};
-
-class WorkloadMetricTableWidget : public MetricTableWidget
-{
-public:
-    WorkloadMetricTableWidget(DataProvider&                     data_provider,
-                              std::shared_ptr<ComputeSelection> compute_selection,
-                              uint32_t category_id, uint32_t table_id);
-
-    virtual void FetchMetrics() override;
-    virtual void UpdateTable() override;
-};
-
 class PinedMetricTable: public MetricTableBase
 {
 public:
     PinedMetricTable(DataProvider&                     data_provider,
                      std::shared_ptr<ComputeSelection> compute_selection,
-                     uint64_t                          client_id,
-                     std::function<void(MetricId)>     pin_metric_clicked,
-                     std::function<void(MetricId metric_id, const std::string&)>
-                                                       set_to_kernel_table_callback);
+                     uint64_t                          client_id);
     void AddRow(MetricId metric_id); 
     void RemoveRow(MetricId metric_id);
     void RefillTable();
@@ -156,12 +111,35 @@ private:
     const AvailableMetrics::Table& GetTable(const MetricId& metric_id, uint32_t workload_id);
 
     std::optional<uint32_t> GetColumnIndex(const std::string& column_name);
-    //virtual void            PinPressed(Row& row) override;
 
     std::optional<MetricId>           m_id_to_delete;
     DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
     uint64_t                          m_client_id;
+};
+
+class MetricTableWidget : public RocWidget
+{
+public:
+    MetricTableWidget(DataProvider&                     data_provider,
+                      std::shared_ptr<ComputeSelection> compute_selection,
+                      uint32_t category_id, uint32_t table_id);
+
+    void Render() override;
+
+    void     FetchMetrics();
+    void     UpdateTable();
+    void     Clear();
+    uint64_t GetClientId() const { return m_client_id; }
+
+private:
+    DataProvider&                     m_data_provider;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+    uint32_t                          m_category_id;
+    uint32_t                          m_table_id;
+    uint64_t                          m_client_id;
+
+    MetricTable m_table;
 };
 
 }  // namespace View

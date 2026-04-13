@@ -20,16 +20,17 @@ ComputeTableView::ComputeTableView(
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
 , m_set_to_kernel_table_callback(set_to_kernel_table_callback)
-, m_pined_metric_table(data_provider, compute_selection, m_client_id,
-                       [this](MetricId metric_id) {
-                           TableKey key{};
-                           key.fields.category_id = metric_id.category_id;
-                           key.fields.table_id    = metric_id.table_id;
-                           m_table_widgets[key.id].ChangePinState(metric_id);
-                           m_pined_metric_table.RemoveRow(metric_id);
-                       },
-                       set_to_kernel_table_callback)
+, m_pined_metric_table(data_provider, compute_selection, m_client_id)
 {
+    m_pined_metric_table.SetPinMetricCallback([this](MetricId metric_id) {
+        TableKey key{};
+        key.fields.category_id = metric_id.category_id;
+        key.fields.table_id    = metric_id.table_id;
+        m_table_widgets[key.id].ChangePinState(metric_id);
+        m_pined_metric_table.RemoveRow(metric_id);
+    });
+    m_pined_metric_table.SetToKernelTableCallback(set_to_kernel_table_callback);
+
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
@@ -186,9 +187,8 @@ ComputeTableView::RebuildTableDataCache()
 
     auto&    model       = m_data_provider.ComputeModel();
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
-       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
         return;
     }
@@ -202,34 +202,46 @@ ComputeTableView::RebuildTableDataCache()
     {
         for(const auto* tbl : cat->ordered_tables)
         {
-            TableKey key{};
-            key.fields.category_id = cat->id;
-            key.fields.table_id    = tbl->id;
-            auto& widget           = m_table_widgets[key.id];
-            auto pin_metric_func   = [this, &widget](MetricId metric_id) {
-                if(widget.IsMetricPined(metric_id))
-                {
-                    m_pined_metric_table.RemoveRow(metric_id);
-                }
-                else
-                {
-                    m_pined_metric_table.AddRow(metric_id);
-
-                }
-                widget.ChangePinState(metric_id);
-            };
-
-            widget = MetricTableCache (pin_metric_func, m_set_to_kernel_table_callback);
-            widget.Populate(*tbl, [&](uint32_t eid) {
-                return model.GetKernelMetricValue(
-                    m_client_id, kernel_id, cat->id, tbl->id, eid);
-            });
-
-            if(!widget.Empty())
-            {
-                m_table_widgets[key.id] = std::move(widget);
-            }
+            AddTable(cat->id, tbl);
         }
+    }
+}
+
+void
+ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* table)
+{
+    TableKey key{};
+    key.fields.category_id       = category_id;
+    key.fields.table_id          = table->id;
+    MetricTable& widget          = m_table_widgets[key.id];
+    auto         pin_metric_func = [this, &widget](MetricId metric_id) {
+        if(widget.IsMetricPined(metric_id))
+        {
+            m_pined_metric_table.RemoveRow(metric_id);
+        }
+        else
+        {
+            m_pined_metric_table.AddRow(metric_id);
+        }
+        widget.ChangePinState(metric_id);
+    };
+    widget.SetPinMetricCallback(pin_metric_func);
+    widget.SetToKernelTableCallback(m_set_to_kernel_table_callback);
+
+    auto& model = m_data_provider.ComputeModel();
+    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+    if(kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    widget.Populate(*table, [&](uint32_t eid) {
+        return model.GetMetricValue(m_client_id, kernel_id, category_id, table->id, eid);
+    });
+
+    if(!widget.Empty())
+    {
+        m_table_widgets[key.id] = std::move(widget);
     }
 }
 

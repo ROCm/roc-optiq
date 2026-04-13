@@ -20,9 +20,10 @@ class DataProvider;
 class SideBar : public RocWidget
 {
 public:
-    SideBar(std::shared_ptr<TrackTopology>                   topology,
-            std::shared_ptr<TimelineSelection>               timeline_selection,
-            std::shared_ptr<std::vector<TrackGraph>> graphs, DataProvider& dp);
+    SideBar(std::shared_ptr<TrackTopology>         topology,
+            std::shared_ptr<TimelineSelection>     timeline_selection,
+            std::shared_ptr<std::vector<TrackGraph>> graphs,
+            DataProvider&                          dp);
     ~SideBar();
     virtual void Render() override;
     virtual void Update() override;
@@ -35,26 +36,29 @@ private:
         kMixed
     };
 
-    bool RenderTrackItem(const uint64_t& index, bool show_eye_button = true);
-    EyeButtonState MergeEyeButtonState(EyeButtonState lhs,
-                                       EyeButtonState rhs) const;
-    EyeButtonState GetLeafState(const LeafNode& leaf) const;
-    EyeButtonState GetTreeState(const TreeNode& node) const;
+    bool               RenderTrackItem(const uint64_t& index,
+                                       bool show_eye_button = true);
+    EyeButtonState     MergeEyeButtonState(EyeButtonState lhs,
+                                           EyeButtonState rhs) const;
+    EyeButtonState     GetLeafState(const LeafNode& leaf) const;
+    EyeButtonState     GetTreeState(const TreeNode& node) const;
+    EyeButtonState     GetSubtreeEyeState(const TreeNode& node,
+                                          bool cross_boundaries) const;
     ImGuiTreeNodeFlags GetTreeNodeFlags(const TreeNode& node) const;
-    void ApplyVisibility(const TreeNode& node, bool visible);
-    void RenderLeafNode(const LeafNode& leaf);
-    void RenderBranchNode(const TreeNode& node,
-                          const TreeNode* state_node  = nullptr,
-                          const TreeNode* target_node = nullptr);
-    void RenderTreeNode(const TreeNode& node);
-    void RenderTreeChildren(const TreeNode& node);
-    EyeButtonState DrawEyeButton(EyeButtonState eye_button_state);
+    void               ApplyVisibility(const TreeNode& node, bool visible);
+    void               RenderLeafNode(const LeafNode& leaf);
+    void               RenderBranchNode(const TreeNode& node,
+                                        const TreeNode* state_node  = nullptr,
+                                        const TreeNode* target_node = nullptr);
+    void               RenderTreeNode(const TreeNode& node);
+    void               RenderTreeChildren(const TreeNode& node);
+    EyeButtonState     DrawEyeButton(EyeButtonState eye_button_state);
 
-    SettingsManager&                                 m_settings;
-    std::shared_ptr<TrackTopology>                   m_track_topology;
-    std::shared_ptr<TimelineSelection>               m_timeline_selection;
+    SettingsManager&                         m_settings;
+    std::shared_ptr<TrackTopology>           m_track_topology;
+    std::shared_ptr<TimelineSelection>       m_timeline_selection;
     std::shared_ptr<std::vector<TrackGraph>> m_graphs;
-    DataProvider&                                    m_data_provider;
+    DataProvider&                            m_data_provider;
 };
 
 }  // namespace View

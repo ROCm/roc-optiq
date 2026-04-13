@@ -9,7 +9,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 
-#include <utility>
 #include <unordered_set>
 
 namespace RocProfVis
@@ -93,7 +92,8 @@ SideBar::Render()
                         continue;
                     }
 
-                    if(child->type == NodeType::kUncategorizedList && !child->collapsable)
+                    if(child->type == NodeType::kUncategorizedList &&
+                       !child->collapsable)
                     {
                         RenderTreeChildren(*child);
                         continue;
@@ -138,6 +138,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     ImGui::PushID(static_cast<int>(graph.chart->GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
+
     bool display = graph.display;
     if(show_eye_button)
     {
@@ -150,10 +151,10 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
             m_data_provider.DataModel().GetTimeline().UpdateHistogram(
                 { graph.chart->GetID() }, graph.display);
         }
-
         ImGui::PopFont();
         if(ImGui::IsItemHovered())
             SetTooltipStyled("Toggle Track Visibility");
+
         ImGui::SameLine();
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
         if(ImGui::Button(ICON_ARROWS_SHRINK))
@@ -166,12 +167,14 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         if(ImGui::IsItemHovered())
             SetTooltipStyled("Scroll To Track");
     }
+
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
     if(show_eye_button)
     {
         ImGui::SameLine();
     }
+
     bool highlight = graph.selected;
     if(!highlight)
     {
@@ -194,6 +197,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     {
         ImGui::PopStyleColor();
     }
+
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     if(graph.chart->IsInViewVertical())
     {
@@ -216,6 +220,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
             "Not In Frame by: %f units.", graph.chart->GetDistanceToView());
     }
 #endif
+
     ImGui::PopID();
     return state_changed;
 }
@@ -246,49 +251,43 @@ SideBar::GetLeafState(const LeafNode& leaf) const
 SideBar::EyeButtonState
 SideBar::GetTreeState(const TreeNode& node) const
 {
-    auto get_state = [this](const auto& self, const TreeNode& current,
-                            bool allow_visibility_boundary_crossing)
-        -> std::pair<bool, EyeButtonState> {
-        bool           has_state = false;
-        EyeButtonState state     = EyeButtonState::kAllHidden;
+    return GetSubtreeEyeState(node, true);
+}
 
-        if(current.IsLeaf())
+SideBar::EyeButtonState
+SideBar::GetSubtreeEyeState(const TreeNode& node, bool cross_boundaries) const
+{
+    if(node.IsLeaf())
+    {
+        return GetLeafState(static_cast<const LeafNode&>(node));
+    }
+
+    bool           has_state = false;
+    EyeButtonState state     = EyeButtonState::kAllHidden;
+
+    for(const auto& child : node.children)
+    {
+        if(!child ||
+           (!cross_boundaries && child->breaks_visibility_chain))
         {
-            state     = GetLeafState(static_cast<const LeafNode&>(current));
-            has_state = true;
+            continue;
         }
 
-        for(const auto& child : current.children)
+        EyeButtonState child_state = GetSubtreeEyeState(*child, false);
+
+        if(!child->IsLeaf() && child->children.empty())
         {
-            if(!child)
-            {
-                continue;
-            }
-
-            if(!allow_visibility_boundary_crossing &&
-               child->breaks_visibility_chain)
-            {
-                continue;
-            }
-
-            auto [child_has_state, child_state] = self(self, *child, false);
-            if(!child_has_state)
-            {
-                continue;
-            }
-
-            state     = has_state ? MergeEyeButtonState(state, child_state) : child_state;
-            has_state = true;
-            if(state == EyeButtonState::kMixed)
-            {
-                break;
-            }
+            continue;
         }
 
-        return { has_state, state };
-    };
+        state     = has_state ? MergeEyeButtonState(state, child_state) : child_state;
+        has_state = true;
+        if(state == EyeButtonState::kMixed)
+        {
+            break;
+        }
+    }
 
-    auto [has_state, state] = get_state(get_state, node, true);
     return has_state ? state : EyeButtonState::kAllHidden;
 }
 

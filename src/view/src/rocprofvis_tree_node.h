@@ -3,19 +3,16 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 namespace RocProfVis
 {
 namespace View
 {
-
-class TrackItem;
 
 enum class NodeType : uint8_t
 {
@@ -51,36 +48,18 @@ public:
 
     TreeNode* AddChild(std::unique_ptr<TreeNode> child)
     {
-        child->parents.push_back(this);
         TreeNode* raw = child.get();
         children.push_back(std::move(child));
         return raw;
     }
 
-    void SetVisibleRecursive(bool v)
-    {
-        visible = v;
-        for(auto& child : children)
-            child->SetVisibleRecursive(v);
-    }
-
-    bool IsAllChildrenHidden() const
-    {
-        if(children.empty())
-            return !visible;
-        return std::all_of(children.begin(), children.end(),
-            [](const auto& child) { return child->IsAllChildrenHidden(); });
-    }
-
     NodeType                                type;
     std::string                             label;
     bool                                    collapsable;
-    bool                                    visible = true;
-    bool                                    show_eye_button = true;
+    bool                                    show_eye_button         = true;
     bool                                    breaks_visibility_chain = false;
-    bool                                    framed = false;
-    bool                                    render_children_inline = false;
-    std::vector<TreeNode*>                  parents;
+    bool                                    framed                  = false;
+    bool                                    render_children_inline  = false;
     std::vector<std::unique_ptr<TreeNode>>  children;
 };
 
@@ -95,15 +74,13 @@ public:
 
     bool IsLeaf() const override { return true; }
 
-    uint64_t   graph_index    = 0;
-    uint64_t   track_id       = 0;
-    TrackItem* track_item     = nullptr;
-    bool       cache_selected = false;
+    uint64_t graph_index = 0;
+    uint64_t track_id    = 0;
 };
 
 struct SidebarTree
 {
-    std::unique_ptr<TreeNode>                        root;
+    std::unique_ptr<TreeNode>                            root;
     std::unordered_map<uint64_t, std::vector<LeafNode*>> leaf_lookup;
 };
 

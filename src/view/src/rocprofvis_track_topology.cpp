@@ -14,27 +14,23 @@ namespace View
 
 namespace
 {
+
 TreeNode*
 AddBranchNode(TreeNode* parent, NodeType type, const std::string& label,
               bool collapsable = true, bool show_eye_button = true,
               bool framed = false)
 {
-    auto node = std::make_unique<TreeNode>(type, label, collapsable);
+    auto node             = std::make_unique<TreeNode>(type, label, collapsable);
     node->show_eye_button = show_eye_button;
     node->framed          = framed;
-    TreeNode* raw         = node.get();
-    if(parent)
-    {
-        parent->AddChild(std::move(node));
-    }
-    return raw;
+    return parent ? parent->AddChild(std::move(node)) : node.release();
 }
 
 LeafNode*
 AddLeafNode(TreeNode* parent, const std::vector<const TrackInfo*>& track_list,
             SidebarTree& sidebar_tree, uint64_t graph_index,
-            const std::string& fallback_label, bool render_children_inline = false,
-            bool show_eye_button = true, bool breaks_visibility_chain = false)
+            const std::string& fallback_label,
+            bool render_children_inline = false)
 {
     uint64_t    track_id = graph_index;
     std::string label    = fallback_label;
@@ -48,17 +44,15 @@ AddLeafNode(TreeNode* parent, const std::vector<const TrackInfo*>& track_list,
         }
     }
 
-    auto leaf = std::make_unique<LeafNode>(label, graph_index, track_id);
+    auto leaf                    = std::make_unique<LeafNode>(label, graph_index, track_id);
     leaf->render_children_inline = render_children_inline;
-    leaf->show_eye_button        = show_eye_button;
-    leaf->breaks_visibility_chain = breaks_visibility_chain;
     LeafNode* raw                = leaf.get();
     parent->AddChild(std::move(leaf));
     sidebar_tree.leaf_lookup[graph_index].push_back(raw);
     return raw;
 }
 
-template <typename Model>
+template<typename Model>
 void
 BuildLeafList(TreeNode* parent, NodeType type, const std::string& label,
               const std::vector<Model>& items,
@@ -85,24 +79,30 @@ BuildLeafList(TreeNode* parent, NodeType type, const std::string& label,
     }
 }
 
+/*
+ * Builds a processor subtree.  When the processor appears inline beneath a
+ * stream leaf, show_controls is false: no eye buttons and no intermediate
+ * list headers are rendered, and breaks_visibility_chain isolates the
+ * subtree from ancestor bulk-visibility toggles.
+ */
 void
 BuildProcessorTree(TreeNode* parent, const ProcessorModel& processor,
                    const std::vector<const TrackInfo*>& track_list,
-                   SidebarTree& sidebar_tree, bool show_eye_button,
-                   bool breaks_visibility_chain = false)
+                   SidebarTree& sidebar_tree, bool show_controls,
+                   bool breaks_chain = false)
 {
     if(!processor.info)
     {
         return;
     }
 
-    TreeNode* processor_node = AddBranchNode(parent, NodeType::kProcessor,
-        processor.header, true, show_eye_button, false);
-    processor_node->breaks_visibility_chain = breaks_visibility_chain;
-    BuildLeafList(processor_node, NodeType::kQueueList, processor.queue_header,
-                  processor.queues, track_list, sidebar_tree, show_eye_button);
-    BuildLeafList(processor_node, NodeType::kCounterList, processor.counter_header,
-                  processor.counters, track_list, sidebar_tree, show_eye_button);
+    TreeNode* node = AddBranchNode(parent, NodeType::kProcessor,
+                                   processor.header, true, show_controls, false);
+    node->breaks_visibility_chain = breaks_chain;
+    BuildLeafList(node, NodeType::kQueueList, processor.queue_header,
+                  processor.queues, track_list, sidebar_tree, show_controls);
+    BuildLeafList(node, NodeType::kCounterList, processor.counter_header,
+                  processor.counters, track_list, sidebar_tree, show_controls);
 }
 
 void
@@ -116,12 +116,12 @@ BuildProcessTree(TreeNode* parent, const ProcessModel& process,
     }
 
     TreeNode* process_node = AddBranchNode(parent, NodeType::kProcess,
-        process.header, true, true, false);
+                                           process.header, true, true, false);
 
     if(!process.streams.empty())
     {
         TreeNode* stream_list = AddBranchNode(process_node, NodeType::kStreamList,
-            process.stream_header, true, true, true);
+                                              process.stream_header, true, true, true);
         for(const auto& stream : process.streams)
         {
             if(!stream.info)
@@ -129,10 +129,10 @@ BuildProcessTree(TreeNode* parent, const ProcessModel& process,
                 continue;
             }
 
-            bool has_processors = !stream.processors.empty();
-            LeafNode* stream_leaf = AddLeafNode(
-                stream_list, track_list, sidebar_tree, stream.graph_index,
-                stream.info->name, has_processors);
+            bool      has_processors = !stream.processors.empty();
+            LeafNode* stream_leaf    = AddLeafNode(stream_list, track_list, sidebar_tree,
+                                                   stream.graph_index, stream.info->name,
+                                                   has_processors);
             for(const auto& processor : stream.processors)
             {
                 BuildProcessorTree(stream_leaf, processor, track_list, sidebar_tree,
@@ -148,6 +148,7 @@ BuildProcessTree(TreeNode* parent, const ProcessModel& process,
                   process.sampled_thread_header,
                   process.sampled_threads, track_list, sidebar_tree);
 }
+
 }  // namespace
 
 TrackTopology::TrackTopology(DataProvider& dp)

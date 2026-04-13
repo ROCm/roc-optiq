@@ -33,6 +33,8 @@ const uint64_t DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchEventCallStack);
 const uint64_t DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kSaveTrimmedTrace);
+const uint64_t DataProvider::CLEANUP_DATABASE_REQUEST_ID =
+    RequestIdBuilder::MakeRequestId(RequestType::kCleanupDatabase);
 const uint64_t DataProvider::TABLE_EXPORT_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kTableExport);
 const uint64_t DataProvider::FETCH_SYSTEM_TRACE_REQUEST_ID =
@@ -58,6 +60,7 @@ DataProvider::DataProvider()
 , m_table_data_ready_callback(nullptr)
 , m_summary_data_ready_callback(nullptr)
 , m_save_trace_callback(nullptr)
+, m_cleanup_database_callback(nullptr)
 , m_table_export_callback(nullptr)
 , m_progress_percent(0)
 , m_model()
@@ -1181,6 +1184,60 @@ DataProvider::SaveTrimmedTrace(const std::string& path, double start_ns, double 
     }
 
     return false;
+}
+
+bool
+DataProvider::CleanupDatabase(bool rebuild)
+{
+    spdlog::debug("Database cleanup requested, rebuild: {}", rebuild);
+
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::debug("Cannot cleanup, provider not ready, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+
+    if(m_requests.find(CLEANUP_DATABASE_REQUEST_ID) != m_requests.end())
+    {
+        spdlog::debug("Cleanup request already pending");
+        return false;
+    }
+
+    rocprofvis_handle_t* cleanup_future = rocprofvis_controller_future_alloc();
+    ROCPROFVIS_ASSERT(cleanup_future);
+
+    rocprofvis_result_t result = rocprofvis_controller_cleanup_trace_database(
+        m_trace_controller, rebuild, cleanup_future);
+
+    if(result == kRocProfVisResultSuccess && cleanup_future)
+    {
+        spdlog::debug("Database cleanup request submitted successfully");
+        RequestInfo request_info;
+        request_info.request_array      = nullptr;
+        request_info.request_future     = cleanup_future;
+        request_info.request_obj_handle = nullptr;
+        request_info.request_args       = nullptr;
+        request_info.request_id         = CLEANUP_DATABASE_REQUEST_ID;
+        request_info.loading_state      = RequestState::kLoading;
+        request_info.request_type       = RequestType::kCleanupDatabase;
+        m_requests.emplace(request_info.request_id, request_info);
+        return true;
+    }
+    else
+    {
+        spdlog::error("Failed to submit database cleanup request, result: {}",
+                      static_cast<int>(result));
+        rocprofvis_controller_future_free(cleanup_future);
+    }
+
+    return false;
+}
+
+void
+DataProvider::SetCleanupDatabaseCallback(const std::function<void(bool)>& callback)
+{
+    m_cleanup_database_callback = callback;
 }
 
 bool
@@ -2586,6 +2643,11 @@ DataProvider::ProcessRequest(RequestInfo& req)
             ProcessSaveTrimmedTraceRequest(req);
             break;
         }
+        case RequestType::kCleanupDatabase:
+        {
+            ProcessCleanupDatabaseRequest(req);
+            break;
+        }
         case RequestType::kFetchSystemTrace:
         {
             ProcessLoadSystemTrace(req);
@@ -2631,6 +2693,18 @@ DataProvider::ProcessSaveTrimmedTraceRequest(RequestInfo& req)
     if(m_save_trace_callback)
     {
         m_save_trace_callback(req.response_code == kRocProfVisResultSuccess);
+    }
+}
+
+void
+DataProvider::ProcessCleanupDatabaseRequest(RequestInfo& req)
+{
+    spdlog::debug("Database cleanup request complete with result: {}",
+                  req.response_code);
+
+    if(m_cleanup_database_callback)
+    {
+        m_cleanup_database_callback(req.response_code == kRocProfVisResultSuccess);
     }
 }
 

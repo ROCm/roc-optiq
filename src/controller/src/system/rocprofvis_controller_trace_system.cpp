@@ -546,6 +546,48 @@ rocprofvis_result_t SystemTrace::SaveTrimmedTrace(Future& future, double start, 
     return error;
 }
 
+rocprofvis_result_t SystemTrace::CleanupTraceDatabase(Future& future, bool rebuild)
+{
+    rocprofvis_result_t error = kRocProfVisResultUnknownError;
+
+    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    future.Set(JobSystem::Get().IssueJob([rebuild, dm_handle](Future* future) -> rocprofvis_result_t {
+        (void) future;
+        rocprofvis_result_t result = kRocProfVisResultUnknownError;
+        rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
+        if (db)
+        {
+            rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+            if (object2wait)
+            {
+                auto error = rocprofvis_db_cleanup_async(db, object2wait, rebuild);
+                result = (error == kRocProfVisDmResultSuccess)
+                    ? kRocProfVisResultSuccess
+                    : kRocProfVisResultUnknownError;
+
+                if (error == kRocProfVisDmResultSuccess)
+                {
+                    error = rocprofvis_db_future_wait(object2wait,
+                        UINT64_MAX);
+                    result = (error == kRocProfVisDmResultSuccess)
+                        ? kRocProfVisResultSuccess
+                        : kRocProfVisResultUnknownError;
+                }
+
+                rocprofvis_db_future_free(object2wait);
+            }
+        }
+        return result;
+        }, &future));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+
+    return error;
+}
+
 rocprofvis_result_t SystemTrace::AsyncFetch(Track& track, Future& future, Array& array,
                                 double start, double end)
 {

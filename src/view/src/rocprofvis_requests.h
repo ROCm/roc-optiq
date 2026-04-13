@@ -32,6 +32,7 @@ enum class RequestType
     kFetchEventCallStack,
     kFetchSummary,
     kSaveTrimmedTrace,
+    kCleanupDatabase,
     kTableExport,
     kFetchSystemTrace,
 #ifdef COMPUTE_UI_SUPPORT

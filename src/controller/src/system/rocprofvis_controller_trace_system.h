@@ -45,6 +45,8 @@ public:
 
     rocprofvis_result_t SaveTrimmedTrace(Future& future, double start, double end, char const* path);
 
+    rocprofvis_result_t CleanupTraceDatabase(Future& future, bool rebuild);
+
     rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
                                    double start, double end);
 

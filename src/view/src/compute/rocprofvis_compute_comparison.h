@@ -76,7 +76,8 @@ private:
                 std::string  data;
                 DisplayProps display_props;
             };
-            // Render representation, rebuilt/reordered as needed when rows/columns change...
+            // Render representation, rebuilt/reordered as needed when rows/columns
+            // change...
             struct Cell
             {
                 std::string_view    data;

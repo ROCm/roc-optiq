@@ -66,6 +66,7 @@ protected:
 
 private:
     float GetTableHight() const;
+    void  RenderPinButton(std::pair<const MetricId, Row>& row);
 };
 
 class MetricTable : public MetricTableBase

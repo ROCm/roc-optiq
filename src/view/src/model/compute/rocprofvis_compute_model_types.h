@@ -131,24 +131,16 @@ struct MetricValue
     std::unordered_map<std::string, double> values;
 };
 
-union MetricKey
+struct MetricId
 {
-    struct
-    {
-        uint64_t category_id : 16;
-        uint64_t table_id : 16;
-        uint64_t entry_id : 32;
-    } fields;
-    uint64_t id;
-};
+    static constexpr unsigned table_bits    = 32;
+    static constexpr uint64_t table_mask  = (1ull << table_bits) - 1;
 
-struct MetricId //TODO: it should be merged with Metric Key and Metric Value
-{
     std::string ToString() const
     {
         return std::to_string(category_id) + "." + std::to_string(table_id) + "." +
                std::to_string(entry_id);
-    };
+    }
 
     bool operator==(const MetricId& other) const noexcept
     {
@@ -156,12 +148,34 @@ struct MetricId //TODO: it should be merged with Metric Key and Metric Value
                entry_id == other.entry_id;
     }
 
-    uint32_t category_id;
-    uint32_t table_id;
-    uint32_t entry_id;
+    static constexpr uint64_t GetTableKey(uint32_t category_id,
+                                          uint32_t table_id) noexcept
+    {
+        return (static_cast<uint64_t>(category_id) << table_bits) |
+               static_cast<uint64_t>(table_id);
+    }
+
+    constexpr uint64_t GetTableKey() const noexcept
+    {
+        return GetTableKey(category_id, table_id);
+    }
+
+    static constexpr uint32_t ExtractCategoryId(uint64_t key) noexcept
+    {
+        return static_cast<uint32_t>(key >> table_bits);
+    }
+
+    static constexpr uint32_t ExtractTableId(uint64_t key) noexcept
+    {
+        return static_cast<uint32_t>(key & table_mask);
+    }
+
+    uint32_t category_id = 0;
+    uint32_t table_id    = 0;
+    uint32_t entry_id    = 0;
 };
 
-struct MetricIdHash //TODO: it should be merged with Metric Key and Metric Value
+struct MetricIdHash
 {
     size_t operator()(const MetricId& id) const noexcept
     {
@@ -171,16 +185,6 @@ struct MetricIdHash //TODO: it should be merged with Metric Key and Metric Value
 
         return std::hash<uint64_t>{}(value);
     }
-};
-
-union TableKey
-{
-    struct
-    {
-        uint64_t category_id : 16;
-        uint64_t table_id : 48;
-    } fields;
-    uint64_t id;
 };
 
 struct ComputeTableInfo

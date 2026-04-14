@@ -21,7 +21,7 @@ MetricTableBase::MetricTableBase()
 , m_lust_column_index(0)
 {
     m_table_flags =
-        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg ;
 }
 
 void
@@ -63,8 +63,8 @@ MetricTableBase::Render()
         {
             if (column.first == 0)
             {
-                ImGui::TableSetupColumn(column.second.c_str(),
-                                        ImGuiTableColumnFlags_WidthFixed, 30.0f); //Set width dinamicly
+                ImGui::TableSetupColumn(column.second.c_str(), ImGuiTableColumnFlags_WidthFixed,
+                    ImGui::CalcTextSize(ICON_EYE).x);
             }
             else
             {
@@ -154,35 +154,7 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
 {
     if (column_index == 0)
     {
-        bool selected = false;
-        ImGui::TableNextColumn();
-        //if(ImGui::Checkbox("", &row.second.pinned))
-        //{
-        //}
-
-        ImGui::PushStyleColor(ImGuiCol_Button, SettingsManager::GetInstance().GetColor(
-                                                   Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-            SettingsManager::GetInstance().GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-            SettingsManager::GetInstance().GetColor(Colors::kTransparent));
-        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault));
-        ImVec2 eye_size = ImGui::CalcTextSize(ICON_EYE);
-        float  button_w = eye_size.x + ImGui::GetStyle().FramePadding.x * 2;
-        float  button_h = eye_size.y + ImGui::GetStyle().FramePadding.y * 2;//TODO: Hight is to big, update it by table cell hight
-        if(ImGui::Button(row.second.pinned == true ? ICON_EYE_SLASH : ICON_EYE,
-                         ImVec2(button_w, button_h)))
-        {
-            if (m_pin_metric_clicked)
-            {
-                m_pin_metric_clicked({ row.first.category_id, row.first.table_id,
-                                        row.first.entry_id });
-            }
-        }
-        ImGui::PopFont();
-        ImGui::PopStyleColor(3);
-
+        RenderPinButton(row);
     }
     else
     {
@@ -199,7 +171,35 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
             RenderTooltip(row.second.values.at(column_index));
         }
     }
+}
 
+void
+MetricTableBase::RenderPinButton(std::pair<const MetricId, Row>& row)
+{
+    bool selected = false;
+    ImGui::TableNextColumn();
+
+    ImGui::PushStyleColor(ImGuiCol_Button,
+                          SettingsManager::GetInstance().GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          SettingsManager::GetInstance().GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          SettingsManager::GetInstance().GetColor(Colors::kTransparent));
+    ImGui::PushFont(
+        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+    ImVec2 eye_size = ImGui::CalcTextSize(ICON_EYE);
+    if(ImGui::Button(row.second.pinned == true ? ICON_EYE_SLASH : ICON_EYE, eye_size))
+    {
+        if(m_pin_metric_clicked)
+        {
+            m_pin_metric_clicked(
+                { row.first.category_id, row.first.table_id, row.first.entry_id });
+        }
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopFont();
+    ImGui::PopStyleColor(3);
 }
 
 void
@@ -247,7 +247,6 @@ MetricTableBase::FillDefaultColumns()
     m_lust_column_index   = 3;
     m_columns[LAST_INDEX] = "Unit";
 }
-
 
 bool
 MetricTableBase::IsMetricPined(MetricId metric_id)
@@ -349,7 +348,6 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
         m_rows[metric_id] = std::move(row);
     }
 }
-
 
 void
 MetricTable::Clear()
@@ -524,7 +522,6 @@ PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
                     m_set_to_kernel_table_callback(row.first, m_columns[column_index]);
             }
         }
-
         ImGui::EndPopup();
     }
 }

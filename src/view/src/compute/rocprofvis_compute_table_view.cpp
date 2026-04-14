@@ -23,10 +23,7 @@ ComputeTableView::ComputeTableView(
 , m_pined_metric_table(data_provider, compute_selection, m_client_id)
 {
     m_pined_metric_table.SetPinMetricCallback([this](MetricId metric_id) {
-        TableKey key{};
-        key.fields.category_id = metric_id.category_id;
-        key.fields.table_id    = metric_id.table_id;
-        m_table_widgets[key.id].ChangePinState(metric_id);
+        m_table_widgets[metric_id.GetTableKey()].ChangePinState(metric_id);
         m_pined_metric_table.RemoveRow(metric_id);
     });
     m_pined_metric_table.SetToKernelTableCallback(set_to_kernel_table_callback);
@@ -210,10 +207,8 @@ ComputeTableView::RebuildTableDataCache()
 void
 ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* table)
 {
-    TableKey key{};
-    key.fields.category_id       = category_id;
-    key.fields.table_id          = table->id;
-    MetricTable& widget          = m_table_widgets[key.id];
+    uint64_t     key = MetricId::GetTableKey(category_id, table->id);
+    MetricTable& widget          = m_table_widgets[key];
     auto         pin_metric_func = [this, &widget](MetricId metric_id) {
         if(widget.IsMetricPined(metric_id))
         {
@@ -241,23 +236,20 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
 
     if(!widget.Empty())
     {
-        m_table_widgets[key.id] = std::move(widget);
+        m_table_widgets[key] = std::move(widget);
     }
 }
 
 void
-ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
+ComputeTableView::RenderCategory(const AvailableMetrics::Category& category)
 {
     bool category_has_data = false;
 
     ImGui::BeginChild("scroll", ImVec2(-1, -1));
-    for(const auto* tbl : cat.ordered_tables)
+    for(const auto* table : category.ordered_tables)
     {
-        TableKey key{};
-        key.fields.category_id = cat.id;
-        key.fields.table_id    = tbl->id;
-
-        auto it = m_table_widgets.find(key.id);
+        uint64_t key = MetricId::GetTableKey(category.id, table->id);
+        auto it = m_table_widgets.find(key);
         if(it == m_table_widgets.end())
             continue;
 

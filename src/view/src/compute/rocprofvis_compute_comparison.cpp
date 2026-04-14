@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_comparison.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_requests.h"
@@ -11,6 +12,8 @@
 #include "widgets/rocprofvis_tab_container.h"
 #include <algorithm>
 #include <bitset>
+#include <cmath>
+#include <cstdlib>
 #include <iomanip>
 #include <sstream>
 
@@ -19,9 +22,11 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr size_t BASELINE_BG_COLOR     = 4;
-constexpr size_t TARGET_BG_COLOR       = 5;
-constexpr size_t DIFFERENCE_BG_COLOR   = 2;
+constexpr int                 SIGNIFICANT_DIGITS = 2;
+const double                  ROUND_FACTOR       = std::pow(10.0, SIGNIFICANT_DIGITS);
+constexpr ImGuiColorEditFlags LEGEND_FLAGS =
+    ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoInputs |
+    ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoLabel;
 constexpr size_t ROW_TAG_INVALID_MATCH = 0;
 
 ComputeComparisonView::ComputeComparisonView(
@@ -42,7 +47,6 @@ ComputeComparisonView::ComputeComparisonView(
 , m_retry_fetch(false)
 , m_filter_common_metrics(false)
 , m_layout(nullptr)
-, m_toolbar_spacer_width(0.0f)
 , m_toolbar_available_width(0.0f)
 , m_tab_container(nullptr)
 , m_bookmark_table(nullptr)
@@ -55,9 +59,6 @@ ComputeComparisonView::ComputeComparisonView(
                                 ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                                     ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY,
                                 3, 1);
-    m_bookmark_table->SetColumnColor("Baseline", true, BASELINE_BG_COLOR);
-    m_bookmark_table->SetColumnColor("Target", true, TARGET_BG_COLOR);
-    m_bookmark_table->SetColumnColor("Difference", true, DIFFERENCE_BG_COLOR);
     m_bookmark_table->SetRowSelectionHandler(
         [this](const Table& table, const size_t index, const bool state) {
             if(!state)
@@ -224,7 +225,7 @@ ComputeComparisonView::FetchMetrics()
         std::vector<MetricsRequestParams::MetricID> metric_ids;
         // Fetch baseline...
         if(!m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_baseline,
-                                                          baseline_kernel_id))
+                                                                baseline_kernel_id))
         {
             m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id_baseline);
             for(const AvailableMetrics::Category* category :
@@ -245,7 +246,7 @@ ComputeComparisonView::FetchMetrics()
         metric_ids.clear();
         // Fetch target...
         if(!m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_target,
-                                                          m_target_kernel_id))
+                                                                m_target_kernel_id))
         {
             m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id_target);
             for(const AvailableMetrics::Category* category :
@@ -270,9 +271,10 @@ ComputeComparisonView::UpdateMetrics()
 {
     // Do nothing unless we have data for baseline + target...
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-    if(m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_baseline, kernel_id) &&
+    if(m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_baseline,
+                                                           kernel_id) &&
        m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_target,
-                                                     m_target_kernel_id))
+                                                           m_target_kernel_id))
     {
         uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
         if(m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id) &&
@@ -286,9 +288,7 @@ ComputeComparisonView::UpdateMetrics()
                     .GetWorkload(workload_id)
                     ->available_metrics.ordered_categories;
             std::unordered_map<uint32_t, const AvailableMetrics::Entry*> row_entry;
-            std::unordered_map<uint32_t, std::vector<std::string>>       row_value_names;
-            std::unordered_map<uint32_t, std::vector<std::optional<double>>>
-                row_value_data;
+            std::unordered_map<uint32_t, std::vector<Table::Value>>      row_value;
             // Go through our available metrics...
             for(const AvailableMetrics::Category* category : baseline_categories)
             {
@@ -331,8 +331,7 @@ ComputeComparisonView::UpdateMetrics()
                                       : nullptr
                                 : nullptr;
                         row_entry.clear();
-                        row_value_names.clear();
-                        row_value_data.clear();
+                        row_value.clear();
                         if(fetched_baseline_entry)
                         {
                             row_entry[0] = fetched_baseline_entry.get()->entry;
@@ -361,65 +360,136 @@ ComputeComparisonView::UpdateMetrics()
                                           ? &fetched_target_entry->values.at(value_name)
                                           : nullptr
                                     : nullptr;
+                            const double rounded_baseline =
+                                baseline_value
+                                    ? std::round(*baseline_value * ROUND_FACTOR) /
+                                          ROUND_FACTOR
+                                    : 0.0;
+                            const double rounded_target =
+                                target_value ? std::round(*target_value * ROUND_FACTOR) /
+                                                   ROUND_FACTOR
+                                             : 0.0;
+                            // Setup customizations...
+                            std::optional<Table::DisplayProps::Color> bg_color_baseline;
+                            std::optional<Table::DisplayProps::Color> bg_color_target;
+                            std::optional<Table::DisplayProps::Color> bg_color_difference;
+                            std::optional<Table::DisplayProps::Color> text_color;
+                            std::optional<const char*>                icon;
+                            if(valid_match)
+                            {
+                                if(baseline_value && target_value &&
+                                   rounded_baseline != rounded_target)
+                                {
+                                    bg_color_baseline = Table::DisplayProps::Color{
+                                        Colors::kComparisonBase, 255
+                                    };
+                                    bg_color_target = Table::DisplayProps::Color{
+                                        Colors::kComparisonTarget, 255
+                                    };
+                                    if(rounded_target > rounded_baseline)
+                                    {
+                                        bg_color_difference = Table::DisplayProps::Color{
+                                            Colors::kComparisonGreater, 255
+                                        };
+                                        icon = ICON_ARROW_UP;
+                                    }
+                                    else
+                                    {
+                                        bg_color_difference = Table::DisplayProps::Color{
+                                            Colors::kComparisonLesser, 255
+                                        };
+                                        icon = ICON_ARROW_DOWN;
+                                    }
+                                    if(rounded_baseline != 0.0)
+                                    {
+                                        bg_color_difference.value().alpha =
+                                            std::min(static_cast<ImU32>(
+                                                         std::abs(rounded_target -
+                                                                  rounded_baseline) /
+                                                             rounded_baseline * 255 +
+                                                         25),
+                                                     ImU32(255));
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                text_color =
+                                    Table::DisplayProps::Color{ Colors::kTextDim, 255 };
+                            }
                             // Merge baseline + target into one row if they match,
                             // otherwise split into two separate rows...
-                            row_value_names[0].emplace_back("Baseline " + value_name);
-                            row_value_data[0].emplace_back(
-                                baseline_value ? std::make_optional(*baseline_value)
-                                               : std::nullopt);
-                            row_value_names[0].emplace_back("Target " + value_name);
-                            row_value_data[0].emplace_back(
+                            row_value[0].emplace_back(Table::Value{
+                                "Baseline " + value_name,
+                                baseline_value ? std::make_optional(rounded_baseline)
+                                               : std::nullopt,
+                                Table::DisplayProps{ bg_color_baseline, text_color,
+                                                     std::nullopt } });
+                            row_value[0].emplace_back(Table::Value{
+                                "Target " + value_name,
                                 valid_match && target_value
-                                    ? std::make_optional(*target_value)
-                                    : std::nullopt);
-                            row_value_names[0].emplace_back("Difference##" + value_name);
-                            row_value_data[0].emplace_back(
+                                    ? std::make_optional(rounded_target)
+                                    : std::nullopt,
+                                Table::DisplayProps{ bg_color_target, text_color,
+                                                     std::nullopt } });
+                            row_value[0].emplace_back(Table::Value{
+                                "Difference##" + value_name,
                                 valid_match && baseline_value && target_value
-                                    ? std::make_optional(*target_value - *baseline_value)
-                                    : std::nullopt);
-                            row_value_names[0].emplace_back("Difference (%)##" +
-                                                            value_name);
-                            row_value_data[0].emplace_back(
+                                    ? std::make_optional(rounded_target -
+                                                         rounded_baseline)
+                                    : std::nullopt,
+                                Table::DisplayProps{ bg_color_difference, text_color,
+                                                     icon } });
+                            row_value[0].emplace_back(Table::Value{
+                                "Difference (%)##" + value_name,
                                 valid_match && baseline_value && target_value &&
-                                        *baseline_value != 0.0
+                                        rounded_baseline != 0.0
                                     ? std::make_optional(
-                                          (*target_value - *baseline_value) /
-                                          *baseline_value * 100)
-                                    : std::nullopt);
+                                          std::round((rounded_target - rounded_baseline) /
+                                                     rounded_baseline * 100 *
+                                                     ROUND_FACTOR) /
+                                          ROUND_FACTOR)
+                                    : std::nullopt,
+                                Table::DisplayProps{ bg_color_difference, text_color,
+                                                     icon } });
                             if(!valid_match && row_entry.count(1) > 0)
                             {
-                                row_value_names[1].emplace_back("Baseline " + value_name);
-                                row_value_data[1].emplace_back(std::nullopt);
-                                row_value_names[1].emplace_back("Target " + value_name);
-                                row_value_data[1].emplace_back(
-                                    target_value ? std::make_optional(*target_value)
-                                                 : std::nullopt);
-                                row_value_names[1].emplace_back("Difference##" +
-                                                                value_name);
-                                row_value_data[1].emplace_back(std::nullopt);
-                                row_value_names[1].emplace_back("Difference (%)##" +
-                                                                value_name);
-                                row_value_data[1].emplace_back(std::nullopt);
+                                row_value[1].emplace_back(Table::Value{
+                                    "Baseline " + value_name, std::nullopt,
+                                    Table::DisplayProps{ bg_color_baseline, text_color,
+                                                         std::nullopt } });
+                                row_value[1].emplace_back(Table::Value{
+                                    "Target " + value_name,
+                                    target_value ? std::make_optional(rounded_target)
+                                                 : std::nullopt,
+                                    Table::DisplayProps{ bg_color_target, text_color,
+                                                         std::nullopt } });
+                                row_value[1].emplace_back(Table::Value{
+                                    "Difference##" + value_name, std::nullopt,
+                                    Table::DisplayProps{ std::nullopt, text_color,
+                                                         std::nullopt } });
+                                row_value[1].emplace_back(Table::Value{
+                                    "Difference (%)##" + value_name, std::nullopt,
+                                    Table::DisplayProps{ std::nullopt, text_color,
+                                                         std::nullopt } });
                             }
                         }
-                        if(row_value_names.size() == row_value_data.size())
+                        for(uint32_t k = 0; k < row_value.size(); k++)
                         {
-                            for(uint32_t k = 0; k < row_value_names.size(); k++)
+                            if(row_entry.count(k) > 0 && row_value.count(k))
                             {
-                                if(row_entry.count(k) > 0 &&
-                                   row_value_names.count(k) > 0 &&
-                                   row_value_data.count(k) > 0)
-                                {
-                                    category_model.tables[i]->AddRow(
-                                        row_entry.at(k), row_value_names.at(k),
-                                        row_value_data.at(k),
-                                        valid_match
-                                            ? std::nullopt
-                                            : std::make_optional(Colors::kTextDim),
-                                        valid_match ? std::nullopt
-                                                    : std::make_optional<size_t>(
-                                                          ROW_TAG_INVALID_MATCH));
-                                }
+                                category_model.tables[i]->AddRow(
+                                    row_entry.at(k), row_value.at(k),
+                                    valid_match
+                                        ? Table::DisplayProps{}
+                                        : Table::DisplayProps{ std::nullopt,
+                                                               Table::DisplayProps::Color{
+                                                                   Colors::kTextDim,
+                                                                   255 },
+                                                               std::nullopt },
+                                    valid_match ? std::nullopt
+                                                : std::make_optional<size_t>(
+                                                      ROW_TAG_INVALID_MATCH));
                             }
                         }
                     }
@@ -436,12 +506,6 @@ ComputeComparisonView::UpdateMetrics()
                             }
                         });
                     empty &= category_model.tables[i]->Rows().empty();
-                    category_model.tables[i]->SetColumnColor("Baseline", true,
-                                                             BASELINE_BG_COLOR);
-                    category_model.tables[i]->SetColumnColor("Target", true,
-                                                             TARGET_BG_COLOR);
-                    category_model.tables[i]->SetColumnColor("Difference", true,
-                                                             DIFFERENCE_BG_COLOR);
                     if(m_filter_common_metrics)
                     {
                         category_model.tables[i]->ApplyRowFilter(ROW_TAG_INVALID_MATCH);
@@ -538,9 +602,56 @@ ComputeComparisonView::RenderToolbar()
     }
     ImGui::EndDisabled();
     VerticalSeparator(&m_settings);
-    if(m_toolbar_spacer_width != 0.0)
+    if(m_toolbar_available_width != 0.0)
     {
-        ImGui::Dummy(ImVec2(m_toolbar_spacer_width, ImGui::GetFrameHeightWithSpacing()));
+        float legend_width =
+            7.0f * style.FramePadding.x + 4.0f * ImGui::GetFrameHeight() +
+            ImGui::CalcTextSize("Baseline").x + ImGui::CalcTextSize("Target").x +
+            2.0f * ImGui::CalcTextSize("Difference[X]").x;
+        if(m_toolbar_available_width > legend_width)
+        {
+            ImGui::Dummy(ImVec2(m_toolbar_available_width - legend_width,
+                                ImGui::GetFrameHeightWithSpacing()));
+            ImGui::SameLine();
+            VerticalSeparator(&m_settings);
+            ImVec4 bg_base = ImGui::ColorConvertU32ToFloat4(
+                m_settings.GetColor(Colors::kComparisonBase));
+            ImVec4 bg_target = ImGui::ColorConvertU32ToFloat4(
+                m_settings.GetColor(Colors::kComparisonTarget));
+            ImVec4 bg_lesser = ImGui::ColorConvertU32ToFloat4(
+                m_settings.GetColor(Colors::kComparisonLesser));
+            ImVec4 bg_greater = ImGui::ColorConvertU32ToFloat4(
+                m_settings.GetColor(Colors::kComparisonGreater));
+            ImGui::SameLine();
+            ImGui::ColorEdit4("b", &bg_base.x, LEGEND_FLAGS);
+            ImGui::SameLine(0.0f, style.FramePadding.x);
+            ImGui::TextUnformatted("Baseline");
+            ImGui::SameLine(0.0f, style.FramePadding.x);
+            ImGui::ColorEdit4("t", &bg_target.x, LEGEND_FLAGS);
+            ImGui::SameLine(0.0f, style.FramePadding.x);
+            ImGui::TextUnformatted("Target");
+            ImGui::SameLine(0.0f, style.FramePadding.x);
+            ImGui::ColorEdit4("d<", &bg_lesser.x, LEGEND_FLAGS);
+            ImGui::SameLine(0.0f, style.FramePadding.x);
+            ImGui::TextUnformatted("Difference");
+            ImGui::SameLine();
+            ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+            ImGui::TextUnformatted(ICON_ARROW_DOWN);
+            ImGui::PopFont();
+            ImGui::SameLine(0.0f, style.FramePadding.x);
+            ImGui::ColorEdit4("d>", &bg_greater.x, LEGEND_FLAGS);
+            ImGui::SameLine(0.0f, style.FramePadding.x);
+            ImGui::TextUnformatted("Difference");
+            ImGui::SameLine();
+            ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+            ImGui::TextUnformatted(ICON_ARROW_UP);
+            ImGui::PopFont();
+        }
+        else
+        {
+            ImGui::Dummy(
+                ImVec2(m_toolbar_available_width, ImGui::GetFrameHeightWithSpacing()));
+        }
     }
     VerticalSeparator(&m_settings);
     if(ImGui::Button(m_filter_common_metrics ? "Show Common Metrics" : "Show All Metrics",
@@ -582,9 +693,10 @@ ComputeComparisonView::RenderToolbar()
     if(BeginItemTooltipStyled())
     {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
-        ImGui::TextUnformatted("Toggle displaying of mismatched (grey-shaded) metrics, such "
-                               "as archetecture specific metrics "
-                               "when comparing across GPU archetectures.");
+        ImGui::TextUnformatted(
+            "Toggle displaying of mismatched (grey-shaded) metrics, such "
+            "as archetecture specific metrics "
+            "when comparing across GPU archetectures.");
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }
@@ -601,8 +713,8 @@ ComputeComparisonView::RenderToolbar()
         }
     }
     ImGui::SameLine();
-    m_toolbar_spacer_width =
-        std::max(0.0f, m_toolbar_spacer_width + ImGui::GetContentRegionAvail().x);
+    m_toolbar_available_width =
+        std::max(0.0f, m_toolbar_available_width + ImGui::GetContentRegionAvail().x);
     ImGui::PopStyleVar(2);
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
@@ -766,8 +878,7 @@ ComputeComparisonView::UpdateBookmarks()
                 }
             }
         }
-        std::vector<std::string>           empty_name;
-        std::vector<std::optional<double>> empty_data;
+        std::vector<Table::Value> empty_value;
         for(size_t i = 0; i < m_bookmarks.size(); i++)
         {
             const Table* table     = updated_bookmarks[i].first;
@@ -785,7 +896,9 @@ ComputeComparisonView::UpdateBookmarks()
                 // Bookmark no longer exist...
                 m_bookmarks[i].row = nullptr;
                 m_bookmark_table->AddRow(
-                    m_bookmarks[i].entry, empty_name, empty_data, Colors::kTextDim,
+                    m_bookmarks[i].entry, empty_value,
+                    { std::nullopt, Table::DisplayProps::Color{ Colors::kTextDim, 255 },
+                      std::nullopt },
                     std::make_optional<size_t>(ROW_TAG_INVALID_MATCH));
                 m_bookmark_table->Rows()[m_bookmark_table->Rows().size() - 1].selected =
                     true;
@@ -822,7 +935,7 @@ ComputeComparisonView::Table::Update()
         // Deferred row removal...
         if(m_remove_row_index.value() < m_rows.size())
         {
-            for(const std::pair<const std::string, std::string>& value :
+            for(const std::pair<const std::string, Row::Value>& value :
                 m_rows[m_remove_row_index.value()].values_map)
             {
                 if(m_value_columns.count(value.first) > 0)
@@ -857,42 +970,28 @@ ComputeComparisonView::Table::Update()
         {
             if(i == Column::Selection)
             {
-                m_columns[i].type        = Column::Selection;
-                m_columns[i].name        = "";
-                m_columns[i].color_index = std::nullopt;
+                m_columns[i].type = Column::Selection;
+                m_columns[i].name = "";
             }
             else if(i == Column::MetricID)
             {
-                m_columns[i].type        = Column::MetricID;
-                m_columns[i].name        = "Metric ID";
-                m_columns[i].color_index = std::nullopt;
+                m_columns[i].type = Column::MetricID;
+                m_columns[i].name = "Metric ID";
             }
             else if(i == Column::MetricName)
             {
-                m_columns[i].type        = Column::MetricName;
-                m_columns[i].name        = "Metric";
-                m_columns[i].color_index = std::nullopt;
+                m_columns[i].type = Column::MetricName;
+                m_columns[i].name = "Metric";
             }
             else if(i == m_columns.size() - 1)
             {
-                m_columns[i].type        = Column::Unit;
-                m_columns[i].name        = "Unit";
-                m_columns[i].color_index = std::nullopt;
+                m_columns[i].type = Column::Unit;
+                m_columns[i].name = "Unit";
             }
             else if(j < m_ordered_value_names.size() &&
                     m_value_columns.count(m_ordered_value_names[j]) > 0)
             {
                 m_columns[i] = m_value_columns.at(m_ordered_value_names[j++]);
-                for(const ColumnColorRule& rule : m_column_color_rules)
-                {
-                    if(rule.fuzzy_match
-                           ? (m_columns[i].name.find(rule.name) != std::string::npos)
-                           : (m_columns[i].name == rule.name))
-                    {
-                        m_columns[i].color_index = rule.color_index;
-                        break;
-                    }
-                }
             }
         }
         // Setup rows...
@@ -906,33 +1005,40 @@ ComputeComparisonView::Table::Update()
                 {
                     case Column::Selection:
                     {
-                        row.cells[i] = std::string_view{};
+                        row.cells[i].data          = std::string_view{};
+                        row.cells[i].display_props = &row.display_props;
                         break;
                     }
                     case Column::MetricID:
                     {
-                        row.cells[i] = row.id.metric_id;
+                        row.cells[i].data          = row.id.metric_id;
+                        row.cells[i].display_props = &row.display_props;
                         break;
                     }
                     case Column::MetricName:
                     {
-                        row.cells[i] = row.entry->name;
+                        row.cells[i].data          = row.entry->name;
+                        row.cells[i].display_props = &row.display_props;
                         break;
                     }
                     case Column::Unit:
                     {
-                        row.cells[i] = row.entry->unit;
+                        row.cells[i].data          = row.entry->unit;
+                        row.cells[i].display_props = &row.display_props;
                         break;
                     }
                     default:
                     {
                         if(row.values_map.count(m_columns[i].name) > 0)
                         {
-                            row.cells[i] = row.values_map.at(m_columns[i].name);
+                            Row::Value& value = row.values_map.at(m_columns[i].name);
+                            row.cells[i].data = value.data;
+                            row.cells[i].display_props = &value.display_props;
                         }
                         else
                         {
-                            row.cells[i] = std::string_view{};
+                            row.cells[i].data          = std::string_view{};
+                            row.cells[i].display_props = &row.display_props;
                         }
                         break;
                     }
@@ -1003,14 +1109,51 @@ ComputeComparisonView::Table::Render()
                     {
                         ImGui::PushID(static_cast<int>(j));
                         ImGui::TableNextColumn();
-                        if(m_columns[j].color_index)
+                        if(m_rows[i].cells[j].display_props)
                         {
-                            ImGui::TableSetBgColor(
-                                ImGuiTableBgTarget_CellBg,
-                                (color_wheel[m_columns[j].color_index.value() %
-                                             color_wheel.size()] &
-                                 ~IM_COL32_A_MASK) |
-                                    (64 << IM_COL32_A_SHIFT));
+                            if(m_rows[i].cells[j].display_props->bg_color)
+                            {
+                                ImGui::TableSetBgColor(
+                                    ImGuiTableBgTarget_CellBg,
+                                    (m_settings.GetColor(
+                                         m_rows[i]
+                                             .cells[j]
+                                             .display_props->bg_color.value()
+                                             .color) &
+                                     ~IM_COL32_A_MASK) |
+                                        (((m_settings.GetColor(
+                                               m_rows[i]
+                                                   .cells[j]
+                                                   .display_props->bg_color.value()
+                                                   .color) >>
+                                           IM_COL32_A_SHIFT) &
+                                          0xFF) *
+                                             m_rows[i]
+                                                 .cells[j]
+                                                 .display_props->bg_color.value()
+                                                 .alpha /
+                                             255
+                                         << IM_COL32_A_SHIFT));
+                            }
+                            if(m_rows[i].cells[j].display_props->text_color)
+                            {
+                                ImGui::PushStyleColor(
+                                    ImGuiCol_Text,
+                                    m_settings.GetColor(
+                                        m_rows[i]
+                                            .cells[j]
+                                            .display_props->text_color.value()
+                                            .color));
+                            }
+                            if(m_rows[i].cells[j].display_props->icon)
+                            {
+                                ImGui::PushFont(m_settings.GetFontManager().GetIconFont(
+                                    FontType::kDefault));
+                                ImGui::TextUnformatted(
+                                    m_rows[i].cells[j].display_props->icon.value());
+                                ImGui::PopFont();
+                                ImGui::SameLine(ImGui::GetFrameHeightWithSpacing());
+                            }
                         }
                         switch(m_columns[j].type)
                         {
@@ -1031,22 +1174,15 @@ ComputeComparisonView::Table::Render()
                             }
                             default:
                             {
-                                if(m_rows[i].cells[j].empty())
+                                if(m_rows[i].cells[j].data.empty())
                                 {
                                     ImGui::TextDisabled("N/A");
                                 }
                                 else
                                 {
-                                    if(m_rows[i].text_color)
-                                    {
-                                        ImGui::PushStyleColor(
-                                            ImGuiCol_Text,
-                                            m_settings.GetColor(
-                                                m_rows[i].text_color.value()));
-                                    }
-                                    CopyableTextUnformatted(m_rows[i].cells[j].data(), "",
-                                                            COPY_DATA_NOTIFICATION, false,
-                                                            true);
+                                    CopyableTextUnformatted(
+                                        m_rows[i].cells[j].data.data(), "",
+                                        COPY_DATA_NOTIFICATION, false, true);
                                     switch(m_columns[j].type)
                                     {
                                         case Column::MetricName:
@@ -1072,12 +1208,15 @@ ComputeComparisonView::Table::Render()
                                             break;
                                         }
                                     }
-                                    if(m_rows[i].text_color)
-                                    {
-                                        ImGui::PopStyleColor();
-                                    }
                                 }
                                 break;
+                            }
+                        }
+                        if(m_rows[i].cells[j].display_props)
+                        {
+                            if(m_rows[i].cells[j].display_props->text_color)
+                            {
+                                ImGui::PopStyleColor();
                             }
                         }
                         ImGui::PopID();
@@ -1119,49 +1258,50 @@ ComputeComparisonView::Table::ReserveRows(size_t rows)
 }
 
 void
-ComputeComparisonView::Table::AddRow(const AvailableMetrics::Entry*      entry,
-                                     std::vector<std::string>&           value_names,
-                                     std::vector<std::optional<double>>& value_data,
-                                     std::optional<Colors>               text_color,
-                                     std::optional<size_t>               tag)
+ComputeComparisonView::Table::AddRow(const AvailableMetrics::Entry* entry,
+                                     std::vector<Value>&            values,
+                                     DisplayProps                   display_props,
+                                     std::optional<size_t>          tag)
 {
-    // Add a row associated with a specfic Entry...
-    if(value_names.size() == value_data.size())
+    if(entry)
     {
-        std::unordered_map<std::string, std::string> value_map;
-        for(size_t i = 0; i < value_names.size(); i++)
+        std::unordered_map<std::string, Row::Value> values_map;
+        for(size_t i = 0; i < values.size(); i++)
         {
+            values_map[values[i].name].name = values[i].name;
             // Convert data to string...
-            if(value_data[i])
+            if(values[i].data)
             {
                 std::ostringstream oss;
-                oss << std::fixed << std::setprecision(2) << value_data[i].value();
-                value_map[value_names[i]] = oss.str();
+                oss << std::fixed << std::setprecision(SIGNIFICANT_DIGITS)
+                    << values[i].data.value();
+                values_map[values[i].name].data = oss.str();
             }
             else
             {
-                value_map[value_names[i]];
+                values_map[values[i].name];
             }
             // Map value names (columns)...
-            if(m_value_columns.count(value_names[i]) == 0)
+            if(m_value_columns.count(values[i].name) == 0)
             {
-                m_ordered_value_names.push_back(value_names[i]);
-                m_value_columns[value_names[i]] =
-                    Column{ Column::Value, value_names[i], 1 };
+                m_ordered_value_names.push_back(values[i].name);
+                m_value_columns[values[i].name] =
+                    Column{ Column::Value, values[i].name, 1 };
             }
             else
             {
-                m_value_columns.at(value_names[i]).ref_count++;
+                m_value_columns.at(values[i].name).ref_count++;
             }
+            values_map[values[i].name].display_props = std::move(values[i].display_props);
         }
         m_rows.emplace_back(Row{ Row::ID{ std::to_string(entry->category_id) + "." +
                                               std::to_string(entry->table_id) + "." +
                                               std::to_string(entry->id),
                                           entry->name },
                                  entry,
-                                 std::move(value_map),
+                                 std::move(values_map),
                                  {},
-                                 text_color,
+                                 std::move(display_props),
                                  {},
                                  false });
         if(tag && tag.value() < MAX_ROW_TAGS)
@@ -1210,15 +1350,6 @@ ComputeComparisonView::Table::ClearRows()
     m_rows.clear();
     m_columns.clear();
     m_visible_row_count = 0;
-}
-
-void
-ComputeComparisonView::Table::SetColumnColor(const std::string& column_name,
-                                             bool fuzzy_match, size_t color_index)
-{
-    m_column_color_rules.push_back(
-        ColumnColorRule{ column_name, fuzzy_match, color_index });
-    m_rows_changed = true;
 }
 
 void

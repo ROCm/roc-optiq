@@ -5,7 +5,7 @@ namespace RocProfVis
 {
 namespace View
 {
-constexpr ImWchar icon_ranges[] = { 
+constexpr ImWchar icon_ranges[] = {
     0xF128, 0xF128,
     0xF133, 0xF133, 
     0xF13D, 0xF13D, 
@@ -18,6 +18,8 @@ constexpr ImWchar icon_ranges[] = {
     0xF306, 0xF306,
     0xF33F, 0xF33F,
     0xF35C, 0xF35C,
+    0xF35D, 0xF35D,
+    0xF366, 0xF366,
     0xF37E, 0xF37E,
     0xF3A8, 0xF3A8, 
     0xF424, 0xF424,
@@ -39,6 +41,8 @@ constexpr const char* ICON_DELETE        = u8"\uF2D7";
 constexpr const char* ICON_EYE_SLASH     = u8"\uF306";
 constexpr const char* ICON_TREE          = u8"\uF33F";
 constexpr const char* ICON_GRID          = u8"\uF35C";
+constexpr const char* ICON_ARROW_DOWN    = u8"\uF35D";
+constexpr const char* ICON_ARROW_UP      = u8"\uF366";
 constexpr const char* ICON_EDIT          = u8"\uF37E";
 constexpr const char* ICON_ARROWS_CYCLE  = u8"\uF3A8";
 constexpr const char* ICON_EYE_THIN      = u8"\uF424";

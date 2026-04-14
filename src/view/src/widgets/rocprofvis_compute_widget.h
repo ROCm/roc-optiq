@@ -66,7 +66,7 @@ protected:
 
 private:
     float GetTableHight() const;
-    void  RenderPinButton(std::pair<const MetricId, Row>& row);
+    void  RenderPinCheckBox(std::pair<const MetricId, Row>& row);
 };
 
 class MetricTable : public MetricTableBase
@@ -83,7 +83,6 @@ public:
                   const MetricValueLookup&       get_value);
 
 private:
-    //virtual void PinPressed(Row& row) override;
     void ContextMenu(const char* value_to_copy, uint32_t column_index,
                      std::pair<const MetricId, Row>& row) override;
 };

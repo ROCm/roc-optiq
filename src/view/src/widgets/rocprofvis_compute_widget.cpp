@@ -63,8 +63,9 @@ MetricTableBase::Render()
         {
             if (column.first == 0)
             {
-                ImGui::TableSetupColumn(column.second.c_str(), ImGuiTableColumnFlags_WidthFixed,
-                    ImGui::CalcTextSize(ICON_EYE).x);
+                const float font_size = ImGui::GetFontSize();
+                ImGui::TableSetupColumn(column.second.c_str(),
+                                        ImGuiTableColumnFlags_WidthFixed, font_size);
             }
             else
             {
@@ -154,7 +155,7 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
 {
     if (column_index == 0)
     {
-        RenderPinButton(row);
+        RenderPinCheckBox(row);
     }
     else
     {
@@ -174,22 +175,11 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
 }
 
 void
-MetricTableBase::RenderPinButton(std::pair<const MetricId, Row>& row)
+MetricTableBase::RenderPinCheckBox(std::pair<const MetricId, Row>& row)
 {
-    bool selected = false;
     ImGui::TableNextColumn();
-
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          SettingsManager::GetInstance().GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          SettingsManager::GetInstance().GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          SettingsManager::GetInstance().GetColor(Colors::kTransparent));
-    ImGui::PushFont(
-        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-    ImVec2 eye_size = ImGui::CalcTextSize(ICON_EYE);
-    if(ImGui::Button(row.second.pinned == true ? ICON_EYE_SLASH : ICON_EYE, eye_size))
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+    if(ImGui::Checkbox("", &m_rows[row.first].pinned))
     {
         if(m_pin_metric_clicked)
         {
@@ -198,8 +188,6 @@ MetricTableBase::RenderPinButton(std::pair<const MetricId, Row>& row)
         }
     }
     ImGui::PopStyleVar();
-    ImGui::PopFont();
-    ImGui::PopStyleColor(3);
 }
 
 void
@@ -270,11 +258,25 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         }
         if(m_pin_metric_clicked)
         {
-            if(ImGui::MenuItem("Pin metric"))
+            if (!row.second.pinned)
             {
-                m_pin_metric_clicked(
-                    { row.first.category_id, row.first.table_id, row.first.entry_id });
+                if(ImGui::MenuItem("Pin metric"))
+                {
+                    row.second.pinned = !row.second.pinned;
+                    m_pin_metric_clicked({ row.first.category_id, row.first.table_id,
+                                           row.first.entry_id });
+                }
             }
+            else
+            {
+                if(ImGui::MenuItem("Unpin metric"))
+                {
+                    row.second.pinned = !row.second.pinned;
+                    m_pin_metric_clicked({ row.first.category_id, row.first.table_id,
+                                           row.first.entry_id });
+                }
+            }
+
         }
         if(column_index != 0 && column_index != 1)
         {

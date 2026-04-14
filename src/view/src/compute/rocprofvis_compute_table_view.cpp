@@ -210,15 +210,16 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
     uint64_t     key = MetricId::GetTableKey(category_id, table->id);
     MetricTable& widget          = m_table_widgets[key];
     auto         pin_metric_func = [this, &widget](MetricId metric_id) {
+        //widget.ChangePinState(metric_id);
         if(widget.IsMetricPined(metric_id))
-        {
-            m_pined_metric_table.RemoveRow(metric_id);
-        }
-        else
         {
             m_pined_metric_table.AddRow(metric_id);
         }
-        widget.ChangePinState(metric_id);
+        else
+        {
+            m_pined_metric_table.RemoveRow(metric_id);
+            
+        }
     };
     widget.SetPinMetricCallback(pin_metric_func);
     widget.SetToKernelTableCallback(m_set_to_kernel_table_callback);

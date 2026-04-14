@@ -10,6 +10,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <algorithm>
 #include <cmath>
@@ -60,6 +61,12 @@ ComputeSummaryView::ComputeSummaryView(
             {
                 m_roofline->SetWorkload(selection_changed_event->GetId());
             }
+            if(m_sol_table)
+            {
+                m_sol_table->Clear();
+                m_sol_table->FetchMetrics();
+            }
+            
         }
     };
 
@@ -75,14 +82,22 @@ ComputeSummaryView::ComputeSummaryView(
             {
                 return;
             }
+
+            if(m_sol_table && m_sol_table->GetClientId() == metrics_fetched_event->GetClientId())
+            {
+                m_sol_table->UpdateTable();
+            }
         }
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
 
+        
     m_top_kernels = std::make_unique<ComputeTopKernels>(m_data_provider);
     m_roofline    = std::make_unique<Roofline>(m_data_provider, Roofline::AllKernels);
+    m_sol_table   = std::make_unique<WorkloadMetricTableWidget>(
+        data_provider, compute_selection, METRIC_CAT_SOL, METRIC_TABLE_SOL);
 
     m_widget_name = GenUniqueName("ComputeSummaryView");
 }
@@ -125,6 +140,10 @@ ComputeSummaryView::Render()
                                                             ImGui::GetWindowHeight())));
         m_roofline->Render();
         ImGui::EndChild();
+    }
+    if(m_sol_table)
+    {
+        m_sol_table->Render();
     }
     ImGui::EndChild();
 }
@@ -330,19 +349,19 @@ ComputeTopKernels::Update()
         {
             for(KernelBarModel::MetricSet& metric_set : m_kernel_bar.metric_sets)
             {
-                switch(m_kernel_bar.selected_metric)
+                switch(metric_set.metric)
                 {
                     case KernelInfo::InvocationCount:
                     {
                         metric_set.axis_title =
-                            DISPLAY_STRING_METRICS[m_kernel_bar.selected_metric];
+                            DISPLAY_STRING_METRICS[metric_set.metric];
                         break;
                     }
                     default:
                     {
                         metric_set.axis_title =
                             std::string(
-                                DISPLAY_STRING_METRICS[m_kernel_bar.selected_metric]) +
+                                DISPLAY_STRING_METRICS[metric_set.metric]) +
                             " (" +
                             timeformat_sufix(
                                 m_settings.GetUserSettings().unit_settings.time_format) +
@@ -611,7 +630,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                         ImGui::GetFontSize() * 0.5f));
                 ElidedText(m_kernels[i]->name.c_str(),
                            y_axis_width - plot_style.LabelPadding.x,
-                           ImGui::GetContentRegionAvail().x * 0.5f, true);
+                           ImGui::GetContentRegionAvail().x * 0.5f, Alignment_Right);
                 if(i == m_hovered_idx)
                 {
                     ImPlot::PushColormap(m_settings.GetContrastColormapName());

@@ -19,6 +19,7 @@ typedef struct rocprofvis_db_sqlite_track_service_data_t
     rocprofvis_dm_event_operation_t op;
     uint64_t                        id;
     uint64_t                        nid;
+    uint64_t                        pid;
     uint32_t                        stream_id;
     uint32_t                        process_id;
     uint32_t                        sub_process_id;
@@ -132,7 +133,7 @@ typedef struct rocprofvis_db_sqlite_dataflow_query_format
 
 typedef struct rocprofvis_db_sqlite_essential_data_query_format
 {
-    static constexpr const int NUM_PARAMS = 7;
+    static constexpr const int NUM_PARAMS = 8;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
     std::vector<std::string>   where;

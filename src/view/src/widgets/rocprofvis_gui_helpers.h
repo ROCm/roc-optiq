@@ -20,6 +20,11 @@ RenderLoadingIndicatorDots(float dot_radius, int num_dots, float spacing,
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots, float spacing);
 
+void
+RenderLoadingIndicator(ImU32 color, const char* window_id = nullptr,
+                       float dot_radius = 5.0f, int num_dots = 3,
+                       float dot_spacing = 5.0f, float anim_speed = 5.0f);
+
 bool
 IconButton(const char* icon, ImFont* icon_font, ImVec2 size = ImVec2(0, 0),
            const char* tooltip = nullptr, ImVec2 tooltip_padding = ImVec2(0, 0),
@@ -48,9 +53,17 @@ BeginItemTooltipStyled();
 void
 EndTooltipStyled();
 
+enum Alignment
+{
+    Alignment_Left,
+    Alignment_Center,
+    Alignment_Right,
+};
+
 void
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
-           bool right_justify = false, bool imgui_AlignTextToFramePadding = false);
+           Alignment alignment                     = Alignment_Left,
+           bool      imgui_AlignTextToFramePadding = false);
 
 class EmbeddedImage
 {

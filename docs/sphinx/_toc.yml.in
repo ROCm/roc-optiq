@@ -17,6 +17,8 @@ subtrees:
   entries:
   - file: how-to/view-trace
     title: View trace data
+  - file: how-to/view-analysis
+    title: View analysis data
   - file: how-to/customize-views
     title: Customize your project
 

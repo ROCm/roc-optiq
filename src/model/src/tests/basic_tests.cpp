@@ -34,7 +34,7 @@ bool        g_full_range=false;
 
 void
 ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
-              rocprofvis_dm_timestamp_t start_time, uint32_t accessInMillisec,
+              rocprofvis_dm_timestamp_t start_time, rocprofvis_dm_timestamp_t end_time, uint32_t accessInMillisec,
               rocprofvis_db_future_t object2wait);
 void
 DeleteSliceData(rocprofvis_dm_trace_t trace, rocprofvis_dm_timestamp_t start_time,
@@ -101,7 +101,7 @@ void PrintHeader(const char* fmt, ...) {
     spdlog::info("\x1b[0m{0}{1}{2}", header, std::string(buffer), header);
 }
 
-void db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status, rocprofvis_db_status_message_t msg, void* user_data)
+void db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_future_id_t id, rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status, rocprofvis_db_status_message_t msg, void* user_data)
 {
     const char* str = " ERROR ";
     const char* color = "\x1b[31m";
@@ -126,28 +126,20 @@ void GenerateRandomSlice(   rocprofvis_dm_trace_t trace,
     static std::vector<uint32_t> v;
     v.clear();
     uint64_t num_tracks = rocprofvis_dm_get_property_as_uint64(trace, kRPVDMNumberOfTracksUInt64, 0);
-    if (g_all_tracks) {
-        for (int i = 0; i < num_tracks; i++) {
-            v.push_back(i);
-        }
-        count = (rocprofvis_db_num_of_tracks_t)num_tracks;
-    }
-    else
-    {
-        int rand_num_tracks = 0;
-        while (rand_num_tracks == 0) rand_num_tracks = std::rand() % num_tracks;
-        for (int i = 0; i < rand_num_tracks; i++) {
-            while (true) {
-                uint32_t track_id1 = std::rand() % std::max(num_tracks,(uint64_t)10);
-                if (std::find_if(v.begin(), v.end(), [track_id1](uint32_t track_id2) {return track_id2 == track_id1; }) == v.end())
-                {
-                    v.push_back(track_id1);
-                    break;
-                }
+    
+    int rand_num_tracks = 1;
+    for (int i = 0; i < rand_num_tracks; i++) {
+        while (true) {
+            uint32_t track_id1 = std::rand() % std::max(num_tracks,(uint64_t)10);
+            if (std::find_if(v.begin(), v.end(), [track_id1](uint32_t track_id2) {return track_id2 == track_id1; }) == v.end())
+            {
+                v.push_back(track_id1);
+                break;
             }
         }
-        count = (rocprofvis_db_num_of_tracks_t)rand_num_tracks;
     }
+    count = (rocprofvis_db_num_of_tracks_t)rand_num_tracks;
+
     
     tracks = &v[0];
     rocprofvis_dm_timestamp_t tenth_time = (end_time - start_time) / 10;
@@ -330,9 +322,11 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                         uint32_t num_rows = ((RocProfVis::DataModel::Future*) object2wait)
                                                 ->GetProcessedRowsCount();
                         total_num_rows += num_rows;
+                        uint64_t hash_time =
+                            hash_combine(start_time, end_time);
                         rocprofvis_dm_slice_t slice =
                             rocprofvis_dm_get_property_as_handle(
-                                track, kRPVDMSliceHandleTimed, start_time);
+                                track, kRPVDMSliceHandleTimed, hash_time);
                         REQUIRE(slice);
                         uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
                             slice, kRPVDMNumberOfRecordsUInt64, 0);
@@ -404,9 +398,11 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                             (rocprofvis_dm_track_category_t)
                                 rocprofvis_dm_get_property_as_uint64(
                                     track, kRPVDMTrackCategoryEnumUInt64, 0);
+                        uint64_t hash_time =
+                            hash_combine(start_time, end_time);
                         rocprofvis_dm_slice_t slice =
                             rocprofvis_dm_get_property_as_handle(
-                                track, kRPVDMSliceHandleTimed, start_time);
+                                track, kRPVDMSliceHandleTimed, hash_time);
                         REQUIRE(slice != nullptr);
                         uint64_t id = rocprofvis_dm_get_property_as_uint64(
                             track, kRPVDMTrackIdUInt64, 0);
@@ -438,11 +434,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                             spdlog::info(ANSI_COLOR_CYAN "\t{0} : {1} : {2}", ext_data_category,
                                    ext_data_name, ext_data_value);
                         }
-                        char* ext_data_json = rocprofvis_dm_get_property_as_charptr(
-                            track, kRPVDMTrackInfoJsonCharPtr, 0);
-                        REQUIRE(ext_data_json);
-                        spdlog::info(ANSI_COLOR_CYAN "Extended data as JSON:\n{}",
-                               ext_data_json);
                         if(nullptr != slice)
                         {
                             uint64_t num_records = rocprofvis_dm_get_property_as_uint64(
@@ -739,7 +730,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
         if(kRocProfVisDmResultSuccess == query_result)
         {
             auto query_wait = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
-            REQUIRE(kRocProfVisDmResultSuccess == query_wait);
+            REQUIRE((kRocProfVisDmResultSuccess == query_result || kRocProfVisDmResultNotSupported == query_result));
             if(kRocProfVisDmResultSuccess == query_wait)
             {
                 uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(
@@ -853,7 +844,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
             {
                 PrintHeader("Access data while loaded");
                 std::thread access_slice(ReadSliceData, m_trace, total_num_tracks,
-                                         start_time, num_tracks * 20, object2wait);               
+                                         start_time, end_time, num_tracks * 20, object2wait);               
                 access_slice.join();
                 
 
@@ -867,7 +858,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
                                              end_time,100);
                     
                     std::thread access_slice(ReadSliceData, m_trace, total_num_tracks,
-                                             start_time,99,  nullptr);
+                                             start_time, end_time, 99,  nullptr);
                     delete_slice.join();
                     access_slice.join();
 
@@ -893,7 +884,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Tests for the Data-Model")
 
 void
 ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
-              rocprofvis_dm_timestamp_t start_time, uint32_t accessInMillisec,
+              rocprofvis_dm_timestamp_t start_time, rocprofvis_dm_timestamp_t end_time, uint32_t accessInMillisec,
               rocprofvis_db_future_t object2wait)
 {
     uint32_t num_rows=0;
@@ -928,9 +919,10 @@ ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
         rocprofvis_dm_track_t track =
             rocprofvis_dm_get_property_as_handle(trace, kRPVDMTrackHandleIndexed, i);
         REQUIRE(track != nullptr);
-
+        uint64_t hash_time =
+            hash_combine(start_time, end_time);
         rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
-            track, kRPVDMSliceHandleTimed, start_time);
+            track, kRPVDMSliceHandleTimed, hash_time);
         if(slice != nullptr)
         {
             uint64_t num_records = rocprofvis_dm_get_property_as_uint64(

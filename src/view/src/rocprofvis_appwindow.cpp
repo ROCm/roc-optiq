@@ -324,12 +324,12 @@ AppWindow::Render()
     Update();
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
-    DrawInternalBuildBanner();
+    DrawInternalBuildBanner("Evaluation Build");
 #endif
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->GetWorkPos());
-    ImGui::SetNextWindowSize(viewport->GetWorkSize());
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
     ImGui::SetNextWindowViewport(viewport->ID);
 #else
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
@@ -652,6 +652,49 @@ AppWindow::RenderFileMenu(Project* project)
             HandleSaveAsFile();
         }
         ImGui::Separator();
+
+        {
+            TraceView* trace_view = nullptr;
+            bool       has_trace  = false;
+            bool       cleanup_pending = false;
+            if(project && project->GetTraceType() == Project::System)
+            {
+                trace_view = dynamic_cast<TraceView*>(project->GetView().get());
+                has_trace  = (trace_view != nullptr);
+                if(has_trace)
+                {
+                    cleanup_pending = trace_view->IsCleanupPending();
+                }
+            }
+
+            std::string project_id = has_trace ? project->GetID() : "";
+            auto start_cleanup = [this, trace_view, project_id](bool rebuild) {
+                trace_view->CleanupDatabase(rebuild, [this, project_id]() {
+                    m_tab_container->RemoveTab(project_id);
+                });
+            };
+
+            bool submenu_enabled = has_trace && !cleanup_pending;
+            if(ImGui::BeginMenu("Database", submenu_enabled))
+            {
+                if(ImGui::MenuItem("Fast Cleanup"))
+                {
+                    start_cleanup(false);
+                }
+                if(ImGui::MenuItem("Full Cleanup (Rebuild)..."))
+                {
+                    ShowConfirmationDialog(
+                        "Full Database Cleanup",
+                        "This will remove service tables, indexes, and rebuild "
+                        "(VACUUM) the database file. This may take a while.\n\n"
+                        "Continue?",
+                        [start_cleanup]() { start_cleanup(true); });
+                }
+                ImGui::EndMenu();
+            }
+        }
+
+        ImGui::Separator();
         const std::list<std::string>& recent_files =
             SettingsManager::GetInstance().GetInternalSettings().recent_files;
         if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))
@@ -885,11 +928,11 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
 void
 AppWindow::RenderAboutDialog()
 {
-    static constexpr char* NAME_LABEL = "ROCm (TM) Optiq";
-    static constexpr char* COPYRIGHT_LABEL =
+    static constexpr const char* NAME_LABEL = "ROCm (TM) Optiq";
+    static constexpr const char* COPYRIGHT_LABEL =
         "Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.";
-    static constexpr char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
-    static constexpr char* DOC_URL =
+    static constexpr const char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
+    static constexpr const char* DOC_URL =
         "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/";
     static const std::string VERSION_LABEL = []() {
         std::stringstream ss;

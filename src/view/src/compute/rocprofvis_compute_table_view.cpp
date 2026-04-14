@@ -17,6 +17,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
+, m_pined_metric_table(data_provider, compute_selection, m_client_id)
 {
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
@@ -51,6 +52,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
             if(evt->GetClientId() == m_client_id)
                 RebuildTableDataCache();
         }
+        m_pined_metric_table.RefillTable();
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
@@ -59,7 +61,7 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
     m_widget_name = GenUniqueName("ComputeTableView");
 
     if(m_compute_selection->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID)
-    {
+    { //TODO: All code under this if statement never reached
         RebuildTabs();
         if(m_compute_selection->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID)
         {
@@ -86,7 +88,7 @@ ComputeTableView::RebuildTabs()
 {
     m_tabs.reset();
     m_table_widgets.clear();
-    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
@@ -110,7 +112,7 @@ ComputeTableView::RebuildTabs()
 void
 ComputeTableView::FetchAllMetrics()
 {
-    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
     m_table_widgets.clear();
     m_fetch_pending = false;
 
@@ -149,6 +151,8 @@ ComputeTableView::Update()
 {
     if(m_tabs)
         m_tabs->Update();
+
+    m_pined_metric_table.Update();
 }
 
 void
@@ -166,6 +170,8 @@ ComputeTableView::Render()
         ImGui::TextDisabled("Select a kernel from the toolbar.");
         return;
     }
+
+    m_pined_metric_table.Render();
 
     if(m_tabs)
         m_tabs->Render();
@@ -197,10 +203,12 @@ ComputeTableView::RebuildTableDataCache()
             TableKey key{};
             key.fields.category_id = cat->id;
             key.fields.table_id    = tbl->id;
-
-            MetricTableCache widget;
+            auto add_row_func = [this](MetricId metric_id) {
+                m_pined_metric_table.AddRow(metric_id);
+            };
+            MetricTableCache widget(add_row_func);
             widget.Populate(*tbl, [&](uint32_t eid) {
-                return model.GetMetricValue(
+                return model.GetKernelMetricValue(
                     m_client_id, kernel_id, cat->id, tbl->id, eid);
             });
 

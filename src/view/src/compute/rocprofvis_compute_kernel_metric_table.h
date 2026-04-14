@@ -5,6 +5,8 @@
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_query_builder.h"
 #include <memory>
+#include <set>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -27,12 +29,12 @@ public:
     void HandleNewData();
 
 private:
-
-    void RenderLoadingIndicator() const;
     void RenderColumnFilter(int column_index);
     void ApplyFilters();
     void ClearAllFilters();
     bool ValidateFilterExpression(const char* expr, bool is_numeric_column);
+    void ComputeColumnMaxValues(const std::vector<std::vector<std::string>>& data);
+    void RenderBarChartContextMenu(int col);
 
     struct MetricInfo
     {
@@ -81,6 +83,9 @@ private:
     // Index 4+: metric columns
     std::vector<ColumnFilter> m_column_filters;        // Active filters
     std::vector<ColumnFilter> m_pending_column_filters; // User editing
+
+    std::set<int>                     m_bar_chart_columns;
+    std::unordered_map<int, double>   m_column_max_values;
 };
 
 }  // namespace View

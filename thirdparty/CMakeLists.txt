@@ -18,6 +18,7 @@ add_library(imgui STATIC
     imgui/imgui_widgets.cpp
     imgui/backends/imgui_impl_glfw.cpp
     imgui/backends/imgui_impl_vulkan.cpp
+    imgui/backends/imgui_impl_opengl3.cpp
 )
 target_compile_definitions(imgui PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

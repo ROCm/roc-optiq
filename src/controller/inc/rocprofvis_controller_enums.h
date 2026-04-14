@@ -174,10 +174,6 @@ typedef enum rocprofvis_controller_system_properties_t : uint32_t
     kRPVControllerSystemTrackById,
     // Notify controller when user select the trace
     kRPVControllerSystemNotifySelected,
-    // Get last stored data-model message
-    kRPVControllerSystemGetDmMessage,
-    // Get last stored data-model progress in percent
-    kRPVControllerSystemGetDmProgress,
     // Get histogram number of bucket
     kRPVControllerSystemGetHistogramBucketsNumber,
     // Get histogram bucket size
@@ -446,6 +442,8 @@ typedef enum rocprofvis_controller_callstack_properties_t : uint32_t
     kRPVControllerCallstackName,
     kRPVControllerCallstackLineName,
     kRPVControllerCallstackLineAddress,
+    kRPVControllerCallstackDepth,
+    kRPVControllerCallstackRegionId,
     __kRPVControllerCallstackPropertiesLast
 } rocprofvis_controller_callstack_properties_t;
 
@@ -659,10 +657,10 @@ typedef enum rocprofvis_controller_future_properties_t : uint32_t
     __kRPVControllerFuturePropertiesFirst = 0xB0000000,
     // Result code
     kRPVControllerFutureResult = __kRPVControllerFuturePropertiesFirst,
-    // Data object
-    kRPVControllerFutureObject,
-    // Type of object, see rocprofvis_controller_object_type_t
-    kRPVControllerFutureType,
+    // Progress percentage
+    kRPVControllerFutureProgressPercentage,
+    // Progress message
+    kRPVControllerFutureProgressMessage,
     __kRPVControllerFuturePropertiesLast
 } rocprofvis_controller_future_properties_t;
 
@@ -900,6 +898,7 @@ typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
  */
 typedef enum rocprofvis_controller_metric_arguments_t : uint32_t
 {
+    kRPVControllerMetricArgsWorkloadId,
     kRPVControllerMetricArgsNumKernels,
     kRPVControllerMetricArgsKernelIdIndexed,
     kRPVControllerMetricArgsNumMetrics,
@@ -940,11 +939,22 @@ typedef enum rocprofvis_controller_metrics_container_properties_t : uint32_t
     kRPVControllerMetricsContainerNumMetrics = __kRPVControllerMetricsContainerPropertiesFirst,
     kRPVControllerMetricsContainerMetricIdIndexed,
     kRPVControllerMetricsContainerMetricNameIndexed,
+    kRPVControllerMetricsContainerMetricSourceTypeIndexed,
+    kRPVControllerMetricsContainerWorkloadIdIndexed,
     kRPVControllerMetricsContainerKernelIdIndexed,
     kRPVControllerMetricsContainerMetricValueNameIndexed,
     kRPVControllerMetricsContainerMetricValueValueIndexed,
     __kRPVControllerMetricsContainerPropertiesLast
 } rocprofvis_controller_metrics_container_properties_t;
+
+/*
+ * Metric source types.
+ */
+typedef enum rocprofvis_controller_metric_source_type_t : uint32_t
+{
+    kRPVControllerMetricSourceTypeWorkload,
+    kRPVControllerMetricSourceTypeKernel,
+} rocprofvis_controller_metric_aggregation_type_t;
 
 /*
  * Properties for roofline.

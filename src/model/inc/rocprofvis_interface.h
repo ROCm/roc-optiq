@@ -102,6 +102,19 @@ rocprofvis_dm_result_t rocprofvis_db_read_metadata_async(
                                     rocprofvis_db_future_t);
 
 /****************************************************************************************************
+* @brief Asynchronous call to cleanup database of service tables and indexes 
+* 
+* @param database database handle
+* @param object future handle allocated by rocprofvis_db_future_alloc
+* @return status of operation
+* 
+***************************************************************************************************/
+rocprofvis_dm_result_t rocprofvis_db_cleanup_async(
+                                    rocprofvis_dm_database_t, 
+                                    rocprofvis_db_future_t,
+                                    bool);
+
+/****************************************************************************************************
  * @brief Asynchronous call to read time slice of records for provided time frame and tracks selection
  *
  * @param database database handle
@@ -132,6 +145,8 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
 * @param params tracks pointer to array of parameters as rocprofvis_db_compute_param_t structures
 * @param out_query pointer to a string returned to a caller
 * @return status of operation
+* 
+* @note caller is responsible for freeing out_query
 *
 ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
@@ -140,6 +155,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
     char** out_query);
 
 /****************************************************************************************************
+* @note caller is responsible for freeing out_query
 * ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_database_t database, 

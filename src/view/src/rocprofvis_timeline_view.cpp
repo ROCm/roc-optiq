@@ -33,7 +33,7 @@ constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
 constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
-constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 30.0f;
+constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 16.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -668,12 +668,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     // (with no alpha) over their predecessors
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
+    ImGui::SetNextItemAllowOverlap();
     ImGui::BeginChild("Scrubber View",
                       ImVec2(m_tpt->GetGraphSizeX(),
                              m_tpt->GetGraphSizeY() - ARTIFICIAL_SCROLLBAR_HEIGHT),
                       ImGuiChildFlags_None, window_flags);
-
-    ImGui::SetItemAllowOverlap();
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -1459,53 +1458,11 @@ TimelineView::RenderHistogram()
     const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
     const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
 
-    // Sidebar area with normalization toggle (left side, before histogram)
+    // Sidebar spacer (left side, before histogram)
     ImGui::SetCursorPos(ImVec2(0, 0));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
     ImGui::BeginChild("HistogramSidebar", ImVec2(m_sidebar_size, kHistogramTotalHeight),
                       false, ImGuiWindowFlags_NoScrollbar);
-
-    // Normalization Switch
-    TimelineModel& timeline_model = m_data_provider.DataModel().GetTimeline();
-    bool           is_global      = timeline_model.IsNormalizeGlobal();
-
-    float       switch_w      = 20.0f;
-    float       switch_h      = kHistogramTotalHeight;  // Full height
-    float       switch_x      = m_sidebar_size - switch_w;  // Hug right side, no gap
-
-    ImGui::SetCursorPos(ImVec2(switch_x, 0));
-
-    ImVec2      p             = ImGui::GetCursorScreenPos();
-    ImDrawList* sidebar_draw  = ImGui::GetWindowDrawList();
-
-    // Interaction
-    ImGui::InvisibleButton("##NormalizeSwitch", ImVec2(switch_w, switch_h));
-    if(ImGui::IsItemClicked())
-    {
-        timeline_model.ToggleNormalization();
-        timeline_model.UpdateHistogram({}, false);
-    }
-
-    if(ImGui::IsItemHovered())
-    {
-        SetTooltipStyled(is_global ? "Normalization: All Tracks"
-                                   : "Normalization: Visible Tracks");
-    }
-
-    // Visuals
-    ImU32 bg_col   = ImGui::GetColorU32(ImGuiCol_FrameBg);
-    ImU32 knob_col = m_settings.GetColor(Colors::kAccentRedActive);
-
-    // Background
-    sidebar_draw->AddRectFilled(p, ImVec2(p.x + switch_w, p.y + switch_h), bg_col);
-
-    // Knob (Up = Global, Down = Local)
-    float knob_h = switch_h / 2.0f;
-    float knob_y = is_global ? p.y : p.y + knob_h;
-
-    sidebar_draw->AddRectFilled(ImVec2(p.x + 2, knob_y + 2),
-                                ImVec2(p.x + switch_w - 2, knob_y + knob_h - 2), knob_col);
-
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();
@@ -1535,7 +1492,7 @@ TimelineView::RenderHistogram()
     float       ruler_width     = m_tpt->GetGraphSizeX();
     float       tick_top        = ruler_pos.y + 2.0f;
     ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
-    float       label_font_size = font->FontSize;
+    float       label_font_size = font->LegacySize;
 
     std::string label =
         nanosecond_to_formatted_str(m_tpt->GetRangeX(), time_format, true) + "gap";
@@ -1665,6 +1622,21 @@ TimelineView::RenderHistogram()
         HandleHistogramTouch();
     }
 
+    if(ImGui::BeginPopupContextWindow("##HistogramOptions"))
+    {
+        TimelineModel& tl = m_data_provider.DataModel().GetTimeline();
+        bool           is_global = tl.IsNormalizeGlobal();
+        if(ImGui::MenuItem("Normalize: All Tracks", nullptr, is_global))
+        {
+            if(!is_global) { tl.ToggleNormalization(); tl.UpdateHistogram({}, false); }
+        }
+        if(ImGui::MenuItem("Normalize: Visible Tracks", nullptr, !is_global))
+        {
+            if(is_global) { tl.ToggleNormalization(); tl.UpdateHistogram({}, false); }
+        }
+        ImGui::EndPopup();
+    }
+
     ImGui::EndChild();  // Histogram Bars
     ImGui::EndChild();
     ImGui::PopStyleColor();
@@ -1751,7 +1723,7 @@ TimelineView::RenderTraceView()
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
     ImGui::SameLine();
 
-    float  available_width = m_tpt->GetGraphSizeX();
+    float  available_width = subcomponent_size_main.x - m_sidebar_size;
     double view_width      = std::min(m_tpt->GetVWidth(), m_tpt->GetRangeX());
     double max_offset      = m_tpt->GetRangeX() - view_width;
     float  view_offset =
@@ -1766,16 +1738,18 @@ TimelineView::RenderTraceView()
     float grab_min_size = std::clamp(available_width * grab_fraction, min_grab, max_grab);
 
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, grab_min_size);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 3.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 2));
     ImGui::PushStyleColor(ImGuiCol_SliderGrab,
-                          m_settings.GetColor(Colors::kScrollBarColor));
+                          m_settings.GetColor(Colors::kScrollGrab));
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive,
                           m_settings.GetColor(Colors::kScrollBarColor));
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, m_settings.GetColor(Colors::kFillerColor));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, m_settings.GetColor(Colors::kScrollBg));
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,
-                          m_settings.GetColor(Colors::kFillerColor));
+                          m_settings.GetColor(Colors::kScrollBg));
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive,
-                          m_settings.GetColor(Colors::kFillerColor));
+                          m_settings.GetColor(Colors::kScrollBg));
 
     ImGui::PushItemWidth(available_width);
 
@@ -1788,7 +1762,7 @@ TimelineView::RenderTraceView()
 
     ImGui::PopItemWidth();
     ImGui::PopStyleColor(5);
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar(4);
 
     m_stop_user_interaction = false;
     m_tpt->ComputePixelMapping();

@@ -158,6 +158,20 @@ rocprofvis_result_t rocprofvis_controller_save_trimmed_trace(rocprofvis_handle_t
     }
     return result;
 }
+rocprofvis_result_t rocprofvis_controller_cleanup_trace_database(rocprofvis_handle_t* object, bool rebuild, rocprofvis_controller_future_t* future)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(object)
+    {
+        RocProfVis::Controller::SystemTraceRef trace(object);
+        RocProfVis::Controller::FutureRef future_ref(future);
+        if (trace.IsValid() && future_ref.IsValid())
+        {
+            result = trace->CleanupTraceDatabase(*future_ref.Get(), rebuild);
+        }
+    }
+    return result;
+}
 rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename)
 {
     rocprofvis_controller_t* controller = nullptr;

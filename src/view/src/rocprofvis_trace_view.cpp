@@ -37,6 +37,7 @@ TraceView::TraceView()
 , m_popup_info({ false, "", "" })
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_event_selection_changed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_progress_update_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
@@ -124,6 +125,14 @@ TraceView::TraceView()
         m_save_notification_id = "";
     });
 
+    m_data_provider.SetRequestProgressUpdateCallback(
+        [this](const RequestInfo& request, uint64_t pct, const std::string& message) {
+            EventManager::GetInstance()->AddEvent(
+                std::make_shared<RequestProgressUpdateEvent>(
+                    request.request_id, request.request_type, pct, message,
+                    m_data_provider.GetTraceFilePath()));
+        });
+
     auto event_selection_handler = [this](std::shared_ptr<RocEvent> e) {
         std::shared_ptr<EventSelectionChangedEvent> event =
             std::dynamic_pointer_cast<EventSelectionChangedEvent>(e);
@@ -151,6 +160,23 @@ TraceView::TraceView()
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         event_selection_handler);
 
+    auto request_progress_update_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto event = std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
+        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
+        {
+            if(event->GetRequestType() == RequestType::kSaveTrimmedTrace &&
+               !m_save_notification_id.empty())
+            {
+                NotificationManager::GetInstance().UpdateProgress(
+                    m_save_notification_id, event->GetProgressPercent(),
+                    event->GetMessage());
+            }
+        }
+    };
+    m_progress_update_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        request_progress_update_handler);
+
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("TraceView");
 }
@@ -162,12 +188,16 @@ TraceView::~TraceView()
     m_data_provider.SetTableDataReadyCallback(nullptr);
     m_data_provider.SetTraceLoadedCallback(nullptr);
     m_data_provider.SetSaveTraceCallback(nullptr);
+    m_data_provider.SetCleanupDatabaseCallback(nullptr);
 
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         m_event_selection_changed_event_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        m_progress_update_event_token);
 }
 
 void
@@ -315,41 +345,46 @@ void
 TraceView::Render()
 {
 
-    if(m_horizontal_split_container &&
-       m_data_provider.GetState() == ProviderState::kReady)
-    {
-        m_horizontal_split_container->Render();
-        HandleHotKeys();
-    }
-
-    if(m_show_minimap_popup && m_minimap)
-    {
-        PopUpStyle popup_style;
-        popup_style.PushPopupStyles();
-        popup_style.PushTitlebarColors();
-
-        float dpi = SettingsManager::GetInstance().GetDPI();
-        ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
-        if(ImGui::Begin("Minimap", &m_show_minimap_popup,
-                        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
-        {
-            m_minimap->Render();
-        }
-        ImGui::End();
-        popup_style.PopStyles();
-    }
-
-    if(m_popup_info.show_popup)
-    {
-        m_popup_info.show_popup = false;
-        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
-                                                    m_popup_info.message);
-    }
-
-    // Render loading overlay if loading
     if(m_data_provider.GetState() == ProviderState::kLoading)
     {
         RenderLoadingScreen(m_data_provider.GetProgressMessage());
+    }
+    else if(IsCleanupPending())
+    {
+        RenderLoadingScreen("Cleaning Database...");
+    }
+    else
+    {
+        if(m_horizontal_split_container &&
+           m_data_provider.GetState() == ProviderState::kReady)
+        {
+            m_horizontal_split_container->Render();
+            HandleHotKeys();
+        }
+
+        if(m_show_minimap_popup && m_minimap)
+        {
+            PopUpStyle popup_style;
+            popup_style.PushPopupStyles();
+            popup_style.PushTitlebarColors();
+
+            float dpi = SettingsManager::GetInstance().GetDPI();
+            ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
+            if(ImGui::Begin("Minimap", &m_show_minimap_popup,
+                            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
+            {
+                m_minimap->Render();
+            }
+            ImGui::End();
+            popup_style.PopStyles();
+        }
+
+        if(m_popup_info.show_popup)
+        {
+            m_popup_info.show_popup = false;
+            AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
+                                                        m_popup_info.message);
+        }
     }
 
     if(m_summary_view)
@@ -468,6 +503,55 @@ TraceView::SaveSelection(const std::string& file_path)
     return false;
 }
 
+bool
+TraceView::CleanupDatabase(bool rebuild, std::function<void()> on_complete)
+{
+    if(m_data_provider.IsRequestPending(DataProvider::CLEANUP_DATABASE_REQUEST_ID))
+    {
+        spdlog::debug("Database cleanup already in progress.");
+        return false;
+    }
+
+    m_data_provider.FreeRequests();
+
+    m_data_provider.SetCleanupDatabaseCallback(
+        [this, on_complete](bool success) {
+            NotificationManager::GetInstance().Hide("cleanup_database");
+            if(success)
+            {
+                NotificationManager::GetInstance().Show(
+                    "Database cleanup completed successfully.",
+                    NotificationLevel::Success);
+            }
+            else
+            {
+                NotificationManager::GetInstance().Show(
+                    "Database cleanup failed.", NotificationLevel::Error);
+            }
+            if(on_complete)
+            {
+                on_complete();
+            }
+        });
+
+    if(m_data_provider.CleanupDatabase(rebuild))
+    {
+        NotificationManager::GetInstance().ShowPersistent(
+            "cleanup_database",
+            rebuild ? "Cleaning and rebuilding database..." : "Cleaning database...",
+            NotificationLevel::Info);
+        return true;
+    }
+
+    return false;
+}
+
+bool
+TraceView::IsCleanupPending() const
+{
+    return m_data_provider.IsRequestPending(DataProvider::CLEANUP_DATABASE_REQUEST_ID);
+}
+
 std::shared_ptr<TimelineSelection>
 TraceView::GetTimelineSelection() const
 {
@@ -562,17 +646,21 @@ TraceView::SetHistogramVisibility(bool visibility)
 void
 TraceView::RenderToolbar()
 {
-    ImGuiStyle& style          = ImGui::GetStyle();
-    ImVec2      frame_padding  = style.FramePadding;
-    float       frame_rounding = style.FrameRounding;
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    ImGui::PushStyleColor(
+        ImGuiCol_ChildBg,
+        ImGui::ColorConvertU32ToFloat4(m_settings_manager.GetColor(Colors::kBgPanel)));
+    ImGui::PushStyleColor(ImGuiCol_Border,
+                          ImGui::ColorConvertU32ToFloat4(
+                              m_settings_manager.GetColor(Colors::kBorderColor)));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
-                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle);
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, frame_rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
     // Toolbar Controls
@@ -588,12 +676,14 @@ TraceView::RenderToolbar()
     
     ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushFont(icon_font);
     if(ImGui::Button(ICON_COMPASS))
     {
         m_show_minimap_popup = !m_show_minimap_popup;
     }
     ImGui::PopFont();
+    ImGui::PopStyleColor();
 
     if(ImGui::IsItemHovered())
     {
@@ -601,6 +691,14 @@ TraceView::RenderToolbar()
     }
     VerticalSeparator(&m_settings_manager);
 
+    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kAccentRed)));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kAccentRedHover)));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kAccentRedActive)));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kTextOnAccent)));
     if(ImGui::Button("Reset View"))
     {
         if(m_timeline_view)
@@ -610,6 +708,7 @@ TraceView::RenderToolbar()
                                             timeline.GetEndTime(), 0.0, false);
         }
     }
+    ImGui::PopStyleColor(4);
     if(ImGui::IsItemHovered())
     {
         SetTooltipStyled("Reset view to default zoom and pan");
@@ -621,11 +720,18 @@ TraceView::RenderToolbar()
         m_event_search->SetWidth(m_event_search->Width() + available_width);
     }
 
-    // pop content style
     ImGui::PopStyleVar(2);
     ImGui::EndChild();
-    // pop child window style
+
+    ImVec2      child_min = ImGui::GetItemRectMin();
+    ImVec2      child_max = ImGui::GetItemRectMax();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddLine(ImVec2(child_min.x, child_max.y - 1.0f),
+                       ImVec2(child_max.x, child_max.y - 1.0f),
+                       m_settings_manager.GetColor(Colors::kAccentRed), 2.0f);
+
     ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
 }
 
 void
@@ -633,36 +739,49 @@ TraceView::RenderAnnotationControls()
 {
     if(m_annotations == nullptr) return;
 
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kTextDim)));
     ImGui::TextUnformatted("Annotations");
+    ImGui::PopStyleColor();
     auto default_style = m_settings_manager.GetDefaultStyle();
     ImGui::SameLine();
-    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x, 0));
+    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x * 0.5f, 0));
     ImGui::SameLine();
 
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImFont*     icon_font =
+    ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
     ImGui::PushFont(icon_font);
     ImGui::BeginGroup();
 
-    bool is_sticky_visible = m_annotations->IsVisibile();
+    bool   is_sticky_visible = m_annotations->IsVisibile();
+    ImVec4 transparent    = ImVec4(0, 0, 0, 0);
+    ImVec4 accent         = ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kAccentRed));
+    ImVec4 accent_hover   = ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kAccentRedHover));
+    ImVec4 text_on_accent = ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kTextOnAccent));
 
     // Show All Stickies
     ImGui::PushID("show_all_stickies");
     if(is_sticky_visible)
     {
-        ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonActive]);
+        ImGui::PushStyleColor(ImGuiCol_Button, accent);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
+        ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
+    }
+    else
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, transparent);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              style.Colors[ImGuiCol_ButtonActive]);
+                              ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text));
     }
     if(ImGui::Button(ICON_EYE))
     {
         m_annotations->SetVisible(true);
     }
-    if(is_sticky_visible)
-    {
-        ImGui::PopStyleColor(2);
-    }
+    ImGui::PopStyleColor(3);
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
@@ -676,18 +795,22 @@ TraceView::RenderAnnotationControls()
     ImGui::PushID("hide_all_stickies");
     if(!is_sticky_visible)
     {
-        ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonActive]);
+        ImGui::PushStyleColor(ImGuiCol_Button, accent);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
+        ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
+    }
+    else
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, transparent);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              style.Colors[ImGuiCol_ButtonActive]);
+                              ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text));
     }
     if(ImGui::Button(ICON_EYE_THIN))
     {
         m_annotations->SetVisible(false);
     }
-    if(!is_sticky_visible)
-    {
-        ImGui::PopStyleColor(2);
-    }
+    ImGui::PopStyleColor(3);
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
@@ -699,6 +822,7 @@ TraceView::RenderAnnotationControls()
 
     // Add New Sticky
     ImGui::PushID("add_new_sticky");
+    ImGui::PushStyleColor(ImGuiCol_Button, transparent);
     if(ImGui::Button(ICON_ADD_NOTE))
     {
         auto tpt = m_timeline_view->GetTransform();
@@ -714,6 +838,7 @@ TraceView::RenderAnnotationControls()
             m_annotations->ShowStickyNotePopup();
         }
     }
+    ImGui::PopStyleColor();
     if(ImGui::IsItemHovered())
     {
         ImGui::PopFont();
@@ -828,13 +953,22 @@ TraceView::RenderBookmarkControls()
 void
 TraceView::RenderFlowControls()
 {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kTextDim)));
     ImGui::TextUnformatted("Flow");
+    ImGui::PopStyleColor();
     auto default_style = m_settings_manager.GetDefaultStyle();
     ImGui::SameLine();
-    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x, 0));
+    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x * 0.5f, 0));
     ImGui::SameLine();
 
-    ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4 transparent    = ImVec4(0, 0, 0, 0);
+    ImVec4 accent         = ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kAccentRed));
+    ImVec4 accent_hover   = ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kAccentRedHover));
+    ImVec4 text_on_accent = ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kTextOnAccent));
 
     static const char* flow_labels[]    = { ICON_EYE, ICON_EYE_SLASH };
     static const char* flow_tool_tips[] = { "Show All", "Hide All" };
@@ -852,12 +986,18 @@ TraceView::RenderFlowControls()
     for(int i = 0; i <= static_cast<int>(FlowDisplayMode::__kLastMode); ++i)
     {
         bool selected = static_cast<int>(current_mode) == i;
-        // Use active colors when selected
         if(selected)
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, style.Colors[ImGuiCol_ButtonActive]);
+            ImGui::PushStyleColor(ImGuiCol_Button, accent);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
+            ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
+        }
+        else
+        {
+            ImGui::PushStyleColor(ImGuiCol_Button, transparent);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                  style.Colors[ImGuiCol_ButtonActive]);
+                                  ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text));
         }
 
         ImGui::PushID(i);
@@ -866,6 +1006,7 @@ TraceView::RenderFlowControls()
             mode = static_cast<FlowDisplayMode>(i);
         }
 
+        ImGui::PopStyleColor(3);
         if(ImGui::IsItemHovered())
         {
             ImGui::PopFont();
@@ -873,10 +1014,6 @@ TraceView::RenderFlowControls()
             ImGui::PushFont(icon_font);
         }
 
-        if(selected)
-        {
-            ImGui::PopStyleColor(2);
-        }
         ImGui::PopID();
         ImGui::SameLine();
     }
@@ -887,6 +1024,7 @@ TraceView::RenderFlowControls()
     {
         label = ICON_CHAIN;
     }
+    ImGui::PushStyleColor(ImGuiCol_Button, transparent);
     if(ImGui::Button(label))
     {
         arrow_layer.SetRenderStyle(arrow_layer.GetRenderStyle() ==
@@ -894,6 +1032,7 @@ TraceView::RenderFlowControls()
                                        ? TimelineArrow::RenderStyle::kFan
                                        : TimelineArrow::RenderStyle::kChain);
     }
+    ImGui::PopStyleColor();
 
     if(ImGui::IsItemHovered())
     {

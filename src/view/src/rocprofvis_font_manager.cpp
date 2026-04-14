@@ -146,10 +146,9 @@ FontManager::Init()
     m_fonts.resize(num_types);
     m_icon_fonts.resize(num_types);
 
-    ImFontConfig config;
-    config.FontDataOwnedByAtlas = false;
-
     // Load all font sizes once
+    m_all_icon_fonts.resize(FONT_AVAILABLE_SIZES.size(), nullptr);
+
     for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)
     {
         ImFont* font = nullptr;
@@ -163,18 +162,18 @@ FontManager::Init()
             fallback_config.SizePixels = FONT_AVAILABLE_SIZES[sz];
             font                       = io.Fonts->AddFontDefault(&fallback_config);
         }
+
+        ImFontConfig icon_config;
+        icon_config.FontDataOwnedByAtlas = false;
+        icon_config.MergeMode            = true;
+        icon_config.PixelSnapH           = true;
+        io.Fonts->AddFontFromMemoryCompressedTTF(&icon_font_compressed_data,
+                                                 icon_font_compressed_size,
+                                                 FONT_AVAILABLE_SIZES[sz], &icon_config,
+                                                 icon_ranges);
+
         m_all_fonts[sz] = font;
-    }
-
-    // Load all icon fonts
-    m_all_icon_fonts.resize(FONT_AVAILABLE_SIZES.size(), nullptr);
-
-    for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)
-    {
-        ImFont* icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
-            &icon_font_compressed_data, icon_font_compressed_size,
-            FONT_AVAILABLE_SIZES[sz], &config, icon_ranges);
-        m_all_icon_fonts[sz] = icon_font;
+        m_all_icon_fonts[sz] = font;
     }
 
     // Don't call Build() - ImGui 1.92+ backend handles font atlas building automatically

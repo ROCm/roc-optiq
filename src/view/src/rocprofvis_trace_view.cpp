@@ -711,7 +711,7 @@ TraceView::RenderToolbar()
     ImGui::PopStyleColor(4);
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Reset view to default zoom and pan");
+        SetTooltipStyled("Reset viewgit checkout amokiche/add-metrics-from-table-view-to-kernel-view to default zoom and pan");
     }
     ImGui::EndGroup();
     float available_width = ImGui::GetContentRegionAvail().x - ImGui::GetItemRectSize().x;

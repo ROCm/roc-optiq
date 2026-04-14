@@ -26,29 +26,37 @@ constexpr ImWchar icon_ranges[] = {
     0xF454, 0xF454,
     0xF472, 0xF472,
     0xF484, 0xF484, 
+    0xF41C, 0xF41C,
+    0xF373, 0xF373,
+    0xF372, 0xF372,
+    0xF10B, 0xF10B,
     0
 };
 
-constexpr const char* ICON_X_CIRCLED     = u8"\uF128";
-constexpr const char* ICON_EYE           = u8"\uF133";
-constexpr const char* ICON_GEAR          = u8"\uF13D";
-constexpr const char* ICON_CHAIN         = u8"\uF1FE";
-constexpr const char* ICON_ADD_NOTE      = u8"\uF218";
-constexpr const char* ICON_ARROWS_SHRINK = u8"\uF267";
-constexpr const char* ICON_COMPASS       = u8"\uF273";
-constexpr const char* ICON_CHART_BAR     = u8"\uF2B5";
-constexpr const char* ICON_DELETE        = u8"\uF2D7";
-constexpr const char* ICON_EYE_SLASH     = u8"\uF306";
-constexpr const char* ICON_TREE          = u8"\uF33F";
-constexpr const char* ICON_GRID          = u8"\uF35C";
-constexpr const char* ICON_ARROW_DOWN    = u8"\uF35D";
-constexpr const char* ICON_ARROW_UP      = u8"\uF366";
-constexpr const char* ICON_EDIT          = u8"\uF37E";
-constexpr const char* ICON_ARROWS_CYCLE  = u8"\uF3A8";
-constexpr const char* ICON_EYE_THIN      = u8"\uF424";
-constexpr const char* ICON_LIST          = u8"\uF454";
-constexpr const char* ICON_STICKY_NOTE   = u8"\uF472";
-constexpr const char* ICON_CHART_PIE     = u8"\uF484";
+inline constexpr char ICON_X_CIRCLED[]          = u8"\uF128";
+inline constexpr char ICON_EYE[]                = u8"\uF133";
+inline constexpr char ICON_GEAR[]               = u8"\uF13D";
+inline constexpr char ICON_CHAIN[]              = u8"\uF1FE";
+inline constexpr char ICON_ADD_NOTE[]           = u8"\uF218";
+inline constexpr char ICON_ARROWS_SHRINK[]      = u8"\uF267";
+inline constexpr char ICON_COMPASS[]            = u8"\uF273";
+inline constexpr char ICON_CHART_BAR[]          = u8"\uF2B5";
+inline constexpr char ICON_DELETE[]             = u8"\uF2D7";
+inline constexpr char ICON_EYE_SLASH[]          = u8"\uF306";
+inline constexpr char ICON_TREE[]               = u8"\uF33F";
+inline constexpr char ICON_GRID[]               = u8"\uF35C";
+inline constexpr const char* ICON_ARROW_DOWN    = u8"\uF35D";
+inline constexpr const char* ICON_ARROW_UP      = u8"\uF366";
+inline constexpr char ICON_EDIT[]               = u8"\uF37E";
+inline constexpr char ICON_ARROWS_CYCLE[]       = u8"\uF3A8";
+inline constexpr char ICON_EYE_THIN[]           = u8"\uF424";
+inline constexpr char ICON_LIST[]               = u8"\uF454";
+inline constexpr char ICON_STICKY_NOTE[]        = u8"\uF472";
+inline constexpr char ICON_CHART_PIE[]          = u8"\uF484";
+inline constexpr char ICON_COPY[]               = u8"\uF41C";
+inline constexpr char ICON_CHEK_BOX_CHECKED[]   = u8"\uF373";
+inline constexpr char ICON_CHEK_BOX_UNCHECKED[] = u8"\uF372";
+inline constexpr char ICON_ARROW_RIGHT[]        = u8"\uF10B";
 
 }  // namespace View
 }  // namespace RocProfVis

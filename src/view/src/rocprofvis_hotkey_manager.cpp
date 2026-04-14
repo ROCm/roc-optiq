@@ -3,12 +3,49 @@
 
 #include "rocprofvis_hotkey_manager.h"
 
-#include "spdlog/spdlog.h"
-
 namespace RocProfVis
 {
 namespace View
 {
+
+// clang-format off
+static const HotkeyActionInfo kActionTable[kHotkeyActionCount] = {
+    {"Pan Left",          "Timeline",  "pan_left",           {ImGuiKey_A,         ImGuiKey_LeftArrow},  ActionType::kPress, true,  false},
+    {"Pan Right",         "Timeline",  "pan_right",          {ImGuiKey_D,         ImGuiKey_RightArrow}, ActionType::kPress, true,  false},
+    {"Zoom In",           "Timeline",  "zoom_in",            {ImGuiKey_W,         ImGuiKey_None},       ActionType::kPress, true,  false},
+    {"Zoom Out",          "Timeline",  "zoom_out",           {ImGuiKey_S,         ImGuiKey_None},       ActionType::kPress, true,  false},
+    {"Scroll Up",         "Timeline",  "scroll_up",          {ImGuiKey_UpArrow,   ImGuiKey_None},       ActionType::kPress, true,  false},
+    {"Scroll Down",       "Timeline",  "scroll_down",        {ImGuiKey_DownArrow, ImGuiKey_None},       ActionType::kPress, true,  false},
+    {"Clear Selection",   "Timeline",  "clear_selection",    {ImGuiKey_Escape,    ImGuiKey_None},       ActionType::kPress, true,  false},
+    {"Toggle Mark",       "Timeline",  "toggle_mark",        {ImGuiKey_M,         ImGuiKey_None},       ActionType::kPress, true,  false},
+
+    {"Save Bookmark 0",  "Bookmarks", "bookmark_save_0",    {ImGuiKey_0 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Save Bookmark 1",  "Bookmarks", "bookmark_save_1",    {ImGuiKey_1 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Save Bookmark 2",  "Bookmarks", "bookmark_save_2",    {ImGuiKey_2 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Save Bookmark 3",  "Bookmarks", "bookmark_save_3",    {ImGuiKey_3 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Save Bookmark 4",  "Bookmarks", "bookmark_save_4",    {ImGuiKey_4 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Save Bookmark 5",  "Bookmarks", "bookmark_save_5",    {ImGuiKey_5 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Save Bookmark 6",  "Bookmarks", "bookmark_save_6",    {ImGuiKey_6 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Save Bookmark 7",  "Bookmarks", "bookmark_save_7",    {ImGuiKey_7 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Save Bookmark 8",  "Bookmarks", "bookmark_save_8",    {ImGuiKey_8 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Save Bookmark 9",  "Bookmarks", "bookmark_save_9",    {ImGuiKey_9 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
+
+    {"Restore Bookmark 0", "Bookmarks", "bookmark_restore_0", {ImGuiKey_0, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Restore Bookmark 1", "Bookmarks", "bookmark_restore_1", {ImGuiKey_1, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Restore Bookmark 2", "Bookmarks", "bookmark_restore_2", {ImGuiKey_2, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Restore Bookmark 3", "Bookmarks", "bookmark_restore_3", {ImGuiKey_3, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Restore Bookmark 4", "Bookmarks", "bookmark_restore_4", {ImGuiKey_4, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Restore Bookmark 5", "Bookmarks", "bookmark_restore_5", {ImGuiKey_5, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Restore Bookmark 6", "Bookmarks", "bookmark_restore_6", {ImGuiKey_6, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Restore Bookmark 7", "Bookmarks", "bookmark_restore_7", {ImGuiKey_7, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Restore Bookmark 8", "Bookmarks", "bookmark_restore_8", {ImGuiKey_8, ImGuiKey_None}, ActionType::kPress, false, false},
+    {"Restore Bookmark 9", "Bookmarks", "bookmark_restore_9", {ImGuiKey_9, ImGuiKey_None}, ActionType::kPress, false, false},
+
+    {"Multi-Select",   "Modifiers", "multi_select",  {ImGuiMod_Ctrl,  ImGuiKey_None}, ActionType::kHold, true, true},
+    {"Region Select",  "Modifiers", "region_select", {ImGuiMod_Ctrl,  ImGuiKey_None}, ActionType::kHold, true, true},
+    {"Speed Boost",    "Modifiers", "speed_boost",   {ImGuiMod_Shift, ImGuiKey_None}, ActionType::kHold, true, true},
+};
+// clang-format on
 
 HotkeyManager* HotkeyManager::s_instance = nullptr;
 
@@ -32,90 +69,35 @@ HotkeyManager::DestroyInstance()
 HotkeyManager::HotkeyManager()
 : m_last_processed_frame(-1)
 {
-    RegisterDefaultActions();
+    ResetAllBindings();
+    m_triggered.fill(false);
+    m_held.fill(false);
 }
 
 HotkeyManager::~HotkeyManager() = default;
 
-void
-HotkeyManager::RegisterAction(const std::string& id,
-                               const std::string& display_name,
-                               const std::string& category,
-                               HotkeyBinding      default_binding,
-                               ActionType          type,
-                               bool                active_during_text_input)
+const HotkeyActionInfo&
+HotkeyManager::GetActionInfo(HotkeyActionId action)
 {
-    if(m_action_index.count(id))
-    {
-        spdlog::warn("HotkeyManager: action '{}' already registered", id);
-        return;
-    }
-
-    HotkeyAction action;
-    action.id                       = id;
-    action.display_name             = display_name;
-    action.category                 = category;
-    action.default_binding          = default_binding;
-    action.current_binding          = default_binding;
-    action.type                     = type;
-    action.active_during_text_input = active_during_text_input;
-
-    m_action_index[id] = m_actions.size();
-    m_actions.push_back(std::move(action));
+    return kActionTable[static_cast<size_t>(action)];
 }
 
-void
-HotkeyManager::RegisterDefaultActions()
+HotkeyActionId
+HotkeyManager::BookmarkSaveAction(int index)
 {
-    RegisterAction("timeline.pan_left", "Pan Left", "Timeline",
-                   {ImGuiKey_A, ImGuiKey_LeftArrow});
-    RegisterAction("timeline.pan_right", "Pan Right", "Timeline",
-                   {ImGuiKey_D, ImGuiKey_RightArrow});
-    RegisterAction("timeline.zoom_in", "Zoom In", "Timeline",
-                   {ImGuiKey_W, ImGuiKey_None});
-    RegisterAction("timeline.zoom_out", "Zoom Out", "Timeline",
-                   {ImGuiKey_S, ImGuiKey_None});
-    RegisterAction("timeline.scroll_up", "Scroll Up", "Timeline",
-                   {ImGuiKey_UpArrow, ImGuiKey_None});
-    RegisterAction("timeline.scroll_down", "Scroll Down", "Timeline",
-                   {ImGuiKey_DownArrow, ImGuiKey_None});
-    RegisterAction("timeline.clear_selection", "Clear Selection", "Timeline",
-                   {ImGuiKey_Escape, ImGuiKey_None});
-    RegisterAction("timeline.toggle_mark", "Toggle Mark", "Timeline",
-                   {ImGuiKey_M, ImGuiKey_None});
+    return static_cast<HotkeyActionId>(
+        static_cast<int>(HotkeyActionId::kBookmarkSave0) + index);
+}
 
-    for(int i = 0; i <= 9; ++i)
-    {
-        ImGuiKey    digit = static_cast<ImGuiKey>(ImGuiKey_0 + i);
-        std::string idx   = std::to_string(i);
-
-        RegisterAction("bookmark.save_" + idx,
-                       "Save Bookmark " + idx, "Bookmarks",
-                       {static_cast<ImGuiKeyChord>(digit | ImGuiMod_Ctrl), ImGuiKey_None});
-
-        RegisterAction("bookmark.restore_" + idx,
-                       "Restore Bookmark " + idx, "Bookmarks",
-                       {digit, ImGuiKey_None});
-    }
-
-    RegisterAction("modifier.multi_select", "Multi-Select", "Modifiers",
-                   {ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kHold);
-    RegisterAction("modifier.region_select", "Region Select", "Modifiers",
-                   {ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kHold);
-    RegisterAction("modifier.speed_boost", "Speed Boost", "Modifiers",
-                   {ImGuiMod_Shift, ImGuiKey_None}, ActionType::kHold);
-
-    RegisterAction("edit.cancel", "Cancel Edit", "Editing",
-                   {ImGuiKey_Escape, ImGuiKey_None},
-                   ActionType::kPress, true);
-
-    RegisterAction("search.execute", "Execute Search", "Search",
-                   {ImGuiKey_Enter, ImGuiKey_None},
-                   ActionType::kPress, true);
+HotkeyActionId
+HotkeyManager::BookmarkRestoreAction(int index)
+{
+    return static_cast<HotkeyActionId>(
+        static_cast<int>(HotkeyActionId::kBookmarkRestore0) + index);
 }
 
 bool
-HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord) const
+HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const
 {
     if(chord == ImGuiKey_None)
         return false;
@@ -126,14 +108,14 @@ HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord) const
 
     if(key != ImGuiKey_None)
     {
-        if(!ImGui::IsKeyPressed(key, true))
+        if(!ImGui::IsKeyPressed(key, repeat))
             return false;
     }
 
-    if((mod_flags & ImGuiMod_Ctrl) && !io.KeyCtrl)    return false;
-    if((mod_flags & ImGuiMod_Shift) && !io.KeyShift)   return false;
-    if((mod_flags & ImGuiMod_Alt) && !io.KeyAlt)       return false;
-    if(!(mod_flags & ImGuiMod_Ctrl) && io.KeyCtrl)     return false;
+    if((mod_flags & ImGuiMod_Ctrl) && !io.KeyCtrl)   return false;
+    if((mod_flags & ImGuiMod_Shift) && !io.KeyShift) return false;
+    if((mod_flags & ImGuiMod_Alt) && !io.KeyAlt)     return false;
+    if(!(mod_flags & ImGuiMod_Ctrl) && io.KeyCtrl)   return false;
 
     return true;
 }
@@ -180,86 +162,77 @@ HotkeyManager::ProcessInput()
         return;
     m_last_processed_frame = frame;
 
-    m_triggered_this_frame.clear();
-    m_held_this_frame.clear();
+    m_triggered.fill(false);
+    m_held.fill(false);
 
     const ImGuiIO& io = ImGui::GetIO();
     bool text_active = io.WantTextInput || ImGui::IsAnyItemActive();
     bool popup_open  = ImGui::IsPopupOpen(
         "", ImGuiPopupFlags_AnyPopup | ImGuiHoveredFlags_NoPopupHierarchy);
 
-    for(const auto& action : m_actions)
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
     {
-        if((popup_open || text_active) && !action.active_during_text_input)
+        const auto& info    = kActionTable[i];
+        const auto& binding = m_bindings[i];
+
+        if((popup_open || text_active) && !info.active_during_text_input)
             continue;
 
-        if(action.type == ActionType::kPress)
+        if(info.type == ActionType::kPress)
         {
-            if(IsKeyChordPressed(action.current_binding.primary) ||
-               IsKeyChordPressed(action.current_binding.alternate))
+            if(IsKeyChordPressed(binding.primary, info.allow_repeat) ||
+               IsKeyChordPressed(binding.alternate, info.allow_repeat))
             {
-                m_triggered_this_frame.insert(action.id);
+                m_triggered[i] = true;
             }
         }
-        else if(action.type == ActionType::kHold)
+        else if(info.type == ActionType::kHold)
         {
-            if(IsKeyChordHeld(action.current_binding.primary) ||
-               IsKeyChordHeld(action.current_binding.alternate))
+            if(IsKeyChordHeld(binding.primary) ||
+               IsKeyChordHeld(binding.alternate))
             {
-                m_held_this_frame.insert(action.id);
+                m_held[i] = true;
             }
         }
     }
 }
 
 bool
-HotkeyManager::WasActionTriggered(const std::string& action_id) const
+HotkeyManager::WasActionTriggered(HotkeyActionId action) const
 {
-    return m_triggered_this_frame.count(action_id) > 0;
+    return m_triggered[static_cast<size_t>(action)];
 }
 
 bool
-HotkeyManager::IsActionHeld(const std::string& action_id) const
+HotkeyManager::IsActionHeld(HotkeyActionId action) const
 {
-    return m_held_this_frame.count(action_id) > 0;
+    return m_held[static_cast<size_t>(action)];
 }
 
 void
-HotkeyManager::SetBinding(const std::string& action_id, HotkeyBinding new_binding)
+HotkeyManager::SetBinding(HotkeyActionId action, HotkeyBinding binding)
 {
-    auto* action = FindAction(action_id);
-    if(action)
-        action->current_binding = new_binding;
+    m_bindings[static_cast<size_t>(action)] = binding;
 }
 
 void
-HotkeyManager::ResetBinding(const std::string& action_id)
+HotkeyManager::ResetBinding(HotkeyActionId action)
 {
-    auto* action = FindAction(action_id);
-    if(action)
-        action->current_binding = action->default_binding;
+    m_bindings[static_cast<size_t>(action)] =
+        kActionTable[static_cast<size_t>(action)].default_binding;
 }
 
 void
 HotkeyManager::ResetAllBindings()
 {
-    for(auto& action : m_actions)
-        action.current_binding = action.default_binding;
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
+        m_bindings[i] = kActionTable[i].default_binding;
 }
 
-const std::vector<HotkeyAction>&
-HotkeyManager::GetActions() const
+HotkeyBinding
+HotkeyManager::GetBinding(HotkeyActionId action) const
 {
-    return m_actions;
-}
-
-HotkeyAction*
-HotkeyManager::FindAction(const std::string& action_id)
-{
-    auto it = m_action_index.find(action_id);
-    if(it == m_action_index.end())
-        return nullptr;
-    return &m_actions[it->second];
+    return m_bindings[static_cast<size_t>(action)];
 }
 
 std::string

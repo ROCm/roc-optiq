@@ -5,15 +5,51 @@
 
 #include "imgui.h"
 
-#include <map>
-#include <set>
+#include <array>
 #include <string>
-#include <vector>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+enum class HotkeyActionId
+{
+    kPanLeft,
+    kPanRight,
+    kZoomIn,
+    kZoomOut,
+    kScrollUp,
+    kScrollDown,
+    kClearSelection,
+    kToggleMark,
+    kBookmarkSave0,
+    kBookmarkSave1,
+    kBookmarkSave2,
+    kBookmarkSave3,
+    kBookmarkSave4,
+    kBookmarkSave5,
+    kBookmarkSave6,
+    kBookmarkSave7,
+    kBookmarkSave8,
+    kBookmarkSave9,
+    kBookmarkRestore0,
+    kBookmarkRestore1,
+    kBookmarkRestore2,
+    kBookmarkRestore3,
+    kBookmarkRestore4,
+    kBookmarkRestore5,
+    kBookmarkRestore6,
+    kBookmarkRestore7,
+    kBookmarkRestore8,
+    kBookmarkRestore9,
+    kMultiSelect,
+    kRegionSelect,
+    kSpeedBoost,
+    kCount
+};
+
+constexpr size_t kHotkeyActionCount = static_cast<size_t>(HotkeyActionId::kCount);
 
 enum class ActionType
 {
@@ -27,15 +63,15 @@ struct HotkeyBinding
     ImGuiKeyChord alternate = ImGuiKey_None;
 };
 
-struct HotkeyAction
+struct HotkeyActionInfo
 {
-    std::string   id;
-    std::string   display_name;
-    std::string   category;
+    const char*   display_name;
+    const char*   category;
+    const char*   key;
     HotkeyBinding default_binding;
-    HotkeyBinding current_binding;
-    ActionType    type                     = ActionType::kPress;
-    bool          active_during_text_input = false;
+    ActionType    type;
+    bool          allow_repeat;
+    bool          active_during_text_input;
 };
 
 class HotkeyManager
@@ -49,15 +85,17 @@ public:
 
     void ProcessInput();
 
-    bool WasActionTriggered(const std::string& action_id) const;
-    bool IsActionHeld(const std::string& action_id) const;
+    bool WasActionTriggered(HotkeyActionId action) const;
+    bool IsActionHeld(HotkeyActionId action) const;
 
-    void SetBinding(const std::string& action_id, HotkeyBinding new_binding);
-    void ResetBinding(const std::string& action_id);
-    void ResetAllBindings();
+    void          SetBinding(HotkeyActionId action, HotkeyBinding binding);
+    void          ResetBinding(HotkeyActionId action);
+    void          ResetAllBindings();
+    HotkeyBinding GetBinding(HotkeyActionId action) const;
 
-    const std::vector<HotkeyAction>& GetActions() const;
-    HotkeyAction*                    FindAction(const std::string& action_id);
+    static const HotkeyActionInfo& GetActionInfo(HotkeyActionId action);
+    static HotkeyActionId          BookmarkSaveAction(int index);
+    static HotkeyActionId          BookmarkRestoreAction(int index);
 
     static std::string   KeyChordToString(ImGuiKeyChord chord);
     static ImGuiKeyChord StringToKeyChord(const std::string& str);
@@ -66,24 +104,15 @@ private:
     HotkeyManager();
     ~HotkeyManager();
 
-    void RegisterDefaultActions();
-    void RegisterAction(const std::string& id,
-                        const std::string& display_name,
-                        const std::string& category,
-                        HotkeyBinding      default_binding,
-                        ActionType          type                     = ActionType::kPress,
-                        bool                active_during_text_input = false);
-
-    bool IsKeyChordPressed(ImGuiKeyChord chord) const;
+    bool IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const;
     bool IsKeyChordHeld(ImGuiKeyChord chord) const;
 
     static HotkeyManager* s_instance;
 
-    std::vector<HotkeyAction>        m_actions;
-    std::map<std::string, size_t>    m_action_index;
-    std::set<std::string>            m_triggered_this_frame;
-    std::set<std::string>            m_held_this_frame;
-    int                              m_last_processed_frame;
+    std::array<HotkeyBinding, kHotkeyActionCount> m_bindings;
+    std::array<bool, kHotkeyActionCount>           m_triggered;
+    std::array<bool, kHotkeyActionCount>           m_held;
+    int                                            m_last_processed_frame;
 };
 
 }  // namespace View

@@ -5,7 +5,6 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_font_manager.h"
-#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
@@ -126,8 +125,11 @@ SettingsPanel::Render()
             ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
                                  ImGui::CalcTextSize("O").x -
                                  2 * ImGui::GetStyle().FramePadding.x);
-            ImGui::SetCursorPosY(ImGui::GetCursorPos().y -
-                                 ImGui::GetFrameHeightWithSpacing());
+            if(m_category != Hotkeys)
+            {
+                ImGui::SetCursorPosY(ImGui::GetCursorPos().y -
+                                     ImGui::GetFrameHeightWithSpacing());
+            }
             if(ResetButton())
             {
                 switch(m_category)
@@ -147,7 +149,6 @@ SettingsPanel::Render()
                         ResetHotkeySettings();
                         break;
                     }
-                    break;
                 }
             }
 
@@ -293,7 +294,6 @@ SettingsPanel::RenderUnitOptions()
 {
     ImGuiStyle& style = ImGui::GetStyle();
 
-    // Theme selection
     ImGui::TextUnformatted("Time");
     ImGui::Separator();
     ImGui::AlignTextToFramePadding();
@@ -379,7 +379,6 @@ void
 SettingsPanel::RenderHotkeySettings()
 {
     auto& hk = HotkeyManager::GetInstance();
-    const auto& actions = hk.GetActions();
 
     ImGui::TextUnformatted("Keyboard Shortcuts");
     ImGui::Separator();
@@ -396,46 +395,46 @@ SettingsPanel::RenderHotkeySettings()
         ImGui::TableSetupColumn("Alternate", ImGuiTableColumnFlags_WidthFixed, 120.0f);
         ImGui::TableHeadersRow();
 
-        for(const auto& action : actions)
+        for(int i = 0; i < static_cast<int>(HotkeyActionId::kCount); ++i)
         {
+            HotkeyActionId action_id = static_cast<HotkeyActionId>(i);
+            const auto&    info      = HotkeyManager::GetActionInfo(action_id);
+            HotkeyBinding  binding   = hk.GetBinding(action_id);
+
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted(action.category.c_str());
+            ImGui::TextUnformatted(info.category);
 
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(action.display_name.c_str());
+            ImGui::TextUnformatted(info.display_name);
 
             ImGui::TableSetColumnIndex(2);
             {
-                std::string label = HotkeyManager::KeyChordToString(action.current_binding.primary);
-                bool is_capturing = (!m_rebinding_action_id.empty() &&
-                                     m_rebinding_action_id == action.id && m_rebinding_primary);
-                if(is_capturing)
+                std::string label = HotkeyManager::KeyChordToString(binding.primary);
+                if(m_rebinding_action == action_id && m_rebinding_primary)
                     label = "Press a key...";
 
-                ImGui::PushID((action.id + "_primary").c_str());
+                ImGui::PushID(i * 2);
                 if(ImGui::Button(label.c_str(), ImVec2(-FLT_MIN, 0)))
                 {
-                    m_rebinding_action_id = action.id;
-                    m_rebinding_primary   = true;
+                    m_rebinding_action  = action_id;
+                    m_rebinding_primary = true;
                 }
                 ImGui::PopID();
             }
 
             ImGui::TableSetColumnIndex(3);
             {
-                std::string label = HotkeyManager::KeyChordToString(action.current_binding.alternate);
-                bool is_capturing = (!m_rebinding_action_id.empty() &&
-                                     m_rebinding_action_id == action.id && !m_rebinding_primary);
-                if(is_capturing)
+                std::string label = HotkeyManager::KeyChordToString(binding.alternate);
+                if(m_rebinding_action == action_id && !m_rebinding_primary)
                     label = "Press a key...";
 
-                ImGui::PushID((action.id + "_alt").c_str());
+                ImGui::PushID(i * 2 + 1);
                 if(ImGui::Button(label.c_str(), ImVec2(-FLT_MIN, 0)))
                 {
-                    m_rebinding_action_id = action.id;
-                    m_rebinding_primary   = false;
+                    m_rebinding_action  = action_id;
+                    m_rebinding_primary = false;
                 }
                 ImGui::PopID();
             }
@@ -443,11 +442,11 @@ SettingsPanel::RenderHotkeySettings()
         ImGui::EndTable();
     }
 
-    if(!m_rebinding_action_id.empty())
+    if(m_rebinding_action != HotkeyActionId::kCount)
     {
         if(ImGui::IsKeyPressed(ImGuiKey_Escape))
         {
-            m_rebinding_action_id.clear();
+            m_rebinding_action = HotkeyActionId::kCount;
         }
         else
         {
@@ -473,7 +472,6 @@ SettingsPanel::RenderHotkeySettings()
 
             if(captured == ImGuiKey_None)
             {
-                const ImGuiIO& io = ImGui::GetIO();
                 if(ImGui::IsKeyPressed(ImGuiKey_LeftCtrl) || ImGui::IsKeyPressed(ImGuiKey_RightCtrl))
                     captured = ImGuiMod_Ctrl;
                 else if(ImGui::IsKeyPressed(ImGuiKey_LeftShift) || ImGui::IsKeyPressed(ImGuiKey_RightShift))
@@ -484,18 +482,14 @@ SettingsPanel::RenderHotkeySettings()
 
             if(captured != ImGuiKey_None)
             {
-                auto* target = hk.FindAction(m_rebinding_action_id);
-                if(target)
-                {
-                    HotkeyBinding binding = target->current_binding;
-                    if(m_rebinding_primary)
-                        binding.primary = captured;
-                    else
-                        binding.alternate = captured;
-                    hk.SetBinding(m_rebinding_action_id, binding);
-                    m_hotkeys_changed = true;
-                }
-                m_rebinding_action_id.clear();
+                HotkeyBinding binding = hk.GetBinding(m_rebinding_action);
+                if(m_rebinding_primary)
+                    binding.primary = captured;
+                else
+                    binding.alternate = captured;
+                hk.SetBinding(m_rebinding_action, binding);
+                m_hotkeys_changed  = true;
+                m_rebinding_action = HotkeyActionId::kCount;
             }
         }
     }

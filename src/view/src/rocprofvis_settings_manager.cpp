@@ -726,15 +726,19 @@ SettingsManager::SerializeHotkeySettings(jt::Json& json)
     auto& hk_mgr = HotkeyManager::GetInstance();
     jt::Json& hs = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_HOTKEYS];
 
-    for(const auto& action : hk_mgr.GetActions())
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
     {
-        if(action.current_binding.primary != action.default_binding.primary ||
-           action.current_binding.alternate != action.default_binding.alternate)
+        HotkeyActionId action_id = static_cast<HotkeyActionId>(i);
+        const auto&    info      = HotkeyManager::GetActionInfo(action_id);
+        HotkeyBinding  binding   = hk_mgr.GetBinding(action_id);
+
+        if(binding.primary != info.default_binding.primary ||
+           binding.alternate != info.default_binding.alternate)
         {
-            jt::Json binding;
-            binding["primary"]   = HotkeyManager::KeyChordToString(action.current_binding.primary);
-            binding["alternate"] = HotkeyManager::KeyChordToString(action.current_binding.alternate);
-            hs[action.id.c_str()] = binding;
+            jt::Json entry;
+            entry["primary"]   = HotkeyManager::KeyChordToString(binding.primary);
+            entry["alternate"] = HotkeyManager::KeyChordToString(binding.alternate);
+            hs[info.key]       = entry;
         }
     }
 }
@@ -748,24 +752,28 @@ SettingsManager::DeserializeHotkeySettings(jt::Json& json)
 
     auto& hk_mgr = HotkeyManager::GetInstance();
 
-    for(auto& [key, value] : hs.getObject())
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
     {
+        HotkeyActionId action_id = static_cast<HotkeyActionId>(i);
+        const auto&    info      = HotkeyManager::GetActionInfo(action_id);
+        jt::Json&      value     = hs[info.key];
+
         if(!value.isObject())
             continue;
 
-        HotkeyBinding binding;
+        HotkeyBinding binding = info.default_binding;
         if(value["primary"].isString())
         {
-            std::string primary_str = value["primary"].getString();
-            binding.primary = HotkeyManager::StringToKeyChord(primary_str);
+            binding.primary = HotkeyManager::StringToKeyChord(
+                value["primary"].getString());
         }
         if(value["alternate"].isString())
         {
-            std::string alt_str = value["alternate"].getString();
-            binding.alternate = HotkeyManager::StringToKeyChord(alt_str);
+            binding.alternate = HotkeyManager::StringToKeyChord(
+                value["alternate"].getString());
         }
 
-        hk_mgr.SetBinding(key, binding);
+        hk_mgr.SetBinding(action_id, binding);
     }
 }
 

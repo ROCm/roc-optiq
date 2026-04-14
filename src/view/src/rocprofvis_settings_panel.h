@@ -3,9 +3,9 @@
 
 #pragma once
 
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include <list>
-#include <string>
 
 namespace RocProfVis
 {
@@ -62,9 +62,9 @@ private:
     UserSettings m_usersettings_previous;
     FontSettings m_font_settings;
 
-    std::string m_rebinding_action_id;
-    bool        m_rebinding_primary = true;
-    bool        m_hotkeys_changed   = false;
+    HotkeyActionId m_rebinding_action  = HotkeyActionId::kCount;
+    bool           m_rebinding_primary = true;
+    bool           m_hotkeys_changed   = false;
 };
 
 }  // namespace View

@@ -406,7 +406,7 @@ TraceView::HandleHotKeys()
     {
         std::string idx = std::to_string(i);
 
-        if(hk.WasActionTriggered("bookmark.save_" + idx))
+        if(hk.WasActionTriggered(HotkeyManager::BookmarkSaveAction(i)))
         {
             if(m_timeline_view)
             {
@@ -421,7 +421,7 @@ TraceView::HandleHotKeys()
             }
         }
 
-        if(hk.WasActionTriggered("bookmark.restore_" + idx))
+        if(hk.WasActionTriggered(HotkeyManager::BookmarkRestoreAction(i)))
         {
             auto it = m_bookmarks.find(i);
             if(it != m_bookmarks.end())
@@ -1068,7 +1068,7 @@ TraceView::RenderEventSearch()
         {
             m_event_search->Show();
         }
-        if(ImGui::IsItemFocused() && HotkeyManager::GetInstance().WasActionTriggered("search.execute"))
+        if(ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter))
         {
             m_event_search->Search();
         }

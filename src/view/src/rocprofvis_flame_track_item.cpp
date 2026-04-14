@@ -410,7 +410,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
             chart_item.selected = !chart_item.selected;
 
 
-            if(!HotkeyManager::GetInstance().IsActionHeld("modifier.multi_select"))
+            if(!HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kMultiSelect))
             {
                 m_timeline_selection->UnselectAllEvents();
             }

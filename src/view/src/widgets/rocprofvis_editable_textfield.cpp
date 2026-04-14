@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_editable_textfield.h"
-#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -135,7 +134,7 @@ EditableTextField::DrawEditingText()
     {
         AcceptEdit();
     }
-    if(HotkeyManager::GetInstance().WasActionTriggered("edit.cancel"))
+    if(ImGui::IsKeyPressed(ImGuiKey_Escape))
     {
         m_editing_mode = false;
     }

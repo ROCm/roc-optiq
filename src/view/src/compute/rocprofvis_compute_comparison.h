@@ -38,6 +38,25 @@ private:
     public:
         static constexpr size_t MAX_ROW_TAGS = 8;
 
+        // Visuals supported by each cell...
+        struct DisplayProps
+        {
+            struct Color
+            {
+                Colors color;
+                ImU32  alpha;
+            };
+            std::optional<Color>       bg_color;
+            std::optional<Color>       text_color;
+            std::optional<const char*> icon;
+        };
+        // Clients populate data via Rows of Values...
+        struct Value
+        {
+            std::string           name;
+            std::optional<double> data;
+            DisplayProps          display_props;
+        };
         struct Row
         {
             struct ID
@@ -50,13 +69,26 @@ private:
                     return metric_id == other.metric_id && entry_name == other.entry_name;
                 }
             };
-            ID                                           id;
-            const AvailableMetrics::Entry*               entry;
-            std::unordered_map<std::string, std::string> values_map;
-            std::vector<std::string_view>                cells;
-            std::optional<Colors>                        text_color;
-            std::bitset<MAX_ROW_TAGS>                    tags;
-            mutable bool                                 selected;
+            // Internal persistant Value storage, never changes once added...
+            struct Value
+            {
+                std::string  name;
+                std::string  data;
+                DisplayProps display_props;
+            };
+            // Render representation, rebuilt/reordered as needed when rows/columns change...
+            struct Cell
+            {
+                std::string_view    data;
+                const DisplayProps* display_props;
+            };
+            ID                                     id;
+            const AvailableMetrics::Entry*         entry;
+            std::unordered_map<std::string, Value> values_map;
+            std::vector<Cell>                      cells;
+            DisplayProps                           display_props;
+            std::bitset<MAX_ROW_TAGS>              tags;
+            mutable bool                           selected;
 
             bool operator==(const Row& other) const { return id == other.id; }
         };
@@ -75,18 +107,14 @@ private:
 
         // Row manipulation...
         void ReserveRows(size_t rows);
-        void AddRow(const AvailableMetrics::Entry*      entry,
-                    std::vector<std::string>&           value_names,
-                    std::vector<std::optional<double>>& value_data,
-                    std::optional<Colors>               text_color = std::nullopt,
-                    std::optional<size_t>               tag        = std::nullopt);
+        void AddRow(const AvailableMetrics::Entry* entry, std::vector<Value>& values,
+                    DisplayProps          display_props = {},
+                    std::optional<size_t> tag           = std::nullopt);
         void AddRow(const Table& table, const size_t index);
         void RemoveRow(size_t index);
         void ClearRows();
 
         // Customization...
-        void SetColumnColor(const std::string& column_name, bool fuzzy_match,
-                            size_t color_index);
         void ApplyRowFilter(size_t tag);
         void RemoveRowFilter(size_t tag);
 
@@ -107,16 +135,9 @@ private:
                 Value,
                 Unit,
             };
-            Type                  type;
-            std::string           name;
-            uint32_t              ref_count;
-            std::optional<size_t> color_index;
-        };
-        struct ColumnColorRule
-        {
+            Type        type;
             std::string name;
-            bool        fuzzy_match;
-            size_t      color_index;
+            uint32_t    ref_count;
         };
 
         // Public properties...
@@ -132,7 +153,6 @@ private:
         std::vector<std::string>                m_ordered_value_names;
         std::unordered_map<std::string, Column> m_value_columns;
         std::vector<Column>                     m_columns;
-        std::vector<ColumnColorRule>            m_column_color_rules;
         std::vector<Row>                        m_rows;
 
         // Internal state...
@@ -196,7 +216,6 @@ private:
     std::unique_ptr<Table>           m_bookmark_table;
     LayoutItem*                      m_bookmark_item;
     float                            m_max_bookmark_height;
-    float                            m_toolbar_spacer_width;
     float                            m_toolbar_available_width;
 
     // Requests...

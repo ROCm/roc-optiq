@@ -406,7 +406,7 @@ ComputeComparisonView::UpdateMetrics()
                                             std::min(static_cast<ImU32>(
                                                          std::abs(rounded_target -
                                                                   rounded_baseline) /
-                                                         rounded_baseline * 255),
+                                                         rounded_baseline * 255 + 25),
                                                      ImU32(255));
                                     }
                                 }

@@ -404,22 +404,28 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 TimelineFocusManager::GetInstance().GetFocusedLayer() ==
                     Layer::kGraphLayer)
         {
-            m_deferred_click_handled =
-                true;  // Ensure only one click is handled per render cycle
-            chart_item.selected = !chart_item.selected;
+            m_deferred_click_handled = true;
 
-
-            //Control to multiselect
-            const ImGuiIO& io = ImGui::GetIO();
-            if(!io.KeyCtrl)
+            if(TimelineFocusManager::GetInstance().IsMeasurementMode())
             {
-                m_timeline_selection->UnselectAllEvents();
+                TimelineFocusManager::GetInstance().SetMeasurementPoint(
+                    chart_item.event.m_start_ts, chart_item.event.m_duration,
+                    m_track_id, chart_item.event.m_level, chart_item.event.m_name);
             }
+            else
+            {
+                chart_item.selected = !chart_item.selected;
 
-            chart_item.selected
-                ? m_timeline_selection->SelectTrackEvent(m_track_id, chart_item.event.m_id.uuid)
-                : m_timeline_selection->UnselectTrackEvent(m_track_id, chart_item.event.m_id.uuid);
-            // Always reset layer clicked after handling
+                const ImGuiIO& io = ImGui::GetIO();
+                if(!io.KeyCtrl)
+                {
+                    m_timeline_selection->UnselectAllEvents();
+                }
+
+                chart_item.selected
+                    ? m_timeline_selection->SelectTrackEvent(m_track_id, chart_item.event.m_id.uuid)
+                    : m_timeline_selection->UnselectTrackEvent(m_track_id, chart_item.event.m_id.uuid);
+            }
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }
 

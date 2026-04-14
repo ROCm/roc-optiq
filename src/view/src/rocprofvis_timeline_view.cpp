@@ -173,6 +173,8 @@ TimelineView::RenderInteractiveUI()
 
     m_arrow_layer.Render(draw_list, window_position, m_track_position_y, m_graphs, m_tpt);
 
+    RenderMeasurement(draw_list, window_position);
+
     RenderAnnotations(draw_list, window_position);
 
     ImGui::EndChild();
@@ -218,6 +220,87 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
     m_annotations->ShowStickyNotePopup();
     m_annotations->ShowStickyNoteEditPopup();
 }
+void
+TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
+{
+    auto& fm = TimelineFocusManager::GetInstance();
+    if(!fm.IsMeasurementMode()) return;
+
+    const auto& p1 = fm.GetMeasurementPoint1();
+    const auto& p2 = fm.GetMeasurementPoint2();
+    if(!p1.valid || !p2.valid) return;
+
+    SettingsManager& settings     = SettingsManager::GetInstance();
+    ImU32            color        = settings.GetColor(Colors::kMeasurementColor);
+    float            level_height = settings.GetEventLevelHeight();
+    const auto&      time_format  = settings.GetUserSettings().unit_settings.time_format;
+    constexpr float  THICKNESS    = 2.5f;
+    constexpr float  HEAD_SIZE    = 6.0f;
+    constexpr int    CURVE_SEGS   = 32;
+    constexpr float  PAD          = 8.0f;
+    constexpr float  ROUNDING     = 6.0f;
+
+    auto to_pos = [&](const MeasurementPoint& pt) -> ImVec2 {
+        float x = m_tpt->RawTimeToPixel(pt.timestamp);
+        float y = m_track_position_y.count(pt.track_id)
+                      ? m_track_position_y.at(pt.track_id) +
+                            level_height * pt.level + level_height / 2.0f
+                      : 0.0f;
+        return ImVec2(window_position.x + x, window_position.y + y);
+    };
+
+    ImVec2 from = to_pos(p1);
+    ImVec2 to   = to_pos(p2);
+
+    // Bezier curve matching flow arrow style
+    float  curve_offset = 0.25f * (to.x - from.x);
+    ImVec2 ctrl1(from.x + curve_offset, from.y);
+    ImVec2 ctrl2(to.x - curve_offset, to.y);
+    draw_list->AddBezierCubic(from, ctrl1, ctrl2, to, color, THICKNESS, CURVE_SEGS);
+
+    // Arrowhead at destination
+    ImVec2 dir(to.x - ctrl2.x, to.y - ctrl2.y);
+    float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
+    if(len > 0.0f) { dir.x /= len; dir.y /= len; }
+    else           { dir = ImVec2(1.0f, 0.0f); }
+    ImVec2 ortho(-dir.y, dir.x);
+    draw_list->AddTriangleFilled(
+        to,
+        ImVec2(to.x - dir.x * HEAD_SIZE - ortho.x * HEAD_SIZE * 0.5f,
+               to.y - dir.y * HEAD_SIZE - ortho.y * HEAD_SIZE * 0.5f),
+        ImVec2(to.x - dir.x * HEAD_SIZE + ortho.x * HEAD_SIZE * 0.5f,
+               to.y - dir.y * HEAD_SIZE + ortho.y * HEAD_SIZE * 0.5f),
+        color);
+
+    draw_list->AddCircleFilled(from, 4.0f, color);
+    draw_list->AddCircleFilled(to, 4.0f, color);
+
+    constexpr ImU32 BG_COL   = IM_COL32(30, 30, 30, 240);
+    constexpr ImU32 EDGE_COL = IM_COL32(70, 70, 70, 200);
+    constexpr ImU32 TEXT_COL = IM_COL32(255, 255, 255, 255);
+
+    auto draw_label = [&](ImVec2 anchor, const char* text, bool above) {
+        ImVec2 sz  = ImGui::CalcTextSize(text);
+        float  lx  = anchor.x - sz.x / 2.0f;
+        float  ly  = above ? anchor.y - sz.y - PAD * 2 : anchor.y + PAD;
+        ImVec2 mn(lx - PAD, ly - PAD);
+        ImVec2 mx(lx + sz.x + PAD, ly + sz.y + PAD);
+        draw_list->AddRectFilled(mn, mx, BG_COL, ROUNDING);
+        draw_list->AddRect(mn, mx, EDGE_COL, ROUNDING, 0, 1.0f);
+        draw_list->AddText(ImVec2(lx, ly), TEXT_COL, text);
+    };
+
+    // Event name labels at each endpoint
+    draw_label(from, p1.name.c_str(), true);
+    draw_label(to, p2.name.c_str(), from.y <= to.y);
+
+    // Delta label at curve midpoint
+    double      delta     = std::abs(p2.timestamp - p1.timestamp);
+    std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
+    ImVec2      mid((from.x + to.x) / 2.0f, (from.y + to.y) / 2.0f);
+    draw_label(mid, delta_str.c_str(), true);
+}
+
 ImVec2
 TimelineView::GetGraphSize()
 {
@@ -293,6 +376,33 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
             ImGui::CloseCurrentPopup();
         }
 
+        ImGui::Separator();
+
+        auto& fm = TimelineFocusManager::GetInstance();
+        if(!fm.IsMeasurementMode())
+        {
+            if(ImGui::MenuItem("Enter Measurement Mode"))
+            {
+                fm.EnterMeasurementMode();
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        else
+        {
+            if(fm.GetMeasurementState() == MeasurementState::kComplete)
+            {
+                if(ImGui::MenuItem("Clear Measurement"))
+                {
+                    fm.ClearMeasurement();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            if(ImGui::MenuItem("Exit Measurement Mode"))
+            {
+                fm.ExitMeasurementMode();
+                ImGui::CloseCurrentPopup();
+            }
+        }
 
         ImGui::EndPopup();
     }

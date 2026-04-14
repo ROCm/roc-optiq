@@ -90,6 +90,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(0, 0, 0, 255),        // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 180),        // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 200, 255, 255),    // Colors::kMeasurementColor
 
     // This must follow the ordering of Colors enum.
 };
@@ -163,6 +164,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(255, 255, 255, 255),  // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 60),         // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 160, 220, 255),    // Colors::kMeasurementColor
 
     // This must follow the ordering of Colors enum.
 };

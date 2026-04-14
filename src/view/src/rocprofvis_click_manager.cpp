@@ -19,6 +19,7 @@ TimelineFocusManager::TimelineFocusManager()
 : m_layer_focused(Layer::kNone)
 , m_all_layers_focused()
 , m_right_click_layer(Layer::kNone)
+, m_measurement_state(MeasurementState::kInactive)
 {}
 
 void
@@ -64,6 +65,75 @@ void
 TimelineFocusManager::ClearRightClickLayer()
 {
     m_right_click_layer = Layer::kNone;
+}
+
+void
+TimelineFocusManager::EnterMeasurementMode()
+{
+    m_measurement_state  = MeasurementState::kWaitingForFirst;
+    m_measurement_point1 = {};
+    m_measurement_point2 = {};
+}
+
+void
+TimelineFocusManager::ExitMeasurementMode()
+{
+    m_measurement_state  = MeasurementState::kInactive;
+    m_measurement_point1 = {};
+    m_measurement_point2 = {};
+}
+
+bool
+TimelineFocusManager::IsMeasurementMode() const
+{
+    return m_measurement_state != MeasurementState::kInactive;
+}
+
+MeasurementState
+TimelineFocusManager::GetMeasurementState() const
+{
+    return m_measurement_state;
+}
+
+void
+TimelineFocusManager::SetMeasurementPoint(double timestamp, double duration,
+                                          uint64_t track_id, uint32_t level,
+                                          const std::string& name)
+{
+    if(m_measurement_state == MeasurementState::kWaitingForFirst)
+    {
+        m_measurement_point1 = { timestamp, duration, track_id, level, name, true };
+        m_measurement_state  = MeasurementState::kWaitingForSecond;
+    }
+    else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
+            m_measurement_state == MeasurementState::kComplete)
+    {
+        m_measurement_point2 = { timestamp, duration, track_id, level, name, true };
+        m_measurement_state  = MeasurementState::kComplete;
+    }
+}
+
+void
+TimelineFocusManager::ClearMeasurement()
+{
+    m_measurement_point1 = {};
+    m_measurement_point2 = {};
+    if(m_measurement_state == MeasurementState::kComplete)
+    {
+        m_measurement_state = MeasurementState::kWaitingForFirst;
+    }
+}
+
+const MeasurementPoint&
+TimelineFocusManager::GetMeasurementPoint1() const
+{
+    return m_measurement_point1;
+}
+
+const MeasurementPoint&
+TimelineFocusManager::GetMeasurementPoint2() const
+{
+    return m_measurement_point2;
 }
 
 }  // namespace View

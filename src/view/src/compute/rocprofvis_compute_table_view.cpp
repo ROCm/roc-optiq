@@ -226,6 +226,15 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
         return model.GetKernelMetricValue(m_client_id, kernel_id, category_id, table->id,
                                           eid);
     });
+
+    auto pined_metrics = m_pined_metric_table.GetPinedMetricIds();
+    for(MetricId id : pined_metrics)
+    {
+        if (!widget.IsMetricPined(id))
+        {
+            widget.ChangePinState(id);
+        }
+    }
 }
 
 void

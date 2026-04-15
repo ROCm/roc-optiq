@@ -573,6 +573,18 @@ PinedMetricTable::Update()
     }
 }
 
+std::vector<MetricId>
+PinedMetricTable::GetPinedMetricIds() const
+{
+    std::vector<MetricId> pined_metric_ids;
+    pined_metric_ids.reserve(m_rows.size());
+    for (auto& row : m_rows)
+    {
+        pined_metric_ids.push_back(row.first);
+    }
+    return pined_metric_ids;
+}
+
 //---------------------------------------------------------
 
 MetricTableWidget::MetricTableWidget(DataProvider& data_provider,

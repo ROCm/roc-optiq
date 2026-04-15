@@ -7,6 +7,7 @@
 
 #include <map>
 #include <limits>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -95,6 +96,7 @@ public:
     void RemoveRow(MetricId metric_id);
     void RefillTable();
     void Update() override;
+    std::vector<MetricId> GetPinedMetricIds() const;
 
 private:
     void ContextMenu(const char* value_to_copy, uint32_t column_index,

@@ -19,9 +19,7 @@ class ComputeTableView: public RocWidget
 {
 public:
     ComputeTableView(DataProvider&                     data_provider,
-                     std::shared_ptr<ComputeSelection> compute_selection,
-                     std::function<void(MetricId metric_id, const std::string&)>
-                         set_to_kernel_table_callback);
+                     std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTableView();
 
     void Update() override;
@@ -45,8 +43,6 @@ private:
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_metrics_fetched_token;
-    std::function<void(MetricId metric_id, const std::string&)>
-        m_set_to_kernel_table_callback;
 };
 
 }  // namespace View

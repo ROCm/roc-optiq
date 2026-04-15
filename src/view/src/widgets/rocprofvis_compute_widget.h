@@ -32,15 +32,12 @@ public:
         std::map<uint32_t, RowValue> values;
         bool                         pinned = false;
     };
-    MetricTableBase();
+    explicit MetricTableBase(std::string event_source_id = {});
     virtual ~MetricTableBase() = default;
     void Render() override;
     void ChangePinState(const MetricId& metric_id);
     bool IsMetricPined(MetricId metric_id);
     void SetPinMetricCallback(std::function<void(MetricId)> callback);
-    void SetToKernelTableCallback(
-        std::function<void(MetricId metric_id, const std::string&)> callback);
-
 protected:
     virtual void ContextMenu(const char* value_to_copy, uint32_t column_index,
                              std::pair<const MetricId, Row>& row);
@@ -50,15 +47,15 @@ protected:
                          std::function<void(const char* value_to_copy)> menu_func);
     void RenderUnitValue(std::pair<const MetricId, Row>& row);
     void FillDefaultColumns();
+    void AddMetricToKernelDetails(const MetricId& metric_id, const std::string& value_name);
 
     std::map<uint32_t, std::string>                 m_columns;
     std::uint32_t                                   m_lust_column_index = 0;
     std::unordered_map<MetricId, Row, MetricIdHash> m_rows;
 
-    std::function<void(MetricId metric_id, const std::string& value_name)>
-        m_set_to_kernel_table_callback;
     std::function<void(MetricId)> m_pin_metric_clicked;
-    std::string               m_table_title;
+    std::string                   m_event_source_id;
+    std::string                   m_table_title;
 
     static constexpr uint32_t LAST_INDEX = std::numeric_limits<uint32_t>::max();
     ImGuiTableFlags           m_table_flags;
@@ -75,7 +72,7 @@ public:
     using MetricValueLookup =
         std::function<std::shared_ptr<MetricValue>(uint32_t entry_id)>;
 
-    MetricTable() = default;
+    explicit MetricTable(std::string event_source_id = {});
 
     void Clear();
     bool Empty() const;

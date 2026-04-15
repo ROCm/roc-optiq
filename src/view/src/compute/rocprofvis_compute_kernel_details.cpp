@@ -41,6 +41,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_new_table_data_token(EventManager::InvalidSubscriptionToken)
 , m_metrics_fetched_token(EventManager::InvalidSubscriptionToken)
+, m_metric_navigation_token(EventManager::InvalidSubscriptionToken)
 {
     SubscribeToEvents();
 
@@ -73,6 +74,9 @@ ComputeKernelDetailsView::~ComputeKernelDetailsView()
         static_cast<int>(RocEvents::kComputeMetricsFetched), m_metrics_fetched_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kNewTableData), m_new_table_data_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeShowMetricInKernelDetails),
+        m_metric_navigation_token);
 }
 
 void ComputeKernelDetailsView::SubscribeToEvents()
@@ -164,6 +168,24 @@ void ComputeKernelDetailsView::SubscribeToEvents()
 
     m_new_table_data_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kNewTableData), new_table_data_handler);
+
+    auto metric_navigation_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<ComputeAddMetricToKernelDetailsEvent>(e);
+        if(!evt || evt->GetSourceId() != m_data_provider.GetTraceFilePath())
+        {
+            return;
+        }
+
+        if(m_kernel_metric_table)
+        {
+            m_kernel_metric_table->SetExternalQuery(evt->GetMetricId(),
+                                                    evt->GetValueName());
+        }
+    };
+
+    m_metric_navigation_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kComputeShowMetricInKernelDetails),
+        metric_navigation_handler);
 }   
 
 void
@@ -177,12 +199,6 @@ ComputeKernelDetailsView::Update()
     {
         m_kernel_metric_table->Update();
     }
-}
-
-void
-ComputeKernelDetailsView::SetQueryFunc(MetricId metric_id, const std::string& value_name)
-{
-    m_kernel_metric_table->SetExternalQuery(metric_id, value_name);
 }
 
 void

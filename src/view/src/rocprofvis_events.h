@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "model/compute/rocprofvis_compute_model_types.h"
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -34,6 +35,7 @@ enum class RocEvents
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,
     kComputeMetricsFetched,
+    kComputeShowMetricInKernelDetails,
 #endif
 };
 
@@ -55,6 +57,7 @@ enum class RocEventType
     kComputeTableSearchEvent,
     kComputeSelectionChangedEvent,
     kComputeMetricsFetchedEvent,
+    kComputeAddMetricToKernelDetailsEvent,
 #endif
 };
 
@@ -213,6 +216,20 @@ public:
 
 private:
     uint64_t m_client_id;
+};
+
+class ComputeAddMetricToKernelDetailsEvent : public RocEvent
+{
+public:
+    ComputeAddMetricToKernelDetailsEvent(MetricId metric_id,
+                                         const std::string& value_name,
+                                         const std::string& source_id);
+    MetricId GetMetricId() const;
+    const std::string& GetValueName() const;
+
+private:
+    MetricId     m_metric_id;
+    std::string  m_value_name;
 };
 
 #endif

@@ -26,7 +26,7 @@ constexpr ImWchar icon_ranges[] = {
     0xF454, 0xF454,
     0xF472, 0xF472,
     0xF484, 0xF484, 
-    0xF41C, 0xF41C,
+    0xF41B, 0xF41B,
     0xF373, 0xF373,
     0xF372, 0xF372,
     0xF10B, 0xF10B,
@@ -53,7 +53,7 @@ inline constexpr char ICON_EYE_THIN[]           = u8"\uF424";
 inline constexpr char ICON_LIST[]               = u8"\uF454";
 inline constexpr char ICON_STICKY_NOTE[]        = u8"\uF472";
 inline constexpr char ICON_CHART_PIE[]          = u8"\uF484";
-inline constexpr char ICON_COPY[]               = u8"\uF41C";
+inline constexpr char ICON_COPY[]               = u8"\uF41B";
 inline constexpr char ICON_CHEK_BOX_CHECKED[]   = u8"\uF373";
 inline constexpr char ICON_CHEK_BOX_UNCHECKED[] = u8"\uF372";
 inline constexpr char ICON_ARROW_RIGHT[]        = u8"\uF10B";

@@ -12,21 +12,17 @@ namespace View
 {
 
 ComputeTableView::ComputeTableView(
-    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
-    std::function<void(MetricId metric_id, const std::string&)>
-        set_to_kernel_table_callback)
+    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
-, m_set_to_kernel_table_callback(set_to_kernel_table_callback)
 , m_pined_metric_table(data_provider, compute_selection, m_client_id)
 {
     m_pined_metric_table.SetPinMetricCallback([this](MetricId metric_id) {
         m_table_widgets[metric_id.GetTableKey()].ChangePinState(metric_id);
         m_pined_metric_table.RemoveRow(metric_id);
     });
-    m_pined_metric_table.SetToKernelTableCallback(set_to_kernel_table_callback);
 
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
@@ -208,21 +204,16 @@ void
 ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* table)
 {
     uint64_t     key = MetricId::GetTableKey(category_id, table->id);
-    MetricTable& widget          = m_table_widgets[key];
-    auto         pin_metric_func = [this, &widget](MetricId metric_id) {
-        //widget.ChangePinState(metric_id);
+    auto         [it, inserted]  =
+        m_table_widgets.try_emplace(key, m_data_provider.GetTraceFilePath());
+    MetricTable& widget          = it->second;
+    auto pin_metric_func = [this, &widget](MetricId metric_id) {
         if(widget.IsMetricPined(metric_id))
-        {
             m_pined_metric_table.AddRow(metric_id);
-        }
         else
-        {
             m_pined_metric_table.RemoveRow(metric_id);
-            
-        }
     };
     widget.SetPinMetricCallback(pin_metric_func);
-    widget.SetToKernelTableCallback(m_set_to_kernel_table_callback);
 
     auto& model = m_data_provider.ComputeModel();
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();

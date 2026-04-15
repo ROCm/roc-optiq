@@ -28,8 +28,6 @@ public:
     void Render() override;
     void Update() override;
 
-    void SetQueryFunc(MetricId metric_id, const std::string& value_name);
-
 private:
 
     void SubscribeToEvents();
@@ -51,6 +49,7 @@ private:
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_metrics_fetched_token;
     EventManager::SubscriptionToken m_new_table_data_token;
+    EventManager::SubscriptionToken m_metric_navigation_token;
 };
 
 }  // namespace View

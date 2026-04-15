@@ -3,6 +3,8 @@
 
 #include "rocprofvis_compute_widget.h"
 #include "compute/rocprofvis_compute_selection.h"
+#include "rocprofvis_event_manager.h"
+#include "rocprofvis_events.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_requests.h"
@@ -14,9 +16,9 @@ namespace RocProfVis
 {
 namespace View
 {
-MetricTableBase::MetricTableBase()
+MetricTableBase::MetricTableBase(std::string event_source_id)
 : m_max_rows_in_table(0)
-, m_set_to_kernel_table_callback(nullptr)
+, m_event_source_id(std::move(event_source_id))
 , m_table_title("")
 , m_lust_column_index(0)
 {
@@ -28,13 +30,6 @@ void
 MetricTableBase::SetPinMetricCallback(std::function<void(MetricId)> callback)
 {
     m_pin_metric_clicked = callback;
-}
-
-void
-MetricTableBase::SetToKernelTableCallback(
-    std::function<void(MetricId metric_id, const std::string&)> callback)
-{
-    m_set_to_kernel_table_callback = callback;
 }
 
 void
@@ -137,11 +132,11 @@ MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
             NotificationManager::GetInstance().Show(
                     COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
         }
-        if (m_set_to_kernel_table_callback)
+        if(!m_event_source_id.empty())
         {
             if(ImGui::MenuItem("Show in kernel table"))
             {
-                m_set_to_kernel_table_callback(row.first, m_columns.at(column_index));
+                AddMetricToKernelDetails(row.first, m_columns.at(column_index));
             }
         }
         ImGui::EndPopup();
@@ -242,6 +237,20 @@ MetricTableBase::IsMetricPined(MetricId metric_id)
     return m_rows[metric_id].pinned;
 }
 
+void
+MetricTableBase::AddMetricToKernelDetails(const MetricId& metric_id,
+                                          const std::string& value_name)
+{
+    if(m_event_source_id.empty())
+    {
+        return;
+    }
+
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<ComputeAddMetricToKernelDetailsEvent>(metric_id, value_name,
+                                                               m_event_source_id));
+}
+
 //---------------------------------------------------------
 
 void
@@ -284,20 +293,20 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         if(column_index != 0 && column_index != 1)
         {
             label = " " + std::string(ICON_ARROW_RIGHT) + " Send Metric to kernel details";
-            if(ImGui::MenuItem(label.c_str()))
+            if(!m_event_source_id.empty() && ImGui::MenuItem(label.c_str()))
             {
-                if(m_set_to_kernel_table_callback)
-                {
-                    m_set_to_kernel_table_callback(
-                        { row.first.category_id, row.first.table_id, row.first.entry_id },
-                        m_columns[column_index]);
-                }
+                AddMetricToKernelDetails(
+                    { row.first.category_id, row.first.table_id, row.first.entry_id },
+                    m_columns[column_index]);
             }
         }
-
         ImGui::EndPopup();
     }
 }
+
+MetricTable::MetricTable(std::string event_source_id)
+: MetricTableBase(std::move(event_source_id))
+{}
 
 void
 MetricTable::Populate(const AvailableMetrics::Table& table,
@@ -488,7 +497,7 @@ WorkloadMetricTableWidget::UpdateTable()
 PinedMetricTable::PinedMetricTable(DataProvider&                     data_provider,
                                    std::shared_ptr<ComputeSelection> compute_selection,
                                    uint64_t                          client_id)
-: MetricTableBase()
+: MetricTableBase(data_provider.GetTraceFilePath())
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(client_id)
@@ -525,10 +534,9 @@ PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         // not equal MetricId, Metric Name and Metric Unit
         {
             label = " " + std::string(ICON_ARROW_RIGHT) + " Send Metric to kernel details";
-            if(ImGui::MenuItem(label.c_str()))
+            if(!m_event_source_id.empty() && ImGui::MenuItem(label.c_str()))
             {
-                if(m_set_to_kernel_table_callback)
-                    m_set_to_kernel_table_callback(row.first, m_columns[column_index]);
+                AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }
         }
         ImGui::EndPopup();

@@ -677,15 +677,18 @@ AppWindow::RenderFileMenu(Project* project)
             bool submenu_enabled = has_trace && !cleanup_pending;
             if(ImGui::BeginMenu("Database", submenu_enabled))
             {
+#ifdef ROCPROFVIS_DEVELOPER_MODE
                 if(ImGui::MenuItem("Fast Cleanup"))
                 {
                     start_cleanup(false);
                 }
-                if(ImGui::MenuItem("Full Cleanup (Rebuild)..."))
+#endif
+                if(ImGui::MenuItem("Full Cleanup"))
                 {
                     ShowConfirmationDialog(
                         "Full Database Cleanup",
-                        "This will remove service tables, indexes, and rebuild "
+                        "This will remove all Optiq metadata present in the database, "
+                        "including service tables, indexes, and rebuild "
                         "(VACUUM) the database file. This may take a while.\n\n"
                         "Continue?",
                         [start_cleanup]() { start_cleanup(true); });

@@ -20,4 +20,4 @@ RUN mkdir -p /opt/vulkan && \
     rm /tmp/vulkansdk.tar.xz
 
 WORKDIR /home
-SHELL [ "/bin/bash", "--login", "-c" ]\
+SHELL [ "/bin/bash", "--login", "-c" ]

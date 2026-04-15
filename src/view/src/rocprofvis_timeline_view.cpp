@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_click_manager.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_track_item.h"
@@ -1884,7 +1885,7 @@ TimelineView::HandleTopSurfaceTouch()
         if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) &&
            !m_is_selecting_region && !m_can_drag_to_pan)
         {
-            if(io.KeyCtrl &&
+            if(HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect) &&
                TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
             {
                 // Claim focus so FlameTrackItem doesn't also handle this click
@@ -1911,7 +1912,7 @@ TimelineView::HandleTopSurfaceTouch()
 
                 m_highlighted_region.first = std::clamp(m_tpt->PixelToTime(cursor_screen_position), 0.0, m_tpt->GetRangeX());
             }
-            else if(!io.KeyCtrl)
+            else if(!HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
             {
                 m_can_drag_to_pan = true;
             }
@@ -1968,31 +1969,29 @@ TimelineView::HandleTopSurfaceTouch()
     if(m_pseudo_focus ||
        m_histogram_pseudo_focus && !io.WantTextInput && !ImGui::IsAnyItemActive())
     {
-        // WASD and Arrow key panning
+        auto& hk = HotkeyManager::GetInstance();
         float pan_speed_sped_up = 2;
-        bool  is_shift_down     = ImGui::GetIO().KeyShift;
+        bool  is_speed_boost    = hk.IsActionHeld(HotkeyActionId::kSpeedBoost);
 
-        float pan_speed = is_shift_down ? pan_speed_sped_up : 1.0f;
+        float pan_speed = is_speed_boost ? pan_speed_sped_up : 1.0f;
 
         float region_moved_per_click_x = 0.01f * m_tpt->GetGraphSizeX();
         float region_moved_per_click_y = 0.01f * m_content_max_y_scroll;
 
-        // A, D, left arrow, right arrow go left and right
-        if(ImGui::IsKeyPressed(ImGuiKey_A) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
+        if(hk.WasActionTriggered(HotkeyActionId::kPanLeft))
         {
             offset_ns -=
                 pan_speed * ((region_moved_per_click_x / m_tpt->GetGraphSizeX()) *
                              m_tpt->GetVWidth());
         }
-        if(ImGui::IsKeyPressed(ImGuiKey_D) || ImGui::IsKeyPressed(ImGuiKey_RightArrow))
+        if(hk.WasActionTriggered(HotkeyActionId::kPanRight))
         {
             offset_ns -=
                 pan_speed * ((-region_moved_per_click_x / m_tpt->GetGraphSizeX()) *
                              m_tpt->GetVWidth());
         }
 
-        // W/S for zoom in/out at cursor position
-        if(ImGui::IsKeyPressed(ImGuiKey_W))
+        if(hk.WasActionTriggered(HotkeyActionId::kZoomIn))
         {
             // Get mouse position relative to graph area
             ImVec2 mouse_pos        = ImGui::GetMousePos();
@@ -2005,7 +2004,7 @@ TimelineView::HandleTopSurfaceTouch()
             // Update offset from the transform
             offset_ns = m_tpt->GetViewTimeOffsetNs();
         }
-        if(ImGui::IsKeyPressed(ImGuiKey_S))
+        if(hk.WasActionTriggered(HotkeyActionId::kZoomOut))
         {
             // Get mouse position relative to graph area
             ImVec2 mouse_pos        = ImGui::GetMousePos();
@@ -2019,15 +2018,14 @@ TimelineView::HandleTopSurfaceTouch()
             offset_ns = m_tpt->GetViewTimeOffsetNs();
         }
 
-        // Up/Down arrows for vertical scroll
-        if(ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+        if(hk.WasActionTriggered(HotkeyActionId::kScrollUp))
         {
             m_loading_timer.Restart();
             m_scroll_position_y =
                 std::clamp(m_scroll_position_y - pan_speed * region_moved_per_click_y,
                            0.0f, m_content_max_y_scroll);
         }
-        if(ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+        if(hk.WasActionTriggered(HotkeyActionId::kScrollDown))
         {
             m_loading_timer.Restart();
             m_scroll_position_y =
@@ -2035,14 +2033,12 @@ TimelineView::HandleTopSurfaceTouch()
                            0.0f, m_content_max_y_scroll);
         }
 
-        // Escape to clear time range selection
-        if(ImGui::IsKeyPressed(ImGuiKey_Escape))
+        if(hk.WasActionTriggered(HotkeyActionId::kClearSelection))
         {
             ClearTimeRangeSelection();
         }
 
-        // M to mark/unmark selected events as a time range
-        if(ImGui::IsKeyPressed(ImGuiKey_M))
+        if(hk.WasActionTriggered(HotkeyActionId::kToggleMark))
         {
             if(m_timeline_selection->HasValidTimeRangeSelection())
             {

@@ -9,6 +9,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_event_search.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_sidebar.h"
@@ -395,62 +396,51 @@ TraceView::Render()
 void
 TraceView::HandleHotKeys()
 {
-    // TODO: handling hot keys here for now.. this should be reworked to use a hotkey
-    // manager in the future
-    const ImGuiIO& io = ImGui::GetIO();
-
-    // Don’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
-    // InputText) or a pop up is open
-    if(io.WantTextInput || ImGui::IsAnyItemActive() ||
-       !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) ||
-       ImGui::IsPopupOpen("",
-                          ImGuiPopupFlags_AnyPopup | ImGuiHoveredFlags_NoPopupHierarchy))
-    {
+    if(!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
         return;
-    }
 
-    // handle numeric hotkeys 0-9
-    // Press Ctrl + [0-9] to save a bookmark, press [0-9] to recall it
+    auto& hk = HotkeyManager::GetInstance();
+
+    // xDon’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
     for(int i = 0; i <= 9; ++i)
     {
-        ImGuiKey key = static_cast<ImGuiKey>(ImGuiKey_0 + i);
-        if(ImGui::IsKeyPressed(key, false))
+        std::string idx = std::to_string(i);
+
+        if(hk.WasActionTriggered(HotkeyManager::BookmarkSaveAction(i)))
         {
-            if(io.KeyCtrl)
+            if(m_timeline_view)
+            {
+                auto coords    = m_timeline_view->GetViewCoords();
+                m_bookmarks[i] = coords;
+                spdlog::info("Bookmark {} saved at time offset: {}, scroll position: "
+                             "{}, zoom: {}",
+                             i, coords.v_min_x, coords.y, coords.z);
+                NotificationManager::GetInstance().Show(
+                    "Bookmark " + idx + " saved.",
+                    NotificationLevel::Info);
+            }
+        }
+
+        if(hk.WasActionTriggered(HotkeyManager::BookmarkRestoreAction(i)))
+        {
+            auto it = m_bookmarks.find(i);
+            if(it != m_bookmarks.end())
             {
                 if(m_timeline_view)
                 {
-                    auto coords    = m_timeline_view->GetViewCoords();
-                    m_bookmarks[i] = coords;
-                    spdlog::info("Bookmark {} saved at time offset: {}, scroll position: "
-                                 "{}, zoom: {}",
-                                 i, coords.v_min_x, coords.y, coords.z);
+                    m_timeline_view->MoveToPosition(
+                        it->second.v_min_x, it->second.v_max_x, it->second.y, false);
+
                     NotificationManager::GetInstance().Show(
-                        "Bookmark " + std::to_string(i) + " saved.",
+                        "Bookmark " + idx + " restored.",
                         NotificationLevel::Info);
                 }
             }
             else
             {
-                auto it = m_bookmarks.find(i);
-                if(it != m_bookmarks.end())
-                {
-                    if(m_timeline_view)
-                    {
-                        m_timeline_view->MoveToPosition(
-                            it->second.v_min_x, it->second.v_max_x, it->second.y, false);
-
-                        NotificationManager::GetInstance().Show(
-                            "Bookmark " + std::to_string(i) + " restored.",
-                            NotificationLevel::Info);
-                    }
-                }
-                else
-                {
-                    NotificationManager::GetInstance().Show(
-                        "Bookmark slot " + std::to_string(i) + " not assigned",
-                        NotificationLevel::Warning);
-                }
+                NotificationManager::GetInstance().Show(
+                    "Bookmark slot " + idx + " not assigned",
+                    NotificationLevel::Warning);
             }
         }
     }

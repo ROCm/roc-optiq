@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include <list>
 
@@ -30,15 +31,18 @@ private:
     {
         Display,
         Units,
-        Other
+        Other,
+        Hotkeys
     };
 
     void RenderDisplayOptions();
     void RenderUnitOptions();
     void RenderOtherSettings();
+    void RenderHotkeySettings();
 
     void ResetDisplayOptions();
     void ResetUnitOptions();
+    void ResetHotkeySettings();
 
     bool ResetButton();
 
@@ -54,11 +58,13 @@ private:
     UserSettings&    m_usersettings;
 
     const UserSettings& m_usersettings_default;
-    // Copy of settings on Show().
     UserSettings m_usersettings_initial;
     UserSettings m_usersettings_previous;
-    // Seperate store for font settings to keep changes isolated to preview.
     FontSettings m_font_settings;
+
+    HotkeyActionId m_rebinding_action  = HotkeyActionId::kCount;
+    bool           m_rebinding_primary = true;
+    bool           m_hotkeys_changed   = false;
 };
 
 }  // namespace View

@@ -1178,85 +1178,9 @@ TraceView::RenderMeasurementControls()
     ImVec4 measure_col    = ImGui::ColorConvertU32ToFloat4(
         m_settings_manager.GetColor(Colors::kMeasurementColor));
 
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kTextDim)));
-    ImGui::TextUnformatted("Measure");
-    ImGui::PopStyleColor();
-
-    auto default_style = m_settings_manager.GetDefaultStyle();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x * 0.5f, 0));
-    ImGui::SameLine();
-
-    bool active = fm.IsMeasurementMode();
-
-    // Toggle measurement mode on/off
-    if(active)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Button, accent);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
-        ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
-    }
-    else
-    {
-        ImGui::PushStyleColor(ImGuiCol_Button, transparent);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text));
-    }
-    if(ImGui::Button(active ? "On" : "Off"))
-    {
-        if(active) fm.ExitMeasurementMode();
-        else       fm.EnterMeasurementMode();
-    }
-    ImGui::PopStyleColor(3);
-    if(ImGui::IsItemHovered())
-        SetTooltipStyled(active ? "Exit measurement mode" : "Enter measurement mode");
-
-    if(!active) return;
-
-    ImGui::SameLine();
-
-    // Edge toggle for Event 1: Start / End
-    {
-        MeasureEdge e1 = fm.GetMeasureEdge1();
-        const char* label1 = (e1 == MeasureEdge::kStart) ? "E1:Start" : "E1:End";
-        ImGui::PushStyleColor(ImGuiCol_Button, transparent);
-        ImGui::PushStyleColor(ImGuiCol_Text, measure_col);
-        if(ImGui::Button(label1))
-        {
-            fm.SetMeasureEdge1(e1 == MeasureEdge::kStart ? MeasureEdge::kEnd
-                                                          : MeasureEdge::kStart);
-        }
-        ImGui::PopStyleColor(2);
-        if(ImGui::IsItemHovered())
-            SetTooltipStyled("Toggle Event 1 measurement edge (start/end)");
-    }
-
-    ImGui::SameLine();
-
-    // Edge toggle for Event 2: Start / End
-    {
-        MeasureEdge e2 = fm.GetMeasureEdge2();
-        const char* label2 = (e2 == MeasureEdge::kStart) ? "E2:Start" : "E2:End";
-        ImGui::PushStyleColor(ImGuiCol_Button, transparent);
-        ImGui::PushStyleColor(ImGuiCol_Text, measure_col);
-        if(ImGui::Button(label2))
-        {
-            fm.SetMeasureEdge2(e2 == MeasureEdge::kStart ? MeasureEdge::kEnd
-                                                          : MeasureEdge::kStart);
-        }
-        ImGui::PopStyleColor(2);
-        if(ImGui::IsItemHovered())
-            SetTooltipStyled("Toggle Event 2 measurement edge (start/end)");
-    }
-
-    ImGui::SameLine();
-
-    // Freehand toggle
-    {
-        bool freehand = fm.IsFreehandMode();
-        if(freehand)
+    // Pushes accent or default styling depending on toggle state
+    auto push_toggle_style = [&](bool selected) {
+        if(selected)
         {
             ImGui::PushStyleColor(ImGuiCol_Button, accent);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
@@ -1269,25 +1193,83 @@ TraceView::RenderMeasurementControls()
                                   ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
             ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text));
         }
-        if(ImGui::Button("Freehand"))
-        {
-            fm.SetFreehandMode(!freehand);
-            if(!freehand)
-            {
-                fm.SetFreehandOffset1(0.0);
-                fm.SetFreehandOffset2(0.0);
-            }
-        }
-        ImGui::PopStyleColor(3);
-        if(ImGui::IsItemHovered())
-            SetTooltipStyled("Toggle freehand mode to drag measurement rulers");
+    };
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kTextDim)));
+    ImGui::TextUnformatted("Measure");
+    ImGui::PopStyleColor();
+
+    auto default_style = m_settings_manager.GetDefaultStyle();
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x * 0.5f, 0));
+    ImGui::SameLine();
+
+    bool active = fm.IsMeasurementMode();
+
+    ImGui::PushID("measure_toggle");
+    push_toggle_style(active);
+    if(ImGui::Button(active ? "On" : "Off"))
+    {
+        if(active) fm.ExitMeasurementMode();
+        else       fm.EnterMeasurementMode();
     }
+    ImGui::PopStyleColor(3);
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled(active ? "Exit measurement mode" : "Enter measurement mode");
+    }
+    ImGui::PopID();
+
+    if(!active) return;
 
     ImGui::SameLine();
 
-    // Reset button
+    for(int i = 0; i < 2; ++i)
+    {
+        MeasureEdge edge  = fm.GetEdge(i);
+        const char* label = (edge == MeasureEdge::kStart)
+                                ? (i == 0 ? "E1:Start" : "E2:Start")
+                                : (i == 0 ? "E1:End" : "E2:End");
+        ImGui::PushID(i);
+        ImGui::PushStyleColor(ImGuiCol_Button, transparent);
+        ImGui::PushStyleColor(ImGuiCol_Text, measure_col);
+        if(ImGui::Button(label))
+        {
+            fm.SetEdge(i, edge == MeasureEdge::kStart ? MeasureEdge::kEnd
+                                                      : MeasureEdge::kStart);
+        }
+        ImGui::PopStyleColor(2);
+        if(ImGui::IsItemHovered())
+        {
+            SetTooltipStyled("Toggle measurement edge (start/end)");
+        }
+        ImGui::PopID();
+        ImGui::SameLine();
+    }
+
+    bool freehand = fm.IsFreehandMode();
+    ImGui::PushID("measure_freehand");
+    push_toggle_style(freehand);
+    if(ImGui::Button("Freehand"))
+    {
+        fm.SetFreehandMode(!freehand);
+        if(!freehand)
+        {
+            fm.SetFreehandOffset(0, 0.0);
+            fm.SetFreehandOffset(1, 0.0);
+        }
+    }
+    ImGui::PopStyleColor(3);
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Toggle freehand ruler placement");
+    }
+    ImGui::PopID();
+
     if(fm.GetMeasurementState() == MeasurementState::kComplete)
     {
+        ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Button, transparent);
         if(ImGui::Button("Reset"))
         {
@@ -1295,7 +1277,9 @@ TraceView::RenderMeasurementControls()
         }
         ImGui::PopStyleColor();
         if(ImGui::IsItemHovered())
+        {
             SetTooltipStyled("Clear measurement and re-measure");
+        }
     }
 }
 

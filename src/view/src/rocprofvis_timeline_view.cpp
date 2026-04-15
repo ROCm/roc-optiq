@@ -227,176 +227,141 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     auto& fm = TimelineFocusManager::GetInstance();
     if(!fm.IsMeasurementMode()) return;
 
-    const auto& p1 = fm.GetMeasurementPoint1();
-    const auto& p2 = fm.GetMeasurementPoint2();
+    const auto& p1 = fm.GetPoint(0);
+    const auto& p2 = fm.GetPoint(1);
     if(!p1.valid && !p2.valid) return;
 
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            color        = settings.GetColor(Colors::kMeasurementColor);
     float            level_height = settings.GetEventLevelHeight();
     const auto&      time_format  = settings.GetUserSettings().unit_settings.time_format;
-    constexpr float  THICKNESS    = 2.5f;
-    constexpr float  VLINE_THICK  = 1.5f;
-    constexpr float  HEAD_SIZE    = 6.0f;
-    constexpr int    CURVE_SEGS   = 32;
-    constexpr float  PAD          = 8.0f;
-    constexpr float  ROUNDING     = 6.0f;
-    constexpr ImU32  BG_COL       = IM_COL32(30, 30, 30, 240);
-    constexpr ImU32  EDGE_COL     = IM_COL32(70, 70, 70, 200);
-    constexpr ImU32  TEXT_COL     = IM_COL32(255, 255, 255, 255);
+
+    constexpr float CURVE_THICK = 2.5f;
+    constexpr float VLINE_THICK = 1.5f;
+    constexpr float HEAD_SIZE   = 6.0f;
+    constexpr float LABEL_PAD   = 8.0f;
+    constexpr float LABEL_ROUND = 6.0f;
+    constexpr ImU32 LABEL_BG    = IM_COL32(30, 30, 30, 240);
+    constexpr ImU32 LABEL_EDGE  = IM_COL32(70, 70, 70, 200);
+    constexpr ImU32 LABEL_TEXT  = IM_COL32(255, 255, 255, 255);
 
     float top = window_position.y;
     float bot = window_position.y + m_track_height_sum;
 
-    // Draw ruler line for point 1 as soon as it's placed
-    if(p1.valid)
-    {
-        double eff_ts1 = fm.GetEffectiveTimestamp1();
-        float  x1      = window_position.x + m_tpt->RawTimeToPixel(eff_ts1);
-        draw_list->AddLine(ImVec2(x1, top), ImVec2(x1, bot), color, VLINE_THICK);
-
-        float label_y = window_position.y + m_scroll_position_y +
-                        m_tpt->GetGraphSizeY() - m_ruler_height -
-                        ARTIFICIAL_SCROLLBAR_HEIGHT -
-                        ImGui::CalcTextSize("0").y - 8.0f;
-        std::string t1_str =
-            nanosecond_to_formatted_str(eff_ts1 - m_tpt->GetMinX(), time_format, true);
-        ImVec2 sz = ImGui::CalcTextSize(t1_str.c_str());
-        float  lx = x1 - sz.x / 2.0f;
-        draw_list->AddRectFilled(ImVec2(lx - 4.0f, label_y - 2.0f),
-                                 ImVec2(lx + sz.x + 4.0f, label_y + sz.y + 2.0f),
-                                 IM_COL32(30, 30, 30, 240), 3.0f);
-        draw_list->AddText(ImVec2(lx, label_y), color, t1_str.c_str());
-    }
-
-    if(!p2.valid) return;
-
-    double eff_ts1 = fm.GetEffectiveTimestamp1();
-    double eff_ts2 = fm.GetEffectiveTimestamp2();
-
-    float x1  = window_position.x + m_tpt->RawTimeToPixel(eff_ts1);
-    float x2  = window_position.x + m_tpt->RawTimeToPixel(eff_ts2);
-
-    // Full-height vertical ruler lines (redraw p1 is fine, draw p2)
-    draw_list->AddLine(ImVec2(x1, top), ImVec2(x1, bot), color, VLINE_THICK);
-    draw_list->AddLine(ImVec2(x2, top), ImVec2(x2, bot), color, VLINE_THICK);
-
-    // Freehand notch markers at event start and end (only for event-based points)
-    if(fm.IsFreehandMode())
-    {
-        constexpr float  NOTCH_H    = 10.0f;
-        constexpr float  NOTCH_W    = 1.0f;
-        ImU32            notch_col  = IM_COL32(255, 255, 255, 120);
-        float visible_mid = window_position.y + m_scroll_position_y +
-                            (m_tpt->GetGraphSizeY() - m_ruler_height -
-                             ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
-
-        auto draw_notch = [&](double ts) {
-            float nx = window_position.x + m_tpt->RawTimeToPixel(ts);
-            draw_list->AddLine(ImVec2(nx, visible_mid - NOTCH_H),
-                               ImVec2(nx, visible_mid + NOTCH_H), notch_col, NOTCH_W);
-        };
-        if(!p1.freehand)
-        {
-            draw_notch(p1.timestamp);
-            draw_notch(p1.timestamp + p1.duration);
-        }
-        if(!p2.freehand)
-        {
-            draw_notch(p2.timestamp);
-            draw_notch(p2.timestamp + p2.duration);
-        }
-    }
-
-    // Timestamp labels pinned to bottom of visible viewport
-    auto draw_vline_label = [&](float x, float y, const char* text) {
-        ImVec2 sz = ImGui::CalcTextSize(text);
-        float  lx = x - sz.x / 2.0f;
-        float  ly = y;
-        ImVec2 mn(lx - 4.0f, ly - 2.0f);
-        ImVec2 mx(lx + sz.x + 4.0f, ly + sz.y + 2.0f);
-        draw_list->AddRectFilled(mn, mx, IM_COL32(30, 30, 30, 240), 3.0f);
-        draw_list->AddText(ImVec2(lx, ly), color, text);
-    };
-
-    std::string t1_str =
-        nanosecond_to_formatted_str(eff_ts1 - m_tpt->GetMinX(), time_format, true);
-    std::string t2_str =
-        nanosecond_to_formatted_str(eff_ts2 - m_tpt->GetMinX(), time_format, true);
-
     float visible_bot = window_position.y + m_scroll_position_y +
                         m_tpt->GetGraphSizeY() - m_ruler_height -
                         ARTIFICIAL_SCROLLBAR_HEIGHT;
-    float label_offset = ImGui::CalcTextSize("0").y + 8.0f;
-    draw_vline_label(x1, visible_bot - label_offset, t1_str.c_str());
-    draw_vline_label(x2, visible_bot - label_offset, t2_str.c_str());
-
-    // Bezier curve between the two positions
     float visible_center_y = m_scroll_position_y +
                              (m_tpt->GetGraphSizeY() - m_ruler_height -
                               ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
+    float label_y = visible_bot - ImGui::CalcTextSize("0").y - 8.0f;
 
-    auto to_point_y = [&](const MeasurementPoint& pt) -> float {
-        if(pt.freehand)
-            return visible_center_y;
-        return m_track_position_y.count(pt.track_id)
-                   ? m_track_position_y.at(pt.track_id) +
-                         level_height * pt.level + level_height / 2.0f
-                   : visible_center_y;
+    // Draws a small timestamp label centered on a ruler line
+    auto draw_ruler_label = [&](float x, const char* text) {
+        ImVec2 sz = ImGui::CalcTextSize(text);
+        float  lx = x - sz.x * 0.5f;
+        draw_list->AddRectFilled(ImVec2(lx - 4.0f, label_y - 2.0f),
+                                 ImVec2(lx + sz.x + 4.0f, label_y + sz.y + 2.0f),
+                                 LABEL_BG, 3.0f);
+        draw_list->AddText(ImVec2(lx, label_y), color, text);
     };
 
-    ImVec2 from(x1, window_position.y + to_point_y(p1));
-    ImVec2 to(x2, window_position.y + to_point_y(p2));
+    // Draws a boxed label, Y-clamped to stay within visible area
+    auto draw_label = [&](float cx, float cy, const char* text) {
+        ImVec2 sz     = ImGui::CalcTextSize(text);
+        float  half_h = sz.y * 0.5f + LABEL_PAD;
+        cy            = std::clamp(cy, top + half_h, visible_bot - half_h);
+        float  lx     = cx - sz.x * 0.5f;
+        float  ly     = cy - sz.y * 0.5f;
+        ImVec2 mn(lx - LABEL_PAD, ly - LABEL_PAD);
+        ImVec2 mx(lx + sz.x + LABEL_PAD, ly + sz.y + LABEL_PAD);
+        draw_list->AddRectFilled(mn, mx, LABEL_BG, LABEL_ROUND);
+        draw_list->AddRect(mn, mx, LABEL_EDGE, LABEL_ROUND, 0, 1.0f);
+        draw_list->AddText(ImVec2(lx, ly), LABEL_TEXT, text);
+    };
 
-    float  curve_offset = 0.25f * (to.x - from.x);
-    ImVec2 ctrl1(from.x + curve_offset, from.y);
-    ImVec2 ctrl2(to.x - curve_offset, to.y);
-    draw_list->AddBezierCubic(from, ctrl1, ctrl2, to, color, THICKNESS, CURVE_SEGS);
+    // Resolves Y position for a measurement point
+    auto point_y = [&](const MeasurementPoint& pt) -> float {
+        if(pt.freehand) return visible_center_y;
+        auto it = m_track_position_y.find(pt.track_id);
+        if(it != m_track_position_y.end())
+            return it->second + level_height * pt.level + level_height * 0.5f;
+        return visible_center_y;
+    };
 
-    // Arrowhead at destination
+    // Draw ruler + label for each valid point
+    int valid_count = 0;
+    float px[2]     = {};
+    for(int i = 0; i < 2; ++i)
+    {
+        const auto& pt = fm.GetPoint(i);
+        if(!pt.valid) continue;
+        ++valid_count;
+
+        double eff     = fm.GetEffectiveTimestamp(i);
+        px[i]          = window_position.x + m_tpt->RawTimeToPixel(eff);
+        draw_list->AddLine(ImVec2(px[i], top), ImVec2(px[i], bot), color, VLINE_THICK);
+
+        std::string ts_str =
+            nanosecond_to_formatted_str(eff - m_tpt->GetMinX(), time_format, true);
+        draw_ruler_label(px[i], ts_str.c_str());
+    }
+
+    if(valid_count < 2) return;
+
+    // Freehand notch markers at original event edges
+    if(fm.IsFreehandMode())
+    {
+        constexpr float NOTCH_H   = 10.0f;
+        ImU32           notch_col = IM_COL32(255, 255, 255, 120);
+        float           mid_y     = window_position.y + visible_center_y;
+
+        for(int i = 0; i < 2; ++i)
+        {
+            const auto& pt = fm.GetPoint(i);
+            if(pt.freehand) continue;
+            for(double ts : { pt.timestamp, pt.timestamp + pt.duration })
+            {
+                float nx = window_position.x + m_tpt->RawTimeToPixel(ts);
+                draw_list->AddLine(ImVec2(nx, mid_y - NOTCH_H),
+                                   ImVec2(nx, mid_y + NOTCH_H), notch_col, 1.0f);
+            }
+        }
+    }
+
+    // Bezier curve connecting the two points
+    ImVec2 from(px[0], window_position.y + point_y(p1));
+    ImVec2 to(px[1], window_position.y + point_y(p2));
+
+    float  ctrl_dx = 0.25f * (to.x - from.x);
+    ImVec2 ctrl1(from.x + ctrl_dx, from.y);
+    ImVec2 ctrl2(to.x - ctrl_dx, to.y);
+    draw_list->AddBezierCubic(from, ctrl1, ctrl2, to, color, CURVE_THICK, 32);
+
+    // Origin dot + destination arrowhead
+    draw_list->AddCircleFilled(from, 4.0f, color);
+
     ImVec2 dir(to.x - ctrl2.x, to.y - ctrl2.y);
     float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
     if(len > 0.0f) { dir.x /= len; dir.y /= len; }
     else           { dir = ImVec2(1.0f, 0.0f); }
-    ImVec2 ortho(-dir.y, dir.x);
+    ImVec2 perp(-dir.y, dir.x);
     draw_list->AddTriangleFilled(
         to,
-        ImVec2(to.x - dir.x * HEAD_SIZE - ortho.x * HEAD_SIZE * 0.5f,
-               to.y - dir.y * HEAD_SIZE - ortho.y * HEAD_SIZE * 0.5f),
-        ImVec2(to.x - dir.x * HEAD_SIZE + ortho.x * HEAD_SIZE * 0.5f,
-               to.y - dir.y * HEAD_SIZE + ortho.y * HEAD_SIZE * 0.5f),
+        ImVec2(to.x - dir.x * HEAD_SIZE - perp.x * HEAD_SIZE * 0.5f,
+               to.y - dir.y * HEAD_SIZE - perp.y * HEAD_SIZE * 0.5f),
+        ImVec2(to.x - dir.x * HEAD_SIZE + perp.x * HEAD_SIZE * 0.5f,
+               to.y - dir.y * HEAD_SIZE + perp.y * HEAD_SIZE * 0.5f),
         color);
-    draw_list->AddCircleFilled(from, 4.0f, color);
 
-    // Visible viewport bounds (screen space)
-    float vis_top = window_position.y;
-    float vis_bot = window_position.y + m_scroll_position_y +
-                    m_tpt->GetGraphSizeY() - m_ruler_height -
-                    ARTIFICIAL_SCROLLBAR_HEIGHT;
+    // Event name labels
+    if(!p1.name.empty()) draw_label(from.x, from.y - 20.0f, p1.name.c_str());
+    if(!p2.name.empty()) draw_label(to.x, to.y + 20.0f, p2.name.c_str());
 
-    // Label helper — clamps Y so the label stays within the visible area
-    auto draw_label = [&](float cx, float cy, const char* text) {
-        ImVec2 sz       = ImGui::CalcTextSize(text);
-        float  half_h   = sz.y / 2.0f + PAD;
-        cy              = std::clamp(cy, vis_top + half_h, vis_bot - half_h);
-        float  lx       = cx - sz.x / 2.0f;
-        float  ly       = cy - sz.y / 2.0f;
-        ImVec2 mn(lx - PAD, ly - PAD);
-        ImVec2 mx(lx + sz.x + PAD, ly + sz.y + PAD);
-        draw_list->AddRectFilled(mn, mx, BG_COL, ROUNDING);
-        draw_list->AddRect(mn, mx, EDGE_COL, ROUNDING, 0, 1.0f);
-        draw_list->AddText(ImVec2(lx, ly), TEXT_COL, text);
-    };
-
-    if(!p1.name.empty())
-        draw_label(from.x, from.y - 20.0f, p1.name.c_str());
-    if(!p2.name.empty())
-        draw_label(to.x, to.y + 20.0f, p2.name.c_str());
-
-    // Delta label at curve midpoint
-    double      delta     = std::abs(eff_ts2 - eff_ts1);
+    // Delta label at midpoint
+    double      delta     = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
     std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
-    draw_label((from.x + to.x) / 2.0f, (from.y + to.y) / 2.0f - 20.0f,
+    draw_label((from.x + to.x) * 0.5f, (from.y + to.y) * 0.5f - 20.0f,
                delta_str.c_str());
 }
 
@@ -2099,41 +2064,36 @@ TimelineView::HandleTopSurfaceTouch()
 
             static int dragging_ruler = -1;
 
-            if(fm_touch.GetMeasurementState() == MeasurementState::kComplete)
+            if(fm_touch.IsFreehandMode() &&
+               fm_touch.GetMeasurementState() == MeasurementState::kComplete)
             {
-                float rx1 = static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp1()));
-                float rx2 = static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp2()));
+                float rx[2] = {
+                    static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp(0))),
+                    static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp(1)))
+                };
 
-                bool hovering_ruler = std::abs(mouse_x - rx1) < GRAB_RADIUS ||
-                                      std::abs(mouse_x - rx2) < GRAB_RADIUS;
-                if(hovering_ruler || dragging_ruler >= 0)
+                bool hovering = std::abs(mouse_x - rx[0]) < GRAB_RADIUS ||
+                                std::abs(mouse_x - rx[1]) < GRAB_RADIUS;
+                if(hovering || dragging_ruler >= 0)
                     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
 
                 if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
                 {
-                    if(std::abs(mouse_x - rx1) < GRAB_RADIUS)      dragging_ruler = 0;
-                    else if(std::abs(mouse_x - rx2) < GRAB_RADIUS) dragging_ruler = 1;
-                    else                                            dragging_ruler = -1;
+                    if(std::abs(mouse_x - rx[0]) < GRAB_RADIUS)      dragging_ruler = 0;
+                    else if(std::abs(mouse_x - rx[1]) < GRAB_RADIUS) dragging_ruler = 1;
+                    else                                              dragging_ruler = -1;
                 }
 
                 if(dragging_ruler >= 0 && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
                 {
-                    double mouse_time = m_tpt->PixelToTime(mouse_x) + m_tpt->GetMinX();
-                    const auto& pt = (dragging_ruler == 0)
-                                         ? fm_touch.GetMeasurementPoint1()
-                                         : fm_touch.GetMeasurementPoint2();
-                    double base = pt.freehand
-                                      ? pt.timestamp
-                                      : ((dragging_ruler == 0
-                                              ? fm_touch.GetMeasureEdge1()
-                                              : fm_touch.GetMeasureEdge2()) == MeasureEdge::kStart)
-                                            ? pt.timestamp
-                                            : pt.timestamp + pt.duration;
-                    if(dragging_ruler == 0)
-                        fm_touch.SetFreehandOffset1(mouse_time - base);
-                    else
-                        fm_touch.SetFreehandOffset2(mouse_time - base);
-
+                    double      mouse_time = m_tpt->PixelToTime(mouse_x) + m_tpt->GetMinX();
+                    const auto& pt   = fm_touch.GetPoint(dragging_ruler);
+                    double      base = pt.freehand
+                                           ? pt.timestamp
+                                           : (fm_touch.GetEdge(dragging_ruler) == MeasureEdge::kStart)
+                                                 ? pt.timestamp
+                                                 : pt.timestamp + pt.duration;
+                    fm_touch.SetFreehandOffset(dragging_ruler, mouse_time - base);
                     fm_touch.RequestLayerFocus(Layer::kInteractiveLayer);
                 }
             }
@@ -2141,11 +2101,11 @@ TimelineView::HandleTopSurfaceTouch()
             if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 dragging_ruler = -1;
 
-            // Freehand click-to-place: click anywhere to set a measurement point
+            MeasurementState state = fm_touch.GetMeasurementState();
             if(fm_touch.IsFreehandMode() && dragging_ruler < 0 &&
                ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-               (fm_touch.GetMeasurementState() == MeasurementState::kWaitingForFirst ||
-                fm_touch.GetMeasurementState() == MeasurementState::kWaitingForSecond))
+               (state == MeasurementState::kWaitingForFirst ||
+                state == MeasurementState::kWaitingForSecond))
             {
                 float  clamped_x  = std::clamp(mouse_x, 0.0f, m_tpt->GetGraphSizeX());
                 double click_time = m_tpt->PixelToTime(clamped_x) + m_tpt->GetMinX();

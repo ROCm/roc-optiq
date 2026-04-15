@@ -64,31 +64,22 @@ public:
     void             ExitMeasurementMode();
     bool             IsMeasurementMode() const;
     MeasurementState GetMeasurementState() const;
-    void             SetMeasurementPoint(double timestamp, double duration,
-                                         uint64_t track_id, uint32_t level,
-                                         const std::string& name);
-    void             SetFreehandMeasurementPoint(double timestamp);
-    void                    ClearMeasurement();
-    const MeasurementPoint& GetMeasurementPoint1() const;
-    const MeasurementPoint& GetMeasurementPoint2() const;
 
-    // Edge mode: measure from start or end of each event
-    void         SetMeasureEdge1(MeasureEdge edge);
-    void         SetMeasureEdge2(MeasureEdge edge);
-    MeasureEdge  GetMeasureEdge1() const;
-    MeasureEdge  GetMeasureEdge2() const;
+    void SetMeasurementPoint(double timestamp, double duration,
+                             uint64_t track_id, uint32_t level,
+                             const std::string& name);
+    void SetFreehandMeasurementPoint(double timestamp);
+    void ClearMeasurement();
 
-    // Effective timestamp for a point given its edge setting
-    double GetEffectiveTimestamp1() const;
-    double GetEffectiveTimestamp2() const;
+    const MeasurementPoint& GetPoint(int index) const;
+    MeasureEdge             GetEdge(int index) const;
+    void                    SetEdge(int index, MeasureEdge edge);
+    double                  GetEffectiveTimestamp(int index) const;
 
-    // Freehand mode: drag vertical rulers freely
-    void  SetFreehandMode(bool enabled);
-    bool  IsFreehandMode() const;
-    void  SetFreehandOffset1(double offset_ns);
-    void  SetFreehandOffset2(double offset_ns);
-    double GetFreehandOffset1() const;
-    double GetFreehandOffset2() const;
+    void   SetFreehandMode(bool enabled);
+    bool   IsFreehandMode() const;
+    void   SetFreehandOffset(int index, double offset_ns);
+    double GetFreehandOffset(int index) const;
 
 private:
     TimelineFocusManager();
@@ -101,13 +92,10 @@ private:
     Layer                 m_right_click_layer;
 
     MeasurementState m_measurement_state;
-    MeasurementPoint m_measurement_point1;
-    MeasurementPoint m_measurement_point2;
-    MeasureEdge      m_measure_edge1;
-    MeasureEdge      m_measure_edge2;
+    MeasurementPoint m_points[2];
+    MeasureEdge      m_edges[2];
     bool             m_freehand_mode;
-    double           m_freehand_offset1;
-    double           m_freehand_offset2;
+    double           m_freehand_offsets[2];
 };
 
 }  // namespace View

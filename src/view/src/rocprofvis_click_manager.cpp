@@ -20,11 +20,10 @@ TimelineFocusManager::TimelineFocusManager()
 , m_all_layers_focused()
 , m_right_click_layer(Layer::kNone)
 , m_measurement_state(MeasurementState::kInactive)
-, m_measure_edge1(MeasureEdge::kStart)
-, m_measure_edge2(MeasureEdge::kStart)
+, m_points{}
+, m_edges{ MeasureEdge::kStart, MeasureEdge::kStart }
 , m_freehand_mode(false)
-, m_freehand_offset1(0.0)
-, m_freehand_offset2(0.0)
+, m_freehand_offsets{ 0.0, 0.0 }
 {}
 
 void
@@ -75,19 +74,19 @@ TimelineFocusManager::ClearRightClickLayer()
 void
 TimelineFocusManager::EnterMeasurementMode()
 {
-    m_measurement_state  = MeasurementState::kWaitingForFirst;
-    m_measurement_point1 = {};
-    m_measurement_point2 = {};
-    m_freehand_offset1   = 0.0;
-    m_freehand_offset2   = 0.0;
+    m_measurement_state = MeasurementState::kWaitingForFirst;
+    m_points[0]         = {};
+    m_points[1]         = {};
+    m_freehand_offsets[0] = 0.0;
+    m_freehand_offsets[1] = 0.0;
 }
 
 void
 TimelineFocusManager::ExitMeasurementMode()
 {
-    m_measurement_state  = MeasurementState::kInactive;
-    m_measurement_point1 = {};
-    m_measurement_point2 = {};
+    m_measurement_state = MeasurementState::kInactive;
+    m_points[0]         = {};
+    m_points[1]         = {};
 }
 
 bool
@@ -109,14 +108,14 @@ TimelineFocusManager::SetMeasurementPoint(double timestamp, double duration,
 {
     if(m_measurement_state == MeasurementState::kWaitingForFirst)
     {
-        m_measurement_point1 = { timestamp, duration, track_id, level, name, true, false };
-        m_measurement_state  = MeasurementState::kWaitingForSecond;
+        m_points[0]         = { timestamp, duration, track_id, level, name, true, false };
+        m_measurement_state = MeasurementState::kWaitingForSecond;
     }
     else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
             m_measurement_state == MeasurementState::kComplete)
     {
-        m_measurement_point2 = { timestamp, duration, track_id, level, name, true, false };
-        m_measurement_state  = MeasurementState::kComplete;
+        m_points[1]         = { timestamp, duration, track_id, level, name, true, false };
+        m_measurement_state = MeasurementState::kComplete;
     }
 }
 
@@ -125,83 +124,77 @@ TimelineFocusManager::SetFreehandMeasurementPoint(double timestamp)
 {
     if(m_measurement_state == MeasurementState::kWaitingForFirst)
     {
-        m_measurement_point1 = { timestamp, 0.0, 0, 0, {}, true, true };
-        m_freehand_offset1   = 0.0;
-        m_measurement_state  = MeasurementState::kWaitingForSecond;
+        m_points[0]           = { timestamp, 0.0, 0, 0, {}, true, true };
+        m_freehand_offsets[0] = 0.0;
+        m_measurement_state   = MeasurementState::kWaitingForSecond;
     }
     else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
             m_measurement_state == MeasurementState::kComplete)
     {
-        m_measurement_point2 = { timestamp, 0.0, 0, 0, {}, true, true };
-        m_freehand_offset2   = 0.0;
-        m_measurement_state  = MeasurementState::kComplete;
+        m_points[1]           = { timestamp, 0.0, 0, 0, {}, true, true };
+        m_freehand_offsets[1] = 0.0;
+        m_measurement_state   = MeasurementState::kComplete;
     }
 }
 
 void
 TimelineFocusManager::ClearMeasurement()
 {
-    m_measurement_point1 = {};
-    m_measurement_point2 = {};
-    m_freehand_offset1   = 0.0;
-    m_freehand_offset2   = 0.0;
+    m_points[0]           = {};
+    m_points[1]           = {};
+    m_freehand_offsets[0] = 0.0;
+    m_freehand_offsets[1] = 0.0;
     if(m_measurement_state == MeasurementState::kComplete)
-    {
         m_measurement_state = MeasurementState::kWaitingForFirst;
-    }
 }
 
 const MeasurementPoint&
-TimelineFocusManager::GetMeasurementPoint1() const
+TimelineFocusManager::GetPoint(int index) const
 {
-    return m_measurement_point1;
+    return m_points[index & 1];
 }
 
-const MeasurementPoint&
-TimelineFocusManager::GetMeasurementPoint2() const
+MeasureEdge
+TimelineFocusManager::GetEdge(int index) const
 {
-    return m_measurement_point2;
+    return m_edges[index & 1];
 }
 
-void TimelineFocusManager::SetMeasureEdge1(MeasureEdge edge)
-{ m_measure_edge1 = edge; m_freehand_offset1 = 0.0; }
-
-void TimelineFocusManager::SetMeasureEdge2(MeasureEdge edge)
-{ m_measure_edge2 = edge; m_freehand_offset2 = 0.0; }
-
-MeasureEdge TimelineFocusManager::GetMeasureEdge1() const { return m_measure_edge1; }
-MeasureEdge TimelineFocusManager::GetMeasureEdge2() const { return m_measure_edge2; }
-
-double
-TimelineFocusManager::GetEffectiveTimestamp1() const
+void
+TimelineFocusManager::SetEdge(int index, MeasureEdge edge)
 {
-    if(!m_measurement_point1.valid) return 0.0;
-    if(m_measurement_point1.freehand)
-        return m_measurement_point1.timestamp + m_freehand_offset1;
-    double base = (m_measure_edge1 == MeasureEdge::kStart)
-                      ? m_measurement_point1.timestamp
-                      : m_measurement_point1.timestamp + m_measurement_point1.duration;
-    return base + m_freehand_offset1;
+    m_edges[index & 1]           = edge;
+    m_freehand_offsets[index & 1] = 0.0;
 }
 
 double
-TimelineFocusManager::GetEffectiveTimestamp2() const
+TimelineFocusManager::GetEffectiveTimestamp(int index) const
 {
-    if(!m_measurement_point2.valid) return 0.0;
-    if(m_measurement_point2.freehand)
-        return m_measurement_point2.timestamp + m_freehand_offset2;
-    double base = (m_measure_edge2 == MeasureEdge::kStart)
-                      ? m_measurement_point2.timestamp
-                      : m_measurement_point2.timestamp + m_measurement_point2.duration;
-    return base + m_freehand_offset2;
+    int i = index & 1;
+    if(!m_points[i].valid) return 0.0;
+    if(m_points[i].freehand)
+        return m_points[i].timestamp + m_freehand_offsets[i];
+
+    double base = (m_edges[i] == MeasureEdge::kStart)
+                      ? m_points[i].timestamp
+                      : m_points[i].timestamp + m_points[i].duration;
+    return base + m_freehand_offsets[i];
 }
 
-void  TimelineFocusManager::SetFreehandMode(bool enabled) { m_freehand_mode = enabled; }
-bool  TimelineFocusManager::IsFreehandMode() const { return m_freehand_mode; }
-void  TimelineFocusManager::SetFreehandOffset1(double o) { m_freehand_offset1 = o; }
-void  TimelineFocusManager::SetFreehandOffset2(double o) { m_freehand_offset2 = o; }
-double TimelineFocusManager::GetFreehandOffset1() const { return m_freehand_offset1; }
-double TimelineFocusManager::GetFreehandOffset2() const { return m_freehand_offset2; }
+void   TimelineFocusManager::SetFreehandMode(bool enabled)    { m_freehand_mode = enabled; }
+bool   TimelineFocusManager::IsFreehandMode() const           { return m_freehand_mode; }
+
+void
+TimelineFocusManager::SetFreehandOffset(int index, double offset)
+{
+    m_freehand_offsets[index & 1] = offset;
+}
+
+double
+TimelineFocusManager::GetFreehandOffset(int index) const
+{
+    return m_freehand_offsets[index & 1];
+}
 
 }  // namespace View
 }  // namespace RocProfVis

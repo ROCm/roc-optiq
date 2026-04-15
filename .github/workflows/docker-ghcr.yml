@@ -38,8 +38,11 @@ jobs:
       - name: Set up Docker args
         id: setup_args
         run: |
-          echo "distro=${{ split(matrix.os-release, '-')[0] }}" >> $GITHUB_OUTPUT 
-          echo "version=${{ split(matrix.os-release, '-')[1] }}" >> $GITHUB_OUTPUT
+          OS_RELEASE=${{ matrix.os-release }}
+          DISTRO=$(echo $OS_RELEASE | cut -d'-' -f1)
+          VERSION=$(echo $OS_RELEASE | cut -d'-' -f2)
+          echo "distro=$DISTRO" >> $GITHUB_OUTPUT 
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta

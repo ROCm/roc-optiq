@@ -406,13 +406,14 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         {
             m_deferred_click_handled = true;
 
-            if(TimelineFocusManager::GetInstance().IsMeasurementMode())
+            if(TimelineFocusManager::GetInstance().IsMeasurementMode() &&
+               !TimelineFocusManager::GetInstance().IsFreehandMode())
             {
                 TimelineFocusManager::GetInstance().SetMeasurementPoint(
                     chart_item.event.m_start_ts, chart_item.event.m_duration,
                     m_track_id, chart_item.event.m_level, chart_item.event.m_name);
             }
-            else
+            else if(!TimelineFocusManager::GetInstance().IsMeasurementMode())
             {
                 chart_item.selected = !chart_item.selected;
 

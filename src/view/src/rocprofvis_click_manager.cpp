@@ -109,13 +109,31 @@ TimelineFocusManager::SetMeasurementPoint(double timestamp, double duration,
 {
     if(m_measurement_state == MeasurementState::kWaitingForFirst)
     {
-        m_measurement_point1 = { timestamp, duration, track_id, level, name, true };
+        m_measurement_point1 = { timestamp, duration, track_id, level, name, true, false };
         m_measurement_state  = MeasurementState::kWaitingForSecond;
     }
     else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
             m_measurement_state == MeasurementState::kComplete)
     {
-        m_measurement_point2 = { timestamp, duration, track_id, level, name, true };
+        m_measurement_point2 = { timestamp, duration, track_id, level, name, true, false };
+        m_measurement_state  = MeasurementState::kComplete;
+    }
+}
+
+void
+TimelineFocusManager::SetFreehandMeasurementPoint(double timestamp)
+{
+    if(m_measurement_state == MeasurementState::kWaitingForFirst)
+    {
+        m_measurement_point1 = { timestamp, 0.0, 0, 0, {}, true, true };
+        m_freehand_offset1   = 0.0;
+        m_measurement_state  = MeasurementState::kWaitingForSecond;
+    }
+    else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
+            m_measurement_state == MeasurementState::kComplete)
+    {
+        m_measurement_point2 = { timestamp, 0.0, 0, 0, {}, true, true };
+        m_freehand_offset2   = 0.0;
         m_measurement_state  = MeasurementState::kComplete;
     }
 }
@@ -158,6 +176,8 @@ double
 TimelineFocusManager::GetEffectiveTimestamp1() const
 {
     if(!m_measurement_point1.valid) return 0.0;
+    if(m_measurement_point1.freehand)
+        return m_measurement_point1.timestamp + m_freehand_offset1;
     double base = (m_measure_edge1 == MeasureEdge::kStart)
                       ? m_measurement_point1.timestamp
                       : m_measurement_point1.timestamp + m_measurement_point1.duration;
@@ -168,6 +188,8 @@ double
 TimelineFocusManager::GetEffectiveTimestamp2() const
 {
     if(!m_measurement_point2.valid) return 0.0;
+    if(m_measurement_point2.freehand)
+        return m_measurement_point2.timestamp + m_freehand_offset2;
     double base = (m_measure_edge2 == MeasureEdge::kStart)
                       ? m_measurement_point2.timestamp
                       : m_measurement_point2.timestamp + m_measurement_point2.duration;

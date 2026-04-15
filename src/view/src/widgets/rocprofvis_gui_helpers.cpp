@@ -246,10 +246,10 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
     if(tooltip && strlen(tooltip) > 0)
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
-        if(ImGui::BeginItemTooltip())
+        if(BeginItemTooltipStyled())
         {
             ImGui::TextUnformatted(tooltip);
-            ImGui::EndTooltip();
+            EndTooltipStyled();
         }
         ImGui::PopStyleVar();
     }

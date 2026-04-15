@@ -708,12 +708,12 @@ ComputeComparisonView::RenderToolbar()
     if(m_pinned_item)
     {
         VerticalSeparator(&m_settings);
+        ImGui::TextUnformatted("Pinned");
+        ImGui::SameLine();
 
         ImFont* icon_font = m_settings.GetFontManager().GetIconFont(FontType::kDefault);
-
         const char* icon =
-            m_pinned_item->m_visible ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
-
+            m_pinned_item->m_visible ? ICON_CHEVRON_DOWN : ICON_CHEVRON_LEFT;
         ImGui::PushFont(icon_font);
         // use larger icon for consistent spacing
         ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN); 
@@ -729,9 +729,7 @@ ComputeComparisonView::RenderToolbar()
                       m_settings.GetColor(Colors::kTransparent)))
         {
             m_pinned_item->m_visible = !m_pinned_item->m_visible;
-        }
-        ImGui::SameLine();
-        ImGui::TextUnformatted("Pinned");
+        }        
     }
     ImGui::SameLine();
     m_toolbar_available_width =

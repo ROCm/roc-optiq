@@ -41,11 +41,13 @@ jobs:
           OS_RELEASE=${{ matrix.os-release }}
           DISTRO=$(echo $OS_RELEASE | cut -d'-' -f1)
           VERSION=$(echo $OS_RELEASE | cut -d'-' -f2)
+          DOCKER_FILE=docker/Dockerfile.$DISTRO
           if [[ "$DISTRO" == "rhel" ]]; then
             DISTRO=rockylinux
           fi
           echo "distro=$DISTRO" >> $GITHUB_OUTPUT 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "docker_file=$DOCKER_FILE" >> $GITHUB_OUTPUT
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -57,7 +59,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
-          file: docker/Dockerfile.${{ steps.setup_args.outputs.distro }}
+          file: ${{ steps.setup_args.outputs.docker_file }}
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |

@@ -532,10 +532,15 @@ void
 ComputeComparisonView::RenderToolbar()
 {
     const ImGuiStyle& style = m_settings.GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::ColorConvertU32ToFloat4(
+                                                m_settings.GetColor(Colors::kBgPanel)));
+    ImGui::PushStyleColor(
+        ImGuiCol_Border,
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kBorderColor)));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::BeginChild("toolbar", ImVec2(-1, 0),
-                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle);
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
@@ -718,6 +723,7 @@ ComputeComparisonView::RenderToolbar()
     ImGui::PopStyleVar(2);
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
 }
 
 void

@@ -48,47 +48,46 @@ MetricTableBase::Render()
                          ImVec2(0, GetTableHight()), false,
                          ImGuiWindowFlags_HorizontalScrollbar))
     {
-
         int num_columns = static_cast<int>(m_columns.size());
-        if(!ImGui::BeginTable(("##" + m_table_title).c_str(), num_columns,
+        if(ImGui::BeginTable(("##" + m_table_title).c_str(), num_columns,
                               m_table_flags))
-            return;
-
-        for (const auto& column : m_columns)
         {
-            if (column.first == 0)
+            for (const auto& column : m_columns)
             {
-                const float font_size = ImGui::GetFontSize();
-                ImGui::TableSetupColumn(column.second.c_str(),
-                                        ImGuiTableColumnFlags_WidthFixed, font_size);
+                if (column.first == 0)
+                {
+                    const float font_size = ImGui::GetFontSize();
+                    ImGui::TableSetupColumn(column.second.c_str(),
+                                            ImGuiTableColumnFlags_WidthFixed, font_size);
+                }
+                else
+                {
+                    ImGui::TableSetupColumn(column.second.c_str());
+                }
             }
-            else
+
+            ImGui::TableHeadersRow();
+
+            uint32_t row_idx = 0;
+            for(auto& row : m_rows)
             {
-                ImGui::TableSetupColumn(column.second.c_str());
+                ImGui::PushID(row_idx++);
+                ImGui::TableNextRow();
+
+                for(auto column_index = 0; column_index < m_columns.size() - 1;
+                    column_index++)
+                {
+                    auto menu_func = [&](const char* value_to_copy) {
+                        this->ContextMenu(value_to_copy, column_index, row);
+                    };
+                    RenderRowValues(column_index, row, menu_func);
+                }
+
+                RenderUnitValue(row);
+                ImGui::PopID();
             }
+            ImGui::EndTable();
         }
-
-        ImGui::TableHeadersRow();
-
-        uint32_t row_idx = 0;
-        for(auto& row : m_rows)
-        {
-            ImGui::PushID(row_idx++);
-            ImGui::TableNextRow();
-
-            for(auto column_index = 0; column_index < m_columns.size() - 1;
-                column_index++)
-            {
-                auto menu_func = [&](const char* value_to_copy) {
-                    this->ContextMenu(value_to_copy, column_index, row);
-                };
-                RenderRowValues(column_index, row, menu_func);
-            }
-
-            RenderUnitValue(row);
-            ImGui::PopID();
-        }
-        ImGui::EndTable();
     }
     ImGui::EndChild();
 }
@@ -251,6 +250,16 @@ MetricTableBase::AddMetricToKernelDetails(const MetricId& metric_id,
                                                                m_event_source_id));
 }
 
+bool
+MetricTableBase::IsValueColumn(uint32_t column_index) const
+{
+    // not equal pin column, MetricId, Metric Name and Metric Unit
+    return column_index != 0 &&
+           column_index != 1 &&
+           column_index != 2 &&
+           column_index != LAST_INDEX;
+}
+
 //---------------------------------------------------------
 
 void
@@ -290,7 +299,8 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
             }
 
         }
-        if(column_index != 0 && column_index != 1)
+        if(IsValueColumn(column_index))
+        // not equal pin column, MetricId, Metric Name and Metric Unit
         {
             label = " " + std::string(ICON_ARROW_RIGHT) + " Send Metric to kernel details";
             if(!m_event_source_id.empty() && ImGui::MenuItem(label.c_str()))
@@ -379,121 +389,6 @@ MetricTable::Empty() const
 
 //---------------------------------------------------------
 
-MetricTableWidget::MetricTableWidget(DataProvider& data_provider,
-                                     std::shared_ptr<ComputeSelection> compute_selection,
-                                     uint32_t category_id, uint32_t table_id)
-: RocWidget()
-, m_data_provider(data_provider)
-, m_compute_selection(compute_selection)
-, m_category_id(category_id)
-, m_table_id(table_id)
-, m_client_id(IdGenerator::GetInstance().GenerateId())
-{
-    m_widget_name = GenUniqueName("MetricTableWidget");
-}
-
-void
-MetricTableWidget::Render()
-{
-    m_table.Render();
-}
-
-void
-MetricTableWidget::Clear()
-{
-    m_table.Clear();
-}
-
-void
-MetricTableWidget::FetchMetrics()
-{
-    m_table.Clear();
-    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
-
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
-       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
-    {
-        return;
-    }
-
-    m_data_provider.FetchMetrics(MetricsRequestParams(
-        workload_id, {kernel_id}, {{m_category_id, m_table_id, std::nullopt}}, m_client_id));
-}
-
-void
-MetricTableWidget::UpdateTable()
-{
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
-       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
-    {
-        return;
-    }
-
-    auto& model = m_data_provider.ComputeModel();
-    if(!model.GetWorkloads().count(workload_id))
-        return;
-
-    const auto& tree = model.GetWorkloads().at(workload_id).available_metrics.tree;
-    if(!tree.count(m_category_id) || !tree.at(m_category_id).tables.count(m_table_id))
-        return;
-
-    m_table.Populate(tree.at(m_category_id).tables.at(m_table_id), [&](uint32_t eid) {
-        return model.GetKernelMetricValue(m_client_id, kernel_id, m_category_id, m_table_id, eid);
-    });
-}
-
-//---------------------------------------------------------
-
-WorkloadMetricTableWidget::WorkloadMetricTableWidget(
-    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
-    uint32_t category_id, uint32_t table_id)
-: MetricTableWidget(data_provider, compute_selection, category_id, table_id)
-{}
-
-void
-WorkloadMetricTableWidget::FetchMetrics()
-{
-    m_table.Clear();
-    m_data_provider.ComputeModel().ClearWorkloadMetricValues(m_client_id);
-
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
-    {
-        return;
-    }
-
-    m_data_provider.FetchMetrics(MetricsRequestParams(
-        workload_id, {}, { { m_category_id, m_table_id, std::nullopt } }, m_client_id));
-}
-
-void
-WorkloadMetricTableWidget::UpdateTable()
-{
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
-    {
-        return;
-    }
-
-    auto& model = m_data_provider.ComputeModel();
-    if(!model.GetWorkloads().count(workload_id)) return;
-
-    const auto& tree = model.GetWorkloads().at(workload_id).available_metrics.tree;
-    if(!tree.count(m_category_id) || !tree.at(m_category_id).tables.count(m_table_id))
-        return;
-
-    m_table.Populate(tree.at(m_category_id).tables.at(m_table_id), [&](uint32_t eid) {
-        return model.GetWorkloadMetricValue(m_client_id, workload_id, m_category_id,
-                                            m_table_id, eid);
-    });
-}
-
-//---------------------------------------------------------
-
 PinedMetricTable::PinedMetricTable(DataProvider&                     data_provider,
                                    std::shared_ptr<ComputeSelection> compute_selection,
                                    uint64_t                          client_id)
@@ -530,8 +425,7 @@ PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
                     { row.first.category_id, row.first.table_id, row.first.entry_id });
             }
         }
-        if(column_index != 0 && column_index != 1 && column_index != LAST_INDEX)
-        // not equal MetricId, Metric Name and Metric Unit
+        if(IsValueColumn(column_index))
         {
             label = " " + std::string(ICON_ARROW_RIGHT) + " Send Metric to kernel details";
             if(!m_event_source_id.empty() && ImGui::MenuItem(label.c_str()))
@@ -679,5 +573,73 @@ PinedMetricTable::Update()
     }
 }
 
+//---------------------------------------------------------
+
+MetricTableWidget::MetricTableWidget(DataProvider& data_provider,
+                                     std::shared_ptr<ComputeSelection> compute_selection,
+                                     uint32_t category_id, uint32_t table_id)
+: RocWidget()
+, m_data_provider(data_provider)
+, m_compute_selection(compute_selection)
+, m_category_id(category_id)
+, m_table_id(table_id)
+, m_client_id(IdGenerator::GetInstance().GenerateId())
+{
+    m_widget_name = GenUniqueName("MetricTableWidget");
+}
+
+void
+MetricTableWidget::Render()
+{
+    m_table.Render();
+}
+
+void
+MetricTableWidget::Clear()
+{
+    m_table.Clear();
+}
+
+void
+MetricTableWidget::FetchMetrics()
+{
+    m_table.Clear();
+    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    m_data_provider.FetchMetrics(MetricsRequestParams(
+        workload_id, {kernel_id}, {{m_category_id, m_table_id, std::nullopt}}, m_client_id));
+}
+
+void
+MetricTableWidget::UpdateTable()
+{
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    auto& model = m_data_provider.ComputeModel();
+    if(!model.GetWorkloads().count(workload_id))
+        return;
+
+    const auto& tree = model.GetWorkloads().at(workload_id).available_metrics.tree;
+    if(!tree.count(m_category_id) || !tree.at(m_category_id).tables.count(m_table_id))
+        return;
+
+    m_table.Populate(tree.at(m_category_id).tables.at(m_table_id), [&](uint32_t eid) {
+        return model.GetMetricValue(m_client_id, kernel_id, m_category_id, m_table_id, eid);
+    });
+}
 }  // namespace View
 }  // namespace RocProfVis

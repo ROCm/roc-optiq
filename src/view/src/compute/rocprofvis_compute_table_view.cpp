@@ -225,11 +225,6 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
     widget.Populate(*table, [&](uint32_t eid) {
         return model.GetMetricValue(m_client_id, kernel_id, category_id, table->id, eid);
     });
-
-    if(!widget.Empty())
-    {
-        m_table_widgets[key] = std::move(widget);
-    }
 }
 
 void

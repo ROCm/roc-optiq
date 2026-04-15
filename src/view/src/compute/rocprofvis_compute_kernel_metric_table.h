@@ -39,6 +39,8 @@ private:
     bool ValidateFilterExpression(const char* expr, bool is_numeric_column);
     void ComputeColumnMaxValues(const std::vector<std::vector<std::string>>& data);
     void RenderBarChartContextMenu(int col);
+    void AppendMetricQuery(const std::string& query, const AvailableMetrics::Entry& entry,
+                           const std::string& value_name);
 
     struct MetricInfo
     {

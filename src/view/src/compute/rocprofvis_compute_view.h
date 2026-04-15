@@ -46,7 +46,6 @@ private:
 
     DataProvider                     m_data_provider;
     std::shared_ptr<RocCustomWidget> m_tool_bar;
-    std::shared_ptr<ComputeKernelDetailsView> m_kernel_details_view;
 };
 
 }  // namespace View

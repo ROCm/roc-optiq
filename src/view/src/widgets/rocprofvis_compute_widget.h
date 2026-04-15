@@ -48,6 +48,7 @@ protected:
     void RenderUnitValue(std::pair<const MetricId, Row>& row);
     void FillDefaultColumns();
     void AddMetricToKernelDetails(const MetricId& metric_id, const std::string& value_name);
+    bool IsValueColumn(uint32_t column_index) const;
 
     std::map<uint32_t, std::string>                 m_columns;
     std::uint32_t                                   m_lust_column_index = 0;

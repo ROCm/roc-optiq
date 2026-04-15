@@ -62,5 +62,5 @@ jobs:
             VERSION=${{ steps.setup_args.outputs.version }}
             VULKAN_SDK_VERSION=${{ env.VULKAN_SDK_VERSION }}
           tags: |
-            ghcr.io/ROCm/optiq-ci-${{ steps.setup_args.outputs.distro }}:${{ steps.setup_args.outputs.version }}
+            ghcr.io/rocm/optiq-ci-${{ steps.setup_args.outputs.distro }}:${{ steps.setup_args.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}

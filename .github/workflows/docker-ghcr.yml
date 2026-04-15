@@ -1,0 +1,63 @@
+name: Build and Publish GHCR Docker Images for Optiq CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-ghcr.yml'
+
+env:
+  VULKAN_SDK_VERSION: 1.4.328.1
+  
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os-release: [ 'ubuntu-22.04', 'ubuntu-24.04', 'rhel-9', 'rhel-10' ]
+        vulkan-sdk: [ '1.4.328.1' ]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: docker
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker args
+        id: setup_args
+        run: |
+          echo "distro=${{ split(matrix.os-release, '-')[0] }}" >> $GITHUB_OUTPUT 
+          echo "version=${{ split(matrix.os-release, '-')[1] }}" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ghcr.io/ROCm/optiq-ci-${{ steps.setup_args.outputs.distro }}
+
+      - name: Build Optiq CI Container (Does not Push on PR)
+        id: docker_build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          file: docker/Dockerfile.${{ steps.setup_args.outputs.distro }}
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            DISTRO=${{ steps.setup_args.outputs.distro }}
+            VERSION=${{ steps.setup_args.outputs.version }}
+            VULKAN_SDK_VERSION=${{ env.VULKAN_SDK_VERSION }}
+          tags: |
+            ghcr.io/ROCm/optiq-ci-${{ steps.setup_args.outputs.distro }}:${{ steps.setup_args.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}

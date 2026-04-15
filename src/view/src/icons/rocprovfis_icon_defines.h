@@ -6,8 +6,7 @@ namespace RocProfVis
 namespace View
 {
 constexpr ImWchar icon_ranges[] = {
-    0xF123, 0xF123,
-    0xF125, 0xF125,
+    0xF123, 0xF125,
     0xF128, 0xF128,
     0xF133, 0xF133, 
     0xF13D, 0xF13D, 
@@ -52,6 +51,7 @@ constexpr const char* ICON_LIST          = u8"\uF454";
 constexpr const char* ICON_STICKY_NOTE   = u8"\uF472";
 constexpr const char* ICON_CHART_PIE     = u8"\uF484";
 constexpr const char* ICON_CHEVRON_DOWN  = u8"\uF123";
+constexpr const char* ICON_CHEVRON_LEFT  = u8"\uF124";
 constexpr const char* ICON_CHEVRON_RIGHT = u8"\uF125";
 
 }  // namespace View

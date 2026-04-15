@@ -213,9 +213,8 @@ RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int
 }
 
 bool
-IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
-           const char* tooltip, ImVec2 tooltip_padding, bool frameless,
-           ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
+IconButton(const char* icon, ImFont* icon_font, ImVec2 size, const char* tooltip,
+           bool frameless, ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
            ImU32 bg_color_active, const char* id)
 {
     if(id && strlen(id) > 0)
@@ -243,15 +242,10 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
     ImGui::PushFont(icon_font);
     bool clicked = ImGui::Button(icon, size);
     ImGui::PopFont();
-    if(tooltip && strlen(tooltip) > 0)
+    if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
-        if(BeginItemTooltipStyled())
-        {
-            ImGui::TextUnformatted(tooltip);
-            EndTooltipStyled();
-        }
-        ImGui::PopStyleVar();
+        ImGui::TextUnformatted(tooltip);
+        EndTooltipStyled();
     }
     ImGui::PopStyleColor(3);
     ImGui::PopStyleVar();
@@ -296,13 +290,15 @@ InputTextWithClear(const char* id, const char* hint, char* buf,
         if(width >= ImGui::CalcTextSize(ICON_X_CIRCLED).x + 2 * style.FramePadding.x)
         {
             ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetItemRectMax().x - 2 * style.FramePadding.x -
-                                 ImGui::CalcTextSize(ICON_X_CIRCLED).x);
+            ImGui::SetCursorScreenPos(
+                ImVec2(ImGui::GetItemRectMax().x - 2 * style.FramePadding.x -
+                           ImGui::CalcTextSize(ICON_X_CIRCLED).x,
+                       ImGui::GetCursorScreenPos().y));
             ImGui::PopFont();
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
-            input_cleared = IconButton(ICON_X_CIRCLED, icon_font, ImVec2(0, 0), "Clear",
-                                       style.WindowPadding, false, style.FramePadding,
-                                       bg_color, bg_color, bg_color);
+            input_cleared =
+                IconButton(ICON_X_CIRCLED, icon_font, ImVec2(0, 0), "Clear", false,
+                           style.FramePadding, bg_color, bg_color, bg_color);
             ImGui::PopStyleVar();
         }
         else

@@ -44,6 +44,11 @@ constexpr float COL_INVOCATION_CHAR_LIMIT = COL_FILTER_CHAR_LIMIT;
 
 constexpr float kTooltipMaxWidth = 600.0f;
 
+constexpr const char* JSON_KEY_SELECTION            = "selection";
+constexpr const char* JSON_KEY_SELECTION_ID         = "id";
+constexpr const char* JSON_KEY_SELECTION_NAME       = "name";
+constexpr const char* JSON_KEY_SELECTION_VALUE_NAME = "value";
+
 KernelMetricTable::KernelMetricTable(DataProvider&                     data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -62,13 +67,17 @@ KernelMetricTable::KernelMetricTable(DataProvider&                     data_prov
 , m_permanent_column_names({ "ID", "Name", "Duration (ns)", "Invocations" })
 {
     m_widget_name = GenUniqueName("KernelMetricTable");
+    m_preset      = std::make_unique<Preset>(*this);
 }
 
 void
 KernelMetricTable::ClearData()
 {
+    m_metrics_info.clear();
     m_metrics_params.clear();
     m_metrics_column_names.clear();
+    m_bar_chart_columns.clear();
+    ClearAllFilters();
 }
 
 void
@@ -80,7 +89,6 @@ KernelMetricTable::FetchData(uint32_t workload_id)
         spdlog::warn("Invalid workload ID, cannot fetch kernel metric data");
         return;
     }
-
     m_query_builder.SetWorkload(m_data_provider.ComputeModel().GetWorkload(workload_id));
     m_fetch_requested = true;
 }
@@ -100,9 +108,11 @@ KernelMetricTable::HandleNewData()
     size_t metric_count = request_params->m_metric_selectors.size();
     for(size_t i = 0; i < metric_count; i++)
     {
-        m_metrics_column_names.push_back(m_metrics_info[i].entry.name + " " +
-                                         m_metrics_info[i].value_name + " " + "(" +
-                                         m_metrics_info[i].entry.unit + ")");
+        m_metrics_column_names.push_back(
+            m_metrics_info[i].entry.name + " " + m_metrics_info[i].value_name +
+            (m_metrics_info[i].entry.unit.empty()
+                 ? ""
+                 : " (" + m_metrics_info[i].entry.unit + ")"));
     }
 
     ComputeColumnMaxValues(table.GetTableData());
@@ -118,6 +128,28 @@ KernelMetricTable::Update()
 
     if(!request_pending && m_fetch_requested)
     {
+        const WorkloadInfo* workload =
+            m_data_provider.ComputeModel().GetWorkload(m_workload_id);
+        if(workload)
+        {
+            // Update selected entries for new workload
+            for(MetricInfo& metric : m_metrics_info)
+            {
+                if(workload->available_metrics.tree.count(metric.entry.category_id) > 0 &&
+                   workload->available_metrics.tree.at(metric.entry.category_id)
+                           .tables.count(metric.entry.table_id) > 0 &&
+                   workload->available_metrics.tree.at(metric.entry.category_id)
+                           .tables.at(metric.entry.table_id)
+                           .entries.count(metric.entry.id) > 0)
+                {
+                    metric.entry =
+                        workload->available_metrics.tree.at(metric.entry.category_id)
+                            .tables.at(metric.entry.table_id)
+                            .entries.at(metric.entry.id);
+                }
+            }
+        }
+
         // Build filter map from vector - only include active filters
         std::unordered_map<uint64_t, std::string> filter_map;
 
@@ -224,8 +256,8 @@ KernelMetricTable::Render()
     if(IconButton(icon, icon_font,
                   ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
                          icon_size.y + style.FramePadding.y * 2.0f),
-                  m_show_kernel_table ? "Hide Table" : "Show Table", style.WindowPadding,
-                  false, style.FramePadding,
+                  m_show_kernel_table ? "Hide Table" : "Show Table", false,
+                  style.FramePadding,
                   SettingsManager::GetInstance().GetColor(Colors::kTransparent),
                   SettingsManager::GetInstance().GetColor(Colors::kButtonHovered),
                   SettingsManager::GetInstance().GetColor(Colors::kTransparent)))
@@ -945,6 +977,115 @@ KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_co
         };
         return starts_with_like(trimmed);
     }
+}
+
+KernelMetricTable::Preset::Preset(KernelMetricTable& widget)
+: PresetComponent(PresetManager::ComputeKernelMetricTable,
+                  widget.m_data_provider.GetTraceFilePath())
+, m_widget(widget)
+{}
+
+bool
+KernelMetricTable::Preset::ToJson(jt::Json& json)
+{
+    if(!m_widget.m_metrics_info.empty())
+    {
+        jt::Json& selection = json[JSON_KEY_SELECTION];
+        for(size_t i = 0; i < m_widget.m_metrics_info.size(); i++)
+        {
+            const MetricInfo& info                      = m_widget.m_metrics_info[i];
+            selection[i][JSON_KEY_SELECTION_ID][0]      = info.entry.category_id;
+            selection[i][JSON_KEY_SELECTION_ID][1]      = info.entry.table_id;
+            selection[i][JSON_KEY_SELECTION_ID][2]      = info.entry.id;
+            selection[i][JSON_KEY_SELECTION_NAME]       = info.entry.name;
+            selection[i][JSON_KEY_SELECTION_VALUE_NAME] = info.value_name;
+        }
+    }
+    return true;
+}
+
+bool
+KernelMetricTable::Preset::FromJson(jt::Json& json)
+{
+    bool result = true;
+    if(json.isObject() && json.contains(JSON_KEY_SELECTION))
+    {
+        jt::Json& selection = json[JSON_KEY_SELECTION];
+        if(selection.isArray())
+        {
+            for(jt::Json& obj : selection.getArray())
+            {
+                result &= obj.isObject() && obj.contains(JSON_KEY_SELECTION_ID) &&
+                          obj.contains(JSON_KEY_SELECTION_NAME) &&
+                          obj.contains(JSON_KEY_SELECTION_VALUE_NAME) &&
+                          obj[JSON_KEY_SELECTION_ID].isArray() &&
+                          obj[JSON_KEY_SELECTION_ID].getArray().size() == 3 &&
+                          obj[JSON_KEY_SELECTION_ID].getArray()[0].isLong() &&
+                          obj[JSON_KEY_SELECTION_ID].getArray()[1].isLong() &&
+                          obj[JSON_KEY_SELECTION_ID].getArray()[2].isLong() &&
+                          obj[JSON_KEY_SELECTION_NAME].isString() &&
+                          obj[JSON_KEY_SELECTION_VALUE_NAME].isString();
+            }
+            if(result)
+            {
+                const WorkloadInfo* workload =
+                    m_widget.m_data_provider.ComputeModel().GetWorkload(
+                        m_widget.m_workload_id);
+                result = workload;
+                if(result)
+                {
+                    Reset();
+                    for(jt::Json& obj : selection.getArray())
+                    {
+                        uint32_t category_id = static_cast<uint32_t>(
+                            obj[JSON_KEY_SELECTION_ID].getArray()[0].getLong());
+                        uint32_t table_id = static_cast<uint32_t>(
+                            obj[JSON_KEY_SELECTION_ID].getArray()[1].getLong());
+                        uint32_t id = static_cast<uint32_t>(
+                            obj[JSON_KEY_SELECTION_ID].getArray()[2].getLong());
+                        std::string& name = obj[JSON_KEY_SELECTION_NAME].getString();
+                        std::string& value_name =
+                            obj[JSON_KEY_SELECTION_VALUE_NAME].getString();
+                        AvailableMetrics::Entry entry;
+                        if(workload->available_metrics.tree.count(category_id) > 0 &&
+                           workload->available_metrics.tree.at(category_id)
+                                   .tables.count(table_id) > 0 &&
+                           workload->available_metrics.tree.at(category_id)
+                                   .tables.at(table_id)
+                                   .entries.count(id) > 0 &&
+                           workload->available_metrics.tree.at(category_id)
+                                   .tables.at(table_id)
+                                   .entries.at(id)
+                                   .name == name)
+                        {
+                            entry = workload->available_metrics.tree.at(category_id)
+                                        .tables.at(table_id)
+                                        .entries.at(id);
+                        }
+                        else
+                        {
+                            entry.category_id = category_id;
+                            entry.table_id    = table_id;
+                            entry.id          = id;
+                            entry.name        = name;
+                        }
+                        m_widget.AppendMetricQuery(
+                            std::to_string(category_id) + "." + std::to_string(table_id) +
+                                "." + std::to_string(id) + ":" + value_name,
+                            std::move(entry), value_name);
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
+void
+KernelMetricTable::Preset::Reset()
+{
+    m_widget.ClearData();
+    m_widget.m_fetch_requested = true;
 }
 
 }  // namespace View

@@ -11,8 +11,11 @@ namespace RocProfVis
 namespace View
 {
 
-ComputeTableView::ComputeTableView(
-    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
+constexpr const char* JSON_KEY_PINNED_METRICS    = "pins";
+constexpr const char* JSON_KEY_PINNED_METRICS_ID = "id";
+
+ComputeTableView::ComputeTableView(DataProvider&                     data_provider,
+                                   std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
@@ -69,6 +72,7 @@ ComputeTableView::ComputeTableView(
         static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
 
     m_widget_name = GenUniqueName("ComputeTableView");
+    m_preset = std::make_unique<Preset>(*this);
 }
 
 ComputeTableView::~ComputeTableView()
@@ -276,6 +280,84 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& category)
     }
 
     ImGui::EndChild();
+}
+
+ComputeTableView::Preset::Preset(ComputeTableView& widget)
+: PresetComponent(PresetManager::ComputeTableView,
+                  widget.m_data_provider.GetTraceFilePath())
+, m_widget(widget)
+{}
+
+bool
+ComputeTableView::Preset::ToJson(jt::Json& json)
+{
+    if(!m_widget.m_pinned_metrics.empty())
+    {
+        jt::Json& pins = json[JSON_KEY_PINNED_METRICS];
+        int       i    = 0;
+        for(const MetricId& id : m_widget.m_pinned_metrics)
+        {
+            pins[i][JSON_KEY_PINNED_METRICS_ID][0] = id.category_id;
+            pins[i][JSON_KEY_PINNED_METRICS_ID][1] = id.table_id;
+            pins[i][JSON_KEY_PINNED_METRICS_ID][2] = id.entry_id;
+            i++;
+        }
+    }
+    return true;
+}
+
+bool
+ComputeTableView::Preset::FromJson(jt::Json& json)
+{
+    bool result = true;
+    if(json.isObject() && json.contains(JSON_KEY_PINNED_METRICS))
+    {
+        jt::Json& pins = json[JSON_KEY_PINNED_METRICS];
+        if(pins.isArray())
+        {
+            for(jt::Json& obj : pins.getArray())
+            {
+                result &= obj.isObject() && obj.contains(JSON_KEY_PINNED_METRICS_ID) &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].isArray() &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].getArray().size() == 3 &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].getArray()[0].isLong() &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].getArray()[1].isLong() &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].getArray()[2].isLong();
+            }
+            if(result)
+            {
+                Reset();
+                for(jt::Json& obj : pins.getArray())
+                {
+                    MetricId id;
+                    id.category_id = static_cast<uint32_t>(
+                        obj[JSON_KEY_PINNED_METRICS_ID].getArray()[0].getLong());
+                    id.table_id = static_cast<uint32_t>(
+                        obj[JSON_KEY_PINNED_METRICS_ID].getArray()[1].getLong());
+                    id.entry_id = static_cast<uint32_t>(
+                        obj[JSON_KEY_PINNED_METRICS_ID].getArray()[2].getLong());
+                    m_widget.m_pinned_metrics.insert(std::move(id));
+                }
+                m_widget.RestoreMetricPining();
+                m_widget.m_pinned_metric_table.RefillTable(m_widget.m_pinned_metrics);
+            }
+        }
+    }
+    return result;
+}
+
+void
+ComputeTableView::Preset::Reset()
+{
+    for(const MetricId& id : m_widget.m_pinned_metrics)
+    {
+        if(m_widget.m_table_widgets.count(id.GetTableKey()) > 0)
+        {
+            m_widget.m_table_widgets.at(id.GetTableKey()).ChangePinState(id);
+        }
+    }
+    m_widget.m_pinned_metrics.clear();
+    m_widget.m_pinned_metric_table.RefillTable(m_widget.m_pinned_metrics);
 }
 
 }  // namespace View

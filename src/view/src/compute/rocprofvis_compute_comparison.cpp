@@ -49,21 +49,21 @@ ComputeComparisonView::ComputeComparisonView(
 , m_layout(nullptr)
 , m_toolbar_available_width(0.0f)
 , m_tab_container(nullptr)
-, m_bookmark_table(nullptr)
-, m_bookmark_item(nullptr)
-, m_max_bookmark_height(FLT_MAX)
+, m_pinned_table(nullptr)
+, m_pinned_item(nullptr)
+, m_max_pinned_height(FLT_MAX)
 {
     m_widget_name = GenUniqueName("ComputeComparison");
-    m_bookmark_table =
+    m_pinned_table =
         std::make_unique<Table>("",
                                 ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                                     ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY,
                                 3, 1);
-    m_bookmark_table->SetRowSelectionHandler(
+    m_pinned_table->SetRowSelectionHandler(
         [this](const Table& table, const size_t index, const bool state) {
             if(!state)
             {
-                RemoveBookmark(table, index);
+                RemovePinnedMetric(table, index);
             }
         });
     LayoutItem toolbar_item(-1, 0);
@@ -73,7 +73,7 @@ ComputeComparisonView::ComputeComparisonView(
     LayoutItem bookmarks_item(-1, 0);
     bookmarks_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
     bookmarks_item.m_item =
-        std::make_shared<RocCustomWidget>([this]() { RenderBookmarks(); });
+        std::make_shared<RocCustomWidget>([this]() { RenderPinnedMetrics(); });
     LayoutItem content_item(-1, 0);
     content_item.m_item = std::make_shared<RocCustomWidget>([this]() { RenderTables(); });
     std::vector<LayoutItem> layout_items;
@@ -82,7 +82,7 @@ ComputeComparisonView::ComputeComparisonView(
     int bookmark_index = static_cast<int>(layout_items.size() - 1);
     layout_items.push_back(content_item);
     m_layout              = std::make_shared<VFixedContainer>(layout_items);
-    m_bookmark_item       = m_layout->GetMutableAt(bookmark_index);
+    m_pinned_item       = m_layout->GetMutableAt(bookmark_index);
     m_baseline_request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchMetrics, m_client_id_baseline);
     m_target_request_id = RequestIdBuilder::MakeClientRequestId(
@@ -117,7 +117,7 @@ ComputeComparisonView::Update()
     if(m_data_changed)
     {
         UpdateMetrics();
-        UpdateBookmarks();
+        UpdatePinnedMetrics();
         if(m_tab_container && !m_active_tab_id.empty())
         {
             m_tab_container->SetActiveTab(m_active_tab_id);
@@ -134,9 +134,9 @@ ComputeComparisonView::Update()
             }
         }
     }
-    if(m_bookmark_table)
+    if(m_pinned_table)
     {
-        m_bookmark_table->Update();
+        m_pinned_table->Update();
     }
 }
 
@@ -145,7 +145,7 @@ ComputeComparisonView::Render()
 {
     m_loading = m_data_provider.IsRequestPending(m_baseline_request_id) ||
                 m_data_provider.IsRequestPending(m_target_request_id);
-    m_max_bookmark_height =
+    m_max_pinned_height =
         ImGui::GetWindowHeight() * 0.5f - ImGui::GetFrameHeightWithSpacing();
     if(m_layout)
     {
@@ -498,11 +498,11 @@ ComputeComparisonView::UpdateMetrics()
                         [this](const Table& table, const size_t index, const bool state) {
                             if(state)
                             {
-                                AddBookmark(table, index);
+                                AddPinnedMetric(table, index);
                             }
                             else
                             {
-                                RemoveBookmark(table, index);
+                                RemovePinnedMetric(table, index);
                             }
                         });
                     empty &= category_model.tables[i]->Rows().empty();
@@ -660,15 +660,15 @@ ComputeComparisonView::RenderToolbar()
                             0)))
     {
         m_filter_common_metrics = !m_filter_common_metrics;
-        if(m_bookmark_table)
+        if(m_pinned_table)
         {
             if(m_filter_common_metrics)
             {
-                m_bookmark_table->ApplyRowFilter(ROW_TAG_INVALID_MATCH);
+                m_pinned_table->ApplyRowFilter(ROW_TAG_INVALID_MATCH);
             }
             else
             {
-                m_bookmark_table->RemoveRowFilter(ROW_TAG_INVALID_MATCH);
+                m_pinned_table->RemoveRowFilter(ROW_TAG_INVALID_MATCH);
             }
         }
         for(CategoryModel& category_model : m_categories)
@@ -695,22 +695,38 @@ ComputeComparisonView::RenderToolbar()
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
         ImGui::TextUnformatted(
             "Toggle displaying of mismatched (grey-shaded) metrics, such "
-            "as archetecture specific metrics "
-            "when comparing across GPU archetectures.");
+            "as architecture specific metrics "
+            "when comparing across GPU architectures.");
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }
-    if(m_bookmark_item)
+    if(m_pinned_item)
     {
         VerticalSeparator(&m_settings);
-        ImGui::TextUnformatted("Bookmarks");
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + style.FramePadding.x);
-        if(ImGui::ArrowButton("toggle_bookmarks",
-                              m_bookmark_item->m_visible ? ImGuiDir_Down : ImGuiDir_Up))
+
+        ImFont* icon_font = m_settings.GetFontManager().GetIconFont(FontType::kDefault);
+
+        const char* icon =
+            m_pinned_item->m_visible ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
+
+        ImGui::PushFont(icon_font);
+        // use larger icon for consistent spacing
+        ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN); 
+        ImGui::PopFont();
+
+        if(IconButton(icon, icon_font,
+                      ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
+                             icon_size.y + style.FramePadding.y * 2.0f),
+                      m_pinned_item->m_visible ? "Hide pinned metrics" : "Show pinned metrics",
+                      style.WindowPadding, false, style.FramePadding,
+                      m_settings.GetColor(Colors::kTransparent),
+                      m_settings.GetColor(Colors::kButtonHovered),
+                      m_settings.GetColor(Colors::kTransparent)))
         {
-            m_bookmark_item->m_visible = !m_bookmark_item->m_visible;
+            m_pinned_item->m_visible = !m_pinned_item->m_visible;
         }
+        ImGui::SameLine();
+        ImGui::TextUnformatted("Pinned");
     }
     ImGui::SameLine();
     m_toolbar_available_width =
@@ -723,7 +739,7 @@ ComputeComparisonView::RenderToolbar()
 void
 ComputeComparisonView::RenderCategory(const size_t i)
 {
-    ImGui::PushID(i);
+    ImGui::PushID(static_cast<int>(i));
     ImGui::BeginChild("category_container");
     for(const std::shared_ptr<Table>& table : m_categories[i].tables)
     {
@@ -738,18 +754,18 @@ ComputeComparisonView::RenderCategory(const size_t i)
 }
 
 void
-ComputeComparisonView::RenderBookmarks() const
+ComputeComparisonView::RenderPinnedMetrics() const
 {
-    if(m_bookmark_table)
+    if(m_pinned_table)
     {
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeightWithSpacing()),
-            ImVec2(ImGui::GetContentRegionAvail().x, m_max_bookmark_height));
+            ImVec2(ImGui::GetContentRegionAvail().x, m_max_pinned_height));
         ImGui::BeginChild("bookmarks", ImVec2(0.0f, 0.0f),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-        if(m_bookmarks.empty())
+        if(m_pinned_metrics.empty())
         {
-            CenterNextItem(ImGui::CalcTextSize("Use () to bookmark metrics.").x +
+            CenterNextItem(ImGui::CalcTextSize("Use () checkbox to pin metrics.").x +
                            ImGui::GetFontSize());
             ImGui::SetCursorPosY(ImGui::GetStyle().FramePadding.y);
             ImGui::BeginDisabled();
@@ -760,13 +776,13 @@ ComputeComparisonView::RenderBookmarks() const
             ImGui::Checkbox("##hint", &hint);
             ImGui::PopStyleVar();
             ImGui::SameLine();
-            ImGui::TextUnformatted(") to bookmark metrics.");
+            ImGui::TextUnformatted(") checkbox to pin metrics.");
             ImGui::EndDisabled();
         }
         else
         {
-            m_bookmark_table->SetMaxSize(ImVec2(FLT_MAX, m_max_bookmark_height));
-            m_bookmark_table->Render();
+            m_pinned_table->SetMaxSize(ImVec2(FLT_MAX, m_max_pinned_height));
+            m_pinned_table->Render();
             if(m_loading)
             {
                 RenderLoadingIndicator(m_settings.GetColor(Colors::kTextMain),
@@ -799,66 +815,66 @@ ComputeComparisonView::RenderTables() const
 }
 
 void
-ComputeComparisonView::AddBookmark(const Table& table, const size_t index)
+ComputeComparisonView::AddPinnedMetric(const Table& table, const size_t index)
 {
-    if(m_bookmark_table && index < table.Rows().size())
+    if(m_pinned_table && index < table.Rows().size())
     {
         const Table::Row& row = table.Rows()[index];
         row.selected          = true;
-        m_bookmarks.emplace_back(BookmarkModel{ row.id, row.entry, &row });
-        m_bookmark_table->AddRow(table, index);
+        m_pinned_metrics.emplace_back(PinnedModel{ row.id, row.entry, &row });
+        m_pinned_table->AddRow(table, index);
     }
 }
 
 void
-ComputeComparisonView::RemoveBookmark(const Table& table, const size_t index)
+ComputeComparisonView::RemovePinnedMetric(const Table& table, const size_t index)
 {
-    if(m_bookmark_table && index < table.Rows().size())
+    if(m_pinned_table && index < table.Rows().size())
     {
         const Table::Row& row = table.Rows()[index];
-        if(&table == m_bookmark_table.get())
+        if(&table == m_pinned_table.get())
         {
             // Removal initiated from bookmarks...
-            if(m_bookmarks[index].row)
+            if(m_pinned_metrics[index].row)
             {
-                m_bookmarks[index].row->selected = false;
+                m_pinned_metrics[index].row->selected = false;
             }
-            m_bookmark_table->RemoveRow(index);
+            m_pinned_table->RemoveRow(index);
         }
         else
         {
             // Removal initiated from main tables...
-            for(size_t i = 0; i < m_bookmark_table->Rows().size(); i++)
+            for(size_t i = 0; i < m_pinned_table->Rows().size(); i++)
             {
-                if(row == m_bookmark_table->Rows()[i])
+                if(row == m_pinned_table->Rows()[i])
                 {
-                    m_bookmarks[i].row->selected = false;
-                    m_bookmark_table->RemoveRow(i);
+                    m_pinned_metrics[i].row->selected = false;
+                    m_pinned_table->RemoveRow(i);
                     break;
                 }
             }
         }
-        m_bookmarks.erase(std::remove(m_bookmarks.begin(), m_bookmarks.end(),
-                                      BookmarkModel{ row.id, row.entry, &row }),
-                          m_bookmarks.end());
+        m_pinned_metrics.erase(std::remove(m_pinned_metrics.begin(), m_pinned_metrics.end(),
+                                      PinnedModel{ row.id, row.entry, &row }),
+                          m_pinned_metrics.end());
     }
 }
 
 void
-ComputeComparisonView::UpdateBookmarks()
+ComputeComparisonView::UpdatePinnedMetrics()
 {
-    if(m_bookmark_table)
+    if(m_pinned_table)
     {
-        m_bookmark_table->ClearRows();
+        m_pinned_table->ClearRows();
         std::vector<std::pair<const Table*, size_t>> updated_bookmarks(
-            m_bookmarks.size());
+            m_pinned_metrics.size());
         std::unordered_map<std::string, std::unordered_map<std::string_view, size_t>>
             id_index_map;
         // Store the ordering of the bookmarks...
-        for(size_t i = 0; i < m_bookmarks.size(); i++)
+        for(size_t i = 0; i < m_pinned_metrics.size(); i++)
         {
-            id_index_map[m_bookmarks[i].row_id.metric_id]
-                        [m_bookmarks[i].row_id.entry_name] = i;
+            id_index_map[m_pinned_metrics[i].row_id.metric_id]
+                        [m_pinned_metrics[i].row_id.entry_name] = i;
         }
         // Go through the categories and find bookmarked metrics...
         for(const CategoryModel& category : m_categories)
@@ -879,28 +895,28 @@ ComputeComparisonView::UpdateBookmarks()
             }
         }
         std::vector<Table::Value> empty_value;
-        for(size_t i = 0; i < m_bookmarks.size(); i++)
+        for(size_t i = 0; i < m_pinned_metrics.size(); i++)
         {
             const Table* table     = updated_bookmarks[i].first;
             size_t&      row_index = updated_bookmarks[i].second;
             if(table && row_index < table->Rows().size())
             {
                 // Bookmark exists...
-                m_bookmarks[i].row           = &table->Rows()[row_index];
-                m_bookmarks[i].row->selected = true;
-                m_bookmark_table->AddRow(*updated_bookmarks[i].first,
+                m_pinned_metrics[i].row           = &table->Rows()[row_index];
+                m_pinned_metrics[i].row->selected = true;
+                m_pinned_table->AddRow(*updated_bookmarks[i].first,
                                          updated_bookmarks[i].second);
             }
             else
             {
                 // Bookmark no longer exist...
-                m_bookmarks[i].row = nullptr;
-                m_bookmark_table->AddRow(
-                    m_bookmarks[i].entry, empty_value,
+                m_pinned_metrics[i].row = nullptr;
+                m_pinned_table->AddRow(
+                    m_pinned_metrics[i].entry, empty_value,
                     { std::nullopt, Table::DisplayProps::Color{ Colors::kTextDim, 255 },
                       std::nullopt },
                     std::make_optional<size_t>(ROW_TAG_INVALID_MATCH));
-                m_bookmark_table->Rows()[m_bookmark_table->Rows().size() - 1].selected =
+                m_pinned_table->Rows()[m_pinned_table->Rows().size() - 1].selected =
                     true;
             }
         }
@@ -1097,7 +1113,6 @@ ComputeComparisonView::Table::Render()
                 ImGui::TableSetupColumn(column.name.c_str());
             }
             ImGui::TableHeadersRow();
-            const std::vector<ImU32>& color_wheel = m_settings.GetColorWheel();
             for(size_t i = 0; i < m_rows.size(); i++)
             {
                 if(m_rows[i].cells.size() == m_columns.size() &&

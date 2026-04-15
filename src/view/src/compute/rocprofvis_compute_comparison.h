@@ -171,13 +171,13 @@ private:
         const AvailableMetrics::Category*   category;
         std::vector<std::shared_ptr<Table>> tables;
     };
-    struct BookmarkModel
+    struct PinnedModel
     {
         Table::Row::ID                 row_id;
         const AvailableMetrics::Entry* entry;
         const Table::Row*              row;
 
-        bool operator==(const BookmarkModel& other) const
+        bool operator==(const PinnedModel& other) const
         {
             return row_id == other.row_id;
         }
@@ -188,12 +188,12 @@ private:
 
     void RenderToolbar();
     void RenderCategory(const size_t i);
-    void RenderBookmarks() const;
+    void RenderPinnedMetrics() const;
     void RenderTables() const;
 
-    void AddBookmark(const Table& table, const size_t index);
-    void RemoveBookmark(const Table& table, const size_t index);
-    void UpdateBookmarks();
+    void AddPinnedMetric(const Table& table, const size_t index);
+    void RemovePinnedMetric(const Table& table, const size_t index);
+    void UpdatePinnedMetrics();
 
     // User options...
     uint32_t m_target_workload_id;
@@ -209,14 +209,14 @@ private:
 
     // Models...
     std::vector<CategoryModel> m_categories;
-    std::vector<BookmarkModel> m_bookmarks;
+    std::vector<PinnedModel> m_pinned_metrics;
 
     // Layout...
     std::shared_ptr<VFixedContainer> m_layout;
     std::unique_ptr<TabContainer>    m_tab_container;
-    std::unique_ptr<Table>           m_bookmark_table;
-    LayoutItem*                      m_bookmark_item;
-    float                            m_max_bookmark_height;
+    std::unique_ptr<Table>           m_pinned_table;
+    LayoutItem*                      m_pinned_item;
+    float                            m_max_pinned_height;
     float                            m_toolbar_available_width;
 
     // Requests...

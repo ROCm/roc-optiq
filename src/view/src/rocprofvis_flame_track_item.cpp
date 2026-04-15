@@ -6,6 +6,7 @@
 #include "rocprofvis_click_manager.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -417,8 +418,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
             {
                 chart_item.selected = !chart_item.selected;
 
-                const ImGuiIO& io = ImGui::GetIO();
-                if(!io.KeyCtrl)
+                if(!HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kMultiSelect))
                 {
                     m_timeline_selection->UnselectAllEvents();
                 }

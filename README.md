@@ -112,7 +112,7 @@ Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwri
     - System Information: Hardware details of the system where the data was collected.
     - Profiling Configuration: Parameters and settings used during capture.
 
-## ROCProfiler Visualizer - Keyboard Shortcuts
+## Keyboard Shortcuts
 
 ### **Timeline Navigation**
 

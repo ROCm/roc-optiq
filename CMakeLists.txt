@@ -21,10 +21,11 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute" ON)
-option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
+option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" ON)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
+option(BUILD_TESTING "Build the testing tree" ON)
 
 if(APPLE AND USE_NATIVE_FILE_DIALOG)
     set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
@@ -52,6 +53,12 @@ else()
     set(GLFW_LIBRARY_TYPE "SHARED" CACHE STRING "GLFW library type" FORCE)
 endif()
 
+# Enable testing if BUILD_TESTING is ON
+if(BUILD_TESTING)
+    enable_testing()
+    include(CTest)
+endif()
+
 # Add third-party libraries, core, and model BEFORE controller
 add_subdirectory(thirdparty)
 add_subdirectory(src/core)
@@ -74,7 +81,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_settings_manager.cpp
     src/view/src/rocprofvis_font_manager.cpp 
     src/view/src/rocprofvis_annotations.cpp
-    src/view/src/rocprofvis_settings_panel.cpp 
+    src/view/src/rocprofvis_settings_panel.cpp
+    src/view/src/rocprofvis_hotkey_manager.cpp 
     src/view/src/rocprofvis_stickynote.cpp
     src/view/src/rocprofvis_click_manager.cpp
     src/view/src/rocprofvis_analysis_view.cpp 

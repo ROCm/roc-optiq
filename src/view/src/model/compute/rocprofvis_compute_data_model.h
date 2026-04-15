@@ -64,7 +64,7 @@ public:
                                                         uint32_t entry_id) const;
     std::shared_ptr<MetricValue> GetWorkloadMetricValue(uint64_t store_id,
                                                         uint32_t workload_id,
-                                                        uint64_t metric_key) const;
+                                                        MetricId metric_id) const;
 
     // Kernel metric accessors
     std::shared_ptr<MetricValue> GetKernelMetricValue(uint64_t store_id,
@@ -74,7 +74,7 @@ public:
                                                       uint32_t entry_id) const;
     std::shared_ptr<MetricValue> GetKernelMetricValue(uint64_t store_id,
                                                       uint32_t kernel_id,
-                                                      uint64_t metric_key) const;
+                                                      MetricId metric_id) const;
 
     MetricValuesByEntryId* GetKernelMetricValuesByTable(uint64_t store_id,
                                                         uint32_t kernel_id,

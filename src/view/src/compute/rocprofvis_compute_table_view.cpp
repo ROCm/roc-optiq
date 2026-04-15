@@ -223,7 +223,8 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
     }
 
     widget.Populate(*table, [&](uint32_t eid) {
-        return model.GetMetricValue(m_client_id, kernel_id, category_id, table->id, eid);
+        return model.GetKernelMetricValue(m_client_id, kernel_id, category_id, table->id,
+                                          eid);
     });
 }
 

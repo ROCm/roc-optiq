@@ -125,19 +125,29 @@ public:
 
     void Render() override;
 
-    void     FetchMetrics();
-    void     UpdateTable();
-    void     Clear();
-    uint64_t GetClientId() const { return m_client_id; }
+    virtual void FetchMetrics();
+    virtual void UpdateTable();
+    void         Clear();
+    uint64_t     GetClientId() const { return m_client_id; }
 
-private:
+protected:
     DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
     uint32_t                          m_category_id;
     uint32_t                          m_table_id;
     uint64_t                          m_client_id;
+    MetricTable                       m_table;
+};
 
-    MetricTable m_table;
+class WorkloadMetricTableWidget : public MetricTableWidget
+{
+public:
+    WorkloadMetricTableWidget(DataProvider&                     data_provider,
+                              std::shared_ptr<ComputeSelection> compute_selection,
+                              uint32_t category_id, uint32_t table_id);
+
+    virtual void FetchMetrics() override;
+    virtual void UpdateTable() override;
 };
 
 }  // namespace View

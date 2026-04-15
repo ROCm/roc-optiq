@@ -10,9 +10,12 @@
 #include "widgets/rocprofvis_widget.h"
 
 // Layout constants
-constexpr float kCategorywidth = 150.0f;
-constexpr float kContentwidth  = 550.0f;
-constexpr float kContentHeight = 450.0f;
+constexpr float kCategorywidth            = 150.0f;
+constexpr float kContentwidth             = 550.0f;
+constexpr float kContentHeight            = 450.0f;
+constexpr float kHotkeyCategoryColWidth   = 90.0f;
+constexpr float kHotkeyBindingColWidth    = 120.0f;
+constexpr float kHotkeyTableBottomMargin  = 60.0f;
 
 namespace RocProfVis
 {
@@ -387,12 +390,12 @@ SettingsPanel::RenderHotkeySettings()
     if(ImGui::BeginTable("##hotkeys_table", 4,
                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                              ImGuiTableFlags_ScrollY,
-                         ImVec2(0, kContentHeight - 60.0f)))
+                         ImVec2(0, kContentHeight - kHotkeyTableBottomMargin)))
     {
-        ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+        ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, kHotkeyCategoryColWidth);
         ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Primary", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-        ImGui::TableSetupColumn("Alternate", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn("Primary", ImGuiTableColumnFlags_WidthFixed, kHotkeyBindingColWidth);
+        ImGui::TableSetupColumn("Alternate", ImGuiTableColumnFlags_WidthFixed, kHotkeyBindingColWidth);
         ImGui::TableHeadersRow();
 
         for(int i = 0; i < static_cast<int>(HotkeyActionId::kCount); ++i)

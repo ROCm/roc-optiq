@@ -235,24 +235,82 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     float            level_height = settings.GetEventLevelHeight();
     const auto&      time_format  = settings.GetUserSettings().unit_settings.time_format;
     constexpr float  THICKNESS    = 2.5f;
+    constexpr float  VLINE_THICK  = 1.5f;
     constexpr float  HEAD_SIZE    = 6.0f;
     constexpr int    CURVE_SEGS   = 32;
     constexpr float  PAD          = 8.0f;
     constexpr float  ROUNDING     = 6.0f;
+    constexpr ImU32  BG_COL       = IM_COL32(30, 30, 30, 240);
+    constexpr ImU32  EDGE_COL     = IM_COL32(70, 70, 70, 200);
+    constexpr ImU32  TEXT_COL     = IM_COL32(255, 255, 255, 255);
 
-    auto to_pos = [&](const MeasurementPoint& pt) -> ImVec2 {
-        float x = m_tpt->RawTimeToPixel(pt.timestamp);
-        float y = m_track_position_y.count(pt.track_id)
-                      ? m_track_position_y.at(pt.track_id) +
-                            level_height * pt.level + level_height / 2.0f
-                      : 0.0f;
-        return ImVec2(window_position.x + x, window_position.y + y);
+    double eff_ts1 = fm.GetEffectiveTimestamp1();
+    double eff_ts2 = fm.GetEffectiveTimestamp2();
+
+    float x1  = window_position.x + m_tpt->RawTimeToPixel(eff_ts1);
+    float x2  = window_position.x + m_tpt->RawTimeToPixel(eff_ts2);
+    float top = window_position.y;
+    float bot = window_position.y + m_track_height_sum;
+
+    // Full-height vertical ruler lines
+    draw_list->AddLine(ImVec2(x1, top), ImVec2(x1, bot), color, VLINE_THICK);
+    draw_list->AddLine(ImVec2(x2, top), ImVec2(x2, bot), color, VLINE_THICK);
+
+    // Freehand notch markers at event start and end
+    if(fm.IsFreehandMode())
+    {
+        constexpr float  NOTCH_H    = 10.0f;
+        constexpr float  NOTCH_W    = 1.0f;
+        ImU32            notch_col  = IM_COL32(255, 255, 255, 120);
+        float visible_mid = window_position.y + m_scroll_position_y +
+                            (m_tpt->GetGraphSizeY() - m_ruler_height -
+                             ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
+
+        auto draw_notch = [&](double ts) {
+            float nx = window_position.x + m_tpt->RawTimeToPixel(ts);
+            draw_list->AddLine(ImVec2(nx, visible_mid - NOTCH_H),
+                               ImVec2(nx, visible_mid + NOTCH_H), notch_col, NOTCH_W);
+        };
+        draw_notch(p1.timestamp);
+        draw_notch(p1.timestamp + p1.duration);
+        draw_notch(p2.timestamp);
+        draw_notch(p2.timestamp + p2.duration);
+    }
+
+    // Timestamp labels pinned to bottom of visible viewport
+    auto draw_vline_label = [&](float x, float y, const char* text) {
+        ImVec2 sz = ImGui::CalcTextSize(text);
+        float  lx = x - sz.x / 2.0f;
+        float  ly = y;
+        ImVec2 mn(lx - 4.0f, ly - 2.0f);
+        ImVec2 mx(lx + sz.x + 4.0f, ly + sz.y + 2.0f);
+        draw_list->AddRectFilled(mn, mx, IM_COL32(30, 30, 30, 240), 3.0f);
+        draw_list->AddText(ImVec2(lx, ly), color, text);
     };
 
-    ImVec2 from = to_pos(p1);
-    ImVec2 to   = to_pos(p2);
+    std::string t1_str =
+        nanosecond_to_formatted_str(eff_ts1 - m_tpt->GetMinX(), time_format, true);
+    std::string t2_str =
+        nanosecond_to_formatted_str(eff_ts2 - m_tpt->GetMinX(), time_format, true);
 
-    // Bezier curve matching flow arrow style
+    float visible_bot = window_position.y + m_scroll_position_y +
+                        m_tpt->GetGraphSizeY() - m_ruler_height -
+                        ARTIFICIAL_SCROLLBAR_HEIGHT;
+    float label_offset = ImGui::CalcTextSize("0").y + 8.0f;
+    draw_vline_label(x1, visible_bot - label_offset, t1_str.c_str());
+    draw_vline_label(x2, visible_bot - label_offset, t2_str.c_str());
+
+    // Bezier curve between the two event positions
+    auto to_event_y = [&](const MeasurementPoint& pt) -> float {
+        return m_track_position_y.count(pt.track_id)
+                   ? m_track_position_y.at(pt.track_id) +
+                         level_height * pt.level + level_height / 2.0f
+                   : 0.0f;
+    };
+
+    ImVec2 from(x1, window_position.y + to_event_y(p1));
+    ImVec2 to(x2, window_position.y + to_event_y(p2));
+
     float  curve_offset = 0.25f * (to.x - from.x);
     ImVec2 ctrl1(from.x + curve_offset, from.y);
     ImVec2 ctrl2(to.x - curve_offset, to.y);
@@ -271,18 +329,13 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         ImVec2(to.x - dir.x * HEAD_SIZE + ortho.x * HEAD_SIZE * 0.5f,
                to.y - dir.y * HEAD_SIZE + ortho.y * HEAD_SIZE * 0.5f),
         color);
-
     draw_list->AddCircleFilled(from, 4.0f, color);
-    draw_list->AddCircleFilled(to, 4.0f, color);
 
-    constexpr ImU32 BG_COL   = IM_COL32(30, 30, 30, 240);
-    constexpr ImU32 EDGE_COL = IM_COL32(70, 70, 70, 200);
-    constexpr ImU32 TEXT_COL = IM_COL32(255, 255, 255, 255);
-
-    auto draw_label = [&](ImVec2 anchor, const char* text, bool above) {
-        ImVec2 sz  = ImGui::CalcTextSize(text);
-        float  lx  = anchor.x - sz.x / 2.0f;
-        float  ly  = above ? anchor.y - sz.y - PAD * 2 : anchor.y + PAD;
+    // Label helper
+    auto draw_label = [&](float cx, float cy, const char* text) {
+        ImVec2 sz = ImGui::CalcTextSize(text);
+        float  lx = cx - sz.x / 2.0f;
+        float  ly = cy - sz.y / 2.0f;
         ImVec2 mn(lx - PAD, ly - PAD);
         ImVec2 mx(lx + sz.x + PAD, ly + sz.y + PAD);
         draw_list->AddRectFilled(mn, mx, BG_COL, ROUNDING);
@@ -290,15 +343,14 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         draw_list->AddText(ImVec2(lx, ly), TEXT_COL, text);
     };
 
-    // Event name labels at each endpoint
-    draw_label(from, p1.name.c_str(), true);
-    draw_label(to, p2.name.c_str(), from.y <= to.y);
+    draw_label(from.x, from.y - 20.0f, p1.name.c_str());
+    draw_label(to.x, to.y + 20.0f, p2.name.c_str());
 
     // Delta label at curve midpoint
-    double      delta     = std::abs(p2.timestamp - p1.timestamp);
+    double      delta     = std::abs(eff_ts2 - eff_ts1);
     std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
-    ImVec2      mid((from.x + to.x) / 2.0f, (from.y + to.y) / 2.0f);
-    draw_label(mid, delta_str.c_str(), true);
+    draw_label((from.x + to.x) / 2.0f, (from.y + to.y) / 2.0f - 20.0f,
+               delta_str.c_str());
 }
 
 ImVec2
@@ -1988,6 +2040,57 @@ TimelineView::HandleTopSurfaceTouch()
         if(mouse_any && !m_pseudo_focus)
         {
             m_pseudo_focus = true;
+        }
+
+        // Freehand measurement drag
+        auto& fm_touch = TimelineFocusManager::GetInstance();
+        if(fm_touch.IsMeasurementMode() && fm_touch.IsFreehandMode() &&
+           fm_touch.GetMeasurementState() == MeasurementState::kComplete)
+        {
+            constexpr float GRAB_RADIUS = 8.0f;
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            float  mouse_x   = mouse_pos.x - graph_area_min.x;
+
+            float rx1 = static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp1()));
+            float rx2 = static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp2()));
+
+            // -1 = none, 0 = ruler 1, 1 = ruler 2
+            static int dragging_ruler = -1;
+
+            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            {
+                if(std::abs(mouse_x - rx1) < GRAB_RADIUS)      dragging_ruler = 0;
+                else if(std::abs(mouse_x - rx2) < GRAB_RADIUS) dragging_ruler = 1;
+                else                                            dragging_ruler = -1;
+            }
+            if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+            {
+                dragging_ruler = -1;
+            }
+
+            if(dragging_ruler >= 0 && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
+            {
+                double mouse_time = m_tpt->PixelToTime(mouse_x) + m_tpt->GetMinX();
+                if(dragging_ruler == 0)
+                {
+                    double base = (fm_touch.GetMeasureEdge1() == MeasureEdge::kStart)
+                                      ? fm_touch.GetMeasurementPoint1().timestamp
+                                      : fm_touch.GetMeasurementPoint1().timestamp +
+                                            fm_touch.GetMeasurementPoint1().duration;
+                    fm_touch.SetFreehandOffset1(mouse_time - base);
+                }
+                else
+                {
+                    double base = (fm_touch.GetMeasureEdge2() == MeasureEdge::kStart)
+                                      ? fm_touch.GetMeasurementPoint2().timestamp
+                                      : fm_touch.GetMeasurementPoint2().timestamp +
+                                            fm_touch.GetMeasurementPoint2().duration;
+                    fm_touch.SetFreehandOffset2(mouse_time - base);
+                }
+
+                TimelineFocusManager::GetInstance().RequestLayerFocus(
+                    Layer::kInteractiveLayer);
+            }
         }
 
         // Handle drag start

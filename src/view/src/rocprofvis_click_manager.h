@@ -28,6 +28,12 @@ enum class MeasurementState
     kComplete
 };
 
+enum class MeasureEdge
+{
+    kStart,
+    kEnd
+};
+
 struct MeasurementPoint
 {
     double      timestamp = 0.0;
@@ -64,6 +70,24 @@ public:
     const MeasurementPoint& GetMeasurementPoint1() const;
     const MeasurementPoint& GetMeasurementPoint2() const;
 
+    // Edge mode: measure from start or end of each event
+    void         SetMeasureEdge1(MeasureEdge edge);
+    void         SetMeasureEdge2(MeasureEdge edge);
+    MeasureEdge  GetMeasureEdge1() const;
+    MeasureEdge  GetMeasureEdge2() const;
+
+    // Effective timestamp for a point given its edge setting
+    double GetEffectiveTimestamp1() const;
+    double GetEffectiveTimestamp2() const;
+
+    // Freehand mode: drag vertical rulers freely
+    void  SetFreehandMode(bool enabled);
+    bool  IsFreehandMode() const;
+    void  SetFreehandOffset1(double offset_ns);
+    void  SetFreehandOffset2(double offset_ns);
+    double GetFreehandOffset1() const;
+    double GetFreehandOffset2() const;
+
 private:
     TimelineFocusManager();
     ~TimelineFocusManager()                              = default;
@@ -77,6 +101,11 @@ private:
     MeasurementState m_measurement_state;
     MeasurementPoint m_measurement_point1;
     MeasurementPoint m_measurement_point2;
+    MeasureEdge      m_measure_edge1;
+    MeasureEdge      m_measure_edge2;
+    bool             m_freehand_mode;
+    double           m_freehand_offset1;
+    double           m_freehand_offset2;
 };
 
 }  // namespace View

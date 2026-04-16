@@ -41,8 +41,9 @@ struct MeasurementPoint
     uint64_t    track_id  = 0;
     uint32_t    level     = 0;
     std::string name;
-    bool        valid    = false;
-    bool        freehand = false;
+    uint64_t    event_uuid = 0;
+    bool        valid      = false;
+    bool        freehand   = false;
 };
 
 class TimelineFocusManager
@@ -67,7 +68,7 @@ public:
 
     void SetMeasurementPoint(double timestamp, double duration,
                              uint64_t track_id, uint32_t level,
-                             const std::string& name);
+                             const std::string& name, uint64_t event_uuid);
     void SetFreehandMeasurementPoint(double timestamp);
     void ClearMeasurement();
 

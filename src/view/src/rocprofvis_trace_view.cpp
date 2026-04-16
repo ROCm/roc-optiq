@@ -1223,32 +1223,37 @@ TraceView::RenderMeasurementControls()
 
     if(!active) return;
 
-    ImGui::SameLine();
-
-    for(int i = 0; i < 2; ++i)
-    {
-        MeasureEdge edge  = fm.GetEdge(i);
-        const char* label = (edge == MeasureEdge::kStart)
-                                ? (i == 0 ? "E1:Start" : "E2:Start")
-                                : (i == 0 ? "E1:End" : "E2:End");
-        ImGui::PushID(i);
-        ImGui::PushStyleColor(ImGuiCol_Button, transparent);
-        ImGui::PushStyleColor(ImGuiCol_Text, measure_col);
-        if(ImGui::Button(label))
-        {
-            fm.SetEdge(i, edge == MeasureEdge::kStart ? MeasureEdge::kEnd
-                                                      : MeasureEdge::kStart);
-        }
-        ImGui::PopStyleColor(2);
-        if(ImGui::IsItemHovered())
-        {
-            SetTooltipStyled("Toggle measurement edge (start/end)");
-        }
-        ImGui::PopID();
-        ImGui::SameLine();
-    }
-
     bool freehand = fm.IsFreehandMode();
+
+    if(!freehand)
+    {
+        ImGui::SameLine();
+        for(int i = 0; i < 2; ++i)
+        {
+            MeasureEdge edge  = fm.GetEdge(i);
+            const char* label = (edge == MeasureEdge::kStart)
+                                    ? (i == 0 ? "E1:Start" : "E2:Start")
+                                    : (i == 0 ? "E1:End" : "E2:End");
+            ImGui::PushID(i);
+            ImGui::PushStyleColor(ImGuiCol_Button, transparent);
+            ImGui::PushStyleColor(ImGuiCol_Text, measure_col);
+            if(ImGui::Button(label))
+            {
+                fm.SetEdge(i, edge == MeasureEdge::kStart ? MeasureEdge::kEnd
+                                                          : MeasureEdge::kStart);
+            }
+            ImGui::PopStyleColor(2);
+            if(ImGui::IsItemHovered())
+            {
+                SetTooltipStyled("Toggle measurement edge (start/end)");
+            }
+            ImGui::PopID();
+            ImGui::SameLine();
+        }
+    }
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x * 0.5f, 0));
+    ImGui::SameLine();
     ImGui::PushID("measure_freehand");
     push_toggle_style(freehand);
     if(ImGui::Button("Freehand"))

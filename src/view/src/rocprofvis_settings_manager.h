@@ -129,6 +129,10 @@ enum class Colors
     kLoadingScreenColor,
     kTextOnAccent,
     kMeasurementColor,
+    kMeasurementLabelBg,
+    kMeasurementLabelEdge,
+    kMeasurementLabelText,
+    kMeasurementNotch,
 
     kComparisonBase,
     kComparisonTarget,

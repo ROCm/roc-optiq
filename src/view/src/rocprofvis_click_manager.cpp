@@ -104,17 +104,17 @@ TimelineFocusManager::GetMeasurementState() const
 void
 TimelineFocusManager::SetMeasurementPoint(double timestamp, double duration,
                                           uint64_t track_id, uint32_t level,
-                                          const std::string& name)
+                                          const std::string& name, uint64_t event_uuid)
 {
     if(m_measurement_state == MeasurementState::kWaitingForFirst)
     {
-        m_points[0]         = { timestamp, duration, track_id, level, name, true, false };
+        m_points[0]         = { timestamp, duration, track_id, level, name, event_uuid, true, false };
         m_measurement_state = MeasurementState::kWaitingForSecond;
     }
     else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
             m_measurement_state == MeasurementState::kComplete)
     {
-        m_points[1]         = { timestamp, duration, track_id, level, name, true, false };
+        m_points[1]         = { timestamp, duration, track_id, level, name, event_uuid, true, false };
         m_measurement_state = MeasurementState::kComplete;
     }
 }

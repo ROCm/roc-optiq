@@ -241,9 +241,9 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     constexpr float HEAD_SIZE   = 6.0f;
     constexpr float LABEL_PAD   = 8.0f;
     constexpr float LABEL_ROUND = 6.0f;
-    constexpr ImU32 LABEL_BG    = IM_COL32(30, 30, 30, 240);
-    constexpr ImU32 LABEL_EDGE  = IM_COL32(70, 70, 70, 200);
-    constexpr ImU32 LABEL_TEXT  = IM_COL32(255, 255, 255, 255);
+    ImU32 label_bg   = settings.GetColor(Colors::kMeasurementLabelBg);
+    ImU32 label_edge = settings.GetColor(Colors::kMeasurementLabelEdge);
+    ImU32 label_text = settings.GetColor(Colors::kMeasurementLabelText);
 
     float top = window_position.y;
     float bot = window_position.y + m_track_height_sum;
@@ -262,8 +262,8 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         float  lx = x - sz.x * 0.5f;
         draw_list->AddRectFilled(ImVec2(lx - 4.0f, label_y - 2.0f),
                                  ImVec2(lx + sz.x + 4.0f, label_y + sz.y + 2.0f),
-                                 LABEL_BG, 3.0f);
-        draw_list->AddText(ImVec2(lx, label_y), color, text);
+                                 label_bg, 3.0f);
+        draw_list->AddText(ImVec2(lx, label_y), label_text, text);
     };
 
     // Draws a boxed label, Y-clamped to stay within visible area
@@ -275,9 +275,9 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         float  ly     = cy - sz.y * 0.5f;
         ImVec2 mn(lx - LABEL_PAD, ly - LABEL_PAD);
         ImVec2 mx(lx + sz.x + LABEL_PAD, ly + sz.y + LABEL_PAD);
-        draw_list->AddRectFilled(mn, mx, LABEL_BG, LABEL_ROUND);
-        draw_list->AddRect(mn, mx, LABEL_EDGE, LABEL_ROUND, 0, 1.0f);
-        draw_list->AddText(ImVec2(lx, ly), LABEL_TEXT, text);
+        draw_list->AddRectFilled(mn, mx, label_bg, LABEL_ROUND);
+        draw_list->AddRect(mn, mx, label_edge, LABEL_ROUND, 0, 1.0f);
+        draw_list->AddText(ImVec2(lx, ly), label_text, text);
     };
 
     // Resolves Y position for a measurement point
@@ -313,7 +313,7 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     if(fm.IsFreehandMode())
     {
         constexpr float NOTCH_H   = 10.0f;
-        ImU32           notch_col = IM_COL32(255, 255, 255, 120);
+        ImU32           notch_col = settings.GetColor(Colors::kMeasurementNotch);
         float           mid_y     = window_position.y + visible_center_y;
 
         for(int i = 0; i < 2; ++i)
@@ -329,40 +329,18 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         }
     }
 
-    // Bezier curve connecting the two points
-    ImVec2 from(px[0], window_position.y + point_y(p1));
-    ImVec2 to(px[1], window_position.y + point_y(p2));
-
-    float  ctrl_dx = 0.25f * (to.x - from.x);
-    ImVec2 ctrl1(from.x + ctrl_dx, from.y);
-    ImVec2 ctrl2(to.x - ctrl_dx, to.y);
-    draw_list->AddBezierCubic(from, ctrl1, ctrl2, to, color, CURVE_THICK, 32);
-
-    // Origin dot + destination arrowhead
-    draw_list->AddCircleFilled(from, 4.0f, color);
-
-    ImVec2 dir(to.x - ctrl2.x, to.y - ctrl2.y);
-    float  len = sqrtf(dir.x * dir.x + dir.y * dir.y);
-    if(len > 0.0f) { dir.x /= len; dir.y /= len; }
-    else           { dir = ImVec2(1.0f, 0.0f); }
-    ImVec2 perp(-dir.y, dir.x);
-    draw_list->AddTriangleFilled(
-        to,
-        ImVec2(to.x - dir.x * HEAD_SIZE - perp.x * HEAD_SIZE * 0.5f,
-               to.y - dir.y * HEAD_SIZE - perp.y * HEAD_SIZE * 0.5f),
-        ImVec2(to.x - dir.x * HEAD_SIZE + perp.x * HEAD_SIZE * 0.5f,
-               to.y - dir.y * HEAD_SIZE + perp.y * HEAD_SIZE * 0.5f),
-        color);
+    // Straight horizontal line connecting the two rulers
+    float line_y = window_position.y + visible_center_y;
+    draw_list->AddLine(ImVec2(px[0], line_y), ImVec2(px[1], line_y), color, CURVE_THICK);
 
     // Event name labels
-    if(!p1.name.empty()) draw_label(from.x, from.y - 20.0f, p1.name.c_str());
-    if(!p2.name.empty()) draw_label(to.x, to.y + 20.0f, p2.name.c_str());
+    if(!p1.name.empty()) draw_label(px[0], line_y - 20.0f, p1.name.c_str());
+    if(!p2.name.empty()) draw_label(px[1], line_y - 20.0f, p2.name.c_str());
 
     // Delta label at midpoint
     double      delta     = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
     std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
-    draw_label((from.x + to.x) * 0.5f, (from.y + to.y) * 0.5f - 20.0f,
-               delta_str.c_str());
+    draw_label((px[0] + px[1]) * 0.5f, line_y + 20.0f, delta_str.c_str());
 }
 
 ImVec2
@@ -2056,13 +2034,12 @@ TimelineView::HandleTopSurfaceTouch()
 
         // Measurement mode: ruler hover cursor, drag, and freehand click-to-place
         auto& fm_touch = TimelineFocusManager::GetInstance();
+        static int dragging_ruler = -1;
         if(fm_touch.IsMeasurementMode())
         {
             constexpr float GRAB_RADIUS = 8.0f;
             ImVec2 mouse_pos = ImGui::GetMousePos();
             float  mouse_x   = mouse_pos.x - graph_area_min.x;
-
-            static int dragging_ruler = -1;
 
             if(fm_touch.IsFreehandMode() &&
                fm_touch.GetMeasurementState() == MeasurementState::kComplete)
@@ -2114,10 +2091,8 @@ TimelineView::HandleTopSurfaceTouch()
             }
         }
 
-        // Handle drag start — suppress when measurement mode is consuming clicks
-        bool measurement_blocking = fm_touch.IsMeasurementMode() &&
-                                    (fm_touch.IsFreehandMode() ||
-                                     fm_touch.GetMeasurementState() == MeasurementState::kComplete);
+        // Handle drag start — only suppress when actively dragging a measurement ruler
+        bool measurement_blocking = dragging_ruler >= 0;
         if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) &&
            !m_is_selecting_region && !m_can_drag_to_pan && !measurement_blocking)
         {

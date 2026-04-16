@@ -1211,8 +1211,15 @@ TraceView::RenderMeasurementControls()
     push_toggle_style(active);
     if(ImGui::Button(active ? "On" : "Off"))
     {
-        if(active) fm.ExitMeasurementMode();
-        else       fm.EnterMeasurementMode();
+        if(active)
+        {
+            fm.ExitMeasurementMode();
+            m_timeline_selection->UnhighlightPersistentEvents();
+        }
+        else
+        {
+            fm.EnterMeasurementMode();
+        }
     }
     ImGui::PopStyleColor(3);
     if(ImGui::IsItemHovered())
@@ -1279,6 +1286,7 @@ TraceView::RenderMeasurementControls()
         if(ImGui::Button("Reset"))
         {
             fm.ClearMeasurement();
+            m_timeline_selection->UnhighlightPersistentEvents();
         }
         ImGui::PopStyleColor();
         if(ImGui::IsItemHovered())

@@ -415,7 +415,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                     chart_item.event.m_start_ts, chart_item.event.m_duration,
                     m_track_id, chart_item.event.m_level, chart_item.event.m_name,
                     chart_item.event.m_id.uuid);
-                m_timeline_selection->HighlightTrackEvent(m_track_id, chart_item.event.m_id.uuid);
+                m_timeline_selection->HighlightTrackEventPersistent(m_track_id, chart_item.event.m_id.uuid);
             }
             else if(!TimelineFocusManager::GetInstance().IsMeasurementMode())
             {
@@ -714,21 +714,22 @@ FlameTrackItem::RenderChart(float graph_width)
                                  ? m_settings.GetColor(Colors::kEventSearchHighlight)
                                  : m_settings.GetColor(Colors::kEventHighlight);
 
-        bool is_last_highlight =
-            item.highlighted &&
-            item.event.m_id.uuid ==
-                m_timeline_selection->GetLastHighlightedEventId();
         float thickness = HIGHLIGHT_THICKNESS;
-        if(is_last_highlight)
+        if(item.highlighted)
         {
-            double elapsed = m_timeline_selection->GetHighlightElapsedSeconds();
-            float  pulse   = 0.5f + 0.5f * std::sin(static_cast<float>(elapsed) * 6.0f);
-            thickness      = HIGHLIGHT_THICKNESS + pulse * 1.5f;
+            double elapsed = m_timeline_selection->GetHighlightElapsedSeconds(item.event.m_id.uuid);
+            bool   persistent = m_timeline_selection->IsHighlightPersistent(item.event.m_id.uuid);
+            if(!persistent)
+            {
+                float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(elapsed) * 6.0f);
+                thickness   = HIGHLIGHT_THICKNESS + pulse * 1.5f;
 
-            ImU32 a     = (border_color >> 24) & 0xFF;
-            ImU32 new_a = static_cast<ImU32>(a * (0.5f + 0.5f * pulse));
-            border_color = (border_color & 0x00FFFFFF) | (new_a << 24);
+                ImU32 a     = (border_color >> 24) & 0xFF;
+                ImU32 new_a = static_cast<ImU32>(a * (0.5f + 0.5f * pulse));
+                border_color = (border_color & 0x00FFFFFF) | (new_a << 24);
+            }
         }
+        bool is_last_highlight = item.highlighted;
 
         float half_t = thickness / 2.0f;
         ImVec2 pulseMin = ImVec2(start_position.x - half_t,

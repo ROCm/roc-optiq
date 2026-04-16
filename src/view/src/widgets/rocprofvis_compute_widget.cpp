@@ -40,7 +40,7 @@ MetricTableBase::Render()
 
     if(m_rows.empty())
     {
-        ImGui::TextDisabled("Pin the metric to see it here");
+        RenderEmptyTable();
         return;
     }
 
@@ -125,18 +125,19 @@ MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
 {
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem("Copy"))
+        std::string label = " " + std::string(ICON_CHEK_BOX_UNCHECKED) + " Pin metric";
+        if(ImGui::MenuItem(label.c_str()))
         {
-            ImGui::SetClipboardText(value_to_copy);
-            NotificationManager::GetInstance().Show(
-                    COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+            row.second.pinned = !row.second.pinned;
+            m_pin_metric_clicked(
+                { row.first.category_id, row.first.table_id, row.first.entry_id });
         }
-        if(!m_event_source_id.empty())
+        label = " " + std::string(ICON_ARROW_RIGHT) + " Send Metric to kernel details";
+        if(!m_event_source_id.empty() && ImGui::MenuItem(label.c_str()))
         {
-            if(ImGui::MenuItem("Show in kernel table"))
-            {
-                AddMetricToKernelDetails(row.first, m_columns.at(column_index));
-            }
+            AddMetricToKernelDetails(
+                { row.first.category_id, row.first.table_id, row.first.entry_id },
+                m_columns[column_index]);
         }
         ImGui::EndPopup();
     }
@@ -312,6 +313,12 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         }
         ImGui::EndPopup();
     }
+}
+
+void
+MetricTable::RenderEmptyTable()
+{
+    ImGui::TextDisabled("This table is empty for current selection");
 }
 
 MetricTable::MetricTable(std::string event_source_id)
@@ -517,6 +524,13 @@ PinedMetricTable::GetColumnIndex(const std::string& column_name)
             return column.first;
     }
     return std::nullopt;
+}
+
+void
+PinedMetricTable::RenderEmptyTable()
+{
+    ImGui::TextDisabled((
+        " " + std::string(ICON_CHEK_BOX_CHECKED) + " Pin the metric to see it here").c_str());
 }
 
 void

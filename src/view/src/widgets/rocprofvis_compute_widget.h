@@ -50,6 +50,7 @@ protected:
     void FillDefaultColumns();
     void AddMetricToKernelDetails(const MetricId& metric_id, const std::string& value_name);
     bool IsValueColumn(uint32_t column_index) const;
+    virtual void RenderEmptyTable() = 0;
 
     std::map<uint32_t, std::string>                 m_columns;
     std::uint32_t                                   m_lust_column_index = 0;
@@ -84,6 +85,7 @@ public:
 private:
     void ContextMenu(const char* value_to_copy, uint32_t column_index,
                      std::pair<const MetricId, Row>& row) override;
+    virtual void RenderEmptyTable() override;
 };
 
 class PinedMetricTable: public MetricTableBase
@@ -111,6 +113,8 @@ private:
     const AvailableMetrics::Table& GetTable(const MetricId& metric_id, uint32_t workload_id);
 
     std::optional<uint32_t> GetColumnIndex(const std::string& column_name);
+
+    virtual void RenderEmptyTable() override;
 
     std::optional<MetricId>           m_id_to_delete;
     DataProvider&                     m_data_provider;

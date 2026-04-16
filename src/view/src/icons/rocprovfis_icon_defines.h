@@ -58,7 +58,6 @@ inline constexpr const char* ICON_COPY               = u8"\uF41B";
 inline constexpr const char* ICON_CHEK_BOX_CHECKED   = u8"\uF373";
 inline constexpr const char* ICON_CHEK_BOX_UNCHECKED = u8"\uF372";
 inline constexpr const char* ICON_ARROW_RIGHT        = u8"\uF10B";
-inline constexpr const char* ICON_CHART_PIE          = u8"\uF484";
 inline constexpr const char* ICON_CHEVRON_DOWN       = u8"\uF123";
 inline constexpr const char* ICON_CHEVRON_LEFT       = u8"\uF124";
 inline constexpr const char* ICON_CHEVRON_RIGHT      = u8"\uF125";

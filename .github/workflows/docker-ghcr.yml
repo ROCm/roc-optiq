@@ -60,7 +60,6 @@ jobs:
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
-            DISTRO=${{ steps.setup_args.outputs.distro }}
             VERSION=${{ steps.setup_args.outputs.version }}
             VULKAN_SDK_VERSION=${{ env.VULKAN_SDK_VERSION }}
           tags: |

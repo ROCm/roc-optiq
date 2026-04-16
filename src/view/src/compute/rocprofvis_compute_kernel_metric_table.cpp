@@ -193,7 +193,6 @@ KernelMetricTable::Render()
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
     const ImGuiStyle &style = settings.GetDefaultStyle();
-    const float      item_spacing = style.ItemSpacing.x;
     const float      cell_padding = style.CellPadding.x * 2.0f;
     const float      char_width = ImGui::CalcTextSize("M").x;
 
@@ -204,21 +203,42 @@ KernelMetricTable::Render()
     const std::vector<std::string>&              header = table.GetTableHeader();
     const std::vector<std::vector<std::string>>& data   = table.GetTableData();
 
-    ImGui::AlignTextToFramePadding();
+    // Toolbar with actions
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::ColorConvertU32ToFloat4(
+                                                SettingsManager::GetInstance().GetColor(Colors::kBgPanel)));
+    ImGui::PushStyleColor(
+        ImGuiCol_Border,
+        ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kBorderColor)));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+    ImGui::BeginChild("toolbar", ImVec2(-1, 0),
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
-    const char* icon = m_show_kernel_table ? ICON_EYE : ICON_EYE_SLASH;
-    if(IconButton(icon, icon_font, ImVec2(0, 0),
-                    m_show_kernel_table ? "Hide Table" : "Show Table",
-                    style.WindowPadding, false, style.FramePadding))
+    ImGui::AlignTextToFramePadding();
+    const char* icon = m_show_kernel_table ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
+    
+    ImGui::PushFont(icon_font);
+    ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN); // use larger icon for consistent spacing
+    ImGui::PopFont();
+
+    if(IconButton(icon, icon_font,
+                  ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
+                         icon_size.y + style.FramePadding.y * 2.0f),
+                  m_show_kernel_table ? "Hide Table" : "Show Table", style.WindowPadding,
+                  false, style.FramePadding,
+                  SettingsManager::GetInstance().GetColor(Colors::kTransparent),
+                  SettingsManager::GetInstance().GetColor(Colors::kButtonHovered),
+                  SettingsManager::GetInstance().GetColor(Colors::kTransparent)))
     {
         m_show_kernel_table = !m_show_kernel_table;
     }
 
+    ImGui::SameLine(); //No spacing on purpose
+    ImGui::TextUnformatted("Table");
+    VerticalSeparator();
+
     m_query_builder.SetWorkload(
         m_data_provider.ComputeModel().GetWorkload(m_workload_id));
-
-
-    ImGui::SameLine(0.0f, item_spacing);
 
     ImGui::BeginDisabled(!m_show_kernel_table ||
                          m_workload_id == ComputeSelection::INVALID_SELECTION_ID);
@@ -246,19 +266,19 @@ KernelMetricTable::Render()
         });
     }
     
-    ImGui::SameLine(0.0f, item_spacing);
+    ImGui::SameLine(0.0f, style.ItemSpacing.x);
 
     // Filter control buttons
     if(ImGui::Button("Apply Filters"))
     {
         ApplyFilters();
     }
-    ImGui::SameLine(0.0f, item_spacing);
+    ImGui::SameLine(0.0f, style.ItemSpacing.x);
     if(ImGui::Button("Clear All Filters"))
     {
         ClearAllFilters();
     }
-    ImGui::SameLine(0.0f, item_spacing);
+    ImGui::SameLine(0.0f, style.ItemSpacing.x);
     if(ImGui::Button(m_bar_chart_columns.empty() ? "Show Bar Charts" : "Hide Bar Charts"))
     {
         if(m_bar_chart_columns.empty())
@@ -289,13 +309,16 @@ KernelMetricTable::Render()
     }
     if(active_count > 0)
     {
-        ImGui::SameLine(0.0f, item_spacing);
+        ImGui::SameLine(0.0f, style.ItemSpacing.x);
         ImGui::TextDisabled("(%zu active filters)", active_count);
     }
 
     ImGui::EndDisabled();
 
-    ImGui::Separator();
+    // End toolbar
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
 
     bool request_pending =
         m_data_provider.IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID);
@@ -442,7 +465,7 @@ KernelMetricTable::Render()
                             }
                         }
                     }
-                    ImGui::SameLine(text_size.x, item_spacing);
+                    ImGui::SameLine(text_size.x, style.ItemInnerSpacing.x);
 
                     ImGui::PushID(col);
                     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
@@ -515,6 +538,13 @@ KernelMetricTable::Render()
                         {
                             const std::string& cell = data[row][col];
                             ImGui::TableNextColumn();
+
+                            // Track hover using the current table cell bounds instead of
+                            // item hover state because the first selectable spans all columns.
+                            ImVec2 cell_min = ImGui::GetCursorScreenPos();
+                            float  cell_width = ImGui::GetContentRegionAvail().x;
+                            float  cell_height = line_height;
+                            ImVec2 cell_max(cell_min.x + cell_width, cell_min.y + cell_height);
 
                             // Check if this is the first visible column
                             ImGuiTableColumnFlags flags = ImGui::TableGetColumnFlags(col);
@@ -602,7 +632,8 @@ KernelMetricTable::Render()
                                     ImGui::TextUnformatted(cell.c_str());
                                 }
                             }
-                            if(need_tooltip && ImGui::IsItemHovered())
+                            bool cell_hovered = ImGui::IsMouseHoveringRect(cell_min, cell_max, true);
+                            if(need_tooltip && cell_hovered)
                             {
                                 ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
                                                                     ImVec2(kTooltipMaxWidth, FLT_MAX));

@@ -53,6 +53,7 @@ jobs:
           images: ghcr.io/ROCm/optiq-ci-${{ steps.setup_args.outputs.distro }}
 
       - name: Build Optiq CI Container (Does not Push on PR)
+        timeout-minutes: 15
         id: docker_build
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:

@@ -61,7 +61,7 @@ jobs:
 
       - name: Build, Make, and Verify Installation
         run: |
-          source /opt/vulkan/${{ matrix.vulkan-sdk }}/setup-env.sh
+          source /opt/vulkan/**/setup-env.sh
           cmake -B build --install-prefix /opt/rocprofiler-visualizer
           cmake --build build --parallel 4
           if [ -e build/${{ env.VISUALIZER_FILE_NAME }} ]; then

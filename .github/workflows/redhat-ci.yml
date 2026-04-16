@@ -36,10 +36,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
             # Full matrix for the 'schedule' event
-            echo "matrix={\"os-release\":[\"9\", \"10\"]" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"os-release\":[\"9\", \"10\"]}" >> "$GITHUB_OUTPUT"
           else
             # Limited matrix for other events (push, pull_request)
-            echo "matrix={\"os-release\":[\"10\"]" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"os-release\":[\"10\"]}" >> "$GITHUB_OUTPUT"
           fi
 
   rocky-linux:

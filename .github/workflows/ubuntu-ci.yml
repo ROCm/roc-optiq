@@ -36,14 +36,14 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
             # Full matrix for the 'schedule' event
-            echo "matrix={\"os-release\":[\"22.04\", \"24.04\"]" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"os-release\":[\"22.04\", \"24.04\"]}" >> "$GITHUB_OUTPUT"
           else
             # Limited matrix for other events (push, pull_request)
-            echo "matrix={\"os-release\":[\"24.04\"]" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"os-release\":[\"24.04\"]}" >> "$GITHUB_OUTPUT"
           fi
 
   ubuntu:
-    name: Ubuntu ${{ matrix.os-release }} • Build Visualizer
+    name: Ubuntu ${{ matrix.os-release }} • Build Optiq
     needs: [set-matrix]
     strategy:
       fail-fast: false

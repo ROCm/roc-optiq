@@ -198,6 +198,8 @@ ComputeTableView::RebuildTableDataCache()
             AddTable(cat->id, tbl);
         }
     }
+
+    RestoreMetricPining();
 }
 
 void
@@ -226,13 +228,18 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
         return model.GetKernelMetricValue(m_client_id, kernel_id, category_id, table->id,
                                           eid);
     });
+}
 
+void
+ComputeTableView::RestoreMetricPining()
+{
     auto pined_metrics = m_pined_metric_table.GetPinedMetricIds();
     for(MetricId id : pined_metrics)
     {
-        if (!widget.IsMetricPined(id))
+        auto& table = m_table_widgets[id.GetTableKey()];
+        if(!table.IsMetricPined(id))
         {
-            widget.ChangePinState(id);
+            table.ChangePinState(id);
         }
     }
 }

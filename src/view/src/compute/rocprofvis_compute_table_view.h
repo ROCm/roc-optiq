@@ -31,6 +31,7 @@ private:
     void FetchAllMetrics();
     void RebuildTableDataCache();
     void AddTable(uint32_t category_id, const AvailableMetrics::Table* table);
+    void RestoreMetricPining();
 
     DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;

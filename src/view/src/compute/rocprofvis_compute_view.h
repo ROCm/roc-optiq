@@ -7,8 +7,6 @@
 #include "widgets/rocprofvis_query_builder.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_compute_selection.h"
-#include "rocprofvis_compute_kernel_details.h"
-
 
 namespace RocProfVis
 {

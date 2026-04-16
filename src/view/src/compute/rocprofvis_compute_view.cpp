@@ -13,6 +13,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "rocprofvis_compute_kernel_details.h"
 
 #include "implot/implot.h"
 #include "spdlog/spdlog.h"
@@ -118,6 +119,7 @@ void
 ComputeView::CreateView()
 {
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
+
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{ "Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false });

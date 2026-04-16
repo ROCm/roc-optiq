@@ -1,6 +1,6 @@
-ARG DISTRO=rockylinux
+ARG DISTRO=rhel
 ARG VERSION=10
-FROM rockylinux/${DISTRO}:${VERSION}
+FROM rockylinux/rockylinux:${VERSION}
 
 ARG VULKAN_SDK_VERSION=1.4.328.1
 

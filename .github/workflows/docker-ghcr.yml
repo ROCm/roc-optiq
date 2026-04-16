@@ -42,9 +42,6 @@ jobs:
           DISTRO=$(echo $OS_RELEASE | cut -d'-' -f1)
           VERSION=$(echo $OS_RELEASE | cut -d'-' -f2)
           DOCKER_FILE=docker/Dockerfile.$DISTRO
-          if [[ "$DISTRO" == "rhel" ]]; then
-            DISTRO=rockylinux
-          fi
           echo "distro=$DISTRO" >> $GITHUB_OUTPUT 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "docker_file=$DOCKER_FILE" >> $GITHUB_OUTPUT

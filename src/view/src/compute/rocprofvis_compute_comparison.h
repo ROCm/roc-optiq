@@ -53,9 +53,19 @@ private:
         // Clients populate data via Rows of Values...
         struct Value
         {
+            enum class Role
+            {
+                Other,
+                Baseline,
+                Target,
+                Difference,
+                DifferencePercent,
+            };
             std::string           name;
             std::optional<double> data;
             DisplayProps          display_props;
+            Role                  role = Role::Other;
+            std::string           compare_group;
         };
         struct Row
         {
@@ -72,9 +82,11 @@ private:
             // Internal persistant Value storage, never changes once added...
             struct Value
             {
-                std::string  name;
-                std::string  data;
-                DisplayProps display_props;
+                std::string       name;
+                std::string       data;
+                DisplayProps      display_props;
+                Table::Value::Role role = Table::Value::Role::Other;
+                std::string       compare_group;
             };
             // Render representation, rebuilt/reordered as needed when rows/columns
             // change...
@@ -104,6 +116,7 @@ private:
 
         // Getters...
         const std::vector<Row>&         Rows() const;
+        std::vector<Row>&               MutableRows();
         const std::vector<std::string>& OrderedValueNames() const;
 
         // Row manipulation...
@@ -185,6 +198,10 @@ private:
 
     void FetchMetrics();
     void UpdateMetrics();
+    void UpdateDifferenceHighlighting();
+    bool GetDifferenceHighlightProps(double rounded_baseline, double rounded_target,
+                                     Colors& diff_color, const char*& icon,
+                                     ImU32& alpha) const;
 
     void RenderToolbar();
     void RenderCategory(const size_t i);
@@ -199,6 +216,7 @@ private:
     uint32_t m_target_workload_id;
     uint32_t m_target_kernel_id;
     bool     m_filter_common_metrics;
+    float    m_percentage_threshold;
 
     // Internal state...
     bool        m_inputs_changed;

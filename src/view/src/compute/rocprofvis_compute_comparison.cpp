@@ -46,6 +46,7 @@ ComputeComparisonView::ComputeComparisonView(
 , m_loading(false)
 , m_retry_fetch(false)
 , m_filter_common_metrics(false)
+, m_percentage_threshold(0.0f)
 , m_layout(nullptr)
 , m_toolbar_available_width(0.0f)
 , m_tab_container(nullptr)
@@ -380,35 +381,23 @@ ComputeComparisonView::UpdateMetrics()
                                 if(baseline_value && target_value &&
                                    rounded_baseline != rounded_target)
                                 {
-                                    bg_color_baseline = Table::DisplayProps::Color{
-                                        Colors::kComparisonBase, 255
-                                    };
-                                    bg_color_target = Table::DisplayProps::Color{
-                                        Colors::kComparisonTarget, 255
-                                    };
-                                    if(rounded_target > rounded_baseline)
+                                    Colors      diff_color = Colors::kComparisonGreater;
+                                    const char* diff_icon  = ICON_ARROW_UP;
+                                    ImU32       diff_alpha = 255;
+                                    if(GetDifferenceHighlightProps(
+                                           rounded_baseline, rounded_target,
+                                           diff_color, diff_icon, diff_alpha))
                                     {
-                                        bg_color_difference = Table::DisplayProps::Color{
-                                            Colors::kComparisonGreater, 255
+                                        bg_color_baseline = Table::DisplayProps::Color{
+                                            Colors::kComparisonBase, 255
                                         };
-                                        icon = ICON_ARROW_UP;
-                                    }
-                                    else
-                                    {
-                                        bg_color_difference = Table::DisplayProps::Color{
-                                            Colors::kComparisonLesser, 255
+                                        bg_color_target = Table::DisplayProps::Color{
+                                            Colors::kComparisonTarget, 255
                                         };
-                                        icon = ICON_ARROW_DOWN;
-                                    }
-                                    if(rounded_baseline != 0.0)
-                                    {
-                                        bg_color_difference.value().alpha =
-                                            std::min(static_cast<ImU32>(
-                                                         std::abs(rounded_target -
-                                                                  rounded_baseline) /
-                                                             rounded_baseline * 255 +
-                                                         25),
-                                                     ImU32(255));
+                                        bg_color_difference =
+                                            Table::DisplayProps::Color{ diff_color,
+                                                                        diff_alpha };
+                                        icon = diff_icon;
                                     }
                                 }
                             }
@@ -424,14 +413,18 @@ ComputeComparisonView::UpdateMetrics()
                                 baseline_value ? std::make_optional(rounded_baseline)
                                                : std::nullopt,
                                 Table::DisplayProps{ bg_color_baseline, text_color,
-                                                     std::nullopt } });
+                                                     std::nullopt },
+                                Table::Value::Role::Baseline,
+                                value_name });
                             row_value[0].emplace_back(Table::Value{
                                 "Target " + value_name,
                                 valid_match && target_value
                                     ? std::make_optional(rounded_target)
                                     : std::nullopt,
                                 Table::DisplayProps{ bg_color_target, text_color,
-                                                     std::nullopt } });
+                                                     std::nullopt },
+                                Table::Value::Role::Target,
+                                value_name });
                             row_value[0].emplace_back(Table::Value{
                                 "Difference##" + value_name,
                                 valid_match && baseline_value && target_value
@@ -439,7 +432,9 @@ ComputeComparisonView::UpdateMetrics()
                                                          rounded_baseline)
                                     : std::nullopt,
                                 Table::DisplayProps{ bg_color_difference, text_color,
-                                                     icon } });
+                                                     icon },
+                                Table::Value::Role::Difference,
+                                value_name });
                             row_value[0].emplace_back(Table::Value{
                                 "Difference (%)##" + value_name,
                                 valid_match && baseline_value && target_value &&
@@ -451,27 +446,37 @@ ComputeComparisonView::UpdateMetrics()
                                           ROUND_FACTOR)
                                     : std::nullopt,
                                 Table::DisplayProps{ bg_color_difference, text_color,
-                                                     icon } });
+                                                     icon },
+                                Table::Value::Role::DifferencePercent,
+                                value_name });
                             if(!valid_match && row_entry.count(1) > 0)
                             {
                                 row_value[1].emplace_back(Table::Value{
                                     "Baseline " + value_name, std::nullopt,
                                     Table::DisplayProps{ bg_color_baseline, text_color,
-                                                         std::nullopt } });
+                                                         std::nullopt },
+                                    Table::Value::Role::Baseline,
+                                    value_name });
                                 row_value[1].emplace_back(Table::Value{
                                     "Target " + value_name,
                                     target_value ? std::make_optional(rounded_target)
                                                  : std::nullopt,
                                     Table::DisplayProps{ bg_color_target, text_color,
-                                                         std::nullopt } });
+                                                         std::nullopt },
+                                    Table::Value::Role::Target,
+                                    value_name });
                                 row_value[1].emplace_back(Table::Value{
                                     "Difference##" + value_name, std::nullopt,
                                     Table::DisplayProps{ std::nullopt, text_color,
-                                                         std::nullopt } });
+                                                         std::nullopt },
+                                    Table::Value::Role::Difference,
+                                    value_name });
                                 row_value[1].emplace_back(Table::Value{
                                     "Difference (%)##" + value_name, std::nullopt,
                                     Table::DisplayProps{ std::nullopt, text_color,
-                                                         std::nullopt } });
+                                                         std::nullopt },
+                                    Table::Value::Role::DifferencePercent,
+                                    value_name });
                             }
                         }
                         for(uint32_t k = 0; k < row_value.size(); k++)
@@ -525,6 +530,179 @@ ComputeComparisonView::UpdateMetrics()
             }
             m_tab_container->SetAllowToolTips(true);
         }
+    }
+}
+
+bool
+ComputeComparisonView::GetDifferenceHighlightProps(double      rounded_baseline,
+                                                   double      rounded_target,
+                                                   Colors&     diff_color,
+                                                   const char*& icon,
+                                                   ImU32&      alpha) const
+{
+    if(rounded_baseline == rounded_target)
+    {
+        return false;
+    }
+
+    double percentage_diff = 0.0;
+    if(rounded_baseline != 0.0)
+    {
+        percentage_diff =
+            std::abs((rounded_target - rounded_baseline) / rounded_baseline * 100.0);
+    }
+    else if(rounded_target != 0.0)
+    {
+        // If baseline is 0 but target is not
+        percentage_diff = 100.0;
+    }
+
+    if(percentage_diff < m_percentage_threshold)
+    {
+        return false;
+    }
+
+    if(rounded_target > rounded_baseline)
+    {
+        diff_color = Colors::kComparisonGreater;
+        icon       = ICON_ARROW_UP;
+    }
+    else
+    {
+        diff_color = Colors::kComparisonLesser;
+        icon       = ICON_ARROW_DOWN;
+    }
+
+    alpha = 255;
+    if(rounded_baseline != 0.0)
+    {
+        alpha = std::min(static_cast<ImU32>(
+                             std::abs(rounded_target - rounded_baseline) /
+                                 rounded_baseline * 255 +
+                             25),
+                         ImU32(255));
+    }
+
+    return true;
+}
+
+void
+ComputeComparisonView::UpdateDifferenceHighlighting()
+{
+    auto recolor_table = [this](Table& table) {
+        std::vector<Table::Row>& rows = table.MutableRows();
+        for(Table::Row& row : rows)
+        {
+            // Skip mismatched rows. They keep their dimmed appearance.
+            if(row.tags.test(ROW_TAG_INVALID_MATCH))
+            {
+                continue;
+            }
+
+            struct ValueGroup
+            {
+                Table::Row::Value* baseline = nullptr;
+                Table::Row::Value* target   = nullptr;
+                Table::Row::Value* diff     = nullptr;
+                Table::Row::Value* diff_pct = nullptr;
+            };
+            std::unordered_map<std::string, ValueGroup> grouped_values;
+            for(auto& [_, value] : row.values_map)
+            {
+                ValueGroup& group = grouped_values[value.compare_group];
+                switch(value.role)
+                {
+                    case Table::Value::Role::Baseline:
+                    {
+                        group.baseline = &value;
+                        break;
+                    }
+                    case Table::Value::Role::Target:
+                    {
+                        group.target = &value;
+                        break;
+                    }
+                    case Table::Value::Role::Difference:
+                    {
+                        group.diff = &value;
+                        break;
+                    }
+                    case Table::Value::Role::DifferencePercent:
+                    {
+                        group.diff_pct = &value;
+                        break;
+                    }
+                    default:
+                    {
+                        break;
+                    }
+                }
+            }
+
+            for(auto& [_, group] : grouped_values)
+            {
+                if(!group.baseline || !group.target || !group.diff || !group.diff_pct)
+                {
+                    continue;
+                }
+
+                Table::Row::Value& baseline_value = *group.baseline;
+                Table::Row::Value& target_value   = *group.target;
+                Table::Row::Value& diff_value     = *group.diff;
+                Table::Row::Value& diff_pct_value = *group.diff_pct;
+
+                baseline_value.display_props.bg_color = std::nullopt;
+                target_value.display_props.bg_color   = std::nullopt;
+                diff_value.display_props.bg_color     = std::nullopt;
+                diff_pct_value.display_props.bg_color = std::nullopt;
+                diff_value.display_props.icon         = std::nullopt;
+                diff_pct_value.display_props.icon     = std::nullopt;
+
+                if(baseline_value.data.empty() || target_value.data.empty())
+                {
+                    continue;
+                }
+
+                const double rounded_baseline = std::atof(baseline_value.data.c_str());
+                const double rounded_target   = std::atof(target_value.data.c_str());
+                Colors      diff_color = Colors::kComparisonGreater;
+                const char* diff_icon  = ICON_ARROW_UP;
+                ImU32       diff_alpha = 255;
+                if(!GetDifferenceHighlightProps(rounded_baseline, rounded_target,
+                                                diff_color, diff_icon, diff_alpha))
+                {
+                    continue;
+                }
+
+                baseline_value.display_props.bg_color =
+                    Table::DisplayProps::Color{ Colors::kComparisonBase, 255 };
+                target_value.display_props.bg_color =
+                    Table::DisplayProps::Color{ Colors::kComparisonTarget, 255 };
+                diff_value.display_props.bg_color =
+                    Table::DisplayProps::Color{ diff_color, diff_alpha };
+                diff_pct_value.display_props.bg_color =
+                    Table::DisplayProps::Color{ diff_color, diff_alpha };
+                diff_value.display_props.icon     = diff_icon;
+                diff_pct_value.display_props.icon = diff_icon;
+            }
+        }
+    };
+
+    for(CategoryModel& category : m_categories)
+    {
+        for(std::shared_ptr<Table>& table : category.tables)
+        {
+            if(!table)
+            {
+                continue;
+            }
+            recolor_table(*table);
+        }
+    }
+
+    if(m_pinned_table)
+    {
+        recolor_table(*m_pinned_table);
     }
 }
 
@@ -606,7 +784,28 @@ ComputeComparisonView::RenderToolbar()
         ImGui::EndCombo();
     }
     ImGui::EndDisabled();
-    VerticalSeparator(&m_settings);
+    
+    float window_width = ImGui::GetWindowWidth(); 
+    VerticalSeparator(&m_settings);   
+    ImGui::TextUnformatted("Delta Threshold");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 4.0f);
+    if(ImGui::DragFloat("##threshold_percentage", &m_percentage_threshold, 0.1f,
+                        0.0f, 100.0f, "%.1f%%"))
+    {
+        UpdateDifferenceHighlighting();
+    }
+    if(BeginItemTooltipStyled())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
+        ImGui::TextUnformatted(
+            "Minimum percentage difference required to mark metrics as different. "
+            "Set to 0 to highlight all differences.");
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();
+    }
+    ImGui::SameLine();
+
     if(m_toolbar_available_width != 0.0)
     {
         float legend_width =
@@ -694,7 +893,7 @@ ComputeComparisonView::RenderToolbar()
             }
         }
     }
-    float window_width = ImGui::GetWindowWidth();
+
     if(BeginItemTooltipStyled())
     {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
@@ -1264,6 +1463,12 @@ ComputeComparisonView::Table::Rows() const
     return m_rows;
 }
 
+std::vector<ComputeComparisonView::Table::Row>&
+ComputeComparisonView::Table::MutableRows()
+{
+    return m_rows;
+}
+
 const std::vector<std::string>&
 ComputeComparisonView::Table::OrderedValueNames() const
 {
@@ -1312,6 +1517,8 @@ ComputeComparisonView::Table::AddRow(const AvailableMetrics::Entry* entry,
                 m_value_columns.at(values[i].name).ref_count++;
             }
             values_map[values[i].name].display_props = std::move(values[i].display_props);
+            values_map[values[i].name].role          = values[i].role;
+            values_map[values[i].name].compare_group = values[i].compare_group;
         }
         m_rows.emplace_back(Row{ Row::ID{ std::to_string(entry->category_id) + "." +
                                               std::to_string(entry->table_id) + "." +

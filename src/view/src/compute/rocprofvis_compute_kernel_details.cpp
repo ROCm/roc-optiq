@@ -178,8 +178,9 @@ void ComputeKernelDetailsView::SubscribeToEvents()
 
         if(m_kernel_metric_table)
         {
-            m_kernel_metric_table->SetExternalQuery(evt->GetMetricId(),
-                                                    evt->GetValueName());
+            m_kernel_metric_table->SetExternalQuery(
+                MetricId{ evt->GetCategoryId(), evt->GetTableId(), evt->GetEntryId() },
+                evt->GetValueName());
         }
     };
 

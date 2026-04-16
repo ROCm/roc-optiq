@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "model/compute/rocprofvis_compute_model_types.h"
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -221,14 +220,17 @@ private:
 class ComputeAddMetricToKernelDetailsEvent : public RocEvent
 {
 public:
-    ComputeAddMetricToKernelDetailsEvent(MetricId metric_id,
-                                         const std::string& value_name,
-                                         const std::string& source_id);
-    MetricId GetMetricId() const;
+    ComputeAddMetricToKernelDetailsEvent(uint32_t category_id, uint32_t table_id, uint32_t entry_id,
+                                         const std::string& value_name, const std::string& source_id);
+    uint32_t GetCategoryId() const;
+    uint32_t GetTableId() const;
+    uint32_t GetEntryId() const;
     const std::string& GetValueName() const;
 
 private:
-    MetricId     m_metric_id;
+    uint32_t m_category_id;
+    uint32_t m_table_id;
+    uint32_t m_entry_id;
     std::string  m_value_name;
 };
 

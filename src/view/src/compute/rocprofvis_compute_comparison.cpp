@@ -784,14 +784,59 @@ ComputeComparisonView::RenderToolbar()
         ImGui::EndCombo();
     }
     ImGui::EndDisabled();
-    
-    float window_width = ImGui::GetWindowWidth(); 
-    VerticalSeparator(&m_settings);   
-    ImGui::TextUnformatted("Delta Threshold");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 4.0f);
-    if(ImGui::DragFloat("##threshold_percentage", &m_percentage_threshold, 0.1f,
-                        0.0f, 100.0f, "%.1f%%"))
+
+    float window_width = ImGui::GetWindowWidth();
+
+    float delta_threshold_width = ImGui::GetFrameHeight() * 3.0f;
+    float legend_width =
+        8.0f * style.FramePadding.x + 4.0f * ImGui::GetFrameHeight() +
+        ImGui::CalcTextSize("Baseline").x + ImGui::CalcTextSize("Target").x +
+        2.0f * ImGui::CalcTextSize("Difference[X]").x + delta_threshold_width;
+
+    if(m_toolbar_available_width > legend_width)
+    {
+        ImGui::Dummy(ImVec2(m_toolbar_available_width - legend_width,
+                            ImGui::GetFrameHeightWithSpacing()));
+    }
+    ImGui::SameLine();
+    VerticalSeparator(&m_settings);
+    ImVec4 bg_base =
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonBase));
+    ImVec4 bg_target =
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonTarget));
+    ImVec4 bg_lesser =
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonLesser));
+    ImVec4 bg_greater =
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonGreater));
+    ImGui::SameLine();
+    ImGui::ColorEdit4("b", &bg_base.x, LEGEND_FLAGS);
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::TextUnformatted("Baseline");
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::ColorEdit4("t", &bg_target.x, LEGEND_FLAGS);
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::TextUnformatted("Target");
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::ColorEdit4("d<", &bg_lesser.x, LEGEND_FLAGS);
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::TextUnformatted("Difference");
+    ImGui::SameLine();
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::TextUnformatted(ICON_ARROW_DOWN);
+    ImGui::PopFont();
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::ColorEdit4("d>", &bg_greater.x, LEGEND_FLAGS);
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::TextUnformatted("Difference");
+    ImGui::SameLine();
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::TextUnformatted(ICON_ARROW_UP);
+    ImGui::PopFont();
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 3.0f);
+    if(ImGui::DragFloat("##threshold_percentage", &m_percentage_threshold, 0.1f, 0.0f,
+                        100.0f, "%.1f%%"))
     {
         UpdateDifferenceHighlighting();
     }
@@ -804,59 +849,7 @@ ComputeComparisonView::RenderToolbar()
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }
-    ImGui::SameLine();
 
-    if(m_toolbar_available_width != 0.0)
-    {
-        float legend_width =
-            7.0f * style.FramePadding.x + 4.0f * ImGui::GetFrameHeight() +
-            ImGui::CalcTextSize("Baseline").x + ImGui::CalcTextSize("Target").x +
-            2.0f * ImGui::CalcTextSize("Difference[X]").x;
-        if(m_toolbar_available_width > legend_width)
-        {
-            ImGui::Dummy(ImVec2(m_toolbar_available_width - legend_width,
-                                ImGui::GetFrameHeightWithSpacing()));
-            ImGui::SameLine();
-            VerticalSeparator(&m_settings);
-            ImVec4 bg_base = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kComparisonBase));
-            ImVec4 bg_target = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kComparisonTarget));
-            ImVec4 bg_lesser = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kComparisonLesser));
-            ImVec4 bg_greater = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kComparisonGreater));
-            ImGui::SameLine();
-            ImGui::ColorEdit4("b", &bg_base.x, LEGEND_FLAGS);
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::TextUnformatted("Baseline");
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::ColorEdit4("t", &bg_target.x, LEGEND_FLAGS);
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::TextUnformatted("Target");
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::ColorEdit4("d<", &bg_lesser.x, LEGEND_FLAGS);
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::TextUnformatted("Difference");
-            ImGui::SameLine();
-            ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-            ImGui::TextUnformatted(ICON_ARROW_DOWN);
-            ImGui::PopFont();
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::ColorEdit4("d>", &bg_greater.x, LEGEND_FLAGS);
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::TextUnformatted("Difference");
-            ImGui::SameLine();
-            ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-            ImGui::TextUnformatted(ICON_ARROW_UP);
-            ImGui::PopFont();
-        }
-        else
-        {
-            ImGui::Dummy(
-                ImVec2(m_toolbar_available_width, ImGui::GetFrameHeightWithSpacing()));
-        }
-    }
     VerticalSeparator(&m_settings);
     if(ImGui::Button(m_filter_common_metrics ? "Show Common Metrics" : "Show All Metrics",
                      ImVec2(ImGui::CalcTextSize("Show Common Metrics").x +

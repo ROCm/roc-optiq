@@ -50,7 +50,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/rocm/optiq-ci-rhel:${{ matrix.os-release }}
-    name: RockyLinux ${{ matrix.os-release }} • Build Optiq
 
     steps:
       - uses: actions/checkout@v6
@@ -58,6 +57,7 @@ jobs:
           submodules: true
 
       - name: Build, Make, and Verify Installation
+        shell: bash
         run: |
           source /opt/vulkan/**/setup-env.sh
           cmake -B build --install-prefix /opt/roc-optiq

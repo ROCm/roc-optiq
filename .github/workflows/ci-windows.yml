@@ -24,7 +24,7 @@ env:
   BUILD_FILE_NAME: "roc-optiq"
 
 jobs:
-  ubuntu:
+  windows:
     name: Windows • Build Optiq
     runs-on: windows-latest
     steps:

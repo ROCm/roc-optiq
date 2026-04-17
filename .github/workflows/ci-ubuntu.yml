@@ -57,6 +57,7 @@ jobs:
           submodules: true
 
       - name: Build, Make, and Verify Installation
+        shell: bash
         run: |
           source /opt/vulkan/**/setup-env.sh
           cmake -B build --install-prefix /opt/roc-optiq

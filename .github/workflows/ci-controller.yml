@@ -26,35 +26,17 @@ env:
   REDHAT_CI_OS_VERSIONS: '[ "10" ]'
 
 jobs:
-  setup:
-    name: Setup
-    runs-on: ubuntu-latest
-    outputs:
-      ubuntu_versions: ${{ steps.setup.outputs.ubuntu_versions }}
-      redhat_versions: ${{ steps.setup.outputs.redhat_versions }}
-    steps:
-      - name: Set up OS versions
-        id: setup
-        run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "ubuntu_versions=$UBUNTU_FULL_OS_VERSIONS" >> "$GITHUB_OUTPUT"
-            echo "redhat_versions=$REDHAT_FULL_OS_VERSIONS" >> "$GITHUB_OUTPUT"
-          else
-            echo "ubuntu_versions=$UBUNTU_CI_OS_VERSIONS" >> "$GITHUB_OUTPUT"
-            echo "redhat_versions=$REDHAT_CI_OS_VERSIONS" >> "$GITHUB_OUTPUT"
-          fi
-
   ci-redhat:
     name: RedHat CI
     uses: ./.github/workflows/ci-redhat.yml
     with:
-      os-version: ${{ fromJson(needs.setup.outputs.redhat_versions) }}
+      os-version: ${{ github.event_name == 'schedule' && env.REDHAT_FULL_OS_VERSIONS || env.REDHAT_CI_OS_VERSIONS }}
 
   ci-ubuntu:
     name: Ubuntu CI
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
-      os-version: ${{ fromJson(needs.setup.outputs.ubuntu_versions) }}
+      os-version: ${{ github.event_name == 'schedule' && env.UBUNTU_FULL_OS_VERSIONS || env.UBUNTU_CI_OS_VERSIONS }}
 
   ci-windows:
     name: Windows CI

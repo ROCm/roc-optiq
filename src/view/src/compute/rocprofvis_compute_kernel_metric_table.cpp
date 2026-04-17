@@ -808,7 +808,9 @@ KernelMetricTable::ComputeColumnMaxValues(
                 continue;
             char*  end = nullptr;
             double val = std::strtod(row[col].c_str(), &end);
-            if(end != row[col].c_str())
+            // Skip non-finite values (inf / -inf / NaN) so they don't
+            // saturate the max and break bar chart scaling for other rows.
+            if(end != row[col].c_str() && std::isfinite(val))
                 max_val = std::max(max_val, std::abs(val));
         }
         if(max_val > 0.0)

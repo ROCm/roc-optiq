@@ -47,7 +47,7 @@ jobs:
         run: |
           source /opt/vulkan/**/setup-env.sh
           cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} --install-prefix /opt/roc-optiq
-          cmake --build ${{ env.BUILD_DIR }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4 --target package
+          cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"
           else

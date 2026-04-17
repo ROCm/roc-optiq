@@ -1428,24 +1428,28 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
         nfdu8char_t* outPath = nullptr;
 
-        nfdu8filteritem_t*       filters = new nfdu8filteritem_t[file_filters.size()];
+        nfdu8filteritem_t*       filters = nullptr;
         std::vector<std::string> extension_stings;
-        for(size_t i = 0; i < file_filters.size(); ++i)
+        if(!file_filters.empty())
         {
-            std::string extensions_str;
-            for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
+            filters = new nfdu8filteritem_t[file_filters.size()];
+            for(size_t i = 0; i < file_filters.size(); ++i)
             {
-                extensions_str += file_filters[i].m_extensions[j];
-                if(j < file_filters[i].m_extensions.size() - 1)
+                std::string extensions_str;
+                for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
                 {
-                    extensions_str += ",";
+                    extensions_str += file_filters[i].m_extensions[j];
+                    if(j < file_filters[i].m_extensions.size() - 1)
+                    {
+                        extensions_str += ",";
+                    }
                 }
+                extension_stings.push_back(std::move(extensions_str));
             }
-            extension_stings.push_back(std::move(extensions_str));
-        }
-        for(size_t i = 0; i < file_filters.size(); ++i)
-        {
-            filters[i] = { file_filters[i].m_name.c_str(), extension_stings[i].c_str() };
+            for(size_t i = 0; i < file_filters.size(); ++i)
+            {
+                filters[i] = { file_filters[i].m_name.c_str(), extension_stings[i].c_str() };
+            }
         }
 
         nfdresult_t result;
@@ -1472,7 +1476,7 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         else
         {
             nfdopendialogu8args_t args = {};
-            args.filterList            = filters;
+            args.filterList  = filters;
             args.filterCount = static_cast<nfdfiltersize_t>(file_filters.size());
             if(!initial_path.empty())
             {
@@ -1480,15 +1484,21 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
             }
             result = NFD_OpenDialogU8_With(&outPath, &args);
         }
-        delete[] filters;
+        if(filters != nullptr)
+        {
+            delete[] filters;
+        }
         std::string file_path;
         if(result == NFD_OKAY)
         {
             file_path = outPath;
             if(outPath)
             {
+                // Save dialog only: append default extension when the name has none (e.g. Linux save).
+                // Open dialog must not do this — extensionless executables would get ".*/.exe" appended
+                // from the filter list (e.g. "transpose" + "."" + ".*" -> "transpose..*").
                 std::filesystem::path p(file_path);
-                if(!path_picker &&!p.has_extension())
+                if(save_dialog && !path_picker && !file_filters.empty() && !p.has_extension())
                 {
                     file_path += "." + file_filters[0].m_extensions[0];
                 }
@@ -1552,13 +1562,21 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
         }
     }
 
+    // Empty filter list would leave ImGuiFileDialog with no dLGFilters, which rejects every file.
+    // Regex form matches any file name including extensionless executables (Linux/macOS).
+    std::string filter_string = filter_stream.str();
+    if(filter_string.empty())
+    {
+        filter_string = "All files{((.*))}";
+    }
+
     IGFD::FileDialogConfig config;
     config.path  = initial_path;
     config.flags = confirm_overwrite
                        ? ImGuiFileDialogFlags_Default
                        : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
     ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title,
-                                            filter_stream.str().c_str(), config);
+                                            filter_string.c_str(), config);
 }
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE

@@ -9,11 +9,28 @@
 #include "imgui.h"
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace RocProfVis
 {
 namespace View
 {
+namespace
+{
+
+std::vector<FileFilter> executable_open_file_filters()
+{
+#ifdef _WIN32
+    return {{"Executables", {".exe"}}, {"All Files", {".*"}}};
+#else
+    // NFD: filterCount 0 shows every file (extensionless binaries, scripts, etc.).
+    // A synthetic ".*" filter hides files with no extension on Linux portals.
+    return {};
+#endif
+}
+
+}  // namespace
+
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     : m_app_window(app_window)
@@ -415,14 +432,9 @@ void ProfilerLauncherDialog::OnBrowseProfilerPath()
         return;
     }
 
-    std::vector<FileFilter> filters = {
-        {"Executables", {".exe"}},
-        {"All Files", {".*"}}
-    };
-
     m_app_window->ShowOpenFileDialog(
         "Choose Profiler Executable",
-        filters,
+        executable_open_file_filters(),
         "",
         [this](const std::string& path) { OnProfilerPathSelected(path); }
     );
@@ -435,14 +447,9 @@ void ProfilerLauncherDialog::OnBrowseTargetExecutable()
         return;
     }
 
-    std::vector<FileFilter> filters = {
-        {"Executables", {".exe"}},
-        {"All Files", {".*"}}
-    };
-
     m_app_window->ShowOpenFileDialog(
         "Choose Target Executable",
-        filters,
+        executable_open_file_filters(),
         "",
         [this](const std::string& path) { OnTargetExecutableSelected(path); }
     );

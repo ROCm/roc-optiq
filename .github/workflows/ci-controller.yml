@@ -27,7 +27,7 @@ env:
 
 jobs:
   setup:
-    name: Setup CI Run
+    name: Setup
     runs-on: ubuntu-latest
     outputs:
       ubuntu_versions: ${{ steps.setup.outputs.ubuntu_versions }}
@@ -46,14 +46,12 @@ jobs:
 
   ci-redhat:
     name: RedHat CI
-    needs: setup
     uses: ./.github/workflows/ci-redhat.yml
     with:
       os-version: ${{ fromJson(needs.setup.outputs.redhat_versions) }}
 
   ci-ubuntu:
     name: Ubuntu CI
-    needs: setup
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
       os-version: ${{ fromJson(needs.setup.outputs.ubuntu_versions) }}

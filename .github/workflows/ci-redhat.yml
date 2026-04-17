@@ -1,4 +1,4 @@
-name: Redhat Continuous Integration
+name: RedHat (Rockylinux) Continuous Integration
 run-name: roc-optiq-redhat-ci
 
 on:

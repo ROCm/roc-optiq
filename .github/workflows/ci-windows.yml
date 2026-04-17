@@ -1,5 +1,5 @@
 name: Windows Continuous Integration 
-run-name: rocprofiler-visualizer-windows-ci
+run-name: roc-optiq-windows-ci
 
 on:
   workflow_dispatch:

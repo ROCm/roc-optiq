@@ -541,7 +541,6 @@ PinnedMetricTable::FillUnavailableRow(const MetricId& metric_id)
     Row row;
     row.pinned = true;
     row.values[1].value = metric_id.ToString();
-    //row.values[2].value = "";
     row.values[LAST_INDEX].value = "";
     m_rows[metric_id] = std::move(row);
 }
@@ -610,25 +609,6 @@ PinnedMetricTable::Update()
         m_ids_to_delete.clear();
     }
 }
-
-//void
-//PinnedMetricTable::Update(const std::set<MetricId>& pinned_metric)
-//{
-//    for(const auto& metric_id : pinned_metric)
-//    {
-//        if(!m_rows.count(metric_id))
-//        {
-//            AddRow(metric_id);
-//        }
-//    }
-//    for(const auto& [metric_id, row] : m_rows)
-//    {
-//        if(!pinned_metric.count(metric_id))
-//        {
-//            m_ids_to_delete.insert(metric_id);
-//        }
-//    }
-//}
 
 //---------------------------------------------------------
 

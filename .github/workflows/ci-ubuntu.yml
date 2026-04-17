@@ -10,10 +10,6 @@ on:
         required: true
         default: '[ "22.04", "24.04" ]'
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   BUILD_FILE_NAME: "roc-optiq"
 

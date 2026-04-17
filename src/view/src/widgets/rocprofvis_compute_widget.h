@@ -37,7 +37,7 @@ public:
     virtual ~MetricTableBase() = default;
     void Render() override;
     void ChangePinState(const MetricId& metric_id);
-    bool IsMetricPined(MetricId metric_id);
+    bool IsMetricPinned(MetricId metric_id);
     void SetPinMetricCallback(std::function<void(MetricId)> callback);
 protected:
     virtual void ContextMenu(const char* value_to_copy, uint32_t column_index,
@@ -52,9 +52,9 @@ protected:
     bool IsValueColumn(uint32_t column_index) const;
     virtual void RenderEmptyTable() = 0;
 
-    std::map<uint32_t, std::string>                 m_columns;
-    std::uint32_t                                   m_lust_column_index = 0;
-    std::unordered_map<MetricId, Row, MetricIdHash> m_rows;
+    std::map<uint32_t, std::string> m_columns;
+    std::uint32_t                   m_lust_column_index = 0;
+    std::map<MetricId, Row>         m_rows;
 
     std::function<void(MetricId)> m_pin_metric_clicked;
     std::string                   m_event_source_id;
@@ -88,17 +88,17 @@ private:
     virtual void RenderEmptyTable() override;
 };
 
-class PinedMetricTable: public MetricTableBase
+class PinnedMetricTable: public MetricTableBase
 {
 public:
-    PinedMetricTable(DataProvider&                     data_provider,
-                     std::shared_ptr<ComputeSelection> compute_selection,
-                     uint64_t                          client_id);
+    PinnedMetricTable(DataProvider&                     data_provider,
+                      std::shared_ptr<ComputeSelection> compute_selection,
+                      uint64_t                          client_id);
     void AddRow(MetricId metric_id); 
     void RemoveRow(MetricId metric_id);
     void RefillTable();
     void Update() override;
-    std::vector<MetricId> GetPinedMetricIds() const;
+    std::vector<MetricId> GetPinnedMetricIds() const;
 
 private:
     void ContextMenu(const char* value_to_copy, uint32_t column_index,

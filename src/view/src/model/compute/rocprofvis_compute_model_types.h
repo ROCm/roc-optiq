@@ -148,6 +148,17 @@ struct MetricId
                entry_id == other.entry_id;
     }
 
+    bool operator<(const MetricId& other) const noexcept
+    {
+        if(category_id != other.category_id)
+            return category_id < other.category_id;
+
+        if(table_id != other.table_id)
+            return table_id < other.table_id;
+
+        return entry_id < other.entry_id;
+    }
+
     static constexpr uint64_t GetTableKey(uint32_t category_id,
                                           uint32_t table_id) noexcept
     {

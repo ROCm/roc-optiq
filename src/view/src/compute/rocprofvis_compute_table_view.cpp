@@ -17,11 +17,11 @@ ComputeTableView::ComputeTableView(
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
-, m_pined_metric_table(data_provider, compute_selection, m_client_id)
+, m_pinned_metric_table(data_provider, compute_selection, m_client_id)
 {
-    m_pined_metric_table.SetPinMetricCallback([this](MetricId metric_id) {
+    m_pinned_metric_table.SetPinMetricCallback([this](MetricId metric_id) {
         m_table_widgets[metric_id.GetTableKey()].ChangePinState(metric_id);
-        m_pined_metric_table.RemoveRow(metric_id);
+        m_pinned_metric_table.RemoveRow(metric_id);
     });
 
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -57,7 +57,7 @@ ComputeTableView::ComputeTableView(
             if(evt->GetClientId() == m_client_id)
                 RebuildTableDataCache();
         }
-        m_pined_metric_table.RefillTable();
+        m_pinned_metric_table.RefillTable();
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
@@ -148,7 +148,7 @@ ComputeTableView::Update()
     if(m_tabs)
         m_tabs->Update();
 
-    m_pined_metric_table.Update();
+    m_pinned_metric_table.Update();
 }
 
 void
@@ -167,7 +167,7 @@ ComputeTableView::Render()
         return;
     }
 
-    m_pined_metric_table.Render();
+    m_pinned_metric_table.Render();
 
     if(m_tabs)
         m_tabs->Render();
@@ -210,10 +210,10 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
         m_table_widgets.try_emplace(key, m_data_provider.GetTraceFilePath());
     MetricTable& widget          = it->second;
     auto pin_metric_func = [this, &widget](MetricId metric_id) {
-        if(widget.IsMetricPined(metric_id))
-            m_pined_metric_table.AddRow(metric_id);
+        if(widget.IsMetricPinned(metric_id))
+            m_pinned_metric_table.AddRow(metric_id);
         else
-            m_pined_metric_table.RemoveRow(metric_id);
+            m_pinned_metric_table.RemoveRow(metric_id);
     };
     widget.SetPinMetricCallback(pin_metric_func);
 
@@ -233,11 +233,11 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
 void
 ComputeTableView::RestoreMetricPining()
 {
-    auto pined_metrics = m_pined_metric_table.GetPinedMetricIds();
-    for(MetricId id : pined_metrics)
+    auto pinned_metrics = m_pinned_metric_table.GetPinnedMetricIds();
+    for(MetricId id : pinned_metrics)
     {
         auto& table = m_table_widgets[id.GetTableKey()];
-        if(!table.IsMetricPined(id))
+        if(!table.IsMetricPinned(id))
         {
             table.ChangePinState(id);
         }

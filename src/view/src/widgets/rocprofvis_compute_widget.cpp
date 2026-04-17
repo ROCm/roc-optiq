@@ -230,9 +230,10 @@ MetricTableBase::FillDefaultColumns()
 }
 
 bool
-MetricTableBase::IsMetricPined(MetricId metric_id)
+MetricTableBase::IsMetricPinned(MetricId metric_id)
 {
-    return m_rows[metric_id].pinned;
+    auto it = m_rows.find(metric_id);
+    return it != m_rows.end() && it->second.pinned;
 }
 
 void
@@ -372,9 +373,9 @@ MetricTable::Empty() const
 
 //---------------------------------------------------------
 
-PinedMetricTable::PinedMetricTable(DataProvider&                     data_provider,
-                                   std::shared_ptr<ComputeSelection> compute_selection,
-                                   uint64_t                          client_id)
+PinnedMetricTable::PinnedMetricTable(DataProvider&                     data_provider,
+                                     std::shared_ptr<ComputeSelection> compute_selection,
+                                     uint64_t                          client_id)
 : MetricTableBase(data_provider.GetTraceFilePath())
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
@@ -387,8 +388,8 @@ PinedMetricTable::PinedMetricTable(DataProvider&                     data_provid
 }
 
 void
-PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
-                              std::pair<const MetricId, Row>& row)
+PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
+                               std::pair<const MetricId, Row>& row)
 {
     if(ImGui::BeginPopupContextItem())
     {
@@ -412,10 +413,10 @@ PinedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
 }
 
 void
-PinedMetricTable::FillMandatoryColumns(const MetricId&                metric_id,
-                                       const AvailableMetrics::Table& table,
-                         Row& row,
-                         std::shared_ptr<MetricValue>     metric_value)
+PinnedMetricTable::FillMandatoryColumns(const MetricId&                metric_id,
+                                        const AvailableMetrics::Table& table,
+                                        Row&                           row,
+                                        std::shared_ptr<MetricValue>   metric_value)
 {
     if(auto entrie = table.entries.find(metric_id.entry_id); entrie != table.entries.end())
     {
@@ -429,7 +430,7 @@ PinedMetricTable::FillMandatoryColumns(const MetricId&                metric_id,
 }
 
 void
-PinedMetricTable::RefillTable()
+PinnedMetricTable::RefillTable()
 {
     m_columns.clear();
     m_lust_column_index = 0;
@@ -441,20 +442,20 @@ PinedMetricTable::RefillTable()
 }
 
 void
-PinedMetricTable::AddRow(MetricId metric_id)
+PinnedMetricTable::AddRow(MetricId metric_id)
 {
     UpdateColumns(metric_id);
     FillTableRow(metric_id);
 }
 
 void
-PinedMetricTable::RemoveRow(MetricId metric_id)
+PinnedMetricTable::RemoveRow(MetricId metric_id)
 {
     m_id_to_delete = metric_id;
 }
 
 void
-PinedMetricTable::UpdateColumns(MetricId metric_id)
+PinnedMetricTable::UpdateColumns(MetricId metric_id)
 {
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
@@ -473,7 +474,7 @@ PinedMetricTable::UpdateColumns(MetricId metric_id)
 }
 
 const AvailableMetrics::Table&
-PinedMetricTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
+PinnedMetricTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
 {
     const auto& tree = m_data_provider.ComputeModel()
                            .GetWorkloads()
@@ -483,7 +484,7 @@ PinedMetricTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
 }
 
 std::optional<uint32_t>
-PinedMetricTable::GetColumnIndex(const std::string& column_name)
+PinnedMetricTable::GetColumnIndex(const std::string& column_name)
 {
     for(auto column : m_columns)
     {
@@ -494,14 +495,14 @@ PinedMetricTable::GetColumnIndex(const std::string& column_name)
 }
 
 void
-PinedMetricTable::RenderEmptyTable()
+PinnedMetricTable::RenderEmptyTable()
 {
     ImGui::TextDisabled((
         " " + std::string(ICON_CHEK_BOX_CHECKED) + " Pin the metric to see it here").c_str());
 }
 
 void
-PinedMetricTable::FillTableRow(const MetricId& metric_id)
+PinnedMetricTable::FillTableRow(const MetricId& metric_id)
 {
     Row row;
     row.pinned = true;
@@ -538,7 +539,7 @@ PinedMetricTable::FillTableRow(const MetricId& metric_id)
 }
 
 void
-PinedMetricTable::Update()
+PinnedMetricTable::Update()
 {
     if(m_id_to_delete.has_value())
     {
@@ -555,15 +556,15 @@ PinedMetricTable::Update()
 }
 
 std::vector<MetricId>
-PinedMetricTable::GetPinedMetricIds() const
+PinnedMetricTable::GetPinnedMetricIds() const
 {
-    std::vector<MetricId> pined_metric_ids;
-    pined_metric_ids.reserve(m_rows.size());
+    std::vector<MetricId> pinned_metric_ids;
+    pinned_metric_ids.reserve(m_rows.size());
     for (auto& row : m_rows)
     {
-        pined_metric_ids.push_back(row.first);
+        pinned_metric_ids.push_back(row.first);
     }
-    return pined_metric_ids;
+    return pinned_metric_ids;
 }
 
 //---------------------------------------------------------

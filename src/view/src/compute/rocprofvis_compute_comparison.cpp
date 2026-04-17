@@ -28,6 +28,7 @@ constexpr ImGuiColorEditFlags LEGEND_FLAGS =
     ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoInputs |
     ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoLabel;
 constexpr size_t ROW_TAG_INVALID_MATCH = 0;
+constexpr size_t FIXED_PREFIX          = 3;
 
 ComputeComparisonView::ComputeComparisonView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
@@ -46,12 +47,14 @@ ComputeComparisonView::ComputeComparisonView(
 , m_loading(false)
 , m_retry_fetch(false)
 , m_filter_common_metrics(false)
+, m_percentage_threshold(0.0f)
 , m_layout(nullptr)
 , m_toolbar_available_width(0.0f)
 , m_tab_container(nullptr)
 , m_pinned_table(nullptr)
 , m_pinned_item(nullptr)
 , m_max_pinned_height(FLT_MAX)
+, m_pinned_columns_dirty(false)
 {
     m_widget_name = GenUniqueName("ComputeComparison");
     m_pinned_table =
@@ -122,7 +125,6 @@ ComputeComparisonView::Update()
         {
             m_tab_container->SetActiveTab(m_active_tab_id);
         }
-        m_data_changed = false;
     }
     for(const CategoryModel& category : m_categories)
     {
@@ -137,6 +139,16 @@ ComputeComparisonView::Update()
     if(m_pinned_table)
     {
         m_pinned_table->Update();
+        if(m_pinned_columns_dirty)
+        {
+            RebuildPinnedDiffEntries();
+            m_pinned_columns_dirty = false;
+        }
+    }
+    if(m_data_changed)
+    {
+        UpdateDifferenceHighlighting();
+        m_data_changed = false;
     }
 }
 
@@ -282,6 +294,7 @@ ComputeComparisonView::UpdateMetrics()
                                                         m_target_kernel_id))
         {
             m_categories.clear();
+            m_diff_cell_groups.clear();
             m_tab_container = std::make_unique<TabContainer>();
             std::vector<const AvailableMetrics::Category*> baseline_categories =
                 m_data_provider.ComputeModel()
@@ -375,41 +388,50 @@ ComputeComparisonView::UpdateMetrics()
                             std::optional<Table::DisplayProps::Color> bg_color_difference;
                             std::optional<Table::DisplayProps::Color> text_color;
                             std::optional<const char*>                icon;
+                            double percentage_diff = 0.0;
+                            Colors diff_color      = Colors::kComparisonGreater;
+                            ImU32  diff_alpha      = 255;
                             if(valid_match)
                             {
                                 if(baseline_value && target_value &&
                                    rounded_baseline != rounded_target)
                                 {
+                                    const char* diff_icon =
+                                        (rounded_target > rounded_baseline)
+                                            ? ICON_ARROW_UP
+                                            : ICON_ARROW_DOWN;
+                                    diff_color =
+                                        (rounded_target > rounded_baseline)
+                                            ? Colors::kComparisonGreater
+                                            : Colors::kComparisonLesser;
+                                    if(rounded_baseline != 0.0)
+                                    {
+                                        percentage_diff =
+                                            std::abs((rounded_target -
+                                                      rounded_baseline) /
+                                                     rounded_baseline * 100.0);
+                                        diff_alpha = std::min(
+                                            static_cast<ImU32>(
+                                                std::abs(rounded_target -
+                                                         rounded_baseline) /
+                                                    rounded_baseline * 255 +
+                                                25),
+                                            ImU32(255));
+                                    }
+                                    else
+                                    {
+                                        percentage_diff = 100.0;
+                                    }
                                     bg_color_baseline = Table::DisplayProps::Color{
                                         Colors::kComparisonBase, 255
                                     };
                                     bg_color_target = Table::DisplayProps::Color{
                                         Colors::kComparisonTarget, 255
                                     };
-                                    if(rounded_target > rounded_baseline)
-                                    {
-                                        bg_color_difference = Table::DisplayProps::Color{
-                                            Colors::kComparisonGreater, 255
-                                        };
-                                        icon = ICON_ARROW_UP;
-                                    }
-                                    else
-                                    {
-                                        bg_color_difference = Table::DisplayProps::Color{
-                                            Colors::kComparisonLesser, 255
-                                        };
-                                        icon = ICON_ARROW_DOWN;
-                                    }
-                                    if(rounded_baseline != 0.0)
-                                    {
-                                        bg_color_difference.value().alpha =
-                                            std::min(static_cast<ImU32>(
-                                                         std::abs(rounded_target -
-                                                                  rounded_baseline) /
-                                                             rounded_baseline * 255 +
-                                                         25),
-                                                     ImU32(255));
-                                    }
+                                    bg_color_difference =
+                                        Table::DisplayProps::Color{ diff_color,
+                                                                    diff_alpha };
+                                    icon = diff_icon;
                                 }
                             }
                             else
@@ -425,6 +447,8 @@ ComputeComparisonView::UpdateMetrics()
                                                : std::nullopt,
                                 Table::DisplayProps{ bg_color_baseline, text_color,
                                                      std::nullopt } });
+                            size_t baseline_index = row_value[0].size() - 1;
+
                             row_value[0].emplace_back(Table::Value{
                                 "Target " + value_name,
                                 valid_match && target_value
@@ -452,6 +476,21 @@ ComputeComparisonView::UpdateMetrics()
                                     : std::nullopt,
                                 Table::DisplayProps{ bg_color_difference, text_color,
                                                      icon } });
+                            // Track cells that are marked as different for
+                            // threshold-based recoloring...
+                            if(valid_match && bg_color_difference.has_value())
+                            {
+                                m_diff_cell_groups.push_back(DiffCellGroup{
+                                    category_model.tables[i].get(),
+                                    category_model.tables[i]->Rows().size(),
+                                    FIXED_PREFIX + baseline_index,
+                                    FIXED_PREFIX + baseline_index + 1,
+                                    FIXED_PREFIX + baseline_index + 2,
+                                    FIXED_PREFIX + baseline_index + 3,
+                                    percentage_diff,
+                                    diff_color,
+                                    diff_alpha });
+                            }
                             if(!valid_match && row_entry.count(1) > 0)
                             {
                                 row_value[1].emplace_back(Table::Value{
@@ -492,6 +531,7 @@ ComputeComparisonView::UpdateMetrics()
                                                       ROW_TAG_INVALID_MATCH));
                             }
                         }
+
                     }
                     // Setup the table (handlers, coloring..etc)
                     category_model.tables[i]->SetRowSelectionHandler(
@@ -524,6 +564,107 @@ ComputeComparisonView::UpdateMetrics()
                 }
             }
             m_tab_container->SetAllowToolTips(true);
+
+            // Build lookup for pinned table highlighting...
+            m_diff_by_metric_id.clear();
+            for(const DiffCellGroup& dcg : m_diff_cell_groups)
+            {
+                const Table::Row& row = dcg.table->Rows()[dcg.row_index];
+                m_diff_by_metric_id[row.id.metric_id].push_back(&dcg);
+            }
+        }
+    }
+}
+
+void
+ComputeComparisonView::RebuildPinnedDiffEntries()
+{
+    // Pre-resolve DiffCellGroup-to-pinned-cell mappings...
+    m_pinned_diff_entries.clear();
+    std::unordered_map<std::string, size_t> col_map;
+    const auto& pinned_names = m_pinned_table->OrderedValueNames();
+    for(size_t n = 0; n < pinned_names.size(); n++)
+    {
+        col_map[pinned_names[n]] = FIXED_PREFIX + n;
+    }
+    for(size_t pi = 0; pi < m_pinned_table->Rows().size(); pi++)
+    {
+        const Table::Row& pinned_row = m_pinned_table->Rows()[pi];
+        auto it = m_diff_by_metric_id.find(pinned_row.id.metric_id);
+        if(it == m_diff_by_metric_id.end())
+        {
+            continue;
+        }
+        for(const DiffCellGroup* src : it->second)
+        {
+            const Table::Row& src_row = src->table->Rows()[src->row_index];
+            if(src_row.id == pinned_row.id)
+            {
+                const auto& src_names = src->table->OrderedValueNames();
+                size_t      src_pos   = src->baseline_index - FIXED_PREFIX;
+                auto col_it = col_map.find(src_names[src_pos]);
+                if(col_it != col_map.end())
+                {
+                    m_pinned_diff_entries.push_back({ src, pi, col_it->second });
+                }
+            }
+        }
+    }
+}
+
+void
+ComputeComparisonView::UpdateDifferenceHighlighting()
+{
+    // Update main table cell colors based on DiffCellGroups
+    for(DiffCellGroup& group : m_diff_cell_groups)
+    {
+        const Table::Row& row = group.table->Rows()[group.row_index];
+        if(group.percent_diff >= m_percentage_threshold)
+        {
+            row.cells[group.baseline_index].display_props->bg_color =
+                Table::DisplayProps::Color{ Colors::kComparisonBase, 255 };
+            row.cells[group.target_index].display_props->bg_color =
+                Table::DisplayProps::Color{ Colors::kComparisonTarget, 255 };
+            row.cells[group.difference_index].display_props->bg_color =
+                Table::DisplayProps::Color{ group.diff_color, group.diff_alpha };
+            row.cells[group.difference_percent_index].display_props->bg_color =
+                Table::DisplayProps::Color{ group.diff_color, group.diff_alpha };
+        }
+        else
+        {
+            row.cells[group.baseline_index].display_props->bg_color = std::nullopt;
+            row.cells[group.target_index].display_props->bg_color   = std::nullopt;
+            row.cells[group.difference_index].display_props->bg_color = std::nullopt;
+            row.cells[group.difference_percent_index].display_props->bg_color =
+                std::nullopt;
+        }
+    }
+
+    // Apply to pinned table using pre-resolved mappings...
+    for(const PinnedDiffEntry& entry : m_pinned_diff_entries)
+    {
+        const Table::Row& pinned_row =
+            m_pinned_table->Rows()[entry.pinned_row_index];
+        size_t base = entry.pinned_base_index;
+        if(entry.source->percent_diff >= m_percentage_threshold)
+        {
+            pinned_row.cells[base].display_props->bg_color =
+                Table::DisplayProps::Color{ Colors::kComparisonBase, 255 };
+            pinned_row.cells[base + 1].display_props->bg_color =
+                Table::DisplayProps::Color{ Colors::kComparisonTarget, 255 };
+            pinned_row.cells[base + 2].display_props->bg_color =
+                Table::DisplayProps::Color{ entry.source->diff_color,
+                                           entry.source->diff_alpha };
+            pinned_row.cells[base + 3].display_props->bg_color =
+                Table::DisplayProps::Color{ entry.source->diff_color,
+                                           entry.source->diff_alpha };
+        }
+        else
+        {
+            pinned_row.cells[base].display_props->bg_color     = std::nullopt;
+            pinned_row.cells[base + 1].display_props->bg_color = std::nullopt;
+            pinned_row.cells[base + 2].display_props->bg_color = std::nullopt;
+            pinned_row.cells[base + 3].display_props->bg_color = std::nullopt;
         }
     }
 }
@@ -606,58 +747,72 @@ ComputeComparisonView::RenderToolbar()
         ImGui::EndCombo();
     }
     ImGui::EndDisabled();
-    VerticalSeparator(&m_settings);
-    if(m_toolbar_available_width != 0.0)
+    ImGui::SameLine();
+
+    float window_width = ImGui::GetWindowWidth();
+
+    float delta_threshold_width = ImGui::GetFrameHeight() * 3.0f;
+    float legend_width =
+        8.0f * style.FramePadding.x + 4.0f * ImGui::GetFrameHeight() +
+        ImGui::CalcTextSize("Baseline").x + ImGui::CalcTextSize("Target").x +
+        2.0f * ImGui::CalcTextSize("Difference[X]").x + delta_threshold_width;
+
+    if(m_toolbar_available_width > legend_width)
     {
-        float legend_width =
-            7.0f * style.FramePadding.x + 4.0f * ImGui::GetFrameHeight() +
-            ImGui::CalcTextSize("Baseline").x + ImGui::CalcTextSize("Target").x +
-            2.0f * ImGui::CalcTextSize("Difference[X]").x;
-        if(m_toolbar_available_width > legend_width)
-        {
-            ImGui::Dummy(ImVec2(m_toolbar_available_width - legend_width,
-                                ImGui::GetFrameHeightWithSpacing()));
-            ImGui::SameLine();
-            VerticalSeparator(&m_settings);
-            ImVec4 bg_base = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kComparisonBase));
-            ImVec4 bg_target = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kComparisonTarget));
-            ImVec4 bg_lesser = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kComparisonLesser));
-            ImVec4 bg_greater = ImGui::ColorConvertU32ToFloat4(
-                m_settings.GetColor(Colors::kComparisonGreater));
-            ImGui::SameLine();
-            ImGui::ColorEdit4("b", &bg_base.x, LEGEND_FLAGS);
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::TextUnformatted("Baseline");
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::ColorEdit4("t", &bg_target.x, LEGEND_FLAGS);
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::TextUnformatted("Target");
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::ColorEdit4("d<", &bg_lesser.x, LEGEND_FLAGS);
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::TextUnformatted("Difference");
-            ImGui::SameLine();
-            ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-            ImGui::TextUnformatted(ICON_ARROW_DOWN);
-            ImGui::PopFont();
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::ColorEdit4("d>", &bg_greater.x, LEGEND_FLAGS);
-            ImGui::SameLine(0.0f, style.FramePadding.x);
-            ImGui::TextUnformatted("Difference");
-            ImGui::SameLine();
-            ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-            ImGui::TextUnformatted(ICON_ARROW_UP);
-            ImGui::PopFont();
-        }
-        else
-        {
-            ImGui::Dummy(
-                ImVec2(m_toolbar_available_width, ImGui::GetFrameHeightWithSpacing()));
-        }
+        ImGui::Dummy(ImVec2(m_toolbar_available_width - legend_width,
+                            ImGui::GetFrameHeightWithSpacing()));
     }
+    ImGui::SameLine();
+    VerticalSeparator(&m_settings);
+    ImVec4 bg_base =
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonBase));
+    ImVec4 bg_target =
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonTarget));
+    ImVec4 bg_lesser =
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonLesser));
+    ImVec4 bg_greater =
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonGreater));
+    ImGui::SameLine();
+    ImGui::ColorEdit4("b", &bg_base.x, LEGEND_FLAGS);
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::TextUnformatted("Baseline");
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::ColorEdit4("t", &bg_target.x, LEGEND_FLAGS);
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::TextUnformatted("Target");
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::ColorEdit4("d<", &bg_lesser.x, LEGEND_FLAGS);
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::TextUnformatted("Difference");
+    ImGui::SameLine();
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::TextUnformatted(ICON_ARROW_DOWN);
+    ImGui::PopFont();
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::ColorEdit4("d>", &bg_greater.x, LEGEND_FLAGS);
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::TextUnformatted("Difference");
+    ImGui::SameLine();
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::TextUnformatted(ICON_ARROW_UP);
+    ImGui::PopFont();
+    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 3.0f);
+    if(ImGui::DragFloat("##threshold_percentage", &m_percentage_threshold, 0.1f, 0.0f,
+                        100.0f, "%.1f%%"))
+    {
+        UpdateDifferenceHighlighting();
+    }
+    if(BeginItemTooltipStyled())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
+        ImGui::TextUnformatted(
+            "Minimum percentage difference required to mark metrics as different. "
+            "Set to 0 to highlight all differences.");
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();
+    }
+
     VerticalSeparator(&m_settings);
     if(ImGui::Button(m_filter_common_metrics ? "Show Common Metrics" : "Show All Metrics",
                      ImVec2(ImGui::CalcTextSize("Show Common Metrics").x +
@@ -694,7 +849,7 @@ ComputeComparisonView::RenderToolbar()
             }
         }
     }
-    float window_width = ImGui::GetWindowWidth();
+
     if(BeginItemTooltipStyled())
     {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
@@ -827,6 +982,7 @@ ComputeComparisonView::AddPinnedMetric(const Table& table, const size_t index)
         row.selected          = true;
         m_pinned_metrics.emplace_back(PinnedModel{ row.id, row.entry, &row });
         m_pinned_table->AddRow(table, index);
+        m_pinned_columns_dirty = true;
     }
 }
 
@@ -861,6 +1017,7 @@ ComputeComparisonView::RemovePinnedMetric(const Table& table, const size_t index
         m_pinned_metrics.erase(std::remove(m_pinned_metrics.begin(), m_pinned_metrics.end(),
                                       PinnedModel{ row.id, row.entry, &row }),
                           m_pinned_metrics.end());
+        m_pinned_columns_dirty = true;
     }
 }
 
@@ -924,6 +1081,7 @@ ComputeComparisonView::UpdatePinnedMetrics()
                     true;
             }
         }
+        m_pinned_columns_dirty = true;
     }
 }
 

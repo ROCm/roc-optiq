@@ -69,7 +69,8 @@ private:
                     return metric_id == other.metric_id && entry_name == other.entry_name;
                 }
             };
-            // Internal persistant Value storage, never changes once added...
+            // Internal persistant Value storage, never changes once added
+            // except for DisplayProps...
             struct Value
             {
                 std::string  name;
@@ -80,8 +81,8 @@ private:
             // change...
             struct Cell
             {
-                std::string_view    data;
-                const DisplayProps* display_props;
+                std::string_view data;
+                DisplayProps*    display_props;
             };
             ID                                     id;
             const AvailableMetrics::Entry*         entry;
@@ -182,9 +183,41 @@ private:
             return row_id == other.row_id;
         }
     };
+    
+
+    struct DiffCellGroup
+    {
+        Table* table;
+        size_t row_index;
+        size_t baseline_index;
+        size_t target_index;
+        size_t difference_index;
+        size_t difference_percent_index;
+        double percent_diff;
+        Colors diff_color;
+        ImU32  diff_alpha;
+    };
+
+    // created during UpdateMetrics, used for updating the cells colors when threshold changes
+    std::vector<DiffCellGroup> m_diff_cell_groups;
+    // lookup from metric_id to DiffCellGroups, rebuilt when m_diff_cell_groups changes
+    std::unordered_map<std::string, std::vector<const DiffCellGroup*>> m_diff_by_metric_id;
+
+    // Pre-resolved mapping from DiffCellGroup to pinned table cell index,
+    // rebuilt after pinned table columns change
+    struct PinnedDiffEntry
+    {
+        const DiffCellGroup* source;
+        size_t               pinned_row_index;
+        size_t               pinned_base_index;
+    };
+    std::vector<PinnedDiffEntry> m_pinned_diff_entries;
+    bool                         m_pinned_columns_dirty;
 
     void FetchMetrics();
     void UpdateMetrics();
+    void UpdateDifferenceHighlighting();
+    void RebuildPinnedDiffEntries();
 
     void RenderToolbar();
     void RenderCategory(const size_t i);
@@ -199,6 +232,7 @@ private:
     uint32_t m_target_workload_id;
     uint32_t m_target_kernel_id;
     bool     m_filter_common_metrics;
+    float    m_percentage_threshold;
 
     // Internal state...
     bool        m_inputs_changed;

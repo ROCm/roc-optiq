@@ -7,7 +7,6 @@ on:
       os_version:
         description: 'JSON array of OS version(s) to test'
         type: string
-        required: true
         default: '[ "9", "10" ]'
 
 env:

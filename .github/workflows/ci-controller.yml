@@ -20,23 +20,42 @@ env:
   # Full OS Coverage (for nightly scheduled builds)
   UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04" ]'
   REDHAT_FULL_OS_VERSIONS: '[ "9", "10" ]'
-
   # Minimal OS Coverage (for all other builds)
   UBUNTU_CI_OS_VERSIONS: '[ "24.04" ]'
   REDHAT_CI_OS_VERSIONS: '[ "10" ]'
 
 jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      ubuntu-os-versions: ${{ steps.set-versions.outputs.ubuntu-os-versions }}
+      redhat-os-versions: ${{ steps.set-versions.outputs.redhat-os-versions }}
+    steps:
+      - name: Set OS versions
+        id: set-versions
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo 'ubuntu-os-versions=[ "22.04", "24.04" ]' >> "$GITHUB_OUTPUT"
+            echo 'redhat-os-versions=[ "9", "10" ]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ubuntu-os-versions=[ "24.04" ]' >> "$GITHUB_OUTPUT"
+            echo 'redhat-os-versions=[ "10" ]' >> "$GITHUB_OUTPUT"
+          fi
+
   ci-redhat:
     name: RedHat CI
+    needs: setup
     uses: ./.github/workflows/ci-redhat.yml
     with:
-      os-version: ${{ github.event_name == 'schedule' && env.REDHAT_FULL_OS_VERSIONS || env.REDHAT_CI_OS_VERSIONS }}
+      os-version: ${{ needs.setup.outputs.redhat-os-versions }}
 
   ci-ubuntu:
     name: Ubuntu CI
+    needs: setup
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
-      os-version: ${{ github.event_name == 'schedule' && env.UBUNTU_FULL_OS_VERSIONS || env.UBUNTU_CI_OS_VERSIONS }}
+      os-version: ${{ needs.setup.outputs.ubuntu-os-versions }}
 
   ci-windows:
     name: Windows CI

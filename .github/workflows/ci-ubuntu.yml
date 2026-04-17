@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: 
-        os-version: ${{ fromJson(github.event.inputs.os-version) }}
+        os-version: ${{ fromJson(inputs.os-version) }}
 
     steps:
       - uses: actions/checkout@v6

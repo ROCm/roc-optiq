@@ -399,11 +399,43 @@ SettingsPanel::RenderHotkeySettings()
         ImGui::TableSetupColumn("Alternate", ImGuiTableColumnFlags_WidthFixed, kHotkeyBindingColWidth);
         ImGui::TableHeadersRow();
 
+        auto try_reset_slot = [&](HotkeyActionId aid, bool is_primary) {
+            const auto&   slot_info    = HotkeyManager::GetActionInfo(aid);
+            HotkeyBinding current      = hk.GetBinding(aid);
+            ImGuiKeyChord default_chord = is_primary
+                                              ? slot_info.default_binding.primary
+                                              : slot_info.default_binding.alternate;
+
+            HotkeyActionId conflict = hk.FindConflictingAction(default_chord, aid);
+            if(conflict != HotkeyActionId::kCount)
+            {
+                NotificationManager::GetInstance().Show(
+                    HotkeyManager::KeyChordToString(default_chord) +
+                        " is already assigned to " +
+                        HotkeyManager::GetActionInfo(conflict).display_name,
+                    NotificationLevel::Warning);
+                return;
+            }
+
+            if(is_primary)
+                current.primary = default_chord;
+            else
+                current.alternate = default_chord;
+            hk.SetBinding(aid, current);
+            m_hotkeys_changed = true;
+        };
+
         for(int i = 0; i < static_cast<int>(HotkeyActionId::kCount); ++i)
         {
             HotkeyActionId action_id = static_cast<HotkeyActionId>(i);
-            const auto&    info      = HotkeyManager::GetActionInfo(action_id);
-            HotkeyBinding  binding   = hk.GetBinding(action_id);
+
+            // Esc is reserved as the rebind-cancel key, so the action it
+            // drives (Clear Selection) is not exposed in the rebind table.
+            if(action_id == HotkeyActionId::kClearSelection)
+                continue;
+
+            const auto&   info    = HotkeyManager::GetActionInfo(action_id);
+            HotkeyBinding binding = hk.GetBinding(action_id);
 
             ImGui::TableNextRow();
 
@@ -413,35 +445,42 @@ SettingsPanel::RenderHotkeySettings()
             ImGui::TableSetColumnIndex(1);
             ImGui::TextUnformatted(info.display_name);
 
-            ImGui::TableSetColumnIndex(2);
-            {
-                std::string label = HotkeyManager::KeyChordToString(binding.primary);
-                if(m_rebinding_action == action_id && m_rebinding_primary)
+            auto render_slot = [&](bool is_primary, int id_seed) {
+                ImGuiKeyChord current_chord = is_primary ? binding.primary
+                                                         : binding.alternate;
+                ImGuiKeyChord default_chord = is_primary
+                                                  ? info.default_binding.primary
+                                                  : info.default_binding.alternate;
+
+                std::string label = HotkeyManager::KeyChordToString(current_chord);
+                if(m_rebinding_action == action_id &&
+                   m_rebinding_primary == is_primary)
                     label = "Press a key...";
 
-                ImGui::PushID(i * 2);
+                ImGui::PushID(id_seed);
                 if(ImGui::Button(label.c_str(), ImVec2(-FLT_MIN, 0)))
                 {
                     m_rebinding_action  = action_id;
-                    m_rebinding_primary = true;
+                    m_rebinding_primary = is_primary;
+                }
+
+                if(ImGui::BeginPopupContextItem("##hk_ctx"))
+                {
+                    std::string reset_label =
+                        "Reset to " + HotkeyManager::KeyChordToString(default_chord);
+                    bool at_default = current_chord == default_chord;
+                    if(ImGui::MenuItem(reset_label.c_str(), nullptr, false, !at_default))
+                        try_reset_slot(action_id, is_primary);
+                    ImGui::EndPopup();
                 }
                 ImGui::PopID();
-            }
+            };
+
+            ImGui::TableSetColumnIndex(2);
+            render_slot(true, i * 2);
 
             ImGui::TableSetColumnIndex(3);
-            {
-                std::string label = HotkeyManager::KeyChordToString(binding.alternate);
-                if(m_rebinding_action == action_id && !m_rebinding_primary)
-                    label = "Press a key...";
-
-                ImGui::PushID(i * 2 + 1);
-                if(ImGui::Button(label.c_str(), ImVec2(-FLT_MIN, 0)))
-                {
-                    m_rebinding_action  = action_id;
-                    m_rebinding_primary = false;
-                }
-                ImGui::PopID();
-            }
+            render_slot(false, i * 2 + 1);
         }
         ImGui::EndTable();
     }
@@ -458,9 +497,7 @@ SettingsPanel::RenderHotkeySettings()
             for(int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k)
             {
                 ImGuiKey key = static_cast<ImGuiKey>(k);
-                if(key == ImGuiKey_LeftCtrl || key == ImGuiKey_RightCtrl ||
-                   key == ImGuiKey_LeftShift || key == ImGuiKey_RightShift ||
-                   key == ImGuiKey_LeftAlt || key == ImGuiKey_RightAlt)
+                if(!HotkeyManager::IsRebindableKey(key))
                     continue;
 
                 if(ImGui::IsKeyPressed(key, false))

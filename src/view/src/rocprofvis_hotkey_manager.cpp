@@ -97,6 +97,30 @@ HotkeyManager::BookmarkRestoreAction(int index)
 }
 
 bool
+HotkeyManager::IsRebindableKey(ImGuiKey key)
+{
+    if(key == ImGuiKey_None || key == ImGuiKey_Escape)
+        return false;
+
+    if(key == ImGuiKey_LeftCtrl  || key == ImGuiKey_RightCtrl ||
+       key == ImGuiKey_LeftShift || key == ImGuiKey_RightShift ||
+       key == ImGuiKey_LeftAlt   || key == ImGuiKey_RightAlt  ||
+       key == ImGuiKey_LeftSuper || key == ImGuiKey_RightSuper)
+        return false;
+
+    if(key >= ImGuiKey_GamepadStart && key <= ImGuiKey_GamepadRStickDown)
+        return false;
+
+    if(key >= ImGuiKey_MouseLeft && key <= ImGuiKey_MouseWheelY)
+        return false;
+
+    if(key >= ImGuiKey_ReservedForModCtrl && key <= ImGuiKey_ReservedForModSuper)
+        return false;
+
+    return true;
+}
+
+bool
 HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const
 {
     if(chord == ImGuiKey_None)

@@ -44,20 +44,6 @@ constexpr float COL_INVOCATION_CHAR_LIMIT = COL_FILTER_CHAR_LIMIT;
 
 constexpr float kTooltipMaxWidth = 600.0f;
 
-namespace
-{
-// Returns true if `cell` parses as a numeric value that is not finite
-// (inf / -inf / NaN). Non-numeric cells (like kernel names) return false.
-bool
-IsNonFiniteNumericCell(const std::string& cell)
-{
-    if(cell.empty()) return false;
-    char*  end = nullptr;
-    double val = std::strtod(cell.c_str(), &end);
-    return end != cell.c_str() && !std::isfinite(val);
-}
-}  // namespace
-
 KernelMetricTable::KernelMetricTable(DataProvider&                     data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -606,11 +592,8 @@ KernelMetricTable::Render()
                             }
                             else
                             {
-                                if(cell.empty() || IsNonFiniteNumericCell(cell))
+                                if(cell.empty())
                                 {
-                                    // Treat inf / -inf / NaN as unavailable so
-                                    // they don't clutter the table or skew the
-                                    // bar chart scaling.
                                     ImGui::TextDisabled("N/A");
                                 }
                                 else

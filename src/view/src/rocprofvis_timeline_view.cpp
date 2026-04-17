@@ -238,7 +238,6 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 
     constexpr float CURVE_THICK = 2.5f;
     constexpr float VLINE_THICK = 1.5f;
-    constexpr float HEAD_SIZE   = 6.0f;
     constexpr float LABEL_PAD   = 8.0f;
     constexpr float LABEL_ROUND = 6.0f;
     ImU32 label_bg   = settings.GetColor(Colors::kMeasurementLabelBg);

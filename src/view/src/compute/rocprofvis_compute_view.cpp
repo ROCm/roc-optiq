@@ -13,6 +13,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "rocprofvis_compute_kernel_details.h"
 
 #include "implot/implot.h"
 #include "spdlog/spdlog.h"

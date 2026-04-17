@@ -44,6 +44,20 @@ constexpr float COL_INVOCATION_CHAR_LIMIT = COL_FILTER_CHAR_LIMIT;
 
 constexpr float kTooltipMaxWidth = 600.0f;
 
+namespace
+{
+// Returns true if `cell` parses as a numeric value that is not finite
+// (inf / -inf / NaN). Non-numeric cells (like kernel names) return false.
+bool
+IsNonFiniteNumericCell(const std::string& cell)
+{
+    if(cell.empty()) return false;
+    char*  end = nullptr;
+    double val = std::strtod(cell.c_str(), &end);
+    return end != cell.c_str() && !std::isfinite(val);
+}
+}  // namespace
+
 KernelMetricTable::KernelMetricTable(DataProvider&                     data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -592,8 +606,11 @@ KernelMetricTable::Render()
                             }
                             else
                             {
-                                if(cell.empty())
+                                if(cell.empty() || IsNonFiniteNumericCell(cell))
                                 {
+                                    // Treat inf / -inf / NaN as unavailable so
+                                    // they don't clutter the table or skew the
+                                    // bar chart scaling.
                                     ImGui::TextDisabled("N/A");
                                 }
                                 else
@@ -808,7 +825,9 @@ KernelMetricTable::ComputeColumnMaxValues(
                 continue;
             char*  end = nullptr;
             double val = std::strtod(row[col].c_str(), &end);
-            if(end != row[col].c_str())
+            // Skip non-finite values (inf / -inf / NaN) so they don't
+            // saturate the max and break bar chart scaling for other rows.
+            if(end != row[col].c_str() && std::isfinite(val))
                 max_val = std::max(max_val, std::abs(val));
         }
         if(max_val > 0.0)

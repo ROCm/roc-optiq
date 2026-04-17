@@ -28,6 +28,7 @@ constexpr ImGuiColorEditFlags LEGEND_FLAGS =
     ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoInputs |
     ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoLabel;
 constexpr size_t ROW_TAG_INVALID_MATCH = 0;
+constexpr size_t FIXED_PREFIX          = 3;
 
 ComputeComparisonView::ComputeComparisonView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
@@ -53,6 +54,7 @@ ComputeComparisonView::ComputeComparisonView(
 , m_pinned_table(nullptr)
 , m_pinned_item(nullptr)
 , m_max_pinned_height(FLT_MAX)
+, m_pinned_columns_dirty(false)
 {
     m_widget_name = GenUniqueName("ComputeComparison");
     m_pinned_table =
@@ -137,6 +139,11 @@ ComputeComparisonView::Update()
     if(m_pinned_table)
     {
         m_pinned_table->Update();
+        if(m_pinned_columns_dirty)
+        {
+            RebuildPinnedDiffEntries();
+            m_pinned_columns_dirty = false;
+        }
     }
     if(m_data_changed)
     {
@@ -473,7 +480,6 @@ ComputeComparisonView::UpdateMetrics()
                             // threshold-based recoloring...
                             if(valid_match && bg_color_difference.has_value())
                             {
-                                constexpr size_t FIXED_PREFIX = 3;
                                 m_diff_cell_groups.push_back(DiffCellGroup{
                                     category_model.tables[i].get(),
                                     category_model.tables[i]->Rows().size(),
@@ -571,10 +577,48 @@ ComputeComparisonView::UpdateMetrics()
 }
 
 void
+ComputeComparisonView::RebuildPinnedDiffEntries()
+{
+    // Pre-resolve DiffCellGroup-to-pinned-cell mappings...
+    m_pinned_diff_entries.clear();
+    std::unordered_map<std::string, size_t> col_map;
+    const auto& pinned_names = m_pinned_table->OrderedValueNames();
+    for(size_t n = 0; n < pinned_names.size(); n++)
+    {
+        col_map[pinned_names[n]] = FIXED_PREFIX + n;
+    }
+    for(size_t pi = 0; pi < m_pinned_table->Rows().size(); pi++)
+    {
+        const Table::Row& pinned_row = m_pinned_table->Rows()[pi];
+        auto it = m_diff_by_metric_id.find(pinned_row.id.metric_id);
+        if(it == m_diff_by_metric_id.end())
+        {
+            continue;
+        }
+        for(const DiffCellGroup* src : it->second)
+        {
+            const Table::Row& src_row = src->table->Rows()[src->row_index];
+            if(src_row.id == pinned_row.id)
+            {
+                const auto& src_names = src->table->OrderedValueNames();
+                size_t      src_pos   = src->baseline_index - FIXED_PREFIX;
+                auto col_it = col_map.find(src_names[src_pos]);
+                if(col_it != col_map.end())
+                {
+                    m_pinned_diff_entries.push_back({ src, pi, col_it->second });
+                }
+            }
+        }
+    }
+}
+
+void
 ComputeComparisonView::UpdateDifferenceHighlighting()
 {
-    auto apply_group = [this](DiffCellGroup& group) {
-        Table::Row& row = group.table->MutableRows()[group.row_index];
+    // Update main table cell colors based on DiffCellGroups
+    for(DiffCellGroup& group : m_diff_cell_groups)
+    {
+        const Table::Row& row = group.table->Rows()[group.row_index];
         if(group.percent_diff >= m_percentage_threshold)
         {
             row.cells[group.baseline_index].display_props->bg_color =
@@ -594,65 +638,33 @@ ComputeComparisonView::UpdateDifferenceHighlighting()
             row.cells[group.difference_percent_index].display_props->bg_color =
                 std::nullopt;
         }
-    };
-
-    for(DiffCellGroup& group : m_diff_cell_groups)
-    {
-        apply_group(group);
     }
 
-    // Apply to pinned table by matching source DiffCellGroups to pinned
-    // rows via row ID, then modifying values_map by value name keys...
-    if(m_pinned_table)
+    // Apply to pinned table using pre-resolved mappings...
+    for(const PinnedDiffEntry& entry : m_pinned_diff_entries)
     {
-        constexpr size_t FIXED_PREFIX = 3;
-        for(size_t pi = 0; pi < m_pinned_table->Rows().size(); pi++)
+        const Table::Row& pinned_row =
+            m_pinned_table->Rows()[entry.pinned_row_index];
+        size_t base = entry.pinned_base_index;
+        if(entry.source->percent_diff >= m_percentage_threshold)
         {
-            Table::Row& pinned_row = m_pinned_table->MutableRows()[pi];
-            auto it = m_diff_by_metric_id.find(pinned_row.id.metric_id);
-            if(it == m_diff_by_metric_id.end())
-            {
-                continue;
-            }
-            for(const DiffCellGroup* src : it->second)
-            {
-                const Table::Row& src_row = src->table->Rows()[src->row_index];
-                if(src_row.id == pinned_row.id)
-                {
-                    const auto& src_names = src->table->OrderedValueNames();
-                    size_t      src_pos   = src->baseline_index - FIXED_PREFIX;
-                    auto set_bg = [&](const std::string& key,
-                                      std::optional<Table::DisplayProps::Color> color) {
-                        auto vit = pinned_row.values_map.find(key);
-                        if(vit != pinned_row.values_map.end())
-                        {
-                            vit->second.display_props.bg_color = color;
-                        }
-                    };
-                    if(src->percent_diff >= m_percentage_threshold)
-                    {
-                        set_bg(src_names[src_pos],
-                               Table::DisplayProps::Color{ Colors::kComparisonBase,
-                                                           255 });
-                        set_bg(src_names[src_pos + 1],
-                               Table::DisplayProps::Color{ Colors::kComparisonTarget,
-                                                           255 });
-                        set_bg(src_names[src_pos + 2],
-                               Table::DisplayProps::Color{ src->diff_color,
-                                                           src->diff_alpha });
-                        set_bg(src_names[src_pos + 3],
-                               Table::DisplayProps::Color{ src->diff_color,
-                                                           src->diff_alpha });
-                    }
-                    else
-                    {
-                        set_bg(src_names[src_pos], std::nullopt);
-                        set_bg(src_names[src_pos + 1], std::nullopt);
-                        set_bg(src_names[src_pos + 2], std::nullopt);
-                        set_bg(src_names[src_pos + 3], std::nullopt);
-                    }
-                }
-            }
+            pinned_row.cells[base].display_props->bg_color =
+                Table::DisplayProps::Color{ Colors::kComparisonBase, 255 };
+            pinned_row.cells[base + 1].display_props->bg_color =
+                Table::DisplayProps::Color{ Colors::kComparisonTarget, 255 };
+            pinned_row.cells[base + 2].display_props->bg_color =
+                Table::DisplayProps::Color{ entry.source->diff_color,
+                                           entry.source->diff_alpha };
+            pinned_row.cells[base + 3].display_props->bg_color =
+                Table::DisplayProps::Color{ entry.source->diff_color,
+                                           entry.source->diff_alpha };
+        }
+        else
+        {
+            pinned_row.cells[base].display_props->bg_color     = std::nullopt;
+            pinned_row.cells[base + 1].display_props->bg_color = std::nullopt;
+            pinned_row.cells[base + 2].display_props->bg_color = std::nullopt;
+            pinned_row.cells[base + 3].display_props->bg_color = std::nullopt;
         }
     }
 }
@@ -970,6 +982,7 @@ ComputeComparisonView::AddPinnedMetric(const Table& table, const size_t index)
         row.selected          = true;
         m_pinned_metrics.emplace_back(PinnedModel{ row.id, row.entry, &row });
         m_pinned_table->AddRow(table, index);
+        m_pinned_columns_dirty = true;
     }
 }
 
@@ -1004,6 +1017,7 @@ ComputeComparisonView::RemovePinnedMetric(const Table& table, const size_t index
         m_pinned_metrics.erase(std::remove(m_pinned_metrics.begin(), m_pinned_metrics.end(),
                                       PinnedModel{ row.id, row.entry, &row }),
                           m_pinned_metrics.end());
+        m_pinned_columns_dirty = true;
     }
 }
 
@@ -1067,6 +1081,7 @@ ComputeComparisonView::UpdatePinnedMetrics()
                     true;
             }
         }
+        m_pinned_columns_dirty = true;
     }
 }
 
@@ -1403,12 +1418,6 @@ ComputeComparisonView::Table::Render()
 
 const std::vector<ComputeComparisonView::Table::Row>&
 ComputeComparisonView::Table::Rows() const
-{
-    return m_rows;
-}
-
-std::vector<ComputeComparisonView::Table::Row>&
-ComputeComparisonView::Table::MutableRows()
 {
     return m_rows;
 }

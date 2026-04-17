@@ -105,7 +105,6 @@ private:
 
         // Getters...
         const std::vector<Row>&         Rows() const;
-        std::vector<Row>&               MutableRows();
         const std::vector<std::string>& OrderedValueNames() const;
 
         // Row manipulation...
@@ -204,9 +203,21 @@ private:
     // lookup from metric_id to DiffCellGroups, rebuilt when m_diff_cell_groups changes
     std::unordered_map<std::string, std::vector<const DiffCellGroup*>> m_diff_by_metric_id;
 
+    // Pre-resolved mapping from DiffCellGroup to pinned table cell index,
+    // rebuilt after pinned table columns change
+    struct PinnedDiffEntry
+    {
+        const DiffCellGroup* source;
+        size_t               pinned_row_index;
+        size_t               pinned_base_index;
+    };
+    std::vector<PinnedDiffEntry> m_pinned_diff_entries;
+    bool                         m_pinned_columns_dirty;
+
     void FetchMetrics();
     void UpdateMetrics();
     void UpdateDifferenceHighlighting();
+    void RebuildPinnedDiffEntries();
 
     void RenderToolbar();
     void RenderCategory(const size_t i);

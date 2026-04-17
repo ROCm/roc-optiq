@@ -2,6 +2,7 @@ name: RedHat (Rockylinux) Continuous Integration
 run-name: roc-optiq-redhat-ci
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 4 * * *'
   push:
@@ -15,16 +16,12 @@ on:
       - 'doc/**'
       - '*.md'
 
-defaults:
-  run:
-    shell: bash
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  VISUALIZER_FILE_NAME: "roc-optiq"
+  BUILD_FILE_NAME: "roc-optiq"
 
 jobs:
   set-matrix:
@@ -43,6 +40,7 @@ jobs:
           fi
 
   rocky-linux:
+    name: RedHat ${{ matrix.os-release }} • Build Optiq
     needs: [set-matrix]
     strategy:
       fail-fast: false
@@ -62,11 +60,11 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/**/setup-env.sh
-          cmake -B build --install-prefix /opt/rocprofiler-visualizer
+          cmake -B build --install-prefix /opt/roc-optiq
           cmake --build build --parallel 4
-          if [ -e build/${{ env.VISUALIZER_FILE_NAME }} ]; then
-            echo "✅ ${{ env.VISUALIZER_FILE_NAME }} has been successfully built!"
+          if [ -e build/${{ env.BUILD_FILE_NAME }} ]; then
+            echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"
           else
-            echo "❌ ${{ env.VISUALIZER_FILE_NAME }} was not built!"
+            echo "❌ ${{ env.BUILD_FILE_NAME }} was not built!"
             exit 1
           fi

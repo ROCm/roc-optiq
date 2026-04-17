@@ -16,16 +16,20 @@ on:
       - 'doc/**'
       - '*.md'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
-  VISUALIZER_FILE_NAME: "roc-optiq"
+  BUILD_FILE_NAME: "roc-optiq"
 
 jobs:
   ubuntu:
-    name: Windows • Build Visualizer
+    name: Windows • Build Optiq
     runs-on: windows-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           submodules: true
       
@@ -33,6 +37,7 @@ jobs:
         run: |
           curl -O https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe?Human=true
           ./vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
+
       - name: Set Vulkan SDK environment variables
         shell: pwsh
         run: |
@@ -47,9 +52,9 @@ jobs:
           mkdir build
           cmake --preset "x64-debug"
           cmake --build build/x64-debug --preset "Windows Debug Build" --parallel 4
-          if (Test-Path "build/x64-debug/Debug/${env:VISUALIZER_FILE_NAME}.exe") {
-            Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
+          if (Test-Path "build/x64-debug/Debug/${env:BUILD_FILE_NAME}.exe") {
+            Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"
           } else {
-            Write-Host "❌ $env:VISUALIZER_FILE_NAME was not built!"
+            Write-Host "❌ $env:BUILD_FILE_NAME was not built!"
             exit 1
           }

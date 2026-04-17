@@ -2,19 +2,12 @@ name: RedHat (Rockylinux) Continuous Integration
 run-name: roc-optiq-redhat-ci
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 4 * * *'
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'doc/**'
-      - '*.md'
-  pull_request:
-    paths-ignore:
-      - 'doc/**'
-      - '*.md'
+  workflow_call:
+    inputs:
+      os-version:
+        description: 'JSON array of OS version(s) to test'
+        required: true
+        default: '[ "9", "10" ]'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,32 +17,15 @@ env:
   BUILD_FILE_NAME: "roc-optiq"
 
 jobs:
-  set-matrix:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set.outputs.matrix }}
-    steps:
-      - id: set
-        run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            # Full matrix for the 'schedule' event
-            echo "matrix={\"os-release\":[\"9\", \"10\"]}" >> "$GITHUB_OUTPUT"
-          else
-            # Limited matrix for other events (push, pull_request)
-            echo "matrix={\"os-release\":[\"10\"]}" >> "$GITHUB_OUTPUT"
-          fi
-
   rocky-linux:
-    name: RedHat ${{ matrix.os-release }} • Build Optiq
-    needs: [set-matrix]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-      # matrix:
-      #     os-release: [ '9', '10' ]
+    name: RedHat ${{ matrix.os-version }} • Build Optiq
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/rocm/optiq-ci-rhel:${{ matrix.os-release }}
+      image: ghcr.io/rocm/optiq-ci-rhel:${{ matrix.os-version }}
+    strategy:
+      fail-fast: false
+      matrix: 
+        os-version: ${{ fromJson(github.event.inputs.os-version) }}
 
     steps:
       - uses: actions/checkout@v6

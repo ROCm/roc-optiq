@@ -1,0 +1,58 @@
+name: Continuous Integration Controller
+run-name: roc-optiq-ci
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'doc/**'
+      - '*.md'
+  pull_request:
+    paths-ignore:
+      - 'doc/**'
+      - '*.md'
+
+env:
+  # Full OS Coverage (for nightly scheduled builds)
+  UBUNTU_FULL_OS_VERSIONS: [ '22.04', '24.04' ]
+  REDHAT_FULL_OS_VERSIONS: [ '9', '10' ]
+
+  # Minimal OS Coverage (for all other builds)
+  UBUNTU_CI_OS_VERSIONS: [ '24.04' ]
+  REDHAT_CI_OS_VERSIONS: [ '10' ]
+
+jobs:
+  setup:
+    name: Setup CI Run
+    id: setup
+    runs-on: ubuntu-latest
+    run: |
+      if [ "${{ github.event_name }}" = "schedule" ]; then
+        echo "ubuntu_versions=$UBUNTU_FULL_OS_VERSIONS" >> "$GITHUB_OUTPUT"
+        echo "redhat_versions=$REDHAT_FULL_OS_VERSIONS" >> "$GITHUB_OUTPUT"
+      else
+        echo "ubuntu_versions=$UBUNTU_CI_OS_VERSIONS" >> "$GITHUB_OUTPUT"
+        echo "redhat_versions=$REDHAT_CI_OS_VERSIONS" >> "$GITHUB_OUTPUT"
+      fi
+
+  ci-redhat:
+    name: RedHat CI
+    needs: setup
+    uses: ./.github/workflows/ci-redhat.yml
+    with:
+      os-version: ${{ needs.setup.outputs.redhat_versions }}
+
+  ci-ubuntu:
+    name: Ubuntu CI
+    needs: setup
+    uses: ./.github/workflows/ci-ubuntu.yml
+    with:
+      os-version: ${{ needs.setup.outputs.ubuntu_versions }}
+
+  ci-windows:
+    name: Windows CI
+    uses: ./.github/workflows/ci-windows.yml

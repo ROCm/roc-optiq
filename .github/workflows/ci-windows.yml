@@ -2,19 +2,7 @@ name: Windows Continuous Integration
 run-name: roc-optiq-windows-ci
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 4 * * *'
-  push:
-    branches: 
-      - main
-    paths-ignore:
-      - 'doc/**'
-      - '*.md'
-  pull_request:
-    paths-ignore:
-      - 'doc/**'
-      - '*.md'
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

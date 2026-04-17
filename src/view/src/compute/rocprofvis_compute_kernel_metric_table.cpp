@@ -259,10 +259,8 @@ KernelMetricTable::Render()
             m_metrics_params.push_back(query);
             const AvailableMetrics::Entry* entry =
                 m_query_builder.GetSelectedMetricInfo();
-            
-            
             m_metrics_info.push_back({ entry ? *entry : AvailableMetrics::Entry(),
-                                        m_query_builder.GetValueName() });
+                                       m_query_builder.GetValueName() });
 
             // Add filter slot for the new metric column
             m_column_filters.push_back(ColumnFilter());

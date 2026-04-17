@@ -7,6 +7,7 @@
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_widget.h"
 
 // Layout constants
@@ -485,14 +486,28 @@ SettingsPanel::RenderHotkeySettings()
 
             if(captured != ImGuiKey_None)
             {
-                HotkeyBinding binding = hk.GetBinding(m_rebinding_action);
-                if(m_rebinding_primary)
-                    binding.primary = captured;
+                HotkeyActionId conflict =
+                    hk.FindConflictingAction(captured, m_rebinding_action);
+                if(conflict != HotkeyActionId::kCount)
+                {
+                    NotificationManager::GetInstance().Show(
+                        HotkeyManager::KeyChordToString(captured) +
+                            " is already assigned to " +
+                            HotkeyManager::GetActionInfo(conflict).display_name,
+                        NotificationLevel::Warning);
+                    m_rebinding_action = HotkeyActionId::kCount;
+                }
                 else
-                    binding.alternate = captured;
-                hk.SetBinding(m_rebinding_action, binding);
-                m_hotkeys_changed  = true;
-                m_rebinding_action = HotkeyActionId::kCount;
+                {
+                    HotkeyBinding binding = hk.GetBinding(m_rebinding_action);
+                    if(m_rebinding_primary)
+                        binding.primary = captured;
+                    else
+                        binding.alternate = captured;
+                    hk.SetBinding(m_rebinding_action, binding);
+                    m_hotkeys_changed  = true;
+                    m_rebinding_action = HotkeyActionId::kCount;
+                }
             }
         }
     }

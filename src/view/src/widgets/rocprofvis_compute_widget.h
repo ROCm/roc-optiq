@@ -6,6 +6,7 @@
 #include "rocprofvis_widget.h"
 
 #include <map>
+#include <set>
 #include <limits>
 #include <vector>
 
@@ -69,6 +70,7 @@ private:
     void  RenderPinCheckBox(std::pair<const MetricId, Row>& row);
 };
 
+
 class MetricTable : public MetricTableBase
 {
 public:
@@ -96,13 +98,14 @@ public:
                       uint64_t                          client_id);
     void AddRow(MetricId metric_id); 
     void RemoveRow(MetricId metric_id);
-    void RefillTable();
-    void Update() override;
-    std::vector<MetricId> GetPinnedMetricIds() const;
+    void RefillTable(const std::set<MetricId> pinned_ids);
+    void Update();
 
 private:
     void ContextMenu(const char* value_to_copy, uint32_t column_index,
                      std::pair<const MetricId, Row>& row) override;
+    bool HasMetricInCurrentWorkload(const MetricId& metric_id) const;
+    void FillUnavailableRow(const MetricId& metric_id);
     void UpdateColumns(MetricId metric_id);
     void FillTableRow(const MetricId& metric_id);
     void FillMandatoryColumns(const MetricId&                metric_id,
@@ -116,7 +119,7 @@ private:
 
     virtual void RenderEmptyTable() override;
 
-    std::optional<MetricId>           m_id_to_delete;
+    std::set<MetricId>                m_ids_to_delete;
     DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
     uint64_t                          m_client_id;

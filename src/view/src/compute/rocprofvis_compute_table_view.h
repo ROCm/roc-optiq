@@ -7,6 +7,7 @@
 #include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include <unordered_map>
+#include <set>
 
 namespace RocProfVis
 {
@@ -25,6 +26,7 @@ public:
     void Update() override;
     void Render() override;
 
+
 private:
     void RenderCategory(const AvailableMetrics::Category& cat);
     void RebuildTabs();
@@ -40,6 +42,7 @@ private:
     std::shared_ptr<TabContainer>     m_tabs;
     std::unordered_map<uint64_t, MetricTable> m_table_widgets;
     PinnedMetricTable                         m_pinned_metric_table;
+    std::set<MetricId>                        m_pinned_metrics;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

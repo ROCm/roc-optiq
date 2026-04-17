@@ -95,7 +95,11 @@ MetricTableBase::Render()
 void
 MetricTableBase::ChangePinState(const MetricId& metric_id)
 {
-    m_rows[metric_id].pinned = !m_rows[metric_id].pinned;
+    auto it = m_rows.find(metric_id);
+    if(it != m_rows.end())
+    {
+        it->second.pinned = !it->second.pinned;
+    }
 }
 
 float
@@ -430,12 +434,12 @@ PinnedMetricTable::FillMandatoryColumns(const MetricId&                metric_id
 }
 
 void
-PinnedMetricTable::RefillTable()
+PinnedMetricTable::RefillTable(const std::set<MetricId> pinned_ids)
 {
     m_columns.clear();
     m_lust_column_index = 0;
     FillDefaultColumns();
-    for(const auto& [metric_id, row] : m_rows)
+    for(const auto& metric_id : pinned_ids)
     {
         AddRow(metric_id);
     }
@@ -444,6 +448,12 @@ PinnedMetricTable::RefillTable()
 void
 PinnedMetricTable::AddRow(MetricId metric_id)
 {
+    if(!HasMetricInCurrentWorkload(metric_id))
+    {
+        FillUnavailableRow(metric_id);
+        return;
+    }
+
     UpdateColumns(metric_id);
     FillTableRow(metric_id);
 }
@@ -451,7 +461,7 @@ PinnedMetricTable::AddRow(MetricId metric_id)
 void
 PinnedMetricTable::RemoveRow(MetricId metric_id)
 {
-    m_id_to_delete = metric_id;
+    m_ids_to_delete.insert(metric_id);
 }
 
 void
@@ -483,6 +493,30 @@ PinnedMetricTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
     return tree.at(metric_id.category_id).tables.at(metric_id.table_id);
 }
 
+bool
+PinnedMetricTable::HasMetricInCurrentWorkload(const MetricId& metric_id) const
+{
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+        return false;
+
+    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();
+    auto workload_it = workloads.find(workload_id);
+    if(workload_it == workloads.end())
+        return false;
+
+    const auto& tree = workload_it->second.available_metrics.tree;
+    auto category_it = tree.find(metric_id.category_id);
+    if(category_it == tree.end())
+        return false;
+
+    auto table_it = category_it->second.tables.find(metric_id.table_id);
+    if(table_it == category_it->second.tables.end())
+        return false;
+
+    return table_it->second.entries.count(metric_id.entry_id) > 0;
+}
+
 std::optional<uint32_t>
 PinnedMetricTable::GetColumnIndex(const std::string& column_name)
 {
@@ -502,6 +536,17 @@ PinnedMetricTable::RenderEmptyTable()
 }
 
 void
+PinnedMetricTable::FillUnavailableRow(const MetricId& metric_id)
+{
+    Row row;
+    row.pinned = true;
+    row.values[1].value = metric_id.ToString();
+    //row.values[2].value = "";
+    row.values[LAST_INDEX].value = "";
+    m_rows[metric_id] = std::move(row);
+}
+
+void
 PinnedMetricTable::FillTableRow(const MetricId& metric_id)
 {
     Row row;
@@ -518,6 +563,8 @@ PinnedMetricTable::FillTableRow(const MetricId& metric_id)
     auto  metric_value =
         model.GetKernelMetricValue(m_client_id, kernel_id, metric_id.category_id,
                              metric_id.table_id, metric_id.entry_id);
+    if(!metric_value)
+        return;
 
     const auto& table = GetTable(metric_id, workload_id);
     FillMandatoryColumns(metric_id, table, row, metric_value);
@@ -541,9 +588,15 @@ PinnedMetricTable::FillTableRow(const MetricId& metric_id)
 void
 PinnedMetricTable::Update()
 {
-    if(m_id_to_delete.has_value())
+    if(!m_ids_to_delete.empty())
     {
-        m_rows.erase(m_id_to_delete.value());
+        for (auto id : m_ids_to_delete)
+        {
+            if(m_rows.count(id))
+            {
+                m_rows.erase(id);
+            }
+        }
 
         m_columns.clear();
         m_lust_column_index = 0;
@@ -551,21 +604,28 @@ PinnedMetricTable::Update()
         {
             UpdateColumns(metric_id);
         }
-        m_id_to_delete = std::nullopt;
+        m_ids_to_delete.clear();
     }
 }
 
-std::vector<MetricId>
-PinnedMetricTable::GetPinnedMetricIds() const
-{
-    std::vector<MetricId> pinned_metric_ids;
-    pinned_metric_ids.reserve(m_rows.size());
-    for (auto& row : m_rows)
-    {
-        pinned_metric_ids.push_back(row.first);
-    }
-    return pinned_metric_ids;
-}
+//void
+//PinnedMetricTable::Update(const std::set<MetricId>& pinned_metric)
+//{
+//    for(const auto& metric_id : pinned_metric)
+//    {
+//        if(!m_rows.count(metric_id))
+//        {
+//            AddRow(metric_id);
+//        }
+//    }
+//    for(const auto& [metric_id, row] : m_rows)
+//    {
+//        if(!pinned_metric.count(metric_id))
+//        {
+//            m_ids_to_delete.insert(metric_id);
+//        }
+//    }
+//}
 
 //---------------------------------------------------------
 

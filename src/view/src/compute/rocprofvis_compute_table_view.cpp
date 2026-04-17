@@ -20,7 +20,12 @@ ComputeTableView::ComputeTableView(
 , m_pinned_metric_table(data_provider, compute_selection, m_client_id)
 {
     m_pinned_metric_table.SetPinMetricCallback([this](MetricId metric_id) {
-        m_table_widgets[metric_id.GetTableKey()].ChangePinState(metric_id);
+        m_pinned_metrics.erase(metric_id);
+        auto table_it = m_table_widgets.find(metric_id.GetTableKey());
+        if(table_it != m_table_widgets.end())
+        {
+            table_it->second.ChangePinState(metric_id);
+        }
         m_pinned_metric_table.RemoveRow(metric_id);
     });
 
@@ -57,7 +62,7 @@ ComputeTableView::ComputeTableView(
             if(evt->GetClientId() == m_client_id)
                 RebuildTableDataCache();
         }
-        m_pinned_metric_table.RefillTable();
+        m_pinned_metric_table.RefillTable(m_pinned_metrics);
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
@@ -210,10 +215,16 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
         m_table_widgets.try_emplace(key, m_data_provider.GetTraceFilePath());
     MetricTable& widget          = it->second;
     auto pin_metric_func = [this, &widget](MetricId metric_id) {
-        if(widget.IsMetricPinned(metric_id))
+        if (widget.IsMetricPinned(metric_id))
+        {
+            m_pinned_metrics.insert(metric_id);
             m_pinned_metric_table.AddRow(metric_id);
+        }
         else
+        {
+            m_pinned_metrics.erase(metric_id);
             m_pinned_metric_table.RemoveRow(metric_id);
+        }
     };
     widget.SetPinMetricCallback(pin_metric_func);
 
@@ -233,13 +244,12 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
 void
 ComputeTableView::RestoreMetricPining()
 {
-    auto pinned_metrics = m_pinned_metric_table.GetPinnedMetricIds();
-    for(MetricId id : pinned_metrics)
+    for(MetricId id : m_pinned_metrics)
     {
-        auto& table = m_table_widgets[id.GetTableKey()];
-        if(!table.IsMetricPinned(id))
+        auto table_it = m_table_widgets.find(id.GetTableKey());
+        if(table_it != m_table_widgets.end())
         {
-            table.ChangePinState(id);
+            table_it->second.ChangePinState(id);
         }
     }
 }

@@ -123,7 +123,6 @@ ComputeComparisonView::Update()
         {
             m_tab_container->SetActiveTab(m_active_tab_id);
         }
-        m_data_changed = false;
     }
     for(const CategoryModel& category : m_categories)
     {
@@ -138,6 +137,11 @@ ComputeComparisonView::Update()
     if(m_pinned_table)
     {
         m_pinned_table->Update();
+    }
+    if(m_data_changed)
+    {
+        UpdateDifferenceHighlighting();
+        m_data_changed = false;
     }
 }
 
@@ -283,6 +287,7 @@ ComputeComparisonView::UpdateMetrics()
                                                         m_target_kernel_id))
         {
             m_categories.clear();
+            m_diff_cell_groups.clear();
             m_tab_container = std::make_unique<TabContainer>();
             std::vector<const AvailableMetrics::Category*> baseline_categories =
                 m_data_provider.ComputeModel()
@@ -376,29 +381,50 @@ ComputeComparisonView::UpdateMetrics()
                             std::optional<Table::DisplayProps::Color> bg_color_difference;
                             std::optional<Table::DisplayProps::Color> text_color;
                             std::optional<const char*>                icon;
+                            double percentage_diff = 0.0;
+                            Colors diff_color      = Colors::kComparisonGreater;
+                            ImU32  diff_alpha      = 255;
                             if(valid_match)
                             {
                                 if(baseline_value && target_value &&
                                    rounded_baseline != rounded_target)
                                 {
-                                    Colors      diff_color = Colors::kComparisonGreater;
-                                    const char* diff_icon  = ICON_ARROW_UP;
-                                    ImU32       diff_alpha = 255;
-                                    if(GetDifferenceHighlightProps(
-                                           rounded_baseline, rounded_target,
-                                           diff_color, diff_icon, diff_alpha))
+                                    const char* diff_icon =
+                                        (rounded_target > rounded_baseline)
+                                            ? ICON_ARROW_UP
+                                            : ICON_ARROW_DOWN;
+                                    diff_color =
+                                        (rounded_target > rounded_baseline)
+                                            ? Colors::kComparisonGreater
+                                            : Colors::kComparisonLesser;
+                                    if(rounded_baseline != 0.0)
                                     {
-                                        bg_color_baseline = Table::DisplayProps::Color{
-                                            Colors::kComparisonBase, 255
-                                        };
-                                        bg_color_target = Table::DisplayProps::Color{
-                                            Colors::kComparisonTarget, 255
-                                        };
-                                        bg_color_difference =
-                                            Table::DisplayProps::Color{ diff_color,
-                                                                        diff_alpha };
-                                        icon = diff_icon;
+                                        percentage_diff =
+                                            std::abs((rounded_target -
+                                                      rounded_baseline) /
+                                                     rounded_baseline * 100.0);
+                                        diff_alpha = std::min(
+                                            static_cast<ImU32>(
+                                                std::abs(rounded_target -
+                                                         rounded_baseline) /
+                                                    rounded_baseline * 255 +
+                                                25),
+                                            ImU32(255));
                                     }
+                                    else
+                                    {
+                                        percentage_diff = 100.0;
+                                    }
+                                    bg_color_baseline = Table::DisplayProps::Color{
+                                        Colors::kComparisonBase, 255
+                                    };
+                                    bg_color_target = Table::DisplayProps::Color{
+                                        Colors::kComparisonTarget, 255
+                                    };
+                                    bg_color_difference =
+                                        Table::DisplayProps::Color{ diff_color,
+                                                                    diff_alpha };
+                                    icon = diff_icon;
                                 }
                             }
                             else
@@ -413,18 +439,16 @@ ComputeComparisonView::UpdateMetrics()
                                 baseline_value ? std::make_optional(rounded_baseline)
                                                : std::nullopt,
                                 Table::DisplayProps{ bg_color_baseline, text_color,
-                                                     std::nullopt },
-                                Table::Value::Role::Baseline,
-                                value_name });
+                                                     std::nullopt } });
+                            size_t baseline_index = row_value[0].size() - 1;
+
                             row_value[0].emplace_back(Table::Value{
                                 "Target " + value_name,
                                 valid_match && target_value
                                     ? std::make_optional(rounded_target)
                                     : std::nullopt,
                                 Table::DisplayProps{ bg_color_target, text_color,
-                                                     std::nullopt },
-                                Table::Value::Role::Target,
-                                value_name });
+                                                     std::nullopt } });
                             row_value[0].emplace_back(Table::Value{
                                 "Difference##" + value_name,
                                 valid_match && baseline_value && target_value
@@ -432,9 +456,7 @@ ComputeComparisonView::UpdateMetrics()
                                                          rounded_baseline)
                                     : std::nullopt,
                                 Table::DisplayProps{ bg_color_difference, text_color,
-                                                     icon },
-                                Table::Value::Role::Difference,
-                                value_name });
+                                                     icon } });
                             row_value[0].emplace_back(Table::Value{
                                 "Difference (%)##" + value_name,
                                 valid_match && baseline_value && target_value &&
@@ -446,37 +468,43 @@ ComputeComparisonView::UpdateMetrics()
                                           ROUND_FACTOR)
                                     : std::nullopt,
                                 Table::DisplayProps{ bg_color_difference, text_color,
-                                                     icon },
-                                Table::Value::Role::DifferencePercent,
-                                value_name });
+                                                     icon } });
+                            // Track cells that are marked as different for
+                            // threshold-based recoloring...
+                            if(valid_match && bg_color_difference.has_value())
+                            {
+                                constexpr size_t FIXED_PREFIX = 3;
+                                m_diff_cell_groups.push_back(DiffCellGroup{
+                                    category_model.tables[i].get(),
+                                    category_model.tables[i]->Rows().size(),
+                                    FIXED_PREFIX + baseline_index,
+                                    FIXED_PREFIX + baseline_index + 1,
+                                    FIXED_PREFIX + baseline_index + 2,
+                                    FIXED_PREFIX + baseline_index + 3,
+                                    percentage_diff,
+                                    diff_color,
+                                    diff_alpha });
+                            }
                             if(!valid_match && row_entry.count(1) > 0)
                             {
                                 row_value[1].emplace_back(Table::Value{
                                     "Baseline " + value_name, std::nullopt,
                                     Table::DisplayProps{ bg_color_baseline, text_color,
-                                                         std::nullopt },
-                                    Table::Value::Role::Baseline,
-                                    value_name });
+                                                         std::nullopt } });
                                 row_value[1].emplace_back(Table::Value{
                                     "Target " + value_name,
                                     target_value ? std::make_optional(rounded_target)
                                                  : std::nullopt,
                                     Table::DisplayProps{ bg_color_target, text_color,
-                                                         std::nullopt },
-                                    Table::Value::Role::Target,
-                                    value_name });
+                                                         std::nullopt } });
                                 row_value[1].emplace_back(Table::Value{
                                     "Difference##" + value_name, std::nullopt,
                                     Table::DisplayProps{ std::nullopt, text_color,
-                                                         std::nullopt },
-                                    Table::Value::Role::Difference,
-                                    value_name });
+                                                         std::nullopt } });
                                 row_value[1].emplace_back(Table::Value{
                                     "Difference (%)##" + value_name, std::nullopt,
                                     Table::DisplayProps{ std::nullopt, text_color,
-                                                         std::nullopt },
-                                    Table::Value::Role::DifferencePercent,
-                                    value_name });
+                                                         std::nullopt } });
                             }
                         }
                         for(uint32_t k = 0; k < row_value.size(); k++)
@@ -497,6 +525,7 @@ ComputeComparisonView::UpdateMetrics()
                                                       ROW_TAG_INVALID_MATCH));
                             }
                         }
+
                     }
                     // Setup the table (handlers, coloring..etc)
                     category_model.tables[i]->SetRowSelectionHandler(
@@ -529,180 +558,102 @@ ComputeComparisonView::UpdateMetrics()
                 }
             }
             m_tab_container->SetAllowToolTips(true);
+
+            // Build lookup for pinned table highlighting...
+            m_diff_by_metric_id.clear();
+            for(const DiffCellGroup& dcg : m_diff_cell_groups)
+            {
+                const Table::Row& row = dcg.table->Rows()[dcg.row_index];
+                m_diff_by_metric_id[row.id.metric_id].push_back(&dcg);
+            }
         }
     }
-}
-
-bool
-ComputeComparisonView::GetDifferenceHighlightProps(double      rounded_baseline,
-                                                   double      rounded_target,
-                                                   Colors&     diff_color,
-                                                   const char*& icon,
-                                                   ImU32&      alpha) const
-{
-    if(rounded_baseline == rounded_target)
-    {
-        return false;
-    }
-
-    double percentage_diff = 0.0;
-    if(rounded_baseline != 0.0)
-    {
-        percentage_diff =
-            std::abs((rounded_target - rounded_baseline) / rounded_baseline * 100.0);
-    }
-    else if(rounded_target != 0.0)
-    {
-        // If baseline is 0 but target is not
-        percentage_diff = 100.0;
-    }
-
-    if(percentage_diff < m_percentage_threshold)
-    {
-        return false;
-    }
-
-    if(rounded_target > rounded_baseline)
-    {
-        diff_color = Colors::kComparisonGreater;
-        icon       = ICON_ARROW_UP;
-    }
-    else
-    {
-        diff_color = Colors::kComparisonLesser;
-        icon       = ICON_ARROW_DOWN;
-    }
-
-    alpha = 255;
-    if(rounded_baseline != 0.0)
-    {
-        alpha = std::min(static_cast<ImU32>(
-                             std::abs(rounded_target - rounded_baseline) /
-                                 rounded_baseline * 255 +
-                             25),
-                         ImU32(255));
-    }
-
-    return true;
 }
 
 void
 ComputeComparisonView::UpdateDifferenceHighlighting()
 {
-    auto recolor_table = [this](Table& table) {
-        std::vector<Table::Row>& rows = table.MutableRows();
-        for(Table::Row& row : rows)
+    auto apply_group = [this](DiffCellGroup& group) {
+        Table::Row& row = group.table->MutableRows()[group.row_index];
+        if(group.percent_diff >= m_percentage_threshold)
         {
-            // Skip mismatched rows. They keep their dimmed appearance.
-            if(row.tags.test(ROW_TAG_INVALID_MATCH))
-            {
-                continue;
-            }
-
-            struct ValueGroup
-            {
-                Table::Row::Value* baseline = nullptr;
-                Table::Row::Value* target   = nullptr;
-                Table::Row::Value* diff     = nullptr;
-                Table::Row::Value* diff_pct = nullptr;
-            };
-            std::unordered_map<std::string, ValueGroup> grouped_values;
-            for(auto& [_, value] : row.values_map)
-            {
-                ValueGroup& group = grouped_values[value.compare_group];
-                switch(value.role)
-                {
-                    case Table::Value::Role::Baseline:
-                    {
-                        group.baseline = &value;
-                        break;
-                    }
-                    case Table::Value::Role::Target:
-                    {
-                        group.target = &value;
-                        break;
-                    }
-                    case Table::Value::Role::Difference:
-                    {
-                        group.diff = &value;
-                        break;
-                    }
-                    case Table::Value::Role::DifferencePercent:
-                    {
-                        group.diff_pct = &value;
-                        break;
-                    }
-                    default:
-                    {
-                        break;
-                    }
-                }
-            }
-
-            for(auto& [_, group] : grouped_values)
-            {
-                if(!group.baseline || !group.target || !group.diff || !group.diff_pct)
-                {
-                    continue;
-                }
-
-                Table::Row::Value& baseline_value = *group.baseline;
-                Table::Row::Value& target_value   = *group.target;
-                Table::Row::Value& diff_value     = *group.diff;
-                Table::Row::Value& diff_pct_value = *group.diff_pct;
-
-                baseline_value.display_props.bg_color = std::nullopt;
-                target_value.display_props.bg_color   = std::nullopt;
-                diff_value.display_props.bg_color     = std::nullopt;
-                diff_pct_value.display_props.bg_color = std::nullopt;
-                diff_value.display_props.icon         = std::nullopt;
-                diff_pct_value.display_props.icon     = std::nullopt;
-
-                if(baseline_value.data.empty() || target_value.data.empty())
-                {
-                    continue;
-                }
-
-                const double rounded_baseline = std::atof(baseline_value.data.c_str());
-                const double rounded_target   = std::atof(target_value.data.c_str());
-                Colors      diff_color = Colors::kComparisonGreater;
-                const char* diff_icon  = ICON_ARROW_UP;
-                ImU32       diff_alpha = 255;
-                if(!GetDifferenceHighlightProps(rounded_baseline, rounded_target,
-                                                diff_color, diff_icon, diff_alpha))
-                {
-                    continue;
-                }
-
-                baseline_value.display_props.bg_color =
-                    Table::DisplayProps::Color{ Colors::kComparisonBase, 255 };
-                target_value.display_props.bg_color =
-                    Table::DisplayProps::Color{ Colors::kComparisonTarget, 255 };
-                diff_value.display_props.bg_color =
-                    Table::DisplayProps::Color{ diff_color, diff_alpha };
-                diff_pct_value.display_props.bg_color =
-                    Table::DisplayProps::Color{ diff_color, diff_alpha };
-                diff_value.display_props.icon     = diff_icon;
-                diff_pct_value.display_props.icon = diff_icon;
-            }
+            row.cells[group.baseline_index].display_props->bg_color =
+                Table::DisplayProps::Color{ Colors::kComparisonBase, 255 };
+            row.cells[group.target_index].display_props->bg_color =
+                Table::DisplayProps::Color{ Colors::kComparisonTarget, 255 };
+            row.cells[group.difference_index].display_props->bg_color =
+                Table::DisplayProps::Color{ group.diff_color, group.diff_alpha };
+            row.cells[group.difference_percent_index].display_props->bg_color =
+                Table::DisplayProps::Color{ group.diff_color, group.diff_alpha };
+        }
+        else
+        {
+            row.cells[group.baseline_index].display_props->bg_color = std::nullopt;
+            row.cells[group.target_index].display_props->bg_color   = std::nullopt;
+            row.cells[group.difference_index].display_props->bg_color = std::nullopt;
+            row.cells[group.difference_percent_index].display_props->bg_color =
+                std::nullopt;
         }
     };
 
-    for(CategoryModel& category : m_categories)
+    for(DiffCellGroup& group : m_diff_cell_groups)
     {
-        for(std::shared_ptr<Table>& table : category.tables)
+        apply_group(group);
+    }
+
+    // Apply to pinned table by matching source DiffCellGroups to pinned
+    // rows via row ID, then modifying values_map by value name keys...
+    if(m_pinned_table)
+    {
+        constexpr size_t FIXED_PREFIX = 3;
+        for(size_t pi = 0; pi < m_pinned_table->Rows().size(); pi++)
         {
-            if(!table)
+            Table::Row& pinned_row = m_pinned_table->MutableRows()[pi];
+            auto it = m_diff_by_metric_id.find(pinned_row.id.metric_id);
+            if(it == m_diff_by_metric_id.end())
             {
                 continue;
             }
-            recolor_table(*table);
+            for(const DiffCellGroup* src : it->second)
+            {
+                const Table::Row& src_row = src->table->Rows()[src->row_index];
+                if(src_row.id == pinned_row.id)
+                {
+                    const auto& src_names = src->table->OrderedValueNames();
+                    size_t      src_pos   = src->baseline_index - FIXED_PREFIX;
+                    auto set_bg = [&](const std::string& key,
+                                      std::optional<Table::DisplayProps::Color> color) {
+                        auto vit = pinned_row.values_map.find(key);
+                        if(vit != pinned_row.values_map.end())
+                        {
+                            vit->second.display_props.bg_color = color;
+                        }
+                    };
+                    if(src->percent_diff >= m_percentage_threshold)
+                    {
+                        set_bg(src_names[src_pos],
+                               Table::DisplayProps::Color{ Colors::kComparisonBase,
+                                                           255 });
+                        set_bg(src_names[src_pos + 1],
+                               Table::DisplayProps::Color{ Colors::kComparisonTarget,
+                                                           255 });
+                        set_bg(src_names[src_pos + 2],
+                               Table::DisplayProps::Color{ src->diff_color,
+                                                           src->diff_alpha });
+                        set_bg(src_names[src_pos + 3],
+                               Table::DisplayProps::Color{ src->diff_color,
+                                                           src->diff_alpha });
+                    }
+                    else
+                    {
+                        set_bg(src_names[src_pos], std::nullopt);
+                        set_bg(src_names[src_pos + 1], std::nullopt);
+                        set_bg(src_names[src_pos + 2], std::nullopt);
+                        set_bg(src_names[src_pos + 3], std::nullopt);
+                    }
+                }
+            }
         }
-    }
-
-    if(m_pinned_table)
-    {
-        recolor_table(*m_pinned_table);
     }
 }
 
@@ -1510,8 +1461,6 @@ ComputeComparisonView::Table::AddRow(const AvailableMetrics::Entry* entry,
                 m_value_columns.at(values[i].name).ref_count++;
             }
             values_map[values[i].name].display_props = std::move(values[i].display_props);
-            values_map[values[i].name].role          = values[i].role;
-            values_map[values[i].name].compare_group = values[i].compare_group;
         }
         m_rows.emplace_back(Row{ Row::ID{ std::to_string(entry->category_id) + "." +
                                               std::to_string(entry->table_id) + "." +

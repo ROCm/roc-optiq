@@ -53,19 +53,9 @@ private:
         // Clients populate data via Rows of Values...
         struct Value
         {
-            enum class Role
-            {
-                Other,
-                Baseline,
-                Target,
-                Difference,
-                DifferencePercent,
-            };
             std::string           name;
             std::optional<double> data;
             DisplayProps          display_props;
-            Role                  role = Role::Other;
-            std::string           compare_group;
         };
         struct Row
         {
@@ -79,21 +69,20 @@ private:
                     return metric_id == other.metric_id && entry_name == other.entry_name;
                 }
             };
-            // Internal persistant Value storage, never changes once added...
+            // Internal persistant Value storage, never changes once added
+            // except for DisplayProps...
             struct Value
             {
-                std::string       name;
-                std::string       data;
-                DisplayProps      display_props;
-                Table::Value::Role role = Table::Value::Role::Other;
-                std::string       compare_group;
+                std::string  name;
+                std::string  data;
+                DisplayProps display_props;
             };
             // Render representation, rebuilt/reordered as needed when rows/columns
             // change...
             struct Cell
             {
-                std::string_view    data;
-                const DisplayProps* display_props;
+                std::string_view data;
+                DisplayProps*    display_props;
             };
             ID                                     id;
             const AvailableMetrics::Entry*         entry;
@@ -195,13 +184,29 @@ private:
             return row_id == other.row_id;
         }
     };
+    
+
+    struct DiffCellGroup
+    {
+        Table* table;
+        size_t row_index;
+        size_t baseline_index;
+        size_t target_index;
+        size_t difference_index;
+        size_t difference_percent_index;
+        double percent_diff;
+        Colors diff_color;
+        ImU32  diff_alpha;
+    };
+
+    // created during UpdateMetrics, used for updating the cells colors when threshold changes
+    std::vector<DiffCellGroup> m_diff_cell_groups;
+    // lookup from metric_id to DiffCellGroups, rebuilt when m_diff_cell_groups changes
+    std::unordered_map<std::string, std::vector<const DiffCellGroup*>> m_diff_by_metric_id;
 
     void FetchMetrics();
     void UpdateMetrics();
     void UpdateDifferenceHighlighting();
-    bool GetDifferenceHighlightProps(double rounded_baseline, double rounded_target,
-                                     Colors& diff_color, const char*& icon,
-                                     ImU32& alpha) const;
 
     void RenderToolbar();
     void RenderCategory(const size_t i);

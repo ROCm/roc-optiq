@@ -201,29 +201,6 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         ImGui::PopStyleColor();
     }
 
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-    if(graph.chart->IsInViewVertical())
-    {
-        ImGui::TextColored(
-            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
-            "Component Is: ");
-        ImGui::SameLine();
-        ImGui::TextColored(
-            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
-            "In Frame ");
-    }
-    else
-    {
-        ImGui::TextColored(
-            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextSuccess)),
-            "Component Is: ");
-        ImGui::SameLine();
-        ImGui::TextColored(
-            ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextError)),
-            "Not In Frame by: %f units.", graph.chart->GetDistanceToView());
-    }
-#endif
-
     ImGui::PopID();
 }
 

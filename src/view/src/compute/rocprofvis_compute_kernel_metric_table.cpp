@@ -245,9 +245,22 @@ KernelMetricTable::Render()
     if(ImGui::Button("Add Metric"))
     {
         m_query_builder.Show([this](const std::string& query) {
+            // only add metric if not already added
+            if(std::find(m_metrics_params.begin(), m_metrics_params.end(), query) !=
+               m_metrics_params.end())
+            {
+                // show notification that metric is already added
+                NotificationManager::GetInstance().Show("The metric '" + query +
+                                                            "' is already in the table.",
+                                                        NotificationLevel::Warning);
+                return;
+            }
+
             m_metrics_params.push_back(query);
             const AvailableMetrics::Entry* entry =
                 m_query_builder.GetSelectedMetricInfo();
+            
+            
             m_metrics_info.push_back({ entry ? *entry : AvailableMetrics::Entry(),
                                         m_query_builder.GetValueName() });
 
@@ -808,9 +821,7 @@ KernelMetricTable::ComputeColumnMaxValues(
                 continue;
             char*  end = nullptr;
             double val = std::strtod(row[col].c_str(), &end);
-            // Skip non-finite values (inf / -inf / NaN) so they don't
-            // saturate the max and break bar chart scaling for other rows.
-            if(end != row[col].c_str() && std::isfinite(val))
+            if(end != row[col].c_str())
                 max_val = std::max(max_val, std::abs(val));
         }
         if(max_val > 0.0)

@@ -535,6 +535,7 @@ rocprofvis_result_t rocprofvis_profiler_config_set_profiler_args(rocprofvis_prof
 */
 rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_profiler_config_t* config, char const* output_directory);
 
+
 /*
 * Launches a profiler process asynchronously.
 * @param config The profiler configuration.

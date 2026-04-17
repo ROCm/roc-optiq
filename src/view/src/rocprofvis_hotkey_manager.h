@@ -88,10 +88,12 @@ public:
     bool WasActionTriggered(HotkeyActionId action) const;
     bool IsActionHeld(HotkeyActionId action) const;
 
-    void          SetBinding(HotkeyActionId action, HotkeyBinding binding);
-    void          ResetBinding(HotkeyActionId action);
-    void          ResetAllBindings();
-    HotkeyBinding GetBinding(HotkeyActionId action) const;
+    void           SetBinding(HotkeyActionId action, HotkeyBinding binding);
+    void           ResetBinding(HotkeyActionId action);
+    void           ResetAllBindings();
+    HotkeyBinding  GetBinding(HotkeyActionId action) const;
+    HotkeyActionId FindConflictingAction(ImGuiKeyChord  chord,
+                                         HotkeyActionId except_action) const;
 
     static const HotkeyActionInfo& GetActionInfo(HotkeyActionId action);
     static HotkeyActionId          BookmarkSaveAction(int index);

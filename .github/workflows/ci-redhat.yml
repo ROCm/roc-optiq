@@ -6,6 +6,7 @@ on:
     inputs:
       os-version:
         description: 'JSON array of OS version(s) to test'
+        type: string
         required: true
         default: '[ "9", "10" ]'
 

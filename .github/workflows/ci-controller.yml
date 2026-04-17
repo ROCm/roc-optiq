@@ -52,14 +52,14 @@ jobs:
     needs: setup
     uses: ./.github/workflows/ci-redhat.yml
     with:
-      os-version: ${{ needs.setup.outputs.redhat-os-versions }}
+      os_version: ${{ needs.setup.outputs.redhat-os-versions }}
 
   ci-ubuntu:
     name: Ubuntu CI
     needs: setup
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
-      os-version: ${{ needs.setup.outputs.ubuntu-os-versions }}
+      os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
 
   ci-windows:
     name: Windows CI

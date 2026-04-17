@@ -4,7 +4,7 @@ run-name: roc-optiq-redhat-ci
 on:
   workflow_call:
     inputs:
-      os-version:
+      os_version:
         description: 'JSON array of OS version(s) to test'
         type: string
         required: true
@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: 
-        os-version: ${{ fromJson(inputs.os-version) }}
+        os-version: ${{ fromJson(inputs.os_version) }}
 
     steps:
       - uses: actions/checkout@v6

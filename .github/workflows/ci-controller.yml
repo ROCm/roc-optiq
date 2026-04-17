@@ -59,4 +59,5 @@ jobs:
 
   ci-windows:
     name: Windows CI
+    needs: setup
     uses: ./.github/workflows/ci-windows.yml

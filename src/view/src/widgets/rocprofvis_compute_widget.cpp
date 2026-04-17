@@ -602,7 +602,10 @@ PinnedMetricTable::Update()
         m_lust_column_index = 0;
         for(const auto& [metric_id, row] : m_rows)
         {
-            UpdateColumns(metric_id);
+            if(HasMetricInCurrentWorkload(metric_id))
+            {
+                UpdateColumns(metric_id);
+            }
         }
         m_ids_to_delete.clear();
     }

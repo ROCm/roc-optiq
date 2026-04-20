@@ -69,6 +69,7 @@ jobs:
           cp ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ${{ env.DIST_DIR }}/
           cp ${{ env.BUILD_DIR }}/*.tar.gz ${{ env.DIST_DIR }}/
           cp ${{ env.BUILD_DIR }}/*.deb ${{ env.DIST_DIR }}/
+          ls -l ${{ env.DIST_DIR }}/
       
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}

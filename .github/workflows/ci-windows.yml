@@ -3,13 +3,18 @@ run-name: roc-optiq-windows-ci
 
 on:
   workflow_call:
+    inputs:
+      upload_to_s3:
+        description: 'Boolean to enable/disable uploading to S3'
+        type: boolean
+        default: false
 
 env:
   BUILD_FILE_NAME: "roc-optiq"
 
 jobs:
   windows:
-    name: Windows • Build Optiq
+    name: Windows • Build Optiq • Upload to S3 (${{ inputs.upload_to_s3 }})
     runs-on: windows-latest
     steps:
       - name: Checkout Repository
@@ -42,3 +47,23 @@ jobs:
             Write-Host "❌ $env:BUILD_FILE_NAME was not built!"
             exit 1
           }
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.upload_to_s3 }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Prepare Distribution Artifacts
+        #if: ${{ inputs.upload_to_s3 }}
+        run: |
+          mkdir ${{ env.DIST_DIR }}
+          cp ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
+          ls -l ${{ env.DIST_DIR }}/
+      
+      - name: Upload Build to S3
+        if: ${{ inputs.upload_to_s3 }}
+        run: |
+          aws s3 cp ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/ \
+            --no-progress

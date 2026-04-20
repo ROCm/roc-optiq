@@ -235,6 +235,34 @@ HotkeyManager::GetBinding(HotkeyActionId action) const
     return m_bindings[static_cast<size_t>(action)];
 }
 
+HotkeyActionId
+HotkeyManager::FindConflictingAction(ImGuiKeyChord  chord,
+                                     HotkeyActionId except_action) const
+{
+    if(chord == ImGuiKey_None)
+        return HotkeyActionId::kCount;
+
+    const ActionType new_type =
+        kActionTable[static_cast<size_t>(except_action)].type;
+
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
+    {
+        if(static_cast<HotkeyActionId>(i) == except_action)
+            continue;
+
+        const auto& info    = kActionTable[i];
+        const auto& binding = m_bindings[i];
+
+        if(new_type == ActionType::kHold && info.type == ActionType::kHold)
+            continue;
+
+        if(binding.primary == chord || binding.alternate == chord)
+            return static_cast<HotkeyActionId>(i);
+    }
+
+    return HotkeyActionId::kCount;
+}
+
 std::string
 HotkeyManager::KeyChordToString(ImGuiKeyChord chord)
 {

@@ -1,4 +1,4 @@
-## Optiq Beta 0.3.1
+## Optiq Beta 0.4.0
 
 ### Features and Improvements
 
@@ -34,6 +34,9 @@
 - Added a database cleanup feature across controller/model/view paths, including UI integration and loading feedback while cleanup runs.
 - Improved cleanup flow reliability and responsiveness (including hang/file-close related handling).
 
+**Misc UI**
+- New settings panel allowing keyboard shortcuts to be customized.
+
 ### Fixes
 
 - Metric table cache crash when columns are empty.
@@ -44,12 +47,15 @@
 - Vulkan fallback and related application-window logging cleanup.
 - SQLite updated to 3.51.3.
 - Fixed incorrect axis labeling in compute summary bar charts.
-- Fixed compute metric table bar-cell clipping so bars render correctly with pinned columns.
-
+- Kernel selection table fixes:
+  - Do not allow duplicate metrics to be added.
+  - Filter out non-finite metric values when rendering bar charts.
+  - Fix metric sorting when missing metrics are present with kernel UUID tiebreaker.
+  - Fixed compute metric table bar-cell clipping so bars render correctly with pinned columns.
 
 ### Known Issues
 
-- Sidebar hide/show toggle does not work correctly for top level nodes (Processors, Process, Device Nodes)
+- Crash if metrics are pinned in Compute Table View and a new workload is selected that does not contain them.
 
 ## Optiq Beta 0.3.0
 

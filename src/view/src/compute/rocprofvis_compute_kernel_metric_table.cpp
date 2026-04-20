@@ -615,7 +615,9 @@ KernelMetricTable::Render()
                                     ImGui::TextUnformatted(cell.c_str());
                                 }
                             }
-                            bool cell_hovered = ImGui::IsMouseHoveringRect(cell_min, cell_max, true);
+                            bool cell_hovered =
+                                ImGui::IsWindowHovered() &&
+                                ImGui::IsMouseHoveringRect(cell_min, cell_max, true);
                             if(need_tooltip && cell_hovered)
                             {
                                 ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
@@ -700,6 +702,17 @@ KernelMetricTable::Render()
 void
 KernelMetricTable::SetQuery(const std::string& query)
 {
+    // only add metric if not already added
+    if(std::find(m_metrics_params.begin(), m_metrics_params.end(), query) !=
+       m_metrics_params.end())
+    {
+        // show notification that metric is already added
+        NotificationManager::GetInstance().Show("The metric '" + query +
+                                                    "' is already in the table.",
+                                                NotificationLevel::Warning);
+        return;
+    }
+  
     const AvailableMetrics::Entry* entry = m_query_builder.GetSelectedMetricInfo();
     AppendMetricQuery(query, entry ? *entry : AvailableMetrics::Entry(),
                       m_query_builder.GetValueName());
@@ -732,6 +745,13 @@ KernelMetricTable::AppendMetricQuery(const std::string& query,
     // Add filter slot for the new metric column.
     m_column_filters.emplace_back(ColumnFilter());
     m_pending_column_filters.emplace_back(ColumnFilter());
+  
+    if(!m_bar_chart_columns.empty())
+    {
+        int new_col = PERMANENT_COLUMN_COUNT +
+                      static_cast<int>(m_metrics_params.size()) - 1;
+        m_bar_chart_columns.insert(new_col);
+    }
 
     m_fetch_requested = true;
 }

@@ -726,6 +726,17 @@ KernelMetricTable::SetExternalQuery(MetricId metric_id, const std::string& value
     if(!workload)
         return;
 
+    // only add metric if not already added
+    if(std::find(m_metrics_params.begin(), m_metrics_params.end(), query) !=
+       m_metrics_params.end())
+    {
+        // show notification that metric is already added
+        NotificationManager::GetInstance().Show("The metric '" + query +
+                                                    "' is already in the table.",
+                                                NotificationLevel::Warning);
+        return;
+    }
+
     auto entry = ComputeDataModel::GetMetricInfo(*workload, metric_id.category_id,
                                                  metric_id.table_id, metric_id.entry_id);
     if(!entry)

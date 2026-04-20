@@ -8,11 +8,9 @@
 #include "spdlog/spdlog.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
-// imgui_internal.h provides ImGui::RegisterUserTexture/UnregisterUserTexture, which are required
-// to make a non-font ImTextureData visible to the active backend's per-frame texture loop
-// (see imgui.cpp UpdateTexturesEndFrame). The API is marked experimental in 1.92.x but is the
-// only sanctioned path for portable user textures, and is honored by both imgui_impl_opengl3
-// and imgui_impl_vulkan via ImGuiBackendFlags_RendererHasTextures.
+// Needed for ImGui::RegisterUserTexture / UnregisterUserTexture: the only portable way
+// (as of ImGui 1.92.x) to expose a non-font ImTextureData to the active backend's
+// per-frame texture loop. Works with both the OpenGL3 and Vulkan backends.
 #include "imgui_internal.h"
 #include <algorithm>
 #include <cmath>
@@ -38,23 +36,16 @@ EmbeddedImage::EmbeddedImage(const unsigned char* data, int data_len)
 
 EmbeddedImage::~EmbeddedImage()
 {
-    // Hand the GPU-side textures back to ImGui's backend for cleanup. The backend will free
-    // its native handle on the next render pass and then transition Status to Destroyed.
-    // We deliberately do NOT IM_DELETE the ImTextureData here: doing so before the backend
-    // has had a frame to honor WantDestroy would leak the GPU resource. EmbeddedImage instances
-    // live for application lifetime, so the small per-instance leak (sizeof(ImTextureData) plus
-    // any pixel staging buffer ImGui frees in its dtor) is acceptable and bounded.
-    auto release = [](ImTextureData*& tex) {
-        if(tex == nullptr) return;
-        if(ImGui::GetCurrentContext() != nullptr)
-        {
-            tex->SetStatus(ImTextureStatus_WantDestroy);
-            ImGui::UnregisterUserTexture(tex);
-        }
-        tex = nullptr;
-    };
-    release(m_tex_normal);
-    release(m_tex_inverted);
+    // Hand the GPU texture back to ImGui's backend; it will free the native handle on the
+    // next render pass. We intentionally do NOT IM_DELETE(m_tex): doing so before the
+    // backend honors WantDestroy would leak the GPU resource. The bounded per-instance
+    // leak of one ImTextureData is acceptable for app-lifetime images.
+    if(m_tex != nullptr && ImGui::GetCurrentContext() != nullptr)
+    {
+        m_tex->SetStatus(ImTextureStatus_WantDestroy);
+        ImGui::UnregisterUserTexture(m_tex);
+    }
+    m_tex = nullptr;
 
     if(m_pixels)
     {
@@ -63,7 +54,7 @@ EmbeddedImage::~EmbeddedImage()
 }
 
 void
-EmbeddedImage::EnsureTexturesUploaded() const
+EmbeddedImage::EnsureTextureUploaded() const
 {
     if(m_tex_attempted) return;
     if(!Valid()) return;
@@ -71,57 +62,22 @@ EmbeddedImage::EnsureTexturesUploaded() const
 
     m_tex_attempted = true;
 
-    // Build two pixel variants in one pass:
-    //   normal:   original RGB, alpha forced to 0 for near-white background pixels
-    //   inverted: (255 - R, 255 - G, 255 - B), same alpha mask
-    // Memory: 2 * W * H * 4 bytes. For the AMD/ROCm OptIQ logo (1759x1104) this is ~16 MB on
-    // the GPU, which is negligible compared to the per-frame draw cost we are eliminating.
-    constexpr unsigned char BG_THRESHOLD = 240;
-    const int               pixel_count  = m_width * m_height;
-
-    auto make_tex = [&](bool invert) -> ImTextureData* {
-        ImTextureData* tex = IM_NEW(ImTextureData)();
-        tex->Create(ImTextureFormat_RGBA32, m_width, m_height);
-        unsigned char* dst = static_cast<unsigned char*>(tex->GetPixels());
-        if(dst == nullptr)
-        {
-            IM_DELETE(tex);
-            return nullptr;
-        }
-        for(int i = 0; i < pixel_count; ++i)
-        {
-            const unsigned char* src = m_pixels + i * 4;
-            const bool is_bg =
-                src[3] == 0 || (src[0] >= BG_THRESHOLD && src[1] >= BG_THRESHOLD &&
-                                src[2] >= BG_THRESHOLD);
-            if(is_bg)
-            {
-                dst[i * 4 + 0] = 0;
-                dst[i * 4 + 1] = 0;
-                dst[i * 4 + 2] = 0;
-                dst[i * 4 + 3] = 0;
-            }
-            else
-            {
-                dst[i * 4 + 0] = invert ? static_cast<unsigned char>(255 - src[0]) : src[0];
-                dst[i * 4 + 1] = invert ? static_cast<unsigned char>(255 - src[1]) : src[1];
-                dst[i * 4 + 2] = invert ? static_cast<unsigned char>(255 - src[2]) : src[2];
-                dst[i * 4 + 3] = src[3];
-            }
-        }
-        tex->SetStatus(ImTextureStatus_WantCreate);
-        ImGui::RegisterUserTexture(tex);
-        return tex;
-    };
-
-    m_tex_normal   = make_tex(false);
-    m_tex_inverted = make_tex(true);
-
-    if(m_tex_normal == nullptr || m_tex_inverted == nullptr)
+    ImTextureData* tex = IM_NEW(ImTextureData)();
+    tex->Create(ImTextureFormat_RGBA32, m_width, m_height);
+    unsigned char* dst = static_cast<unsigned char*>(tex->GetPixels());
+    if(dst == nullptr)
     {
-        spdlog::warn("EmbeddedImage: failed to allocate GPU texture variant ({}x{})",
-                     m_width, m_height);
+        IM_DELETE(tex);
+        spdlog::warn("EmbeddedImage: failed to allocate GPU texture ({}x{})", m_width,
+                     m_height);
+        return;
     }
+
+    std::memcpy(dst, m_pixels, static_cast<size_t>(m_width) * m_height * 4);
+
+    tex->SetStatus(ImTextureStatus_WantCreate);
+    ImGui::RegisterUserTexture(tex);
+    m_tex = tex;
 }
 
 bool
@@ -157,19 +113,17 @@ EmbeddedImage::GetPixel(int x, int y) const
 }
 
 void
-EmbeddedImage::Render(ImVec2 top_left, float target_width, bool invert_colors) const
+EmbeddedImage::Render(ImVec2 top_left, float target_width) const
 {
     if(!Valid()) return;
 
-    EnsureTexturesUploaded();
+    EnsureTextureUploaded();
+    if(m_tex == nullptr) return;
 
-    ImTextureData* tex = invert_colors ? m_tex_inverted : m_tex_normal;
-    if(tex == nullptr) return;
-
-    const float  scale  = target_width / static_cast<float>(m_width);
-    const ImVec2 bottom_right(top_left.x + target_width,
-                              top_left.y + static_cast<float>(m_height) * scale);
-    ImGui::GetWindowDrawList()->AddImage(tex->GetTexRef(), top_left, bottom_right);
+    const float target_height =
+        target_width * static_cast<float>(m_height) / static_cast<float>(m_width);
+    const ImVec2 bottom_right(top_left.x + target_width, top_left.y + target_height);
+    ImGui::GetWindowDrawList()->AddImage(m_tex->GetTexRef(), top_left, bottom_right);
 }
 
 ImVec2

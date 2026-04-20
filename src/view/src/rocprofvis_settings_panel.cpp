@@ -126,33 +126,9 @@ SettingsPanel::Render()
             }
             ImGui::EndChild();
 
-            float reset_x = ImGui::GetContentRegionMax().x -
-                            ImGui::CalcTextSize("O").x -
-                            2 * ImGui::GetStyle().FramePadding.x;
-
-            if(m_category == Hotkeys)
-            {
-                float vim_w = ImGui::CalcTextSize("Vim").x +
-                              2 * ImGui::GetStyle().FramePadding.x;
-                ImGui::SetCursorPosX(reset_x - vim_w -
-                                     ImGui::GetStyle().ItemSpacing.x);
-
-                ImGui::PushStyleColor(ImGuiCol_Button,
-                                      m_settings.GetColor(Colors::kTransparent));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      m_settings.GetColor(Colors::kTransparent));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                                      m_settings.GetColor(Colors::kTransparent));
-                if(ImGui::Button("Vim"))
-                    ApplyVimLayout();
-                ImGui::PopStyleColor(3);
-
-                if(ImGui::IsItemHovered())
-                    SetTooltipStyled("Bind Vim-style keys to all alternate slots.");
-                ImGui::SameLine();
-            }
-
-            ImGui::SetCursorPosX(reset_x);
+            ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                                 ImGui::CalcTextSize("O").x -
+                                 2 * ImGui::GetStyle().FramePadding.x);
             if(m_category != Hotkeys)
             {
                 ImGui::SetCursorPosY(ImGui::GetCursorPos().y -
@@ -406,7 +382,8 @@ SettingsPanel::ResetButton()
 void
 SettingsPanel::RenderHotkeySettings()
 {
-    auto& hk = HotkeyManager::GetInstance();
+    auto&          hk                 = HotkeyManager::GetInstance();
+    HotkeyActionId rebind_at_frame_start = m_rebinding_action;
 
     ImGui::TextUnformatted("Keyboard Shortcuts");
     ImGui::Separator();
@@ -530,14 +507,18 @@ SettingsPanel::RenderHotkeySettings()
                         if(is_primary) b.primary   = ImGuiKey_None;
                         else           b.alternate = ImGuiKey_None;
                         hk.SetBinding(action_id, b);
-                        m_hotkeys_changed = true;
+                        m_hotkeys_changed  = true;
+                        m_rebinding_action = HotkeyActionId::kCount;
                     }
 
                     std::string reset_label =
                         "Reset to " + HotkeyManager::KeyChordToString(default_chord);
                     bool at_default = current_chord == default_chord;
                     if(ImGui::MenuItem(reset_label.c_str(), nullptr, false, !at_default))
+                    {
                         try_reset_slot(action_id, is_primary);
+                        m_rebinding_action = HotkeyActionId::kCount;
+                    }
                     ImGui::EndPopup();
                 }
                 ImGui::PopID();
@@ -554,7 +535,13 @@ SettingsPanel::RenderHotkeySettings()
 
     if(m_rebinding_action != HotkeyActionId::kCount)
     {
-        if(ImGui::IsKeyPressed(ImGuiKey_Escape))
+        bool rebind_unchanged_this_frame =
+            m_rebinding_action == rebind_at_frame_start;
+        bool clicked_away =
+            rebind_unchanged_this_frame &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape) || clicked_away)
         {
             m_rebinding_action = HotkeyActionId::kCount;
         }
@@ -625,45 +612,6 @@ SettingsPanel::ResetHotkeySettings()
 {
     HotkeyManager::GetInstance().ResetAllBindings();
     m_hotkeys_changed = true;
-}
-
-void
-SettingsPanel::ApplyVimLayout()
-{
-    auto& hk = HotkeyManager::GetInstance();
-
-    auto assign_alt = [&](HotkeyActionId action, ImGuiKeyChord chord) {
-        HotkeyActionId conflict = hk.FindConflictingAction(chord, action);
-        if(conflict != HotkeyActionId::kCount)
-            StealChord(conflict, chord);
-
-        HotkeyBinding b = hk.GetBinding(action);
-        b.alternate     = chord;
-        hk.SetBinding(action, b);
-    };
-
-    assign_alt(HotkeyActionId::kPanLeft,    ImGuiKey_H);
-    assign_alt(HotkeyActionId::kPanRight,   ImGuiKey_L);
-    assign_alt(HotkeyActionId::kScrollUp,   ImGuiKey_K);
-    assign_alt(HotkeyActionId::kScrollDown, ImGuiKey_J);
-    assign_alt(HotkeyActionId::kZoomIn,     ImGuiKey_Equal);
-    assign_alt(HotkeyActionId::kZoomOut,    ImGuiKey_Minus);
-    assign_alt(HotkeyActionId::kToggleMark, ImGuiKey_Apostrophe);
-
-    for(int n = 0; n < 10; ++n)
-    {
-        ImGuiKey fkey = static_cast<ImGuiKey>(ImGuiKey_F1 + n);
-        assign_alt(HotkeyManager::BookmarkRestoreAction(n), fkey);
-        assign_alt(HotkeyManager::BookmarkSaveAction(n), ImGuiMod_Shift | fkey);
-    }
-
-    assign_alt(HotkeyActionId::kMultiSelect,  ImGuiMod_Alt);
-    assign_alt(HotkeyActionId::kRegionSelect, ImGuiMod_Ctrl);
-    assign_alt(HotkeyActionId::kSpeedBoost,   ImGuiMod_Alt);
-
-    m_hotkeys_changed = true;
-    NotificationManager::GetInstance().Show("Vim layout applied.",
-                                            NotificationLevel::Info);
 }
 
 void

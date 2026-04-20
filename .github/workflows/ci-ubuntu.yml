@@ -63,7 +63,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Prepare Distribution Artifacts
-        if: ${{ inputs.upload_to_s3 }}
+        #if: ${{ inputs.upload_to_s3 }}
         run: |
           mkdir ${{ env.DIST_DIR }}
           cp ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ${{ env.DIST_DIR }}/

@@ -643,7 +643,9 @@ KernelMetricTable::Render()
                                     ImGui::TextUnformatted(cell.c_str());
                                 }
                             }
-                            bool cell_hovered = ImGui::IsMouseHoveringRect(cell_min, cell_max, true);
+                            bool cell_hovered =
+                                ImGui::IsWindowHovered() &&
+                                ImGui::IsMouseHoveringRect(cell_min, cell_max, true);
                             if(need_tooltip && cell_hovered)
                             {
                                 ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),

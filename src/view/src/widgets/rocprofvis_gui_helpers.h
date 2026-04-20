@@ -83,9 +83,16 @@ public:
     void Render(ImVec2 top_left, float target_width, bool invert_colors = false) const;
 
 private:
-    int            m_width  = 0;
-    int            m_height = 0;
-    unsigned char* m_pixels = nullptr;
+    // Build the GPU-backed texture variants from m_pixels.
+    // Lazy: invoked on first Render() once an ImGui context exists.
+    void EnsureTexturesUploaded() const;
+
+    int                    m_width  = 0;
+    int                    m_height = 0;
+    unsigned char*         m_pixels = nullptr;          // CPU copy (RGBA8). Kept for icon usage.
+    mutable ImTextureData* m_tex_normal   = nullptr;    // Background-removed, original colors.
+    mutable ImTextureData* m_tex_inverted = nullptr;    // Background-removed, RGB inverted.
+    mutable bool           m_tex_attempted = false;     // Avoid retrying on failure each frame.
 };
 
 void

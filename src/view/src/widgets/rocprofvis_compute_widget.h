@@ -51,6 +51,7 @@ protected:
     void FillDefaultColumns();
     void AddMetricToKernelDetails(const MetricId& metric_id, const std::string& value_name);
     bool IsValueColumn(uint32_t column_index) const;
+    bool CanBePinned();
     virtual void RenderEmptyTable() = 0;
 
     std::map<uint32_t, std::string> m_columns;

@@ -56,9 +56,13 @@ MetricTableBase::Render()
             {
                 if (column.first == 0)
                 {
-                    const float font_size = ImGui::GetFontSize();
-                    ImGui::TableSetupColumn(column.second.c_str(),
-                                            ImGuiTableColumnFlags_WidthFixed, font_size);
+                    if (CanBePinned())
+                    {
+                        const float font_size = ImGui::GetFontSize();
+                        ImGui::TableSetupColumn(column.second.c_str(),
+                                                ImGuiTableColumnFlags_WidthFixed,
+                                                font_size);
+                    }
                 }
                 else
                 {
@@ -77,6 +81,10 @@ MetricTableBase::Render()
                 for(auto column_index = 0; column_index < m_columns.size() - 1;
                     column_index++)
                 {
+                    if(column_index == 0 && !CanBePinned())
+                    {
+                        continue;
+                    }
                     auto menu_func = [&](const char* value_to_copy) {
                         this->ContextMenu(value_to_copy, column_index, row);
                     };
@@ -266,6 +274,15 @@ MetricTableBase::IsValueColumn(uint32_t column_index) const
            column_index != 1 &&
            column_index != 2 &&
            column_index != LAST_INDEX;
+}
+
+bool
+MetricTableBase::CanBePinned()
+{
+    if(m_pin_metric_clicked != nullptr)
+        return true;
+
+    return false;
 }
 
 //---------------------------------------------------------

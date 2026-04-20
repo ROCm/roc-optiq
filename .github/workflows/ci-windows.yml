@@ -60,6 +60,7 @@ jobs:
             Write-Host "❌ $env:BUILD_FILE_NAME was not built!"
             exit 1
           }
+          ls -l ${{ env.BUILD_DIR }}
 
       - name: Configure AWS credentials
         if: ${{ inputs.upload_to_s3 }}

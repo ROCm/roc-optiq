@@ -43,6 +43,8 @@ private:
     void ResetDisplayOptions();
     void ResetUnitOptions();
     void ResetHotkeySettings();
+    void ApplyVimLayout();
+    void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 
     bool ResetButton();
 

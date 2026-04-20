@@ -140,6 +140,17 @@ HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const
     if((mod_flags & ImGuiMod_Shift) && !io.KeyShift) return false;
     if((mod_flags & ImGuiMod_Alt) && !io.KeyAlt)     return false;
 
+    if(!(mod_flags & ImGuiMod_Ctrl) && io.KeyCtrl && key != ImGuiKey_None)
+    {
+        ImGuiKeyChord ctrl_variant = chord | ImGuiMod_Ctrl;
+        for(size_t i = 0; i < kHotkeyActionCount; ++i)
+        {
+            if(m_bindings[i].primary == ctrl_variant ||
+               m_bindings[i].alternate == ctrl_variant)
+                return false;
+        }
+    }
+
     return true;
 }
 

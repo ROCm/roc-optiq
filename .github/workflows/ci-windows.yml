@@ -26,6 +26,9 @@ jobs:
   windows:
     name: Windows • Build Optiq • Upload to S3 (${{ inputs.upload_to_s3 }})
     runs-on: windows-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6

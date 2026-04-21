@@ -44,7 +44,14 @@ ComputeView::ComputeView()
             const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();  
             if(!workloads.empty())
             {
-                m_compute_selection->SelectWorkload(workloads.begin()->first);
+                if(m_compute_selection) 
+                {
+                    m_compute_selection->SelectWorkload(workloads.begin()->first);
+                }
+                else
+                {
+                    spdlog::warn("Selection manager not available, workload not selected");
+                }
             }
         }
     });
@@ -119,6 +126,14 @@ void
 ComputeView::CreateView()
 {
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
+    // When launched remotely, for example over ssh, the UI make take long to init, and the data provider
+    // may have already loaded an analysis if the application was launched with --file flag.
+    // Check if one exists and if it does set the workload.
+    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();  
+    if(!workloads.empty())
+    {
+        m_compute_selection->SelectWorkload(workloads.begin()->first);
+    }
 
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});

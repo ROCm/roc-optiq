@@ -555,11 +555,6 @@ Roofline::Render()
         bool roofline_hovered = plot_size.x > 0.0f && plot_size.y > 0.0f &&
                                 ImGui::IsMouseHoveringRect(
                                     plot_pos, plot_pos + plot_size, false);
-        if(m_plot_interactions_enabled && roofline_hovered)
-        {
-            ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
-            ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
-        }
         if(!m_plot_interactions_enabled && roofline_hovered)
         {
             ImVec2      hint_size = ImGui::CalcTextSize(CHART_ZOOM_HINT);

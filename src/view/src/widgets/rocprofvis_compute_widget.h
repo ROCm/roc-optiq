@@ -48,14 +48,14 @@ protected:
     void RenderRowValues(uint32_t index, std::pair<const MetricId, Row>& row,
                          std::function<void(const char* value_to_copy)> menu_func);
     void RenderUnitValue(std::pair<const MetricId, Row>& row);
-    void FillDefaultColumns();
+    void FillDefaultColumns(std::map<uint32_t, std::string>& columns, std::uint32_t& last_column_index);
     void AddMetricToKernelDetails(const MetricId& metric_id, const std::string& value_name);
     bool IsValueColumn(uint32_t column_index) const;
     bool CanBePinned();
     virtual void RenderEmptyTable() = 0;
 
     std::map<uint32_t, std::string> m_columns;
-    std::uint32_t                   m_lust_column_index = 0;
+    std::uint32_t                   m_last_column_index = 0;
     std::map<MetricId, Row>         m_rows;
 
     std::function<void(MetricId)> m_pin_metric_clicked;
@@ -97,29 +97,35 @@ public:
     PinnedMetricTable(DataProvider&                     data_provider,
                       std::shared_ptr<ComputeSelection> compute_selection,
                       uint64_t                          client_id);
-    void AddRow(MetricId metric_id); 
-    void RemoveRow(MetricId metric_id);
-    void RefillTable(const std::set<MetricId> pinned_ids);
-    void Update();
+    void Update() override;
+    void AddRow(MetricId metric_id);
+    void RefillTable(const std::set<MetricId>& pinned_ids);
 
 private:
     void ContextMenu(const char* value_to_copy, uint32_t column_index,
                      std::pair<const MetricId, Row>& row) override;
     bool HasMetricInCurrentWorkload(const MetricId& metric_id) const;
-    void FillUnavailableRow(const MetricId& metric_id);
-    void UpdateColumns(MetricId metric_id);
-    void FillTableRow(const MetricId& metric_id);
+    void FillUnavailableRow(const MetricId& metric_id,
+                            std::map<MetricId, Row>& rows);
+    void UpdateColumns(MetricId                        metric_id,
+                       std::map<uint32_t, std::string>& columns,
+                       uint32_t&                        last_column_index);
+    void FillTableRow(const MetricId&              metric_id,
+                      const std::map<uint32_t, std::string>& columns,
+                      std::map<MetricId, Row>&     rows);
     void FillMandatoryColumns(const MetricId&                metric_id,
                               const AvailableMetrics::Table& table,
                               Row&                           row);
 
     const AvailableMetrics::Table& GetTable(const MetricId& metric_id, uint32_t workload_id);
 
-    std::optional<uint32_t> GetColumnIndex(const std::string& column_name);
+    std::optional<uint32_t> GetColumnIndex(const std::string&                  column_name,
+                                           const std::map<uint32_t, std::string>& columns);
 
     virtual void RenderEmptyTable() override;
 
-    std::set<MetricId>                m_ids_to_delete;
+    std::set<MetricId>                m_pending_pinned_ids;
+    bool                              m_rebuild_pending = false;
     DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
     uint64_t                          m_client_id;

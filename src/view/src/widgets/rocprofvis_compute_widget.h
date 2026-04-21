@@ -9,6 +9,7 @@
 #include <set>
 #include <limits>
 #include <vector>
+#include <optional>
 
 namespace RocProfVis
 {

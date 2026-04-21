@@ -44,11 +44,22 @@ MetricTableBase::Render()
         return;
     }
 
+    int num_columns = static_cast<int>(m_columns.size());
+    if(!CanBePinned())
+    {
+        if(num_columns > 0)
+            num_columns--;
+        if(num_columns == 0)
+        {
+            RenderEmptyTable();
+            return;
+        }
+    }
+
     if(ImGui::BeginChild(("##" + m_table_title + "layout").c_str(),
                          ImVec2(0, GetTableHight()), false,
                          ImGuiWindowFlags_HorizontalScrollbar))
     {
-        int num_columns = static_cast<int>(m_columns.size());
         if(ImGui::BeginTable(("##" + m_table_title).c_str(), num_columns,
                               m_table_flags))
         {

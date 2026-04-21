@@ -357,14 +357,14 @@ Roofline::Render()
         bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
         ImVec2 plot_pos;
         ImVec2 plot_size;
-        ImPlotFlags plot_flags = ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
-                                 ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
-                                 ImPlotFlags_Crosshairs;
 
         if(ImPlot::BeginPlot("plot", ImVec2(menus_outside ? 0.75f * region.x : -1, -1),
-                             plot_flags))
+                             ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
+                                 ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
+                                 ImPlotFlags_Crosshairs))
         {
-            ImPlotAxisFlags axis_flags = ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight;
+            ImPlotAxisFlags axis_flags =
+                ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight;
             if(!m_plot_zoom_enabled)
             {
                 axis_flags |= ImPlotAxisFlags_Lock;

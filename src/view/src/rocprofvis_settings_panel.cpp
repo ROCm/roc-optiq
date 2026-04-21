@@ -463,8 +463,7 @@ SettingsPanel::RenderHotkeySettings()
         {
             HotkeyActionId action_id = static_cast<HotkeyActionId>(i);
 
-            // Esc is reserved as the rebind-cancel key, so the action it
-            // drives (Clear Selection) is not exposed in the rebind table.
+            // Esc is reserved to cancel rebinding.
             if(action_id == HotkeyActionId::kClearSelection)
                 continue;
 

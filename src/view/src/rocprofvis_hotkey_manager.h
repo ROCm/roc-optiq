@@ -99,9 +99,6 @@ public:
     static HotkeyActionId          BookmarkSaveAction(int index);
     static HotkeyActionId          BookmarkRestoreAction(int index);
 
-    // Filters out keys that are not meaningful keyboard chords:
-    // mouse buttons, gamepad inputs, reserved-for-mod slots, standalone
-    // modifier keys, and Esc (reserved as the rebind-cancel key).
     static bool IsRebindableKey(ImGuiKey key);
 
     static std::string   KeyChordToString(ImGuiKeyChord chord);

@@ -99,7 +99,8 @@ HotkeyManager::BookmarkRestoreAction(int index)
 bool
 HotkeyManager::IsRebindableKey(ImGuiKey key)
 {
-    if(key == ImGuiKey_None || key == ImGuiKey_Escape)
+    // Esc cancels rebind; F11 is reserved for fullscreen toggle.
+    if(key == ImGuiKey_None || key == ImGuiKey_Escape || key == ImGuiKey_F11)
         return false;
 
     if(key == ImGuiKey_LeftCtrl  || key == ImGuiKey_RightCtrl ||
@@ -140,14 +141,34 @@ HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const
     if((mod_flags & ImGuiMod_Shift) && !io.KeyShift) return false;
     if((mod_flags & ImGuiMod_Alt) && !io.KeyAlt)     return false;
 
-    if(!(mod_flags & ImGuiMod_Ctrl) && io.KeyCtrl && key != ImGuiKey_None)
+    // Suppress this chord if a more-specific binding (same key + extra held
+    // modifiers) is owned by some action.
+    if(key != ImGuiKey_None)
     {
-        ImGuiKeyChord ctrl_variant = chord | ImGuiMod_Ctrl;
-        for(size_t i = 0; i < kHotkeyActionCount; ++i)
+        ImGuiKeyChord extra_mods = 0;
+        if(io.KeyCtrl  && !(mod_flags & ImGuiMod_Ctrl))  extra_mods |= ImGuiMod_Ctrl;
+        if(io.KeyShift && !(mod_flags & ImGuiMod_Shift)) extra_mods |= ImGuiMod_Shift;
+        if(io.KeyAlt   && !(mod_flags & ImGuiMod_Alt))   extra_mods |= ImGuiMod_Alt;
+
+        if(extra_mods != 0)
         {
-            if(m_bindings[i].primary == ctrl_variant ||
-               m_bindings[i].alternate == ctrl_variant)
-                return false;
+            for(size_t i = 0; i < kHotkeyActionCount; ++i)
+            {
+                ImGuiKeyChord candidates[2] = {m_bindings[i].primary,
+                                               m_bindings[i].alternate};
+                for(ImGuiKeyChord cand : candidates)
+                {
+                    if(cand == ImGuiKey_None)
+                        continue;
+                    if((cand & ~ImGuiMod_Mask_) != key)
+                        continue;
+                    ImGuiKeyChord added_mods = (cand & ImGuiMod_Mask_) & ~mod_flags;
+                    if(added_mods == 0)
+                        continue;
+                    if((added_mods & extra_mods) == added_mods)
+                        return false;
+                }
+            }
         }
     }
 

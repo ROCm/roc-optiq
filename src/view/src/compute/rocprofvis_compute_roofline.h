@@ -121,6 +121,7 @@ private:
     const KernelInfo*     m_kernel;
     uint32_t              m_requested_kernel_id;
     bool                  m_options_changed;
+    bool                  m_plot_interactions_enabled;
     std::optional<size_t> m_hovered_item_idx;
     float                 m_hovered_item_distance;
     float                 m_menus_rendered_height;

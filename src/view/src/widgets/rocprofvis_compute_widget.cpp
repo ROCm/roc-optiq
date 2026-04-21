@@ -97,7 +97,11 @@ MetricTableBase::Render()
                         continue;
                     }
                     auto menu_func = [&](const char* value_to_copy) {
+                        ImU32 mainColor =
+                            SettingsManager::GetInstance().GetColor(Colors::kTextMain);
+                        ImGui::PushStyleColor(ImGuiCol_Text, mainColor);
                         this->ContextMenu(value_to_copy, column_index, row);
+                        ImGui::PopStyleColor();
                     };
                     RenderRowValues(column_index, row, menu_func);
                 }
@@ -178,7 +182,20 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
         ImGui::TableNextColumn();
         if(auto it = row.second.values.find(column_index); it == row.second.values.end())
         {
+            //TODO: color should depend by color schema
+            const ImU32 light_gray = IM_COL32(230, 230, 230, 255);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, light_gray,
+                                   static_cast<int>(column_index));
             ImGui::TextDisabled("N/A");
+        }
+        else if (row.second.values.at(column_index).value.empty())
+        {
+            ImVec4 disabled_col = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+            ImGui::PushStyleColor(ImGuiCol_Text, disabled_col);
+            CopyableTextUnformatted("N/A",
+                                    "##value" + std::to_string(column_index),
+                                    COPY_DATA_NOTIFICATION, false, true, menu_func);
+            ImGui::PopStyleColor();
         }
         else
         {
@@ -384,6 +401,10 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
                              metric_value->values.at(value_name));
                     row.values[value_index + 3].value = buf;
                 }
+                else
+                {
+                    row.values[value_index + 3].value = "";
+                }
             }
         }
         m_rows[metric_id] = std::move(row);
@@ -426,12 +447,16 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
     if(ImGui::BeginPopupContextItem())
     {
         std::string label = " " + std::string(ICON_COPY) + " Copy";
-        if(ImGui::MenuItem(label.c_str()))
+        if(value_to_copy && std::string_view(value_to_copy) != "N/A")
         {
-            ImGui::SetClipboardText(value_to_copy);
-            NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
-                                                    NotificationLevel::Info);
+            if(ImGui::MenuItem(label.c_str()))
+            {
+                ImGui::SetClipboardText(value_to_copy);
+                NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+                                                        NotificationLevel::Info);
+            }
         }
+
         if(IsValueColumn(column_index))
         {
             label = " " + std::string(ICON_ARROW_RIGHT) + " Send Metric to kernel details";
@@ -440,6 +465,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }
         }
+
         ImGui::EndPopup();
     }
 }
@@ -601,6 +627,10 @@ PinnedMetricTable::FillTableRow(const MetricId& metric_id)
             {
                 snprintf(buf, sizeof(buf), "%.2f", metric_value->values.at(value_name));
                 row.values[column_index.value()].value = buf;
+            }
+            else
+            {
+                row.values[column_index.value()].value = "";
             }
         }
     }

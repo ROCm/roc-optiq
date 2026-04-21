@@ -55,6 +55,8 @@ constexpr const char* DISPLAY_NAMES_PRESET[] = {
     "FP64",  // PresetModel::Type::FP64
 };
 
+constexpr const char* CHART_ZOOM_HINT = "Click chart to enable zoom";
+
 Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 : m_data_provider(data_provider)
 , m_settings(SettingsManager::GetInstance())
@@ -68,6 +70,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_kernel_changed(false)
 , m_kernel_mode(kernel_mode)
 , m_options_changed(false)
+, m_plot_zoom_enabled(false)
 , m_workload(nullptr)
 , m_requested_workload_id(0)
 , m_kernel(nullptr)
@@ -354,15 +357,21 @@ Roofline::Render()
         bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
         ImVec2 plot_pos;
         ImVec2 plot_size;
+
         if(ImPlot::BeginPlot("plot", ImVec2(menus_outside ? 0.75f * region.x : -1, -1),
                              ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
                                  ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
                                  ImPlotFlags_Crosshairs))
         {
-            ImPlot::SetupAxis(ImAxis_X1, "Arithmetic Intensity (FLOP/Byte)",
-                              ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
-            ImPlot::SetupAxis(ImAxis_Y1, "Performance (GFLOP/s)",
-                              ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+            ImPlotAxisFlags axis_flags =
+                ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight;
+            if(!m_plot_zoom_enabled)
+            {
+                axis_flags |= ImPlotAxisFlags_Lock;
+            }
+            ImPlot::SetupAxis(ImAxis_X1, "Arithmetic Intensity (FLOP/Byte)", axis_flags);
+            ImPlot::SetupAxis(ImAxis_Y1, "Performance (GFLOP/s)", axis_flags);
+
             ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
             ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
             ImPlot::SetupAxisLimits(ImAxis_X1, m_workload->roofline.min.x,
@@ -374,7 +383,8 @@ Roofline::Render()
             ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, m_workload->roofline.min.y / 10,
                                                m_workload->roofline.max.y * 10);
             PlotHoverIdx();
-            for(size_t i = 0; i < m_items.size(); i++)
+            int item_count = static_cast<int>(m_items.size());
+            for(int i = 0; i < item_count; i++)
             {
                 bool display = false;
                 switch(m_items[i].type)
@@ -540,8 +550,32 @@ Roofline::Render()
             ImPlot::EndPlot();
         }
         ImGui::PopID();
+        bool roofline_hovered = plot_size.x > 0.0f && plot_size.y > 0.0f &&
+                                ImGui::IsMouseHoveringRect(
+                                    plot_pos, plot_pos + plot_size, false);
+        if(!m_plot_zoom_enabled && roofline_hovered)
+        {
+            ImVec2      hint_size = ImGui::CalcTextSize(CHART_ZOOM_HINT);
+            ImVec2      hint_pos = plot_pos +
+                              ImVec2(plot_size.x - hint_size.x, 0.0f) * 0.5f +
+                              ImVec2(0.0f, plot_style.PlotPadding.y);
+            ImGui::GetWindowDrawList()->AddText(
+                hint_pos, ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]),
+                CHART_ZOOM_HINT);
+        }
         bool menus_item_hovered = false;
         RenderMenus(region, plot_pos, plot_size, style, plot_style, menus_item_hovered);
+        if(!m_plot_zoom_enabled && roofline_hovered &&
+           ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_plot_zoom_enabled = true;
+        }
+        else if(m_plot_zoom_enabled &&
+                (ImGui::IsKeyPressed(ImGuiKey_Escape) ||
+                 (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !roofline_hovered)))
+        {
+            m_plot_zoom_enabled = false;
+        }
         if(!menus_item_hovered)
         {
             m_hovered_item_idx      = std::nullopt;
@@ -728,7 +762,9 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                           ImGuiChildFlags_AutoResizeY,
                           ImGuiWindowFlags_NoScrollWithMouse);
         bool empty = true;
-        for(size_t i = 0; i < m_items.size(); i++)
+
+        int item_count = static_cast<int>(m_items.size());
+        for(int i = 0; i < item_count; i++)
         {
             bool display = false;
             switch(m_items[i].type)

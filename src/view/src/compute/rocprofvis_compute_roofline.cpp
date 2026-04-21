@@ -70,7 +70,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_kernel_changed(false)
 , m_kernel_mode(kernel_mode)
 , m_options_changed(false)
-, m_plot_interactions_enabled(false)
+, m_plot_zoom_enabled(false)
 , m_workload(nullptr)
 , m_requested_workload_id(0)
 , m_kernel(nullptr)
@@ -357,23 +357,21 @@ Roofline::Render()
         bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
         ImVec2 plot_pos;
         ImVec2 plot_size;
-        ImPlotFlags plot_flags   = ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
-                                 ImPlotFlags_NoLegend | ImPlotFlags_NoMenus;
-        if(m_plot_interactions_enabled)
-        {
-            plot_flags |= ImPlotFlags_Crosshairs;
-        }
-        else
-        {
-            plot_flags |= ImPlotFlags_NoInputs;
-        }
+        ImPlotFlags plot_flags = ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
+                                 ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
+                                 ImPlotFlags_Crosshairs;
+
         if(ImPlot::BeginPlot("plot", ImVec2(menus_outside ? 0.75f * region.x : -1, -1),
                              plot_flags))
         {
-            ImPlot::SetupAxis(ImAxis_X1, "Arithmetic Intensity (FLOP/Byte)",
-                              ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
-            ImPlot::SetupAxis(ImAxis_Y1, "Performance (GFLOP/s)",
-                              ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+            ImPlotAxisFlags axis_flags = ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight;
+            if(!m_plot_zoom_enabled)
+            {
+                axis_flags |= ImPlotAxisFlags_Lock;
+            }
+            ImPlot::SetupAxis(ImAxis_X1, "Arithmetic Intensity (FLOP/Byte)", axis_flags);
+            ImPlot::SetupAxis(ImAxis_Y1, "Performance (GFLOP/s)", axis_flags);
+
             ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
             ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
             ImPlot::SetupAxisLimits(ImAxis_X1, m_workload->roofline.min.x,
@@ -555,7 +553,7 @@ Roofline::Render()
         bool roofline_hovered = plot_size.x > 0.0f && plot_size.y > 0.0f &&
                                 ImGui::IsMouseHoveringRect(
                                     plot_pos, plot_pos + plot_size, false);
-        if(!m_plot_interactions_enabled && roofline_hovered)
+        if(!m_plot_zoom_enabled && roofline_hovered)
         {
             ImVec2      hint_size = ImGui::CalcTextSize(CHART_ZOOM_HINT);
             ImVec2      hint_pos = plot_pos +
@@ -567,16 +565,16 @@ Roofline::Render()
         }
         bool menus_item_hovered = false;
         RenderMenus(region, plot_pos, plot_size, style, plot_style, menus_item_hovered);
-        if(!m_plot_interactions_enabled && roofline_hovered &&
+        if(!m_plot_zoom_enabled && roofline_hovered &&
            ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            m_plot_interactions_enabled = true;
+            m_plot_zoom_enabled = true;
         }
-        else if(m_plot_interactions_enabled &&
+        else if(m_plot_zoom_enabled &&
                 (ImGui::IsKeyPressed(ImGuiKey_Escape) ||
                  (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !roofline_hovered)))
         {
-            m_plot_interactions_enabled = false;
+            m_plot_zoom_enabled = false;
         }
         if(!menus_item_hovered)
         {

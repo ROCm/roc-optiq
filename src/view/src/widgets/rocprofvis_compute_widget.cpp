@@ -182,9 +182,8 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
         ImGui::TableNextColumn();
         if(auto it = row.second.values.find(column_index); it == row.second.values.end())
         {
-            //TODO: color should depend by color schema
-            const ImU32 light_gray = IM_COL32(230, 230, 230, 255);
-            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, light_gray,
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
+                                   SettingsManager::GetInstance().GetColor(Colors::kBorderGray),
                                    static_cast<int>(column_index));
             ImGui::TextDisabled("N/A");
         }

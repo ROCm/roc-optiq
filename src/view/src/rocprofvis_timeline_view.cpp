@@ -552,12 +552,15 @@ TimelineView::RenderSplitter()
                       ImGuiSelectableFlags_AllowDoubleClick,
                       ImVec2(5.0f, display_size.y));
 
-    if(ImGui::IsItemHovered())
+    if(ImGui::IsItemHovered() || ImGui::IsItemActive())
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
     }
 
-    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+    // Use IsItemActive() + IsMouseDragging() instead of the BeginDragDropSource hack
+    // that was previously here.  The drag-drop variant interacts badly with imgui's
+    // docking-branch window-move drags.
+    if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
         m_sidebar_size =
@@ -570,12 +573,7 @@ TimelineView::RenderSplitter()
             (drag_delta.x / display_size.x) *
                 m_tpt->GetVWidth());  // Prevents chart from moving in unexpected way.
         ImGui::ResetMouseDragDelta();
-        ImGui::EndDragDropSource();
         m_resize_activity |= true;
-    }
-    if(ImGui::BeginDragDropTarget())
-    {
-        ImGui::EndDragDropTarget();
     }
 
     ImGui::EndChild();
@@ -1117,9 +1115,15 @@ TimelineView::RenderTrack(int track_index, bool request_data,
         // Save distance for book keeping
         track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
 
-        // This item is being reordered if there is an active payload and its id
-        // matches the payload's id.
-        bool is_reordering = ImGui::GetDragDropPayload() &&
+        // This item is being reordered if a "reorder_request" payload is currently
+        // active and its id matches this track's id.  Note: we must check the payload
+        // *type* — GetDragDropPayload() returns non-null for any active drag-drop
+        // (e.g. imgui-docking's window-move drags), and m_reorder_request.track_id
+        // defaults to 0, which would make the first track appear to be reordering
+        // any time another drag fires.
+        const ImGuiPayload* payload      = ImGui::GetDragDropPayload();
+        bool                is_reordering = payload &&
+                             payload->IsDataType("reorder_request") &&
                              m_reorder_request.track_id == track_item->GetID();
 
         // Check if the track is visible

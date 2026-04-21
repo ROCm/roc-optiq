@@ -436,8 +436,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
 void
 PinnedMetricTable::FillMandatoryColumns(const MetricId&                metric_id,
                                         const AvailableMetrics::Table& table,
-                                        Row&                           row,
-                                        std::shared_ptr<MetricValue>   metric_value)
+                                        Row&                           row)
 {
     if(auto entrie = table.entries.find(metric_id.entry_id); entrie != table.entries.end())
     {
@@ -575,17 +574,13 @@ PinnedMetricTable::FillTableRow(const MetricId& metric_id)
     {
         return;
     }
-    auto& model = m_data_provider.ComputeModel();
-    auto  metric_value =
-        model.GetKernelMetricValue(m_client_id, kernel_id, metric_id.category_id,
-                             metric_id.table_id, metric_id.entry_id);
-    if(!metric_value)
-        return;
-
     const auto& table = GetTable(metric_id, workload_id);
-    FillMandatoryColumns(metric_id, table, row, metric_value);
+    FillMandatoryColumns(metric_id, table, row);
 
     char buf[64];
+    auto metric_value = m_data_provider.ComputeModel().GetKernelMetricValue(
+        m_client_id, kernel_id, metric_id.category_id,
+                                   metric_id.table_id, metric_id.entry_id);
     for(const auto& value_name : table.value_names)
     {
         if(auto column_index = GetColumnIndex(value_name); column_index.has_value())

@@ -111,8 +111,7 @@ private:
     void FillTableRow(const MetricId& metric_id);
     void FillMandatoryColumns(const MetricId&                metric_id,
                               const AvailableMetrics::Table& table,
-                              Row&                           row,
-                              std::shared_ptr<MetricValue>   metric_value);
+                              Row&                           row);
 
     const AvailableMetrics::Table& GetTable(const MetricId& metric_id, uint32_t workload_id);
 

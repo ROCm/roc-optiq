@@ -380,10 +380,6 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
     }
 
-    // Use IsItemActive() + IsMouseDragging() instead of the BeginDragDropSource hack
-    // that was previously here.  The drag-drop variant interacts badly with imgui's
-    // docking-branch window-move drags (it would spuriously fire and resize tracks
-    // whenever any other window was being dragged).
     if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);

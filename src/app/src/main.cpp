@@ -248,8 +248,7 @@ main(int argc, char** argv)
                 io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
                 io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
-                // When viewports are enabled, undocked windows should not have a
-                // platform-window taskbar icon, so they feel like sub-windows of the app
+                // Keep undocked windows out of the OS taskbar.
                 io.ConfigViewportsNoTaskBarIcon = true;
 
                 ImGui::StyleColorsLight();
@@ -316,11 +315,7 @@ main(int argc, char** argv)
                         backend.m_render(&backend, draw_data, &clear_color);
                     }
 
-                    // Render any platform (OS) windows for windows the user has
-                    // dragged out of the main viewport.  This must happen after the
-                    // main viewport is rendered but before we present, since for the
-                    // OpenGL backend RenderPlatformWindowsDefault() will swap each
-                    // platform window's GL context.
+                    // Render windows that have been dragged out of the main viewport.
                     if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
                     {
                         GLFWwindow* backup_current_context = glfwGetCurrentContext();

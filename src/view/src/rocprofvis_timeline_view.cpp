@@ -557,9 +557,6 @@ TimelineView::RenderSplitter()
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
     }
 
-    // Use IsItemActive() + IsMouseDragging() instead of the BeginDragDropSource hack
-    // that was previously here.  The drag-drop variant interacts badly with imgui's
-    // docking-branch window-move drags.
     if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
@@ -1115,12 +1112,8 @@ TimelineView::RenderTrack(int track_index, bool request_data,
         // Save distance for book keeping
         track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
 
-        // This item is being reordered if a "reorder_request" payload is currently
-        // active and its id matches this track's id.  Note: we must check the payload
-        // *type* — GetDragDropPayload() returns non-null for any active drag-drop
-        // (e.g. imgui-docking's window-move drags), and m_reorder_request.track_id
-        // defaults to 0, which would make the first track appear to be reordering
-        // any time another drag fires.
+        // Match on the "reorder_request" payload type so unrelated drags
+        // (e.g. imgui docking window moves) don't trigger reordering.
         const ImGuiPayload* payload      = ImGui::GetDragDropPayload();
         bool                is_reordering = payload &&
                              payload->IsDataType("reorder_request") &&

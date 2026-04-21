@@ -22,7 +22,6 @@ AddBranchNode(TreeNode* parent, NodeType type, const std::string& label,
 {
     auto node             = std::make_unique<TreeNode>(type, label, collapsable);
     node->show_eye_button = show_eye_button;
-    node->framed          = framed;
     return parent->AddChild(std::move(node));
 }
 
@@ -760,7 +759,6 @@ TrackTopology::BuildSidebarTree()
 
     auto root = std::make_unique<TreeNode>(NodeType::kRoot, "Project", true);
     root->show_eye_button = false;
-    root->framed          = true;
 
     TreeNode* root_node = root.get();
     const auto& track_list = m_data_provider.DataModel().GetTimeline().GetTrackList();

@@ -27,12 +27,6 @@ option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui fi
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
 
-if(APPLE AND USE_NATIVE_FILE_DIALOG)
-    set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
-        "Use the OS native file dialog instead of ImGui file dialog" FORCE)
-    message(WARNING "Disabling native file dialog on macOS; it must run on the main thread.")
-endif()
-
 if(COMPUTE_UI_SUPPORT) 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)

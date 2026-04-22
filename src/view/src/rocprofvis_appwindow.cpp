@@ -1132,7 +1132,7 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
     }
 
-    m_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
+    auto dialog_task = [=]() -> std::string {
         nfdresult_t init_result = NFD_Init();
         if(init_result != NFD_OKAY)
         {
@@ -1143,7 +1143,6 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
             m_use_native_file_dialog.store(false);
             return std::string();
         }
-
         nfdu8char_t* outPath = nullptr;
 
         nfdu8filteritem_t*       filters = new nfdu8filteritem_t[file_filters.size()];
@@ -1216,7 +1215,18 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
         NFD_Quit();
         return file_path;
-    });
+    };
+
+#if defined(__APPLE__)
+    // NSOpenPanel / NSSavePanel are AppKit objects and must be driven from the
+    // main thread. Run synchronously here and hand the result to the existing
+    // future-polling path via a ready promise.
+    std::promise<std::string> dialog_promise;
+    dialog_promise.set_value(dialog_task());
+    m_file_dialog_future = dialog_promise.get_future();
+#else
+    m_file_dialog_future = std::async(std::launch::async, std::move(dialog_task));
+#endif
 }
 
 #endif

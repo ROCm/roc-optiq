@@ -24,7 +24,6 @@ enum class EventColorMode
 {
     kNone,
     kByEventName,
-    kByTimeLevel,
     __kCount
 };
 

@@ -246,19 +246,34 @@ TrackItem::RenderMetaArea()
                                        anim_speed);
         }
 
-        // Reordering grip decoration
-        float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
-        float arrow_width       = ImGui::GetTextLineHeight();
+        // Reordering grip decoration: a 2x3 grid of grey dots painted directly via
+        // the draw list. The actual draggable hotspot is set up by TimelineView in
+        // a transparent overlay child sized to m_reorder_grip_width.
+        constexpr float kGripDotRadius  = 1.5f;
+        constexpr float kGripDotSpacing = 5.0f;
+        constexpr int   kGripCols       = 2;
+        constexpr int   kGripRows       = 3;
+        const float grip_block_w = (kGripCols - 1) * kGripDotSpacing;
+        const float grip_block_h = (kGripRows - 1) * kGripDotSpacing;
+        const float grid_icon_width = grip_block_w + kGripDotRadius * 2.0f;
+        const float arrow_width     = ImGui::GetTextLineHeight();
 
-        ImGui::SetCursorPos(
-            ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
-                   (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-
-        ImGui::TextUnformatted(ICON_GRID);
-        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
-      
-        ImGui::PopFont();
+        const ImU32  grip_color = m_settings.GetColor(Colors::kTextDim);
+        const ImVec2 win_pos    = ImGui::GetWindowPos();
+        const float  grip_origin_x =
+            win_pos.x + (m_reorder_grip_width - grip_block_w) * 0.5f;
+        const float  grip_origin_y =
+            win_pos.y + (container_size.y - grip_block_h) * 0.5f;
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        for(int col = 0; col < kGripCols; ++col)
+        {
+            for(int row = 0; row < kGripRows; ++row)
+            {
+                const ImVec2 center(grip_origin_x + col * kGripDotSpacing,
+                                    grip_origin_y + row * kGripDotSpacing);
+                draw_list->AddCircleFilled(center, kGripDotRadius, grip_color);
+            }
+        }
 
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
         // Adjust content size to account for padding
@@ -281,7 +296,7 @@ TrackItem::RenderMetaArea()
         ImGui::PushFont(large_font);
 
         float available_for_text =
-            content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
+            content_size.x - (m_meta_area_scale_width + grid_icon_width + arrow_width +
             4.0f * m_metadata_padding.x + 2.0f);
 
         if(available_for_text < 0.0f) available_for_text = 0.0f;
@@ -316,23 +331,14 @@ TrackItem::RenderMetaArea()
             EndTooltipStyled();
         }
 
-        ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
-                                       m_meta_area_scale_width - menu_button_width,
-                                   m_metadata_padding.y));
-        IconButton(ICON_GEAR,
-                   m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-        if(ImGui::IsItemHovered())
-            SetTooltipStyled("Track Options");
+        // Right-click anywhere in the metadata area opens the track options menu.
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             m_settings.GetDefaultStyle().WindowPadding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
                             m_settings.GetDefaultStyle().FrameRounding);
-        ImGui::SetNextWindowPos(ImGui::GetCursorScreenPos() +
-                                ImVec2(content_size.x - m_meta_area_scale_width -
-                                           menu_button_width -
-                                           ImGui::GetStyle().FramePadding.x,
-                                       0));
-        if(ImGui::BeginPopupContextItem("", ImGuiPopupFlags_MouseButtonLeft))
+        if(ImGui::BeginPopupContextWindow("##TrackOptionsPopup",
+                                          ImGuiPopupFlags_MouseButtonRight |
+                                              ImGuiPopupFlags_NoOpenOverItems))
         {
             RenderMetaAreaOptions();
             ImGui::EndPopup();

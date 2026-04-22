@@ -119,9 +119,14 @@ FlameTrackItem::RenderMetaAreaExpand()
         ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
                ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight())));
 
-    int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
+    // Use the chart's drawable height (m_track_content_height) so the calculation
+    // matches the area events are actually rendered into. A level only counts as
+    // "visible" if it fits fully, otherwise we'd offer to expand even when all
+    // events are already on screen.
+    int visible_levels =
+        static_cast<int>(std::floor(m_track_content_height / m_level_height));
 
-    if(visible_levels <= m_max_level + 1)
+    if(visible_levels < m_max_level + 1)
     {
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
@@ -654,13 +659,7 @@ FlameTrackItem::RenderChart(float graph_width)
             continue;  // Skip if the item is not visible in the current view
         }
 
-        if(m_event_color_mode == EventColorMode::kByTimeLevel)
-        {
-            color_index =
-                static_cast<uint64_t>(item.event.m_start_ts + item.event.m_level) %
-                colorCount;
-        }
-        else if(m_event_color_mode == EventColorMode::kByEventName)
+        if(m_event_color_mode == EventColorMode::kByEventName)
         {
             color_index = static_cast<uint64_t>(item.name_hash) % colorCount;
         }
@@ -748,12 +747,6 @@ FlameTrackItem::RenderMetaAreaOptions()
 
     if(ImGui::RadioButton("Color by Name", mode == EventColorMode::kByEventName))
         mode = EventColorMode::kByEventName;
-    ImGui::SameLine();
-    if(ImGui::RadioButton("Color by Time Level", mode == EventColorMode::kByTimeLevel))
-        mode = EventColorMode::kByTimeLevel;
-    ImGui::SameLine();
-    if(ImGui::RadioButton("No Color", mode == EventColorMode::kNone))
-        mode = EventColorMode::kNone;
     m_event_color_mode = mode;
 
     if(ImGui::Checkbox("Compact Mode", &m_compact_mode))

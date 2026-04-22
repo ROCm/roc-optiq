@@ -73,7 +73,7 @@ jobs:
         #if: ${{ inputs.upload_to_s3 }}
         run: |
           mkdir ${{ env.DIST_DIR }}
-          cp ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/Debug/${{ env.BUILD_FILE_NAME }} ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
       
       - name: Upload Build to S3

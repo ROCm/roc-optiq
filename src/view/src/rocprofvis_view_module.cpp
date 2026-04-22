@@ -11,9 +11,11 @@
 using namespace RocProfVis::View;
 
 bool
-rocprofvis_view_init(std::function<void(int)> notification_callback)
+rocprofvis_view_init(std::function<void(int)>                 notification_callback,
+                     rocprofvis_view_file_dialog_preference_t file_dialog_pref)
 {
     auto app = AppWindow::GetInstance();
+    app->SetFileDialogPreference(file_dialog_pref);
     bool result = app->Init();
     if(!result)
     {

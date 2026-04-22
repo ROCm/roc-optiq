@@ -255,21 +255,5 @@ get_executable_name(const std::string& fullPath);
 bool
 is_remote_display_session();
 
-/**
- * @brief Decides at startup which file-dialog backend the application should use.
- *
- * Checked in order:
- *   1. Env var `ROCPROFVIS_FORCE_IMGUI_DIALOG`  -> returns false
- *   2. Env var `ROCPROFVIS_FORCE_NATIVE_DIALOG` -> returns true (only meaningful
- *      when the native dialog was compiled in; otherwise ignored).
- *   3. Native dialog compiled in AND !is_remote_display_session() -> true
- *   4. Otherwise -> false (use the in-process ImGui dialog).
- *
- * Logs the decision and the reason exactly once via spdlog.
- * The result is cached on first call.
- */
-bool
-should_use_native_file_dialog();
-
 }  // namespace View
 }  // namespace RocProfVis

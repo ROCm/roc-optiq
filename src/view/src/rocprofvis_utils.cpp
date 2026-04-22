@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_utils.h"
-#include "spdlog/spdlog.h"
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -433,25 +432,6 @@ RocProfVis::View::get_executable_name(const std::string& fullPath)
 
 namespace
 {
-// Returns true if the env var is set to a value that is neither empty nor a
-// conventional "disabled" literal ("0", "false", "no", case-insensitive).
-bool
-env_flag_enabled(const char* name)
-{
-    const char* v = std::getenv(name);
-    if(v == nullptr || v[0] == '\0')
-    {
-        return false;
-    }
-    std::string lowered(v);
-    for(char& c : lowered)
-    {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return lowered != "0" && lowered != "false" && lowered != "no" &&
-           lowered != "off";
-}
-
 // Returns true if DISPLAY looks like an SSH X11-forwarded display, e.g.
 // "localhost:10.0". SSH always uses the "localhost:" prefix and allocates
 // display numbers starting at 10 by default (X11DisplayOffset in sshd_config).
@@ -493,69 +473,3 @@ RocProfVis::View::is_remote_display_session()
     return s_cached;
 }
 
-bool
-RocProfVis::View::should_use_native_file_dialog()
-{
-    static const bool s_cached = []() {
-        const bool force_imgui  = env_flag_enabled("ROCPROFVIS_FORCE_IMGUI_DIALOG");
-        const bool force_native = env_flag_enabled("ROCPROFVIS_FORCE_NATIVE_DIALOG");
-
-#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
-        constexpr bool have_native = true;
-#else
-        constexpr bool have_native = false;
-#endif
-
-        bool        use_native = false;
-        const char* reason     = "";
-
-        if(force_imgui)
-        {
-            use_native = false;
-            reason     = "ROCPROFVIS_FORCE_IMGUI_DIALOG is set";
-        }
-        else if(force_native && have_native)
-        {
-            use_native = true;
-            reason     = "ROCPROFVIS_FORCE_NATIVE_DIALOG is set";
-        }
-        else if(force_native && !have_native)
-        {
-            use_native = false;
-            reason     = "ROCPROFVIS_FORCE_NATIVE_DIALOG is set but native "
-                         "dialog was not compiled in";
-        }
-        else if(!have_native)
-        {
-            use_native = false;
-            reason     = "native dialog was not compiled in";
-        }
-        else if(is_remote_display_session())
-        {
-            use_native = false;
-            if(std::getenv("SSH_CONNECTION") != nullptr ||
-               std::getenv("SSH_CLIENT") != nullptr ||
-               std::getenv("SSH_TTY") != nullptr)
-            {
-                reason = "SSH session detected; xdg-desktop-portal cannot "
-                         "forward to the client";
-            }
-            else
-            {
-                reason = "DISPLAY looks like an SSH-forwarded X11 display";
-            }
-        }
-        else
-        {
-            use_native = true;
-            reason     = "local session";
-        }
-
-        spdlog::info("File dialog backend: {} ({})",
-                     use_native ? "native (xdg-desktop-portal)"
-                                : "in-process ImGuiFileDialog",
-                     reason);
-        return use_native;
-    }();
-    return s_cached;
-}

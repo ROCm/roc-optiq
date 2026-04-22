@@ -119,6 +119,9 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
     result &= cli_parser.AddOption("v", "version", "Print application version", false);
     result &= cli_parser.AddOption("f", "file", "Open file", true);
     result &= cli_parser.AddOption("b", "backend", "Force rendering backend: 'vulkan' or 'opengl' (default: auto with fallback)", true);
+    result &= cli_parser.AddOption("d", "file-dialog",
+        "File dialog backend: 'auto' (default), 'native' (xdg-desktop-portal), "
+        "or 'imgui' (in-process). Use 'imgui' for ssh -X sessions.", true);
     result &= cli_parser.AddOption("h", "help", "Help the user with commands", false);
     ROCPROFVIS_ASSERT(result);
 
@@ -195,6 +198,31 @@ main(int argc, char** argv)
         }
     }
 
+    rocprofvis_view_file_dialog_preference_t fd_pref = kRocProfVisViewFileDialog_Auto;
+    if(cli_parser.WasOptionFound("file-dialog"))
+    {
+        std::string fd_str = cli_parser.GetOptionValue("file-dialog");
+        if(fd_str == "auto")
+        {
+            fd_pref = kRocProfVisViewFileDialog_Auto;
+        }
+        else if(fd_str == "native")
+        {
+            fd_pref = kRocProfVisViewFileDialog_Native;
+        }
+        else if(fd_str == "imgui")
+        {
+            fd_pref = kRocProfVisViewFileDialog_ImGui;
+        }
+        else
+        {
+            spdlog::error("Invalid --file-dialog '{}'. Valid options: auto, "
+                          "native, imgui",
+                          fd_str);
+            return 1;
+        }
+    }
+
     glfwSetErrorCallback(glfw_error_callback);
 #ifdef __linux__
     // Force X11 on Linux for multi-viewport and window positioning support
@@ -251,7 +279,7 @@ main(int argc, char** argv)
 
                 rocprofvis_view_init([window](int notification) -> void {
                     app_notification_callback(window, notification);
-                });
+                }, fd_pref);
 
                 backend.m_config(&backend, window);
 

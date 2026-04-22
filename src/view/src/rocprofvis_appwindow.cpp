@@ -97,7 +97,8 @@ AppWindow::AppWindow()
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
 , m_is_fullscreen(false)
-, m_use_native_file_dialog(should_use_native_file_dialog())
+, m_file_dialog_preference(kRocProfVisViewFileDialog_Auto)
+, m_use_native_file_dialog(false)
 , m_init_file_dialog(false)
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 , m_is_native_file_dialog_open(false)
@@ -183,7 +184,70 @@ AppWindow::Init()
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 
+    ConfigureFileDialogBackend();
+
     return result;
+}
+
+void
+AppWindow::ConfigureFileDialogBackend()
+{
+    bool want_native = false;
+    switch(m_file_dialog_preference)
+    {
+        case kRocProfVisViewFileDialog_ImGui:
+            want_native = false;
+            break;
+        case kRocProfVisViewFileDialog_Native:
+            want_native = true;
+            break;
+        case kRocProfVisViewFileDialog_Auto:
+        default:
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+            want_native = !is_remote_display_session();
+#else
+            want_native = false;
+#endif
+            break;
+    }
+
+#ifndef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(want_native)
+    {
+        spdlog::warn("--file-dialog=native requested but native dialog was "
+                     "not compiled in; using ImGui.");
+        want_native = false;
+    }
+#else
+    if(want_native)
+    {
+        nfdresult_t nfd_result = NFD_Init();
+        if(nfd_result != NFD_OKAY)
+        {
+            const char* err = NFD_GetError();
+            spdlog::warn("NFD_Init failed ({}); falling back to in-process "
+                         "ImGui file dialog.",
+                         err ? err : "unknown");
+            NFD_ClearError();
+            want_native = false;
+        }
+        else
+        {
+            NFD_Quit();
+        }
+    }
+#endif
+
+    m_use_native_file_dialog.store(want_native);
+    spdlog::info("File dialog backend: {}",
+                 want_native ? "native (xdg-desktop-portal)"
+                             : "in-process ImGuiFileDialog");
+}
+
+void
+AppWindow::SetFileDialogPreference(rocprofvis_view_file_dialog_preference_t pref)
+{
+    m_file_dialog_preference = pref;
 }
 
 void
@@ -259,7 +323,7 @@ AppWindow::ShowSaveFileDialog(const std::string& title, const std::vector<FileFi
                               std::function<void(std::string)> callback)
 {
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
-    if(m_use_native_file_dialog)
+    if(m_use_native_file_dialog.load())
     {
         (void)title;
         ShowNativeFileDialog(file_filters, initial_path, callback, true);
@@ -275,7 +339,7 @@ AppWindow::ShowOpenFileDialog(const std::string& title, const std::vector<FileFi
                               std::function<void(std::string)> callback)
 {
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
-    if(m_use_native_file_dialog)
+    if(m_use_native_file_dialog.load())
     {
         (void)title;
         ShowNativeFileDialog(file_filters, initial_path, callback, false);
@@ -1070,7 +1134,17 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
     }
 
     m_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
-        NFD_Init();
+        nfdresult_t init_result = NFD_Init();
+        if(init_result != NFD_OKAY)
+        {
+            const char* err = NFD_GetError();
+            spdlog::error("NFD_Init failed at dialog open: {}",
+                          err ? err : "unknown");
+            NFD_ClearError();
+            m_use_native_file_dialog.store(false);
+            return std::string();
+        }
+
         nfdu8char_t* outPath = nullptr;
 
         nfdu8filteritem_t*       filters = new nfdu8filteritem_t[file_filters.size()];
@@ -1123,7 +1197,6 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
             file_path = outPath;
             if(outPath)
             {
-                // Append default extension if none provided (used to prevent linux from saving files with no extension).
                 std::filesystem::path p(file_path);
                 if(!p.has_extension())
                 {

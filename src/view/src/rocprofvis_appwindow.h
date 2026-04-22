@@ -8,11 +8,12 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
 
-#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 #include <atomic>
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 #include <future>
 #include <thread>
 #include <chrono>
@@ -72,6 +73,8 @@ public:
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;
 
+    void SetFileDialogPreference(rocprofvis_view_file_dialog_preference_t pref);
+
 private:
     AppWindow();
     ~AppWindow();
@@ -91,6 +94,7 @@ private:
     void HandleOpenFile();
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
+    void ConfigureFileDialogBackend();
 
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
@@ -130,11 +134,11 @@ private:
     bool m_open_about_dialog;
     bool m_disable_app_interaction;
 
-    // Whether the native (xdg-desktop-portal) dialog should be used; decided
-    // once at Init() time. When false, the in-process ImGui dialog is used,
-    // which is necessary for remote SSH sessions where the portal cannot
-    // forward its window to the client. See should_use_native_file_dialog().
-    bool                             m_use_native_file_dialog;
+    rocprofvis_view_file_dialog_preference_t m_file_dialog_preference;
+
+    // Decided at Init() time; can be downgraded to false if NFD_Init fails at
+    // runtime. Atomic because the async native-dialog lambda can flip it.
+    std::atomic<bool>                m_use_native_file_dialog;
 
     bool                             m_init_file_dialog;
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG

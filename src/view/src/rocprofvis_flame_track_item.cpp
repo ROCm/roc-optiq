@@ -743,12 +743,6 @@ FlameTrackItem::RenderMetaAreaScale()
 void
 FlameTrackItem::RenderMetaAreaOptions()
 {
-    EventColorMode mode = m_event_color_mode;
-
-    if(ImGui::RadioButton("Color by Name", mode == EventColorMode::kByEventName))
-        mode = EventColorMode::kByEventName;
-    m_event_color_mode = mode;
-
     if(ImGui::Checkbox("Compact Mode", &m_compact_mode))
     {
         if(m_compact_mode)

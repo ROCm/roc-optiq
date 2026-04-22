@@ -116,13 +116,18 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
 {
     cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
     bool result = true;
-    result &= cli_parser.AddOption("v", "version", "Print application version", false);
-    result &= cli_parser.AddOption("f", "file", "Open file", true);
-    result &= cli_parser.AddOption("b", "backend", "Force rendering backend: 'vulkan' or 'opengl' (default: auto with fallback)", true);
-    result &= cli_parser.AddOption("d", "file-dialog",
-        "File dialog backend: 'auto' (default), 'native' (xdg-desktop-portal), "
-        "or 'imgui' (in-process). Use 'imgui' for ssh -X sessions.", true);
-    result &= cli_parser.AddOption("h", "help", "Help the user with commands", false);
+    result &= cli_parser.AddOption("v", "version", "Print version and exit", false);
+    result &= cli_parser.AddOption("f", "file", "Open a trace or project file", true);
+    result &= cli_parser.AddOption(
+        "b", "backend",
+        "Set rendering backend: 'auto' (default), 'vulkan', or 'opengl'", true);
+    result &= cli_parser.AddOption(
+        "d", "file-dialog",
+        "Set file dialog backend: 'auto' (default), 'native' (system file "
+        "dialog), or 'imgui' (built-in). Use 'imgui' when running over SSH",
+        true);
+    result &= cli_parser.AddOption("h", "help",
+        "Show this help message and exit", false);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -183,7 +188,11 @@ main(int argc, char** argv)
     if(cli_parser.WasOptionFound("backend"))
     {
         std::string backend_str = cli_parser.GetOptionValue("backend");
-        if(backend_str == "vulkan")
+        if(backend_str == "auto")
+        {
+            backend_pref = kRPVBackendAuto;
+        }
+        else if(backend_str == "vulkan")
         {
             backend_pref = kRPVBackendForceVulkan;
         }
@@ -193,7 +202,7 @@ main(int argc, char** argv)
         }
         else
         {
-            spdlog::error("Invalid backend '{}'. Valid options: vulkan, opengl", backend_str);
+            spdlog::error("Invalid backend '{}'. Valid options: auto, vulkan, opengl", backend_str);
             return 1;
         }
     }

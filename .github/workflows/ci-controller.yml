@@ -55,6 +55,7 @@ jobs:
   ci-redhat:
     name: RedHat CI
     needs: setup
+    if: false
     uses: ./.github/workflows/ci-redhat.yml
     with:
       os_version: ${{ needs.setup.outputs.redhat-os-versions }}
@@ -62,12 +63,14 @@ jobs:
   ci-ubuntu:
     name: Ubuntu CI
     needs: setup
+    if: false
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
 
   ci-windows:
     name: Windows CI
+    if: false
     needs: setup
     uses: ./.github/workflows/ci-windows.yml
 

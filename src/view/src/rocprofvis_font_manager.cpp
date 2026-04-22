@@ -50,7 +50,7 @@ FontManager::GetDPIScaledFontIndex()
 
     float           scaled_size =
         BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT); 
-
+ 
 
     // Find the index of the font size closest to scaled_size
     int best_index = 0;

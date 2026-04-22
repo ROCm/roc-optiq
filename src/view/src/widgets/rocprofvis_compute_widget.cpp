@@ -605,8 +605,7 @@ PinnedMetricTable::GetColumnIndex(const std::string&                  column_nam
 void
 PinnedMetricTable::RenderEmptyTable()
 {
-    ImGui::TextDisabled((
-        " " + std::string(ICON_CHEK_BOX_CHECKED) + " Pin the metric to see it here").c_str());
+    ImGui::TextDisabled(" Pin the metric to see it here");
 }
 
 void

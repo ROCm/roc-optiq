@@ -8,6 +8,7 @@ namespace View
 constexpr ImWchar icon_ranges[] = {
     0xF123, 0xF125,
     0xF128, 0xF128,
+    0xF130, 0xF130,
     0xF133, 0xF133, 
     0xF13D, 0xF13D, 
     0xF1FE, 0xF1FE, 
@@ -31,6 +32,7 @@ constexpr ImWchar icon_ranges[] = {
 };
 
 constexpr const char* ICON_X_CIRCLED     = u8"\uF128";
+constexpr const char* ICON_DRAG          = u8"\uF130";
 constexpr const char* ICON_EYE           = u8"\uF133";
 constexpr const char* ICON_GEAR          = u8"\uF13D";
 constexpr const char* ICON_CHAIN         = u8"\uF1FE";

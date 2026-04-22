@@ -246,30 +246,18 @@ TrackItem::RenderMetaArea()
                                        anim_speed);
         }
 
-        // 2x3 grid of dots used as the reorder grip decoration.
-        float dot_radius      = 1.5f;
-        float dot_spacing     = 5.0f;
-        int   grip_cols       = 2;
-        int   grip_rows       = 3;
-        float grip_block_w    = (grip_cols - 1) * dot_spacing;
-        float grip_block_h    = (grip_rows - 1) * dot_spacing;
-        float grid_icon_width = grip_block_w + dot_radius * 2.0f;
+        // Reordering grip decoration
+        float grid_icon_width = ImGui::CalcTextSize(ICON_DRAG).x;
         float arrow_width     = ImGui::GetTextLineHeight();
 
-        ImU32       grip_color    = m_settings.GetColor(Colors::kTextDim);
-        ImVec2      win_pos       = ImGui::GetWindowPos();
-        float       grip_origin_x = win_pos.x + (m_reorder_grip_width - grip_block_w) * 0.5f;
-        float       grip_origin_y = win_pos.y + (container_size.y - grip_block_h) * 0.5f;
-        ImDrawList* draw_list     = ImGui::GetWindowDrawList();
-        for(int col = 0; col < grip_cols; ++col)
-        {
-            for(int row = 0; row < grip_rows; ++row)
-            {
-                ImVec2 center(grip_origin_x + col * dot_spacing,
-                              grip_origin_y + row * dot_spacing);
-                draw_list->AddCircleFilled(center, dot_radius, grip_color);
-            }
-        }
+        ImGui::SetCursorPos(
+            ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
+                   (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
+        ImGui::TextUnformatted(ICON_DRAG);
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
 
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
         // Adjust content size to account for padding

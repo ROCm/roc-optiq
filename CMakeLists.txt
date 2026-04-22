@@ -42,9 +42,6 @@ endif(ROCPROFVIS_DEVELOPER_MODE)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
-if(USE_NATIVE_FILE_DIALOG)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NATIVE_FILE_DIALOG")
-endif(USE_NATIVE_FILE_DIALOG)
 
 # Set GLFW library type based on option
 if(GLFW_LINK_STATIC)
@@ -260,15 +257,18 @@ if(APPLE)
 endif()
 
 # === NativeFileDialog Extended ===
+# When enabled, the native (portal) dialog is compiled in, but the in-process
+# ImGuiFileDialog is ALWAYS linked as well so the app can fall back to it at
+# runtime (e.g. when running over ssh -X where xdg-desktop-portal cannot
+# forward the dialog to the client).
 if(USE_NATIVE_FILE_DIALOG)
   set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
   add_subdirectory(thirdparty/nativefiledialog-extended)
   target_link_libraries(${TARGET_NAME} PRIVATE nfd)
+  target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
 endif()
-# === ImGuiFileDialog ===
-if(NOT USE_NATIVE_FILE_DIALOG)
-  target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
-endif()
+# === ImGuiFileDialog (always linked as portable / SSH fallback) ===
+target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
 
 # === Vulkan ===
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")

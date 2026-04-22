@@ -246,32 +246,28 @@ TrackItem::RenderMetaArea()
                                        anim_speed);
         }
 
-        // Reordering grip decoration: a 2x3 grid of grey dots painted directly via
-        // the draw list. The actual draggable hotspot is set up by TimelineView in
-        // a transparent overlay child sized to m_reorder_grip_width.
-        constexpr float kGripDotRadius  = 1.5f;
-        constexpr float kGripDotSpacing = 5.0f;
-        constexpr int   kGripCols       = 2;
-        constexpr int   kGripRows       = 3;
-        const float grip_block_w = (kGripCols - 1) * kGripDotSpacing;
-        const float grip_block_h = (kGripRows - 1) * kGripDotSpacing;
-        const float grid_icon_width = grip_block_w + kGripDotRadius * 2.0f;
-        const float arrow_width     = ImGui::GetTextLineHeight();
+        // 2x3 grid of dots used as the reorder grip decoration.
+        float dot_radius      = 1.5f;
+        float dot_spacing     = 5.0f;
+        int   grip_cols       = 2;
+        int   grip_rows       = 3;
+        float grip_block_w    = (grip_cols - 1) * dot_spacing;
+        float grip_block_h    = (grip_rows - 1) * dot_spacing;
+        float grid_icon_width = grip_block_w + dot_radius * 2.0f;
+        float arrow_width     = ImGui::GetTextLineHeight();
 
-        const ImU32  grip_color = m_settings.GetColor(Colors::kTextDim);
-        const ImVec2 win_pos    = ImGui::GetWindowPos();
-        const float  grip_origin_x =
-            win_pos.x + (m_reorder_grip_width - grip_block_w) * 0.5f;
-        const float  grip_origin_y =
-            win_pos.y + (container_size.y - grip_block_h) * 0.5f;
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        for(int col = 0; col < kGripCols; ++col)
+        ImU32       grip_color    = m_settings.GetColor(Colors::kTextDim);
+        ImVec2      win_pos       = ImGui::GetWindowPos();
+        float       grip_origin_x = win_pos.x + (m_reorder_grip_width - grip_block_w) * 0.5f;
+        float       grip_origin_y = win_pos.y + (container_size.y - grip_block_h) * 0.5f;
+        ImDrawList* draw_list     = ImGui::GetWindowDrawList();
+        for(int col = 0; col < grip_cols; ++col)
         {
-            for(int row = 0; row < kGripRows; ++row)
+            for(int row = 0; row < grip_rows; ++row)
             {
-                const ImVec2 center(grip_origin_x + col * kGripDotSpacing,
-                                    grip_origin_y + row * kGripDotSpacing);
-                draw_list->AddCircleFilled(center, kGripDotRadius, grip_color);
+                ImVec2 center(grip_origin_x + col * dot_spacing,
+                              grip_origin_y + row * dot_spacing);
+                draw_list->AddCircleFilled(center, dot_radius, grip_color);
             }
         }
 
@@ -331,7 +327,6 @@ TrackItem::RenderMetaArea()
             EndTooltipStyled();
         }
 
-        // Right-click anywhere in the metadata area opens the track options menu.
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             m_settings.GetDefaultStyle().WindowPadding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,

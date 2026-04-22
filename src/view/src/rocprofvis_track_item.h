@@ -16,9 +16,6 @@ namespace RocProfVis
 namespace View
 {
 
-// Sized so the default track is exactly 2 event levels tall (2 * EVENT_LEVEL_HEIGHT)
-// plus the 2px metadata shrink padding applied in RenderMetaArea. This lets a track
-// with 2 events render in full without the expand arrow.
 inline constexpr float DEFAULT_TRACK_HEIGHT = 82.0f;
 
 class SettingsManager;

@@ -119,10 +119,6 @@ FlameTrackItem::RenderMetaAreaExpand()
         ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
                ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight())));
 
-    // Use the chart's drawable height (m_track_content_height) so the calculation
-    // matches the area events are actually rendered into. A level only counts as
-    // "visible" if it fits fully, otherwise we'd offer to expand even when all
-    // events are already on screen.
     int visible_levels =
         static_cast<int>(std::floor(m_track_content_height / m_level_height));
 

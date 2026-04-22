@@ -63,7 +63,6 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Prepare Distribution Artifacts
-        #if: ${{ inputs.upload_to_s3 }}
         run: |
           mkdir ${{ env.DIST_DIR }}
           cp ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ${{ env.DIST_DIR }}/
@@ -71,6 +70,13 @@ jobs:
           cp ${{ env.BUILD_DIR }}/*.rpm ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
       
+      - name: Configure AWS credentials
+        if: ${{ inputs.upload_to_s3 }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |

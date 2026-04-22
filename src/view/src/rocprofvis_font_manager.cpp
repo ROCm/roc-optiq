@@ -69,7 +69,8 @@ FontManager::SetFontSize(int idx)
     constexpr int num_types = static_cast<int>(FontType::__kLastFont);
 
     if(num_types == 0 || m_all_fonts.empty()) return;
-    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return;
+    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size()))
+        return;
 
     static const int offsets[] = { -1, 0, 1, 2 };
 
@@ -105,12 +106,15 @@ FontManager::Init()
 #elif __APPLE__
     const char* font_paths[] = {
         // macOS system fonts
-        "/System/Library/Fonts/Helvetica.ttc", "/System/Library/Fonts/HelveticaNeue.ttc",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/HelveticaNeue.ttc",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/System/Library/Fonts/Supplemental/Verdana.ttf", "/Library/Fonts/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Verdana.ttf",
+        "/Library/Fonts/Arial.ttf",
         "/Library/Fonts/Microsoft/Arial.ttf",
         // SF Pro (newer macOS)
-        "/System/Library/Fonts/SFNSDisplay.ttf", "/System/Library/Fonts/SFNS.ttf"
+        "/System/Library/Fonts/SFNSDisplay.ttf",
+        "/System/Library/Fonts/SFNS.ttf"
     };
 #else
     const char* font_paths[] = {

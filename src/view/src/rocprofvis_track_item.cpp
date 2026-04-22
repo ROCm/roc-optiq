@@ -247,7 +247,7 @@ TrackItem::RenderMetaArea()
         }
 
         // Reordering grip decoration
-        float grid_icon_width = ImGui::CalcTextSize(ICON_DRAG).x;
+        float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
         float arrow_width     = ImGui::GetTextLineHeight();
 
         ImGui::SetCursorPos(
@@ -255,7 +255,7 @@ TrackItem::RenderMetaArea()
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
-        ImGui::TextUnformatted(ICON_DRAG);
+        ImGui::TextUnformatted(ICON_GRID);
         ImGui::PopStyleColor();
         ImGui::PopFont();
 

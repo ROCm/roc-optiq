@@ -50,8 +50,12 @@
 - Kernel selection table fixes:
   - Do not allow duplicate metrics to be added.
   - Filter out non-finite metric values when rendering bar charts.
-  - Fix metric sorting when missing metrics are present with kernel UUID tiebreaker.
+  - Fixed metric sorting when missing metrics are present with kernel UUID tiebreaker.
   - Fixed compute metric table bar-cell clipping so bars render correctly with pinned columns.
+  - Fixed tooltip being shown over overlapping window.
+- Prevent accidental Roofline zoom while scrolling.
+- Fix race comdition when compute analysis file loads before view is created. 
+- Fix mismatched sidebar header sizes.
 
 ### Known Issues
 

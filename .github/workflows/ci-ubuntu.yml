@@ -16,8 +16,12 @@ on:
         description: 'CMake Build Preset to Use'
         type: string
         default: 'Linux Release Build'
+      upload_to_github:
+        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        type: boolean
+        default: false
       upload_to_s3:
-        description: 'Boolean to enable/disable uploading to S3'
+        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
         type: boolean
         default: false
 
@@ -63,6 +67,17 @@ jobs:
           cp ${{ env.BUILD_DIR }}/*.deb ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
       
+      - name: Upload GitHub Artifacts
+        if: ${{ inputs.upload_to_github }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: roc-optiq-ubuntu-${{ matrix.os-version }}-release
+          path: |
+            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}
+            ${{ env.DIST_DIR }}/*.deb
+            ${{ env.DIST_DIR }}/*.tar.gz
+          retention-days: 2
+
       - name: Configure AWS credentials
         if: ${{ inputs.upload_to_s3 }}
         uses: aws-actions/configure-aws-credentials@v6

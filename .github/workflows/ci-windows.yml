@@ -12,15 +12,19 @@ on:
         description: 'CMake Build Preset to Use'
         type: string
         default: 'Windows Debug Build'
+      upload_to_github:
+        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        type: boolean
+        default: false
       upload_to_s3:
-        description: 'Boolean to enable/disable uploading to S3'
+        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
         type: boolean
         default: false
 
 env:
   BUILD_DIR: "build/x64-debug"
   DIST_DIR: "dist"
-  BUILD_FILE_NAME: "roc-optiq.exe"
+  BUILD_FILE_NAME: "roc-optiq"
 
 jobs:
   windows:
@@ -54,7 +58,7 @@ jobs:
           mkdir build
           cmake --preset "${{ inputs.cmake_config_preset }}"
           cmake --build ${{ env.BUILD_DIR }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
-          if (Test-Path "${{ env.BUILD_DIR }}/Debug/${env:BUILD_FILE_NAME}") {
+          if (Test-Path "${{ env.BUILD_DIR }}/Debug/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"
           } else {
             Write-Host "❌ $env:BUILD_FILE_NAME was not built!"
@@ -71,9 +75,22 @@ jobs:
       - name: Prepare Distribution Artifacts
         run: |
           mkdir ${{ env.DIST_DIR }}
-          cp ${{ env.BUILD_DIR }}/Debug/${{ env.BUILD_FILE_NAME }} ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/Debug/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/Debug/${{ env.BUILD_FILE_NAME }}.pdb ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/Debug/glfw3.dll ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
       
+      - name: Upload GitHub Artifacts
+        if: ${{ inputs.upload_to_github }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: roc-optiq-release
+          path: | 
+            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.exe
+            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.pdb
+            ${{ env.DIST_DIR }}/glfw3.dll
+          retention-days: 2
+
       - name: Configure AWS credentials
         if: ${{ inputs.upload_to_s3 }}
         uses: aws-actions/configure-aws-credentials@v6

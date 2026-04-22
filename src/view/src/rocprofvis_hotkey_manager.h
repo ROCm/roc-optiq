@@ -99,6 +99,8 @@ public:
     static HotkeyActionId          BookmarkSaveAction(int index);
     static HotkeyActionId          BookmarkRestoreAction(int index);
 
+    static bool IsRebindableKey(ImGuiKey key);
+
     static std::string   KeyChordToString(ImGuiKeyChord chord);
     static ImGuiKeyChord StringToKeyChord(const std::string& str);
 

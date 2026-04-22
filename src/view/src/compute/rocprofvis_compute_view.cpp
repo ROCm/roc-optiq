@@ -4,6 +4,7 @@
 #include "rocprofvis_compute_view.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_compute_comparison.h"
+#include "rocprofvis_compute_kernel_details.h"
 #include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_compute_summary.h"
 #include "rocprofvis_compute_table_view.h"
@@ -13,7 +14,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "rocprofvis_compute_kernel_details.h"
 
 #include "implot/implot.h"
 #include "spdlog/spdlog.h"

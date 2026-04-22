@@ -56,12 +56,14 @@ MetricTableBase::Render()
         }
     }
 
-    if(ImGui::BeginChild(("##" + m_table_title + "layout").c_str(),
-                         ImVec2(0, GetTableHight()), false,
+    const std::string child_id = "##" + m_table_title + "_layout_" +
+                                 std::to_string(reinterpret_cast<uintptr_t>(this));
+    const std::string table_id = child_id + "_table";
+
+    if(ImGui::BeginChild(child_id.c_str(), ImVec2(0, GetTableHight()), false,
                          ImGuiWindowFlags_HorizontalScrollbar))
     {
-        if(ImGui::BeginTable(("##" + m_table_title).c_str(), num_columns,
-                              m_table_flags))
+        if(ImGui::BeginTable(table_id.c_str(), num_columns, m_table_flags))
         {
             for (const auto& column : m_columns)
             {

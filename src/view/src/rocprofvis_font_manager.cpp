@@ -48,8 +48,8 @@ FontManager::GetDPIScaledFontIndex()
     constexpr float DPI_EXPONENT =
         0.75f;  // Adjust as needed. Higher values increase size more rapidly.
 
-    float scaled_size =
-        BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT);
+    float           scaled_size =
+        BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT); 
 
     // Find the index of the font size closest to scaled_size
     int best_index = 0;
@@ -69,8 +69,7 @@ FontManager::SetFontSize(int idx)
     constexpr int num_types = static_cast<int>(FontType::__kLastFont);
 
     if(num_types == 0 || m_all_fonts.empty()) return;
-    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size()))
-        return;
+    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return;
 
     static const int offsets[] = { -1, 0, 1, 2 };
 

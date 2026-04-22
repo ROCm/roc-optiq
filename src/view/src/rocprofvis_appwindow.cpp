@@ -4,11 +4,10 @@
 #include "rocprofvis_appwindow.h"
 #include "imgui.h"
 #include "implot.h"
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 #    include "nfd.h"
-#else
-#    include "ImGuiFileDialog.h"
 #endif
+#include "ImGuiFileDialog.h"
 
 #include "amd_rocm_optiq_logo_png.h"
 #include "rocprofvis_controller.h"
@@ -98,9 +97,9 @@ AppWindow::AppWindow()
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
 , m_is_fullscreen(false)
-#ifndef USE_NATIVE_FILE_DIALOG
+, m_use_native_file_dialog(should_use_native_file_dialog())
 , m_init_file_dialog(false)
-#else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 , m_is_native_file_dialog_open(false)
 #endif
 , m_disable_app_interaction(false)
@@ -259,12 +258,15 @@ AppWindow::ShowSaveFileDialog(const std::string& title, const std::vector<FileFi
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback)
 {
-    #ifdef USE_NATIVE_FILE_DIALOG
-    (void)title;
-    ShowNativeFileDialog(file_filters, initial_path, callback, true);
-    #else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_use_native_file_dialog)
+    {
+        (void)title;
+        ShowNativeFileDialog(file_filters, initial_path, callback, true);
+        return;
+    }
+#endif
     ShowImGuiFileDialog(title, file_filters, initial_path, true, callback);
-    #endif
 }
 
 void
@@ -272,12 +274,15 @@ AppWindow::ShowOpenFileDialog(const std::string& title, const std::vector<FileFi
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback)
 {
-    #ifdef USE_NATIVE_FILE_DIALOG
-    (void)title;
-    ShowNativeFileDialog(file_filters, initial_path, callback, false);
-    #else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_use_native_file_dialog)
+    {
+        (void)title;
+        ShowNativeFileDialog(file_filters, initial_path, callback, false);
+        return;
+    }
+#endif
     ShowImGuiFileDialog(title, file_filters, initial_path, false, callback);
-    #endif
 }
 
 Project*
@@ -306,7 +311,7 @@ AppWindow::GetCurrentProject()
 void
 AppWindow::Update()
 {
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     UpdateNativeFileDialog();
 #endif
     HotkeyManager::GetInstance().ProcessInput();
@@ -380,9 +385,7 @@ AppWindow::Render()
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
-#ifndef USE_NATIVE_FILE_DIALOG    
-     RenderFileDialog();
-#endif
+    RenderFileDialog();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
@@ -512,7 +515,6 @@ AppWindow::RenderEmptyState()
     }
 }
 
-#ifndef USE_NATIVE_FILE_DIALOG
 void
 AppWindow::RenderFileDialog()
 {
@@ -551,7 +553,6 @@ AppWindow::RenderFileDialog()
     }
     ImGui::PopStyleVar(3);
 }
-#endif
 
 void
 AppWindow::OpenFile(std::string file_path)
@@ -629,10 +630,10 @@ AppWindow::RenderDisableScreen()
 void
 AppWindow::RenderFileMenu(Project* project)
 {
-    bool is_open_file_dialog_open = false;
-    #ifdef USE_NATIVE_FILE_DIALOG
-    is_open_file_dialog_open = m_is_native_file_dialog_open;
-    #endif
+    bool is_open_file_dialog_open = ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME);
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    is_open_file_dialog_open = is_open_file_dialog_open || m_is_native_file_dialog_open.load();
+#endif
 
     if(ImGui::BeginMenu("File"))
     {
@@ -1009,7 +1010,7 @@ AppWindow::RenderAboutDialog()
 
  }
 
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 void
 AppWindow::UpdateNativeFileDialog()
 {
@@ -1148,7 +1149,6 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
 
 #endif
 
-#ifndef USE_NATIVE_FILE_DIALOG
 void
 AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
                           const std::string& initial_path, const bool& confirm_overwrite,
@@ -1186,7 +1186,6 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
     ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title,
                                             filter_stream.str().c_str(), config);
 }
-#endif
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void

@@ -242,5 +242,34 @@ open_url(const std::string& url);
 std::string
 get_executable_name(const std::string& fullPath);
 
+/**
+ * @brief Detects whether the current process appears to be running in a remote
+ *        session where xdg-desktop-portal file dialogs cannot reach the user.
+ *
+ * Returns true when any of `SSH_CONNECTION`, `SSH_CLIENT`, or `SSH_TTY` is set,
+ * or when `DISPLAY` matches the pattern `localhost:N[.S]` with `N >= 10` (the
+ * display-number range SSH uses for X11 forwarding; local X servers use :0/:1).
+ *
+ * The result is cached on first call.
+ */
+bool
+is_remote_display_session();
+
+/**
+ * @brief Decides at startup which file-dialog backend the application should use.
+ *
+ * Checked in order:
+ *   1. Env var `ROCPROFVIS_FORCE_IMGUI_DIALOG`  -> returns false
+ *   2. Env var `ROCPROFVIS_FORCE_NATIVE_DIALOG` -> returns true (only meaningful
+ *      when the native dialog was compiled in; otherwise ignored).
+ *   3. Native dialog compiled in AND !is_remote_display_session() -> true
+ *   4. Otherwise -> false (use the in-process ImGui dialog).
+ *
+ * Logs the decision and the reason exactly once via spdlog.
+ * The result is cached on first call.
+ */
+bool
+should_use_native_file_dialog();
+
 }  // namespace View
 }  // namespace RocProfVis

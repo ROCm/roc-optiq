@@ -11,7 +11,7 @@
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
 
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 #include <atomic>
 #include <future>
 #include <thread>
@@ -92,19 +92,18 @@ private:
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
 
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
 
     void ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback,
                               bool                             save_dialog);
-#else
+#endif
     void ShowImGuiFileDialog(const std::string&             title,
                         const std::vector<FileFilter>& file_filters,
                         const std::string& initial_path, const bool& confirm_overwrite,
                         std::function<void(std::string)> callback);
-#endif
     static AppWindow* s_instance;
 
     std::shared_ptr<VFixedContainer> m_main_view;
@@ -131,9 +130,14 @@ private:
     bool m_open_about_dialog;
     bool m_disable_app_interaction;
 
-#ifndef USE_NATIVE_FILE_DIALOG
+    // Whether the native (xdg-desktop-portal) dialog should be used; decided
+    // once at Init() time. When false, the in-process ImGui dialog is used,
+    // which is necessary for remote SSH sessions where the portal cannot
+    // forward its window to the client. See should_use_native_file_dialog().
+    bool                             m_use_native_file_dialog;
+
     bool                             m_init_file_dialog;
-#else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     std::atomic<bool>                m_is_native_file_dialog_open;
     std::future<std::string>         m_file_dialog_future;
 #endif

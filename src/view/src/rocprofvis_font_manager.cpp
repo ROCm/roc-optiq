@@ -48,9 +48,8 @@ FontManager::GetDPIScaledFontIndex()
     constexpr float DPI_EXPONENT =
         0.75f;  // Adjust as needed. Higher values increase size more rapidly.
 
-    float           scaled_size =
-        BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT); 
- 
+    float scaled_size =
+        BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT);
 
     // Find the index of the font size closest to scaled_size
     int best_index = 0;
@@ -71,7 +70,7 @@ FontManager::SetFontSize(int idx)
 
     if(num_types == 0 || m_all_fonts.empty()) return;
     if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return;
- 
+
     static const int offsets[] = { -1, 0, 1, 2 };
 
     m_fonts.resize(num_types);
@@ -106,15 +105,12 @@ FontManager::Init()
 #elif __APPLE__
     const char* font_paths[] = {
         // macOS system fonts
-        "/System/Library/Fonts/Helvetica.ttc",
-        "/System/Library/Fonts/HelveticaNeue.ttc",
+        "/System/Library/Fonts/Helvetica.ttc", "/System/Library/Fonts/HelveticaNeue.ttc",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/System/Library/Fonts/Supplemental/Verdana.ttf",
-        "/Library/Fonts/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Verdana.ttf", "/Library/Fonts/Arial.ttf",
         "/Library/Fonts/Microsoft/Arial.ttf",
         // SF Pro (newer macOS)
-        "/System/Library/Fonts/SFNSDisplay.ttf",
-        "/System/Library/Fonts/SFNS.ttf"
+        "/System/Library/Fonts/SFNSDisplay.ttf", "/System/Library/Fonts/SFNS.ttf"
     };
 #else
     const char* font_paths[] = {
@@ -146,9 +142,10 @@ FontManager::Init()
     m_fonts.resize(num_types);
     m_icon_fonts.resize(num_types);
 
-    // Load all font sizes once
-    m_all_icon_fonts.resize(FONT_AVAILABLE_SIZES.size(), nullptr);
+    ImFontConfig config;
+    config.FontDataOwnedByAtlas = false;
 
+    // Load all font sizes once
     for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)
     {
         ImFont* font = nullptr;
@@ -162,18 +159,18 @@ FontManager::Init()
             fallback_config.SizePixels = FONT_AVAILABLE_SIZES[sz];
             font                       = io.Fonts->AddFontDefault(&fallback_config);
         }
-
-        ImFontConfig icon_config;
-        icon_config.FontDataOwnedByAtlas = false;
-        icon_config.MergeMode            = true;
-        icon_config.PixelSnapH           = true;
-        io.Fonts->AddFontFromMemoryCompressedTTF(&icon_font_compressed_data,
-                                                 icon_font_compressed_size,
-                                                 FONT_AVAILABLE_SIZES[sz], &icon_config,
-                                                 icon_ranges);
-
         m_all_fonts[sz] = font;
-        m_all_icon_fonts[sz] = font;
+    }
+
+    // Load all icon fonts
+    m_all_icon_fonts.resize(FONT_AVAILABLE_SIZES.size(), nullptr);
+
+    for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)
+    {
+        ImFont* icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
+            &icon_font_compressed_data, icon_font_compressed_size,
+            FONT_AVAILABLE_SIZES[sz], &config, icon_ranges);
+        m_all_icon_fonts[sz] = icon_font;
     }
 
     // Don't call Build() - ImGui 1.92+ backend handles font atlas building automatically

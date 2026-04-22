@@ -141,8 +141,7 @@ CopyableTextUnformatted(
         }
         else if(ImGui::BeginPopupContextItem())
         {
-            std::string label = " " + std::string(ICON_COPY) + " Copy";
-            if(ImGui::MenuItem(label.c_str()))
+            if(ImGui::MenuItem(" Copy"))
             {
                 ImGui::SetClipboardText(text);
                 if(!notification.empty())

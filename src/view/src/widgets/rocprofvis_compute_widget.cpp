@@ -152,15 +152,14 @@ MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
 {
     if(ImGui::BeginPopupContextItem())
     {
-        std::string label = " " + std::string(ICON_CHEK_BOX_UNCHECKED) + " Pin metric";
-        if(ImGui::MenuItem(label.c_str()))
+        if(ImGui::MenuItem(" Pin metric"))
         {
             row.second.pinned = !row.second.pinned;
             m_pin_metric_clicked(
                 { row.first.category_id, row.first.table_id, row.first.entry_id });
         }
-        label = " " + std::string(ICON_ARROW_RIGHT) + " Send Metric to kernel details";
-        if(!m_event_source_id.empty() && ImGui::MenuItem(label.c_str()))
+        if(!m_event_source_id.empty() &&
+           ImGui::MenuItem(" Send Metric to kernel details"))
         {
             AddMetricToKernelDetails(row.first, m_columns[column_index]);
         }
@@ -321,8 +320,7 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
 {
     if(ImGui::BeginPopupContextItem())
     {
-        std::string label = " " + std::string(ICON_COPY) + " Copy";
-        if(ImGui::MenuItem(label.c_str()))
+        if(ImGui::MenuItem(" Copy"))
         {
             ImGui::SetClipboardText(value_to_copy);
             NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -331,8 +329,8 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         if(IsValueColumn(column_index))
         // not equal pin column, MetricId, Metric Name and Metric Unit
         {
-            label = " " + std::string(ICON_ARROW_RIGHT) + " Send Metric to kernel details";
-            if(!m_event_source_id.empty() && ImGui::MenuItem(label.c_str()))
+            if(!m_event_source_id.empty() &&
+               ImGui::MenuItem(" Send Metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }
@@ -469,6 +467,7 @@ PinnedMetricTable::Update()
     m_rows.swap(new_rows);
     m_columns.swap(new_columns);
     m_last_column_index = new_last_column_index;
+    m_pending_pinned_ids.clear();
     m_rebuild_pending = false;
 }
 
@@ -478,10 +477,9 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
 {
     if(ImGui::BeginPopupContextItem())
     {
-        std::string label = " " + std::string(ICON_COPY) + " Copy";
         if(value_to_copy && std::string_view(value_to_copy) != "N/A")
         {
-            if(ImGui::MenuItem(label.c_str()))
+            if(ImGui::MenuItem(" Copy"))
             {
                 ImGui::SetClipboardText(value_to_copy);
                 NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -491,8 +489,8 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
 
         if(IsValueColumn(column_index))
         {
-            label = " " + std::string(ICON_ARROW_RIGHT) + " Send Metric to kernel details";
-            if(!m_event_source_id.empty() && ImGui::MenuItem(label.c_str()))
+            if(!m_event_source_id.empty() &&
+               ImGui::MenuItem(" Send Metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }

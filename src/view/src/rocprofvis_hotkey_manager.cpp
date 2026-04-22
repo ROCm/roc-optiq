@@ -141,12 +141,17 @@ HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const
     if((mod_flags & ImGuiMod_Shift) && !io.KeyShift) return false;
     if((mod_flags & ImGuiMod_Alt) && !io.KeyAlt)     return false;
 
-    // Suppress this chord if a more-specific binding (same key + extra held
-    // modifiers) is owned by some action.
+    // Ctrl is reserved as a click-modifier (Multi-Select, Region Select);
+    // never let a bare-key chord fire while Ctrl is held.
+    if(key != ImGuiKey_None && io.KeyCtrl && !(mod_flags & ImGuiMod_Ctrl))
+        return false;
+
+    // Shift/Alt may legitimately combine with keyboard actions (e.g. Speed
+    // Boost), so only suppress when another action explicitly owns the
+    // more-specific variant.
     if(key != ImGuiKey_None)
     {
         ImGuiKeyChord extra_mods = 0;
-        if(io.KeyCtrl  && !(mod_flags & ImGuiMod_Ctrl))  extra_mods |= ImGuiMod_Ctrl;
         if(io.KeyShift && !(mod_flags & ImGuiMod_Shift)) extra_mods |= ImGuiMod_Shift;
         if(io.KeyAlt   && !(mod_flags & ImGuiMod_Alt))   extra_mods |= ImGuiMod_Alt;
 

@@ -240,8 +240,7 @@ AppWindow::ConfigureFileDialogBackend()
 
     m_use_native_file_dialog.store(want_native);
     spdlog::info("File dialog backend: {}",
-                 want_native ? "native (xdg-desktop-portal)"
-                             : "in-process ImGuiFileDialog");
+                 want_native ? "system file dialog" : "in-process ImGuiFileDialog");
 }
 
 void

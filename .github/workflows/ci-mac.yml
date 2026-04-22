@@ -2,6 +2,28 @@ name: Mac Continuous Integration
 run-name: roc-optiq-mac-ci
 
 on:
+  workflow_dispatch:
+    inputs:
+      os_version:
+        description: 'JSON array of OS versions to test'
+        type: string
+        default: '[ "14", "15", "26" ]'
+      cmake_config_preset:
+        description: 'CMake Config Preset to Use'
+        type: string
+        default: 'macos-release'
+      cmake_build_preset:
+        description: 'CMake Build Preset to Use'
+        type: string
+        default: 'macOS Release Build'
+      upload_to_github:
+        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        type: boolean
+        default: false
+      upload_to_s3:
+        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       os_version:

@@ -2,6 +2,28 @@ name: Ubuntu Continuous Integration
 run-name: roc-optiq-ubuntu-ci
 
 on:
+  workflow_dispatch:
+    inputs:
+      os_version:
+        description: 'JSON array of OS versions to test'
+        type: string
+        default: '[ "22.04", "24.04" ]'
+      cmake_config_preset:
+        description: 'CMake Config Preset to Use'
+        type: string
+        default: 'linux-release'
+      cmake_build_preset:
+        description: 'CMake Build Preset to Use'
+        type: string
+        default: 'Linux Release Build'
+      upload_to_github:
+        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        type: boolean
+        default: false
+      upload_to_s3:
+        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       os_version:

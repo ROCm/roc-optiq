@@ -2,6 +2,24 @@ name: Windows Continuous Integration
 run-name: roc-optiq-windows-ci
 
 on:
+  workflow_dispatch:
+    inputs:
+      cmake_config_preset:
+        description: 'CMake Config Preset to Use'
+        type: string
+        default: 'x64-debug'
+      cmake_build_preset:
+        description: 'CMake Build Preset to Use'
+        type: string
+        default: 'Windows Debug Build'
+      upload_to_github:
+        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        type: boolean
+        default: false
+      upload_to_s3:
+        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       cmake_config_preset:

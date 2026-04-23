@@ -304,8 +304,6 @@ ComputeView::RenderPresets()
     if(m_preset_browser)
     {
         const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
-        ImFont*           icons =
-            m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
         ImGui::TextUnformatted("Presets");
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + style.ItemSpacing.x);

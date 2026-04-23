@@ -16,6 +16,10 @@ on:
         description: 'CMake Build Preset to Use'
         type: string
         default: 'Linux Release Build'
+      enable_internal_banner:
+        description: 'Boolean to enable/disable the internal banner'
+        type: boolean
+        default: false
       upload_to_github:
         description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
         type: boolean
@@ -38,6 +42,10 @@ on:
         description: 'CMake Build Preset to Use'
         type: string
         default: 'Linux Release Build'
+      enable_internal_banner:
+        description: 'Boolean to enable/disable the internal banner'
+        type: boolean
+        default: false
       upload_to_github:
         description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
         type: boolean
@@ -51,10 +59,11 @@ env:
   BUILD_DIR: "build"
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
+  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
 
 jobs:
   rocky-linux:
-    name: RedHat ${{ matrix.os-version }} • Build Optiq • Upload to S3 (${{ inputs.upload_to_s3 }})
+    name: RedHat ${{ matrix.os-version }} • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/rocm/optiq-ci-rhel:${{ matrix.os-version }}
@@ -72,7 +81,7 @@ jobs:
         shell: bash
         run: |
           source /opt/vulkan/**/setup-env.sh
-          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} --install-prefix /opt/roc-optiq
+          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e build/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

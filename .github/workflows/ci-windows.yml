@@ -12,6 +12,10 @@ on:
         description: 'CMake Build Preset to Use'
         type: string
         default: 'Windows Debug Build'
+      enable_internal_banner:
+        description: 'Boolean to enable/disable the internal banner'
+        type: boolean
+        default: false
       upload_to_github:
         description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
         type: boolean
@@ -30,6 +34,10 @@ on:
         description: 'CMake Build Preset to Use'
         type: string
         default: 'Windows Debug Build'
+      enable_internal_banner:
+        description: 'Boolean to enable/disable the internal banner'
+        type: boolean
+        default: false
       upload_to_github:
         description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
         type: boolean
@@ -43,10 +51,11 @@ env:
   BUILD_DIR: "build/x64-debug"
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
+  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
 
 jobs:
   windows:
-    name: Windows • Build Optiq • Upload to S3 (${{ inputs.upload_to_s3 }})
+    name: Windows • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
     runs-on: windows-latest
     permissions:
       id-token: write
@@ -74,7 +83,7 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           mkdir build
-          cmake --preset "${{ inputs.cmake_config_preset }}"
+          cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
           cmake --build ${{ env.BUILD_DIR }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
           if (Test-Path "${{ env.BUILD_DIR }}/Debug/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"
@@ -102,7 +111,7 @@ jobs:
         if: ${{ inputs.upload_to_github }}
         uses: actions/upload-artifact@v7
         with:
-          name: roc-optiq-release
+          name: roc-optiq-windows-release
           path: | 
             ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.exe
             ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.pdb

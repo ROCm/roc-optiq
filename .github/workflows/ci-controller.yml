@@ -49,7 +49,7 @@ jobs:
           else
             echo 'ubuntu-os-versions=[ "24.04" ]' >> "$GITHUB_OUTPUT"
             echo 'redhat-os-versions=[ "10" ]' >> "$GITHUB_OUTPUT"
-            echo 'mac-os-versions=[ "26" ]' >> "$GITHUB_OUTPUT"
+            echo 'mac-os-versions=[ "14", "15", "26" ]' >> "$GITHUB_OUTPUT"
           fi
 
   ci-redhat:

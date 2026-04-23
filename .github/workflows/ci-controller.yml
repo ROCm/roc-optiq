@@ -61,7 +61,8 @@ jobs:
     uses: ./.github/workflows/ci-redhat.yml
     with:
       os_version: ${{ needs.setup.outputs.redhat-os-versions }}
-      upload_to_github: ${{ needs.setup.outputs.upload-to-github == 'true' }}
+      upload_to_github: ${{ github.event_name == 'schedule' }}
+      upload_to_s3: false # TODO: Add S3 support
 
   ci-ubuntu:
     name: Ubuntu CI
@@ -69,7 +70,8 @@ jobs:
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
-      upload_to_github: ${{ needs.setup.outputs.upload-to-github == 'true' }}
+      upload_to_github: ${{ github.event_name == 'schedule' }}
+      upload_to_s3: false # TODO: Add S3 support
 
   ci-windows:
     name: Windows CI
@@ -77,4 +79,5 @@ jobs:
     uses: ./.github/workflows/ci-windows.yml
     with:
       os_version: ${{ needs.setup.outputs.windows-os-versions }}
-      upload_to_github: ${{ needs.setup.outputs.upload-to-github == 'true' }}
+      upload_to_github: ${{ github.event_name == 'schedule' }}
+      upload_to_s3: false # TODO: Add S3 support

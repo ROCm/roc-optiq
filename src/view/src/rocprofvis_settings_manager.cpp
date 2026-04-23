@@ -194,6 +194,8 @@ inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
 inline constexpr float        EVENT_LEVEL_HEIGHT = 40.0f;
 inline constexpr float        COMPACT_EVENT_HEIGHT = 6.0f;
+inline constexpr float        EVENT_LEVEL_PADDING = 4.0f;
+inline constexpr float        EVENT_LEVEL_COMPACT_PADDING = 2.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -724,6 +726,18 @@ const float
 SettingsManager::GetEventLevelCompactHeight() const
 {
     return COMPACT_EVENT_HEIGHT;
+}
+
+const float
+SettingsManager::GetEventLevelPadding() const
+{
+    return EVENT_LEVEL_PADDING;
+}
+
+const float
+SettingsManager::GetEventLevelCompactPadding() const
+{
+    return EVENT_LEVEL_COMPACT_PADDING;
 }
 
 void

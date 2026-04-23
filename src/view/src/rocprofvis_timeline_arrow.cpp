@@ -54,12 +54,13 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
         return;
     }
 
-    SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            color        = settings.GetColor(Colors::kArrowColor);
-    float            thickness    = LINE_THICKNESS;
-    float            head_size    = ARROW_HEAD_SIZE;
-    float            level_height = settings.GetEventLevelHeight();
-    TimelineModel&   tlm          = m_data_provider.DataModel().GetTimeline();
+    SettingsManager& settings      = SettingsManager::GetInstance();
+    ImU32            color         = settings.GetColor(Colors::kArrowColor);
+    float            thickness     = LINE_THICKNESS;
+    float            head_size     = ARROW_HEAD_SIZE;
+    float            level_height  = settings.GetEventLevelHeight();
+    float            level_padding = settings.GetEventLevelPadding();
+    TimelineModel&   tlm           = m_data_provider.DataModel().GetTimeline();
 
     for(const EventInfo* event : m_selected_event_data)
     {
@@ -80,17 +81,20 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
             }
             if(origin_track.chart->IsCompactMode())
             {
-                level_height = settings.GetEventLevelCompactHeight();
+                level_height  = settings.GetEventLevelCompactHeight();
+                level_padding = settings.GetEventLevelCompactPadding();
             }
             else
             {
-                level_height = settings.GetEventLevelHeight();
+                level_height  = settings.GetEventLevelHeight();
+                level_padding = settings.GetEventLevelPadding();
             }
 
             float origin_x = tpt->RawTimeToPixel(origin.end_timestamp);
-            float origin_y = track_position_y.at(origin.track_id) +
-                             std::min(level_height * origin.level + level_height / 2,
-                                      origin_track.chart->GetTrackHeight());
+            float origin_y =
+                track_position_y.at(origin.track_id) +
+                std::min((level_height + level_padding) * origin.level + level_height / 2,
+                         origin_track.chart->GetTrackHeight());
             ImVec2 p_origin = ImVec2(window.x + origin_x, window.y + origin_y);
 
             for(size_t i = 1; i < flows.size(); ++i)
@@ -104,17 +108,21 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
 
                 if(target_track.chart->IsCompactMode())
                 {
-                    level_height = settings.GetEventLevelCompactHeight();
+                    level_height  = settings.GetEventLevelCompactHeight();
+                    level_padding = settings.GetEventLevelCompactPadding();
                 }
                 else
                 {
-                    level_height = settings.GetEventLevelHeight();
+                    level_height  = settings.GetEventLevelHeight();
+                    level_padding = settings.GetEventLevelPadding();
                 }
 
                 float target_x = tpt->RawTimeToPixel(target.start_timestamp);
-                float target_y = track_position_y.at(target.track_id) +
-                                 std::min(level_height * target.level + level_height / 2,
-                                          target_track.chart->GetTrackHeight());
+                float target_y =
+                    track_position_y.at(target.track_id) +
+                    std::min((level_height + level_padding) * target.level +
+                                 level_height / 2,
+                             target_track.chart->GetTrackHeight());
                 ImVec2 p_target = ImVec2(window.x + target_x, window.y + target_y);
 
                 if(p_origin.x == p_target.x && p_origin.y == p_target.y) continue;
@@ -178,32 +186,39 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
 
                 if(from_track.chart->IsCompactMode())
                 {
-                    level_height = settings.GetEventLevelCompactHeight();
+                    level_height  = settings.GetEventLevelCompactHeight();
+                    level_padding = settings.GetEventLevelCompactPadding();
                 }
                 else
                 {
-                    level_height = settings.GetEventLevelHeight();
+                    level_height  = settings.GetEventLevelHeight();
+                    level_padding = settings.GetEventLevelPadding();
                 }
 
                 float from_x = tpt->RawTimeToPixel(from.end_timestamp);
-                float from_y = track_position_y.at(from.track_id) +
-                               std::min(level_height * from.level + level_height / 2,
-                                        from_track.chart->GetTrackHeight());
+                float from_y =
+                    track_position_y.at(from.track_id) +
+                    std::min((level_height + level_padding) * from.level +
+                                 level_height / 2,
+                             from_track.chart->GetTrackHeight());
                 ImVec2 p_from = ImVec2(window.x + from_x, window.y + from_y);
 
                 if(to_track.chart->IsCompactMode())
                 {
-                    level_height = settings.GetEventLevelCompactHeight();
+                    level_height  = settings.GetEventLevelCompactHeight();
+                    level_padding = settings.GetEventLevelCompactPadding();
                 }
                 else
                 {
-                    level_height = settings.GetEventLevelHeight();
+                    level_height  = settings.GetEventLevelHeight();
+                    level_padding = settings.GetEventLevelPadding();
                 }
 
                 float to_x = tpt->RawTimeToPixel(to.start_timestamp);
-                float to_y = track_position_y.at(to.track_id) +
-                             std::min(level_height * to.level + level_height / 2,
-                                      to_track.chart->GetTrackHeight());
+                float to_y =
+                    track_position_y.at(to.track_id) +
+                    std::min((level_height + level_padding) * to.level + level_height / 2,
+                             to_track.chart->GetTrackHeight());
                 ImVec2 p_to = ImVec2(window.x + to_x, window.y + to_y);
 
                 if(p_from.x == p_to.x && p_from.y == p_to.y) continue;

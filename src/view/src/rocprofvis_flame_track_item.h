@@ -101,6 +101,7 @@ private:
     EventColorMode                     m_event_color_mode;
     ImVec2                             m_text_padding;
     float                              m_level_height;
+    float                              m_level_padding;
     std::vector<uint64_t>              m_selected_event_id;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     FlameTrackProjectSettings          m_flame_track_project_settings;

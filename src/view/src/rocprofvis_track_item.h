@@ -16,7 +16,9 @@ namespace RocProfVis
 namespace View
 {
 
-inline constexpr float DEFAULT_TRACK_HEIGHT = 82.0f;
+// Sized to fit two event levels (40 px each) plus the 4 px inter-level padding
+// used by flame tracks: 2 * 40 + 1 * 4 = 84.
+inline constexpr float DEFAULT_TRACK_HEIGHT = 84.0f;
 
 class SettingsManager;
 class TrackItem;

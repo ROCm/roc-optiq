@@ -110,6 +110,18 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 void
 FlameTrackItem::RenderMetaAreaExpand()
 {
+    int visible_levels =
+        static_cast<int>(std::floor(m_track_content_height / m_level_height));
+
+    const bool show_expand   = visible_levels < m_max_level + 1;
+    const bool show_contract = !show_expand &&
+                               m_track_height > std::max(m_max_level * m_level_height +
+                                                             m_level_height,
+                                                         DEFAULT_TRACK_HEIGHT);
+
+    if(!show_expand && !show_contract)
+        return;
+
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
                           m_settings.GetColor(Colors::kTransparent));
@@ -119,10 +131,7 @@ FlameTrackItem::RenderMetaAreaExpand()
         ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
                ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight())));
 
-    int visible_levels =
-        static_cast<int>(std::floor(m_track_content_height / m_level_height));
-
-    if(visible_levels < m_max_level + 1)
+    if(show_expand)
     {
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
@@ -131,9 +140,7 @@ FlameTrackItem::RenderMetaAreaExpand()
         }
         if(ImGui::IsItemHovered()) SetTooltipStyled("Expand track to see all events");
     }
-    else if(m_track_height >
-            std::max(m_max_level * m_level_height + m_level_height,
-                     DEFAULT_TRACK_HEIGHT))  // stand-in for default height..
+    else
     {
         if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
         {

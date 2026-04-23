@@ -110,6 +110,23 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 void
 FlameTrackItem::RenderMetaAreaExpand()
 {
+    // Pre-existing bug: this function always pushed the cursor to the bottom-right of
+    // the meta area via SetCursorPos before deciding whether to draw an arrow. When
+    // neither the expand nor the contract arrow ended up rendering, no item was
+    // submitted after the SetCursorPos and ImGui's
+    // ErrorCheckUsingSetCursorPosToExtendParentBoundaries asserted at the surrounding
+    // EndChild because the cursor advanced past CursorMaxPos with nothing to anchor
+    // the bound expansion (see imgui.cpp ~ line 11427 / imgui issue #5548).
+    //
+    // The original code (Sept 2025) hit this any time a single-event flame track sat
+    // at default height. Bumping DEFAULT_TRACK_HEIGHT and tightening the visibility
+    // check earlier in this branch made 2-event tracks at default height fall into
+    // the same "no arrow" path too, which is the common case, so the assert started
+    // firing constantly (especially while dragging since every frame redraws every
+    // visible track).
+    //
+    // Fix: figure out which arrow we're going to draw up front and return early when
+    // there's nothing to render so we don't touch the cursor at all.
     int visible_levels =
         static_cast<int>(std::floor(m_track_content_height / m_level_height));
 

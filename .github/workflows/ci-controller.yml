@@ -33,18 +33,21 @@ jobs:
     name: Setup
     runs-on: ubuntu-latest
     outputs:
-      ubuntu-os-versions: ${{ steps.set-versions.outputs.ubuntu-os-versions }}
-      redhat-os-versions: ${{ steps.set-versions.outputs.redhat-os-versions }}
+      ubuntu-os-versions: ${{ steps.set-vars.outputs.ubuntu-os-versions }}
+      redhat-os-versions: ${{ steps.set-vars.outputs.redhat-os-versions }}
+      upload-to-github: ${{ steps.set-vars.outputs.upload-to-github }}
     steps:
-      - name: Set OS versions
-        id: set-versions
+      - name: Set variables for CI
+        id: set-vars
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
             echo 'ubuntu-os-versions=[ "22.04", "24.04" ]' >> "$GITHUB_OUTPUT"
             echo 'redhat-os-versions=[ "9", "10" ]' >> "$GITHUB_OUTPUT"
+            echo 'upload-to-github=true' >> "$GITHUB_OUTPUT"
           else
             echo 'ubuntu-os-versions=[ "22.04", "24.04" ]' >> "$GITHUB_OUTPUT"
-            echo 'redhat-os-versions=[ "10" ]' >> "$GITHUB_OUTPUT"
+            echo 'redhat-os-versions=[ "9", "10" ]' >> "$GITHUB_OUTPUT"
+            echo 'upload-to-github=true' >> "$GITHUB_OUTPUT"
           fi
 
   ci-redhat:
@@ -53,6 +56,7 @@ jobs:
     uses: ./.github/workflows/ci-redhat.yml
     with:
       os_version: ${{ needs.setup.outputs.redhat-os-versions }}
+      upload_to_github: ${{ needs.setup.outputs.upload-to-github }}
 
   ci-ubuntu:
     name: Ubuntu CI
@@ -60,9 +64,11 @@ jobs:
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
-      upload_to_github: true
+      upload_to_github: ${{ needs.setup.outputs.upload-to-github }}
 
   ci-windows:
     name: Windows CI
     needs: setup
     uses: ./.github/workflows/ci-windows.yml
+    with:
+      upload_to_github: ${{ needs.setup.outputs.upload-to-github }}

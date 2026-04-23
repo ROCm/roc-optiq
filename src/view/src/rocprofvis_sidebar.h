@@ -37,7 +37,7 @@ private:
     };
 
     void               RenderTrackItem(const uint64_t& index,
-                                       bool show_eye_button = true);
+                                       bool allow_visibility_toggle = true);
     EyeButtonState     MergeEyeButtonState(EyeButtonState lhs,
                                            EyeButtonState rhs) const;
     EyeButtonState     GetLeafState(const LeafNode& leaf) const;
@@ -51,7 +51,6 @@ private:
                                         const TreeNode* target_node = nullptr);
     void               RenderTreeNode(const TreeNode& node);
     void               RenderTreeChildren(const TreeNode& node);
-    EyeButtonState     DrawEyeButton(EyeButtonState eye_button_state);
     void               InvalidateEyeStateCache(const TreeNode& node);
 
     SettingsManager&                         m_settings;

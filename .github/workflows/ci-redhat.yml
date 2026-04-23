@@ -105,7 +105,7 @@ jobs:
             ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}
             ${{ env.DIST_DIR }}/*.gz
             ${{ env.DIST_DIR }}/*.rpm
-          retention-days: 2 # Retain artifact for 2 days
+          retention-days: 2
       
       - name: Configure AWS credentials
         if: ${{ inputs.upload_to_s3 }}

@@ -60,6 +60,7 @@ jobs:
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
+      upload_to_github: true
 
   ci-windows:
     name: Windows CI

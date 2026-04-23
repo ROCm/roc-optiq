@@ -117,9 +117,9 @@ jobs:
       - name: Prepare Distribution Artifacts
         run: |
           mkdir ${{ env.DIST_DIR }}
-          cp ${{ env.BUILD_DIR }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
-          cp ${{ env.BUILD_DIR }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.pdb ${{ env.DIST_DIR }}/
-          cp ${{ env.BUILD_DIR }}/${{ env.BINARY_DIR }}/glfw3.dll ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.pdb ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/glfw3.dll ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
       
       - name: Upload GitHub Artifacts

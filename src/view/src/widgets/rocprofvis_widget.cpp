@@ -132,13 +132,16 @@ CopyableTextUnformatted(
     
     if(context_menu)
     {
+        auto style = SettingsManager::GetInstance().GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
         if (menu_func)
         {
             menu_func(text);
         }
         else if(ImGui::BeginPopupContextItem())
         {
-            if(ImGui::MenuItem("Copy"))
+            if(ImGui::MenuItem(" Copy"))
             {
                 ImGui::SetClipboardText(text);
                 if(!notification.empty())
@@ -149,6 +152,7 @@ CopyableTextUnformatted(
             }
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar(2);
     }
 
     if(one_click_copy)

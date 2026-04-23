@@ -7,6 +7,7 @@
 #include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include <unordered_map>
+#include <set>
 
 namespace RocProfVis
 {
@@ -18,25 +19,30 @@ class ComputeSelection;
 class ComputeTableView: public RocWidget
 {
 public:
-    ComputeTableView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
+    ComputeTableView(DataProvider&                     data_provider,
+                     std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTableView();
 
     void Update() override;
     void Render() override;
+
 
 private:
     void RenderCategory(const AvailableMetrics::Category& cat);
     void RebuildTabs();
     void FetchAllMetrics();
     void RebuildTableDataCache();
+    void AddTable(uint32_t category_id, const AvailableMetrics::Table* table);
+    void RestoreMetricPining();
 
     DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
     uint64_t                          m_client_id;
     bool                              m_fetch_pending = false;
     std::shared_ptr<TabContainer>     m_tabs;
-    std::unordered_map<uint64_t, MetricTableCache> m_table_widgets;
-    PinedMetricTable                               m_pined_metric_table;
+    std::unordered_map<uint64_t, MetricTable> m_table_widgets;
+    PinnedMetricTable                         m_pinned_metric_table;
+    std::set<MetricId>                        m_pinned_metrics;
 
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;

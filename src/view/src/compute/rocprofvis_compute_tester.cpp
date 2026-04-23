@@ -575,10 +575,10 @@ ComputeTester::Render()
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         ImGui::Text("Speed of light (SOL)");
 
-        TableKey table_key = { 2, 1 }; // SOL
+        constexpr uint64_t table_key = MetricId::GetTableKey(2, 1); // SOL
         //assume client id 1 and kernel id 1 for test
         ComputeDataModel::MetricValuesByEntryId* sol_metrics =
-            m_data_provider.ComputeModel().GetKernelMetricValuesByTable(1, 1, table_key.id);
+            m_data_provider.ComputeModel().GetKernelMetricValuesByTable(1, 1, table_key);
         if(!sol_metrics || sol_metrics->empty())
         {
             ImGui::TextDisabled("No SOL metrics available for client 1.");

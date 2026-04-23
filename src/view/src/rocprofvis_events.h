@@ -34,6 +34,7 @@ enum class RocEvents
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,
     kComputeMetricsFetched,
+    kComputeShowMetricInKernelDetails,
 #endif
 };
 
@@ -55,6 +56,7 @@ enum class RocEventType
     kComputeTableSearchEvent,
     kComputeSelectionChangedEvent,
     kComputeMetricsFetchedEvent,
+    kComputeAddMetricToKernelDetailsEvent,
 #endif
 };
 
@@ -213,6 +215,23 @@ public:
 
 private:
     uint64_t m_client_id;
+};
+
+class ComputeAddMetricToKernelDetailsEvent : public RocEvent
+{
+public:
+    ComputeAddMetricToKernelDetailsEvent(uint32_t category_id, uint32_t table_id, uint32_t entry_id,
+                                         const std::string& value_name, const std::string& source_id);
+    uint32_t GetCategoryId() const;
+    uint32_t GetTableId() const;
+    uint32_t GetEntryId() const;
+    const std::string& GetValueName() const;
+
+private:
+    uint32_t m_category_id;
+    uint32_t m_table_id;
+    uint32_t m_entry_id;
+    std::string  m_value_name;
 };
 
 #endif

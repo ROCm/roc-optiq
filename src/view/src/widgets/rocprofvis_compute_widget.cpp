@@ -10,7 +10,6 @@
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "icons/rocprovfis_icon_defines.h"
 
 namespace RocProfVis
 {
@@ -56,14 +55,15 @@ MetricTableBase::Render()
         }
     }
 
-    const std::string child_id = "##" + m_table_title + "_layout_" +
-                                 std::to_string(reinterpret_cast<uintptr_t>(this));
+    const std::string child_id = "##" + m_table_title + "_layout_";
     const std::string table_id = child_id + "_table";
 
-    if(ImGui::BeginChild(child_id.c_str(), ImVec2(0, GetTableHight()), false,
+    if(ImGui::BeginChild(RocWidget::GenUniqueName(child_id).c_str(),
+                         ImVec2(0, GetTableHight()), false,
                          ImGuiWindowFlags_HorizontalScrollbar))
     {
-        if(ImGui::BeginTable(table_id.c_str(), num_columns, m_table_flags))
+        if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
+                             m_table_flags))
         {
             for (const auto& column : m_columns)
             {

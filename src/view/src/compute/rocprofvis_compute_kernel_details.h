@@ -49,7 +49,7 @@ private:
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_metrics_fetched_token;
     EventManager::SubscriptionToken m_new_table_data_token;
-    EventManager::SubscriptionToken m_metric_navigation_token;
+    EventManager::SubscriptionToken m_send_metric_to_kernel_details_token;
 };
 
 }  // namespace View

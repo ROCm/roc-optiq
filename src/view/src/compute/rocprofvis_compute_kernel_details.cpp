@@ -41,7 +41,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_new_table_data_token(EventManager::InvalidSubscriptionToken)
 , m_metrics_fetched_token(EventManager::InvalidSubscriptionToken)
-, m_metric_navigation_token(EventManager::InvalidSubscriptionToken)
+, m_send_metric_to_kernel_details_token(EventManager::InvalidSubscriptionToken)
 {
     SubscribeToEvents();
 
@@ -76,7 +76,7 @@ ComputeKernelDetailsView::~ComputeKernelDetailsView()
         static_cast<int>(RocEvents::kNewTableData), m_new_table_data_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kComputeShowMetricInKernelDetails),
-        m_metric_navigation_token);
+        m_send_metric_to_kernel_details_token);
 }
 
 void ComputeKernelDetailsView::SubscribeToEvents()
@@ -184,7 +184,7 @@ void ComputeKernelDetailsView::SubscribeToEvents()
         }
     };
 
-    m_metric_navigation_token = EventManager::GetInstance()->Subscribe(
+    m_send_metric_to_kernel_details_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeShowMetricInKernelDetails),
         metric_navigation_handler);
 }   

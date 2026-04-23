@@ -11,11 +11,11 @@ on:
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
-        default: 'x64-debug'
+        default: 'x64-release'
       cmake_build_preset:
         description: 'CMake Build Preset to Use'
         type: string
-        default: 'Windows Debug Build'
+        default: 'Windows Release Build'
       enable_internal_banner:
         description: 'Boolean to enable/disable the internal banner'
         type: boolean
@@ -37,11 +37,11 @@ on:
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
-        default: 'x64-debug'
+        default: 'x64-release'
       cmake_build_preset:
         description: 'CMake Build Preset to Use'
         type: string
-        default: 'Windows Debug Build'
+        default: 'Windows Release Build'
       enable_internal_banner:
         description: 'Boolean to enable/disable the internal banner'
         type: boolean
@@ -56,10 +56,12 @@ on:
         default: false
 
 env:
-  BUILD_DIR: "build/x64-debug"
+  BUILD_DIR: "build"
   DIST_DIR: "dist"
+  BINARY_DIR: "Release"
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  
 
 jobs:
   windows:
@@ -97,8 +99,8 @@ jobs:
         run: |
           mkdir build
           cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
-          cmake --build ${{ env.BUILD_DIR }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
-          if (Test-Path "${{ env.BUILD_DIR }}/Debug/${env:BUILD_FILE_NAME}.exe") {
+          cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
+          if (Test-Path "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"
           } else {
             Write-Host "❌ $env:BUILD_FILE_NAME was not built!"
@@ -115,9 +117,9 @@ jobs:
       - name: Prepare Distribution Artifacts
         run: |
           mkdir ${{ env.DIST_DIR }}
-          cp ${{ env.BUILD_DIR }}/Debug/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
-          cp ${{ env.BUILD_DIR }}/Debug/${{ env.BUILD_FILE_NAME }}.pdb ${{ env.DIST_DIR }}/
-          cp ${{ env.BUILD_DIR }}/Debug/glfw3.dll ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.pdb ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/${{ env.BINARY_DIR }}/glfw3.dll ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
       
       - name: Upload GitHub Artifacts

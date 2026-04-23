@@ -43,7 +43,7 @@ jobs:
             echo 'ubuntu-os-versions=[ "22.04", "24.04" ]' >> "$GITHUB_OUTPUT"
             echo 'redhat-os-versions=[ "9", "10" ]' >> "$GITHUB_OUTPUT"
           else
-            echo 'ubuntu-os-versions=[ "24.04" ]' >> "$GITHUB_OUTPUT"
+            echo 'ubuntu-os-versions=[ "22.04", "24.04" ]' >> "$GITHUB_OUTPUT"
             echo 'redhat-os-versions=[ "10" ]' >> "$GITHUB_OUTPUT"
           fi
 

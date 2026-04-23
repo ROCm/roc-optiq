@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_imgui_backend.h"
+#include "rocprofvis_view_module.h"
 #include "spdlog/spdlog.h"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
@@ -94,8 +95,20 @@ rocprofvis_imgui_backend_setup_with_fallback(
 
         case kRPVBackendAuto:
         default:
+        {
+            // SSH X11 forwarding can cause Vulkan drivers to crash during
+            // swapchain creation rather than returning an error code.
+            // Detect this and skip straight to OpenGL.
+            bool skip_vulkan = false;
+            if(rocprofvis_view_is_remote_display_session())
+            {
+                spdlog::warn("[rpv] Remote display session detected, "
+                             "skipping Vulkan to avoid driver issues with X11 forwarding. "
+                             "Use --backend vulkan to override.");
+                skip_vulkan = true;
+            }
             // Auto mode: Try Vulkan first, fallback to OpenGL on failure
-            if(glfwVulkanSupported())
+            if(!skip_vulkan && glfwVulkanSupported())
             {
                 spdlog::info("[rpv] Vulkan is supported, attempting Vulkan backend...");
                 bOk = rocprofvis_imgui_backend_setup_vulkan(backend, *window);
@@ -112,14 +125,17 @@ rocprofvis_imgui_backend_setup_with_fallback(
             }
             else
             {
-                // Vulkan not supported, use OpenGL directly
-                spdlog::info("[rpv] Vulkan not supported by GLFW, recreating window for "
-                             "OpenGL...");
+                if(!skip_vulkan)
+                {
+                    spdlog::info("[rpv] Vulkan not supported by GLFW, recreating window "
+                                 "for OpenGL...");
+                }
                 glfwDestroyWindow(*window);
                 bOk = setup_opengl_window_and_backend(backend, window, width, height,
                                                       title);
             }
             break;
+        }
     }
 
     if(!bOk)

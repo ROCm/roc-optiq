@@ -48,3 +48,6 @@ rocprofvis_view_set_fullscreen_state(bool is_fullscreen);
 
 std::string
 rocprofvis_get_application_config_path();
+
+bool
+rocprofvis_view_is_remote_display_session();

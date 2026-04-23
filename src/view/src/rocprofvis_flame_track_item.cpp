@@ -364,7 +364,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         rectColor = m_settings.GetColorWheel()[color_index];
     }
 
-    const float rounding = std::min(1.0f, (rectMax.y - rectMin.y) * 0.1f);
+    const float rounding = std::min(3.0f, (rectMax.y - rectMin.y) * 0.2f);
     draw_list->AddRectFilled(rectMin, rectMax, rectColor, rounding);
 
     if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH)
@@ -704,7 +704,7 @@ FlameTrackItem::RenderChart(float graph_width)
         double normalized_duration =
             std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
 
-        const float rounding = std::min(1.0f, m_level_height * 0.1f) + 1.0f;
+        const float rounding = std::min(3.0f, m_level_height * 0.2f) + 1.0f;
         ImVec2 start_position =
             ImVec2(static_cast<float>(normalized_start),
                    item.event.m_level * (m_level_height + m_level_padding));

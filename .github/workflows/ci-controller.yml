@@ -56,7 +56,7 @@ jobs:
     uses: ./.github/workflows/ci-redhat.yml
     with:
       os_version: ${{ needs.setup.outputs.redhat-os-versions }}
-      upload_to_github: ${{ needs.setup.outputs.upload-to-github }}
+      upload_to_github: ${{ needs.setup.outputs.upload-to-github == 'true' }}
 
   ci-ubuntu:
     name: Ubuntu CI
@@ -64,11 +64,11 @@ jobs:
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
-      upload_to_github: ${{ needs.setup.outputs.upload-to-github }}
+      upload_to_github: ${{ needs.setup.outputs.upload-to-github == 'true' }}
 
   ci-windows:
     name: Windows CI
     needs: setup
     uses: ./.github/workflows/ci-windows.yml
     with:
-      upload_to_github: ${{ needs.setup.outputs.upload-to-github }}
+      upload_to_github: ${{ needs.setup.outputs.upload-to-github == 'true' }}

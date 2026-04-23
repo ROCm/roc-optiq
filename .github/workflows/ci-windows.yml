@@ -125,7 +125,7 @@ jobs:
         if: ${{ inputs.upload_to_github }}
         uses: actions/upload-artifact@v7
         with:
-          name: roc-optiq-windows-release
+          name: roc-optiq-windows-${{ matrix.os-version }}-release
           path: | 
             ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.exe
             ${{ env.DIST_DIR }}/glfw3.dll

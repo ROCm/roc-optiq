@@ -97,6 +97,10 @@ private:
     void RenderTooltip(ChartItem& chart_item, int color_index);
     void RecalculateTrackHeight();
 
+    // Track height needed to fully display every level (including the inter-level
+    // padding and the metadata area's vertical shrink allowance).
+    float FullTrackHeight() const;
+
     std::vector<ChartItem>             m_chart_items;
     EventColorMode                     m_event_color_mode;
     ImVec2                             m_text_padding;

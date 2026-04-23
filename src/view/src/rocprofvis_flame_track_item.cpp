@@ -121,8 +121,7 @@ FlameTrackItem::RenderMetaAreaExpand()
                   std::floor((m_track_content_height + m_level_padding) / level_stride))
             : 0;
 
-    const float full_track_height =
-        (m_max_level + 1.0f) * m_level_height + m_max_level * m_level_padding;
+    const float full_track_height = FullTrackHeight();
 
     const bool show_expand   = visible_levels < m_max_level + 1;
     const bool show_contract = !show_expand &&
@@ -640,10 +639,19 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 void
 FlameTrackItem::RecalculateTrackHeight()
 {
-    const float full_track_height =
-        (m_max_level + 1.0f) * m_level_height + m_max_level * m_level_padding;
-    m_track_height         = std::max(full_track_height, DEFAULT_TRACK_HEIGHT);
+    m_track_height         = std::max(FullTrackHeight(), DEFAULT_TRACK_HEIGHT);
     m_track_height_changed = true;
+}
+
+float
+FlameTrackItem::FullTrackHeight() const
+{
+    // Parent TrackItem shrinks the chart's content area by 1 px on top and bottom
+    // (metadata_shrink_padding); add that 2 px back so a "fully expanded" track
+    // actually fits every level + the inter-level padding.
+    constexpr float kMetaShrinkAllowance = 2.0f;
+    return (m_max_level + 1.0f) * m_level_height +
+           m_max_level * m_level_padding + kMetaShrinkAllowance;
 }
 
 void
@@ -781,9 +789,7 @@ FlameTrackItem::RenderMetaAreaOptions()
                 RecalculateTrackHeight();
             }
         }
-        const float full_track_height =
-            (m_max_level + 1.0f) * m_level_height + m_max_level * m_level_padding;
-        if(m_track_height > std::max(full_track_height, DEFAULT_TRACK_HEIGHT))
+        if(m_track_height > std::max(FullTrackHeight(), DEFAULT_TRACK_HEIGHT))
         {
             RecalculateTrackHeight();
         }

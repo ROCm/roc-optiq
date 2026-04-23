@@ -112,26 +112,8 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 void
 FlameTrackItem::RenderMetaAreaExpand()
 {
-    // Pre-existing bug: this function always pushed the cursor to the bottom-right of
-    // the meta area via SetCursorPos before deciding whether to draw an arrow. When
-    // neither the expand nor the contract arrow ended up rendering, no item was
-    // submitted after the SetCursorPos and ImGui's
-    // ErrorCheckUsingSetCursorPosToExtendParentBoundaries asserted at the surrounding
-    // EndChild because the cursor advanced past CursorMaxPos with nothing to anchor
-    // the bound expansion (see imgui.cpp ~ line 11427 / imgui issue #5548).
-    //
-    // The original code (Sept 2025) hit this any time a single-event flame track sat
-    // at default height. Bumping DEFAULT_TRACK_HEIGHT and tightening the visibility
-    // check earlier in this branch made 2-event tracks at default height fall into
-    // the same "no arrow" path too, which is the common case, so the assert started
-    // firing constantly (especially while dragging since every frame redraws every
-    // visible track).
-    //
-    // Fix: figure out which arrow we're going to draw up front and return early when
-    // there's nothing to render so we don't touch the cursor at all.
-    // A level occupies m_level_height pixels and is followed by m_level_padding pixels
-    // of empty space before the next level. The first level has no leading padding, so
-    // N visible levels need N*level_height + (N-1)*level_padding pixels of content.
+    // Decide which arrow (if any) to draw before touching the cursor. SetCursorPos
+    // without a follow-up item trips ImGui's CursorMaxPos assert (imgui issue #5548).
     const float level_stride = m_level_height + m_level_padding;
     int visible_levels =
         (level_stride > 0.0f)
@@ -382,7 +364,6 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         rectColor = m_settings.GetColorWheel()[color_index];
     }
 
-    // Clamp rounding so very short boxes (compact mode) don't end up nearly circular.
     const float rounding = std::min(3.0f, (rectMax.y - rectMin.y) * 0.2f);
     draw_list->AddRectFilled(rectMin, rectMax, rectColor, rounding);
 
@@ -390,9 +371,8 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
     {
         draw_list->PushClipRect(rectMin, rectMax, true);
 
-        // Vertically center the label inside the box. Fall back to the text padding
-        // offset when the box is shorter than the text (compact mode), so the text
-        // doesn't get pushed above the box.
+        // Center label vertically; fall back to top padding when the box is shorter
+        // than the text (compact mode).
         const float text_line_height = ImGui::GetTextLineHeight();
         const float box_height       = rectMax.y - rectMin.y;
         const float centered_offset_y =
@@ -660,7 +640,6 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 void
 FlameTrackItem::RecalculateTrackHeight()
 {
-    // (max_level + 1) levels stacked with (max_level) inter-level gaps.
     const float full_track_height =
         (m_max_level + 1.0f) * m_level_height + m_max_level * m_level_padding;
     m_track_height         = std::max(full_track_height, DEFAULT_TRACK_HEIGHT);
@@ -692,9 +671,6 @@ FlameTrackItem::RenderChart(float graph_width)
 
         ImVec2 start_position;
 
-        // Calculate the start position based on the normalized start time and level.
-        // Each level is offset by level_height plus a small inter-level padding so
-        // stacked events are visually separated.
         start_position = ImVec2(static_cast<float>(normalized_start),
                                 item.event.m_level *
                                     (m_level_height + m_level_padding));
@@ -728,8 +704,6 @@ FlameTrackItem::RenderChart(float graph_width)
         double normalized_duration =
             std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
 
-        // Match the rounding used by the filled event box, slightly enlarged so the
-        // highlight border traces the outside of the box's corners cleanly.
         const float rounding = std::min(3.0f, m_level_height * 0.2f) + 1.0f;
         ImVec2 start_position =
             ImVec2(static_cast<float>(normalized_start),

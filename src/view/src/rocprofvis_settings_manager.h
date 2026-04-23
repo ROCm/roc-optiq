@@ -206,7 +206,6 @@ public:
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
 
-    // Vertical spacing between stacked event levels within a flame track.
     const float GetEventLevelPadding() const;
     const float GetEventLevelCompactPadding() const;
 

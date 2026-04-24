@@ -4,17 +4,17 @@
 #include "rocprofvis_appwindow.h"
 #include "imgui.h"
 #include "implot.h"
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 #    include "nfd.h"
-#else
-#    include "ImGuiFileDialog.h"
-#    include <sstream>
 #endif
+#include "ImGuiFileDialog.h"
 
+#include "amd_rocm_optiq_logo_png.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_utils.h"
@@ -24,6 +24,7 @@
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
 #include <sstream>
@@ -37,6 +38,15 @@ constexpr ImVec2      FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
 constexpr const char* FILE_DIALOG_NAME       = "ChooseFileDlgKey";
 constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
+constexpr float EMPTY_STATE_CONTENT_EM      = 32.0f;
+constexpr float EMPTY_STATE_BUTTON_EM       = 10.0f;
+constexpr float EMPTY_STATE_LOGO_EM         = 12.0f;
+constexpr float EMPTY_STATE_RECENT_FILES_EM = 22.0f;
+
+const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml" };
+const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
+const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
+constexpr const char* SUPPORTED_FILE_TYPES_HINT   = "Supported types: .db, .rpd, .yaml, .rpv";
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
 
@@ -71,6 +81,7 @@ AppWindow::AppWindow()
 : m_main_view(nullptr)
 , m_settings_panel(nullptr)
 , m_tab_container(nullptr)
+, m_amd_logo(amd_rocm_optiq_logo_png, static_cast<int>(sizeof(amd_rocm_optiq_logo_png)))
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
@@ -86,9 +97,10 @@ AppWindow::AppWindow()
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
 , m_is_fullscreen(false)
-#ifndef USE_NATIVE_FILE_DIALOG
+, m_file_dialog_preference(kRocProfVisViewFileDialog_Auto)
+, m_use_native_file_dialog(false)
 , m_init_file_dialog(false)
-#else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 , m_is_native_file_dialog_open(false)
 #endif
 , m_disable_app_interaction(false)
@@ -138,7 +150,16 @@ AppWindow::Init()
     m_tab_container->EnableSendCloseEvent(true);
     m_tab_container->EnableSendChangeEvent(true);
 
-    main_area_item.m_item = m_tab_container;
+    main_area_item.m_item = std::make_shared<RocCustomWidget>([this]() {
+        if(m_tab_container && !m_tab_container->GetTabs().empty())
+        {
+            m_tab_container->Render();
+        }
+        else
+        {
+            RenderEmptyState();
+        }
+    });
 
     std::vector<LayoutItem> layout_items;
     layout_items.push_back(tool_bar_item);
@@ -163,7 +184,69 @@ AppWindow::Init()
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 
+    ConfigureFileDialogBackend();
+
     return result;
+}
+
+void
+AppWindow::ConfigureFileDialogBackend()
+{
+    bool want_native = false;
+    switch(m_file_dialog_preference)
+    {
+        case kRocProfVisViewFileDialog_ImGui:
+            want_native = false;
+            break;
+        case kRocProfVisViewFileDialog_Native:
+            want_native = true;
+            break;
+        case kRocProfVisViewFileDialog_Auto:
+        default:
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+            want_native = !is_remote_display_session();
+#else
+            want_native = false;
+#endif
+            break;
+    }
+
+#ifndef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(want_native)
+    {
+        spdlog::warn("--file-dialog=native requested but native dialog was "
+                     "not compiled in; using ImGui.");
+        want_native = false;
+    }
+#else
+    if(want_native)
+    {
+        nfdresult_t nfd_result = NFD_Init();
+        if(nfd_result != NFD_OKAY)
+        {
+            const char* err = NFD_GetError();
+            spdlog::warn("NFD_Init failed ({}); falling back to in-process "
+                         "ImGui file dialog.",
+                         err ? err : "unknown");
+            NFD_ClearError();
+            want_native = false;
+        }
+        else
+        {
+            NFD_Quit();
+        }
+    }
+#endif
+
+    m_use_native_file_dialog.store(want_native);
+    spdlog::info("File dialog backend: {}",
+                 want_native ? "system file dialog" : "in-process ImGuiFileDialog");
+}
+
+void
+AppWindow::SetFileDialogPreference(rocprofvis_view_file_dialog_preference_t pref)
+{
+    m_file_dialog_preference = pref;
 }
 
 void
@@ -238,12 +321,15 @@ AppWindow::ShowSaveFileDialog(const std::string& title, const std::vector<FileFi
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback)
 {
-    #ifdef USE_NATIVE_FILE_DIALOG
-    (void)title;
-    ShowNativeFileDialog(file_filters, initial_path, callback, true);
-    #else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_use_native_file_dialog.load())
+    {
+        (void)title;
+        ShowNativeFileDialog(file_filters, initial_path, callback, true);
+        return;
+    }
+#endif
     ShowImGuiFileDialog(title, file_filters, initial_path, true, callback);
-    #endif
 }
 
 void
@@ -251,12 +337,15 @@ AppWindow::ShowOpenFileDialog(const std::string& title, const std::vector<FileFi
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback)
 {
-    #ifdef USE_NATIVE_FILE_DIALOG
-    (void)title;
-    ShowNativeFileDialog(file_filters, initial_path, callback, false);
-    #else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_use_native_file_dialog.load())
+    {
+        (void)title;
+        ShowNativeFileDialog(file_filters, initial_path, callback, false);
+        return;
+    }
+#endif
     ShowImGuiFileDialog(title, file_filters, initial_path, false, callback);
-    #endif
 }
 
 Project*
@@ -285,9 +374,10 @@ AppWindow::GetCurrentProject()
 void
 AppWindow::Update()
 {
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     UpdateNativeFileDialog();
 #endif
+    HotkeyManager::GetInstance().ProcessInput();
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
@@ -302,12 +392,12 @@ AppWindow::Render()
     Update();
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
-    DrawInternalBuildBanner();
+    DrawInternalBuildBanner("Evaluation Build");
 #endif
 #ifdef IMGUI_HAS_VIEWPORT
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->GetWorkPos());
-    ImGui::SetNextWindowSize(viewport->GetWorkSize());
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
     ImGui::SetNextWindowViewport(viewport->ID);
 #else
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
@@ -358,9 +448,7 @@ AppWindow::Render()
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
-#ifndef USE_NATIVE_FILE_DIALOG    
-     RenderFileDialog();
-#endif
+    RenderFileDialog();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
@@ -371,7 +459,125 @@ AppWindow::Render()
     RenderDisableScreen();
 }
 
-#ifndef USE_NATIVE_FILE_DIALOG
+void
+AppWindow::RenderEmptyState()
+{
+    SettingsManager&            settings     = SettingsManager::GetInstance();
+    const InternalSettings&     internal     = settings.GetInternalSettings();
+    const std::list<std::string>& recent_files = internal.recent_files;
+    const float font_size     = ImGui::GetFontSize();
+    const float window_width  = ImGui::GetContentRegionAvail().x;
+    const float window_height = ImGui::GetContentRegionAvail().y;
+    const float card_width    = std::min(window_width - font_size * 2.0f,
+                                         font_size * EMPTY_STATE_CONTENT_EM);
+    const float card_padding  = font_size * 1.8f;
+    std::string recent_file_to_open;
+
+    // Vertically center the dialog card
+    ImGui::SetCursorPosY(window_height * 0.18f);
+    ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(card_padding, card_padding));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+    ImGui::BeginChild("welcome_dialog", ImVec2(card_width, 0.0f),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
+                      ImGuiWindowFlags_NoScrollbar);
+
+    // --- Logo ---
+    if(m_amd_logo.Valid())
+    {
+        const float avail      = ImGui::GetContentRegionAvail().x;
+        const float logo_width = std::min(avail * 0.42f, font_size * EMPTY_STATE_LOGO_EM);
+        const float logo_height =
+            logo_width * static_cast<float>(m_amd_logo.GetHeight()) /
+            static_cast<float>(m_amd_logo.GetWidth());
+        const float offset = (avail - logo_width) * 0.5f;
+        ImVec2      logo_pos = ImGui::GetCursorScreenPos();
+        logo_pos.x += offset;
+        ImGui::Dummy(ImVec2(avail, logo_height));
+        bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
+        m_amd_logo.Render(logo_pos, logo_width, is_dark);
+        ImGui::Dummy(ImVec2(0.0f, font_size));
+    }
+
+    // --- Title ---
+    ImFont* title_font = settings.GetFontManager().GetFont(FontType::kLarge);
+    if(title_font) ImGui::PushFont(title_font);
+    CenterNextTextItem("Open a trace or project");
+    ImGui::TextUnformatted("Open a trace or project");
+    if(title_font) ImGui::PopFont();
+
+    ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
+
+    // --- Subtitle ---
+    CenterNextTextItem("Drag and drop files here, or open one from disk.");
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextUnformatted("Drag and drop files here, or open one from disk.");
+    ImGui::PopStyleColor();
+
+    ImGui::Dummy(ImVec2(0.0f, font_size * 0.9f));
+
+    // --- Open button ---
+    const float button_width = font_size * EMPTY_STATE_BUTTON_EM;
+    CenterNextItem(button_width);
+    if(ImGui::Button("Open File", ImVec2(button_width, 0.0f)))
+    {
+        HandleOpenFile();
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
+    }
+
+    // --- Recent files ---
+    if(!recent_files.empty())
+    {
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
+        ImGui::Separator();
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
+
+        CenterNextTextItem("Recent Files");
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::TextUnformatted("Recent Files");
+        ImGui::PopStyleColor();
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
+
+        const float rf_width =
+            std::min(ImGui::GetContentRegionAvail().x * 0.78f,
+                     font_size * EMPTY_STATE_RECENT_FILES_EM);
+        int shown = 0;
+        for(const std::string& file : recent_files)
+        {
+            if(shown++ >= static_cast<int>(MAX_RECENT_FILES)) break;
+
+            const std::filesystem::path fpath(file);
+            const std::string fname = fpath.filename().empty() ? file : fpath.filename().string();
+
+            ImGui::PushID(file.c_str());
+            CenterNextItem(rf_width);
+
+            if(ImGui::Selectable(fname.c_str(), false, 0, ImVec2(rf_width, 0.0f)))
+            {
+                recent_file_to_open = file;
+            }
+            if(ImGui::IsItemHovered())
+            {
+                SetTooltipStyled("%s", file.c_str());
+            }
+
+            ImGui::PopID();
+        }
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+
+    if(!recent_file_to_open.empty())
+    {
+        HandleOpenRecentFile(recent_file_to_open);
+    }
+}
+
 void
 AppWindow::RenderFileDialog()
 {
@@ -410,7 +616,6 @@ AppWindow::RenderFileDialog()
     }
     ImGui::PopStyleVar(3);
 }
-#endif
 
 void
 AppWindow::OpenFile(std::string file_path)
@@ -444,6 +649,20 @@ AppWindow::OpenFile(std::string file_path)
 }
 
 void
+AppWindow::HandleOpenRecentFile(const std::string& file_path)
+{
+    if(!std::filesystem::exists(file_path))
+    {
+        SettingsManager::GetInstance().RemoveRecentFile(file_path);
+        ShowMessageDialog("Recent File Not Found",
+                          "This recent file could not be found and was removed from the list:\n\n" +
+                              file_path);
+        return;
+    }
+    OpenFile(file_path);
+}
+
+void
 AppWindow::RenderDisableScreen()
 {
     if(m_disable_app_interaction)
@@ -474,10 +693,10 @@ AppWindow::RenderDisableScreen()
 void
 AppWindow::RenderFileMenu(Project* project)
 {
-    bool is_open_file_dialog_open = false;
-    #ifdef USE_NATIVE_FILE_DIALOG
-    is_open_file_dialog_open = m_is_native_file_dialog_open;
-    #endif
+    bool is_open_file_dialog_open = ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME);
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    is_open_file_dialog_open = is_open_file_dialog_open || m_is_native_file_dialog_open.load();
+#endif
 
     if(ImGui::BeginMenu("File"))
     {
@@ -497,7 +716,53 @@ AppWindow::RenderFileMenu(Project* project)
             HandleSaveAsFile();
         }
         ImGui::Separator();
-        const std::list<std::string> recent_files =
+
+        {
+            TraceView* trace_view = nullptr;
+            bool       has_trace  = false;
+            bool       cleanup_pending = false;
+            if(project && project->GetTraceType() == Project::System)
+            {
+                trace_view = dynamic_cast<TraceView*>(project->GetView().get());
+                has_trace  = (trace_view != nullptr);
+                if(has_trace)
+                {
+                    cleanup_pending = trace_view->IsCleanupPending();
+                }
+            }
+
+            std::string project_id = has_trace ? project->GetID() : "";
+            auto start_cleanup = [this, trace_view, project_id](bool rebuild) {
+                trace_view->CleanupDatabase(rebuild, [this, project_id]() {
+                    m_tab_container->RemoveTab(project_id);
+                });
+            };
+
+            bool submenu_enabled = has_trace && !cleanup_pending;
+            if(ImGui::BeginMenu("Database", submenu_enabled))
+            {
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+                if(ImGui::MenuItem("Fast Cleanup"))
+                {
+                    start_cleanup(false);
+                }
+#endif
+                if(ImGui::MenuItem("Full Cleanup"))
+                {
+                    ShowConfirmationDialog(
+                        "Full Database Cleanup",
+                        "This will remove all Optiq metadata present in the database, "
+                        "including service tables, indexes, and rebuild "
+                        "(VACUUM) the database file. This may take a while.\n\n"
+                        "Continue?",
+                        [start_cleanup]() { start_cleanup(true); });
+                }
+                ImGui::EndMenu();
+            }
+        }
+
+        ImGui::Separator();
+        const std::list<std::string>& recent_files =
             SettingsManager::GetInstance().GetInternalSettings().recent_files;
         if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))
         {
@@ -505,7 +770,8 @@ AppWindow::RenderFileMenu(Project* project)
             {
                 if(ImGui::MenuItem(file.c_str(), nullptr))
                 {
-                    OpenFile(file);
+                    HandleOpenRecentFile(file);
+                    break;
                 }
             }
             ImGui::EndMenu();
@@ -624,16 +890,16 @@ AppWindow::HandleOpenFile()
     std::vector<FileFilter> file_filters;
 
     FileFilter all_filter;
-    all_filter.m_name = "All Supported";
-    all_filter.m_extensions = { "db", "rpd", "yaml", "rpv" };
+    all_filter.m_name       = "All Supported";
+    all_filter.m_extensions = ALL_EXTENSIONS;
 
     FileFilter trace_filter;
-    trace_filter.m_name = "Traces";
-    trace_filter.m_extensions = { "db", "rpd", "yaml" };
+    trace_filter.m_name       = "Traces";
+    trace_filter.m_extensions = TRACE_EXTENSIONS;
 
     FileFilter project_filter;
-    project_filter.m_name = "Projects";
-    project_filter.m_extensions = { "rpv" };
+    project_filter.m_name       = "Projects";
+    project_filter.m_extensions = PROJECT_EXTENSIONS;
 
     file_filters.push_back(all_filter);
     file_filters.push_back(trace_filter);
@@ -729,11 +995,11 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
 void
 AppWindow::RenderAboutDialog()
 {
-    static constexpr char* NAME_LABEL = "ROCm (TM) Optiq";
-    static constexpr char* COPYRIGHT_LABEL =
+    static constexpr const char* NAME_LABEL = "ROCm (TM) Optiq";
+    static constexpr const char* COPYRIGHT_LABEL =
         "Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.";
-    static constexpr char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
-    static constexpr char* DOC_URL =
+    static constexpr const char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
+    static constexpr const char* DOC_URL =
         "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/";
     static const std::string VERSION_LABEL = []() {
         std::stringstream ss;
@@ -807,7 +1073,7 @@ AppWindow::RenderAboutDialog()
 
  }
 
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 void
 AppWindow::UpdateNativeFileDialog()
 {
@@ -866,8 +1132,17 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
     }
 
-    m_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
-        NFD_Init();
+    auto dialog_task = [=]() -> std::string {
+        nfdresult_t init_result = NFD_Init();
+        if(init_result != NFD_OKAY)
+        {
+            const char* err = NFD_GetError();
+            spdlog::error("NFD_Init failed at dialog open: {}",
+                          err ? err : "unknown");
+            NFD_ClearError();
+            m_use_native_file_dialog.store(false);
+            return std::string();
+        }
         nfdu8char_t* outPath = nullptr;
 
         nfdu8filteritem_t*       filters = new nfdu8filteritem_t[file_filters.size()];
@@ -920,7 +1195,6 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
             file_path = outPath;
             if(outPath)
             {
-                // Append default extension if none provided (used to prevent linux from saving files with no extension).
                 std::filesystem::path p(file_path);
                 if(!p.has_extension())
                 {
@@ -941,12 +1215,22 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
         NFD_Quit();
         return file_path;
-    });
+    };
+
+#if defined(__APPLE__)
+    // NSOpenPanel / NSSavePanel are AppKit objects and must be driven from the
+    // main thread. Run synchronously here and hand the result to the existing
+    // future-polling path via a ready promise.
+    std::promise<std::string> dialog_promise;
+    dialog_promise.set_value(dialog_task());
+    m_file_dialog_future = dialog_promise.get_future();
+#else
+    m_file_dialog_future = std::async(std::launch::async, std::move(dialog_task));
+#endif
 }
 
 #endif
 
-#ifndef USE_NATIVE_FILE_DIALOG
 void
 AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
                           const std::string& initial_path, const bool& confirm_overwrite,
@@ -984,7 +1268,6 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
     ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title,
                                             filter_stream.str().c_str(), config);
 }
-#endif
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void

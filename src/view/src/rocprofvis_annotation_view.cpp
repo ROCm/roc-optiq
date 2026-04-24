@@ -82,7 +82,7 @@ AnnotationView::Render()
 
             if(ImGui::Selectable(selectable_label.c_str(), is_selected,
                                  ImGuiSelectableFlags_SpanAllColumns |
-                                     ImGuiSelectableFlags_AllowItemOverlap,
+                                     ImGuiSelectableFlags_AllowOverlap,
                                  ImVec2(0, max_row_height)))
             {
                 m_selected_note_id = note.GetID();

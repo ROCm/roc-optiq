@@ -55,6 +55,8 @@ private:
     std::shared_ptr<TimelineSelection>       m_timeline_selection;
     std::list<EventItem>                     m_event_items;
     int                                      m_event_item_id;
+    int                                      m_context_menu_flow_index;
+    int                                      m_context_menu_flow_column;
     const std::string_view DATA_COPIED_NOTIFICATION = "Data was copied";
 };
 

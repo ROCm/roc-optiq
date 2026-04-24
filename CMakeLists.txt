@@ -8,9 +8,9 @@ project(${TARGET_NAME})
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
-set(PROJECT_VERSION_MINOR 3)
+set(PROJECT_VERSION_MINOR 4)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 3)
+set(PROJECT_VERSION_BUILD 1)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -24,13 +24,8 @@ option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute" ON)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
-option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" OFF)
-
-if(APPLE AND USE_NATIVE_FILE_DIALOG)
-    set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
-        "Use the OS native file dialog instead of ImGui file dialog" FORCE)
-    message(WARNING "Disabling native file dialog on macOS; it must run on the main thread.")
-endif()
+option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
+option(BUILD_TESTING "Build the testing tree" ON)
 
 if(COMPUTE_UI_SUPPORT) 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
@@ -41,15 +36,18 @@ endif(ROCPROFVIS_DEVELOPER_MODE)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
-if(USE_NATIVE_FILE_DIALOG)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NATIVE_FILE_DIALOG")
-endif(USE_NATIVE_FILE_DIALOG)
 
 # Set GLFW library type based on option
 if(GLFW_LINK_STATIC)
     set(GLFW_LIBRARY_TYPE "STATIC" CACHE STRING "GLFW library type" FORCE)
 else()
     set(GLFW_LIBRARY_TYPE "SHARED" CACHE STRING "GLFW library type" FORCE)
+endif()
+
+# Enable testing if BUILD_TESTING is ON
+if(BUILD_TESTING)
+    enable_testing()
+    include(CTest)
 endif()
 
 # Add third-party libraries, core, and model BEFORE controller
@@ -74,7 +72,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_settings_manager.cpp
     src/view/src/rocprofvis_font_manager.cpp 
     src/view/src/rocprofvis_annotations.cpp
-    src/view/src/rocprofvis_settings_panel.cpp 
+    src/view/src/rocprofvis_settings_panel.cpp
+    src/view/src/rocprofvis_hotkey_manager.cpp 
     src/view/src/rocprofvis_stickynote.cpp
     src/view/src/rocprofvis_click_manager.cpp
     src/view/src/rocprofvis_analysis_view.cpp 
@@ -127,6 +126,7 @@ list(APPEND VIEW_FILES
     src/view/src/compute/rocprofvis_compute_roofline.cpp
     src/view/src/compute/rocprofvis_compute_workload_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
+    src/view/src/compute/rocprofvis_compute_comparison.cpp
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
@@ -153,14 +153,18 @@ endif(WIN32)
 
 if(APPLE)
     add_executable(${TARGET_NAME} MACOSX_BUNDLE
+        src/app/src/rocprofvis_imgui_backend.cpp
         src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/rocprofvis_imgui_opengl.cpp
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
         ${VIEW_FILES})
 else()
     add_executable(${TARGET_NAME}
+        src/app/src/rocprofvis_imgui_backend.cpp
         src/app/src/rocprofvis_imgui_vulkan.cpp
+        src/app/src/rocprofvis_imgui_opengl.cpp
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
@@ -222,8 +226,8 @@ target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(APPLE)
     set_target_properties(${TARGET_NAME} PROPERTIES
-        BUILD_RPATH "@executable_path/../Frameworks"
-        INSTALL_RPATH "@executable_path/../Frameworks"
+        BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
+        INSTALL_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
     )
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
@@ -242,26 +246,30 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             "$<TARGET_FILE_NAME:glfw>"
             "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${Vulkan_LIBRARIES}"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMENT "Staging GLFW and Vulkan dylibs into the app bundle"
+        COMMENT "Staging GLFW dylib into the app bundle"
     )
 endif()
 
 # === NativeFileDialog Extended ===
+# When enabled, the native (portal) dialog is compiled in, but the in-process
+# ImGuiFileDialog is ALWAYS linked as well so the app can fall back to it at
+# runtime (e.g. when running over ssh -X where xdg-desktop-portal cannot
+# forward the dialog to the client).
 if(USE_NATIVE_FILE_DIALOG)
   set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
   add_subdirectory(thirdparty/nativefiledialog-extended)
   target_link_libraries(${TARGET_NAME} PRIVATE nfd)
+  target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
 endif()
-# === ImGuiFileDialog ===
-if(NOT USE_NATIVE_FILE_DIALOG)
-  target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
-endif()
+# === ImGuiFileDialog (always linked as portable / SSH fallback) ===
+target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
 
 # === Vulkan ===
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")
+
+# === OpenGL (fallback when Vulkan fails) ===
+find_package(OpenGL REQUIRED)
+target_link_libraries(${TARGET_NAME} PRIVATE OpenGL::GL)
 
 # CPACK Packaging Enabling
 set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
@@ -328,9 +336,15 @@ install(FILES ${LICENSE_FILE}
        COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
-install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
-        COMPONENT ${RUNTIME_COMP_TYPE} )
+if(APPLE)
+    install(TARGETS ${TARGET_NAME}
+            BUNDLE DESTINATION .
+            COMPONENT ${RUNTIME_COMP_TYPE})
+else()
+    install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            COMPONENT ${RUNTIME_COMP_TYPE} )
+endif()
 
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
@@ -391,12 +405,15 @@ endif()
 include(CPack)
 
 # Copy runtime files to target folder
+# Uses a no-op (cmake -E true) when there are no runtime DLLs (e.g. GLFW_LINK_STATIC=ON)
 if(WIN32)
     add_custom_command(
         TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_RUNTIME_DLLS:${TARGET_NAME}>"
-            "$<TARGET_FILE_DIR:${TARGET_NAME}>"
+        COMMAND ${CMAKE_COMMAND} -E
+            $<IF:$<BOOL:$<TARGET_RUNTIME_DLLS:${TARGET_NAME}>>,copy_if_different,true>
+            $<TARGET_RUNTIME_DLLS:${TARGET_NAME}>
+            $<$<BOOL:$<TARGET_RUNTIME_DLLS:${TARGET_NAME}>>:$<TARGET_FILE_DIR:${TARGET_NAME}>>
+        COMMAND_EXPAND_LISTS
         COMMENT "Copying dependent DLLs to executable directory"
     )
 endif()

@@ -11,13 +11,24 @@ namespace RocProfVis
 namespace View
 {
 
-ComputeTableView::ComputeTableView(DataProvider&                     data_provider,
-                                   std::shared_ptr<ComputeSelection> compute_selection)
+ComputeTableView::ComputeTableView(
+    DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
+, m_pinned_metric_table(data_provider, compute_selection, m_client_id)
 {
+    m_pinned_metric_table.SetPinMetricCallback([this](MetricId metric_id) {
+        m_pinned_metrics.erase(metric_id);
+        auto table_it = m_table_widgets.find(metric_id.GetTableKey());
+        if(table_it != m_table_widgets.end())
+        {
+            table_it->second.ChangePinState(metric_id);
+        }
+        m_pinned_metric_table.RefillTable(m_pinned_metrics);
+    });
+
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
@@ -51,21 +62,13 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
             if(evt->GetClientId() == m_client_id)
                 RebuildTableDataCache();
         }
+        m_pinned_metric_table.RefillTable(m_pinned_metrics);
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
 
     m_widget_name = GenUniqueName("ComputeTableView");
-
-    if(m_compute_selection->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID)
-    {
-        RebuildTabs();
-        if(m_compute_selection->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID)
-        {
-            FetchAllMetrics();
-        }
-    }
 }
 
 ComputeTableView::~ComputeTableView()
@@ -86,7 +89,7 @@ ComputeTableView::RebuildTabs()
 {
     m_tabs.reset();
     m_table_widgets.clear();
-    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
 
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
@@ -110,7 +113,7 @@ ComputeTableView::RebuildTabs()
 void
 ComputeTableView::FetchAllMetrics()
 {
-    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
     m_table_widgets.clear();
     m_fetch_pending = false;
 
@@ -147,6 +150,8 @@ ComputeTableView::FetchAllMetrics()
 void
 ComputeTableView::Update()
 {
+    m_pinned_metric_table.Update();
+
     if(m_tabs)
         m_tabs->Update();
 }
@@ -167,6 +172,8 @@ ComputeTableView::Render()
         return;
     }
 
+    m_pinned_metric_table.Render();
+
     if(m_tabs)
         m_tabs->Render();
 }
@@ -178,9 +185,8 @@ ComputeTableView::RebuildTableDataCache()
 
     auto&    model       = m_data_provider.ComputeModel();
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
-       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
         return;
     }
@@ -194,37 +200,69 @@ ComputeTableView::RebuildTableDataCache()
     {
         for(const auto* tbl : cat->ordered_tables)
         {
-            TableKey key{};
-            key.fields.category_id = cat->id;
-            key.fields.table_id    = tbl->id;
+            AddTable(cat->id, tbl);
+        }
+    }
 
-            MetricTableCache widget;
-            widget.Populate(*tbl, [&](uint32_t eid) {
-                return model.GetMetricValue(
-                    m_client_id, kernel_id, cat->id, tbl->id, eid);
-            });
+    RestoreMetricPining();
+}
 
-            if(!widget.Empty())
-            {
-                m_table_widgets[key.id] = std::move(widget);
-            }
+void
+ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* table)
+{
+    uint64_t     key = MetricId::GetTableKey(category_id, table->id);
+    auto         [it, inserted]  =
+        m_table_widgets.try_emplace(key, m_data_provider.GetTraceFilePath());
+    MetricTable& widget          = it->second;
+    auto pin_metric_func = [this, &widget](MetricId metric_id) {
+        if (widget.IsMetricPinned(metric_id))
+        {
+            m_pinned_metrics.insert(metric_id);
+        }
+        else
+        {
+            m_pinned_metrics.erase(metric_id);
+        }
+        m_pinned_metric_table.RefillTable(m_pinned_metrics);
+    };
+    widget.SetPinMetricCallback(pin_metric_func);
+
+    auto& model = m_data_provider.ComputeModel();
+    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+    if(kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    widget.Populate(*table, [&](uint32_t eid) {
+        return model.GetKernelMetricValue(m_client_id, kernel_id, category_id, table->id,
+                                          eid);
+    });
+}
+
+void
+ComputeTableView::RestoreMetricPining()
+{
+    for(MetricId id : m_pinned_metrics)
+    {
+        auto table_it = m_table_widgets.find(id.GetTableKey());
+        if(table_it != m_table_widgets.end())
+        {
+            table_it->second.ChangePinState(id);
         }
     }
 }
 
 void
-ComputeTableView::RenderCategory(const AvailableMetrics::Category& cat)
+ComputeTableView::RenderCategory(const AvailableMetrics::Category& category)
 {
     bool category_has_data = false;
 
     ImGui::BeginChild("scroll", ImVec2(-1, -1));
-    for(const auto* tbl : cat.ordered_tables)
+    for(const auto* table : category.ordered_tables)
     {
-        TableKey key{};
-        key.fields.category_id = cat.id;
-        key.fields.table_id    = tbl->id;
-
-        auto it = m_table_widgets.find(key.id);
+        uint64_t key = MetricId::GetTableKey(category.id, table->id);
+        auto it = m_table_widgets.find(key);
         if(it == m_table_widgets.end())
             continue;
 

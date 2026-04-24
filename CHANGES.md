@@ -1,3 +1,66 @@
+## Optiq Beta 0.4.0
+
+### Features and Improvements
+
+**Startup and progress**
+- Branded loading and landing screen.
+- Generalized trace-loading progress updates.
+
+**Compute profiling**
+- Side-by-side baseline comparison of compute metrics (baseline kernel vs target kernel).
+- Pinned metric table with configurable rows and columns (including custom metrics).
+- Interface support for metric values grouped by workload; compute database schema 1.3 and related performance improvements.
+- Roofline chart: legend can be repositioned; aspect ratio follows the window; multi-workload chart fixes and top-kernels presentation updates.
+- Added workload metric support in the compute data model, including dedicated workload metric getters.
+- Added Speed-of-Light (SOL) workload metrics to the compute summary view.
+- Compute kernel metric table updates: mini-graphs in cells, pinned title/header behavior improvements, and a global toggle for inline charts.
+- Improved metric table usability with better kernel-name handling (tooltip for clipped names) and adjusted name-column sizing to free space for metrics.
+
+**Topology and timeline**
+- Stream topology improvements (naming, processor/instance IDs for UI stability, track mapping fixes).
+- Toggle on device nodes to show or hide all tracks under that device.
+
+**Navigation and inspection**
+- Unified go-to-event behavior across tables and the flow panel: double-click or context menu to open the event on the timeline, with vertical track centering and highlight feedback.
+- Highlight-on-navigate with a dedicated event path, pulsing indicator, and timed auto-clear; selection and highlight handled independently.
+- Callstack experience reworked (including schema version 4 updates).
+
+**Rendering and platform**
+- OpenGL backend as a fallback when Vulkan is unavailable; optional software rendering path; command-line option to force a specific graphics backend.
+- Dear ImGui updated (docking-capable line, ImPlot aligned); Linux session defaults to X11 for compatibility.
+- Windows packages link GLFW statically by default (no separate `glfw.dll` in the installer).
+
+**Database and trace handling**
+- Added a database cleanup feature across controller/model/view paths, including UI integration and loading feedback while cleanup runs.
+- Improved cleanup flow reliability and responsiveness (including hang/file-close related handling).
+
+**Misc UI**
+- New settings panel allowing keyboard shortcuts to be customized.
+
+### Fixes
+
+- Metric table cache crash when columns are empty.
+- Counter samples missing or jumping on the timeline; level-of-detail sampling uses a weighted average where appropriate.
+- Minimum width rules for rendered samples (including the single-sample case).
+- RPD trace query validation and related issues.
+- Track detection and mapping issues.
+- Vulkan fallback and related application-window logging cleanup.
+- SQLite updated to 3.51.3.
+- Fixed incorrect axis labeling in compute summary bar charts.
+- Kernel selection table fixes:
+  - Do not allow duplicate metrics to be added.
+  - Filter out non-finite metric values when rendering bar charts.
+  - Fixed metric sorting when missing metrics are present with kernel UUID tiebreaker.
+  - Fixed compute metric table bar-cell clipping so bars render correctly with pinned columns.
+  - Fixed tooltip being shown over overlapping window.
+- Prevent accidental Roofline zoom while scrolling.
+- Fix race comdition when compute analysis file loads before view is created. 
+- Fix mismatched sidebar header sizes.
+
+### Known Issues
+
+- Crash if metrics are pinned in Compute Table View and a new workload is selected that does not contain them.
+
 ## Optiq Beta 0.3.0
 
 ### Features and Improvements

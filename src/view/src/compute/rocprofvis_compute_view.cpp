@@ -3,6 +3,7 @@
 
 #include "rocprofvis_compute_view.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
+#include "rocprofvis_compute_comparison.h"
 #include "rocprofvis_compute_kernel_details.h"
 #include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_compute_summary.h"
@@ -43,7 +44,14 @@ ComputeView::ComputeView()
             const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();  
             if(!workloads.empty())
             {
-                m_compute_selection->SelectWorkload(workloads.begin()->first);
+                if(m_compute_selection) 
+                {
+                    m_compute_selection->SelectWorkload(workloads.begin()->first);
+                }
+                else
+                {
+                    spdlog::warn("Selection manager not available, workload not selected");
+                }
             }
         }
     });
@@ -118,12 +126,21 @@ void
 ComputeView::CreateView()
 {
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
+    // When launched remotely, for example over ssh, the UI make take long to init, and the data provider
+    // may have already loaded an analysis if the application was launched with --file flag.
+    // Check if one exists and if it does set the workload.
+    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();  
+    if(!workloads.empty())
+    {
+        m_compute_selection->SelectWorkload(workloads.begin()->first);
+    }
 
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{"Baseline Comparison", "compute_comparison_view", std::make_shared<ComputeComparisonView>(m_data_provider, m_compute_selection), false});
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider, m_compute_selection), false});
 #endif
@@ -169,17 +186,20 @@ ComputeView::GetToolbar()
 void
 ComputeView::RenderToolbar()
 {
-    const ImGuiStyle& style          = SettingsManager::GetInstance().GetDefaultStyle();
-    ImVec2      frame_padding  = style.FramePadding;
-    float       frame_rounding = style.FrameRounding;
-
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    ImGui::PushStyleColor(
+        ImGuiCol_ChildBg,
+        ImGui::ColorConvertU32ToFloat4(m_settings_manager.GetColor(Colors::kBgPanel)));
+    ImGui::PushStyleColor(ImGuiCol_Border,
+                          ImGui::ColorConvertU32ToFloat4(
+                              m_settings_manager.GetColor(Colors::kBorderColor)));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
-                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_FrameStyle);
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, frame_rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
     RenderWorkloadSelection();
@@ -189,6 +209,7 @@ ComputeView::RenderToolbar()
     ImGui::EndChild();
     // pop child window style
     ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
 }
 
 void

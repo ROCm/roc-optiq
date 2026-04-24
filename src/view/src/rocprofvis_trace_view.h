@@ -62,6 +62,8 @@ public:
     bool IsTrimSaveAllowed() const;
 
     bool                               SaveSelection(const std::string& file_path);
+    bool                               CleanupDatabase(bool rebuild, std::function<void()> on_complete = nullptr);
+    bool                               IsCleanupPending() const;
     void                               RenderBookmarkControls();
     std::shared_ptr<TimelineSelection> GetTimelineSelection() const;
     std::shared_ptr<RocWidget>         GetToolbar() override;
@@ -109,6 +111,7 @@ private:
 
     EventManager::SubscriptionToken m_tabselected_event_token;
     EventManager::SubscriptionToken m_event_selection_changed_event_token;
+    EventManager::SubscriptionToken m_progress_update_event_token;
 
     std::string m_save_notification_id;
 

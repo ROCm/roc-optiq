@@ -100,9 +100,9 @@ Showing where kernels are positioned relative to these rooflines helps determine
     - Inside, Bottom Right
     - Outside (which pushes legend outside the plot area)
 
-   .. image:: ../images/Roofline-legend.png
-      :width: 800
-      :align: center
+    .. image:: ../images/Roofline-legend.png
+       :width: 800
+       :align: center
 
 .. _kernel-details:
 
@@ -223,7 +223,7 @@ Workload Details
    :width: 800
    :align: center
 
-.. _baseline:
+.. _baseline-comparison:
 
 Baseline Comparison
 ===================

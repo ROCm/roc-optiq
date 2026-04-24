@@ -388,7 +388,7 @@ if("RPM" IN_LIST CPACK_GENERATOR)
 endif()
 
 # Include packaging
-include(CPack)
+#include(CPack)
 
 # Copy runtime files to target folder
 if(WIN32)

@@ -544,7 +544,7 @@ TopKernels::Render()
         ImGui::BeginGroup();
         if(IconButton(ICON_CHART_PIE,
                       m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                      ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Pie ? Colors::kButton
                                                                 : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -555,7 +555,7 @@ TopKernels::Render()
         ImGui::SameLine();
         if(IconButton(ICON_CHART_BAR,
                       m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                      ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Bar ? Colors::kButton
                                                                 : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -566,7 +566,7 @@ TopKernels::Render()
         ImGui::SameLine();
         if(IconButton(ICON_LIST,
                       m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                      ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Table ? Colors::kButton
                                                                   : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),

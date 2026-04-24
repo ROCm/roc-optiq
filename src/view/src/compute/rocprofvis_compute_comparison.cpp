@@ -27,8 +27,14 @@ const double                  ROUND_FACTOR       = std::pow(10.0, SIGNIFICANT_DI
 constexpr ImGuiColorEditFlags LEGEND_FLAGS =
     ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoInputs |
     ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoLabel;
-constexpr size_t ROW_TAG_INVALID_MATCH = 0;
-constexpr size_t FIXED_PREFIX          = 3;
+constexpr size_t      ROW_TAG_INVALID_MATCH        = 0;
+constexpr const char* BASELINE_COLUMN_PREFIX       = "Baseline ";
+constexpr const char* TARGET_COLUMN_PREFIX         = "Target ";
+constexpr const char* DIFFERENCE_COLUMN_PREFIX     = "Difference##";
+constexpr const char* DIFFERENCE_PCT_COLUMN_PREFIX = "Difference (%)##";
+constexpr const char* JSON_KEY_PINNED_METRICS      = "pins";
+constexpr const char* JSON_KEY_PINNED_METRICS_ID   = "id";
+constexpr const char* JSON_KEY_PINNED_METRICS_NAME = "name";
 
 ComputeComparisonView::ComputeComparisonView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
@@ -44,6 +50,9 @@ ComputeComparisonView::ComputeComparisonView(
 , m_target_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_inputs_changed(false)
 , m_data_changed(false)
+, m_metrics_changed(false)
+, m_pinned_changed(false)
+, m_highlight_changed(false)
 , m_loading(false)
 , m_retry_fetch(false)
 , m_filter_common_metrics(false)
@@ -54,7 +63,7 @@ ComputeComparisonView::ComputeComparisonView(
 , m_pinned_table(nullptr)
 , m_pinned_item(nullptr)
 , m_max_pinned_height(FLT_MAX)
-, m_pinned_columns_dirty(false)
+, m_preset(nullptr)
 {
     m_widget_name = GenUniqueName("ComputeComparison");
     m_pinned_table =
@@ -73,24 +82,25 @@ ComputeComparisonView::ComputeComparisonView(
     toolbar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
     toolbar_item.m_item =
         std::make_shared<RocCustomWidget>([this]() { RenderToolbar(); });
-    LayoutItem bookmarks_item(-1, 0);
-    bookmarks_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
-    bookmarks_item.m_item =
+    LayoutItem pinned_item(-1, 0);
+    pinned_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
+    pinned_item.m_item =
         std::make_shared<RocCustomWidget>([this]() { RenderPinnedMetrics(); });
     LayoutItem content_item(-1, 0);
     content_item.m_item = std::make_shared<RocCustomWidget>([this]() { RenderTables(); });
     std::vector<LayoutItem> layout_items;
     layout_items.push_back(toolbar_item);
-    layout_items.push_back(bookmarks_item);
-    int bookmark_index = static_cast<int>(layout_items.size() - 1);
+    layout_items.push_back(pinned_item);
+    int pinned_index = static_cast<int>(layout_items.size() - 1);
     layout_items.push_back(content_item);
     m_layout              = std::make_shared<VFixedContainer>(layout_items);
-    m_pinned_item       = m_layout->GetMutableAt(bookmark_index);
+    m_pinned_item         = m_layout->GetMutableAt(pinned_index);
     m_baseline_request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchMetrics, m_client_id_baseline);
     m_target_request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchMetrics, m_client_id_target);
     SubscribeEvents();
+    m_preset = std::make_unique<Preset>(*this);
 }
 
 ComputeComparisonView::~ComputeComparisonView() { UnsubscribeEvents(); }
@@ -120,11 +130,27 @@ ComputeComparisonView::Update()
     if(m_data_changed)
     {
         UpdateMetrics();
-        UpdatePinnedMetrics();
+        m_difference_groups.clear();
+        for(const CategoryModel& category : m_categories)
+        {
+            for(const std::shared_ptr<Table>& table : category.tables)
+            {
+                UpdateDifferenceGroups(table.get(), m_difference_groups);
+            }
+        }
         if(m_tab_container && !m_active_tab_id.empty())
         {
             m_tab_container->SetActiveTab(m_active_tab_id);
         }
+        m_metrics_changed   = true;
+        m_highlight_changed = true;
+        m_data_changed      = false;
+    }
+    if(m_metrics_changed)
+    {
+        UpdatePinnedMetrics();
+        m_pinned_changed  = true;
+        m_metrics_changed = false;
     }
     for(const CategoryModel& category : m_categories)
     {
@@ -139,16 +165,19 @@ ComputeComparisonView::Update()
     if(m_pinned_table)
     {
         m_pinned_table->Update();
-        if(m_pinned_columns_dirty)
-        {
-            RebuildPinnedDiffEntries();
-            m_pinned_columns_dirty = false;
-        }
     }
-    if(m_data_changed)
+    if(m_pinned_changed)
     {
-        UpdateDifferenceHighlighting();
-        m_data_changed = false;
+        m_pinned_difference_groups.clear();
+        UpdateDifferenceGroups(m_pinned_table.get(), m_pinned_difference_groups);
+        m_highlight_changed = true;
+        m_pinned_changed    = false;
+    }
+    if(m_highlight_changed)
+    {
+        UpdateDifferenceHighlight(m_difference_groups);
+        UpdateDifferenceHighlight(m_pinned_difference_groups);
+        m_highlight_changed = false;
     }
 }
 
@@ -294,7 +323,6 @@ ComputeComparisonView::UpdateMetrics()
                                                         m_target_kernel_id))
         {
             m_categories.clear();
-            m_diff_cell_groups.clear();
             m_tab_container = std::make_unique<TabContainer>();
             std::vector<const AvailableMetrics::Category*> baseline_categories =
                 m_data_provider.ComputeModel()
@@ -388,50 +416,31 @@ ComputeComparisonView::UpdateMetrics()
                             std::optional<Table::DisplayProps::Color> bg_color_difference;
                             std::optional<Table::DisplayProps::Color> text_color;
                             std::optional<const char*>                icon;
-                            double percentage_diff = 0.0;
-                            Colors diff_color      = Colors::kComparisonGreater;
-                            ImU32  diff_alpha      = 255;
                             if(valid_match)
                             {
                                 if(baseline_value && target_value &&
                                    rounded_baseline != rounded_target)
                                 {
-                                    const char* diff_icon =
-                                        (rounded_target > rounded_baseline)
-                                            ? ICON_ARROW_UP
-                                            : ICON_ARROW_DOWN;
-                                    diff_color =
-                                        (rounded_target > rounded_baseline)
-                                            ? Colors::kComparisonGreater
-                                            : Colors::kComparisonLesser;
-                                    if(rounded_baseline != 0.0)
-                                    {
-                                        percentage_diff =
-                                            std::abs((rounded_target -
-                                                      rounded_baseline) /
-                                                     rounded_baseline * 100.0);
-                                        diff_alpha = std::min(
-                                            static_cast<ImU32>(
-                                                std::abs(rounded_target -
-                                                         rounded_baseline) /
-                                                    rounded_baseline * 255 +
-                                                25),
-                                            ImU32(255));
-                                    }
-                                    else
-                                    {
-                                        percentage_diff = 100.0;
-                                    }
                                     bg_color_baseline = Table::DisplayProps::Color{
                                         Colors::kComparisonBase, 255
                                     };
                                     bg_color_target = Table::DisplayProps::Color{
                                         Colors::kComparisonTarget, 255
                                     };
-                                    bg_color_difference =
-                                        Table::DisplayProps::Color{ diff_color,
-                                                                    diff_alpha };
-                                    icon = diff_icon;
+                                    if(rounded_target > rounded_baseline)
+                                    {
+                                        bg_color_difference = Table::DisplayProps::Color{
+                                            Colors::kComparisonGreater, 255
+                                        };
+                                        icon = ICON_ARROW_UP;
+                                    }
+                                    else
+                                    {
+                                        bg_color_difference = Table::DisplayProps::Color{
+                                            Colors::kComparisonLesser, 255
+                                        };
+                                        icon = ICON_ARROW_DOWN;
+                                    }
                                 }
                             }
                             else
@@ -442,22 +451,20 @@ ComputeComparisonView::UpdateMetrics()
                             // Merge baseline + target into one row if they match,
                             // otherwise split into two separate rows...
                             row_value[0].emplace_back(Table::Value{
-                                "Baseline " + value_name,
+                                BASELINE_COLUMN_PREFIX + value_name,
                                 baseline_value ? std::make_optional(rounded_baseline)
                                                : std::nullopt,
                                 Table::DisplayProps{ bg_color_baseline, text_color,
                                                      std::nullopt } });
-                            size_t baseline_index = row_value[0].size() - 1;
-
                             row_value[0].emplace_back(Table::Value{
-                                "Target " + value_name,
+                                TARGET_COLUMN_PREFIX + value_name,
                                 valid_match && target_value
                                     ? std::make_optional(rounded_target)
                                     : std::nullopt,
                                 Table::DisplayProps{ bg_color_target, text_color,
                                                      std::nullopt } });
                             row_value[0].emplace_back(Table::Value{
-                                "Difference##" + value_name,
+                                DIFFERENCE_COLUMN_PREFIX + value_name,
                                 valid_match && baseline_value && target_value
                                     ? std::make_optional(rounded_target -
                                                          rounded_baseline)
@@ -465,7 +472,7 @@ ComputeComparisonView::UpdateMetrics()
                                 Table::DisplayProps{ bg_color_difference, text_color,
                                                      icon } });
                             row_value[0].emplace_back(Table::Value{
-                                "Difference (%)##" + value_name,
+                                DIFFERENCE_PCT_COLUMN_PREFIX + value_name,
                                 valid_match && baseline_value && target_value &&
                                         rounded_baseline != 0.0
                                     ? std::make_optional(
@@ -476,39 +483,25 @@ ComputeComparisonView::UpdateMetrics()
                                     : std::nullopt,
                                 Table::DisplayProps{ bg_color_difference, text_color,
                                                      icon } });
-                            // Track cells that are marked as different for
-                            // threshold-based recoloring...
-                            if(valid_match && bg_color_difference.has_value())
-                            {
-                                m_diff_cell_groups.push_back(DiffCellGroup{
-                                    category_model.tables[i].get(),
-                                    category_model.tables[i]->Rows().size(),
-                                    FIXED_PREFIX + baseline_index,
-                                    FIXED_PREFIX + baseline_index + 1,
-                                    FIXED_PREFIX + baseline_index + 2,
-                                    FIXED_PREFIX + baseline_index + 3,
-                                    percentage_diff,
-                                    diff_color,
-                                    diff_alpha });
-                            }
                             if(!valid_match && row_entry.count(1) > 0)
                             {
                                 row_value[1].emplace_back(Table::Value{
-                                    "Baseline " + value_name, std::nullopt,
+                                    BASELINE_COLUMN_PREFIX + value_name, std::nullopt,
                                     Table::DisplayProps{ bg_color_baseline, text_color,
                                                          std::nullopt } });
                                 row_value[1].emplace_back(Table::Value{
-                                    "Target " + value_name,
+                                    TARGET_COLUMN_PREFIX + value_name,
                                     target_value ? std::make_optional(rounded_target)
                                                  : std::nullopt,
                                     Table::DisplayProps{ bg_color_target, text_color,
                                                          std::nullopt } });
                                 row_value[1].emplace_back(Table::Value{
-                                    "Difference##" + value_name, std::nullopt,
+                                    DIFFERENCE_COLUMN_PREFIX + value_name, std::nullopt,
                                     Table::DisplayProps{ std::nullopt, text_color,
                                                          std::nullopt } });
                                 row_value[1].emplace_back(Table::Value{
-                                    "Difference (%)##" + value_name, std::nullopt,
+                                    DIFFERENCE_PCT_COLUMN_PREFIX + value_name,
+                                    std::nullopt,
                                     Table::DisplayProps{ std::nullopt, text_color,
                                                          std::nullopt } });
                             }
@@ -531,7 +524,6 @@ ComputeComparisonView::UpdateMetrics()
                                                       ROW_TAG_INVALID_MATCH));
                             }
                         }
-
                     }
                     // Setup the table (handlers, coloring..etc)
                     category_model.tables[i]->SetRowSelectionHandler(
@@ -564,107 +556,6 @@ ComputeComparisonView::UpdateMetrics()
                 }
             }
             m_tab_container->SetAllowToolTips(true);
-
-            // Build lookup for pinned table highlighting...
-            m_diff_by_metric_id.clear();
-            for(const DiffCellGroup& dcg : m_diff_cell_groups)
-            {
-                const Table::Row& row = dcg.table->Rows()[dcg.row_index];
-                m_diff_by_metric_id[row.id.metric_id].push_back(&dcg);
-            }
-        }
-    }
-}
-
-void
-ComputeComparisonView::RebuildPinnedDiffEntries()
-{
-    // Pre-resolve DiffCellGroup-to-pinned-cell mappings...
-    m_pinned_diff_entries.clear();
-    std::unordered_map<std::string, size_t> col_map;
-    const auto& pinned_names = m_pinned_table->OrderedValueNames();
-    for(size_t n = 0; n < pinned_names.size(); n++)
-    {
-        col_map[pinned_names[n]] = FIXED_PREFIX + n;
-    }
-    for(size_t pi = 0; pi < m_pinned_table->Rows().size(); pi++)
-    {
-        const Table::Row& pinned_row = m_pinned_table->Rows()[pi];
-        auto it = m_diff_by_metric_id.find(pinned_row.id.metric_id);
-        if(it == m_diff_by_metric_id.end())
-        {
-            continue;
-        }
-        for(const DiffCellGroup* src : it->second)
-        {
-            const Table::Row& src_row = src->table->Rows()[src->row_index];
-            if(src_row.id == pinned_row.id)
-            {
-                const auto& src_names = src->table->OrderedValueNames();
-                size_t      src_pos   = src->baseline_index - FIXED_PREFIX;
-                auto col_it = col_map.find(src_names[src_pos]);
-                if(col_it != col_map.end())
-                {
-                    m_pinned_diff_entries.push_back({ src, pi, col_it->second });
-                }
-            }
-        }
-    }
-}
-
-void
-ComputeComparisonView::UpdateDifferenceHighlighting()
-{
-    // Update main table cell colors based on DiffCellGroups
-    for(DiffCellGroup& group : m_diff_cell_groups)
-    {
-        const Table::Row& row = group.table->Rows()[group.row_index];
-        if(group.percent_diff >= m_percentage_threshold)
-        {
-            row.cells[group.baseline_index].display_props->bg_color =
-                Table::DisplayProps::Color{ Colors::kComparisonBase, 255 };
-            row.cells[group.target_index].display_props->bg_color =
-                Table::DisplayProps::Color{ Colors::kComparisonTarget, 255 };
-            row.cells[group.difference_index].display_props->bg_color =
-                Table::DisplayProps::Color{ group.diff_color, group.diff_alpha };
-            row.cells[group.difference_percent_index].display_props->bg_color =
-                Table::DisplayProps::Color{ group.diff_color, group.diff_alpha };
-        }
-        else
-        {
-            row.cells[group.baseline_index].display_props->bg_color = std::nullopt;
-            row.cells[group.target_index].display_props->bg_color   = std::nullopt;
-            row.cells[group.difference_index].display_props->bg_color = std::nullopt;
-            row.cells[group.difference_percent_index].display_props->bg_color =
-                std::nullopt;
-        }
-    }
-
-    // Apply to pinned table using pre-resolved mappings...
-    for(const PinnedDiffEntry& entry : m_pinned_diff_entries)
-    {
-        const Table::Row& pinned_row =
-            m_pinned_table->Rows()[entry.pinned_row_index];
-        size_t base = entry.pinned_base_index;
-        if(entry.source->percent_diff >= m_percentage_threshold)
-        {
-            pinned_row.cells[base].display_props->bg_color =
-                Table::DisplayProps::Color{ Colors::kComparisonBase, 255 };
-            pinned_row.cells[base + 1].display_props->bg_color =
-                Table::DisplayProps::Color{ Colors::kComparisonTarget, 255 };
-            pinned_row.cells[base + 2].display_props->bg_color =
-                Table::DisplayProps::Color{ entry.source->diff_color,
-                                           entry.source->diff_alpha };
-            pinned_row.cells[base + 3].display_props->bg_color =
-                Table::DisplayProps::Color{ entry.source->diff_color,
-                                           entry.source->diff_alpha };
-        }
-        else
-        {
-            pinned_row.cells[base].display_props->bg_color     = std::nullopt;
-            pinned_row.cells[base + 1].display_props->bg_color = std::nullopt;
-            pinned_row.cells[base + 2].display_props->bg_color = std::nullopt;
-            pinned_row.cells[base + 3].display_props->bg_color = std::nullopt;
         }
     }
 }
@@ -798,21 +689,20 @@ ComputeComparisonView::RenderToolbar()
     ImGui::PopFont();
     ImGui::SameLine(0.0f, style.FramePadding.x);
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 3.0f);
+    ImGui::BeginDisabled(!m_tab_container);
     if(ImGui::DragFloat("##threshold_percentage", &m_percentage_threshold, 0.1f, 0.0f,
-                        100.0f, "%.1f%%"))
+                        100.0f, "%.1f%%", ImGuiSliderFlags_ClampOnInput))
     {
-        UpdateDifferenceHighlighting();
+        m_highlight_changed = true;
     }
     if(BeginItemTooltipStyled())
     {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
         ImGui::TextUnformatted(
-            "Minimum percentage difference required to mark metrics as different. "
-            "Set to 0 to highlight all differences.");
+            "Highlight absolute percentage differences above this threshold.");
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }
-
     VerticalSeparator(&m_settings);
     if(ImGui::Button(m_filter_common_metrics ? "Show Common Metrics" : "Show All Metrics",
                      ImVec2(ImGui::CalcTextSize("Show Common Metrics").x +
@@ -849,7 +739,6 @@ ComputeComparisonView::RenderToolbar()
             }
         }
     }
-
     if(BeginItemTooltipStyled())
     {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
@@ -860,6 +749,7 @@ ComputeComparisonView::RenderToolbar()
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }
+    ImGui::EndDisabled();
     if(m_pinned_item)
     {
         VerticalSeparator(&m_settings);
@@ -871,20 +761,20 @@ ComputeComparisonView::RenderToolbar()
             m_pinned_item->m_visible ? ICON_CHEVRON_DOWN : ICON_CHEVRON_LEFT;
         ImGui::PushFont(icon_font);
         // use larger icon for consistent spacing
-        ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN); 
+        ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
         ImGui::PopFont();
 
-        if(IconButton(icon, icon_font,
-                      ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
-                             icon_size.y + style.FramePadding.y * 2.0f),
-                      m_pinned_item->m_visible ? "Hide pinned metrics" : "Show pinned metrics",
-                      style.WindowPadding, false, style.FramePadding,
-                      m_settings.GetColor(Colors::kTransparent),
-                      m_settings.GetColor(Colors::kButtonHovered),
-                      m_settings.GetColor(Colors::kTransparent)))
+        if(IconButton(
+               icon, icon_font,
+               ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
+                      icon_size.y + style.FramePadding.y * 2.0f),
+               m_pinned_item->m_visible ? "Hide pinned metrics" : "Show pinned metrics",
+               false, style.FramePadding, m_settings.GetColor(Colors::kTransparent),
+               m_settings.GetColor(Colors::kButtonHovered),
+               m_settings.GetColor(Colors::kTransparent)))
         {
             m_pinned_item->m_visible = !m_pinned_item->m_visible;
-        }        
+        }
     }
     ImGui::SameLine();
     m_toolbar_available_width =
@@ -920,7 +810,7 @@ ComputeComparisonView::RenderPinnedMetrics() const
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeightWithSpacing()),
             ImVec2(ImGui::GetContentRegionAvail().x, m_max_pinned_height));
-        ImGui::BeginChild("bookmarks", ImVec2(0.0f, 0.0f),
+        ImGui::BeginChild("pinned", ImVec2(0.0f, 0.0f),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         if(m_pinned_metrics.empty())
         {
@@ -980,9 +870,12 @@ ComputeComparisonView::AddPinnedMetric(const Table& table, const size_t index)
     {
         const Table::Row& row = table.Rows()[index];
         row.selected          = true;
-        m_pinned_metrics.emplace_back(PinnedModel{ row.id, row.entry, &row });
+        m_pinned_metrics.emplace_back(PinnedModel{
+            PinnedModel::ID{ row.entry->category_id, row.entry->table_id, row.entry->id,
+                             row.id.metric_id, row.id.entry_name.data() },
+            row.entry, &row });
         m_pinned_table->AddRow(table, index);
-        m_pinned_columns_dirty = true;
+        m_pinned_changed = true;
     }
 }
 
@@ -994,7 +887,7 @@ ComputeComparisonView::RemovePinnedMetric(const Table& table, const size_t index
         const Table::Row& row = table.Rows()[index];
         if(&table == m_pinned_table.get())
         {
-            // Removal initiated from bookmarks...
+            // Removal initiated from pinned...
             if(m_pinned_metrics[index].row)
             {
                 m_pinned_metrics[index].row->selected = false;
@@ -1014,10 +907,14 @@ ComputeComparisonView::RemovePinnedMetric(const Table& table, const size_t index
                 }
             }
         }
-        m_pinned_metrics.erase(std::remove(m_pinned_metrics.begin(), m_pinned_metrics.end(),
-                                      PinnedModel{ row.id, row.entry, &row }),
-                          m_pinned_metrics.end());
-        m_pinned_columns_dirty = true;
+        m_pinned_metrics.erase(
+            std::remove(m_pinned_metrics.begin(), m_pinned_metrics.end(),
+                        PinnedModel{ PinnedModel::ID{ row.entry->category_id,
+                                                      row.entry->table_id, row.entry->id,
+                                                      "", row.id.entry_name.data() },
+                                     nullptr, nullptr }),
+            m_pinned_metrics.end());
+        m_pinned_changed = true;
     }
 }
 
@@ -1031,13 +928,13 @@ ComputeComparisonView::UpdatePinnedMetrics()
             m_pinned_metrics.size());
         std::unordered_map<std::string, std::unordered_map<std::string_view, size_t>>
             id_index_map;
-        // Store the ordering of the bookmarks...
+        // Store the ordering of the pins...
         for(size_t i = 0; i < m_pinned_metrics.size(); i++)
         {
-            id_index_map[m_pinned_metrics[i].row_id.metric_id]
-                        [m_pinned_metrics[i].row_id.entry_name] = i;
+            id_index_map[m_pinned_metrics[i].id.metric_id]
+                        [m_pinned_metrics[i].id.entry_name] = i;
         }
-        // Go through the categories and find bookmarked metrics...
+        // Go through the categories and find pinned metrics...
         for(const CategoryModel& category : m_categories)
         {
             for(const std::shared_ptr<Table>& table : category.tables)
@@ -1052,6 +949,7 @@ ComputeComparisonView::UpdatePinnedMetrics()
                                               .at(row.id.entry_name)] =
                             std::make_pair(table.get(), i);
                     }
+                    row.selected = false;
                 }
             }
         }
@@ -1062,26 +960,97 @@ ComputeComparisonView::UpdatePinnedMetrics()
             size_t&      row_index = updated_bookmarks[i].second;
             if(table && row_index < table->Rows().size())
             {
-                // Bookmark exists...
+                // Pin exists...
+                m_pinned_metrics[i].entry         = table->Rows()[row_index].entry;
                 m_pinned_metrics[i].row           = &table->Rows()[row_index];
                 m_pinned_metrics[i].row->selected = true;
                 m_pinned_table->AddRow(*updated_bookmarks[i].first,
-                                         updated_bookmarks[i].second);
+                                       updated_bookmarks[i].second);
             }
             else
             {
-                // Bookmark no longer exist...
+                // Pin no longer exist...
                 m_pinned_metrics[i].row = nullptr;
                 m_pinned_table->AddRow(
                     m_pinned_metrics[i].entry, empty_value,
                     { std::nullopt, Table::DisplayProps::Color{ Colors::kTextDim, 255 },
                       std::nullopt },
                     std::make_optional<size_t>(ROW_TAG_INVALID_MATCH));
-                m_pinned_table->Rows()[m_pinned_table->Rows().size() - 1].selected =
-                    true;
+                m_pinned_table->Rows()[m_pinned_table->Rows().size() - 1].selected = true;
             }
         }
-        m_pinned_columns_dirty = true;
+    }
+}
+
+void
+ComputeComparisonView::UpdateDifferenceGroups(const Table*                  table,
+                                              std::vector<DifferenceGroup>& output)
+{
+    if(table)
+    {
+        const WorkloadInfo* baseline_info = m_data_provider.ComputeModel().GetWorkload(
+            m_compute_selection->GetSelectedWorkload());
+        if(baseline_info)
+        {
+            for(const Table::Row& row : table->Rows())
+            {
+                if(row.entry &&
+                   baseline_info->available_metrics.tree.count(row.entry->category_id) >
+                       0 &&
+                   baseline_info->available_metrics.tree.at(row.entry->category_id)
+                           .tables.count(row.entry->table_id) > 0)
+                {
+                    for(const std::string& value_name :
+                        baseline_info->available_metrics.tree.at(row.entry->category_id)
+                            .tables.at(row.entry->table_id)
+                            .value_names)
+                    {
+                        if(row.values_map.count(DIFFERENCE_COLUMN_PREFIX + value_name) >
+                               0 &&
+                           row.values_map.count(DIFFERENCE_PCT_COLUMN_PREFIX +
+                                                value_name) > 0)
+                        {
+                            const Table::Row::Value& value =
+                                row.values_map.at(DIFFERENCE_COLUMN_PREFIX + value_name);
+                            const Table::Row::Value& pct_value = row.values_map.at(
+                                DIFFERENCE_PCT_COLUMN_PREFIX + value_name);
+                            if(value.dbl_data && pct_value.dbl_data &&
+                               value.dbl_data != 0.0)
+                            {
+                                output.emplace_back(
+                                    DifferenceGroup{ &pct_value, &value });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void
+ComputeComparisonView::UpdateDifferenceHighlight(
+    const std::vector<DifferenceGroup>& groups) const
+{
+    for(const DifferenceGroup& group : groups)
+    {
+        if(group.pct_value && group.value)
+        {
+            if(std::abs(group.pct_value->dbl_data.value()) > m_percentage_threshold)
+            {
+                ImU32 alpha = std::min(
+                    static_cast<ImU32>(
+                        std::abs(group.pct_value->dbl_data.value()) / 100.0 * 255 + 25),
+                    ImU32(255));
+                group.pct_value->display_props.bg_color.value().alpha = alpha;
+                group.value->display_props.bg_color.value().alpha     = alpha;
+            }
+            else
+            {
+                group.pct_value->display_props.bg_color.value().alpha = 0;
+                group.value->display_props.bg_color.value().alpha     = 0;
+            }
+        }
     }
 }
 
@@ -1096,11 +1065,23 @@ ComputeComparisonView::Table::Table(std::string title, ImGuiTableFlags flags,
 , m_scroll_freeze_rows(scroll_freeze_rows)
 , m_rows_changed(false)
 , m_row_filter_changed(false)
-, m_scrollable(true)
+, m_h_scrollable(true)
 , m_remove_row_index(std::nullopt)
 , m_visible_row_count(0)
 {
-    m_widget_name = GenUniqueName("metric_table");
+    m_widget_name                                 = GenUniqueName("metric_table");
+    m_fixed_columns[Column::Selection].type       = Column::Selection;
+    m_fixed_columns[Column::Selection].name       = "";
+    m_fixed_columns[Column::Selection].ref_count  = 0;
+    m_fixed_columns[Column::MetricID].type        = Column::MetricID;
+    m_fixed_columns[Column::MetricID].name        = "Metric ID";
+    m_fixed_columns[Column::MetricID].ref_count   = 0;
+    m_fixed_columns[Column::MetricName].type      = Column::MetricName;
+    m_fixed_columns[Column::MetricName].name      = "Metric";
+    m_fixed_columns[Column::MetricName].ref_count = 0;
+    m_fixed_columns[Column::Unit].type            = Column::Unit;
+    m_fixed_columns[Column::Unit].name            = "Unit";
+    m_fixed_columns[Column::Unit].ref_count       = 0;
 }
 
 ComputeComparisonView::Table::~Table() {}
@@ -1133,6 +1114,10 @@ ComputeComparisonView::Table::Update()
                     }
                 }
             }
+            if(!m_rows[m_remove_row_index.value()].entry->unit.empty())
+            {
+                m_fixed_columns[Column::Unit].ref_count--;
+            }
             m_rows.erase(m_rows.begin() + m_remove_row_index.value());
             m_rows_changed = true;
         }
@@ -1140,36 +1125,26 @@ ComputeComparisonView::Table::Update()
     }
     if(m_rows_changed)
     {
-        // (Check box, metric id, metric name, unit) + value columns
-        m_columns.resize(4 + m_value_columns.size());
+        // (Check box, metric id, metric name) + value columns + (unit)
+        m_columns.resize(3 + m_value_columns.size() +
+                         (m_fixed_columns[Column::Unit].ref_count > 0 ? 1 : 0));
         int j = 0;
         // Setup columns...
         for(size_t i = 0; i < m_columns.size(); i++)
         {
-            if(i == Column::Selection)
+            if(i == Column::Selection || i == Column::MetricID || i == Column::MetricName)
             {
-                m_columns[i].type = Column::Selection;
-                m_columns[i].name = "";
+                m_columns[i] = &m_fixed_columns[i];
             }
-            else if(i == Column::MetricID)
+            else if(i == m_columns.size() - 1 &&
+                    m_fixed_columns[Column::Unit].ref_count > 0)
             {
-                m_columns[i].type = Column::MetricID;
-                m_columns[i].name = "Metric ID";
-            }
-            else if(i == Column::MetricName)
-            {
-                m_columns[i].type = Column::MetricName;
-                m_columns[i].name = "Metric";
-            }
-            else if(i == m_columns.size() - 1)
-            {
-                m_columns[i].type = Column::Unit;
-                m_columns[i].name = "Unit";
+                m_columns[i] = &m_fixed_columns[Column::Unit];
             }
             else if(j < m_ordered_value_names.size() &&
                     m_value_columns.count(m_ordered_value_names[j]) > 0)
             {
-                m_columns[i] = m_value_columns.at(m_ordered_value_names[j++]);
+                m_columns[i] = &m_value_columns.at(m_ordered_value_names[j++]);
             }
         }
         // Setup rows...
@@ -1179,7 +1154,7 @@ ComputeComparisonView::Table::Update()
             row.cells.resize(m_columns.size());
             for(size_t i = 0; i < m_columns.size(); i++)
             {
-                switch(m_columns[i].type)
+                switch(m_columns[i]->type)
                 {
                     case Column::Selection:
                     {
@@ -1207,9 +1182,9 @@ ComputeComparisonView::Table::Update()
                     }
                     default:
                     {
-                        if(row.values_map.count(m_columns[i].name) > 0)
+                        if(row.values_map.count(m_columns[i]->name) > 0)
                         {
-                            Row::Value& value = row.values_map.at(m_columns[i].name);
+                            Row::Value& value = row.values_map.at(m_columns[i]->name);
                             row.cells[i].data = value.data;
                             row.cells[i].display_props = &value.display_props;
                         }
@@ -1256,7 +1231,7 @@ ComputeComparisonView::Table::Render()
                          m_max_size.y,
                          ImGui::GetFrameHeightWithSpacing() *
                                  (m_visible_row_count + (m_title.empty() ? 1.0f : 2.0f)) +
-                             (m_scrollable ? ImGui::GetStyle().ScrollbarSize : 0.0f))),
+                             (m_h_scrollable ? ImGui::GetStyle().ScrollbarSize : 0.0f))),
         ImGuiChildFlags_Borders);
     float title_height = 0.0f;
     if(!m_title.empty())
@@ -1266,13 +1241,17 @@ ComputeComparisonView::Table::Render()
     }
     if(!m_rows.empty() && m_visible_row_count > 0)
     {
-        if(ImGui::BeginTable(m_widget_name.c_str(), static_cast<int>(m_columns.size()),
-                             m_flags, ImGui::GetContentRegionAvail()))
+        ImVec2 table_region = ImGui::GetContentRegionAvail();
+        if(ImGui::IsRectVisible(ImGui::GetCursorScreenPos() + ImVec2(0.0f, 1.0f),
+                                ImGui::GetCursorScreenPos() + table_region -
+                                    ImVec2(0.0f, 1.0f)) &&
+           ImGui::BeginTable(m_widget_name.c_str(), static_cast<int>(m_columns.size()),
+                             m_flags, table_region))
         {
             ImGui::TableSetupScrollFreeze(m_scroll_freeze_columns, m_scroll_freeze_rows);
-            for(const Column& column : m_columns)
+            for(const Column* column : m_columns)
             {
-                ImGui::TableSetupColumn(column.name.c_str());
+                ImGui::TableSetupColumn(column->name.c_str());
             }
             ImGui::TableHeadersRow();
             for(size_t i = 0; i < m_rows.size(); i++)
@@ -1332,7 +1311,7 @@ ComputeComparisonView::Table::Render()
                                 ImGui::SameLine(ImGui::GetFrameHeightWithSpacing());
                             }
                         }
-                        switch(m_columns[j].type)
+                        switch(m_columns[j]->type)
                         {
                             case Column::Selection:
                             {
@@ -1360,7 +1339,7 @@ ComputeComparisonView::Table::Render()
                                     CopyableTextUnformatted(
                                         m_rows[i].cells[j].data.data(), "",
                                         COPY_DATA_NOTIFICATION, false, true);
-                                    switch(m_columns[j].type)
+                                    switch(m_columns[j]->type)
                                     {
                                         case Column::MetricName:
                                         {
@@ -1401,7 +1380,7 @@ ComputeComparisonView::Table::Render()
                     ImGui::PopID();
                 }
             }
-            m_scrollable = ImGui::GetScrollMaxX() > 0.0;
+            m_h_scrollable = ImGui::GetScrollMaxX() > 0.0;
             ImGui::EndTable();
         }
     }
@@ -1445,7 +1424,8 @@ ComputeComparisonView::Table::AddRow(const AvailableMetrics::Entry* entry,
         std::unordered_map<std::string, Row::Value> values_map;
         for(size_t i = 0; i < values.size(); i++)
         {
-            values_map[values[i].name].name = values[i].name;
+            values_map[values[i].name].name     = values[i].name;
+            values_map[values[i].name].dbl_data = values[i].data;
             // Convert data to string...
             if(values[i].data)
             {
@@ -1470,6 +1450,10 @@ ComputeComparisonView::Table::AddRow(const AvailableMetrics::Entry* entry,
                 m_value_columns.at(values[i].name).ref_count++;
             }
             values_map[values[i].name].display_props = std::move(values[i].display_props);
+        }
+        if(!entry->unit.empty())
+        {
+            m_fixed_columns[Column::Unit].ref_count++;
         }
         m_rows.emplace_back(Row{ Row::ID{ std::to_string(entry->category_id) + "." +
                                               std::to_string(entry->table_id) + "." +
@@ -1509,6 +1493,10 @@ ComputeComparisonView::Table::AddRow(const Table& table, const size_t index)
             }
         }
     }
+    if(!other.entry->unit.empty())
+    {
+        m_fixed_columns[Column::Unit].ref_count++;
+    }
     m_rows.emplace_back(other);
     m_rows_changed = true;
 }
@@ -1522,6 +1510,10 @@ ComputeComparisonView::Table::RemoveRow(size_t index)
 void
 ComputeComparisonView::Table::ClearRows()
 {
+    for(Column& column : m_fixed_columns)
+    {
+        column.ref_count = 0;
+    }
     m_ordered_value_names.clear();
     m_value_columns.clear();
     m_rows.clear();
@@ -1555,6 +1547,92 @@ ComputeComparisonView::Table::SetRowSelectionHandler(
         handler)
 {
     m_row_selection_callback = handler;
+}
+
+ComputeComparisonView::Preset::Preset(ComputeComparisonView& widget)
+: PresetComponent(PresetManager::ComputeComparison,
+                  widget.m_data_provider.GetTraceFilePath())
+, m_widget(widget)
+{}
+
+bool
+ComputeComparisonView::Preset::ToJson(jt::Json& json)
+{
+    if(!m_widget.m_pinned_metrics.empty())
+    {
+        jt::Json& pins = json[JSON_KEY_PINNED_METRICS];
+        for(size_t i = 0; i < m_widget.m_pinned_metrics.size(); i++)
+        {
+            pins[i][JSON_KEY_PINNED_METRICS_ID][0] =
+                m_widget.m_pinned_metrics[i].id.category_id;
+            pins[i][JSON_KEY_PINNED_METRICS_ID][1] =
+                m_widget.m_pinned_metrics[i].id.table_id;
+            pins[i][JSON_KEY_PINNED_METRICS_ID][2] =
+                m_widget.m_pinned_metrics[i].id.entry_id;
+            pins[i][JSON_KEY_PINNED_METRICS_NAME] =
+                m_widget.m_pinned_metrics[i].id.entry_name;
+        }
+    }
+    return true;
+}
+
+bool
+ComputeComparisonView::Preset::FromJson(jt::Json& json)
+{
+    bool result = true;
+    if(json.isObject() && json.contains(JSON_KEY_PINNED_METRICS))
+    {
+        jt::Json& pins = json[JSON_KEY_PINNED_METRICS];
+        if(pins.isArray())
+        {
+            for(jt::Json& obj : pins.getArray())
+            {
+                result &= obj.isObject() && obj.contains(JSON_KEY_PINNED_METRICS_ID) &&
+                          obj.contains(JSON_KEY_PINNED_METRICS_NAME) &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].isArray() &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].getArray().size() == 3 &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].getArray()[0].isLong() &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].getArray()[1].isLong() &&
+                          obj[JSON_KEY_PINNED_METRICS_ID].getArray()[2].isLong() &&
+                          obj[JSON_KEY_PINNED_METRICS_NAME].isString();
+            }
+            if(result)
+            {
+                Reset();
+                for(jt::Json& obj : pins.getArray())
+                {
+                    AvailableMetrics::Entry entry;
+                    entry.category_id = static_cast<uint32_t>(
+                        obj[JSON_KEY_PINNED_METRICS_ID].getArray()[0].getLong());
+                    entry.table_id = static_cast<uint32_t>(
+                        obj[JSON_KEY_PINNED_METRICS_ID].getArray()[1].getLong());
+                    entry.id = static_cast<uint32_t>(
+                        obj[JSON_KEY_PINNED_METRICS_ID].getArray()[2].getLong());
+                    entry.name = obj[JSON_KEY_PINNED_METRICS_NAME].getString();
+                    m_entries.push_back(std::move(entry));
+                    m_widget.m_pinned_metrics.emplace_back(PinnedModel{
+                        PinnedModel::ID{ m_entries.back().category_id,
+                                         m_entries.back().table_id, m_entries.back().id,
+                                         std::to_string(m_entries.back().category_id) +
+                                             "." +
+                                             std::to_string(m_entries.back().table_id) +
+                                             "." + std::to_string(m_entries.back().id),
+                                         m_entries.back().name },
+                        &m_entries.back(), nullptr });
+                }
+                m_widget.m_metrics_changed = true;
+            }
+        }
+    }
+    return result;
+}
+
+void
+ComputeComparisonView::Preset::Reset()
+{
+    m_entries.clear();
+    m_widget.m_pinned_metrics.clear();
+    m_widget.m_metrics_changed = true;
 }
 
 }  // namespace View

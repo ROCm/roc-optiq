@@ -149,7 +149,7 @@ jobs:
         run: |
           mkdir -p ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
           cmake -B ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_config_preset }}" -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" -DVulkan_LIBRARY="$Vulkan_LIBRARY"
-          cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --parallel 4 --target package
+          cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4 --target package
           ls ${{ env.BUILD_DIR }}
 
           if [ -d "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BUILD_FILE_NAME }}.app" ]; then

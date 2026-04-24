@@ -1038,14 +1038,12 @@ ComputeComparisonView::UpdateDifferenceHighlight(
         {
             if(std::abs(group.pct_value->dbl_data.value()) > m_percentage_threshold)
             {
-                group.pct_value->display_props.bg_color.value().alpha = std::min(
+                ImU32 alpha = std::min(
                     static_cast<ImU32>(
                         std::abs(group.pct_value->dbl_data.value()) / 100.0 * 255 + 25),
                     ImU32(255));
-                group.value->display_props.bg_color.value().alpha = std::min(
-                    static_cast<ImU32>(
-                        std::abs(group.pct_value->dbl_data.value()) / 100.0 * 255 + 25),
-                    ImU32(255));
+                group.pct_value->display_props.bg_color.value().alpha = alpha;
+                group.value->display_props.bg_color.value().alpha     = alpha;
             }
             else
             {

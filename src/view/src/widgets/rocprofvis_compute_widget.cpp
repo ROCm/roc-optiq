@@ -263,7 +263,7 @@ void
 MetricTableBase::FillDefaultColumns(std::map<uint32_t, std::string>& columns,
                                     std::uint32_t&                   last_column_index)
 {
-    columns[0]            = "Pin";
+    columns[0]            = "##Pin";
     columns[1]            = "Metric ID";
     columns[2]            = "Metric";
     last_column_index     = 3;

@@ -121,7 +121,3 @@ jobs:
         run: |
           aws s3 cp ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/ \
             --no-progress
-
-
-
-

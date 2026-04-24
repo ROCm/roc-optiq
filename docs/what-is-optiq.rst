@@ -45,3 +45,4 @@ Key features include:
 - :ref:`kernel-details`: Focuses on individual kernels.  
 - :ref:`analysis-table`: Complete list of available metrics for the selected kernel. Metrics are grouped by category. 
 - :ref:`analysis-workload`: Contextual information about the profiled workload, including system information and profiling configuration. 
+- Baseline Comparison: A side-by-side view that compares two workload measurements (baseline vs. target) to quickly identify and assess performance regressions or improvements. 

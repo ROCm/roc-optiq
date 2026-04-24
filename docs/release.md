@@ -10,9 +10,48 @@
 
 | Version | Release date |
 | ------- | ------------ |
+| [Beta 0.4.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.4.0/index.html) | May 6, 2026 |
 | [Beta 0.3.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.3.0/index.html) | March 26, 2026 |
 | [Beta 0.2.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.2.0/index.html) | February 11, 2026 |
 | [Beta 0.1.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.1.0/index.html) | December 10, 2025 |
+
+## ROCm Optiq (Beta) 0.4.0 
+
+### Added
+
+New visualization features for analysis data include: 
+
+- Summary View – Speed of Light: provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, showing utilization relative to architectural peak capabilities. The Percent-of-Peak values help quickly identify whether the workload is limited. 
+- Kernel Details - Kernel Selection Table: added bar chart visualization for values of metrics and a tooltip feature for displaying kernels’ full names. 
+- Baseline Comparison: enables you to compare two workload measurements (baseline vs. target) side by side in a unified table. It helps to quickly spot regressions, improvements, and behavior changes. It highlights per-metric deltas (including percentage change) to make the performance impact easy to quantify. 
+- Added support for ROCm compute profiler’s database schema 1.3 and related performance improvements. 
+
+Other new features: 
+
+- Data clean-up: remove metadata added by ROCm-Optiq in database file. 
+- Command line Interface support. 
+- OpenGL backend as a fallback when Vulkan is unavailable; optional software rendering path; command-line option to force a specific graphics backend. 
+- Dear ImGui updated (docking-capable line, ImPlot aligned); Linux session defaults to X11 for compatibility. 
+- Windows packages link GLFW statically by default (no separate glfw.dll in the installer). 
+- New settings panel allowing keyboard shortcuts to be customized. 
+
+### Changed
+
+Changes in viewing analysis data include: 
+
+- Legend can be repositioned in Roofline charts of Summary View and Kernel Details; multi-workload chart fixes and top-kernels presentation updates. 
+- Kernel Details – Kernel Selection Table updates: Added mini-graphs in cells, pinned title/header improvements, and a global toggle for inline charts. Added tooltip for displaying clipped names and adjusted name-column sizing to free space for metrics. 
+
+Changes in viewing trace data include: 
+
+- Topology View and Timeline:  
+- Enhanced System Topology tree for better representation of hardware and software topologies.  
+- Toggle on device nodes to show or hide all tracks under that device. 
+
+Navigation and inspection:  
+
+- Go-to-event behavior across tables, flow panel, and call stack panel. Double-click or context menu to open the event on the timeline, with vertical track centering and highlight feedback.  
+- Highlight-on-navigate with a dedicated event path, pulsing indicator, and timed auto-clear; selection and highlight handled independently 
 
 ## ROCm Optiq (Beta) 0.3.0 
 

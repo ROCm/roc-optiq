@@ -22,6 +22,11 @@ subtrees:
   - file: how-to/customize-views
     title: Customize your project
 
+- caption: Reference
+  entries:
+  - file: reference/cli-support
+    title: Command-line support
+
 - caption: About
   entries:
   - file: license.rst

@@ -41,8 +41,8 @@ Summary View
 
 The **Summary View** displays a high-level overview of the captured data. 
 
-Table
------
+Summary View -- Table
+---------------------
  
 The table in **Summary View** lists the top 10 longest-running kernels sorted by Total Execution Time. 
 The table displays kernel names, the number of invocations, and statistics including Total, Min, Max, Mean, Median durations.  
@@ -51,8 +51,8 @@ The table displays kernel names, the number of invocations, and statistics inclu
    :width: 800
    :align: center
 
-Charts
-------
+Summary View -- Charts
+----------------------
 
 Charts display as bar or pie charts.
 
@@ -77,8 +77,8 @@ The bar chart displays per-kernel metrics including the number of invocations, a
 
 Selected kernels are highlighted white in both charts.  
 
-Summary View Roofline Chart
----------------------------
+Summary View -- Roofline Chart
+------------------------------
 
 The chart plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels.
 Showing where kernels are positioned relative to these rooflines helps determine whether performance is memory-bound or compute-bound, and identify the most impactful optimization direction. 
@@ -97,7 +97,29 @@ The information includes the Kernel name, Invocation(s), Duration, Arithmetic In
 
 There are also presets available to display information specific to a particular data type. 
 
+Roofline “Legend/Menu position” control: you can choose options to reposition the roofline legend/menu. 
+The options include: 
+
+- Inside, Top Left
+- Inside, Top Right
+- Inside, Bottom Left
+- Inside, Bottom Right
+- Outside (which pushes legend outside the plot area)
+
+.. image:: ../images/roofline-legend.png
+   :width: 800
+   :align: center
+
 .. _kernel-details:
+
+Summary View -- System Speed-of-Light
+-------------------------------------
+
+- Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, highlighting utilization relative to architectural peak capabilities. 
+- The Summary View's System Speed-of-Light table includes the following columns: Metric ID, Metric Name, Average Value, Peak, Percent-of-Peak, and Unit. 
+- Metrics are aggregated across kernels to reflect overall application behavior rather than per-kernel performance. 
+- Use the Percent-of-Peak column to quickly identify whether execution is limited. Execution could be limited by compute, memory, or other hardware subsystems. 
+- Hover over a metric name to see a tooltip with a detailed description. 
 
 Kernel Details
 ==============
@@ -128,6 +150,9 @@ The **Kernel Selection Table** displays kernel information, including names and 
 - The Duration column enables you to sort (ascending or descending).  
 - Selecting a kernel through the **Kernel Selection Table** or kernel selector drop-down updates the Memory Chart, System Speed-of-Light, Kernel-level Roofline Analysis, and Table View accordingly. 
 - You can hide this table clicking |eye| to maximize space for charts.
+- To show or hide bar charts for metric values in the Kernel Selection Table, select Show Bar Charts or Hide Bar Charts.  
+- To show/hide bar charts for a specific metric, right-click the metric's column header and select Show Bar Chart or Hide Bar Chart. 
+- Hover over a clipped kernel name to view the full name in a tooltip. 
 
 Memory Chart
 ------------
@@ -188,6 +213,8 @@ Metrics are grouped into tabs that match compute categories, including:
 - L2 Cache 
 - L2 Cache (per channel) 
 
+To pin a metric for focused analysis, right-click the metric and select **Pin metric**. 
+
 .. _analysis-workload:
 
 Workload Details 
@@ -201,3 +228,48 @@ Workload Details
 .. image:: ../images/workload-details.png
    :width: 800
    :align: center
+
+Baseline Comparison
+===================
+
+The Baseline Comparison shows performance differences between two workload measurements (baseline and target) side by side. It is useful for scenarios such as: 
+
+- Comparing results before and after optimization or tuning changes. 
+- Measuring the impact of code, algorithm, or kernel changes. 
+- Evaluating the effect of environment updates. 
+- Validating performance stability across multiple runs. 
+
+Baseline Comparison presents a unified table of available metrics for both runs, making it easy to identify regressions, improvements, and other behavior changes. 
+
+Use the drop-down menus to select the baseline and target workload and kernel. The comparison table updates to show statistics for the selected selections. 
+
+You can also compare two kernels within the same workload.
+
+.. image:: ../images/baseline-comparison.png
+   :width: 800
+   :align: center
+
+Choose how metrics are displayed by selecting **Show Common Metrics** or **Show All Metrics**. You can also pin metrics for focused analysis. 
+
+For each metric, Baseline Comparison shows: 
+
+- Baseline statistics available in the database (for example, average, median, minimum, and maximum). 
+- Target statistics available in the database (for example, average, median, minimum, and maximum). 
+- The difference (delta) between baseline and target values. 
+- The percentage change between baseline and target values. 
+
+.. note::
+
+   To compare two runs in ROCm Optiq, both sets of analysis results must be present in the same database.
+
+To generate a database that contains multiple workloads with ROCm Compute Profiler for comparison, profile each workload and then run analysis with database output enabled: 
+
+.. code::
+
+   $ rocprof-compute profile -n <workload_name_1> -- <application> 
+   ... 
+   $ rocprof-compute profile -n <workload_name_N> -- <application> 
+
+   $ rocprof-compute analyze -p <path to workload_name_1> ... -p <path to workload_name_N> --output-format db 
+
+Copy the generated ``.db`` file to the host system and open it in ROCm Optiq. Then, go to the **Baseline Comparison** tab and select a baseline workload under **Workload:** and a target workload under **Compare With:**. Select a kernel for each workload to compare. 

@@ -147,12 +147,12 @@ jobs:
 
       - name: Build, Make, and Verify Installation
         run: |
-          mkdir -p ${{ env.BUILD_DIR }}
-          cmake -B ${{ env.BUILD_DIR }} --preset "${{ inputs.cmake_config_preset }}" -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" -DVulkan_LIBRARY="$Vulkan_LIBRARY"
-          cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
+          mkdir -p ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
+          cmake -B ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_config_preset }}" -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" -DVulkan_LIBRARY="$Vulkan_LIBRARY"
+          cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --parallel 4 --target package
           ls ${{ env.BUILD_DIR }}
 
-          if [ -d "${{ env.BUILD_DIR }}/macos-release/${{ env.BUILD_FILE_NAME }}.app" ]; then
+          if [ -d "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BUILD_FILE_NAME }}.app" ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }}.app has been successfully built!"
           else
             echo "❌ ${{ env.BUILD_FILE_NAME }}.app was not built!"
@@ -161,8 +161,8 @@ jobs:
 
       - name: Prepare Distribution Artifacts
         run: |
-          mkdir ${{ env.DIST_DIR }}
-          cp ${{ env.BUILD_DIR }}/macos-release/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/
+          mkdir ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
 
       - name: Upload GitHub Artifacts

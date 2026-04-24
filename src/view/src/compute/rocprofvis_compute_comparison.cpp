@@ -691,7 +691,7 @@ ComputeComparisonView::RenderToolbar()
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 3.0f);
     ImGui::BeginDisabled(!m_tab_container);
     if(ImGui::DragFloat("##threshold_percentage", &m_percentage_threshold, 0.1f, 0.0f,
-                        100.0f, "%.1f%%"))
+                        100.0f, "%.1f%%", ImGuiSliderFlags_ClampOnInput))
     {
         m_highlight_changed = true;
     }
@@ -699,8 +699,7 @@ ComputeComparisonView::RenderToolbar()
     {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
         ImGui::TextUnformatted(
-            "Minimum percentage difference required to mark metrics as different. "
-            "Set to 0 to highlight all differences.");
+            "Highlight absolute percentage differences above this threshold.");
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }

@@ -250,19 +250,6 @@ PresetManager::PresetManager()
     }
 }
 
-PresetComponent::PresetComponent(PresetManager::ComponentType type,
-                                 const std::string&           project_id)
-: m_type(type)
-, m_project_id(project_id)
-{
-    PresetManager::GetInstance().RegisterComponent(m_project_id, *this);
-}
-
-PresetComponent::~PresetComponent()
-{
-    PresetManager::GetInstance().UnregisterComponent(m_project_id, *this);
-}
-
 bool
 PresetManager::WritePresetFile()
 {
@@ -274,6 +261,19 @@ PresetManager::WritePresetFile()
         file.close();
     }
     return result;
+}
+
+PresetComponent::PresetComponent(PresetManager::ComponentType type,
+                                 const std::string&           project_id)
+: m_type(type)
+, m_project_id(project_id)
+{
+    PresetManager::GetInstance().RegisterComponent(m_project_id, *this);
+}
+
+PresetComponent::~PresetComponent()
+{
+    PresetManager::GetInstance().UnregisterComponent(m_project_id, *this);
 }
 
 PresetManager::ComponentType

@@ -87,28 +87,22 @@ Showing where kernels are positioned relative to these rooflines helps determine
    :width: 800
    :align: center
 
-Kernel performance at each cache level is displayed as individual dots in the roofline chart.  
-The size of each dot represents the kernel's duration. 
+- The kernel performance at each cache level is displayed as individual dots in the roofline chart. The size of each dot represents the kernel's duration. 
+- Click |gear| in the menu to show or hide rooflines or arithmetic intensity points. 
+- Hold your cursor over a dot to view detailed information about the kernel it represents. The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
+- There are also presets available to display information specific to a particular data type. 
 
-Click |gear| in the menu to show or hide rooflines or arithmetic intensity points. 
+  - Using the Roofline **Legend/Menu position** control, you can choose options to reposition the Roofline Legend/Menu. The options include: 
 
-Hold your cursor over a dot to view detailed information about the kernel it represents. 
-The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
+    - Inside, Top Left
+    - Inside, Top Right
+    - Inside, Bottom Left
+    - Inside, Bottom Right
+    - Outside (which pushes legend outside the plot area)
 
-There are also presets available to display information specific to a particular data type. 
-
-Roofline “Legend/Menu position” control: you can choose options to reposition the roofline legend/menu. 
-The options include: 
-
-- Inside, Top Left
-- Inside, Top Right
-- Inside, Bottom Left
-- Inside, Bottom Right
-- Outside (which pushes legend outside the plot area)
-
-.. image:: ../images/roofline-legend.png
-   :width: 800
-   :align: center
+   .. image:: ../images/Roofline-legend.png
+      :width: 800
+      :align: center
 
 .. _kernel-details:
 
@@ -131,8 +125,8 @@ Kernel Details
 - **System Speed-of-Light**: A table view of kernel metrics with their unit, average, peak, and percentage of peak values.  
 - **Roofline analysis**: Displays kernel performance relative to the system's capabilities for the selected kernel. 
 
-Kernel Selection Table
-----------------------
+Kernel Details -- Kernel Selection Table
+----------------------------------------
 
 The **Kernel Selection Table** displays kernel information, including names and GPU metrics.  
 
@@ -149,13 +143,13 @@ The **Kernel Selection Table** displays kernel information, including names and 
 
 - The Duration column enables you to sort (ascending or descending).  
 - Selecting a kernel through the **Kernel Selection Table** or kernel selector drop-down updates the Memory Chart, System Speed-of-Light, Kernel-level Roofline Analysis, and Table View accordingly. 
-- You can hide this table clicking |eye| to maximize space for charts.
-- To show or hide bar charts for metric values in the Kernel Selection Table, select Show Bar Charts or Hide Bar Charts.  
-- To show/hide bar charts for a specific metric, right-click the metric's column header and select Show Bar Chart or Hide Bar Chart. 
+- You can hide this table by clicking |eye| to maximize space for charts.
+- To show or hide bar charts for metric values in the **Kernel Selection Table**, select **Show Bar Charts** or **Hide Bar Charts**.  
+- To show/hide bar charts for a specific metric, right-click the metric's column header and select **Show Bar Chart** or **Hide Bar Charts**. 
 - Hover over a clipped kernel name to view the full name in a tooltip. 
 
-Memory Chart
-------------
+Kernel Details -- Memory Chart
+------------------------------
 
 The **Memory Chart** displays memory transactions and throughput at each cache hierarchy level. Each cache level presents its associated counter values and derived metrics, helping users understand memory behavior across the hardware memory hierarchy.
 
@@ -167,8 +161,8 @@ This visual diagram displays counter values and calculations to help you underst
 
 Select a kernel in the **Kernel Selection Table** or the kernel selector drop-down to view the memory chart of the selected kernel. 
 
-System Speed-of-Light 
----------------------
+Kernel Details -- System Speed-of-Light 
+---------------------------------------
 
 The **System Speed-of-Light** displays key kernel-level performance metrics to show the overall compute performance and hardware utilization.  
 
@@ -176,8 +170,8 @@ The **System Speed-of-Light** displays key kernel-level performance metrics to s
    :width: 800
    :align: center
 
-Kernel Roofline Chart
----------------------
+Kernel Details -- Kernel Roofline Chart
+---------------------------------------
 
 The **Kernel Roofline Chart** displays a kernel-specific roofline analysis, which helps you determine whether the kernel is compute-bound or memory-bound. 
 
@@ -229,17 +223,19 @@ Workload Details
    :width: 800
    :align: center
 
+.. _baseline:
+
 Baseline Comparison
 ===================
 
-The Baseline Comparison shows performance differences between two workload measurements (baseline and target) side by side. It is useful for scenarios such as: 
+The **Baseline Comparison** shows performance differences between two workload measurements (baseline and target) side-by-side. It's useful for scenarios such as: 
 
 - Comparing results before and after optimization or tuning changes. 
 - Measuring the impact of code, algorithm, or kernel changes. 
 - Evaluating the effect of environment updates. 
 - Validating performance stability across multiple runs. 
 
-Baseline Comparison presents a unified table of available metrics for both runs, making it easy to identify regressions, improvements, and other behavior changes. 
+**Baseline Comparison** presents a unified table of available metrics for both runs, making it easy to identify regressions, improvements, and other behavior changes. 
 
 Use the drop-down menus to select the baseline and target workload and kernel. The comparison table updates to show statistics for the selected selections. 
 
@@ -251,7 +247,7 @@ You can also compare two kernels within the same workload.
 
 Choose how metrics are displayed by selecting **Show Common Metrics** or **Show All Metrics**. You can also pin metrics for focused analysis. 
 
-For each metric, Baseline Comparison shows: 
+For each metric, **Baseline Comparison** shows: 
 
 - Baseline statistics available in the database (for example, average, median, minimum, and maximum). 
 - Target statistics available in the database (for example, average, median, minimum, and maximum). 

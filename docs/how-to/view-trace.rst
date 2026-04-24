@@ -92,8 +92,8 @@ The **System Topology View** displays a hierarchical representation of the hardw
 
 ROCm Optiq displays ROCm events in both Stream view and Queue view simultaneously: 
 
-- Stream view: Groups events (kernels and memory copies) by the HIP stream to which they were submitted. This view reflects your application's intended dependencies. 
-- Queue view: Groups the same events by the HSA queue to which they were scheduled. This view reflects what the runtime and hardware actually used. 
+- **Stream view**: Groups events (kernels and memory copies) by the HIP stream to which they were submitted. This view reflects your application's intended dependencies. 
+- **Queue view**: Groups the same events by the HSA queue to which they were scheduled. This view reflects what the runtime and hardware actually used. 
 
 .. _timeline:
 
@@ -171,7 +171,6 @@ The **Histogram** provides two display modes:
 - A display across all tracks, visible and hidden.
 
 .. image:: ../images/histogram.png
-   :align: center
 
 When the **Timeline View** is zoomed in, the area currently in view is highlighted on the **Histogram**. 
 The highlighted area in the **Histogram** can be dragged to scroll the **Timeline View**.
@@ -202,9 +201,9 @@ This section provides an interface for multiple data perspectives, offering gran
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs, and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
 
-  - The Flow Data displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and choose Go To Event. The navigation makes it easier to follow execution flow across queues and tracks. 
-  - The Call Stack Data now shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The Call Stack Data is displayed in call order, following the execution path. 
-  - Known deficiency: For instrumented threads, some call stack information such as address, file, and PC is not available. 
+  - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 
+  - The **Call Stack Data** now shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. 
+  - Known deficiency: For instrumented threads, some call stack information such as address, file, and PC isn't available. 
 
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.

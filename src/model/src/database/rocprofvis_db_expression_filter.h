@@ -78,6 +78,15 @@ namespace DataModel
             return 0;
         }
 
+        std::string GetText()
+        {
+            SkipSpaces();
+            size_t start = m_pos;
+            while (m_pos < m_text.size() && m_text[m_pos] != ' ')
+                ++m_pos;
+            return m_text.substr(start, m_pos - start);
+        }
+
         // Return a single word (letters only)
         std::string GetWord()
         {

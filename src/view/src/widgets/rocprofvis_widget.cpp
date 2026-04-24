@@ -102,9 +102,10 @@ WithPadding(float left, float right, float top, float bottom,
 }
 
 bool
-CopyableTextUnformatted(const char* text, std::string_view unique_id,
-                        std::string_view notification, bool one_click_copy,
-    bool context_menu)
+CopyableTextUnformatted(
+    const char* text, std::string_view unique_id, std::string_view notification,
+    bool one_click_copy, bool context_menu,
+                        std::function<void(const char* value_to_copy)> menu_func)
 {
     bool clicked = false;
     if(!unique_id.empty())
@@ -131,9 +132,16 @@ CopyableTextUnformatted(const char* text, std::string_view unique_id,
     
     if(context_menu)
     {
-        if(ImGui::BeginPopupContextItem())
+        auto style = SettingsManager::GetInstance().GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+        if (menu_func)
         {
-            if(ImGui::MenuItem("Copy"))
+            menu_func(text);
+        }
+        else if(ImGui::BeginPopupContextItem())
+        {
+            if(ImGui::MenuItem(" Copy"))
             {
                 ImGui::SetClipboardText(text);
                 if(!notification.empty())
@@ -144,6 +152,7 @@ CopyableTextUnformatted(const char* text, std::string_view unique_id,
             }
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar(2);
     }
 
     if(one_click_copy)

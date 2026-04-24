@@ -161,7 +161,7 @@ ComputeMemoryChartView::FetchMemChartMetrics()
     m_values.fill("-");
     m_metric_ptrs.assign(MEMCHART_METRIC_COUNT, nullptr);
 
-    m_data_provider.ComputeModel().ClearMetricValues(m_client_id);
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
 
     if(m_compute_selection)
     {
@@ -188,7 +188,7 @@ ComputeMemoryChartView::UpdateMetrics()
     if(kernel_id == ComputeSelection::INVALID_SELECTION_ID) return;
 
     const std::vector<std::shared_ptr<MetricValue>>* metrics =
-        m_data_provider.ComputeModel().GetMetricsData(m_client_id, kernel_id);
+        m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id, kernel_id);
     
     if(!metrics) return;
 

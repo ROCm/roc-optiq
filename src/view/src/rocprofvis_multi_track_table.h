@@ -13,8 +13,6 @@ namespace RocProfVis
 namespace View
 {
 
-class TimelineSelection;
-
 class MultiTrackTable : public InfiniteScrollTable
 {
 public:
@@ -37,8 +35,7 @@ private:
     bool XButton(const char* id) const;
     void CopyCellToClipboard(bool use_formatted_data);
 
-    std::shared_ptr<TimelineSelection> m_timeline_selection;
-    bool                               m_defer_track_selection_changed;
+    bool m_defer_track_selection_changed;
 
     // Keep track of currently selected tracks for this table type
     std::vector<uint64_t> m_selected_tracks;

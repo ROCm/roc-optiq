@@ -35,7 +35,7 @@ jobs:
           echo "ENABLE_INTERNAL_BANNER: ${{ env.ENABLE_INTERNAL_BANNER }}"
 
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.client_payload.ref || github.ref }}
           submodules: true
@@ -65,7 +65,7 @@ jobs:
           }
 
       - name: Upload Visualizer Binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: | 

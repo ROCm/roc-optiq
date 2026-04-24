@@ -4,6 +4,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_track_item.h"
+#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include <algorithm>
 
@@ -16,6 +17,8 @@ TimelineSelection::TimelineSelection(DataProvider& dp)
 : m_selected_range_start(INVALID_SELECTION_TIME)
 , m_selected_range_end(INVALID_SELECTION_TIME)
 , m_data_provider(dp)
+, m_highlight_timer_active(false)
+, m_last_highlighted_event_id(INVALID_SELECTION_ID)
 {}
 
 TimelineSelection::~TimelineSelection() {}
@@ -205,6 +208,107 @@ bool
 TimelineSelection::HasSelectedEvents() const
 {
     return !m_selected_event_ids.empty();
+}
+
+void
+TimelineSelection::NavigateToEvent(uint64_t track_id, uint64_t event_uuid,
+                                   double start_ns, double duration_ns)
+{
+    ViewRangeNS view_range = calculate_adaptive_view_range(start_ns, duration_ns);
+
+    EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
+        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent), track_id,
+        m_data_provider.GetTraceFilePath()));
+    EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
+        static_cast<int>(RocEvents::kSetViewRange), view_range.start_ns, view_range.end_ns,
+        m_data_provider.GetTraceFilePath()));
+
+    if(event_uuid != INVALID_SELECTION_ID)
+    {
+        HighlightTrackEvent(track_id, event_uuid);
+    }
+}
+
+void
+TimelineSelection::HighlightTrackEvent(uint64_t track_id, uint64_t event_id)
+{
+    if(m_highlighted_event_ids.count(event_id) == 0)
+    {
+        m_highlighted_event_ids.insert(event_id);
+        SendEventHighlightChanged(event_id, track_id, true);
+    }
+    m_last_highlighted_event_id = event_id;
+    m_highlight_timer_start     = std::chrono::steady_clock::now();
+    m_highlight_timer_active    = true;
+}
+
+void
+TimelineSelection::UnhighlightTrackEvent(uint64_t track_id, uint64_t event_id)
+{
+    if(m_highlighted_event_ids.count(event_id) > 0)
+    {
+        m_highlighted_event_ids.erase(event_id);
+        SendEventHighlightChanged(event_id, track_id, false);
+    }
+}
+
+bool
+TimelineSelection::EventHighlighted(uint64_t event_id) const
+{
+    return m_highlighted_event_ids.count(event_id) > 0;
+}
+
+void
+TimelineSelection::UnhighlightAllEvents()
+{
+    m_highlighted_event_ids.clear();
+    m_highlight_timer_active        = false;
+    m_last_highlighted_event_id     = INVALID_SELECTION_ID;
+    SendEventHighlightChanged(INVALID_SELECTION_ID, INVALID_SELECTION_ID, false, true);
+}
+
+bool
+TimelineSelection::HasHighlightedEvents() const
+{
+    return !m_highlighted_event_ids.empty();
+}
+
+uint64_t
+TimelineSelection::GetLastHighlightedEventId() const
+{
+    return m_last_highlighted_event_id;
+}
+
+double
+TimelineSelection::GetHighlightElapsedSeconds() const
+{
+    if(!m_highlight_timer_active)
+        return 0.0;
+    auto elapsed = std::chrono::steady_clock::now() - m_highlight_timer_start;
+    return std::chrono::duration<double>(elapsed).count();
+}
+
+void
+TimelineSelection::UpdateHighlightTimer()
+{
+    if(m_highlight_timer_active)
+    {
+        auto elapsed = std::chrono::steady_clock::now() - m_highlight_timer_start;
+        double elapsed_s =
+            std::chrono::duration<double>(elapsed).count();
+        if(elapsed_s >= HIGHLIGHT_TIMEOUT_S)
+        {
+            UnhighlightAllEvents();
+        }
+    }
+}
+
+void
+TimelineSelection::SendEventHighlightChanged(uint64_t event_id, uint64_t track_id,
+                                              bool highlighted, bool all)
+{
+    EventManager::GetInstance()->AddEvent(std::make_shared<EventHighlightChangedEvent>(
+        event_id, track_id, highlighted, m_data_provider.GetTraceFilePath(), all));
 }
 
 }  // namespace View

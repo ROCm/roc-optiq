@@ -165,7 +165,7 @@ TopologyNode::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t
             result = kRocProfVisResultSuccess;
             break;
         case kRPVControllerStreamNumProcessors:
-            *value = m_children[kRPVControllerTopologyNodeProcess].size();
+            *value = m_children[kRPVControllerTopologyNodeProcessor].size();
             result = kRocProfVisResultSuccess;
             break;
         case kRPVControllerProcessNumQueues:
@@ -186,6 +186,11 @@ TopologyNode::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t
                 else if (strcmp(prop_string, "CPU") == 0)
                 {
                     *value = kRPVControllerProcessorTypeCPU;
+                    result = kRocProfVisResultSuccess;
+                }
+                else if (strcmp(prop_string, "NIC") == 0)
+                {
+                    *value = kRPVControllerProcessorTypeNIC;
                     result = kRocProfVisResultSuccess;
                 }
                 else

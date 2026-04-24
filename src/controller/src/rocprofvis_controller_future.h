@@ -8,6 +8,8 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_c_interface.h"
+#include <string>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -34,17 +36,19 @@ public:
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final;
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final;
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final;
+
+    void ResetProgress();
+    static void ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_db_future_id_t db_future_id, rocprofvis_db_progress_percent_t progress_percent, rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data);
 
 private:
     Job* m_job;
-    Data m_object;
     std::vector<rocprofvis_db_future_t> m_db_futures;
-    std::atomic<bool>                   m_cancelled;
-    std::mutex                          m_mutex;
-
+    std::atomic<bool> m_cancelled;
+    std::mutex m_mutex;
+    uint16_t m_progress_percentage;
+    std::string m_progress_message;
+    std::unordered_map<uint64_t, uint16_t> m_progress_map;
 };
 
 }

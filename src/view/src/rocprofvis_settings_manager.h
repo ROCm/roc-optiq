@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <list>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -82,6 +83,9 @@ enum class Colors
     kAccentRed,
     kAccentRedHover,
     kAccentRedActive,
+    kTabAccent,
+    kTabAccentHover,
+    kTabAccentActive,
     kBorderGray,
     kTextMain,
     kTextDim,
@@ -93,6 +97,7 @@ enum class Colors
     kTableRowBg,
     kTableRowBgAlt,
     kEventHighlight,
+    kEventSearchHighlight,
     kLineChartColor,
     kButton,
     kButtonHovered,
@@ -123,6 +128,11 @@ enum class Colors
     kMinimapBg,
     kLoadingScreenColor,
     kTextOnAccent,
+
+    kComparisonBase,
+    kComparisonTarget,
+    kComparisonLesser,
+    kComparisonGreater,
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -142,9 +152,12 @@ constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
+constexpr size_t      MAX_RECENT_FILES                       = 5;
 
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
+
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 
 class SettingsManager
 {
@@ -163,7 +176,9 @@ public:
 
     // Styling
     ImU32                     GetColor(Colors color) const;
-    const std::vector<ImU32>& GetColorWheel();
+    const std::vector<ImU32>& GetColorWheel() const;
+    const char*               GetFlameColormapName() const;
+    const char*               GetContrastColormapName() const;
     /**
      * Returns the default ImGui style.
      */
@@ -184,6 +199,8 @@ public:
     void              RemoveRecentFile(const std::string& file_path);
 
     AppWindowSettings& GetAppWindowSettings();
+
+    void SaveHotkeySettings();
 
     // Constant for event height;
     const float GetEventLevelHeight() const;
@@ -214,6 +231,9 @@ private:
 
     void SerializeOtherSettings(jt::Json& json);
     void DeserializeOtherSettings(jt::Json& json);
+
+    void SerializeHotkeySettings(jt::Json& json);
+    void DeserializeHotkeySettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 

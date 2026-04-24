@@ -1243,8 +1243,12 @@ ComputeComparisonView::Table::Render()
     }
     if(!m_rows.empty() && m_visible_row_count > 0)
     {
-        if(ImGui::BeginTable(m_widget_name.c_str(), static_cast<int>(m_columns.size()),
-                             m_flags, ImGui::GetContentRegionAvail()))
+        ImVec2 table_region = ImGui::GetContentRegionAvail();
+        if(ImGui::IsRectVisible(ImGui::GetCursorScreenPos() + ImVec2(0.0f, 1.0f),
+                                ImGui::GetCursorScreenPos() + table_region -
+                                    ImVec2(0.0f, 1.0f)) &&
+           ImGui::BeginTable(m_widget_name.c_str(), static_cast<int>(m_columns.size()),
+                             m_flags, table_region))
         {
             ImGui::TableSetupScrollFreeze(m_scroll_freeze_columns, m_scroll_freeze_rows);
             for(const Column* column : m_columns)

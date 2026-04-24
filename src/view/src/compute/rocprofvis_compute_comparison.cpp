@@ -1015,7 +1015,7 @@ ComputeComparisonView::UpdateDifferenceGroups(const Table*                  tabl
                             const Table::Row::Value& pct_value = row.values_map.at(
                                 DIFFERENCE_PCT_COLUMN_PREFIX + value_name);
                             if(value.dbl_data && pct_value.dbl_data &&
-                               pct_value.dbl_data != 0.0)
+                               value.dbl_data != 0.0)
                             {
                                 output.emplace_back(
                                     DifferenceGroup{ &pct_value, &value });

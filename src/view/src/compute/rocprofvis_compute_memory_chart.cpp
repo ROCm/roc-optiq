@@ -482,10 +482,10 @@ ComputeMemoryChartView::DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin)
 
     // --- Draw arrows + pills FIRST (behind) ---
     const char* pill_labels[] = {
-        "SALU", "SMEM", "VALU", "MFMA", "VMEM", "LDS", "GWS", "Br"
+        "SALU", "SMEM", "VALU", "Matrix Ops", "VMEM", "LDS", "GWS", "Br"
     };
     const MemChartMetric pill_metrics[] = {
-        SALU, SMEM, VALU, MFMA, VMEM, LDS, GWS, BR
+        SALU, SMEM, VALU, MATRIX_OPS, VMEM, LDS, GWS, BR
     };
 
     ImU32 arrow_color     = Settings().GetColor(Colors::kArrowColor);

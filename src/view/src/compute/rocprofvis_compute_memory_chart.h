@@ -40,7 +40,7 @@ enum MemChartMetric
     SALU,
     SMEM,
     VALU,
-    MFMA,
+    MATRIX_OPS,
     VMEM,
     LDS,
     GWS,

@@ -57,13 +57,14 @@ namespace DataModel
         {
             kRocOptiqTableVersionMemoryActivity = 0x0002,
             kRocOptiqTableVersionMemoryAllocate = 0x0001,
-            kRocOptiqTableVersionKernelDispatchLevel = 0x0001,
-            kRocOptiqTableVersionRegionLevel = 0x0001,
-            kRocOptiqTableVersionRegionSampleLevel = 0x0001,
-            kRocOptiqTableVersionMemoryAllocLevel = 0x0001,
-            kRocOptiqTableVersionMemoryCopyLevel = 0x0001,
+            kRocOptiqTableVersionForLevelCalculation = 0x0002,
+            kRocOptiqTableVersionKernelDispatchLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionRegionLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionRegionSampleLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionMemoryAllocLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionMemoryCopyLevel = kRocOptiqTableVersionForLevelCalculation,
             kRocOptiqTableVersionHistogram = 0x0001,
-            kRocOptiqTableVersionTrackInfo = 0x0001,
+            kRocOptiqTableVersionTrackInfo = 0x0002,
         };
 
         struct roc_optiq_metadata_t

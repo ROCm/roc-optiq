@@ -64,7 +64,7 @@ namespace DataModel
             kRocOptiqTableVersionMemoryAllocLevel = kRocOptiqTableVersionForLevelCalculation,
             kRocOptiqTableVersionMemoryCopyLevel = kRocOptiqTableVersionForLevelCalculation,
             kRocOptiqTableVersionHistogram = 0x0001,
-            kRocOptiqTableVersionTrackInfo = 0x0001,
+            kRocOptiqTableVersionTrackInfo = 0x0002,
         };
 
         struct roc_optiq_metadata_t

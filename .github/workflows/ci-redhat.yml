@@ -125,6 +125,8 @@ jobs:
 
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}
+        shell: bash
         run: |
-          aws s3 cp ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/ \
+          TIMESTAMP=$(date +%Y_%m_%d)
+          aws s3 cp ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/rhel/${{ matrix.os-version }}/ \
             --no-progress

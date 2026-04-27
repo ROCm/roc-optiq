@@ -119,6 +119,7 @@ struct WorkloadInfo
     std::vector<std::vector<std::string>>    profiling_config;
     AvailableMetrics                         available_metrics;
     std::unordered_map<uint32_t, KernelInfo> kernels;
+    std::vector<const KernelInfo*>           ordered_kernels;  // built from map values; never null
     Roofline                                 roofline;
 };
 

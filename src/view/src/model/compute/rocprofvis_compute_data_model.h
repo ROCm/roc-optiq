@@ -41,7 +41,7 @@ public:
     ComputeDataModel();
     ~ComputeDataModel() = default;
 
-    const std::unordered_map<uint32_t, WorkloadInfo>& GetWorkloads() const;
+    const std::vector<const WorkloadInfo*>& GetWorkloadList() const;
     const WorkloadInfo* GetWorkload(uint32_t workload_id) const;
 
     const std::vector<std::shared_ptr<MetricValue>>* GetKernelMetricsData(
@@ -116,8 +116,11 @@ public:
 
 private:
     void OrderAvailableMetrics(WorkloadInfo& workload);
+    void OrderKernels(WorkloadInfo& workload);
+    void OrderWorkloads();
 
     std::unordered_map<uint32_t, WorkloadInfo> m_workloads;
+    std::vector<const WorkloadInfo*>           m_ordered_workloads;  // built from map values; never null
 
     struct MetricStore
     {

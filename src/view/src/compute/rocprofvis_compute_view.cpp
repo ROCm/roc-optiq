@@ -47,12 +47,13 @@ ComputeView::ComputeView()
         else
         {
             // select the first workload by default when a trace is loaded
-            const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();  
+            const std::vector<const WorkloadInfo*>& workloads =
+                m_data_provider.ComputeModel().GetWorkloadList();
             if(!workloads.empty())
             {
-                if(m_compute_selection) 
+                if(m_compute_selection)
                 {
-                    m_compute_selection->SelectWorkload(workloads.begin()->first);
+                    m_compute_selection->SelectWorkload(workloads.front()->id);
                 }
                 else
                 {
@@ -139,10 +140,11 @@ ComputeView::CreateView()
     // When launched remotely, for example over ssh, the UI make take long to init, and the data provider
     // may have already loaded an analysis if the application was launched with --file flag.
     // Check if one exists and if it does set the workload.
-    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();  
+    const std::vector<const WorkloadInfo*>& workloads =
+        m_data_provider.ComputeModel().GetWorkloadList();
     if(!workloads.empty())
     {
-        m_compute_selection->SelectWorkload(workloads.begin()->first);
+        m_compute_selection->SelectWorkload(workloads.front()->id);
     }
     m_preset_browser    = std::make_unique<PresetBrowser>();
     m_tab_container = std::make_shared<TabContainer>();
@@ -248,25 +250,26 @@ ComputeView::RenderWorkloadSelection()
 
     const ImGuiStyle& style          = SettingsManager::GetInstance().GetDefaultStyle();
 
-    const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
-        m_data_provider.ComputeModel().GetWorkloads();
+    const std::vector<const WorkloadInfo*>& workloads =
+        m_data_provider.ComputeModel().GetWorkloadList();
 
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t            workload_id       = m_compute_selection->GetSelectedWorkload();
+    const WorkloadInfo* selected_workload =
+        m_data_provider.ComputeModel().GetWorkload(workload_id);
     ImGui::Text("Workload:");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
     ImGui::BeginDisabled(workloads.empty());
-    if(ImGui::BeginCombo("##Workloads", workloads.count(workload_id) > 0
-                                          ? workloads.at(workload_id).name.c_str()
-                                          : "-"))
+    if(ImGui::BeginCombo("##Workloads",
+                         selected_workload ? selected_workload->name.c_str() : "-"))
     {
 
-        for(const std::pair<const uint32_t, WorkloadInfo>& workload : workloads)
+        for(const WorkloadInfo* workload : workloads)
         {
-            if(ImGui::Selectable(workload.second.name.c_str(),
-                                 workload_id == workload.second.id))
+            if(ImGui::Selectable(workload->name.c_str(),
+                                 workload_id == workload->id))
             {
-                m_compute_selection->SelectWorkload(workload.second.id);
+                m_compute_selection->SelectWorkload(workload->id);
             }
         }
         ImGui::EndCombo();

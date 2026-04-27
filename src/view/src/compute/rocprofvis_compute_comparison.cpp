@@ -579,23 +579,23 @@ ComputeComparisonView::RenderToolbar()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Compare With:");
     ImGui::SameLine(0, style.ItemSpacing.x);
-    const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
-        m_data_provider.ComputeModel().GetWorkloads();
+    const std::vector<const WorkloadInfo*>& workloads =
+        m_data_provider.ComputeModel().GetWorkloadList();
+    const WorkloadInfo* target_workload =
+        m_data_provider.ComputeModel().GetWorkload(m_target_workload_id);
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
     ImGui::BeginDisabled(workloads.empty());
     if(ImGui::BeginCombo("##TargetWorkloads",
-                         workloads.count(m_target_workload_id) > 0
-                             ? workloads.at(m_target_workload_id).name.c_str()
-                             : "-"))
+                         target_workload ? target_workload->name.c_str() : "-"))
     {
-        for(const std::pair<const uint32_t, WorkloadInfo>& workload : workloads)
+        for(const WorkloadInfo* workload : workloads)
         {
-            if(ImGui::Selectable(workload.second.name.c_str(),
-                                 m_target_workload_id == workload.second.id))
+            if(ImGui::Selectable(workload->name.c_str(),
+                                 m_target_workload_id == workload->id))
             {
-                if(m_target_workload_id != workload.second.id)
+                if(m_target_workload_id != workload->id)
                 {
-                    m_target_workload_id = workload.second.id;
+                    m_target_workload_id = workload->id;
                     std::vector<const KernelInfo*> kernel_list =
                         m_data_provider.ComputeModel().GetKernelInfoList(
                             m_target_workload_id);

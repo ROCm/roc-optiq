@@ -36,12 +36,12 @@ Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq
   .. image:: ../images/settings.png
      :width: 600
 
-- The time unit settings displayed on the **Timeline View**.
+- The time unit settings displayed on the **Timeline View**:
 
   .. image:: ../images/units.png
      :width: 600
 
-- The hotkey settings provide configurable keyboard shortcuts with conflict prevention, safe rebinding rules, and consistent modifier handling to enable reliable, efficient keyboard-driven workflows.
+- The hotkey settings provide configurable keyboard shortcuts with conflict prevention, safe rebinding rules, and consistent modifier handling to enable reliable, efficient keyboard-driven workflows:
 
   .. image:: ../images/hotkeys.png
      :width: 600
@@ -238,6 +238,6 @@ Persist the pinned metric configurations for the Table View and Baseline Compari
 
 After a preset is saved you can:
 
-- Recall it by clicking |recall| in the preset's row
-- Overwrite it by clicking |overwrite|
-- Delete it by clicking |delete|  
+- Recall it by clicking |recall| in the preset's row.
+- Overwrite it by clicking |overwrite|.
+- Delete it by clicking |delete|.  

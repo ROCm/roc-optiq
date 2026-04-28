@@ -59,9 +59,20 @@ Changes in viewing trace data include:
 
 Navigation and inspection:  
 
-- Go To Event behavior across tables and Flow Data panel, you can double-click or use context menu to open the event on the timeline, with vertical track centering and highlight feedback.
+- Use **Go To Event** in tables and the **Flow Data** panel to go to a specific event. Double-click the event, or click **Go To Event** from the right-click context menu, to open the event on the timeline with vertical track centering and highlighted feedback.
 - Highlight-on-navigate with a dedicated event path, pulsing indicator, and timed auto-clear; selection and highlight handled independently.
 - Callstack experience improvements. 
+
+Resolved issues
+---------------
+
+- Fixed issue where metrics that reference ``None`` return N/A.
+- Fixed issue where ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-directory``. 
+
+Known issues
+------------
+
+- On **Call Stack Data**, for instrumented threads, some call stack information such as address, file, and PC isn't available. 
 
 .. tip::
 

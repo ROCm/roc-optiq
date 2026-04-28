@@ -206,8 +206,7 @@ This section provides an interface for multiple data perspectives, offering gran
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs, and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
 
   - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 
-  - The **Call Stack Data** now shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. 
-  - Known deficiency: For instrumented threads, some call stack information such as address, file, and PC isn't available. 
+  - The **Call Stack Data** shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. 
 
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.

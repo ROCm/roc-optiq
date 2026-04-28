@@ -243,12 +243,8 @@ ComputeTopKernels::Update()
             m_kernels.clear();
             m_padded_info = nullptr;
             m_padded_idx  = std::nullopt;
-            const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
-                m_data_provider.ComputeModel().GetWorkloads();
-            if(workloads.count(m_requested_workload_id) > 0)
-            {
-                m_workload = &workloads.at(m_requested_workload_id);
-            }
+            m_workload =
+                m_data_provider.ComputeModel().GetWorkload(m_requested_workload_id);
             if(m_workload)
             {
                 std::vector<const KernelInfo*> all_kernels =

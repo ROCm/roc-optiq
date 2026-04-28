@@ -46,10 +46,10 @@ ComputeKernelSelectionTable::Clear()
 
 ComputeDataModel::ComputeDataModel() {}
 
-const std::unordered_map<uint32_t, WorkloadInfo>&
-ComputeDataModel::GetWorkloads() const
+const std::vector<const WorkloadInfo*>&
+ComputeDataModel::GetWorkloadList() const
 {
-    return m_workloads;
+    return m_ordered_workloads;
 }
 
 const WorkloadInfo*
@@ -78,6 +78,34 @@ ComputeDataModel::AddWorkload(WorkloadInfo& workload)
     uint32_t id = workload.id;
     m_workloads[id] = std::move(workload);
     OrderAvailableMetrics(m_workloads[id]);
+    OrderKernels(m_workloads[id]);
+    OrderWorkloads();
+}
+
+void
+ComputeDataModel::OrderKernels(WorkloadInfo& workload)
+{
+    workload.ordered_kernels.clear();
+    workload.ordered_kernels.reserve(workload.kernels.size());
+    for(const std::pair<const uint32_t, KernelInfo>& kernel_pair : workload.kernels)
+    {
+        workload.ordered_kernels.push_back(&kernel_pair.second);
+    }
+    std::sort(workload.ordered_kernels.begin(), workload.ordered_kernels.end(),
+              [](const KernelInfo* a, const KernelInfo* b) { return a->id < b->id; });
+}
+
+void
+ComputeDataModel::OrderWorkloads()
+{
+    m_ordered_workloads.clear();
+    m_ordered_workloads.reserve(m_workloads.size());
+    for(const std::pair<const uint32_t, WorkloadInfo>& workload_pair : m_workloads)
+    {
+        m_ordered_workloads.push_back(&workload_pair.second);
+    }
+    std::sort(m_ordered_workloads.begin(), m_ordered_workloads.end(),
+              [](const WorkloadInfo* a, const WorkloadInfo* b) { return a->id < b->id; });
 }
 
 void
@@ -272,6 +300,7 @@ ComputeDataModel::Clear()
 {
     ClearAllMetricValues();
     m_workloads.clear();
+    m_ordered_workloads.clear();
     m_kernel_selection_table.Clear();
 }
 
@@ -434,11 +463,7 @@ ComputeDataModel::GetKernelInfoList(uint32_t workload_id) const
     std::vector<const KernelInfo*> kernel_info_list;
     if(m_workloads.count(workload_id))
     {
-        const WorkloadInfo& workload = m_workloads.at(workload_id);
-        for(const auto& kernel_pair : workload.kernels)
-        {
-            kernel_info_list.push_back(&kernel_pair.second);
-        }
+        kernel_info_list = m_workloads.at(workload_id).ordered_kernels;
     }
     return kernel_info_list;
 }

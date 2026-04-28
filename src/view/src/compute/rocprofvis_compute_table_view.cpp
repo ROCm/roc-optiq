@@ -99,14 +99,14 @@ ComputeTableView::RebuildTabs()
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
         return;
 
-    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();
-    if(!workloads.count(workload_id))
+    const WorkloadInfo* workload =
+        m_data_provider.ComputeModel().GetWorkload(workload_id);
+    if(!workload)
         return;
 
-    const auto& workload = workloads.at(workload_id);
     m_tabs = std::make_shared<TabContainer>();
     m_tabs->SetAllowToolTips(true);
-    for(const auto* cat : workload.available_metrics.ordered_categories)
+    for(const auto* cat : workload->available_metrics.ordered_categories)
     {
         auto widget = std::make_shared<RocCustomWidget>(
             [this, cat]() { RenderCategory(*cat); });
@@ -129,21 +129,21 @@ ComputeTableView::FetchAllMetrics()
         return;
     }
 
-    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();
-    if(!workloads.count(workload_id))
+    const WorkloadInfo* workload =
+        m_data_provider.ComputeModel().GetWorkload(workload_id);
+    if(!workload)
         return;
 
-    const auto& workload = workloads.at(workload_id);
     std::vector<uint32_t>                   kernel_ids = { kernel_id };
     std::vector<MetricsRequestParams::MetricID> metric_ids;
-    for(const auto* cat : workload.available_metrics.ordered_categories)
+    for(const auto* cat : workload->available_metrics.ordered_categories)
     {
         for(const auto* tbl : cat->ordered_tables)
             metric_ids.push_back({ cat->id, tbl->id, std::nullopt });
     }
 
     bool success = m_data_provider.FetchMetrics(
-        MetricsRequestParams(workload.id, kernel_ids, metric_ids, m_client_id));
+        MetricsRequestParams(workload->id, kernel_ids, metric_ids, m_client_id));
 
     if(!success)
     {
@@ -195,12 +195,11 @@ ComputeTableView::RebuildTableDataCache()
         return;
     }
 
-    const auto& workloads = model.GetWorkloads();
-    if(!workloads.count(workload_id))
+    const WorkloadInfo* workload = model.GetWorkload(workload_id);
+    if(!workload)
         return;
 
-    const auto& workload = workloads.at(workload_id);
-    for(const auto* cat : workload.available_metrics.ordered_categories)
+    for(const auto* cat : workload->available_metrics.ordered_categories)
     {
         for(const auto* tbl : cat->ordered_tables)
         {

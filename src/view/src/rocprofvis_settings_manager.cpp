@@ -645,6 +645,12 @@ SettingsManager::RemoveRecentFile(const std::string& file_path)
 }
 
 void
+SettingsManager::ClearRecentFiles()
+{
+    m_internalsettings.recent_files.clear();
+}
+
+void
 SettingsManager::SerializeInternalSettings(jt::Json& json)
 {
     jt::Json& is = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_INTERNAL];

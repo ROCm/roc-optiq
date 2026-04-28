@@ -320,9 +320,13 @@ main(int argc, char** argv)
                     // OS window position before user code runs, so
                     // hit-testing and rendering agree with reality when
                     // the window manager clamps our requested drag pos.
+                    // Call raise_dragged_viewport_after_release(), this is a fix
+                    // for the post-drag click-fall-through bug under
+                    // Xwayland/Mutter.
                     if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
                     {
                         snap_secondary_viewports_to_os_pos(g_viewport_intended_pos);
+                        raise_dragged_viewport_after_release();
                     }
 #endif
 

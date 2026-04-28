@@ -19,4 +19,7 @@ void
 restore_secondary_viewport_intended_pos(
     std::unordered_map<ImGuiID, ImVec2>& viewport_intended_pos);
 
+void
+raise_dragged_viewport_after_release();
+
 #endif

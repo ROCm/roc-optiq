@@ -3,6 +3,29 @@
 #    include "imgui.h"
 #    include <unordered_map>
 
+// Raw X11 access for repairing stacking order after a floating-window
+// drag.  GLFW's glfwFocusWindow() routes through _NET_ACTIVE_WINDOW,
+// which Mutter (GNOME) silently drops under focus-stealing-prevention
+// when the request doesn't match its idea of "recent user action" -- so
+// we bypass GLFW and call XRaiseWindow() directly.
+#    define GLFW_EXPOSE_NATIVE_X11
+#    include <GLFW/glfw3.h>
+#    include <GLFW/glfw3native.h>
+#    include <X11/Xatom.h>
+#    include <X11/Xlib.h>
+
+// File-static workaround state.  Owned here (not by the caller) because it
+// is purely a private implementation detail of the X11 stacking-order
+// repair: see raise_dragged_viewport_after_release() for the rationale.
+//
+// g_dragged_viewport_id holds the ID of the most recently snapped secondary
+// viewport observed while the left mouse button was down -- in practice the
+// floating window the user is dragging.  g_prev_mouse_left_down lets us
+// detect the release transition (down -> up) without leaning on any
+// internal ImGui drag state.
+static ImGuiID g_dragged_viewport_id  = 0;
+static bool    g_prev_mouse_left_down = false;
+
 // Snap every secondary viewport's Pos to its actual OS window position,
 // so hit-testing and rendering agree with what the user sees on screen.
 //
@@ -49,6 +72,7 @@ snap_secondary_viewports_to_os_pos(
         return;
     }
     viewport_intended_pos.clear();
+    const bool mouse_left_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     for(int i = 1; i < pio.Viewports.Size; ++i)
     {
         ImGuiViewport* vp = pio.Viewports[i];
@@ -67,6 +91,13 @@ snap_secondary_viewports_to_os_pos(
         // corrected Pos into the owning ImGuiWindow (window->Pos =
         // viewport->Pos), which is what hit-testing actually uses.
         vp->PlatformRequestMove = true;
+        // Snapping while the mouse is held strongly implies an active
+        // drag of this viewport.  Remember it so the post-release hook
+        // can raise its OS window back to the top of the X11 stack.
+        if(mouse_left_down)
+        {
+            g_dragged_viewport_id = vp->ID;
+        }
     }
 }
 
@@ -96,5 +127,75 @@ restore_secondary_viewport_intended_pos(
         vp->PlatformRequestMove = false;
     }
     viewport_intended_pos.clear();
+}
+
+
+// Repair X11 pointer routing after a floating-window drag.
+//
+// Symptom: dragging a secondary (external) viewport and then clicking
+// on it again routes the click to whatever sits beneath it (the
+// underlying window of our app or another app).  The give-away tell
+// is that immediately after the drag the cursor glyph reflects the
+// underlying window (e.g. a text caret from an editor below) and
+// tooltips fire on the underlying window even though the cursor sits
+// visually over ours.
+//
+// Cause: X11 only fires EnterNotify/LeaveNotify on **cursor** motion,
+// not on **window** motion.  During the drag, ImGui issues
+// glfwSetWindowPos every frame, so the floating window briefly slips
+// out from under the stationary cursor at some point.  X11 emits a
+// LeaveNotify for our window and EnterNotify for the underlying one;
+// pointer focus latches onto the underlying.  When the drag ends the
+// floating window is back on top, but the cursor has not moved, so
+// X11 never re-evaluates containment -- pointer focus stays on the
+// underlying and the next click is routed there.  This is independent
+// of (visual) stacking, so even with _NET_WM_STATE_ABOVE applied to
+// the floating window, pointer routing remains stale.
+//
+// Less invasive approaches we tried but found ineffective under
+// Xwayland/Mutter:
+//   * glfwFocusWindow() -- routes through _NET_ACTIVE_WINDOW which
+//     Mutter drops under focus-stealing-prevention.
+//   * XRaiseWindow() -- restacks correctly but stacking was already
+//     fine; the bug is purely stale pointer-window association.
+//   * XWarpPointer() -- silently dropped under Xwayland pointer-warp
+//     restrictions when the destination surface isn't focused.
+//   * XGrabPointer + XUngrabPointer -- grab is silently rejected /
+//     does not refresh pointer-window association on ungrab.
+//
+// Working fix: unmap + remap the floating window (XUnmapWindow +
+// XMapWindow, sequenced via glfwHide/ShowWindow).  Mutter treats the
+// remap as the window appearing fresh and rebuilds pointer-window
+// association from scratch.  Causes a sub-frame flicker but reliably
+// repairs the routing.
+void
+raise_dragged_viewport_after_release()
+{
+    const bool curr_mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    if(g_prev_mouse_left_down && !curr_mouse_down && g_dragged_viewport_id != 0)
+    {
+        ImGuiViewport* vp = ImGui::FindViewportByID(g_dragged_viewport_id);
+        if(vp != nullptr && vp->PlatformWindowCreated &&
+           vp->PlatformHandle != nullptr)
+        {
+            GLFWwindow* glfw_win = static_cast<GLFWwindow*>(vp->PlatformHandle);
+            // Capture position in case Mutter re-places the window on
+            // map; restore it explicitly to be safe.
+            int pos_x = 0, pos_y = 0;
+            glfwGetWindowPos(glfw_win, &pos_x, &pos_y);
+            glfwHideWindow(glfw_win);
+            glfwShowWindow(glfw_win);
+            glfwSetWindowPos(glfw_win, pos_x, pos_y);
+            // Final XSync so the unmap/map/move round-trip completes
+            // before the next pointer/click event is dispatched.
+            Display* display = glfwGetX11Display();
+            if(display != nullptr)
+            {
+                XSync(display, False);
+            }
+        }
+        g_dragged_viewport_id = 0;
+    }
+    g_prev_mouse_left_down = curr_mouse_down;
 }
 #endif

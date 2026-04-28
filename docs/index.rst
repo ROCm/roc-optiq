@@ -29,10 +29,13 @@ New visualization features for analysis data include:
 - Kernel Details - Kernel Selection Table: Added a bar chart visualization for values of metrics and a tooltip feature for displaying kernels' full names. 
 - Baseline Comparison: Enables you to compare two workload measurements (baseline vs. target) side-by-side in a unified table. It helps to quickly spot regressions, improvements, and behavior changes. It highlights per-metric deltas (including percentage change) to make the performance impact easy to quantify. 
 - Added support for ROCm compute profiler's database schema 1.3 and related performance improvements. 
+- Presets: Save and recall pinned metric configurations for Table View and Baseline Comparison.
+- New context menu to add metrics to Kernel Selection Table from Table View.
+- Configurable delta-threshold control for Baseline Comparison.
 
 Other new features: 
 
-- Data clean-up: Remove metadata added by ROCm Optiq in a database file. 
+- Data clean-up: Enables removal of metadata added by ROCm Optiq in a database file. 
 - Command-line interface support. 
 - OpenGL backend as a fallback when Vulkan is unavailable; optional software rendering path; command-line option to force a specific graphics backend. 
 - Dear ImGui updated (docking-capable line, ImPlot aligned); Linux session defaults to X11 for compatibility. 
@@ -45,7 +48,7 @@ Changed
 Changes in viewing analysis data include: 
 
 - The legend can be repositioned in the Roofline charts section of the Summary View and Kernel Details; it includes multi-workload chart fixes and top-kernels presentation updates. 
-- Kernel Details – Kernel Selection Table updates: Added mini-graphs in cells, pinned title/header improvements, and a global toggle for inline charts. Added a tooltip for displaying clipped names and adjusted the name-column sizing to free space for metrics. 
+- Kernel Details updates: Added mini-graphs in cells, pinned title/header improvements, and a global toggle for inline charts. Added a tooltip for displaying clipped names and adjusted the name-column sizing to free space for metrics. 
 
 Changes in viewing trace data include: 
 
@@ -56,8 +59,9 @@ Changes in viewing trace data include:
 
 Navigation and inspection:  
 
-- Go-to-event behavior across tables, flow panel, and call stack panel. Double-click or context menu to open the event on the timeline, with vertical track centering and highlight feedback.  
-- Highlight-on-navigate with a dedicated event path, pulsing indicator, and timed auto-clear; selection and highlight handled independently 
+- Go To Event behavior across tables and Flow Data panel, you can double-click or use context menu to open the event on the timeline, with vertical track centering and highlight feedback.
+- Highlight-on-navigate with a dedicated event path, pulsing indicator, and timed auto-clear; selection and highlight handled independently.
+- Callstack experience improvements. 
 
 .. tip::
 

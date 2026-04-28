@@ -121,11 +121,15 @@ Navigate the Timeline
 
 You can pan and scroll through the **Timeline View** using the scrollbars or by dragging your mouse across the **Graph** area of the **Timeline View**.
 
-The **WASD** and arrow keys can be also used to zoom and pan the view:
+The hotkeys (**WASD** and arrow keys) can be also used to zoom and pan the view:
 
 - **W** / **S**: Zoom in and out, respectively.
 - **A** or **Left Arrow** / **D** or **Right Arrow**: Pan left and right, respectively.
 - **Up Arrow** / **Down Arrow**: Scroll the track list up and down.
+
+.. note::
+
+   See :ref:`change-settings` to customize these hotkeys.
 
 Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
 Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
@@ -195,7 +199,7 @@ This section provides an interface for multiple data perspectives, offering gran
   .. tip::
 
      - Right-click on the column headers to show/hide columns, size a column to fit, or size all columns to fit your screen.
-     - Right-click on a table row and select **Go to event** to navigate to the **Timeline View** to the highlighted event.
+     - Right-click on a table row and select **Go To Event** to navigate to the **Timeline View** to the highlighted event.
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.

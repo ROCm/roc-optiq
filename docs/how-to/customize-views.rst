@@ -14,15 +14,21 @@ Customize your ROCm Optiq project
 .. |reset| image:: ../images/reset.png
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
+.. |plus| image:: ../images/plus.png
+.. |recall| image:: ../images/recall.png
+.. |overwrite| image:: ../images/overwrite.png
+.. |delete| image:: ../images/delete.png
 
 You can customize display settings, filters, bookmarks, and more in your ROCm Optiq projects.
 
-Change display settings
-=======================
+.. _change-settings:
 
-You can adjust the display settings in your ROCm Compute Profiler and ROCm Systems Profiler projects.
+Change settings
+===============
 
-Select **Edit** > **Preferences** to adjust these global display settings for ROCm Optiq from the **Settings** menu: 
+You can adjust the settings in your ROCm Compute Profiler and ROCm Systems Profiler projects.
+
+Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq from the **Settings** menu: 
 
 - The application theme display (Light or Dark mode).
 - The font scaling: automatic based on the display DPI, or customized using the font size control:
@@ -32,8 +38,10 @@ Select **Edit** > **Preferences** to adjust these global display settings for RO
 
 - The time unit settings displayed on the **Timeline View**.
 
-  .. image:: ../images/units.png
+  .. image:: ../images/hotkeys.png
      :width: 600
+
+- The hotkey settings provide configurable keyboard shortcuts with conflict prevention, safe rebinding rules, and consistent modifier handling to enable reliable, efficient keyboard-driven workflows.
 
 Show/hide panels
 ================
@@ -209,3 +217,24 @@ Data Cleanup in a project file
 
 You can remove metadata added by ROCm Optiq during processing trace data by selecting **File > Database > Full Cleanup**.
 
+.. image:: ../images/cleanup.png
+   :width: 600
+
+Customize ROCm Optiq projects for ROCm Compute Profiler Analysis Data
+=====================================================================
+
+.. _presets:
+
+Presets
+-------
+
+Persist the pinned metric configurations for the Table View and Baseline Comparison by saving them as a preset. To do this, go to **Presets**, enter a preset name into the **New Preset Name** field, then click |plus|.
+
+.. image:: ../images/presets.png
+   :width: 600
+
+After a preset is saved you can:
+
+- Recall it by clicking |recall| in the preset's row
+- Overwrite it by clicking |overwrite|
+- Delete it by clicking |delete|  

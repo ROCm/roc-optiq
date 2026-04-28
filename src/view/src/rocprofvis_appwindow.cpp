@@ -774,6 +774,11 @@ AppWindow::RenderFileMenu(Project* project)
                     break;
                 }
             }
+            ImGui::Separator();
+            if(ImGui::MenuItem("Clear Recent Files"))
+            {
+                SettingsManager::GetInstance().ClearRecentFiles();
+            }
             ImGui::EndMenu();
         }
         ImGui::Separator();

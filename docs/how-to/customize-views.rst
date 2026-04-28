@@ -38,10 +38,13 @@ Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq
 
 - The time unit settings displayed on the **Timeline View**.
 
-  .. image:: ../images/hotkeys.png
+  .. image:: ../images/units.png
      :width: 600
 
 - The hotkey settings provide configurable keyboard shortcuts with conflict prevention, safe rebinding rules, and consistent modifier handling to enable reliable, efficient keyboard-driven workflows.
+
+  .. image:: ../images/hotkeys.png
+     :width: 600
 
 Show/hide panels
 ================
@@ -218,7 +221,7 @@ Data Cleanup in a project file
 You can remove metadata added by ROCm Optiq during processing trace data by selecting **File > Database > Full Cleanup**.
 
 .. image:: ../images/cleanup.png
-   :width: 600
+   :width: 300
 
 Customize ROCm Optiq projects for ROCm Compute Profiler Analysis Data
 =====================================================================

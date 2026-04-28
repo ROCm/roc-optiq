@@ -234,7 +234,7 @@ Presets
 Persist the pinned metric configurations for the Table View and Baseline Comparison by saving them as a preset. To do this, go to **Presets**, enter a preset name into the **New Preset Name** field, then click |plus|.
 
 .. image:: ../images/presets.png
-   :width: 600
+   :width: 300
 
 After a preset is saved you can:
 

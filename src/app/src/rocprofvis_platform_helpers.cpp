@@ -1,18 +1,47 @@
 #ifdef __linux__
 
 #    include "imgui.h"
+#    include <cstdlib>
+#    include <cstring>
 #    include <unordered_map>
 
-// Raw X11 access for repairing stacking order after a floating-window
-// drag.  GLFW's glfwFocusWindow() routes through _NET_ACTIVE_WINDOW,
-// which Mutter (GNOME) silently drops under focus-stealing-prevention
-// when the request doesn't match its idea of "recent user action" -- so
-// we bypass GLFW and call XRaiseWindow() directly.
+// Raw X11 access for repairing pointer-window association after a
+// floating-window drag under Xwayland.  GLFW's glfwFocusWindow() routes
+// through _NET_ACTIVE_WINDOW, which Mutter (GNOME) silently drops under
+// focus-stealing-prevention when the request doesn't match its idea of
+// "recent user action" -- so we bypass GLFW and call XSync() / XMap-
+// related primitives directly.
 #    define GLFW_EXPOSE_NATIVE_X11
 #    include <GLFW/glfw3.h>
 #    include <GLFW/glfw3native.h>
 #    include <X11/Xatom.h>
 #    include <X11/Xlib.h>
+
+// All workarounds in this file address bugs that only manifest when an
+// X11 client (us) runs against an Xwayland server hosted by a Wayland
+// compositor -- specifically GNOME's Mutter, which (a) silently clamps
+// XMoveWindow requests near screen edges without sending a corrective
+// ConfigureNotify, and (b) does not refresh pointer-window association
+// during programmatic XMoveWindow bursts.  Native X11 sessions do not
+// exhibit either bug (X server handles both correctly), so on RHEL/
+// Fedora/X11-on-Ubuntu/etc. the helpers below are a no-op.
+//
+// Detected via the standard freedesktop session env vars; result is
+// cached because env vars do not change for the lifetime of a process.
+static bool
+is_wayland_session()
+{
+    static const bool cached = []() {
+        const char* wd = std::getenv("WAYLAND_DISPLAY");
+        if(wd != nullptr && wd[0] != '\0')
+        {
+            return true;
+        }
+        const char* st = std::getenv("XDG_SESSION_TYPE");
+        return st != nullptr && std::strcmp(st, "wayland") == 0;
+    }();
+    return cached;
+}
 
 // File-static workaround state.  Owned here (not by the caller) because it
 // is purely a private implementation detail of the X11 stacking-order
@@ -66,6 +95,10 @@ void
 snap_secondary_viewports_to_os_pos(
     std::unordered_map<ImGuiID, ImVec2>& viewport_intended_pos)
 {
+    if(!is_wayland_session())
+    {
+        return;
+    }
     ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
     if(pio.Platform_GetWindowPos == nullptr)
     {
@@ -110,6 +143,9 @@ void
 restore_secondary_viewport_intended_pos(
     std::unordered_map<ImGuiID, ImVec2>& viewport_intended_pos)
 {
+    // Cheap fast-path: native X11 never populates the map, so no
+    // explicit is_wayland_session() check is required here -- this
+    // early-return covers it.
     if(viewport_intended_pos.empty())
     {
         return;
@@ -168,9 +204,16 @@ restore_secondary_viewport_intended_pos(
 // remap as the window appearing fresh and rebuilds pointer-window
 // association from scratch.  Causes a sub-frame flicker but reliably
 // repairs the routing.
+//
+// Native X11 sessions (no compositor / X11-only WMs on RHEL, Fedora,
+// etc.) do not exhibit this bug, so we early-return on those.
 void
 raise_dragged_viewport_after_release()
 {
+    if(!is_wayland_session())
+    {
+        return;
+    }
     const bool curr_mouse_down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     if(g_prev_mouse_left_down && !curr_mouse_down && g_dragged_viewport_id != 0)
     {

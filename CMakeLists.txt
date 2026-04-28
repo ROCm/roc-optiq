@@ -235,6 +235,21 @@ target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
+# Linux: link libX11 directly so the Xwayland-specific platform helpers
+# (rocprofvis_platform_helpers.cpp) can call XSync / Xlib symbols.  Use
+# the X11::X11 imported target rather than the legacy ${X11_LIBRARIES}
+# variable -- the variable does not always include libX11 itself in
+# the link interface on RHEL/Fedora, and combined with the linker's
+# default --as-needed produces:
+#   "/usr/lib64/libX11.so.6: error adding symbols: DSO missing from
+#    command line"
+# even though libX11 is reachable transitively through GLFW.  The
+# imported target is portable across distributions (CMake >= 3.14).
+if(UNIX AND NOT APPLE)
+    find_package(X11 REQUIRED)
+    target_link_libraries(${TARGET_NAME} PRIVATE X11::X11)
+endif()
+
 if(APPLE)
     set_target_properties(${TARGET_NAME} PROPERTIES
         BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"

@@ -33,7 +33,7 @@ static constexpr float BLOCK_ROUNDING    = 8.0f;
 static constexpr float BLOCK_TEXT_PAD    = 10.0f;
 static constexpr float ROW_HEIGHT        = 20.0f;
 static constexpr float HEADER_SEP_GAP    = 6.0f;
-static constexpr float METRIC_VALUE_X_RATIO = 0.58f;
+static constexpr float METRIC_VALUE_X_RATIO = 0.54f;
 
 static constexpr float ARROW_THICKNESS   = 2.0f;
 static constexpr float ARROW_HEAD_SIZE   = 5.0f;
@@ -634,7 +634,7 @@ ComputeMemoryChartView::DrawLDS(ImDrawList* draw_list, ImVec2 origin)
 
     cursor_y =
         DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Util:", LDS_UTIL, "%");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", LDS_LATENCY,
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", LDS_LATENCY,
                              "cycles");
 }
 
@@ -652,9 +652,9 @@ ComputeMemoryChartView::DrawVectorL1(ImDrawList* draw_list, ImVec2 origin)
 
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", VL1_HIT, "%");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", MEMCHART_METRIC_NA, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", MEMCHART_METRIC_NA, "cycles");
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Coales:", VL1_COALESCE, "%");
+                             "Coalescing:", VL1_COALESCE, "%");
     cursor_y =
         DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Stall:", VL1_STALL, "%");
 }
@@ -674,7 +674,7 @@ ComputeMemoryChartView::DrawScalarL1D(ImDrawList* draw_list, ImVec2 origin)
     cursor_y =
         DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", SL1D_HIT, "%");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", SL1D_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", SL1D_LAT, "cycles");
 }
 
 void
@@ -691,7 +691,7 @@ ComputeMemoryChartView::DrawInstrL1(ImDrawList* draw_list, ImVec2 origin)
 
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", IL1_HIT, "%");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", IL1_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", IL1_LAT, "cycles");
 }
 
 void

@@ -32,9 +32,7 @@ ComputeTableView::ComputeTableView(
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
-        {
             RebuildTabs();
-        }
     };
 
     m_workload_selection_changed_token = EventManager::GetInstance()->Subscribe(
@@ -87,6 +85,8 @@ ComputeTableView::~ComputeTableView()
 void
 ComputeTableView::RebuildTabs()
 {
+    if(m_tabs)
+        m_active_tab_id = m_tabs->GetActiveTab()->m_id;
     m_tabs.reset();
     m_table_widgets.clear();
     m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
@@ -108,6 +108,7 @@ ComputeTableView::RebuildTabs()
             [this, cat]() { RenderCategory(*cat); });
         m_tabs->AddTab({ cat->name, cat->name, widget, false });
     }
+    m_tabs->SetActiveTab(m_active_tab_id);
 }
 
 void

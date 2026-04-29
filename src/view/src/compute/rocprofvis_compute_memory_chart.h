@@ -88,8 +88,8 @@ enum MemChartMetric
     HBM_RD,
     HBM_WR,
 
-    // Chart-only placeholder for fields displayed by the diagram but absent
-    // from the cleaned 3.1 Memory Chart metric table.
+    // Chart-only placeholder for rows that intentionally display N/A instead
+    // of looking up a metric value.
     MEMCHART_METRIC_NA,
     MEMCHART_METRIC_COUNT = MEMCHART_METRIC_NA  // sentinel: total number of chart slots
 };

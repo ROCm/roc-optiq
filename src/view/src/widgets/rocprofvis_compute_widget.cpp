@@ -60,11 +60,13 @@ MetricTableBase::Render()
 
     if(ImGui::BeginChild(RocWidget::GenUniqueName(child_id).c_str(),
                          ImVec2(0, GetTableHight()), false,
-                         ImGuiWindowFlags_HorizontalScrollbar))
+                         ImGuiWindowFlags_NoScrollbar))
     {
         if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
-                             m_table_flags))
+                             m_table_flags, ImGui::GetContentRegionAvail()))
         {
+            ImGui::TableSetupScrollFreeze(0, 1);
+
             for (const auto& column : m_columns)
             {
                 if (column.first == 0)
@@ -349,7 +351,10 @@ MetricTable::RenderEmptyTable()
 
 MetricTable::MetricTable(std::string event_source_id)
 : MetricTableBase(std::move(event_source_id))
-{}
+{
+    m_table_flags |= ImGuiTableFlags_ScrollY;
+    m_max_rows_in_table = 15;
+}
 
 void
 MetricTable::Populate(const AvailableMetrics::Table& table,

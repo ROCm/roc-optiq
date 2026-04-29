@@ -207,7 +207,7 @@ Metrics are grouped into tabs that match compute categories, including:
 - L2 Cache 
 - L2 Cache (per channel) 
 
-To pin a metric for focused analysis, right-click the metric and select **Pin metric**. You can pin a metric for focused analysis by toggling it. Pinned metric configurations can be saved to be persisted across sessions (see :ref:`Presets` for more information).
+You can pin a metric for focused analysis by toggling it. Pinned metric configurations can be saved to be persisted across sessions (see :ref:`Presets` for more information).
 
 You can add a metric to the Kernel Details by right-clicking that metric in Table View and selecting **Send Metric to kernel details**. 
 Here's an example:
@@ -261,7 +261,7 @@ For each metric, **Baseline Comparison** shows:
 - Target statistics available in the database (for example, average, median, minimum, and maximum). 
 - The difference (delta) between baseline and target values. 
 - The percentage change between baseline and target values. 
-- The **Baseline**, **Target**, **Difference**, and **Difference (%)** columns. They're color-coded to make changes easy to spot and quantify.
+- The **Baseline**, **Target Difference**, and **Difference (%)** columns. They're color-coded to make changes easy to spot and quantify.
 - A combination of side-by-side statistics with clear delta reporting to provide a fast way to understand performance trends across workloads.
 
 You can configure a delta-threshold for comparison metrics to suppress the noise of minor deviations or filter out changes below a certain level.

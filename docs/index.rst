@@ -47,7 +47,7 @@ Changed
 
 Changes in viewing analysis data include: 
 
-- The legend can be repositioned in the Roofline charts section of the Summary View and Kernel Details; it includes multi-workload chart fixes and top-kernels presentation updates. 
+- Roofline charts for Summary View and Kernel Details: legend can be repositioned; aspect ratio follows the window; multi-workload chart fixes and top-kernels presentation updates.
 - Kernel Details updates: Added mini-graphs in cells, pinned title/header improvements, and a global toggle for inline charts. Added a tooltip for displaying clipped names and adjusted the name-column sizing to free space for metrics. 
 
 Changes in viewing trace data include: 

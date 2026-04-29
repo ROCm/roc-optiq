@@ -5,17 +5,7 @@
 #    include <cstring>
 #    include <unordered_map>
 
-// Raw X11 access for repairing pointer-window association after a
-// floating-window drag under Xwayland.  GLFW's glfwFocusWindow() routes
-// through _NET_ACTIVE_WINDOW, which Mutter (GNOME) silently drops under
-// focus-stealing-prevention when the request doesn't match its idea of
-// "recent user action" -- so we bypass GLFW and call XSync() / XMap-
-// related primitives directly.
-#    define GLFW_EXPOSE_NATIVE_X11
 #    include <GLFW/glfw3.h>
-#    include <GLFW/glfw3native.h>
-#    include <X11/Xatom.h>
-#    include <X11/Xlib.h>
 
 // All workarounds in this file address bugs that only manifest when an
 // X11 client (us) runs against an Xwayland server hosted by a Wayland
@@ -229,13 +219,6 @@ raise_dragged_viewport_after_release()
             glfwHideWindow(glfw_win);
             glfwShowWindow(glfw_win);
             glfwSetWindowPos(glfw_win, pos_x, pos_y);
-            // Final XSync so the unmap/map/move round-trip completes
-            // before the next pointer/click event is dispatched.
-            Display* display = glfwGetX11Display();
-            if(display != nullptr)
-            {
-                XSync(display, False);
-            }
         }
         g_dragged_viewport_id = 0;
     }

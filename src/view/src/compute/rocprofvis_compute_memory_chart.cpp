@@ -150,6 +150,7 @@ ComputeMemoryChartView::~ComputeMemoryChartView() {}
 const char*
 ComputeMemoryChartView::GetMetricText(MemChartMetric metric) const
 {
+    if(metric == MEMCHART_METRIC_NA) return "N/A";
     if(metric >= 0 && metric < MEMCHART_METRIC_COUNT)
         return m_values[metric].c_str();
     return "-";
@@ -321,10 +322,11 @@ ComputeMemoryChartView::DrawMetricRow(ImDrawList* draw_list, float block_x, floa
                         label, metric_id, true, false);
 
     float value_x = block_x + block_w * 0.48f;
-    if(unit[0] != '\0')
+    const char* metric_text = GetMetricText(metric_id);
+    if(unit[0] != '\0' && metric_id != MEMCHART_METRIC_NA)
     {
         char text_buf[64];
-        snprintf(text_buf, sizeof(text_buf), "%s %s", GetMetricText(metric_id), unit);
+        snprintf(text_buf, sizeof(text_buf), "%s %s", metric_text, unit);
         DrawTextWithTooltip(draw_list, {value_x, cursor_y},
                             Settings().GetColor(Colors::kTextMain),
                             text_buf, metric_id, false, true);
@@ -333,7 +335,7 @@ ComputeMemoryChartView::DrawMetricRow(ImDrawList* draw_list, float block_x, floa
     {
         DrawTextWithTooltip(draw_list, {value_x, cursor_y},
                             Settings().GetColor(Colors::kTextMain),
-                            GetMetricText(metric_id), metric_id, false, true);
+                            metric_text, metric_id, false, true);
     }
     return cursor_y + ROW_HEIGHT;
 }
@@ -639,7 +641,7 @@ ComputeMemoryChartView::DrawVectorL1(ImDrawList* draw_list, ImVec2 origin)
 
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", VL1_HIT, "%");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", VL1_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", MEMCHART_METRIC_NA, "cycles");
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
                              "Coales:", VL1_COALESCE, "%");
     cursor_y =
@@ -702,9 +704,9 @@ ComputeMemoryChartView::DrawL2(ImDrawList* draw_list, ImVec2 origin)
     cursor_y = DrawBlockHeader(draw_list, "Latency",
                                block_x, cursor_y - BLOCK_TEXT_PAD, block.w);
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", L2_RD_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", MEMCHART_METRIC_NA, "cycles");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", L2_WR_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", MEMCHART_METRIC_NA, "cycles");
 }
 
 void

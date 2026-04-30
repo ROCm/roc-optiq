@@ -429,8 +429,10 @@ ComputeMemoryChartView::Render()
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetCursorScreenPos();
+    float       backdrop_w =
+        std::max(canvas_w, ImGui::GetContentRegionAvail().x + ImGui::GetScrollX());
 
-    DrawChartBackdrop(draw_list, window_position, canvas_w, canvas_h);
+    DrawChartBackdrop(draw_list, window_position, backdrop_w, canvas_h);
 
     // -----------------------------------------------------------------
     // Draw every block

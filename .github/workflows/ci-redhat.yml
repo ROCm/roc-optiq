@@ -17,15 +17,15 @@ on:
         type: string
         default: 'Linux Release Build'
       enable_internal_banner:
-        description: 'Boolean to enable/disable the internal banner'
+        description: 'Enable the internal banner?'
         type: boolean
         default: false
       upload_to_github:
-        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
         default: false
       upload_to_s3:
-        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
   workflow_call:
@@ -43,15 +43,15 @@ on:
         type: string
         default: 'Linux Release Build'
       enable_internal_banner:
-        description: 'Boolean to enable/disable the internal banner'
+        description: 'Enable the internal banner?'
         type: boolean
         default: false
       upload_to_github:
-        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
         default: false
       upload_to_s3:
-        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
 

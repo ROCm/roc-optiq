@@ -143,117 +143,148 @@ MultiTrackTable::Render()
 #endif
     }
 
-    ImGui::BeginGroup();
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x, style.WindowPadding.y * 0.75f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::BeginChild("##table_filter_panel", ImVec2(0.0f, 0.0f),
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                          ImGuiChildFlags_AlwaysUseWindowPadding);
 
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Aggregate by Column:");
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Group Columns");
-#endif
-
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Filter:");
-    ImGui::EndGroup();
-
-    ImGui::SameLine();
-
-    ImGui::BeginGroup();
-    ImGui::SetNextItemAllowOverlap();
-    if(ImGui::Combo("##group_by", &m_group_by_selection_index,
-                    m_group_by_choices_ptr.data(),
-                    static_cast<int>(m_group_by_choices_ptr.size())))
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
+                        ImVec2(style.FramePadding.x, style.ItemSpacing.y * 0.35f));
+    if(ImGui::BeginTable("##table_filter_controls", 4,
+                         ImGuiTableFlags_SizingStretchProp |
+                             ImGuiTableFlags_NoSavedSettings))
     {
-        if(m_group_by_selection_index == 0)
-        {
-            m_pending_filter_options.group_by = "";
-        }
-        else
-        {
-            m_pending_filter_options.group_by =
-                m_group_by_choices_ptr[m_group_by_selection_index];
-        }
-    }
+        ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFontSize() * 10.0f);
+        ImGui::TableSetupColumn("control", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("clear", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight());
+        ImGui::TableSetupColumn("submit", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFontSize() * 7.5f);
 
-    if(m_pending_filter_options.group_by != "")
-    {
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFrameHeightWithSpacing() -
-                             ImGui::GetFontSize());
-        if(XButton("clear_group"))
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Aggregate");
+
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if(ImGui::Combo("##group_by", &m_group_by_selection_index,
+                        m_group_by_choices_ptr.data(),
+                        static_cast<int>(m_group_by_choices_ptr.size())))
+        {
+            if(m_group_by_selection_index == 0)
+            {
+                m_pending_filter_options.group_by = "";
+            }
+            else
+            {
+                m_pending_filter_options.group_by =
+                    m_group_by_choices_ptr[m_group_by_selection_index];
+            }
+        }
+
+        ImGui::TableNextColumn();
+        if(m_pending_filter_options.group_by != "" && XButton("clear_group"))
         {
             m_pending_filter_options.group_by = "";
             m_group_by_selection_index        = 0;
         }
-    }
+
+        ImGui::TableNextColumn();
+        if(ImGui::Button("Submit", ImVec2(-FLT_MIN, 0.0f)))
+        {
+            m_filter_requested = true;
+
+            if(m_group_by_selection_index == 0)
+            {
+                if(m_filter_store[0] != '\0')
+                {
+                    // restore previous filter
+                    snprintf(m_pending_filter_options.filter,
+                             IM_ARRAYSIZE(m_pending_filter_options.filter), "%s",
+                             m_filter_store);
+                    m_filter_store[0] = '\0';
+                }
+            }
+            else
+            {
+                if(m_pending_filter_options.filter[0] != '\0')
+                {
+                    // backup current filter
+                    snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s",
+                             m_pending_filter_options.filter);
+                    // clear filter when group by is selected
+                    m_pending_filter_options.filter[0] = '\0';
+                }
+            }
+        }
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-    ImGui::SetNextItemAllowOverlap();
-    ImGui::BeginDisabled(m_filter_options.group_by == "");
-    ImGui::InputTextWithHint(
-        "##group_columns",
-        "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
-        "MIN(duration) as min_duration, MAX(duration) as max_duration",
-        m_pending_filter_options.group_columns,
-        IM_ARRAYSIZE(m_pending_filter_options.group_columns));
-    if(strlen(m_pending_filter_options.group_columns) > 0)
-    {
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
-        if(XButton("clear_group_columns"))
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Group columns");
+
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::BeginDisabled(m_filter_options.group_by == "");
+        ImGui::InputTextWithHint(
+            "##group_columns",
+            "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+            "MIN(duration) as min_duration, MAX(duration) as max_duration",
+            m_pending_filter_options.group_columns,
+            IM_ARRAYSIZE(m_pending_filter_options.group_columns));
+        ImGui::EndDisabled();
+
+        ImGui::TableNextColumn();
+        ImGui::BeginDisabled(m_filter_options.group_by == "");
+        if(strlen(m_pending_filter_options.group_columns) > 0 &&
+           XButton("clear_group_columns"))
         {
             m_pending_filter_options.group_columns[0] = '\0';
         }
-    }
-    ImGui::EndDisabled();
+        ImGui::EndDisabled();
+        ImGui::TableNextColumn();
 #endif
 
-    ImGui::SetNextItemAllowOverlap();
-    // Filter disabled when "group by" is selected
-    ImGui::BeginDisabled(m_filter_options.group_by != "");
-    ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
-                             m_pending_filter_options.filter,
-                             IM_ARRAYSIZE(m_pending_filter_options.filter));
-    if(strlen(m_pending_filter_options.filter) > 0)
-    {
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
-        if(XButton("clear_filters"))
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Filter");
+
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        // Filter disabled when "group by" is selected
+        ImGui::BeginDisabled(m_filter_options.group_by != "");
+        ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
+                                 m_pending_filter_options.filter,
+                                 IM_ARRAYSIZE(m_pending_filter_options.filter));
+        ImGui::EndDisabled();
+
+        ImGui::TableNextColumn();
+        ImGui::BeginDisabled(m_filter_options.group_by != "");
+        if(strlen(m_pending_filter_options.filter) > 0 && XButton("clear_filters"))
         {
             m_pending_filter_options.filter[0] = '\0';
         }
-    }
-    ImGui::EndDisabled();
+        ImGui::EndDisabled();
+        ImGui::TableNextColumn();
 
-    ImGui::EndGroup();
-    ImGui::SameLine();
-    if(ImGui::Button("Submit", ImVec2(0, ImGui::GetItemRectSize().y)))
-    {
-        m_filter_requested = true;
-
-        if(m_group_by_selection_index == 0)
-        {
-            if(m_filter_store[0] != '\0')
-            {
-                // restore previous filter
-                snprintf(m_pending_filter_options.filter,
-                         IM_ARRAYSIZE(m_pending_filter_options.filter), "%s",
-                         m_filter_store);
-                m_filter_store[0] = '\0';
-            }
-        }
-        else
-        {
-            if(m_pending_filter_options.filter[0] != '\0')
-            {
-                // backup current filter
-                snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s",
-                         m_pending_filter_options.filter);
-                // clear filter when group by is selected
-                m_pending_filter_options.filter[0] = '\0';
-            }
-        }
+        ImGui::EndTable();
     }
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+
+    ImGui::Spacing();
     InfiniteScrollTable::Render();
     RenderContextMenu();
 }

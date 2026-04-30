@@ -23,20 +23,29 @@ AnnotationView::~AnnotationView() {}
 void
 AnnotationView::Render()
 {
-    ImGui::BeginChild("Annotations");
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+    ImGui::BeginChild("Annotations", ImVec2(0, 0), ImGuiChildFlags_Borders);
 
     if(m_annotations->GetStickyNotes().empty())
     {
-        ImGui::Text("No annotations.");
+        ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
+        ImGui::TextDisabled("No annotations.");
     }
     else if(ImGui::BeginTable("StickyNotesTable", 4,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+                              ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
+                                  ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
+                                  ImGuiTableFlags_SizingStretchProp))
     {
         ImGui::TableSetupColumn("Title");
         ImGui::TableSetupColumn("Text");
-        ImGui::TableSetupColumn("Time (ns)");
-
-        ImGui::TableSetupColumn("Visibility");
+        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFontSize() * 12.0f);
+        ImGui::TableSetupColumn("Visible", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFontSize() * 5.5f);
         ImGui::TableHeadersRow();
 
         double trace_start_time =
@@ -71,14 +80,15 @@ AnnotationView::Render()
             if(is_selected)
             {
                 ImGui::PushStyleColor(ImGuiCol_Header,
-                                      ImGui::GetStyleColorVec4(ImGuiCol_TableRowBg));
+                                      settings.GetColor(Colors::kSelection));
                 ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                                      ImGui::GetStyleColorVec4(ImGuiCol_TableRowBg));
+                                      settings.GetColor(Colors::kSelection));
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                                      ImGui::GetStyleColorVec4(ImGuiCol_TableRowBg));
+                                      settings.GetColor(Colors::kSelection));
             }
             std::string selectable_label =
-                note.GetTitle() + "##sticky_note_" + std::to_string(note.GetID());
+                (note.GetTitle().empty() ? "Untitled" : note.GetTitle()) +
+                "##sticky_note_" + std::to_string(note.GetID());
 
             if(ImGui::Selectable(selectable_label.c_str(), is_selected,
                                  ImGuiSelectableFlags_SpanAllColumns |
@@ -118,6 +128,8 @@ AnnotationView::Render()
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar();
 }
 
 }  // namespace View

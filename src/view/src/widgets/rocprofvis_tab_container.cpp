@@ -97,9 +97,12 @@ TabContainer::Render()
 
     // Modern app-style tab strip: tinted band so the active tab visibly
     // "lifts" out as the canvas color underneath.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 8));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 4));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14, 7));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x + 2.0f, style.WindowPadding.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(style.ItemSpacing.x * 0.6f, style.ItemSpacing.y * 0.5f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(style.FramePadding.x + 2.0f, style.FramePadding.y + 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, style.FrameRounding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);

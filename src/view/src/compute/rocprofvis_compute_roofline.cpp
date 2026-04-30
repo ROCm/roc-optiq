@@ -57,6 +57,25 @@ constexpr const char* DISPLAY_NAMES_PRESET[] = {
 
 constexpr const char* CHART_ZOOM_HINT = "Click chart to enable zoom";
 
+namespace
+{
+
+ImVec4
+Color(SettingsManager& settings, Colors color)
+{
+    return ImGui::ColorConvertU32ToFloat4(settings.GetColor(color));
+}
+
+ImVec4
+ColorWithAlpha(SettingsManager& settings, Colors color, float alpha)
+{
+    ImVec4 rgba = Color(settings, color);
+    rgba.w      = std::clamp(alpha, 0.0f, 1.0f);
+    return rgba;
+}
+
+}  // namespace
+
 Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 : m_data_provider(data_provider)
 , m_settings(SettingsManager::GetInstance())
@@ -343,10 +362,36 @@ Roofline::Render()
     }
     else
     {
-        ImPlot::PushStyleColor(ImPlotCol_PlotBg,
-                               ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-        ImPlot::PushStyleColor(ImPlotCol_FrameBg,
-                               m_settings.GetColor(Colors::kTransparent));
+        ImPlot::PushStyleColor(ImPlotCol_FrameBg, Color(m_settings, Colors::kTransparent));
+        ImPlot::PushStyleColor(ImPlotCol_PlotBg, Color(m_settings, Colors::kBgFrame));
+        ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
+                               ColorWithAlpha(m_settings, Colors::kBorderColor, 0.85f));
+        ImPlot::PushStyleColor(ImPlotCol_LegendBg,
+                               ColorWithAlpha(m_settings, Colors::kBgPanel, 0.96f));
+        ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
+                               ColorWithAlpha(m_settings, Colors::kBorderColor, 0.85f));
+        ImPlot::PushStyleColor(ImPlotCol_LegendText,
+                               Color(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_TitleText,
+                               Color(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_InlayText,
+                               Color(m_settings, Colors::kTextDim));
+        ImPlot::PushStyleColor(ImPlotCol_AxisText,
+                               Color(m_settings, Colors::kTextDim));
+        ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
+                               ColorWithAlpha(m_settings, Colors::kBorderColor, 0.34f));
+        ImPlot::PushStyleColor(ImPlotCol_AxisTick,
+                               ColorWithAlpha(m_settings, Colors::kTextDim, 0.56f));
+        ImPlot::PushStyleColor(ImPlotCol_AxisBg,
+                               Color(m_settings, Colors::kTransparent));
+        ImPlot::PushStyleColor(ImPlotCol_AxisBgHovered,
+                               ColorWithAlpha(m_settings, Colors::kButtonHovered, 0.72f));
+        ImPlot::PushStyleColor(ImPlotCol_AxisBgActive,
+                               ColorWithAlpha(m_settings, Colors::kButtonActive, 0.80f));
+        ImPlot::PushStyleColor(ImPlotCol_Selection,
+                               Color(m_settings, Colors::kSelectionBorder));
+        ImPlot::PushStyleColor(ImPlotCol_Crosshairs,
+                               ColorWithAlpha(m_settings, Colors::kSelectionBorder, 0.72f));
         ImPlot::PushColormap(m_settings.GetFlameColormapName());
         ImGui::PushID(m_workload->id);
         bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
@@ -577,7 +622,7 @@ Roofline::Render()
             m_hovered_item_distance = FLT_MAX;
         }
         ImPlot::PopColormap();
-        ImPlot::PopStyleColor(2);
+        ImPlot::PopStyleColor(16);
     }
     ImGui::EndChild();
 }
@@ -692,7 +737,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
             ImGui::GetWindowDrawList()->AddRectFilled(
                 ImGui::GetCursorScreenPos(),
                 ImGui::GetCursorScreenPos() + ImVec2(menus_width, plot_size.y),
-                ImGui::GetColorU32(plot_style.Colors[ImPlotCol_PlotBg]));
+                m_settings.GetColor(Colors::kBgFrame));
         }
         ImGui::SetCursorPos(button_pos +
                             ImVec2(0.0f, menus_on_bottom ? -button_size : button_size));
@@ -715,7 +760,8 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::SetNextWindowSizeConstraints(ImVec2(menus_width, button_size * 2.0f),
                                             ImVec2(menus_width, max_menus_height));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
         ImGui::BeginChild("menus_window", ImVec2(menus_width, 0.0f),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         float menus_content_width =
@@ -888,7 +934,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         }
         m_menus_rendered_height = ImGui::GetWindowHeight();
         ImGui::EndChild();
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(2);
         ImGui::PopStyleVar();
         ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
     }

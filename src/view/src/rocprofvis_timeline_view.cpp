@@ -35,6 +35,19 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 10.0f;
 
+namespace
+{
+
+ImU32
+WithAlpha(ImU32 color, float alpha)
+{
+    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
+    rgba.w      = std::clamp(alpha, 0.0f, 1.0f);
+    return ImGui::ColorConvertFloat4ToU32(rgba);
+}
+
+}  // namespace
+
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotations)
@@ -1201,6 +1214,42 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     ImDrawList* lane_dl = ImGui::GetWindowDrawList();
     lane_dl->AddRectFilled(lane_min, lane_max, lane_color);
 
+    if(m_grid_interval_ns > 0.0 && m_grid_interval_count > 0)
+    {
+        constexpr int   MINOR_GRID_DIVISIONS = 4;
+        const double    start_ns = m_tpt->GetViewTimeOffsetNs();
+        const double    first_major_ns =
+            std::floor(start_ns / m_grid_interval_ns) * m_grid_interval_ns;
+        const double minor_interval_ns = m_grid_interval_ns / MINOR_GRID_DIVISIONS;
+        const float  graph_min_x       = lane_min.x + m_sidebar_size;
+        const float  graph_max_x       = graph_min_x + m_tpt->GetGraphSizeX();
+        const ImU32  minor_grid_color =
+            WithAlpha(m_settings.GetColor(Colors::kGridColor), 0.10f);
+        const ImU32 major_grid_color =
+            WithAlpha(m_settings.GetColor(Colors::kBoundBox), 0.12f);
+
+        for(int i = 0; i < m_grid_interval_count; ++i)
+        {
+            const double major_ns = first_major_ns + i * m_grid_interval_ns;
+
+            for(int j = 1; j < MINOR_GRID_DIVISIONS; ++j)
+            {
+                const double minor_ns = major_ns + j * minor_interval_ns;
+                const float  x        = graph_min_x + m_tpt->TimeToPixel(minor_ns);
+                if(x <= graph_min_x || x >= graph_max_x) continue;
+
+                lane_dl->AddLine(ImVec2(x, lane_min.y), ImVec2(x, lane_max.y),
+                                 minor_grid_color, 1.0f);
+            }
+
+            const float x = graph_min_x + m_tpt->TimeToPixel(major_ns);
+            if(x <= graph_min_x || x >= graph_max_x) continue;
+
+            lane_dl->AddLine(ImVec2(x, lane_min.y), ImVec2(x, lane_max.y),
+                             major_grid_color, 1.0f);
+        }
+    }
+
     if(track_graph.selected)
     {
         // Quiet 2px accent rail on the inner edge of the selected lane.
@@ -1769,10 +1818,11 @@ TimelineView::RenderTraceView()
             ? static_cast<float>(m_tpt->GetVWidth() / m_tpt->GetRangeX())
             : 1.0f;
     float grab_min_size = std::clamp(available_width * grab_fraction, min_grab, max_grab);
+    const float scrollbar_rounding = m_settings.GetDefaultStyle().ScrollbarRounding;
 
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, grab_min_size);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 8.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, scrollbar_rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, scrollbar_rounding);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 2));
     ImGui::PushStyleColor(ImGuiCol_SliderGrab,
                           m_settings.GetColor(Colors::kScrollGrab));

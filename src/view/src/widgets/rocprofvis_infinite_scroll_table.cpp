@@ -478,7 +478,8 @@ InfiniteScrollTable::Render()
         }
         else if(!m_no_data_text.empty())
         {
-            ImGui::TextUnformatted(m_no_data_text.c_str());
+            ImGui::Dummy(ImVec2(0.0f, style.ItemSpacing.y * 0.5f));
+            ImGui::TextDisabled("%s", m_no_data_text.c_str());
         }
         ImGui::PopStyleColor();
         ImGui::PopID();

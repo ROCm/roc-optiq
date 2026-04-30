@@ -479,7 +479,8 @@ AppWindow::RenderEmptyState()
     ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(card_padding, card_padding));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
     ImGui::BeginChild("welcome_dialog", ImVec2(card_width, 0.0f),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                       ImGuiWindowFlags_NoScrollbar);
@@ -1019,8 +1020,8 @@ AppWindow::RenderAboutDialog()
     popup_style.PushTitlebarColors();
     popup_style.CenterPopup();
 
-    // Set window size
-    ImGui::SetNextWindowSize(ImVec2(580, 0));
+    ImGui::SetNextWindowSize(
+        GetResponsiveWindowSize(ImVec2(580.0f, 0.0f), ImVec2(360.0f, 0.0f)));
 
     if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize |

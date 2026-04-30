@@ -154,14 +154,14 @@ MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
 {
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem(" Pin metric"))
+        if(ImGui::MenuItem("Pin metric"))
         {
             row.second.pinned = !row.second.pinned;
             m_pin_metric_clicked(
                 { row.first.category_id, row.first.table_id, row.first.entry_id });
         }
         if(!m_event_source_id.empty() &&
-           ImGui::MenuItem(" Send Metric to kernel details"))
+           ImGui::MenuItem("Send metric to kernel details"))
         {
             AddMetricToKernelDetails(row.first, m_columns[column_index]);
         }
@@ -322,7 +322,7 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
 {
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem(" Copy"))
+        if(ImGui::MenuItem("Copy"))
         {
             ImGui::SetClipboardText(value_to_copy);
             NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -332,7 +332,7 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         // not equal pin column, MetricId, Metric Name and Metric Unit
         {
             if(!m_event_source_id.empty() &&
-               ImGui::MenuItem(" Send Metric to kernel details"))
+               ImGui::MenuItem("Send metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }
@@ -481,7 +481,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
     {
         if(value_to_copy && std::string_view(value_to_copy) != "N/A")
         {
-            if(ImGui::MenuItem(" Copy"))
+            if(ImGui::MenuItem("Copy"))
             {
                 ImGui::SetClipboardText(value_to_copy);
                 NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -492,7 +492,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         if(IsValueColumn(column_index))
         {
             if(!m_event_source_id.empty() &&
-               ImGui::MenuItem(" Send Metric to kernel details"))
+               ImGui::MenuItem("Send metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }

@@ -212,6 +212,44 @@ RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int
     ImGui::SetCursorPos(pos);
 }
 
+ImVec2
+GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size, float viewport_margin)
+{
+    constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
+    const float     scale = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
+
+    ImVec2 result(desired_size.x > 0.0f ? desired_size.x * scale : desired_size.x,
+                  desired_size.y > 0.0f ? desired_size.y * scale : desired_size.y);
+    const ImVec2 scaled_min(min_size.x > 0.0f ? min_size.x * scale : min_size.x,
+                            min_size.y > 0.0f ? min_size.y * scale : min_size.y);
+
+    if(result.x > 0.0f && scaled_min.x > 0.0f)
+    {
+        result.x = std::max(result.x, scaled_min.x);
+    }
+    if(result.y > 0.0f && scaled_min.y > 0.0f)
+    {
+        result.y = std::max(result.y, scaled_min.y);
+    }
+
+    if(const ImGuiViewport* viewport = ImGui::GetMainViewport())
+    {
+        const float margin = std::max(0.0f, viewport_margin * scale);
+        const ImVec2 max_size(std::max(0.0f, viewport->WorkSize.x - margin * 2.0f),
+                              std::max(0.0f, viewport->WorkSize.y - margin * 2.0f));
+        if(result.x > 0.0f && max_size.x > 0.0f)
+        {
+            result.x = std::min(result.x, max_size.x);
+        }
+        if(result.y > 0.0f && max_size.y > 0.0f)
+        {
+            result.y = std::min(result.y, max_size.y);
+        }
+    }
+
+    return result;
+}
+
 bool
 IconButton(const char* icon, ImFont* icon_font, ImVec2 size, const char* tooltip,
            bool frameless, ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,

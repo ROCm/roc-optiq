@@ -10,10 +10,19 @@
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
 #include "rocprofvis_cli_parser.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#if defined(_WIN32)
+#    define GLFW_EXPOSE_NATIVE_WIN32
+#endif
 #include <GLFW/glfw3.h>
+#if defined(_WIN32)
+#    include <GLFW/glfw3native.h>
+#    include <windows.h>
+#    include <dwmapi.h>
+#endif
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
@@ -29,6 +38,30 @@ static rocprofvis_view_render_options_t g_render_options =
 
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
+
+#if defined(_WIN32)
+static void
+apply_windows_titlebar_theme(GLFWwindow* window, bool use_dark_mode)
+{
+    if(!window) return;
+
+    HWND hwnd = glfwGetWin32Window(window);
+    if(!hwnd) return;
+
+    BOOL dark_mode = use_dark_mode ? TRUE : FALSE;
+    HRESULT result =
+        DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                              &dark_mode, sizeof(dark_mode));
+
+    // Older Windows 10 builds used 19 before the public constant settled on 20.
+    if(FAILED(result))
+    {
+        constexpr DWORD DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+        DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1,
+                              &dark_mode, sizeof(dark_mode));
+    }
+}
+#endif
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -290,6 +323,13 @@ main(int argc, char** argv)
                     app_notification_callback(window, notification);
                 }, fd_pref);
 
+#if defined(_WIN32)
+                bool titlebar_dark_mode = RocProfVis::View::SettingsManager::GetInstance()
+                                              .GetUserSettings()
+                                              .display_settings.use_dark_mode;
+                apply_windows_titlebar_theme(window, titlebar_dark_mode);
+#endif
+
                 backend.m_config(&backend, window);
 
                 if(cli_parser.WasOptionFound("file") &&
@@ -336,6 +376,17 @@ main(int argc, char** argv)
                     ImGui::NewFrame();
 
                     rocprofvis_view_render(g_render_options);
+#if defined(_WIN32)
+                    const bool use_dark_mode =
+                        RocProfVis::View::SettingsManager::GetInstance()
+                            .GetUserSettings()
+                            .display_settings.use_dark_mode;
+                    if(use_dark_mode != titlebar_dark_mode)
+                    {
+                        titlebar_dark_mode = use_dark_mode;
+                        apply_windows_titlebar_theme(window, titlebar_dark_mode);
+                    }
+#endif
                     g_render_options = rocprofvis_view_render_options_t::
                         kRocProfVisViewRenderOption_None;
 

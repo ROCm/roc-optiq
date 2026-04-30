@@ -300,7 +300,7 @@ DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y)
 
     const LegendItem legend[] = {
         {"Read", C().read}, {"Write", C().write}, {"Atomic", C().atomic},
-        {"Util", C().util}, {"Hits", C().hit}, {"Stall", C().stall}};
+        {"Util", C().util}, {"Hit", C().hit}, {"Stall", C().stall}};
 
     ImVec2 pos(origin.x + CHART_PADDING, origin.y + y);
     draw_list->AddText(pos, C().text_dim, "Legend:");

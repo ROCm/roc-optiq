@@ -25,6 +25,10 @@ RenderLoadingIndicator(ImU32 color, const char* window_id = nullptr,
                        float dot_radius = 5.0f, int num_dots = 3,
                        float dot_spacing = 5.0f, float anim_speed = 5.0f);
 
+ImVec2
+GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size = ImVec2(0.0f, 0.0f),
+                        float viewport_margin = 32.0f);
+
 bool
 IconButton(const char* icon, ImFont* icon_font, ImVec2 size = ImVec2(0, 0),
            const char* tooltip = nullptr, bool frameless = true,

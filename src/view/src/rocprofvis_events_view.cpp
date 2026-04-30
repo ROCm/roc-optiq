@@ -16,9 +16,26 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr ImGuiTabBarFlags TABLE_FLAGS = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                         ImGuiTableFlags_Resizable |
-                                         ImGuiTableFlags_SizingStretchProp;
+constexpr ImGuiTableFlags TABLE_FLAGS = ImGuiTableFlags_BordersOuter |
+                                        ImGuiTableFlags_BordersV |
+                                        ImGuiTableFlags_RowBg |
+                                        ImGuiTableFlags_Resizable |
+                                        ImGuiTableFlags_SizingStretchProp;
+
+namespace
+{
+
+void
+PushSectionHeaderStyle(SettingsManager& settings)
+{
+    ImGui::PushStyleColor(ImGuiCol_Header, settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                          settings.GetColor(Colors::kButtonHovered));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                          settings.GetColor(Colors::kButtonActive));
+}
+
+}  // namespace
 
 EventsView::EventsView(DataProvider&                      dp,
                        std::shared_ptr<TimelineSelection> timeline_selection)
@@ -35,10 +52,17 @@ EventsView::~EventsView() {}
 void
 EventsView::Render()
 {
-    ImGui::BeginChild("events_view", ImVec2(0, 0), ImGuiChildFlags_None);
+    const ImGuiStyle& style = m_settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::BeginChild("events_view", ImVec2(0, 0),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
     if(m_event_items.empty())
     {
-        ImGui::TextUnformatted("No data available for the selected events.");
+        ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
+        ImGui::TextDisabled("No data available for the selected events.");
     }
     else
     {
@@ -52,8 +76,12 @@ EventsView::Render()
                 ImGui::PushID(item.id);
                 ImGui::SetNextItemAllowOverlap();
 
-                if(ImGui::CollapsingHeader(item.header.c_str(),
-                                           ImGuiTreeNodeFlags_DefaultOpen))
+                PushSectionHeaderStyle(m_settings);
+                bool event_open = ImGui::CollapsingHeader(
+                    item.header.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::PopStyleColor(3);
+
+                if(event_open)
                 {
                     ImGui::SameLine();
                     ImGui::Dummy(
@@ -92,57 +120,49 @@ EventsView::Render()
         }
     }
     ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
 }
 
 bool
 EventsView::RenderBasicData(const EventInfo* event_data)
 {
-    ImVec4 headerColor =
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
-
-    ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
-
-    ImGui::PushFont(large_font);
-
     const auto& info = event_data->basic_info;
-
-    ImGui::TextUnformatted("ID");
-
     const uint64_t& db_id = event_data->basic_info.id.bitfield.event_id;
-    ImGui::SameLine(160);
-    CopyableTextUnformatted(std::to_string(db_id).c_str(), "ID", DATA_COPIED_NOTIFICATION,
-                            false, true);
-
-    ImGui::TextUnformatted("Name");
-    ImGui::SameLine(160);
-    CopyableTextUnformatted(info.name.c_str(), "Name", DATA_COPIED_NOTIFICATION, false,
-                            true);
-
     double trace_start_time = m_data_provider.DataModel().GetTimeline().GetStartTime();
     const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    std::string db_id_label  = std::to_string(db_id);
+    std::string start_label  = nanosecond_to_formatted_str(info.start_ts - trace_start_time,
+                                                           time_format, true);
+    std::string duration_label = nanosecond_to_formatted_str(info.duration,
+                                                             time_format, true);
 
-    ImGui::TextUnformatted("Start Time");
-    ImGui::SameLine(160);
-    std::string label = nanosecond_to_formatted_str(info.start_ts - trace_start_time,
-                                                    time_format, true);
-    CopyableTextUnformatted(label.c_str(), "Start_time", DATA_COPIED_NOTIFICATION, false,
-                            true);
+    if(ImGui::BeginTable("EventSummaryTable", 2,
+                         ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings))
+    {
+        ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFontSize() * 8.5f);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
-    ImGui::TextUnformatted("Duration");
-    ImGui::SameLine(160);
-    label = nanosecond_to_formatted_str(info.duration, time_format, true);
-    CopyableTextUnformatted(label.c_str(), "Duration", DATA_COPIED_NOTIFICATION, false,
-                            true);
+        const auto row = [&](const char* label, const char* value, const char* id) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled("%s", label);
+            ImGui::TableNextColumn();
+            CopyableTextUnformatted(value, id, DATA_COPIED_NOTIFICATION, false, true);
+        };
+
+        row("ID", db_id_label.c_str(), "ID");
+        row("Name", info.name.c_str(), "Name");
+        row("Start", start_label.c_str(), "Start_time");
+        row("Duration", duration_label.c_str(), "Duration");
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-    ImGui::TextUnformatted("Level");
-    ImGui::SameLine(160);
-    CopyableTextUnformatted(std::to_string(info.level).c_str(), "Level",
-                            DATA_COPIED_NOTIFICATION,
-                            false, true);
+        std::string level_label = std::to_string(info.level);
+        row("Level", level_label.c_str(), "Level");
 #endif
-
-    ImGui::PopFont();
+        ImGui::EndTable();
+    }
     return true;
 }
 
@@ -154,12 +174,7 @@ EventsView::RenderEventExtData(const EventInfo* event_data)
         return false;
     }
 
-    ImVec4 headerColor =
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
-
-    ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
+    PushSectionHeaderStyle(m_settings);
 
     // --- Expandable full extended data ---
     if(ImGui::CollapsingHeader("Event Extended Data", ImGuiTreeNodeFlags_None))
@@ -228,12 +243,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
         return false;
     }
 
-    ImVec4 headerColor =
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
-
-    ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
+    PushSectionHeaderStyle(m_settings);
 
     if(ImGui::CollapsingHeader("Flow Data", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -401,12 +411,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
         return false;
     }
 
-    ImVec4 headerColor =
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
-
-    ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
+    PushSectionHeaderStyle(m_settings);
 
     if(ImGui::CollapsingHeader("Call Stack Data", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -466,12 +471,7 @@ EventsView::RenderArgumentData(const EventInfo* event_data)
         return false;
     }
 
-    ImVec4 headerColor =
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
-
-    ImGui::PushStyleColor(ImGuiCol_Header, headerColor);
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, headerColor);
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, headerColor);
+    PushSectionHeaderStyle(m_settings);
 
     if(ImGui::CollapsingHeader("Arguments", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -546,8 +546,11 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
                 this->RenderEventExtData(event_data);
             });
             left->m_window_padding = default_style.WindowPadding;
+            left->m_item_spacing   = default_style.ItemSpacing;
+            left->m_bg_color       = m_settings.GetColor(Colors::kBgPanel);
             left->m_child_flags =
-                ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding;
+                ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                ImGuiChildFlags_AlwaysUseWindowPadding;
 
             LayoutItem::Ptr right = std::make_shared<LayoutItem>();
             right->m_item = std::make_shared<RocCustomWidget>([this, event_data]() {
@@ -562,13 +565,16 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
                 this->RenderCallStackData(event_data);
             });
             right->m_window_padding = default_style.WindowPadding;
+            right->m_item_spacing   = default_style.ItemSpacing;
+            right->m_bg_color       = m_settings.GetColor(Colors::kBgPanel);
             right->m_child_flags =
-                ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding;
+                ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                ImGuiChildFlags_AlwaysUseWindowPadding;
 
             std::unique_ptr<HSplitContainer> container =
                 std::make_unique<HSplitContainer>(left, right);
-            container->SetMinLeftWidth(10.0f);
-            container->SetMinRightWidth(10.0f);
+            container->SetMinLeftWidth(260.0f);
+            container->SetMinRightWidth(260.0f);
             container->SetSplit(0.5f);
 
             // Get DB from event ID

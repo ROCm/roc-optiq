@@ -3,6 +3,15 @@ run-name: roc-optiq-ci
 
 on:
   workflow_dispatch:
+    inputs:
+      upload_to_github:
+        description: 'Upload build artifacts to GitHub Artifacts?'
+        type: boolean
+        default: false
+      upload_to_s3:
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
+        type: boolean
+        default: false
   schedule:
     - cron: '0 4 * * *'
   push:
@@ -57,8 +66,8 @@ jobs:
     uses: ./.github/workflows/ci-redhat.yml
     with:
       os_version: ${{ needs.setup.outputs.redhat-os-versions }}
-      upload_to_github: ${{ github.event_name == 'schedule' }}
-      upload_to_s3: false # TODO: Add S3 support
+      upload_to_github: ${{ github.event_name == 'schedule' }} || ${{ inputs.upload_to_github }}
+      upload_to_s3: ${{ github.event_name == 'schedule' }} || ${{ inputs.upload_to_s3}}
 
   ci-ubuntu:
     name: Ubuntu CI
@@ -66,8 +75,8 @@ jobs:
     uses: ./.github/workflows/ci-ubuntu.yml
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
-      upload_to_github: ${{ github.event_name == 'schedule' }}
-      upload_to_s3: false # TODO: Add S3 support
+      upload_to_github: ${{ github.event_name == 'schedule' }} || ${{ inputs.upload_to_github }}
+      upload_to_s3: ${{ github.event_name == 'schedule' }} || ${{ inputs.upload_to_s3}}
 
   ci-windows:
     name: Windows CI
@@ -75,5 +84,5 @@ jobs:
     uses: ./.github/workflows/ci-windows.yml
     with:
       os_version: ${{ needs.setup.outputs.windows-os-versions }}
-      upload_to_github: ${{ github.event_name == 'schedule' }}
-      upload_to_s3: false # TODO: Add S3 support
+      upload_to_github: ${{ github.event_name == 'schedule' }} || ${{ inputs.upload_to_github }}
+      upload_to_s3: ${{ github.event_name == 'schedule' }} || ${{ inputs.upload_to_s3}}

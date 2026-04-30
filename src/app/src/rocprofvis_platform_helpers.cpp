@@ -3,33 +3,36 @@
 #    include "imgui.h"
 #    include <cstdlib>
 #    include <cstring>
-#    include <fstream>
-#    include <string>
 #    include <unordered_map>
 
 #    include <GLFW/glfw3.h>
 
 #    include "rocprofvis_platform_helpers.h"
 
-// All workarounds in this file address bugs that only manifest under a
-// specific subset of Linux configurations, where an X11 client (us)
-// runs through Xwayland against a Mutter compositor that exhibits two
-// regressions: (a) silently clamping XMoveWindow requests near screen
-// edges without sending a corrective ConfigureNotify, and (b) failing
-// to refresh pointer-window association during programmatic
-// XMoveWindow bursts.  Empirically:
+// This file addresses two distinct Mutter/Xwayland bugs that affect
+// our floating (secondary-viewport) windows on Linux.  They have
+// different blast radii across distributions and different cost
+// profiles for the fixes, so each is gated independently:
 //
-//   * Ubuntu 24 (Wayland)        : both bugs present -> workaround needed
-//   * RHEL 9 (Wayland)           : neither bug present -> workaround off
-//   * RHEL 10 (Wayland)          : neither bug present -> workaround off
-//   * Native X11 sessions        : bugs by definition absent
+//                                  Ubuntu 24   RHEL 9   RHEL 10   Native X11
+//                                  (Wayland)   (Wayl.)  (Wayl.)   (any)
+//   ---------------------------------------------------------------------
+//   (1) Corner-lock cursor offset    bug         bug      bug?       --
+//   (2) Post-drag click-through      bug          --       --        --
 //
-// So the gate is finer than "is Wayland session" -- both RHEL versions
-// run Wayland but neither trips the bug.  Bug presumably lives in an
-// Ubuntu-specific Mutter patch; mainline Mutter (used by RHEL) seems
-// unaffected.  We default to enabling the workaround only on Ubuntu's
-// Wayland session, with explicit user override available via either
-// the ROCPROFVIS_DRAG_REPAIR env var or the --drag-repair CLI flag.
+// (1) is gated on is_wayland_session(): always engaged under any
+// Wayland session, because the fix is a pure ImGui-state correction
+// with no visible side effect (it's a no-op on any frame where ImGui's
+// viewport->Pos already matches the OS window pos).  Even on
+// configurations that don't strictly need it, running it costs
+// nothing.
+//
+// (2) is gated on should_apply_drag_repair(), which is user-controlled
+// because the only known-working repair (XUnmapWindow + XMapWindow via
+// glfwHide/ShowWindow) triggers GNOME Shell's magic-lamp animation
+// every drag-release.  Default is OFF; users on affected systems
+// (currently confirmed Ubuntu Wayland only) opt in via either the
+// ROCPROFVIS_DRAG_REPAIR env var or the --drag-repair CLI flag.
 
 // Returns true when running under a Wayland session (X11 client over
 // Xwayland) detected via the standard freedesktop session env vars.
@@ -49,42 +52,10 @@ is_wayland_session()
     return cached;
 }
 
-// Returns true when /etc/os-release identifies the host distro as
-// Ubuntu (ID=ubuntu).  /etc/os-release values may be quoted per
-// freedesktop.org's spec, so strip surrounding single/double quotes.
-// Cached because /etc/os-release does not change at runtime.
-static bool
-is_ubuntu_distro()
-{
-    static const bool cached = []() {
-        std::ifstream f("/etc/os-release");
-        if(!f.is_open())
-        {
-            return false;
-        }
-        std::string line;
-        while(std::getline(f, line))
-        {
-            if(line.rfind("ID=", 0) != 0)
-            {
-                continue;
-            }
-            std::string v = line.substr(3);
-            if(v.size() >= 2 && (v.front() == '"' || v.front() == '\'') &&
-               v.front() == v.back())
-            {
-                v = v.substr(1, v.size() - 2);
-            }
-            return v == "ubuntu";
-        }
-        return false;
-    }();
-    return cached;
-}
-
 // Parse a string in the truthiness convention used by both the env
 // var and the --drag-repair CLI flag.  Returns 1 for explicitly-on
-// values, 0 for explicitly-off values, -1 for unrecognised / "auto".
+// values, 0 for explicitly-off values, -1 for unrecognised / "auto"
+// (which falls through to the next tier in should_apply_drag_repair).
 static int
 parse_drag_repair_value(const char* s)
 {
@@ -102,14 +73,12 @@ parse_drag_repair_value(const char* s)
     {
         return 1;
     }
-    // "auto" (or anything unrecognised) leaves the lower-priority
-    // tiers in charge.
     return -1;
 }
 
-// CLI-supplied override.  -1 = unset (defer to env / auto-detect);
-// 0 = forced off; 1 = forced on.  Mutated only from the
-// set/clear public API at startup, then read freely thereafter.
+// CLI-supplied override.  -1 = unset (defer to env / default off);
+// 0 = forced off; 1 = forced on.  Mutated only from the set/clear
+// public API at startup, then read freely thereafter.
 static int g_cli_drag_repair_override = -1;
 
 void
@@ -124,12 +93,20 @@ clear_drag_repair_override()
     g_cli_drag_repair_override = -1;
 }
 
-// Layered policy: CLI override wins, otherwise env var, otherwise
-// auto-detect (Ubuntu + Wayland).  The env-var and auto-detect tiers
-// are individually cached; the CLI tier is just an int read.  All
-// callers (snap_secondary_viewports_to_os_pos,
-// raise_dragged_viewport_after_release) hit this once per frame, so
-// the cost is negligible.
+// Layered policy for the post-drag click-through fix (the one with
+// the magic-lamp flicker).  Resolution order, highest priority first:
+//   1. CLI override (--drag-repair on|off, set from main()).
+//   2. Env var ROCPROFVIS_DRAG_REPAIR.
+//   3. Default OFF.
+//
+// There is intentionally no auto-detect tier: the only known-buggy
+// configuration is Ubuntu Wayland, but distro-allowlist heuristics
+// rot over time (when Ubuntu picks up a fixed Mutter, the allowlist
+// goes stale) and don't generalise to derivatives (Pop!_OS, Mint,
+// etc.) that ship Ubuntu's Mutter under different /etc/os-release
+// IDs.  Affected users opt in explicitly; everyone else gets no
+// flicker.  See raise_dragged_viewport_after_release() for the bug
+// description and why opt-in is the right default.
 static bool
 should_apply_drag_repair()
 {
@@ -139,10 +116,7 @@ should_apply_drag_repair()
     static const int env_value = []() {
         return parse_drag_repair_value(std::getenv("ROCPROFVIS_DRAG_REPAIR"));
     }();
-    if(env_value == 1) return true;
-    if(env_value == 0) return false;
-
-    return is_wayland_session() && is_ubuntu_distro();
+    return env_value == 1;
 }
 
 // File-static workaround state.  Owned here (not by the caller) because it
@@ -197,7 +171,13 @@ void
 snap_secondary_viewports_to_os_pos(
     std::unordered_map<ImGuiID, ImVec2>& viewport_intended_pos)
 {
-    if(!should_apply_drag_repair())
+    // Always engaged under Wayland (Mutter clamps XMoveWindow on every
+    // Wayland session we've tested -- Ubuntu 24, RHEL 9, presumably
+    // RHEL 10).  Pure ImGui state correction with no visible side
+    // effect, so no user-controllable gate is needed -- and a no-op
+    // on frames where viewport->Pos already matches the OS pos, so
+    // it's free on configurations that don't need it.
+    if(!is_wayland_session())
     {
         return;
     }
@@ -333,9 +313,14 @@ restore_secondary_viewport_intended_pos(
 // flicker is an accepted trade-off versus leaving stale pointer-
 // window association after every drag.
 //
-// Native X11 sessions and known-clean Wayland configurations (RHEL 9,
-// RHEL 10) do not exhibit the bug, so should_apply_drag_repair()
-// short-circuits the entire helper on those.
+// This bug is narrower than the corner-lock cursor-offset bug fixed
+// by snap_secondary_viewports_to_os_pos(): RHEL 9 and RHEL 10 also
+// run Wayland and they DO exhibit the corner-lock bug, but they do
+// NOT exhibit this click-through bug.  The click-through bug is
+// (so far) confirmed only on Ubuntu Wayland.  That asymmetry is why
+// the two helpers have different gates: the corner-lock fix is
+// always-on under Wayland, the click-through fix is opt-in via
+// should_apply_drag_repair() because the only known repair flickers.
 void
 raise_dragged_viewport_after_release()
 {

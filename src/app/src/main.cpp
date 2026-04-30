@@ -135,9 +135,9 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
 #ifdef __linux__
     result &= cli_parser.AddOption(
         "r", "drag-repair",
-        "Linux floating-window drag/click-through workaround: "
-        "'on'|'off'|'auto' (env: ROCPROFVIS_DRAG_REPAIR; default: auto, "
-        "= on for Ubuntu Wayland only)",
+        "Linux post-drag click-through fix for floating windows "
+        "(Ubuntu Wayland bug; trade-off: brief flicker per drag-release): "
+        "'on'|'off' (env: ROCPROFVIS_DRAG_REPAIR; default: off)",
         true);
 #endif
     result &= cli_parser.AddOption("h", "help", "Help the user with commands", false);

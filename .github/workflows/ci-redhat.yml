@@ -90,13 +90,6 @@ jobs:
             exit 1
           fi
 
-      - name: Configure AWS credentials
-        if: ${{ inputs.upload_to_s3 }}
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
       - name: Prepare Distribution Artifacts
         run: |
           mkdir ${{ env.DIST_DIR }}

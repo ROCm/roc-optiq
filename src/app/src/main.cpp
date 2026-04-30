@@ -132,6 +132,14 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
     result &= cli_parser.AddOption("v", "version", "Print application version", false);
     result &= cli_parser.AddOption("f", "file", "Open file", true);
     result &= cli_parser.AddOption("b", "backend", "Force rendering backend: 'vulkan' or 'opengl' (default: auto with fallback)", true);
+#ifdef __linux__
+    result &= cli_parser.AddOption(
+        "r", "drag-repair",
+        "Linux floating-window drag/click-through workaround: "
+        "'on'|'off'|'auto' (env: ROCPROFVIS_DRAG_REPAIR; default: auto, "
+        "= on for Ubuntu Wayland only)",
+        true);
+#endif
     result &= cli_parser.AddOption("h", "help", "Help the user with commands", false);
     ROCPROFVIS_ASSERT(result);
 
@@ -152,6 +160,27 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
             exit_app = true;
         }
     }
+
+#ifdef __linux__
+    // Apply --drag-repair before any frame runs so the platform helper
+    // policy is in place from the very first viewport interaction.
+    // 'auto' (or unrecognised values) leaves the override unset, so
+    // the helper falls back through env var to auto-detection.
+    if(!exit_app && cli_parser.WasOptionFound("drag-repair"))
+    {
+        const std::string v = cli_parser.GetOptionValue("drag-repair");
+        if(v == "on" || v == "1" || v == "true" || v == "yes")
+        {
+            set_drag_repair_override(true);
+        }
+        else if(v == "off" || v == "0" || v == "false" || v == "no")
+        {
+            set_drag_repair_override(false);
+        }
+        // else: "auto" or anything else -> do nothing, defer to env /
+        // auto-detect tiers in should_apply_drag_repair().
+    }
+#endif
 
     if(exit_app)
     {

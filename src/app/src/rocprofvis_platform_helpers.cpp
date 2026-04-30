@@ -3,21 +3,37 @@
 #    include "imgui.h"
 #    include <cstdlib>
 #    include <cstring>
+#    include <fstream>
+#    include <string>
 #    include <unordered_map>
 
 #    include <GLFW/glfw3.h>
 
-// All workarounds in this file address bugs that only manifest when an
-// X11 client (us) runs against an Xwayland server hosted by a Wayland
-// compositor -- specifically GNOME's Mutter, which (a) silently clamps
-// XMoveWindow requests near screen edges without sending a corrective
-// ConfigureNotify, and (b) does not refresh pointer-window association
-// during programmatic XMoveWindow bursts.  Native X11 sessions do not
-// exhibit either bug (X server handles both correctly), so on RHEL/
-// Fedora/X11-on-Ubuntu/etc. the helpers below are a no-op.
+#    include "rocprofvis_platform_helpers.h"
+
+// All workarounds in this file address bugs that only manifest under a
+// specific subset of Linux configurations, where an X11 client (us)
+// runs through Xwayland against a Mutter compositor that exhibits two
+// regressions: (a) silently clamping XMoveWindow requests near screen
+// edges without sending a corrective ConfigureNotify, and (b) failing
+// to refresh pointer-window association during programmatic
+// XMoveWindow bursts.  Empirically:
 //
-// Detected via the standard freedesktop session env vars; result is
-// cached because env vars do not change for the lifetime of a process.
+//   * Ubuntu 24 (Wayland)        : both bugs present -> workaround needed
+//   * RHEL 9 (Wayland)           : neither bug present -> workaround off
+//   * RHEL 10 (Wayland)          : neither bug present -> workaround off
+//   * Native X11 sessions        : bugs by definition absent
+//
+// So the gate is finer than "is Wayland session" -- both RHEL versions
+// run Wayland but neither trips the bug.  Bug presumably lives in an
+// Ubuntu-specific Mutter patch; mainline Mutter (used by RHEL) seems
+// unaffected.  We default to enabling the workaround only on Ubuntu's
+// Wayland session, with explicit user override available via either
+// the ROCPROFVIS_DRAG_REPAIR env var or the --drag-repair CLI flag.
+
+// Returns true when running under a Wayland session (X11 client over
+// Xwayland) detected via the standard freedesktop session env vars.
+// Cached because env vars do not change for the lifetime of a process.
 static bool
 is_wayland_session()
 {
@@ -31,6 +47,102 @@ is_wayland_session()
         return st != nullptr && std::strcmp(st, "wayland") == 0;
     }();
     return cached;
+}
+
+// Returns true when /etc/os-release identifies the host distro as
+// Ubuntu (ID=ubuntu).  /etc/os-release values may be quoted per
+// freedesktop.org's spec, so strip surrounding single/double quotes.
+// Cached because /etc/os-release does not change at runtime.
+static bool
+is_ubuntu_distro()
+{
+    static const bool cached = []() {
+        std::ifstream f("/etc/os-release");
+        if(!f.is_open())
+        {
+            return false;
+        }
+        std::string line;
+        while(std::getline(f, line))
+        {
+            if(line.rfind("ID=", 0) != 0)
+            {
+                continue;
+            }
+            std::string v = line.substr(3);
+            if(v.size() >= 2 && (v.front() == '"' || v.front() == '\'') &&
+               v.front() == v.back())
+            {
+                v = v.substr(1, v.size() - 2);
+            }
+            return v == "ubuntu";
+        }
+        return false;
+    }();
+    return cached;
+}
+
+// Parse a string in the truthiness convention used by both the env
+// var and the --drag-repair CLI flag.  Returns 1 for explicitly-on
+// values, 0 for explicitly-off values, -1 for unrecognised / "auto".
+static int
+parse_drag_repair_value(const char* s)
+{
+    if(s == nullptr || s[0] == '\0')
+    {
+        return -1;
+    }
+    if(std::strcmp(s, "0") == 0 || std::strcmp(s, "false") == 0 ||
+       std::strcmp(s, "off") == 0 || std::strcmp(s, "no") == 0)
+    {
+        return 0;
+    }
+    if(std::strcmp(s, "1") == 0 || std::strcmp(s, "true") == 0 ||
+       std::strcmp(s, "on") == 0 || std::strcmp(s, "yes") == 0)
+    {
+        return 1;
+    }
+    // "auto" (or anything unrecognised) leaves the lower-priority
+    // tiers in charge.
+    return -1;
+}
+
+// CLI-supplied override.  -1 = unset (defer to env / auto-detect);
+// 0 = forced off; 1 = forced on.  Mutated only from the
+// set/clear public API at startup, then read freely thereafter.
+static int g_cli_drag_repair_override = -1;
+
+void
+set_drag_repair_override(bool on)
+{
+    g_cli_drag_repair_override = on ? 1 : 0;
+}
+
+void
+clear_drag_repair_override()
+{
+    g_cli_drag_repair_override = -1;
+}
+
+// Layered policy: CLI override wins, otherwise env var, otherwise
+// auto-detect (Ubuntu + Wayland).  The env-var and auto-detect tiers
+// are individually cached; the CLI tier is just an int read.  All
+// callers (snap_secondary_viewports_to_os_pos,
+// raise_dragged_viewport_after_release) hit this once per frame, so
+// the cost is negligible.
+static bool
+should_apply_drag_repair()
+{
+    if(g_cli_drag_repair_override == 1) return true;
+    if(g_cli_drag_repair_override == 0) return false;
+
+    static const int env_value = []() {
+        return parse_drag_repair_value(std::getenv("ROCPROFVIS_DRAG_REPAIR"));
+    }();
+    if(env_value == 1) return true;
+    if(env_value == 0) return false;
+
+    return is_wayland_session() && is_ubuntu_distro();
 }
 
 // File-static workaround state.  Owned here (not by the caller) because it
@@ -85,7 +197,7 @@ void
 snap_secondary_viewports_to_os_pos(
     std::unordered_map<ImGuiID, ImVec2>& viewport_intended_pos)
 {
-    if(!is_wayland_session())
+    if(!should_apply_drag_repair())
     {
         return;
     }
@@ -192,15 +304,42 @@ restore_secondary_viewport_intended_pos(
 // Working fix: unmap + remap the floating window (XUnmapWindow +
 // XMapWindow, sequenced via glfwHide/ShowWindow).  Mutter treats the
 // remap as the window appearing fresh and rebuilds pointer-window
-// association from scratch.  Causes a sub-frame flicker but reliably
-// repairs the routing.
+// association from scratch.  Causes a sub-frame "magic-lamp" flicker
+// (GNOME Shell's open + destroy effect) but reliably repairs the
+// routing.
 //
-// Native X11 sessions (no compositor / X11-only WMs on RHEL, Fedora,
-// etc.) do not exhibit this bug, so we early-return on those.
+// Suppressing the GNOME Shell animation has been investigated and
+// abandoned -- documenting here so we don't reattempt:
+//
+//   * Permanent retype to _NET_WM_WINDOW_TYPE_UTILITY/DOCK/POPUP_MENU
+//     does suppress the animation (only NORMAL/DIALOG/MODAL_DIALOG are
+//     animated by gnome-shell/js/ui/windowManager.js), but each type
+//     trips a different unwanted Mutter code path: degraded raise on
+//     alt-tab (UTILITY), screen-edge strut handling (DOCK), and focus-
+//     loss auto-dismiss (POPUP_MENU).
+//   * Transient retype (NORMAL -> UTILITY -> hide/show -> NORMAL)
+//     does not work either: tested on Ubuntu 24 GNOME 46 and RHEL 10,
+//     full magic-lamp animation runs in both cases.  Empirically
+//     gnome-shell latches the "is animatable" decision onto the long-
+//     lived Meta.Window object at first MapRequest and does not re-
+//     evaluate it from _NET_WM_WINDOW_TYPE on subsequent maps.  So the
+//     retype is too late, regardless of timing.
+//   * Alternative pointer-routing repair operations (XRaiseWindow,
+//     XWarpPointer, XGrabPointer/XUngrabPointer, glfwFocusWindow) all
+//     fail under Xwayland for distinct reasons documented in the
+//     "Less invasive approaches" list above.
+//
+// Net: hide/show is the only known-working repair, and the resulting
+// flicker is an accepted trade-off versus leaving stale pointer-
+// window association after every drag.
+//
+// Native X11 sessions and known-clean Wayland configurations (RHEL 9,
+// RHEL 10) do not exhibit the bug, so should_apply_drag_repair()
+// short-circuits the entire helper on those.
 void
 raise_dragged_viewport_after_release()
 {
-    if(!is_wayland_session())
+    if(!should_apply_drag_repair())
     {
         return;
     }

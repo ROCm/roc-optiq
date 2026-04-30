@@ -175,11 +175,11 @@ main(int argc, char** argv)
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "visualizer.debug.log";
+        std::filesystem::path(config_path) / "roc-optiq.debug.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::debug);
 #else
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "visualizer.log";
+        std::filesystem::path(config_path) / "roc-optiq.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
 

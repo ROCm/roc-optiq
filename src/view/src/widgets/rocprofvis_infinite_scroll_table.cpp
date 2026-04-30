@@ -479,7 +479,7 @@ InfiniteScrollTable::Render()
         else if(!m_no_data_text.empty())
         {
             const float empty_state_y =
-                std::max(style.ItemSpacing.y, ImGui::GetContentRegionAvail().y * 0.18f);
+                std::max(style.ItemSpacing.y, ImGui::GetTextLineHeightWithSpacing());
             ImGui::Dummy(ImVec2(0.0f, empty_state_y));
             CenterNextTextItem(m_no_data_text.c_str());
             ImGui::TextDisabled("%s", m_no_data_text.c_str());

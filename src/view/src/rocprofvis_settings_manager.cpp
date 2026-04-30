@@ -95,7 +95,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
     IM_COL32(42, 82, 118, 255),    // Colors::kComparisonBase
     IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
-    IM_COL32(130, 95, 25, 255),    // Colors::kComparisonLesser
+    IM_COL32(205, 170, 82, 255),    // Colors::kComparisonLesser
     IM_COL32(92, 62, 132, 255),    // Colors::kComparisonGreater
     // This must follow the ordering of Colors enum.
 };
@@ -173,22 +173,22 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
     IM_COL32(203, 230, 252, 255),  // Colors::kComparisonBase
     IM_COL32(194, 235, 230, 255),  // Colors::kComparisonTarget
-    IM_COL32(246, 226, 178, 255),  // Colors::kComparisonLesser
+    IM_COL32(248, 224, 166, 255),  // Colors::kComparisonLesser
     IM_COL32(224, 206, 244, 255),  // Colors::kComparisonGreater
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> DARK_FLAME_COLORS = {
     IM_COL32(126, 219, 224, 230), IM_COL32(150, 190, 238, 230),
-    IM_COL32(194, 172, 230, 230), IM_COL32(232, 210, 126, 230),
+    IM_COL32(194, 172, 230, 230), IM_COL32(244, 220, 156, 230),
     IM_COL32(162, 222, 166, 230), IM_COL32(134, 202, 232, 230),
-    IM_COL32(238, 184, 126, 230), IM_COL32(232, 154, 166, 230),
+    IM_COL32(238, 210, 150, 230), IM_COL32(232, 154, 166, 230),
     IM_COL32(190, 230, 248, 230), IM_COL32(216, 198, 244, 230)
 };
 const std::vector<ImU32> LIGHT_FLAME_COLORS = {
     IM_COL32(96, 198, 204, 215),  IM_COL32(112, 158, 226, 215),
-    IM_COL32(170, 132, 220, 215), IM_COL32(214, 166, 68, 215),
+    IM_COL32(170, 132, 220, 215), IM_COL32(244, 219, 153, 215),
     IM_COL32(128, 190, 104, 215), IM_COL32(92, 176, 214, 215),
-    IM_COL32(224, 150, 78, 215),  IM_COL32(220, 118, 132, 215),
+    IM_COL32(237, 204, 140, 215),  IM_COL32(220, 118, 132, 215),
     IM_COL32(144, 204, 234, 215), IM_COL32(194, 166, 232, 215)
 };
 inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";

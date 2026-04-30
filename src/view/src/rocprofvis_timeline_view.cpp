@@ -1800,53 +1800,63 @@ TimelineView::RenderTraceView()
 
     ImGui::BeginChild("scrollbar",
                       ImVec2(subcomponent_size_main.x, ARTIFICIAL_SCROLLBAR_HEIGHT),
-                      true, ImGuiWindowFlags_NoScrollbar);
+                      false, ImGuiWindowFlags_NoScrollbar);
+
+    const float scrollbar_frame_height = 8.0f;
+    ImGui::SetCursorPosY(std::max(
+        0.0f, (ARTIFICIAL_SCROLLBAR_HEIGHT - scrollbar_frame_height) * 0.5f));
 
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
     ImGui::SameLine();
 
     float  available_width = subcomponent_size_main.x - m_sidebar_size;
     double view_width      = std::min(m_tpt->GetVWidth(), m_tpt->GetRangeX());
-    double max_offset      = m_tpt->GetRangeX() - view_width;
+    double max_offset      = std::max(0.0, m_tpt->GetRangeX() - view_width);
     float  view_offset =
         static_cast<float>(std::clamp(m_tpt->GetViewTimeOffsetNs(), 0.0, max_offset));
 
-    float min_grab = 4.0f;
+    float min_grab = 12.0f;
     float max_grab = available_width;
     float grab_fraction =
         (m_tpt->GetRangeX() > 0.0)
             ? static_cast<float>(m_tpt->GetVWidth() / m_tpt->GetRangeX())
             : 1.0f;
-    float grab_min_size = std::clamp(available_width * grab_fraction, min_grab, max_grab);
-    const float scrollbar_rounding = m_settings.GetDefaultStyle().ScrollbarRounding;
+    float grab_width = std::clamp(available_width * grab_fraction, min_grab, max_grab);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, grab_min_size);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, scrollbar_rounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, scrollbar_rounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 1));
-    ImGui::PushStyleColor(ImGuiCol_SliderGrab,
-                          m_settings.GetColor(Colors::kScrollGrab));
-    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive,
-                          m_settings.GetColor(Colors::kScrollBarColor));
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, m_settings.GetColor(Colors::kScrollBg));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,
-                          m_settings.GetColor(Colors::kScrollBg));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,
-                          m_settings.GetColor(Colors::kScrollBg));
+    ImGui::InvisibleButton("##scrollbar", ImVec2(available_width, scrollbar_frame_height));
+    ImVec2 track_min = ImGui::GetItemRectMin();
+    ImVec2 track_max = ImGui::GetItemRectMax();
 
-    ImGui::PushItemWidth(available_width);
-
-    if(ImGui::SliderFloat("##scrollbar", &view_offset, 0.0f,
-                          static_cast<float>(max_offset), ""))
+    if((ImGui::IsItemActive() || ImGui::IsItemClicked()) && max_offset > 0.0)
     {
+        const float mouse_x = std::clamp(ImGui::GetIO().MousePos.x - track_min.x,
+                                         0.0f, available_width);
+        const float grab_center = std::clamp(mouse_x, grab_width * 0.5f,
+                                             available_width - grab_width * 0.5f);
+        const float t = (available_width > grab_width)
+                            ? (grab_center - grab_width * 0.5f) /
+                                  (available_width - grab_width)
+                            : 0.0f;
+        view_offset = static_cast<float>(t * max_offset);
         m_tpt->SetViewTimeOffsetNs(static_cast<double>(view_offset));
         m_loading_timer.Restart();
     }
 
-    ImGui::PopItemWidth();
-    ImGui::PopStyleColor(5);
-    ImGui::PopStyleVar(4);
-
+    const float grab_x = max_offset > 0.0 && available_width > grab_width
+                             ? static_cast<float>(view_offset / max_offset) *
+                                   (available_width - grab_width)
+                             : 0.0f;
+    ImDrawList* scrollbar_draw_list = ImGui::GetWindowDrawList();
+    const float scrollbar_rounding = scrollbar_frame_height * 0.5f;
+    scrollbar_draw_list->AddRectFilled(track_min, track_max,
+                                       m_settings.GetColor(Colors::kScrollBg),
+                                       scrollbar_rounding);
+    scrollbar_draw_list->AddRectFilled(
+        ImVec2(track_min.x + grab_x, track_min.y),
+        ImVec2(track_min.x + grab_x + grab_width, track_max.y),
+        ImGui::IsItemActive() ? m_settings.GetColor(Colors::kScrollBarColor)
+                              : m_settings.GetColor(Colors::kScrollGrab),
+        scrollbar_rounding);
     m_stop_user_interaction = false;
     m_tpt->ComputePixelMapping();
     ImGui::EndChild();

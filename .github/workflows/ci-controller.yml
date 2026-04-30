@@ -1,0 +1,79 @@
+name: Continuous Integration Controller
+run-name: roc-optiq-ci
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'doc/**'
+      - '*.md'
+  pull_request:
+    paths-ignore:
+      - 'doc/**'
+      - '*.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    env:
+      # Full OS Coverage (for nightly scheduled builds)
+      UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04" ]'
+      REDHAT_FULL_OS_VERSIONS: '[ "9", "10" ]'
+      WINDOWS_FULL_OS_VERSIONS: '[ "2025" ]'
+      # Minimal OS Coverage (for all other builds)
+      UBUNTU_CI_OS_VERSIONS: '[ "24.04" ]'
+      REDHAT_CI_OS_VERSIONS: '[ "10" ]'
+      WINDOWS_CI_OS_VERSIONS: '[ "2025" ]'
+    outputs:
+      ubuntu-os-versions: ${{ steps.setup-os-versions.outputs.ubuntu-os-versions }}
+      redhat-os-versions: ${{ steps.setup-os-versions.outputs.redhat-os-versions }}
+      windows-os-versions: ${{ steps.setup-os-versions.outputs.windows-os-versions }}
+    steps:
+      - name: Set OS versions
+        id: setup-os-versions
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "ubuntu-os-versions=${{ env.UBUNTU_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
+            echo "redhat-os-versions=${{ env.UBUNTU_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
+            echo "windows-os-versions=${{ env.WINDOWS_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ubuntu-os-versions=${{ env.UBUNTU_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
+            echo "redhat-os-versions=${{ env.REDHAT_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
+            echo "windows-os-versions=${{ env.WINDOWS_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  ci-redhat:
+    name: RedHat CI
+    needs: setup
+    uses: ./.github/workflows/ci-redhat.yml
+    with:
+      os_version: ${{ needs.setup.outputs.redhat-os-versions }}
+      upload_to_github: ${{ github.event_name == 'schedule' }}
+      upload_to_s3: false # TODO: Add S3 support
+
+  ci-ubuntu:
+    name: Ubuntu CI
+    needs: setup
+    uses: ./.github/workflows/ci-ubuntu.yml
+    with:
+      os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
+      upload_to_github: ${{ github.event_name == 'schedule' }}
+      upload_to_s3: false # TODO: Add S3 support
+
+  ci-windows:
+    name: Windows CI
+    needs: setup
+    uses: ./.github/workflows/ci-windows.yml
+    with:
+      os_version: ${{ needs.setup.outputs.windows-os-versions }}
+      upload_to_github: ${{ github.event_name == 'schedule' }}
+      upload_to_s3: false # TODO: Add S3 support

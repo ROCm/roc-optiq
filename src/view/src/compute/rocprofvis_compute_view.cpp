@@ -5,17 +5,20 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_compute_comparison.h"
 #include "rocprofvis_compute_kernel_details.h"
-#include "rocprofvis_compute_roofline.h"
+#include "rocprofvis_compute_selection.h"
 #include "rocprofvis_compute_summary.h"
 #include "rocprofvis_compute_table_view.h"
-#include "rocprofvis_compute_tester.h"
+#include "rocprofvis_presets.h"
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+#    include "rocprofvis_compute_tester.h"
+#endif
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
-#include "implot/implot.h"
 #include "spdlog/spdlog.h"
 
 namespace RocProfVis
@@ -25,6 +28,9 @@ namespace View
 
 ComputeView::ComputeView()
 : m_view_created(false)
+, m_toolbar_available_width(0.0f)
+, m_compute_selection(nullptr)
+, m_preset_browser(nullptr)
 , m_tab_container(nullptr)
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
@@ -41,12 +47,13 @@ ComputeView::ComputeView()
         else
         {
             // select the first workload by default when a trace is loaded
-            const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();  
+            const std::vector<const WorkloadInfo*>& workloads =
+                m_data_provider.ComputeModel().GetWorkloadList();
             if(!workloads.empty())
             {
-                if(m_compute_selection) 
+                if(m_compute_selection)
                 {
-                    m_compute_selection->SelectWorkload(workloads.begin()->first);
+                    m_compute_selection->SelectWorkload(workloads.front()->id);
                 }
                 else
                 {
@@ -115,6 +122,10 @@ ComputeView::Update()
 
     if(new_state == ProviderState::kReady)
     {
+        if(m_preset_browser)
+        {
+            m_preset_browser->Update();
+        }
         if(m_tab_container)
         {
             m_tab_container->Update();
@@ -129,12 +140,13 @@ ComputeView::CreateView()
     // When launched remotely, for example over ssh, the UI make take long to init, and the data provider
     // may have already loaded an analysis if the application was launched with --file flag.
     // Check if one exists and if it does set the workload.
-    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();  
+    const std::vector<const WorkloadInfo*>& workloads =
+        m_data_provider.ComputeModel().GetWorkloadList();
     if(!workloads.empty())
     {
-        m_compute_selection->SelectWorkload(workloads.begin()->first);
+        m_compute_selection->SelectWorkload(workloads.front()->id);
     }
-
+    m_preset_browser    = std::make_unique<PresetBrowser>();
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
@@ -170,6 +182,10 @@ ComputeView::Render()
     }
     else
     {
+        if(m_preset_browser)
+        {
+            m_preset_browser->Render();
+        }
         if(m_tab_container)
         {
             m_tab_container->Render();
@@ -203,6 +219,18 @@ ComputeView::RenderToolbar()
     ImGui::AlignTextToFramePadding();
 
     RenderWorkloadSelection();
+    VerticalSeparator(&m_settings_manager);
+    if(m_toolbar_available_width != 0.0)
+    {
+        ImGui::Dummy(
+            ImVec2(m_toolbar_available_width, ImGui::GetFrameHeightWithSpacing()));
+    }
+    VerticalSeparator(&m_settings_manager);
+    RenderPresets();
+
+    ImGui::SameLine();
+    m_toolbar_available_width =
+        std::max(0.0f, m_toolbar_available_width + ImGui::GetContentRegionAvail().x);
 
     // pop content style
     ImGui::PopStyleVar(2);
@@ -222,25 +250,26 @@ ComputeView::RenderWorkloadSelection()
 
     const ImGuiStyle& style          = SettingsManager::GetInstance().GetDefaultStyle();
 
-    const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
-        m_data_provider.ComputeModel().GetWorkloads();
+    const std::vector<const WorkloadInfo*>& workloads =
+        m_data_provider.ComputeModel().GetWorkloadList();
 
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t            workload_id       = m_compute_selection->GetSelectedWorkload();
+    const WorkloadInfo* selected_workload =
+        m_data_provider.ComputeModel().GetWorkload(workload_id);
     ImGui::Text("Workload:");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
     ImGui::BeginDisabled(workloads.empty());
-    if(ImGui::BeginCombo("##Workloads", workloads.count(workload_id) > 0
-                                          ? workloads.at(workload_id).name.c_str()
-                                          : "-"))
+    if(ImGui::BeginCombo("##Workloads",
+                         selected_workload ? selected_workload->name.c_str() : "-"))
     {
 
-        for(const std::pair<const uint32_t, WorkloadInfo>& workload : workloads)
+        for(const WorkloadInfo* workload : workloads)
         {
-            if(ImGui::Selectable(workload.second.name.c_str(),
-                                 workload_id == workload.second.id))
+            if(ImGui::Selectable(workload->name.c_str(),
+                                 workload_id == workload->id))
             {
-                m_compute_selection->SelectWorkload(workload.second.id);
+                m_compute_selection->SelectWorkload(workload->id);
             }
         }
         ImGui::EndCombo();
@@ -270,6 +299,30 @@ ComputeView::RenderWorkloadSelection()
         ImGui::EndCombo();
     }
     ImGui::EndDisabled();
+}
+
+void
+ComputeView::RenderPresets()
+{
+    if(m_preset_browser)
+    {
+        const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+        ImGui::TextUnformatted("Presets");
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + style.ItemSpacing.x);
+        if(IconButton(ICON_CHEVRON_DOWN,
+                      m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault),
+                      ImVec2(0.0f, 0.0f), nullptr, false, style.FramePadding,
+                      m_settings_manager.GetColor(Colors::kTransparent),
+                      m_settings_manager.GetColor(Colors::kButtonHovered),
+                      m_settings_manager.GetColor(Colors::kTransparent)))
+        {
+            m_preset_browser->Show();
+        }
+        m_preset_browser->SetPosition(
+            ImGui::GetItemRectMax().x + 0.5f * style.ItemSpacing.x,
+            ImGui::GetItemRectMax().y + 0.5f * style.ItemSpacing.y);
+    }
 }
 
 }  // namespace View

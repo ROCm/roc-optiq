@@ -10,7 +10,7 @@ project(${TARGET_NAME})
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 4)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 1)
+set(PROJECT_VERSION_BUILD 2)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -103,6 +103,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_summary_view.cpp
     src/view/src/rocprofvis_time_to_pixel.cpp
     src/view/src/rocprofvis_minimap.cpp
+    src/view/src/rocprofvis_presets.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
     src/view/src/widgets/rocprofvis_flex_container.cpp

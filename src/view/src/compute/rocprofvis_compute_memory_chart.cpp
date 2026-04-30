@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <imgui.h>
 
 namespace RocProfVis
@@ -32,6 +33,7 @@ static constexpr float BLOCK_ROUNDING    = 8.0f;
 static constexpr float BLOCK_TEXT_PAD    = 10.0f;
 static constexpr float ROW_HEIGHT        = 20.0f;
 static constexpr float HEADER_SEP_GAP    = 6.0f;
+static constexpr float METRIC_VALUE_X_RATIO = 0.54f;
 
 static constexpr float ARROW_THICKNESS   = 2.0f;
 static constexpr float ARROW_HEAD_SIZE   = 5.0f;
@@ -48,17 +50,26 @@ Settings()
     return SettingsManager::GetInstance();
 }
 
+static constexpr const char* UNAVAILABLE_METRIC_TEXT = "N/A";
+
+static bool
+IsAvailableMetricText(const char* text)
+{
+    return text && std::strcmp(text, UNAVAILABLE_METRIC_TEXT) != 0 &&
+           std::strcmp(text, "-") != 0;
+}
+
 static std::string
 FormatMetricValue(double value)
 {
-    if(value != value) return "-";
+    if(value != value) return UNAVAILABLE_METRIC_TEXT;
     return compact_number_format(value);
 }
 
 static std::string
 FormatMetricValueRaw(double value)
 {
-    if(value != value) return "-";
+    if(value != value) return UNAVAILABLE_METRIC_TEXT;
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%.2f", value);
     return std::string(buf);
@@ -141,7 +152,7 @@ ComputeMemoryChartView::ComputeMemoryChartView(DataProvider& data_provider, std:
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
 {
-    m_values.fill("-");
+    m_values.fill(UNAVAILABLE_METRIC_TEXT);
     m_metric_ptrs.resize(MEMCHART_METRIC_COUNT, nullptr);
 }
 
@@ -150,15 +161,16 @@ ComputeMemoryChartView::~ComputeMemoryChartView() {}
 const char*
 ComputeMemoryChartView::GetMetricText(MemChartMetric metric) const
 {
+    if(metric == MEMCHART_METRIC_NA) return UNAVAILABLE_METRIC_TEXT;
     if(metric >= 0 && metric < MEMCHART_METRIC_COUNT)
         return m_values[metric].c_str();
-    return "-";
+    return UNAVAILABLE_METRIC_TEXT;
 }
 
 void
 ComputeMemoryChartView::FetchMemChartMetrics()
 {
-    m_values.fill("-");
+    m_values.fill(UNAVAILABLE_METRIC_TEXT);
     m_metric_ptrs.assign(MEMCHART_METRIC_COUNT, nullptr);
 
     m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
@@ -213,7 +225,7 @@ ComputeMemoryChartView::UpdateMetrics()
         }
         else
         {
-            m_values[i] = "-";
+            m_values[i] = UNAVAILABLE_METRIC_TEXT;
         }
     }
 }
@@ -320,11 +332,12 @@ ComputeMemoryChartView::DrawMetricRow(ImDrawList* draw_list, float block_x, floa
                         Settings().GetColor(Colors::kTextDim),
                         label, metric_id, true, false);
 
-    float value_x = block_x + block_w * 0.48f;
-    if(unit[0] != '\0')
+    float value_x = block_x + block_w * METRIC_VALUE_X_RATIO;
+    const char* metric_text = GetMetricText(metric_id);
+    if(unit[0] != '\0' && IsAvailableMetricText(metric_text))
     {
         char text_buf[64];
-        snprintf(text_buf, sizeof(text_buf), "%s %s", GetMetricText(metric_id), unit);
+        snprintf(text_buf, sizeof(text_buf), "%s %s", metric_text, unit);
         DrawTextWithTooltip(draw_list, {value_x, cursor_y},
                             Settings().GetColor(Colors::kTextMain),
                             text_buf, metric_id, false, true);
@@ -333,7 +346,7 @@ ComputeMemoryChartView::DrawMetricRow(ImDrawList* draw_list, float block_x, floa
     {
         DrawTextWithTooltip(draw_list, {value_x, cursor_y},
                             Settings().GetColor(Colors::kTextMain),
-                            GetMetricText(metric_id), metric_id, false, true);
+                            metric_text, metric_id, false, true);
     }
     return cursor_y + ROW_HEIGHT;
 }
@@ -482,10 +495,10 @@ ComputeMemoryChartView::DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin)
 
     // --- Draw arrows + pills FIRST (behind) ---
     const char* pill_labels[] = {
-        "SALU", "SMEM", "VALU", "MFMA", "VMEM", "LDS", "GWS", "Br"
+        "SALU", "SMEM", "VALU", "Matrix Ops", "VMEM", "LDS", "GWS", "Br"
     };
     const MemChartMetric pill_metrics[] = {
-        SALU, SMEM, VALU, MFMA, VMEM, LDS, GWS, BR
+        SALU, SMEM, VALU, MATRIX_OPS, VMEM, LDS, GWS, BR
     };
 
     ImU32 arrow_color     = Settings().GetColor(Colors::kArrowColor);
@@ -621,7 +634,7 @@ ComputeMemoryChartView::DrawLDS(ImDrawList* draw_list, ImVec2 origin)
 
     cursor_y =
         DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Util:", LDS_UTIL, "%");
-    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", LDS_LATENCY,
+    cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", LDS_LATENCY,
                              "cycles");
 }
 
@@ -639,9 +652,9 @@ ComputeMemoryChartView::DrawVectorL1(ImDrawList* draw_list, ImVec2 origin)
 
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", VL1_HIT, "%");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", VL1_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", MEMCHART_METRIC_NA, "cycles");
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
-                             "Coales:", VL1_COALESCE, "%");
+                             "Coalescing:", VL1_COALESCE, "%");
     cursor_y =
         DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Stall:", VL1_STALL, "%");
 }
@@ -661,7 +674,7 @@ ComputeMemoryChartView::DrawScalarL1D(ImDrawList* draw_list, ImVec2 origin)
     cursor_y =
         DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", SL1D_HIT, "%");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", SL1D_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", SL1D_LAT, "cycles");
 }
 
 void
@@ -678,7 +691,7 @@ ComputeMemoryChartView::DrawInstrL1(ImDrawList* draw_list, ImVec2 origin)
 
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", IL1_HIT, "%");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Lat:", IL1_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", IL1_LAT, "cycles");
 }
 
 void
@@ -702,9 +715,9 @@ ComputeMemoryChartView::DrawL2(ImDrawList* draw_list, ImVec2 origin)
     cursor_y = DrawBlockHeader(draw_list, "Latency",
                                block_x, cursor_y - BLOCK_TEXT_PAD, block.w);
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", L2_RD_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", MEMCHART_METRIC_NA, "cycles");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", L2_WR_LAT, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", MEMCHART_METRIC_NA, "cycles");
 }
 
 void

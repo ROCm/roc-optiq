@@ -27,9 +27,8 @@ RenderLoadingIndicator(ImU32 color, const char* window_id = nullptr,
 
 bool
 IconButton(const char* icon, ImFont* icon_font, ImVec2 size = ImVec2(0, 0),
-           const char* tooltip = nullptr, ImVec2 tooltip_padding = ImVec2(0, 0),
-           bool frameless = true, ImVec2 frame_padding = ImVec2(0, 0),
-           ImU32 bg_color        = IM_COL32(0, 0, 0, 0),
+           const char* tooltip = nullptr, bool frameless = true,
+           ImVec2 frame_padding = ImVec2(0, 0), ImU32 bg_color = IM_COL32(0, 0, 0, 0),
            ImU32 bg_color_hover  = IM_COL32(0, 0, 0, 0),
            ImU32 bg_color_active = IM_COL32(0, 0, 0, 0), const char* id = nullptr);
 

@@ -259,7 +259,7 @@ void
 MetricTableBase::FillDefaultColumns(std::map<uint32_t, std::string>& columns,
                                     std::uint32_t&                   last_column_index)
 {
-    columns[0]            = "Pin";
+    columns[0]            = "##Pin";
     columns[1]            = "Metric ID";
     columns[2]            = "Metric";
     last_column_index     = 3;
@@ -560,10 +560,8 @@ PinnedMetricTable::UpdateColumns(MetricId                        metric_id,
 const AvailableMetrics::Table&
 PinnedMetricTable::GetTable(const MetricId& metric_id, uint32_t workload_id)
 {
-    const auto& tree = m_data_provider.ComputeModel()
-                           .GetWorkloads()
-                           .at(workload_id)
-                           .available_metrics.tree;
+    const std::unordered_map<uint32_t, AvailableMetrics::Category>& tree =
+        m_data_provider.ComputeModel().GetWorkload(workload_id)->available_metrics.tree;
     return tree.at(metric_id.category_id).tables.at(metric_id.table_id);
 }
 
@@ -574,12 +572,13 @@ PinnedMetricTable::HasMetricInCurrentWorkload(const MetricId& metric_id) const
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
         return false;
 
-    const auto& workloads = m_data_provider.ComputeModel().GetWorkloads();
-    auto workload_it = workloads.find(workload_id);
-    if(workload_it == workloads.end())
+    const WorkloadInfo* workload =
+        m_data_provider.ComputeModel().GetWorkload(workload_id);
+    if(!workload)
         return false;
 
-    const auto& tree = workload_it->second.available_metrics.tree;
+    const std::unordered_map<uint32_t, AvailableMetrics::Category>& tree =
+        workload->available_metrics.tree;
     auto category_it = tree.find(metric_id.category_id);
     if(category_it == tree.end())
         return false;
@@ -717,11 +716,13 @@ MetricTableWidget::UpdateTable()
         return;
     }
 
-    auto& model = m_data_provider.ComputeModel();
-    if(!model.GetWorkloads().count(workload_id))
+    ComputeDataModel&   model    = m_data_provider.ComputeModel();
+    const WorkloadInfo* workload = model.GetWorkload(workload_id);
+    if(!workload)
         return;
 
-    const auto& tree = model.GetWorkloads().at(workload_id).available_metrics.tree;
+    const std::unordered_map<uint32_t, AvailableMetrics::Category>& tree =
+        workload->available_metrics.tree;
     if(!tree.count(m_category_id) || !tree.at(m_category_id).tables.count(m_table_id))
         return;
 
@@ -763,10 +764,12 @@ WorkloadMetricTableWidget::UpdateTable()
         return;
     }
 
-    auto& model = m_data_provider.ComputeModel();
-    if(!model.GetWorkloads().count(workload_id)) return;
+    ComputeDataModel&   model    = m_data_provider.ComputeModel();
+    const WorkloadInfo* workload = model.GetWorkload(workload_id);
+    if(!workload) return;
 
-    const auto& tree = model.GetWorkloads().at(workload_id).available_metrics.tree;
+    const std::unordered_map<uint32_t, AvailableMetrics::Category>& tree =
+        workload->available_metrics.tree;
     if(!tree.count(m_category_id) || !tree.at(m_category_id).tables.count(m_table_id))
         return;
 

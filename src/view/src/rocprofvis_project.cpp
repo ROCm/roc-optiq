@@ -3,6 +3,7 @@
 
 #include "rocprofvis_project.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_presets.h"
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_version.h"
 #ifdef COMPUTE_UI_SUPPORT
@@ -103,7 +104,9 @@ Project::SaveAs(const std::string& file_path)
 
 void
 Project::Close()
-{}
+{
+    PresetManager::GetInstance().UnregisterComponents(m_trace_file_path);
+}
 
 Project::OpenResult
 Project::OpenProject(std::string& file_path)

@@ -567,6 +567,7 @@ SettingsManager::InitStyling()
     style.ItemSpacing   = ImVec2(10, 8);
     style.WindowPadding = ImVec2(4, 4);
     style.ChildRounding = 6.0f;
+    style.PopupRounding = 6.0f;
  
     m_default_style = style;  // Store the our customized style
 
@@ -641,6 +642,12 @@ SettingsManager::RemoveRecentFile(const std::string& file_path)
     {
         m_internalsettings.recent_files.erase(pos);
     }
+}
+
+void
+SettingsManager::ClearRecentFiles()
+{
+    m_internalsettings.recent_files.clear();
 }
 
 void

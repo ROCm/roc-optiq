@@ -9,6 +9,8 @@
 **Compute profiling**
 - Side-by-side baseline comparison of compute metrics (baseline kernel vs target kernel).
 - Pinned metric table with configurable rows and columns (including custom metrics).
+- Compute view presets. Save and recall pinned metric configurations.
+- New context menu shortcut to add metrics to kernel selection table from table view.
 - Interface support for metric values grouped by workload; compute database schema 1.3 and related performance improvements.
 - Roofline chart: legend can be repositioned; aspect ratio follows the window; multi-workload chart fixes and top-kernels presentation updates.
 - Added workload metric support in the compute data model, including dedicated workload metric getters.
@@ -54,12 +56,11 @@
   - Fixed compute metric table bar-cell clipping so bars render correctly with pinned columns.
   - Fixed tooltip being shown over overlapping window.
 - Prevent accidental Roofline zoom while scrolling.
-- Fix race comdition when compute analysis file loads before view is created. 
+- Fix race condition when compute analysis file loads before view is created.
+- Fix issue where file dialog does not work if D-Bus is mis-configured.
+- Fix for issues with Vulkan driver crashing when display is forwarded over ssh.
 - Fix mismatched sidebar header sizes.
 
-### Known Issues
-
-- Crash if metrics are pinned in Compute Table View and a new workload is selected that does not contain them.
 
 ## Optiq Beta 0.3.0
 

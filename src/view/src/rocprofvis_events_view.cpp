@@ -17,7 +17,6 @@ namespace View
 {
 
 constexpr ImGuiTableFlags TABLE_FLAGS = ImGuiTableFlags_BordersOuter |
-                                        ImGuiTableFlags_BordersV |
                                         ImGuiTableFlags_RowBg |
                                         ImGuiTableFlags_Resizable |
                                         ImGuiTableFlags_SizingStretchProp;
@@ -93,7 +92,7 @@ EventsView::Render()
                                       ImGuiChildFlags_None);
                     item.contents->Render();
                     ImGui::EndChild();
-                    ImGui::Separator();
+
 
                     // Use the optimal height of the contents as the new height for the
                     // next frame
@@ -363,7 +362,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                                 static_cast<double>(ctx_flow.end_timestamp -
                                                     ctx_flow.start_timestamp));
                         }
-                        ImGui::Separator();
+
                         std::string cells[] = {
                             std::to_string(ctx_flow.id.bitfield.event_id),
                             ctx_flow.name,
@@ -539,10 +538,8 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             auto            default_style = m_settings.GetDefaultStyle();
             LayoutItem::Ptr left          = std::make_shared<LayoutItem>();
             left->m_item = std::make_shared<RocCustomWidget>([this, event_data]() {
-                if(this->RenderBasicData(event_data))
-                {
-                    ImGui::NewLine();
-                }
+                this->RenderBasicData(event_data);
+                ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
                 this->RenderEventExtData(event_data);
             });
             left->m_window_padding = default_style.WindowPadding;
@@ -556,11 +553,11 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             right->m_item = std::make_shared<RocCustomWidget>([this, event_data]() {
                 if(this->RenderArgumentData(event_data))
                 {
-                    ImGui::NewLine();
+                    ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.35f));
                 }
                 if(this->RenderEventFlowInfo(event_data))
                 {
-                    ImGui::NewLine();
+                    ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.35f));
                 }
                 this->RenderCallStackData(event_data);
             });

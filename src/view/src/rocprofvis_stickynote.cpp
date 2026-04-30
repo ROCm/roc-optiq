@@ -326,13 +326,22 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PopStyleColor(4);
         ImGui::PopFont();
 
-        // Text area
-        ImGui::SetCursorPos(ImVec2(margin, header_height + margin));
+        // Scroll only the note body; the header/actions stay pinned.
+        const float body_y      = header_height + margin;
+        const float body_height = std::max(0.0f, sticky_size.y - body_y - margin);
+        ImGui::SetCursorPos(ImVec2(margin, body_y));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
+        ImGui::BeginChild("StickyNoteBody", ImVec2(sticky_size.x - margin * 2.0f,
+                                                   body_height), false);
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-        ImGui::PushTextWrapPos(sticky_size.x - margin);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
         ImGui::TextUnformatted(m_text.c_str());
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
 
         ImGui::EndChild();
         // Cover hover case for input control

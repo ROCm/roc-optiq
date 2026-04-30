@@ -18,11 +18,11 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float      BASE_FONT_SIZE       = 13.0f;
-constexpr std::array FONT_AVAILABLE_SIZES = { 7.0f,  8.0f,  9.0f,  10.0f, 11.0f,
-                                              12.0f, 13.0f, 14.0f, 15.0f, 16.0f,
-                                              17.0f, 18.0f, 19.0f, 20.0f, 21.0f,
-                                              23.0f, 25.0f, 27.0f, 29.0f, 33.0f };
+constexpr float      BASE_FONT_SIZE       = 15.0f;
+constexpr std::array FONT_AVAILABLE_SIZES = { 9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
+                                              14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                              19.0f, 20.0f, 21.0f, 22.0f, 23.0f,
+                                              25.0f, 27.0f, 29.0f, 31.0f, 35.0f };
 
 FontManager::FontManager() {}
 

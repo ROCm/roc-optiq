@@ -121,5 +121,5 @@ jobs:
         shell: bash
         run: |
           TIMESTAMP=$(date +%Y_%m_%d)
-          aws s3 cp ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/ubuntu/${{ matrix.os-version }}/ \
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/ubuntu/${{ matrix.os-version }}/ \
             --no-progress

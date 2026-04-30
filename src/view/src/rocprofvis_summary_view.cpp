@@ -94,13 +94,15 @@ SummaryView::Render()
         m_v_container->SetMinBottomHeight(m_kernel_instance_table->MinHeight());
         m_h_container->SetMinLeftWidth(m_hw_utilization->MinWidth());
         m_h_container->SetMinRightWidth(m_top_kernels->MinWidth());
-        ImGui::SetNextWindowPos(ImGui::GetWindowSize() * INITIAL_RELATIVE_POS,
+        const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+        const ImVec2         viewport_pos  = main_viewport->WorkPos;
+        const ImVec2         viewport_size = main_viewport->WorkSize;
+        ImGui::SetNextWindowPos(viewport_pos + viewport_size * INITIAL_RELATIVE_POS,
                                 ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImGui::GetWindowSize() * INITIAL_RELATIVE_SIZE,
+        ImGui::SetNextWindowSize(viewport_size * INITIAL_RELATIVE_SIZE,
                                  ImGuiCond_FirstUseEver);
         ImGui::Begin("Summary", &m_settings.GetAppWindowSettings().show_summary,
-                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoScrollbar |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
                          ImGuiWindowFlags_NoScrollWithMouse);
         if(m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID) ||
            m_data_provider.GetState() == ProviderState::kLoading)

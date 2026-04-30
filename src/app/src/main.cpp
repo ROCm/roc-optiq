@@ -12,12 +12,16 @@
 #include "rocprofvis_cli_parser.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
+#include "rocprofvis_platform_helpers.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef __linux__
+#    include <unordered_map>
+#endif
 
 const char* APP_NAME = "ROCm(TM) Optiq Beta";
 
@@ -26,6 +30,15 @@ static std::vector<std::string>         g_dropped_file_paths;
 static bool                             g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
+
+#ifdef __linux__
+// Per-frame snapshot of the "intended" (drag-target) position that
+// UpdateMouseMovingWindowNewFrame() wrote into viewport->Pos before we
+// snap it to the actual OS position.  Populated in the post-NewFrame
+// hook, consumed in the pre-UpdatePlatformWindows hook so the requested
+// move is still transmitted to the OS.  Key: viewport ID.
+static std::unordered_map<ImGuiID, ImVec2> g_viewport_intended_pos;
+#endif
 
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
@@ -282,7 +295,11 @@ main(int argc, char** argv)
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+                io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+                io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
+                // Keep undocked windows out of the OS taskbar.
+                io.ConfigViewportsNoTaskBarIcon = false;
 
                 ImGui::StyleColorsLight();
 
@@ -335,6 +352,21 @@ main(int argc, char** argv)
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
 
+#ifdef __linux__
+                    // Hook A: snap secondary viewport Pos to the actual
+                    // OS window position before user code runs, so
+                    // hit-testing and rendering agree with reality when
+                    // the window manager clamps our requested drag pos.
+                    // Call raise_dragged_viewport_after_release(), this is a fix
+                    // for the post-drag click-fall-through bug under
+                    // Xwayland/Mutter.
+                    if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+                    {
+                        snap_secondary_viewports_to_os_pos(g_viewport_intended_pos);
+                        raise_dragged_viewport_after_release();
+                    }
+#endif
+
                     rocprofvis_view_render(g_render_options);
                     g_render_options = rocprofvis_view_render_options_t::
                         kRocProfVisViewRenderOption_None;
@@ -346,6 +378,26 @@ main(int argc, char** argv)
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
+                    }
+
+                    // Render windows that have been dragged out of the main viewport.
+                    if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+                    {
+                        GLFWwindow* backup_current_context = glfwGetCurrentContext();
+#ifdef __linux__
+                        // Hook B: restore the drag-target Pos we
+                        // temporarily replaced with the OS pos in Hook A
+                        // so UpdatePlatformWindows() still transmits the
+                        // requested move.
+                        restore_secondary_viewport_intended_pos(g_viewport_intended_pos);
+#endif
+                        ImGui::UpdatePlatformWindows();
+                        ImGui::RenderPlatformWindowsDefault();
+                        glfwMakeContextCurrent(backup_current_context);
+                    }
+
+                    if(!is_minimized)
+                    {
                         backend.m_present(&backend);
                     }
                 }

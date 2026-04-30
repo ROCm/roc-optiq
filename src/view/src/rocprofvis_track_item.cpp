@@ -375,27 +375,21 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     ImGui::Selectable(("##MovePositionLine" + std::to_string(m_track_id)).c_str(), false,
                       ImGuiSelectableFlags_AllowDoubleClick,
                       ImVec2(0, m_resize_grip_thickness));
-    if(ImGui::IsItemHovered())
+    if(ImGui::IsItemHovered() || ImGui::IsItemActive())
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
     }
 
-    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+    if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_track_height    = m_track_height + (drag_delta.y);
+        m_track_height    = m_track_height + drag_delta.y;
         if(m_track_height < m_min_track_height)
         {
             m_track_height = m_min_track_height;
         }
-
         ImGui::ResetMouseDragDelta();
-        ImGui::EndDragDropSource();
         m_track_height_changed = true;
-    }
-    if(ImGui::BeginDragDropTarget())
-    {
-        ImGui::EndDragDropTarget();
     }
     ImGui::EndChild();  // end resize handle
     ImGui::PopStyleColor();

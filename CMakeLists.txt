@@ -160,6 +160,7 @@ if(APPLE)
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
+        src/app/src/rocprofvis_platform_helpers.cpp
         ${VIEW_FILES})
 else()
     add_executable(${TARGET_NAME}
@@ -169,6 +170,7 @@ else()
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
+        src/app/src/rocprofvis_platform_helpers.cpp
         ${VIEW_FILES})
 endif()
 

@@ -33,9 +33,6 @@ jobs:
   setup:
     name: Setup
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     env:
       # Full OS Coverage (for nightly scheduled builds)
       UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04" ]'
@@ -67,6 +64,7 @@ jobs:
     name: RedHat CI
     needs: setup
     uses: ./.github/workflows/ci-redhat.yml
+    secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.redhat-os-versions }}
       upload_to_github: ${{ github.event_name == 'schedule' || inputs.upload_to_github }}
@@ -76,6 +74,7 @@ jobs:
     name: Ubuntu CI
     needs: setup
     uses: ./.github/workflows/ci-ubuntu.yml
+    secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
       upload_to_github: ${{ github.event_name == 'schedule' || inputs.upload_to_github }}
@@ -85,6 +84,7 @@ jobs:
     name: Windows CI
     needs: setup
     uses: ./.github/workflows/ci-windows.yml
+    secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.windows-os-versions }}
       upload_to_github: ${{ github.event_name == 'schedule' || inputs.upload_to_github }}

@@ -33,6 +33,9 @@ jobs:
   setup:
     name: Setup
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     env:
       # Full OS Coverage (for nightly scheduled builds)
       UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04" ]'

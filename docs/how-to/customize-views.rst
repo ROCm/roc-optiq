@@ -164,7 +164,7 @@ Customize display options for each track by clicking the gear icon in the track'
 .. image:: ../images/track-gear.png
    :width: 600
 
-- For event tracks, you can toggle between **Color by name**, **Color by Time Level**, **No Color***, and **Compact mode**.
+- For event tracks, you can toggle between **Color by name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
   - **Color by name**, **Color by Time Level**, and **No Color***: Change the coloring method used to color the events.
   - **Compact Mode**: Shrink the event heights so that tall flame graphs can be displayed in a smaller area.

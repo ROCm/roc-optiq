@@ -30,7 +30,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(244, 96, 110, 255),   // Colors::kTextError
     IM_COL32(120, 220, 144, 255),  // Colors::kTextSuccess
-    IM_COL32(86, 180, 233, 215),   // Colors::kFlameChartColor
+    IM_COL32(120, 162, 255, 220),  // Colors::kFlameChartColor
     IM_COL32(120, 130, 150, 32),   // Colors::kGridColor
     IM_COL32(244, 96, 110, 255),   // Colors::kGridRed
     IM_COL32(120, 162, 255, 255),  // Colors::kSelectionBorder
@@ -66,7 +66,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(24, 26, 33, 255),     // Colors::kTableRowBgAlt
     IM_COL32(244, 96, 110, 220),   // Colors::kEventHighlight
     IM_COL32(120, 220, 144, 240),  // Colors::kEventSearchHighlight
-    IM_COL32(120, 162, 255, 130),  // Colors::kLineChartColor
+    IM_COL32(120, 162, 255, 120),  // Colors::kLineChartColor
     IM_COL32(28, 31, 40, 255),     // Colors::kButton
     IM_COL32(40, 44, 56, 255),     // Colors::kButtonHovered
     IM_COL32(56, 62, 78, 255),     // Colors::kButtonActive
@@ -74,7 +74,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(235, 82, 98, 255),    // Colors::kBgError
     IM_COL32(113, 217, 138, 255),  // Colors::kBgSuccess
     IM_COL32(62, 74, 96, 255),     // Colors::kStickyNoteYellow
-    IM_COL32(110, 196, 255, 140),  // Colors::kLineChartColorAlt
+    IM_COL32(47, 214, 220, 120),   // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
     IM_COL32(60, 80, 120, 255),    // Colors::kMinimapBin1
     IM_COL32(60, 0, 80, 255),      // Colors::kMinimapBin2
@@ -108,7 +108,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(214, 56, 64, 255),    // Colors::kTextError
     IM_COL32(36, 150, 82, 255),    // Colors::kTextSuccess
-    IM_COL32(62, 148, 210, 220),   // Colors::kFlameChartColor
+    IM_COL32(88, 132, 245, 225),   // Colors::kFlameChartColor
     IM_COL32(140, 150, 170, 28),   // Colors::kGridColor
     IM_COL32(214, 56, 64, 255),    // Colors::kGridRed
     IM_COL32(56, 124, 244, 255),   // Colors::kSelectionBorder
@@ -144,7 +144,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(250, 251, 253, 255),  // Colors::kTableRowBgAlt
     IM_COL32(214, 56, 64, 210),    // Colors::kEventHighlight
     IM_COL32(36, 150, 82, 230),    // Colors::kEventSearchHighlight
-    IM_COL32(56, 124, 244, 110),   // Colors::kLineChartColor
+    IM_COL32(88, 132, 245, 105),   // Colors::kLineChartColor
     IM_COL32(244, 246, 250, 255),  // Colors::kButton
     IM_COL32(232, 236, 244, 255),  // Colors::kButtonHovered
     IM_COL32(220, 226, 238, 255),  // Colors::kButtonActive
@@ -152,7 +152,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(224, 84, 82, 255),    // Colors::kBgError
     IM_COL32(58, 145, 26, 255),    // Colors::kBgSuccess
     IM_COL32(255, 244, 182, 255),  // Colors::kStickyNoteYellow
-    IM_COL32(44, 64, 92, 130),     // Colors::kLineChartColorAlt
+    IM_COL32(42, 190, 196, 105),   // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
     IM_COL32(180, 200, 220, 255),  // Colors::kMinimapBin1
     IM_COL32(150, 100, 180, 255),  // Colors::kMinimapBin2
@@ -178,18 +178,18 @@ constexpr std::array LIGHT_THEME_COLORS = {
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> DARK_FLAME_COLORS = {
-    IM_COL32(50, 145, 210, 215),  IM_COL32(0, 158, 115, 215),
-    IM_COL32(240, 228, 66, 215),  IM_COL32(204, 121, 167, 215),
-    IM_COL32(86, 180, 233, 215),  IM_COL32(235, 130, 45, 215),
-    IM_COL32(0, 204, 102, 215),   IM_COL32(230, 159, 0, 215),
-    IM_COL32(153, 153, 255, 215), IM_COL32(255, 153, 51, 215)
+    IM_COL32(47, 214, 220, 235),  IM_COL32(120, 162, 255, 235),
+    IM_COL32(184, 139, 226, 235), IM_COL32(225, 203, 78, 235),
+    IM_COL32(129, 231, 79, 235),  IM_COL32(86, 180, 233, 235),
+    IM_COL32(255, 159, 67, 235),  IM_COL32(244, 96, 110, 235),
+    IM_COL32(172, 220, 255, 235), IM_COL32(205, 180, 255, 235)
 };
 const std::vector<ImU32> LIGHT_FLAME_COLORS = {
-    IM_COL32(50, 145, 210, 220),  IM_COL32(0, 158, 115, 220),
-    IM_COL32(240, 228, 66, 220),  IM_COL32(204, 121, 167, 220),
-    IM_COL32(86, 180, 233, 220),  IM_COL32(235, 130, 45, 220),
-    IM_COL32(0, 204, 102, 220),   IM_COL32(230, 159, 0, 220),
-    IM_COL32(153, 153, 255, 220), IM_COL32(255, 153, 51, 220)
+    IM_COL32(42, 190, 196, 225), IM_COL32(88, 132, 245, 225),
+    IM_COL32(158, 104, 226, 225), IM_COL32(225, 170, 45, 225),
+    IM_COL32(98, 180, 70, 225),  IM_COL32(46, 165, 210, 225),
+    IM_COL32(238, 136, 50, 225), IM_COL32(230, 88, 102, 225),
+    IM_COL32(112, 190, 235, 225), IM_COL32(190, 150, 245, 225)
 };
 inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
 inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
@@ -297,8 +297,8 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_TabActive]          = tabAccent;
     style.Colors[ImGuiCol_TabUnfocused]       = bgFrame;
     style.Colors[ImGuiCol_TabUnfocusedActive] = tabAccentActive;
-    style.Colors[ImGuiCol_TabSelectedOverline] = tabAccentHover;
-    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = tabAccentActive;
+    style.Colors[ImGuiCol_TabSelectedOverline] = accentRed;
+    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = accentRedActive;
 
     // Headers (collapsing, selectable, etc)
     style.Colors[ImGuiCol_Header]        = tabAccent;

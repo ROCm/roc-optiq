@@ -126,11 +126,14 @@ void SplitContainerBase::Render()
             UpdateSplitRatio(mouse_pos, window_pos, available_size);
             fill_active = true;
         }
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            splitter_min, splitter_max,
-            SettingsManager::GetInstance().GetColor(
-                fill_active ? Colors::kBorderGray : Colors::kSplitterColor),
-            2.0f);
+        // Invisible by default; only paint on hover/drag so the chrome stays
+        // out of the way of the data.
+        if(fill_active)
+        {
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                splitter_min, splitter_max,
+                SettingsManager::GetInstance().GetColor(Colors::kBorderGray));
+        }
         AddSameLine();
     }
 
@@ -183,7 +186,7 @@ SplitContainerBase::SetMinSecondSize(float size)
 
 //------------------------------------------------------------------
 HSplitContainer::HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
-: SplitContainerBase(left, right, 2.0f, 100.0f, 100.0f, 0.25f)
+: SplitContainerBase(left, right, 3.0f, 100.0f, 100.0f, 0.25f)
 {
     m_widget_name = GenUniqueName("HSplitContainer");
     m_first_name  = GenUniqueName("LeftColumn");
@@ -283,7 +286,7 @@ HSplitContainer::GetSplitterSize(const ImVec2& total_size)
 void
 HSplitContainer::AddSameLine()
 {
-    ImGui::SameLine();
+    ImGui::SameLine(0.0f, 0.0f);
 };
 
 float
@@ -294,7 +297,7 @@ HSplitContainer::GetItemSize()
 
 //------------------------------------------------------------------
 VSplitContainer::VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
-: SplitContainerBase(top, bottom, 2.0f, 200.0f, 100.0f, 0.6f)
+: SplitContainerBase(top, bottom, 3.0f, 200.0f, 100.0f, 0.6f)
 {
     m_widget_name = GenUniqueName("VSplitContainer");
     m_first_name  = GenUniqueName("TopRow");

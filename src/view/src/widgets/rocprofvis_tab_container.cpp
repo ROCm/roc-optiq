@@ -95,25 +95,25 @@ TabContainer::Render()
     SettingsManager& settings = SettingsManager::GetInstance();
     const ImGuiStyle& style = settings.GetDefaultStyle();
 
-    // Modern app-style tab strip: a soft band that visually separates the
-    // active document from the rest of the chrome.
+    // Modern app-style tab strip: tinted band so the active tab visibly
+    // "lifts" out as the canvas color underneath.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 8));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14, 7));
     ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, style.FrameRounding);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
     int new_selected_tab = m_active_tab_index;
     if(!m_tabs.empty())
     {
         int index_to_remove = s_invalid_index;
-        ImGui::PushStyleColor(ImGuiCol_Tab, settings.GetColor(Colors::kBgMain));
+        ImGui::PushStyleColor(ImGuiCol_Tab, settings.GetColor(Colors::kBgFrame));
         ImGui::PushStyleColor(ImGuiCol_TabHovered,
-                              settings.GetColor(Colors::kBgFrame));
+                              settings.GetColor(Colors::kButtonHovered));
         ImGui::PushStyleColor(ImGuiCol_TabActive,
                               settings.GetColor(Colors::kBgPanel));
         ImGui::PushStyleColor(ImGuiCol_TabUnfocused,
-                              settings.GetColor(Colors::kBgMain));
+                              settings.GetColor(Colors::kBgFrame));
         ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive,
                               settings.GetColor(Colors::kBgPanel));
         if(ImGui::BeginTabBar("Tabs", ImGuiTabBarFlags_NoTabListScrollingButtons |
@@ -140,21 +140,15 @@ TabContainer::Render()
                     p_open = nullptr;
                 }
                 bool is_active_tab = (static_cast<int>(i) == m_active_tab_index);
-                if(is_active_tab)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text,
-                        ImGui::ColorConvertU32ToFloat4(
-                            settings.GetColor(Colors::kTextMain)));
-                }
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                    ImGui::ColorConvertU32ToFloat4(settings.GetColor(
+                        is_active_tab ? Colors::kTextMain : Colors::kTextDim)));
 
                 bool tab_visible = false;
                 ImGui::PushID(tab.m_id.c_str());
                 bool tab_selected = ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags);
 
-                if(is_active_tab)
-                {
-                    ImGui::PopStyleColor();
-                }
+                ImGui::PopStyleColor();
 
                 if(tab_selected)
                 {

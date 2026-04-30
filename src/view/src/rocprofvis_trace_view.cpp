@@ -284,10 +284,14 @@ TraceView::CreateView()
     m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible = m_settings_manager.GetAppWindowSettings().show_sidebar;
     m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
+    // Drop the child border on these split-container panes so the splitter
+    // alone defines the visual separation.
+    m_sidebar_item->m_child_flags = ImGuiChildFlags_None;
 
     m_analysis_item = LayoutItem::CreateFromWidget(analysis);
     m_analysis_item->m_visible =
         m_settings_manager.GetAppWindowSettings().show_details_panel;
+    m_analysis_item->m_child_flags = ImGuiChildFlags_None;
 
     LayoutItem m_histogram_item(0, 80);
     m_histogram_item.m_item    = m_histogram_widget;
@@ -305,8 +309,9 @@ TraceView::CreateView()
         std::make_shared<VSplitContainer>(timeline_container_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
 
-    auto trace_area    = std::make_shared<LayoutItem>();
-    trace_area->m_item = m_vertical_split_container;
+    auto trace_area          = std::make_shared<LayoutItem>();
+    trace_area->m_item        = m_vertical_split_container;
+    trace_area->m_child_flags = ImGuiChildFlags_None;
 
     m_horizontal_split_container =
         std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);

@@ -33,7 +33,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 , m_track_content_height(0.0f)
 , m_min_track_height(DEFAULT_MIN_TRACK_HEIGHT)
 , m_is_in_view_vertical(false)
-, m_metadata_padding(ImVec2(4.0f, 4.0f))
+, m_metadata_padding(ImVec2(8.0f, 5.0f))
 , m_resize_grip_thickness(4.0f)
 , m_request_state(TrackDataRequestState::kIdle)
 , m_track_height_changed(false)
@@ -202,10 +202,10 @@ TrackItem::RenderMetaArea()
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
     m_track_content_height      = m_track_height - metadata_shrink_padding.y * 2.0f;
 
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(2, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 3));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 5));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         m_settings.GetDefaultStyle().ChildRounding);
 
@@ -265,7 +265,7 @@ TrackItem::RenderMetaArea()
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
         // Adjust content size to account for padding
         content_size.x -= m_metadata_padding.x * 2;
-        content_size.y -= m_metadata_padding.x * 2;
+        content_size.y = std::max(0.0f, content_size.y - m_metadata_padding.y * 2.0f);
 
         // TODO: For testing and debugging request cancellation on the backend
         // Remove once this feature is stable
@@ -279,27 +279,45 @@ TrackItem::RenderMetaArea()
         //         }
         //     }
         // }
-        ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
-        ImGui::PushFont(large_font);
-
         float available_for_text =
             content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
             4.0f * m_metadata_padding.x + 2.0f);
 
         if(available_for_text < 0.0f) available_for_text = 0.0f;
 
-        ImVec2 text_size = ImGui::CalcTextSize(
-            m_meta_area_label.c_str(), nullptr, false, available_for_text);
+        std::string primary_label   = m_meta_area_label;
+        std::string secondary_label = "";
+        if(size_t qualifier_pos = primary_label.find(" ("); qualifier_pos != std::string::npos)
+        {
+            secondary_label = primary_label.substr(qualifier_pos);
+            primary_label   = primary_label.substr(0, qualifier_pos);
+        }
+
+        ImVec2 text_size = ImGui::CalcTextSize(primary_label.c_str(), nullptr, false,
+                                               available_for_text);
+        if(!secondary_label.empty())
+        {
+            text_size.y += ImGui::GetTextLineHeightWithSpacing();
+        }
 
         if(content_size.y - text_size.y < m_pill.GetPillSize().y)
             m_pill.Hide();
         else
             m_pill.Show();
 
+        ImGui::BeginGroup();
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + available_for_text);
-        ImGui::TextUnformatted(m_meta_area_label.c_str());
+        ImGui::TextUnformatted(primary_label.c_str());
         ImGui::PopTextWrapPos();
-        ImGui::PopFont();
+        ImGui::PopStyleColor();
+        if(!secondary_label.empty())
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
+            ImGui::TextUnformatted(secondary_label.c_str());
+            ImGui::PopStyleColor();
+        }
+        ImGui::EndGroup();
 
         if(!m_meta_area_tooltip.empty() && ImGui::IsItemHovered())
         {

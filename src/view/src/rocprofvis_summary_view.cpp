@@ -26,6 +26,33 @@ constexpr float  FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
 constexpr ImVec2 INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
 constexpr float  INITIAL_RELATIVE_SIZE           = 0.8f;
 
+namespace
+{
+
+ImVec4
+ThemeColor(SettingsManager& settings, Colors color, float alpha = 1.0f)
+{
+    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color));
+    rgba.w *= alpha;
+    return rgba;
+}
+
+void
+PushPlotChrome(SettingsManager& settings)
+{
+    ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBorder, ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextDim));
+    ImPlot::PushStyleColor(ImPlotCol_AxisGrid, ThemeColor(settings, Colors::kBorderColor, 0.34f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisTick, ThemeColor(settings, Colors::kTextDim, 0.56f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBg, ThemeColor(settings, Colors::kBgPanel, 0.96f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBorder, ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendText, ThemeColor(settings, Colors::kTextMain));
+}
+
+}  // namespace
+
 SummaryView::SummaryView(DataProvider& dp)
 : m_data_provider(dp)
 , m_settings(SettingsManager::GetInstance())
@@ -633,8 +660,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
                            int& hovered_idx)
 {
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     if(ImPlot::BeginPlot("##Pie",
                          ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
                                         plot_style.PlotPadding.y),
@@ -687,9 +713,9 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
             ImPlot::PopColormap();
         }
         ImPlot::EndPlot();
-        ImPlot::PopStyleColor(2);
-        ImPlot::PopStyleVar();
     }
+    ImPlot::PopStyleColor(9);
+    ImPlot::PopStyleVar();
     PlotInputHandler();
 }
 
@@ -698,8 +724,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
                            TimeFormat time_format, int& hovered_idx)
 {
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     if(ImPlot::BeginPlot("##Bar",
                          ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
                                         plot_style.PlotPadding.y),
@@ -748,7 +773,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleColor(9);
     ImPlot::PopStyleVar();
     PlotInputHandler();
 }

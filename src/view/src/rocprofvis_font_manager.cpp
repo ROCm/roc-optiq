@@ -102,32 +102,43 @@ FontManager::Init()
     const int num_types = static_cast<int>(FontType::__kLastFont);
 
 #ifdef _WIN32
-    const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
+    const char* font_paths[] = {
+        "C:\\Windows\\Fonts\\SegUIVar.ttf",
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+        "C:\\Windows\\Fonts\\segoeuib.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf"
+    };
 #elif __APPLE__
     const char* font_paths[] = {
-        // macOS system fonts
-        "/System/Library/Fonts/Helvetica.ttc",
+        // macOS system UI fonts
+        "/System/Library/Fonts/SFNS.ttf",
+        "/System/Library/Fonts/SFNSDisplay.ttf",
+        "/System/Library/Fonts/SFNSRounded.ttf",
         "/System/Library/Fonts/HelveticaNeue.ttc",
+        "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/System/Library/Fonts/Supplemental/Verdana.ttf",
         "/Library/Fonts/Arial.ttf",
-        "/Library/Fonts/Microsoft/Arial.ttf",
-        // SF Pro (newer macOS)
-        "/System/Library/Fonts/SFNSDisplay.ttf",
-        "/System/Library/Fonts/SFNS.ttf"
+        "/Library/Fonts/Microsoft/Arial.ttf"
     };
 #else
     const char* font_paths[] = {
+        // Preferred modern UI fonts
+        "/usr/share/fonts/truetype/inter/Inter-Regular.ttf",
+        "/usr/share/fonts/opentype/inter/Inter-Regular.otf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/google-noto/NotoSans-Regular.ttf",
         // Ubuntu / Debian
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
         "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
         // RedHat 8, Oracle 8
+        "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf",
         "/usr/share/fonts/dejavu/DejaVuSans.ttf",
         // RedHat 9 / 10, Oracle 9 / 10
-        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
-        "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf"
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf"
     };
 #endif
 

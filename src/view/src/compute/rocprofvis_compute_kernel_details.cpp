@@ -205,7 +205,11 @@ ComputeKernelDetailsView::Update()
 void
 ComputeKernelDetailsView::Render()
 {
-    ImGui::BeginChild("kernel_details");
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x, style.WindowPadding.y));
+    ImGui::BeginChild("kernel_details", ImVec2(0, 0),
+                      ImGuiChildFlags_AlwaysUseWindowPadding);
     if(m_roofline_flex_item)
     {
         // Maintain 2:1 aspect ratio until 15-frame minimum.
@@ -217,9 +221,13 @@ ComputeKernelDetailsView::Render()
         m_kernel_metric_table->Render();
     }
 
-    ImGui::Dummy(ImVec2(0.0f, KERNEL_TABLE_PANEL_PADDING));
+    const float panel_gap = KERNEL_TABLE_PANEL_PADDING > ImGui::GetStyle().ItemSpacing.y
+                                ? KERNEL_TABLE_PANEL_PADDING
+                                : ImGui::GetStyle().ItemSpacing.y;
+    ImGui::Dummy(ImVec2(0.0f, panel_gap));
     m_flex_container.Render();
     ImGui::EndChild();
+    ImGui::PopStyleVar();
 }
 
 }  // namespace View

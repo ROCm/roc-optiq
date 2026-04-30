@@ -35,6 +35,33 @@ constexpr const char* DISPLAY_STRING_METRICS[]{ "Invocation(s)", "Total Duration
                                                 "Min Duration",  "Max Duration",
                                                 "Mean Duration", "Median Duration" };
 
+namespace
+{
+
+ImVec4
+ThemeColor(SettingsManager& settings, Colors color, float alpha = 1.0f)
+{
+    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color));
+    rgba.w *= alpha;
+    return rgba;
+}
+
+void
+PushPlotChrome(SettingsManager& settings)
+{
+    ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBorder, ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextDim));
+    ImPlot::PushStyleColor(ImPlotCol_AxisGrid, ThemeColor(settings, Colors::kBorderColor, 0.34f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisTick, ThemeColor(settings, Colors::kTextDim, 0.56f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBg, ThemeColor(settings, Colors::kBgPanel, 0.96f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBorder, ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendText, ThemeColor(settings, Colors::kTextMain));
+}
+
+}  // namespace
+
 ComputeSummaryView::ComputeSummaryView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -127,11 +154,21 @@ ComputeSummaryView::Update()
 void
 ComputeSummaryView::Render()
 {
-    ImGui::BeginChild("summary");
+    const ImGuiStyle& style = ImGui::GetStyle();
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x, style.WindowPadding.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+    ImGui::BeginChild("summary", ImVec2(0, 0),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
     if(m_top_kernels)
     {
         m_top_kernels->Render();
     }
+    ImGui::Spacing();
     if(m_roofline)
     {
         ImGui::BeginChild("roofline_container", ImVec2(ImGui::GetContentRegionAvail().x,
@@ -141,11 +178,14 @@ ComputeSummaryView::Render()
         m_roofline->Render();
         ImGui::EndChild();
     }
+    ImGui::Spacing();
     if(m_sol_table)
     {
         m_sol_table->Render();
     }
     ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
 }
 
 ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
@@ -492,8 +532,7 @@ void
 ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time_format)
 {
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     ImGui::PushID(m_workload->id);
     if(ImPlot::BeginPlot(
            "##Pie", ImVec2(-1, -1),
@@ -558,7 +597,7 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::EndPlot();
     }
     ImGui::PopID();
-    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleColor(9);
     ImPlot::PopStyleVar();
 }
 
@@ -568,8 +607,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
     ImGui::BeginChild("bar_area", ImVec2(0, 0));
     float y_axis_width = 0.15f * ImGui::GetContentRegionAvail().x;
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     ImGui::SetCursorPos(ImVec2(y_axis_width, 0.0f));
     if(ImPlot::BeginPlot("##Bar", ImVec2(-1, -1),
                          ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
@@ -656,7 +694,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleColor(9);
     ImPlot::PopStyleVar();
     ImGui::EndChild();
 }

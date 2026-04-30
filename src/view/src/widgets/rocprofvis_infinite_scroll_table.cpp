@@ -478,8 +478,14 @@ InfiniteScrollTable::Render()
         }
         else if(!m_no_data_text.empty())
         {
-            ImGui::Dummy(ImVec2(0.0f, style.ItemSpacing.y * 0.5f));
+            const float empty_state_y =
+                std::max(style.ItemSpacing.y, ImGui::GetContentRegionAvail().y * 0.18f);
+            ImGui::Dummy(ImVec2(0.0f, empty_state_y));
+            CenterNextTextItem(m_no_data_text.c_str());
             ImGui::TextDisabled("%s", m_no_data_text.c_str());
+            const char* hint = "Select compatible tracks or adjust the current filters.";
+            CenterNextTextItem(hint);
+            ImGui::TextDisabled("%s", hint);
         }
         ImGui::PopStyleColor();
         ImGui::PopID();

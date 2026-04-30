@@ -33,7 +33,7 @@ constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
 constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
-constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 10.0f;
+constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 
 namespace
 {
@@ -1823,7 +1823,7 @@ TimelineView::RenderTraceView()
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, grab_min_size);
     ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, scrollbar_rounding);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, scrollbar_rounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 1));
     ImGui::PushStyleColor(ImGuiCol_SliderGrab,
                           m_settings.GetColor(Colors::kScrollGrab));
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive,

@@ -405,15 +405,16 @@ AppWindow::Render()
 #endif
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 6));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 
     ImGui::Begin("Main Window", nullptr,
                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
                      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14, m_default_spacing.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 6));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
     if(ImGui::BeginMenuBar())
     {
         Project* project = GetCurrentProject();
@@ -426,7 +427,7 @@ AppWindow::Render()
 #endif
         ImGui::EndMenuBar();
     }
-    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
+    ImGui::PopStyleVar(3);  // ItemSpacing, WindowPadding, FramePadding
 
     if(m_main_view)
     {

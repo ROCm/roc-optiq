@@ -654,7 +654,7 @@ TraceView::RenderToolbar()
                           ImGui::ColorConvertU32ToFloat4(
                               m_settings_manager.GetColor(Colors::kBorderColor)));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
 
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
@@ -691,14 +691,15 @@ TraceView::RenderToolbar()
     }
     VerticalSeparator(&m_settings_manager);
 
+    // Quiet, minimal action: outline-style instead of a heavy filled accent.
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kAccentRed)));
+        m_settings_manager.GetColor(Colors::kBgFrame)));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kAccentRedHover)));
+        m_settings_manager.GetColor(Colors::kButtonHovered)));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kAccentRedActive)));
+        m_settings_manager.GetColor(Colors::kButtonActive)));
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kTextOnAccent)));
+        m_settings_manager.GetColor(Colors::kTextMain)));
     if(ImGui::Button("Reset View"))
     {
         if(m_timeline_view)
@@ -728,7 +729,7 @@ TraceView::RenderToolbar()
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     draw_list->AddLine(ImVec2(child_min.x, child_max.y - 1.0f),
                        ImVec2(child_max.x, child_max.y - 1.0f),
-                       m_settings_manager.GetColor(Colors::kAccentRed), 2.0f);
+                       m_settings_manager.GetColor(Colors::kBorderColor), 1.0f);
 
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(2);

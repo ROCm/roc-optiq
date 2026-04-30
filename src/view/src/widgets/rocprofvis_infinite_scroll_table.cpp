@@ -175,7 +175,12 @@ InfiniteScrollTable::Render()
     // Flag to show loading spinner
     bool show_loading_indicator = false;
 
-    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), true);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0),
+                      ImGuiChildFlags_Borders);
     const auto& table_model = m_data_provider.DataModel().GetTables();
 
     const std::vector<std::vector<std::string>>& table_data =
@@ -330,7 +335,7 @@ InfiniteScrollTable::Render()
                     ImGui::TableSetBgColor(
                         ImGuiTableBgTarget_RowBg0,
                         (row_n == m_hovered_row)
-                            ? m_settings.GetColor(Colors::kAccentRedHover)
+                            ? m_settings.GetColor(Colors::kHighlightChart)
                             : 0);
 
                     // Render actual cells after the row hit-box
@@ -486,6 +491,8 @@ InfiniteScrollTable::Render()
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar();
 
     if(sort_requested || m_filter_requested)
     {

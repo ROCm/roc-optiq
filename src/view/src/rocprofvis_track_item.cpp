@@ -206,6 +206,8 @@ TrackItem::RenderMetaArea()
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 3));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 3));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_selected
@@ -353,7 +355,7 @@ TrackItem::RenderMetaArea()
                 m_settings.GetColor(Colors::kMetaDataSeparator), 1.0f);
 
     ImGui::PopStyleColor();
-    ImGui::PopStyleVar(4);
+    ImGui::PopStyleVar(5);
     if(ImGui::IsItemClicked(ImGuiMouseButton_Left))
     {
         m_meta_area_clicked = true;

@@ -129,7 +129,8 @@ void SplitContainerBase::Render()
         ImGui::GetWindowDrawList()->AddRectFilled(
             splitter_min, splitter_max,
             SettingsManager::GetInstance().GetColor(
-                fill_active ? Colors::kAccentRedActive : Colors::kSplitterColor));
+                fill_active ? Colors::kBorderGray : Colors::kSplitterColor),
+            2.0f);
         AddSameLine();
     }
 
@@ -182,7 +183,7 @@ SplitContainerBase::SetMinSecondSize(float size)
 
 //------------------------------------------------------------------
 HSplitContainer::HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
-: SplitContainerBase(left, right, 4.0f, 100.0f, 100.0f, 0.25f)
+: SplitContainerBase(left, right, 2.0f, 100.0f, 100.0f, 0.25f)
 {
     m_widget_name = GenUniqueName("HSplitContainer");
     m_first_name  = GenUniqueName("LeftColumn");
@@ -293,7 +294,7 @@ HSplitContainer::GetItemSize()
 
 //------------------------------------------------------------------
 VSplitContainer::VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
-: SplitContainerBase(top, bottom, 4.0f, 200.0f, 100.0f, 0.6f)
+: SplitContainerBase(top, bottom, 2.0f, 200.0f, 100.0f, 0.6f)
 {
     m_widget_name = GenUniqueName("VSplitContainer");
     m_first_name  = GenUniqueName("TopRow");

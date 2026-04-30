@@ -33,7 +33,7 @@ constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
 constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
-constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 16.0f;
+constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 10.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -933,7 +933,8 @@ TimelineView::RenderGrid()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    if(ImGui::BeginChild("Grid"), content_size, true, window_flags)
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgFrame));
+    if(ImGui::BeginChild("Grid", content_size, true, window_flags))
     {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -997,6 +998,7 @@ TimelineView::RenderGrid()
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
 
 void
@@ -1189,6 +1191,25 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         selection_color = m_settings.GetColor(Colors::kHighlightChart);
     }
 
+    // Lane plate: subtle alternating bands give scannable rows without screaming.
+    ImVec2 lane_min = ImGui::GetCursorScreenPos();
+    ImVec2 lane_max(lane_min.x + ImGui::GetContentRegionAvail().x,
+                    lane_min.y + track_height - 1.0f);
+    ImU32 lane_color = (track_index % 2 == 0)
+                           ? m_settings.GetColor(Colors::kBgPanel)
+                           : m_settings.GetColor(Colors::kBgFrame);
+    ImDrawList* lane_dl = ImGui::GetWindowDrawList();
+    lane_dl->AddRectFilled(lane_min, lane_max, lane_color);
+
+    if(track_graph.selected)
+    {
+        // Quiet 2px accent rail on the inner edge of the selected lane.
+        lane_dl->AddRectFilled(
+            ImVec2(lane_min.x, lane_min.y),
+            ImVec2(lane_min.x + 2.0f, lane_max.y),
+            m_settings.GetColor(Colors::kAccentRed));
+    }
+
     ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
     ImGui::PushID(track_index);
     if(ImGui::BeginChild("", ImVec2(0, track_height), false,
@@ -1267,8 +1288,11 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     // This is done after the child window to ensure it is on top
     ImVec2 p_min = ImGui::GetItemRectMin();
     ImVec2 p_max = ImGui::GetItemRectMax();
-    ImGui::GetWindowDrawList()->AddRect(
-        p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
+    // Replace heavy lane border with a single subtle bottom rule. Cleaner read.
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(p_min.x, p_max.y - 0.5f),
+        ImVec2(p_max.x, p_max.y - 0.5f),
+        m_settings.GetColor(Colors::kTableBorderLight), 1.0f);
 }
 
 void
@@ -1468,7 +1492,7 @@ TimelineView::RenderHistogram()
     ImGui::SameLine();
 
     // Vertical splitter
-    float splitter_size = 5.0f;
+    float splitter_size = 1.0f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
     ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
                       false);
@@ -1565,8 +1589,9 @@ TimelineView::RenderHistogram()
             float y_bar      = y1 - bar_height;
             draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
                                      i % 2 == 0
-                                         ? m_settings.GetColor(Colors::kAccentRedActive)
-                                         : m_settings.GetColor(Colors::kAccentRed));
+                                         ? m_settings.GetColor(Colors::kLineChartColor)
+                                         : m_settings.GetColor(Colors::kLineChartColorAlt),
+                                     1.5f);
         }
     }
     // Draw view range overlays and labels
@@ -1670,6 +1695,14 @@ TimelineView::RenderTraceView()
     m_loading_timer.Tick();
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
+
+    // Quiet canvas surface: filled panel + a single hairline border, no
+    // shadow/glow. Lets the data own the visual weight.
+    ImDrawList* bg_draw_list = ImGui::GetWindowDrawList();
+    bg_draw_list->AddRectFilled(screen_pos,
+                                screen_pos + subcomponent_size_main,
+                                m_settings.GetColor(Colors::kBgPanel),
+                                m_settings.GetDefaultStyle().ChildRounding);
 
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {

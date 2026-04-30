@@ -92,12 +92,32 @@ TabContainer::Update()
 void
 TabContainer::Render()
 {
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style = settings.GetDefaultStyle();
+
+    // Modern app-style tab strip: a soft band that visually separates the
+    // active document from the rest of the chrome.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14, 7));
+    ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, style.FrameRounding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
     ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
     int new_selected_tab = m_active_tab_index;
     if(!m_tabs.empty())
     {
         int index_to_remove = s_invalid_index;
-        if(ImGui::BeginTabBar("Tabs"))
+        ImGui::PushStyleColor(ImGuiCol_Tab, settings.GetColor(Colors::kBgMain));
+        ImGui::PushStyleColor(ImGuiCol_TabHovered,
+                              settings.GetColor(Colors::kBgFrame));
+        ImGui::PushStyleColor(ImGuiCol_TabActive,
+                              settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_TabUnfocused,
+                              settings.GetColor(Colors::kBgMain));
+        ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive,
+                              settings.GetColor(Colors::kBgPanel));
+        if(ImGui::BeginTabBar("Tabs", ImGuiTabBarFlags_NoTabListScrollingButtons |
+                                          ImGuiTabBarFlags_FittingPolicyResizeDown))
         {
             for(size_t i = 0; i < m_tabs.size(); ++i)
             {
@@ -124,7 +144,7 @@ TabContainer::Render()
                 {
                     ImGui::PushStyleColor(ImGuiCol_Text,
                         ImGui::ColorConvertU32ToFloat4(
-                            SettingsManager::GetInstance().GetColor(Colors::kTextOnAccent)));
+                            settings.GetColor(Colors::kTextMain)));
                 }
 
                 bool tab_visible = false;
@@ -177,6 +197,7 @@ TabContainer::Render()
             }
             ImGui::EndTabBar();
         }
+        ImGui::PopStyleColor(5);
 
         // Check if the active tab has changed
         if(m_active_tab_index != new_selected_tab)
@@ -207,6 +228,8 @@ TabContainer::Render()
         }
     }
     ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(4);
 }
 
 void

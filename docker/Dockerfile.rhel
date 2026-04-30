@@ -10,7 +10,7 @@ SHELL [ "/bin/bash", "-c" ]
 RUN dnf groupinstall -y "Development Tools" && \
     dnf install -y epel-release && crb enable && \
     dnf install -y cmake curl libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget && \
-    dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel
+    dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel unzip
 
 # Install Vulkan SDK
 RUN mkdir -p /opt/vulkan && \

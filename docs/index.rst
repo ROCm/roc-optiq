@@ -11,7 +11,7 @@ It provides deep insights into both system-level behavior and kernel-level perfo
 
 ROCm Optiq enables developers to visualize execution traces and profiling analysis data in a single interface, helping to identify performance bottlenecks, understand hardware utilization, optimize workloads, and efficiently scale applications across CPUs and GPUs. 
 
-The component public repository is located at `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_.
+The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_.
 
 .. note::
 
@@ -23,7 +23,7 @@ ROCm Optiq (Beta) 0.4.0
 Added
 -----
 
-New visualization features for analysis data include: 
+New visualization features for analyzing data include: 
 
 - Summary View – Speed of Light: Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, showing utilization relative to architectural peak capabilities. The Percent-of-Peak values help quickly identify whether the workload is limited. 
 - Kernel Details - Kernel Selection Table: Added a bar chart visualization for values of metrics and a tooltip feature for displaying kernels' full names. 

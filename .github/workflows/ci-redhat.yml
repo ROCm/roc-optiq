@@ -107,9 +107,7 @@ jobs:
         with:
           name: roc-optiq-rhel-${{ matrix.os-version }}-release
           path: |
-            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}
-            ${{ env.DIST_DIR }}/*.gz
-            ${{ env.DIST_DIR }}/*.rpm
+            ${{ env.DIST_DIR }}/
           retention-days: 2
       
       - name: Configure AWS credentials

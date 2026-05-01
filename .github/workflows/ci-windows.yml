@@ -119,7 +119,7 @@ jobs:
         with:
           name: roc-optiq-windows-${{ matrix.os-version }}-release
           path: | 
-            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.exe
+            ${{ env.DIST_DIR }}
           retention-days: 2
 
       - name: Configure AWS credentials

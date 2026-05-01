@@ -107,9 +107,7 @@ jobs:
         with:
           name: roc-optiq-ubuntu-${{ matrix.os-version }}-release
           path: |
-            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}
-            ${{ env.DIST_DIR }}/*.deb
-            ${{ env.DIST_DIR }}/*.tar.gz
+            ${{ env.DIST_DIR }}/
           retention-days: 2
 
       - name: Configure AWS credentials

@@ -42,7 +42,7 @@ Install on Windows
 Install on Linux
 ================
 
-Indentify the operating system
+Identify the operating system
 ------------------------------
 
 If you're unsure of the Linux distribution and version, the ``/etc/os-release`` and ``/usr/lib/os-release`` files contain this information.

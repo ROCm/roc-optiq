@@ -11,47 +11,68 @@ It provides deep insights into both system-level behavior and kernel-level perfo
 
 ROCm Optiq enables developers to visualize execution traces and profiling analysis data in a single interface, helping to identify performance bottlenecks, understand hardware utilization, optimize workloads, and efficiently scale applications across CPUs and GPUs. 
 
-The component public repository is located at `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_.
+The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_.
 
 .. note::
 
   ROCm Optiq is in beta. Running production workloads is not recommended.
 
-ROCm Optiq 0.3.0 
-================
-
-Listed below are the incremental changes in this release compared to the previous release (`ROCm Optiq 0.2.0 <https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.2.0/index.html>`_).
+ROCm Optiq (Beta) 0.4.0 
+=======================
 
 Added
 -----
 
-ROCm Optiq for visualizing ROCm Compute Profiler's data. New features include:
+New visualization features for analyzing data include: 
 
-- **Summary View**: Shows a high-level overview of the captured data.  
+- Summary View -- Speed of Light: Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, showing utilization relative to architectural peak capabilities. The Percent-of-Peak values help quickly identify whether the workload is limited. 
+- Kernel Details -- Kernel Selection Table: Added a bar chart visualization of metric values and a tooltip that displays kernels’ full names. 
+- Baseline Comparison: Enables you to compare two workload measurements (baseline vs. target) side-by-side in a unified table. It helps to quickly spot regressions, improvements, and behavior changes. It highlights per-metric deltas (including percentage change) to make the performance impact easy to quantify. 
+- Added support for ROCm compute profiler's database schema 1.3 and related performance improvements. 
+- Presets: Save and recall pinned metric configurations for Table View and Baseline Comparison.
+- New context menu to add metrics to Kernel Selection Table from Table View.
+- Configurable delta-threshold control for Baseline Comparison.
 
-  - **Table**: lists the ten longest-running kernels sorted by Total Execution Time. 
-  - **Charts**: Plot duration and invocation statistics across kernels. 
-  - **Roofline Chart**: plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels.
+Other new features: 
 
-- **Kernel Details**: displays details of each kernel. 
-
-  - **Kernel Selection Table**: Lists kernels with GPU metrics. Use **Add Metric** to append additional GPU metric columns. Per-column search box accepts names or metric expressions (for example, ``metric > threshold``). Click **Apply Filters** to execute; combine multiple filters to narrow the analysis. 
-  - **Memory Chart**: Shows memory transactions and throughput per cache hierarchy level for the selected kernel. 
-  - **System Speed-of-Light**: Displays key kernel-level performance metrics with unit, average, peak, and percentage of peak values. 
-  - **Kernel Roofline Chart**: Shows a kernel-specific roofline analysis to determine whether a kernel is compute-bound or memory-bound. Click the gear icon to access customization options. 
-
-- **Table View**: provides a complete list of available metrics for the selected kernel.
-- **Workload Details**: Provides contextual information about the workload.
+- Data clean-up: Enables the removal of metadata added by ROCm Optiq in a database file. 
+- Command-line interface support. 
+- OpenGL backend as a fallback when Vulkan is unavailable; optional software rendering path; command-line option to force a specific graphics backend. 
+- Dear ImGui updated (docking-capable line, ImPlot aligned); Linux session defaults to X11 for compatibility. 
+- Microsoft Windows packages link GLFW statically by default (no separate ``glfw.dll`` in the installer). 
+- New settings panel allowing keyboard shortcuts to be customized. 
 
 Changed
 -------
 
-Changes in ROCm Optiq for visualizing ROCm System Profiler traces: 
+Changes in viewing analysis data include: 
 
-- System Topology tree was restructured to show both hardware and software topologies. 
-- Memory allocation activity tracks are now displayed in Timeline and System Topology Views. 
-- RPD files populate Topology. 
-- Multi-node support: Time normalization for multi-node configurations. 
+- Roofline charts for Summary View and Kernel Details: The legend can be repositioned; aspect ratio follows the window; multi-workload chart fixes and top-kernels presentation updates.
+- Kernel Details updates: Added mini-graphs in cells, pinned title/header improvements, and a global toggle for inline charts. Added a tooltip to display clipped names and adjusted the name-column sizing to free up space for metrics. 
+
+Changes in viewing trace data include: 
+
+- Topology View and Timeline:  
+  
+  - Enhanced System Topology tree for better representation of hardware and software topologies.  
+  - Toggle on device nodes to show or hide all tracks under that device. 
+
+Navigation and inspection:  
+
+- Use **Go To Event** in tables and the **Flow Data** panel to go to a specific event. Double-click the event, or click **Go To Event** from the right-click context menu, to open the event on the timeline with vertical track centering and highlighted feedback.
+- Highlight-on-navigate with a dedicated event path, pulsing indicator, and timed auto-clear; selection and highlight handled independently.
+- Callstack experience improvements. 
+
+Resolved issues
+---------------
+
+- Fixed an issue where metrics that reference ``None`` return N/A.
+- Fixed an issue where ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-directory``. 
+
+Known issues
+------------
+
+- On **Call Stack Data**, for instrumented threads, some call stack information such as address, file, and PC isn't available. 
 
 .. tip::
 
@@ -69,6 +90,10 @@ Changes in ROCm Optiq for visualizing ROCm System Profiler traces:
     * :doc:`View trace data <how-to/view-trace>`
     * :doc:`View analysis data <how-to/view-analysis>`
     * :doc:`Customize your project <how-to/customize-views>`
+
+  .. grid-item-card:: Reference
+
+    * :doc:`Command-line support <reference/cli-support>`
 
 To contribute to the documentation, refer to the
 `Programming Guide in the GitHub repo <https://github.com/ROCm/roc-optiq/blob/main/CODING.md>`_.

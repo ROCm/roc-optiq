@@ -92,7 +92,7 @@ TabContainer::Update()
 void
 TabContainer::Render()
 {
-    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
+    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollWithMouse);
     int new_selected_tab = m_active_tab_index;
     if(!m_tabs.empty())
     {

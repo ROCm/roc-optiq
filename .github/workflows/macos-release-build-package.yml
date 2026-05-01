@@ -79,7 +79,7 @@ jobs:
             --confirm-command \
             install \
             copy_only=1
-            
+
           if [ ! -d "${SDK_ROOT}" ]; then
             echo "❌ SDK root not created: ${SDK_ROOT}"
             exit 1

@@ -17,15 +17,15 @@ on:
         type: string
         default: 'Windows Release Build'
       enable_internal_banner:
-        description: 'Boolean to enable/disable the internal banner'
+        description: 'Enable the internal banner?'
         type: boolean
         default: false
       upload_to_github:
-        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
         default: false
       upload_to_s3:
-        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
   workflow_call:
@@ -43,22 +43,22 @@ on:
         type: string
         default: 'Windows Release Build'
       enable_internal_banner:
-        description: 'Boolean to enable/disable the internal banner'
+        description: 'Enable the internal banner?'
         type: boolean
         default: false
       upload_to_github:
-        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
         default: false
       upload_to_s3:
-        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
 
 env:
   BUILD_DIR: "build"
   DIST_DIR: "dist"
-  BINARY_DIR: "Release"
+  BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || 'Release' }}
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
   
@@ -107,18 +107,10 @@ jobs:
             exit 1
           }
 
-      - name: Configure AWS credentials
-        if: ${{ inputs.upload_to_s3 }}
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
       - name: Prepare Distribution Artifacts
         run: |
           mkdir ${{ env.DIST_DIR }}
           cp ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
-          cp ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/glfw3.dll ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
       
       - name: Upload GitHub Artifacts
@@ -127,8 +119,7 @@ jobs:
         with:
           name: roc-optiq-windows-${{ matrix.os-version }}-release
           path: | 
-            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.exe
-            ${{ env.DIST_DIR }}/glfw3.dll
+            ${{ env.DIST_DIR }}
           retention-days: 2
 
       - name: Configure AWS credentials
@@ -143,5 +134,5 @@ jobs:
         shell: pwsh
         run: |
           $timestamp = Get-Date -Format "yyyy_MM_dd"
-          aws s3 cp ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$timeStamp/windows/ \
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$timeStamp/windows/ `
             --no-progress

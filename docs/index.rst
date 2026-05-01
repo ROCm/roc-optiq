@@ -26,7 +26,7 @@ Added
 New visualization features for analyzing data include: 
 
 - Summary View – Speed of Light: Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, showing utilization relative to architectural peak capabilities. The Percent-of-Peak values help quickly identify whether the workload is limited. 
-- Kernel Details - Kernel Selection Table: Added a bar chart visualization for values of metrics and a tooltip feature for displaying kernels' full names. 
+- Kernel Details - Kernel Selection Table: Added a bar chart visualization of metric values and a tooltip that displays kernels’ full names. 
 - Baseline Comparison: Enables you to compare two workload measurements (baseline vs. target) side-by-side in a unified table. It helps to quickly spot regressions, improvements, and behavior changes. It highlights per-metric deltas (including percentage change) to make the performance impact easy to quantify. 
 - Added support for ROCm compute profiler's database schema 1.3 and related performance improvements. 
 - Presets: Save and recall pinned metric configurations for Table View and Baseline Comparison.
@@ -35,11 +35,11 @@ New visualization features for analyzing data include:
 
 Other new features: 
 
-- Data clean-up: Enables removal of metadata added by ROCm Optiq in a database file. 
+- Data clean-up: Enables the removal of metadata added by ROCm Optiq in a database file. 
 - Command-line interface support. 
 - OpenGL backend as a fallback when Vulkan is unavailable; optional software rendering path; command-line option to force a specific graphics backend. 
 - Dear ImGui updated (docking-capable line, ImPlot aligned); Linux session defaults to X11 for compatibility. 
-- Windows packages link GLFW statically by default (no separate ``glfw.dll`` in the installer). 
+- Microsoft Windows packages link GLFW statically by default (no separate ``glfw.dll`` in the installer). 
 - New settings panel allowing keyboard shortcuts to be customized. 
 
 Changed
@@ -48,7 +48,7 @@ Changed
 Changes in viewing analysis data include: 
 
 - Roofline charts for Summary View and Kernel Details: legend can be repositioned; aspect ratio follows the window; multi-workload chart fixes and top-kernels presentation updates.
-- Kernel Details updates: Added mini-graphs in cells, pinned title/header improvements, and a global toggle for inline charts. Added a tooltip for displaying clipped names and adjusted the name-column sizing to free space for metrics. 
+- Kernel Details updates: Added mini-graphs in cells, pinned title/header improvements, and a global toggle for inline charts. Added a tooltip to display clipped names and adjusted the name-column sizing to free up space for metrics. 
 
 Changes in viewing trace data include: 
 
@@ -66,8 +66,8 @@ Navigation and inspection:
 Resolved issues
 ---------------
 
-- Fixed issue where metrics that reference ``None`` return N/A.
-- Fixed issue where ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-directory``. 
+- Fixed an issue where metrics that reference ``None`` return N/A.
+- Fixed an issue where ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-directory``. 
 
 Known issues
 ------------

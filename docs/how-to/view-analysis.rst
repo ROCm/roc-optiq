@@ -12,6 +12,7 @@ View ROCm Compute Profiler analysis data in ROCm Optiq
 .. |gear| image:: ../images/gear.png
 
 ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel- and metric-level analysis. 
+ROCm Optiq provides intuitive, interactive profiling and analysis for compute workloads, moving from high-level performance summaries to detailed kernel- and metric-level analysis. 
 It enables rapid identification of performance hotspots and interactive exploration of kernel-level metrics for a profiled workload.
 
 Open a ROCm Compute Profiler database file
@@ -45,7 +46,7 @@ Summary View -- Table
 ---------------------
  
 The table in **Summary View** lists the top 10 longest-running kernels sorted by Total Execution Time. 
-The table displays kernel names, the number of invocations, and statistics including Total, Min, Max, Mean, Median durations.  
+The table displays kernel names, the number of invocations, and statistics including Total, Min, Max, Mean, and Median durations.  
 
 .. image:: ../images/summary-view-table.png
    :width: 800
@@ -75,7 +76,7 @@ The bar chart displays per-kernel metrics including the number of invocations, a
    :width: 800
    :align: center
 
-Selected kernels are highlighted white in both charts.  
+Selected kernels are highlighted in white in both charts.  
 
 Summary View -- Roofline Chart
 ------------------------------
@@ -109,9 +110,9 @@ Summary View -- System Speed-of-Light
 -------------------------------------
 
 - Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, highlighting utilization relative to architectural peak capabilities. 
-- The Summary View -- System Speed-of-Light table includes the following columns: Metric ID, Metric Name, Average Value, Peak, Percent-of-Peak, and Unit. 
+- The Summary View -- System Speed-of-Light table includes the following columns: **Metric ID**, **Metric Name**, **Average Value**, **Peak, Percent-of-Peak**, and **Unit**. 
 - Metrics are aggregated across kernels to reflect overall application behavior rather than per-kernel performance. 
-- Use the Percent-of-Peak column to quickly identify whether execution is limited. Execution could be limited by compute, memory, or other hardware subsystems. 
+- Use the **Percent-of-Peak** column to quickly identify whether execution is limited. Execution could be limited by compute, memory, or other hardware subsystems. 
 - Hover over a metric name to see a tooltip with a detailed description. 
 
 Kernel Details

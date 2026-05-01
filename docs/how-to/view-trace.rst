@@ -100,7 +100,7 @@ ROCm Optiq displays ROCm events in both Stream view and Queue view simultaneousl
 Timeline View
 -------------
 
-The **Timeline View** displays CPU and GPU activities, events, and performance metrics chronologically. You can:
+The **Timeline View** displays CPU and GPU activities, events, and performance metrics in chronological order. You can:
 
 - Review events such as API calls, kernel dispatches, and more.
 - See performance counter data as charts displaying the data points.
@@ -121,7 +121,7 @@ Navigate the Timeline
 
 You can pan and scroll through the **Timeline View** using the scrollbars or by dragging your mouse across the **Graph** area of the **Timeline View**.
 
-The hotkeys (**WASD** and arrow keys) can be also used to zoom and pan the view:
+The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the view:
 
 - **W** / **S**: Zoom in and out, respectively.
 - **A** or **Left Arrow** / **D** or **Right Arrow**: Pan left and right, respectively.

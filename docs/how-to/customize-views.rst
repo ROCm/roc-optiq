@@ -54,7 +54,7 @@ Use the **View** menu to show and hide application panels.
 .. image:: ../images/view.png
   :width: 300
 
-Customize ROCm Optiq projects for ROCm Systems Profiler traces
+Customize projects for ROCm Systems Profiler traces
 ==============================================================
 
 You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, saved trace selections, added bookmarks/annotations, and more.
@@ -82,7 +82,7 @@ If one or more events are selected, the **Make Time Range Selection** option dis
 
 |make|
 
-Selecting this will set a time range filter with boundaries at the event's start and end times, or the first start time and last end time if multiple events are selected. 
+Selecting this sets a time-range filter with boundaries at the event's start and end times, or at the first start time and last end time if multiple events are selected. 
 
 .. tip::
 
@@ -167,13 +167,13 @@ Customize display options for each track by clicking the gear icon in the track'
 - For event tracks, you can toggle between **Color by name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
   - **Color by name**, **Color by Time Level**, and **No Color***: Change the coloring method used to color the events.
-  - **Compact Mode**: Shrink the event heights so that tall flame graphs can be displayed in a smaller area.
+  - **Compact Mode**: Shrink event heights to display tall flame graphs in a smaller area.
 
 - For sample counter tracks, you can toggle between **Show Counter Boxes**, **Alternate Counter Coloring**, and **Highlight Y Range**:
 
   - **Show Counter Boxes**: Display as a line only, or fill the area under the line as well.
   - **Alternate Counter Coloring**: If the area under the line is filled, alternate the fill color for each sample.
-  - **Highlight Y Range**: Select an area of the graph to highlight. Choose the min and max range that you want to highlight. The tool highlights these values on the track region.
+  - **Highlight Y Range**: Select an area of the graph to highlight. Choose the minimum and maximum range that you want to highlight. The tool highlights these values on the track region.
 
     .. image:: ../images/timeline-display-options.png
        :width: 400  
@@ -189,7 +189,7 @@ Customize display options for each track by clicking the gear icon in the track'
 Set the flow rendering display mode
 -----------------------------------
 
-Use the **Flow** buttons on the **Toolbar** to show and hide flow information on the :ref:`timeline`, or change the flow display mode from Render (fan) to Chain mode. 
+Use the **Flow** buttons on the toolbar to show and hide flow information on the :ref:`timeline`, or change the flow display mode from Render (fan) to Chain mode. 
 
 |flow|
 
@@ -223,7 +223,7 @@ You can remove metadata added by ROCm Optiq during processing trace data by sele
 .. image:: ../images/cleanup.png
    :width: 300
 
-Customize ROCm Optiq projects for ROCm Compute Profiler Analysis Data
+Customize projects for ROCm Compute Profiler Analysis Data
 =====================================================================
 
 .. _presets:
@@ -236,7 +236,7 @@ Persist the pinned metric configurations for the Table View and Baseline Compari
 .. image:: ../images/presets.png
    :width: 300
 
-After a preset is saved you can:
+After a preset is saved, you can:
 
 - Recall it by clicking |recall| in the preset's row.
 - Overwrite it by clicking |overwrite|.

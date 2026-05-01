@@ -52,7 +52,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
             echo "ubuntu-os-versions=${{ env.UBUNTU_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
-            echo "redhat-os-versions=${{ env.UBUNTU_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
+            echo "redhat-os-versions=${{ env.REDHAT_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "windows-os-versions=${{ env.WINDOWS_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
           else
             echo "ubuntu-os-versions=${{ env.UBUNTU_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"

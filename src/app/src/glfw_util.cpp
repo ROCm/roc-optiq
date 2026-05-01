@@ -4,8 +4,6 @@
 #include "glfw_util.h"
 #include "rocprofvis_view_module.h"
 #include "spdlog/spdlog.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb-image/stb_image.h"
 
 namespace RocProfVis
 {
@@ -227,36 +225,6 @@ is_fullscreen_active(GLFWwindow* window)
         (std::abs(wh - mode->height) <= TOL);
 
     return matches_workarea || matches_vidmode;
-}
-
-std::pair<GLFWimage, unsigned char*>
-create_icon(const unsigned char* icon_data, size_t icon_data_len)
-{
-    int            width, height, channels;
-    unsigned char* pixels =
-        stbi_load_from_memory(icon_data, static_cast<int>(icon_data_len), &width, &height,
-                              &channels, STBI_rgb_alpha);
-
-    GLFWimage image;
-    if(!pixels)
-    {
-        spdlog::error("Failed to load icon image: {}", stbi_failure_reason());
-        image = { 0, 0, nullptr };
-        return { image, nullptr };
-    }
-    else
-    {
-        image.width  = width;
-        image.height = height;
-        image.pixels = pixels;
-        return { image, pixels };
-    }
-}
-
-void
-free_icon(unsigned char* pixels)
-{
-    stbi_image_free(pixels);
 }
 
 }  // namespace View

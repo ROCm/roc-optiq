@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "imgui.h"
 #include "implot.h"
 #include "rocprofvis_core.h"
@@ -21,52 +22,56 @@ namespace View
 
 
 constexpr std::array DARK_THEME_COLORS = {
-    IM_COL32(52, 54, 58, 255),     // kMetaDataColor
-    IM_COL32(44, 46, 50, 255),     // kMetaDataColorSelected
-    IM_COL32(68, 70, 74, 255),     // kMetaDataSeparator
-    IM_COL32(0, 0, 0, 0),          // kTransparent
-    IM_COL32(224, 62, 62, 255),    // kTextError
-    IM_COL32(90, 200, 120, 255),   // kTextSuccess
-    IM_COL32(200, 200, 210, 255),  // kFlameChartColor
-    IM_COL32(180, 180, 190, 60),   // kGridColor
-    IM_COL32(224, 62, 62, 255),    // kGridRed
-    IM_COL32(255, 120, 120, 255),  // kSelectionBorder
-    IM_COL32(224, 62, 62, 100),    // kSelection
-    IM_COL32(170, 170, 180, 255),  // kBoundBox
-    IM_COL32(36, 38, 42, 255),     // kFillerColor
-    IM_COL32(90, 90, 100, 255),    // kScrollBarColor
-    IM_COL32(255, 140, 140, 120),  // kHighlightChart
-    IM_COL32(62, 64, 68, 255),     // kRulerBgColor
-    IM_COL32(220, 220, 220, 255),  // kRulerTextColor
-    IM_COL32(220, 220, 220, 255),  // kScrubberNumberColor
-    IM_COL32(224, 62, 62, 180),    // kArrowColor
-    IM_COL32(62, 64, 68, 255),     // kBorderColor
-    IM_COL32(90, 90, 100, 255),    // kSplitterColor
-    IM_COL32(28, 30, 34, 255),     // kBgMain
-    IM_COL32(38, 40, 44, 255),     // kBgPanel
-    IM_COL32(44, 46, 50, 255),     // kBgFrame
-    IM_COL32(224, 62, 62, 255),    // kAccentRed
-    IM_COL32(255, 140, 140, 255),  // kAccentRedHover
-    IM_COL32(181, 40, 40, 255),    // kAccentRedActive
-    IM_COL32(80, 80, 90, 255),     // kBorderGray
-    IM_COL32(235, 235, 240, 255),  // kTextMain
-    IM_COL32(170, 170, 180, 255),  // kTextDim
-    IM_COL32(52, 54, 58, 255),     // kScrollBg
-    IM_COL32(100, 100, 110, 255),  // kScrollGrab
-    IM_COL32(80, 80, 90, 255),     // kTableHeaderBg
-    IM_COL32(100, 100, 110, 255),  // kTableBorderStrong
-    IM_COL32(62, 64, 68, 255),     // kTableBorderLight
-    IM_COL32(52, 54, 58, 255),     // kTableRowBg
-    IM_COL32(58, 60, 64, 255),     // kTableRowBgAlt
-    IM_COL32(0, 200, 255, 160),    // kEventHighlight
-    IM_COL32(235, 235, 240, 69),  // kLineChartColor
-    IM_COL32(100, 100, 110, 255),  // kButton
-    IM_COL32(130, 130, 140, 255),  // kButtonHovered
-    IM_COL32(160, 160, 170, 255),  // kButtonActive
-    IM_COL32(180, 160, 60, 255),   // kBgWarning
-    IM_COL32(160, 60, 60, 255),    // kBgError
-    IM_COL32(60, 160, 60, 255),    // kBgSuccess
-    IM_COL32(60, 80, 100, 255),    // kStickyNoteYellow
+    IM_COL32(52, 54, 58, 255),     // Colors::kMetaDataColor
+    IM_COL32(44, 46, 50, 255),     // Colors::kMetaDataColorSelected
+    IM_COL32(68, 70, 74, 255),     // Colors::kMetaDataSeparator
+    IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
+    IM_COL32(224, 62, 62, 255),    // Colors::kTextError
+    IM_COL32(90, 200, 120, 255),   // Colors::kTextSuccess
+    IM_COL32(186, 154, 160, 255),  // Colors::kFlameChartColor
+    IM_COL32(180, 180, 190, 60),   // Colors::kGridColor
+    IM_COL32(224, 62, 62, 255),    // Colors::kGridRed
+    IM_COL32(255, 120, 120, 255),  // Colors::kSelectionBorder
+    IM_COL32(224, 62, 62, 100),    // Colors::kSelection
+    IM_COL32(170, 170, 180, 255),  // Colors::kBoundBox
+    IM_COL32(36, 38, 42, 255),     // Colors::kFillerColor
+    IM_COL32(90, 90, 100, 255),    // Colors::kScrollBarColor
+    IM_COL32(255, 140, 140, 120),  // Colors::kHighlightChart
+    IM_COL32(62, 64, 68, 255),     // Colors::kRulerBgColor
+    IM_COL32(220, 220, 220, 255),  // Colors::kRulerTextColor
+    IM_COL32(220, 220, 220, 255),  // Colors::kScrubberNumberColor
+    IM_COL32(224, 62, 62, 180),    // Colors::kArrowColor
+    IM_COL32(62, 64, 68, 255),     // Colors::kBorderColor
+    IM_COL32(90, 90, 100, 255),    // Colors::kSplitterColor
+    IM_COL32(28, 30, 34, 255),     // Colors::kBgMain
+    IM_COL32(38, 40, 44, 255),     // Colors::kBgPanel
+    IM_COL32(44, 46, 50, 255),     // Colors::kBgFrame
+    IM_COL32(224, 62, 62, 255),    // Colors::kAccentRed
+    IM_COL32(255, 140, 140, 255),  // Colors::kAccentRedHover
+    IM_COL32(181, 40, 40, 255),    // Colors::kAccentRedActive
+    IM_COL32(215, 85, 85, 255),    // Colors::kTabAccent
+    IM_COL32(235, 115, 115, 255),  // Colors::kTabAccentHover
+    IM_COL32(185, 65, 68, 255),    // Colors::kTabAccentActive
+    IM_COL32(80, 80, 90, 255),     // Colors::kBorderGray
+    IM_COL32(235, 235, 240, 255),  // Colors::kTextMain
+    IM_COL32(170, 170, 180, 255),  // Colors::kTextDim
+    IM_COL32(52, 54, 58, 255),     // Colors::kScrollBg
+    IM_COL32(100, 100, 110, 255),  // Colors::kScrollGrab
+    IM_COL32(80, 80, 90, 255),     // Colors::kTableHeaderBg
+    IM_COL32(100, 100, 110, 255),  // Colors::kTableBorderStrong
+    IM_COL32(62, 64, 68, 255),     // Colors::kTableBorderLight
+    IM_COL32(52, 54, 58, 255),     // Colors::kTableRowBg
+    IM_COL32(58, 60, 64, 255),     // Colors::kTableRowBgAlt
+    IM_COL32(255, 128, 110, 220),  // Colors::kEventHighlight
+    IM_COL32(50, 220, 100, 240),   // Colors::kEventSearchHighlight
+    IM_COL32(235, 235, 240, 69),   // Colors::kLineChartColor
+    IM_COL32(100, 100, 110, 255),  // Colors::kButton
+    IM_COL32(130, 130, 140, 255),  // Colors::kButtonHovered
+    IM_COL32(160, 160, 170, 255),  // Colors::kButtonActive
+    IM_COL32(180, 160, 60, 255),   // Colors::kBgWarning
+    IM_COL32(160, 60, 60, 255),    // Colors::kBgError
+    IM_COL32(60, 160, 60, 255),    // Colors::kBgSuccess
+    IM_COL32(60, 80, 100, 255),    // Colors::kStickyNoteYellow
     IM_COL32(230, 240, 255, 140),  // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
     IM_COL32(60, 80, 120, 255),    // Colors::kMinimapBin1
@@ -86,7 +91,10 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(0, 0, 0, 255),        // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 180),        // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
-
+    IM_COL32(45, 60, 95, 255),     // Colors::kComparisonBase
+    IM_COL32(30, 80, 75, 255),     // Colors::kComparisonTarget
+    IM_COL32(95, 70, 30, 255),     // Colors::kComparisonLesser
+    IM_COL32(70, 45, 90, 255),     // Colors::kComparisonGreater
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
@@ -96,7 +104,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(242, 90, 70, 255),    // Colors::kTextError
     IM_COL32(60, 170, 60, 255),    // Colors::kTextSuccess
-    IM_COL32(170, 140, 120, 255),  // Colors::kFlameChartColor
+    IM_COL32(198, 150, 138, 255),  // Colors::kFlameChartColor
     IM_COL32(220, 210, 200, 80),   // Colors::kGridColor
     IM_COL32(242, 90, 70, 255),    // Colors::kGridRed
     IM_COL32(242, 90, 70, 255),    // Colors::kSelectionBorder
@@ -117,6 +125,9 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(242, 90, 70, 255),    // Colors::kAccentRed
     IM_COL32(255, 140, 120, 255),  // Colors::kAccentRedHover
     IM_COL32(255, 110, 90, 255),   // Colors::kAccentRedActive
+    IM_COL32(242, 90, 70, 255),    // Colors::kTabAccent
+    IM_COL32(255, 140, 120, 255),  // Colors::kTabAccentHover
+    IM_COL32(255, 110, 90, 255),   // Colors::kTabAccentActive
     IM_COL32(230, 225, 220, 255),  // Colors::kBorderGray
     IM_COL32(40, 30, 25, 255),     // Colors::kTextMain
     IM_COL32(150, 130, 120, 255),  // Colors::kTextDim
@@ -127,8 +138,9 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(240, 235, 230, 255),  // Colors::kTableBorderLight
     IM_COL32(255, 253, 250, 255),  // Colors::kTableRowBg
     IM_COL32(252, 250, 248, 255),  // Colors::kTableRowBgAlt
-    IM_COL32(0, 140, 200, 180),    // Colors::kEventHighlight
-    IM_COL32(0, 0, 0, 69),        // Colors::kLineChartColor
+    IM_COL32(224, 94, 78, 210),    // Colors::kEventHighlight
+    IM_COL32(30, 180, 80, 230),    // Colors::kEventSearchHighlight
+    IM_COL32(0, 0, 0, 69),         // Colors::kLineChartColor
     IM_COL32(230, 230, 230, 255),  // Colors::kButton
     IM_COL32(210, 210, 210, 255),  // Colors::kButtonHovered
     IM_COL32(180, 180, 180, 255),  // Colors::kButtonActive
@@ -155,18 +167,31 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(255, 255, 255, 255),  // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 60),         // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
-
+    IM_COL32(180, 195, 230, 255),  // Colors::kComparisonBase
+    IM_COL32(175, 220, 215, 255),  // Colors::kComparisonTarget
+    IM_COL32(235, 215, 175, 255),  // Colors::kComparisonLesser
+    IM_COL32(210, 190, 230, 255),  // Colors::kComparisonGreater
     // This must follow the ordering of Colors enum.
 };
-const std::vector<ImU32> FLAME_COLORS = {
-    IM_COL32(0, 114, 188, 204),   IM_COL32(0, 158, 115, 204),
-    IM_COL32(240, 228, 66, 204),  IM_COL32(204, 121, 167, 204),
-    IM_COL32(86, 180, 233, 204),  IM_COL32(213, 94, 0, 204),
-    IM_COL32(0, 204, 102, 204),   IM_COL32(230, 159, 0, 204),
-    IM_COL32(153, 153, 255, 204), IM_COL32(255, 153, 51, 204)
+const std::vector<ImU32> DARK_FLAME_COLORS = {
+    IM_COL32(50, 145, 210, 215),  IM_COL32(0, 158, 115, 215),
+    IM_COL32(240, 228, 66, 215),  IM_COL32(204, 121, 167, 215),
+    IM_COL32(86, 180, 233, 215),  IM_COL32(235, 130, 45, 215),
+    IM_COL32(0, 204, 102, 215),   IM_COL32(230, 159, 0, 215),
+    IM_COL32(153, 153, 255, 215), IM_COL32(255, 153, 51, 215)
 };
+const std::vector<ImU32> LIGHT_FLAME_COLORS = {
+    IM_COL32(50, 145, 210, 220),  IM_COL32(0, 158, 115, 220),
+    IM_COL32(240, 228, 66, 220),  IM_COL32(204, 121, 167, 220),
+    IM_COL32(86, 180, 233, 220),  IM_COL32(235, 130, 45, 220),
+    IM_COL32(0, 204, 102, 220),   IM_COL32(230, 159, 0, 220),
+    IM_COL32(153, 153, 255, 220), IM_COL32(255, 153, 51, 220)
+};
+inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
+inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
+inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
+inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
-inline constexpr size_t       RECENT_FILES_LIMIT = 5;
 inline constexpr float        EVENT_LEVEL_HEIGHT = 40.0f;
 inline constexpr float        COMPACT_EVENT_HEIGHT = 6.0f;
 
@@ -192,6 +217,11 @@ SettingsManager::ApplyColorStyling()
         ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedHover));
     ImVec4 accentRedActive =
         ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedActive));
+    ImVec4 tabAccent = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccent));
+    ImVec4 tabAccentHover =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccentHover));
+    ImVec4 tabAccentActive =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccentActive));
     ImVec4 borderGray = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBorderGray));
     ImVec4 textMain   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTextMain));
     ImVec4 textDim    = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTextDim));
@@ -240,12 +270,10 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_TableRowBgAlt]     = tableRowBgAlt;
 
     // Scrollbar
-    style.Colors[ImGuiCol_ScrollbarBg]   = scrollBg;
-    style.Colors[ImGuiCol_ScrollbarGrab] = scrollGrab;
-    style.Colors[ImGuiCol_ScrollbarGrabHovered] =
-        ImVec4(96.0f / 255.0f, 96.0f / 255.0f, 96.0f / 255.0f, 1.0f);
-    style.Colors[ImGuiCol_ScrollbarGrabActive] =
-        ImVec4(128.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f);
+    style.Colors[ImGuiCol_ScrollbarBg]          = scrollBg;
+    style.Colors[ImGuiCol_ScrollbarGrab]        = scrollGrab;
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = buttonHovered;
+    style.Colors[ImGuiCol_ScrollbarGrabActive]  = buttonActive;
 
     // Checkboxes, radio buttons
     style.Colors[ImGuiCol_CheckMark] = accentRed;
@@ -257,14 +285,16 @@ SettingsManager::ApplyColorStyling()
     // Buttons
     style.Colors[ImGuiCol_Button]        = button;
     style.Colors[ImGuiCol_ButtonHovered] = buttonHovered;
-    style.Colors[ImGuiCol_ButtonActive]  = buttonActive;
+    style.Colors[ImGuiCol_ButtonActive]  = accentRedActive;
 
     // Tabs
     style.Colors[ImGuiCol_Tab]                = bgPanel;
-    style.Colors[ImGuiCol_TabHovered]         = accentRedHover;
-    style.Colors[ImGuiCol_TabActive]          = accentRed;
+    style.Colors[ImGuiCol_TabHovered]         = tabAccentHover;
+    style.Colors[ImGuiCol_TabActive]          = tabAccent;
     style.Colors[ImGuiCol_TabUnfocused]       = bgPanel;
-    style.Colors[ImGuiCol_TabUnfocusedActive] = accentRedActive;
+    style.Colors[ImGuiCol_TabUnfocusedActive] = tabAccentActive;
+    style.Colors[ImGuiCol_TabSelectedOverline] = tabAccentHover;
+    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = tabAccentActive;
 
     // Headers (collapsing, selectable, etc)
     style.Colors[ImGuiCol_Header]        = accentRed;
@@ -353,6 +383,7 @@ SettingsManager::SaveSettingsJson()
     SerializeDisplaySettings(settings_json);
     SerializeUnitSettings(settings_json);
     SerializeOtherSettings(settings_json);
+    SerializeHotkeySettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -381,6 +412,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeDisplaySettings(result.second);
         DeserializeUnitSettings(result.second);
         DeserializeOtherSettings(result.second);
+        DeserializeHotkeySettings(result.second);
     }
     else
     {
@@ -448,9 +480,24 @@ SettingsManager::GetColor(Colors color) const
 }
 
 const std::vector<ImU32>&
-SettingsManager::GetColorWheel()
+SettingsManager::GetColorWheel() const
 {
-    return FLAME_COLORS;
+    return m_usersettings.display_settings.use_dark_mode ? DARK_FLAME_COLORS
+                                                         : LIGHT_FLAME_COLORS;
+}
+
+const char*
+SettingsManager::GetFlameColormapName() const
+{
+    return m_usersettings.display_settings.use_dark_mode ? FLAME_DARK_COLORMAP_NAME
+                                                         : FLAME_LIGHT_COLORMAP_NAME;
+}
+
+const char*
+SettingsManager::GetContrastColormapName() const
+{
+    return m_usersettings.display_settings.use_dark_mode ? CONTRAST_DARK_COLORMAP_NAME
+                                                         : CONTRAST_LIGHT_COLORMAP_NAME;
 }
 
 SettingsManager::SettingsManager()
@@ -514,23 +561,41 @@ SettingsManager::InitStyling()
     style.GrabRounding      = 6.0f;
     style.TabRounding       = 6.0f;
     style.WindowRounding    = 8.0f;
-    style.ScrollbarRounding = 8.0f;
+    style.ScrollbarRounding = 12.0f;
+    style.ScrollbarSize     = 12.0f;
     style.FramePadding  = ImVec2(10, 6);
     style.ItemSpacing   = ImVec2(10, 8);
     style.WindowPadding = ImVec2(4, 4);
     style.ChildRounding = 6.0f;
+    style.PopupRounding = 6.0f;
  
     m_default_style = style;  // Store the our customized style
 
-    std::vector<ImU32> colormap;
-    for(const ImU32& flame_color : GetColorWheel())
-    {
-        colormap.push_back(255 << IM_COL32_A_SHIFT | flame_color);
-    }
-    colormap.push_back(IM_COL32(220, 50, 50, 255));
-    ImPlot::AddColormap("flame", colormap.data(), colormap.size());
-    colormap = { IM_COL32(255, 255, 255, 255), IM_COL32(255, 255, 255, 255) };
-    ImPlot::AddColormap("white", colormap.data(), colormap.size());
+    const auto add_flame_colormap = [](const char* name,
+                                       const std::vector<ImU32>& flame_colors) {
+        std::vector<ImU32> colormap;
+        colormap.reserve(flame_colors.size() + 1);
+        for(const ImU32& flame_color : flame_colors)
+        {
+            colormap.push_back(255 << IM_COL32_A_SHIFT | flame_color);
+        }
+        colormap.push_back(IM_COL32(235, 98, 98, 255));
+        ImPlot::AddColormap(name, colormap.data(), static_cast<int>(colormap.size()));
+    };
+
+    add_flame_colormap(FLAME_DARK_COLORMAP_NAME, DARK_FLAME_COLORS);
+    add_flame_colormap(FLAME_LIGHT_COLORMAP_NAME, LIGHT_FLAME_COLORS);
+
+    const std::vector<ImU32> contrast_dark_colormap = {
+        IM_COL32(255, 255, 255, 255), IM_COL32(255, 255, 255, 255)
+    };
+    const std::vector<ImU32> contrast_light_colormap = {
+        IM_COL32(25, 25, 25, 255), IM_COL32(25, 25, 25, 255)
+    };
+    ImPlot::AddColormap(CONTRAST_DARK_COLORMAP_NAME, contrast_dark_colormap.data(),
+                        static_cast<int>(contrast_dark_colormap.size()));
+    ImPlot::AddColormap(CONTRAST_LIGHT_COLORMAP_NAME, contrast_light_colormap.data(),
+                        static_cast<int>(contrast_light_colormap.size()));
 }
 
 const ImGuiStyle&
@@ -562,7 +627,7 @@ SettingsManager::AddRecentFile(const std::string& file_path)
 {
     RemoveRecentFile(file_path);
     m_internalsettings.recent_files.emplace_front(file_path);
-    if(m_internalsettings.recent_files.size() > RECENT_FILES_LIMIT)
+    if(m_internalsettings.recent_files.size() > MAX_RECENT_FILES)
     {
         m_internalsettings.recent_files.pop_back();
     }
@@ -577,6 +642,12 @@ SettingsManager::RemoveRecentFile(const std::string& file_path)
     {
         m_internalsettings.recent_files.erase(pos);
     }
+}
+
+void
+SettingsManager::ClearRecentFiles()
+{
+    m_internalsettings.recent_files.clear();
 }
 
 void
@@ -660,6 +731,69 @@ const float
 SettingsManager::GetEventLevelCompactHeight() const
 {
     return COMPACT_EVENT_HEIGHT;
+}
+
+void
+SettingsManager::SerializeHotkeySettings(jt::Json& json)
+{
+    auto& hk_mgr = HotkeyManager::GetInstance();
+    jt::Json& hs = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_HOTKEYS];
+
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
+    {
+        HotkeyActionId action_id = static_cast<HotkeyActionId>(i);
+        const auto&    info      = HotkeyManager::GetActionInfo(action_id);
+        HotkeyBinding  binding   = hk_mgr.GetBinding(action_id);
+
+        if(binding.primary != info.default_binding.primary ||
+           binding.alternate != info.default_binding.alternate)
+        {
+            jt::Json entry;
+            entry["primary"]   = HotkeyManager::KeyChordToString(binding.primary);
+            entry["alternate"] = HotkeyManager::KeyChordToString(binding.alternate);
+            hs[info.key]       = entry;
+        }
+    }
+}
+
+void
+SettingsManager::DeserializeHotkeySettings(jt::Json& json)
+{
+    jt::Json& hs = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_HOTKEYS];
+    if(!hs.isObject())
+        return;
+
+    auto& hk_mgr = HotkeyManager::GetInstance();
+
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
+    {
+        HotkeyActionId action_id = static_cast<HotkeyActionId>(i);
+        const auto&    info      = HotkeyManager::GetActionInfo(action_id);
+        jt::Json&      value     = hs[info.key];
+
+        if(!value.isObject())
+            continue;
+
+        HotkeyBinding binding = info.default_binding;
+        if(value["primary"].isString())
+        {
+            binding.primary = HotkeyManager::StringToKeyChord(
+                value["primary"].getString());
+        }
+        if(value["alternate"].isString())
+        {
+            binding.alternate = HotkeyManager::StringToKeyChord(
+                value["alternate"].getString());
+        }
+
+        hk_mgr.SetBinding(action_id, binding);
+    }
+}
+
+void
+SettingsManager::SaveHotkeySettings()
+{
+    SaveSettingsJson();
 }
 
 }  // namespace View

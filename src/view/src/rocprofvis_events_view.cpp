@@ -26,6 +26,8 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_settings(SettingsManager::GetInstance())
 , m_timeline_selection(timeline_selection)
 , m_event_item_id(0)
+, m_context_menu_flow_index(-1)
+, m_context_menu_flow_column(-1)
 {}
 
 EventsView::~EventsView() {}
@@ -256,49 +258,133 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                 const auto& time_format =
                     m_settings.GetUserSettings().unit_settings.time_format;
 
+                auto flow_cell = [&](int col, const char* text, const char* id, int row)
+                {
+                    if(col > 0)
+                        ImGui::TableSetColumnIndex(col);
+                    else
+                        ImGui::SameLine();
+                    CopyableTextUnformatted(text, id, COPY_DATA_NOTIFICATION,
+                                            false, false);
+                    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+                    {
+                        m_context_menu_flow_index  = row;
+                        m_context_menu_flow_column = col;
+                        ImGui::OpenPopup("##FlowContextMenu");
+                    }
+                };
+
                 ImGuiListClipper clipper;
                 clipper.Begin(static_cast<int>(event_data->flow_info.size()));
                 while(clipper.Step())
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
+                        const auto& flow = event_data->flow_info[i];
+                        std::string row_str = std::to_string(i);
+
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
 
-                        const uint64_t& db_id =
-                            event_data->flow_info[i].id.bitfield.event_id;
+                        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+                        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+                        bool row_clicked = ImGui::Selectable(
+                            ("##flow_sel_" + row_str).c_str(), false,
+                            ImGuiSelectableFlags_SpanAllColumns |
+                                ImGuiSelectableFlags_AllowOverlap,
+                            ImVec2(0.0f, 0.0f));
+                        bool row_hovered =
+                            row_clicked ||
+                            ImGui::IsItemHovered(
+                                ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
+                                ImGuiHoveredFlags_AllowWhenOverlappedByItem);
+                        if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+                        {
+                            m_context_menu_flow_index  = i;
+                            m_context_menu_flow_column = 0;
+                            ImGui::OpenPopup("##FlowContextMenu");
+                        }
+                        ImGui::PopStyleColor(3);
 
-                        CopyableTextUnformatted(std::to_string(db_id).c_str(),
-                            "##id_" + std::to_string(i), COPY_DATA_NOTIFICATION, false,
-                            true);
-                        ImGui::TableSetColumnIndex(1);
-                        CopyableTextUnformatted(event_data->flow_info[i].name.c_str(),
-                                                "##name_" + std::to_string(i),
-                                                COPY_DATA_NOTIFICATION, false, true);
-                        ImGui::TableSetColumnIndex(2);
-                        std::string timestamp_label = nanosecond_to_formatted_str(
-                            event_data->flow_info[i].start_timestamp - trace_start_time,
-                            time_format, true);
-                        CopyableTextUnformatted(timestamp_label.c_str(),
-                                                "##start_timestamp_" + std::to_string(i),
-                                                COPY_DATA_NOTIFICATION, false, true);
-                        ImGui::TableSetColumnIndex(3);
-                        CopyableTextUnformatted(
-                            std::to_string(event_data->flow_info[i].track_id).c_str(),
-                            "##track_id_" + std::to_string(i), COPY_DATA_NOTIFICATION,
-                            false, true);
-                        ImGui::TableSetColumnIndex(4);
-                        CopyableTextUnformatted(
-                            std::to_string(event_data->flow_info[i].level).c_str(),
-                            "##level_" + std::to_string(i), COPY_DATA_NOTIFICATION, false,
-                            true);
-                        ImGui::TableSetColumnIndex(5);
-                        CopyableTextUnformatted(
-                            std::to_string(event_data->flow_info[i].direction).c_str(),
-                            "##direction_" + std::to_string(i), COPY_DATA_NOTIFICATION,
-                            false, true);
+                        std::string id_str        = std::to_string(flow.id.bitfield.event_id);
+                        std::string timestamp_str = nanosecond_to_formatted_str(
+                            flow.start_timestamp - trace_start_time, time_format, true);
+                        std::string track_str     = std::to_string(flow.track_id);
+                        std::string level_str     = std::to_string(flow.level);
+                        std::string dir_str       = std::to_string(flow.direction);
+
+                        flow_cell(0, id_str.c_str(),        ("##id_" + row_str).c_str(), i);
+                        flow_cell(1, flow.name.c_str(),     ("##name_" + row_str).c_str(), i);
+                        flow_cell(2, timestamp_str.c_str(), ("##ts_" + row_str).c_str(), i);
+                        flow_cell(3, track_str.c_str(),     ("##tid_" + row_str).c_str(), i);
+                        flow_cell(4, level_str.c_str(),     ("##lvl_" + row_str).c_str(), i);
+                        flow_cell(5, dir_str.c_str(),       ("##dir_" + row_str).c_str(), i);
+
+                        if(row_hovered &&
+                           ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                        {
+                            m_timeline_selection->NavigateToEvent(
+                                flow.track_id, flow.id.uuid,
+                                static_cast<double>(flow.start_timestamp),
+                                static_cast<double>(flow.end_timestamp -
+                                                    flow.start_timestamp));
+                        }
                     }
                 }
+
+                auto style = m_settings.GetDefaultStyle();
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+                if(ImGui::BeginPopup("##FlowContextMenu"))
+                {
+                    if(m_context_menu_flow_index >= 0 &&
+                       m_context_menu_flow_index <
+                           static_cast<int>(event_data->flow_info.size()))
+                    {
+                        const auto& ctx_flow =
+                            event_data->flow_info[m_context_menu_flow_index];
+
+                        if(ImGui::MenuItem("Go To Event"))
+                        {
+                            m_timeline_selection->NavigateToEvent(
+                                ctx_flow.track_id, ctx_flow.id.uuid,
+                                static_cast<double>(ctx_flow.start_timestamp),
+                                static_cast<double>(ctx_flow.end_timestamp -
+                                                    ctx_flow.start_timestamp));
+                        }
+                        ImGui::Separator();
+                        std::string cells[] = {
+                            std::to_string(ctx_flow.id.bitfield.event_id),
+                            ctx_flow.name,
+                            nanosecond_to_formatted_str(
+                                ctx_flow.start_timestamp - trace_start_time,
+                                time_format, true),
+                            std::to_string(ctx_flow.track_id),
+                            std::to_string(ctx_flow.level),
+                            std::to_string(ctx_flow.direction)};
+
+                        if(ImGui::MenuItem("Copy Row Data"))
+                        {
+                            std::string row_text;
+                            for(int c = 0; c < 6; c++)
+                            {
+                                if(c > 0) row_text += '\t';
+                                row_text += cells[c];
+                            }
+                            ImGui::SetClipboardText(row_text.c_str());
+                        }
+                        if(ImGui::MenuItem("Copy Cell Data"))
+                        {
+                            int col = m_context_menu_flow_column;
+                            if(col >= 0 && col < 6)
+                                ImGui::SetClipboardText(cells[col].c_str());
+                        }
+                    }
+                    ImGui::EndPopup();
+                }
+                ImGui::PopStyleVar(2);
+
                 ImGui::EndTable();
             }
         }

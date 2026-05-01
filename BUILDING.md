@@ -158,9 +158,22 @@ cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --
 
 - Xcode Command Line Tools (`xcode-select --install`)
 - CMake 3.21+
-- Vulkan SDK (LunarG) — required for Vulkan headers/libs
-- Homebrew (for Molten VK)
-- Molten VK
+- Vulkan SDK (LunarG) — required for Vulkan headers/libs at build time
+- Homebrew
+
+### Runtime prerequisites
+
+The Vulkan loader must be installed on the system for the app to launch. Install it via Homebrew:
+
+```bash
+brew install vulkan-loader
+```
+
+For Vulkan rendering (optional — the app falls back to OpenGL if unavailable):
+
+```bash
+brew install molten-vk
+```
 
 ### Install Homebrew
 
@@ -168,17 +181,11 @@ cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 
 ```
 
-### Install Vulkan SDK
+### Install Vulkan SDK (build time)
 
 Download and install the latest Vulkan SDK from LunarG:
 
 - https://vulkan.lunarg.com/sdk/home#mac
-
-### Install Molten VK
-
-```
- brew install molten-vk
-```
 
 ### Build (Release)
 
@@ -196,3 +203,33 @@ cmake --build build/macos-release --preset "macOS Release Build" --parallel 4
 - macOS: the executable is in `build/<preset>/`.
 
 If you need symbol builds, use the `*-release-symbols` presets.
+
+---
+
+## File dialog behavior on Linux
+
+On Linux, `roc-optiq` uses the native [xdg-desktop-portal](https://flatpak.github.io/xdg-desktop-portal/) file chooser by default, but also ships the in-process ImGui file dialog as a fallback.
+
+The portal dialog is launched by an external D-Bus service on the host machine and is **not** compatible with remote display forwarding (e.g. `ssh -X` / `ssh -Y`): the portal parents its window on the host's compositor, so over an SSH session the dialog would appear on the host rather than on your client — or simply never appear at all if the host has no local display.
+
+To work around this, the application automatically picks the in-window ImGui dialog when it detects a remote session. Detection looks at:
+
+- `SSH_CONNECTION`, `SSH_CLIENT`, `SSH_TTY` environment variables (set by `sshd`), and
+- `DISPLAY` matching `localhost:N` with `N >= 10` (the range SSH uses for X11 forwarding).
+
+The chosen backend is logged once at startup. If the auto-detection gets it wrong (for example the SSH environment was stripped by `sudo` or `systemd-run`, or you are `ssh`'ing into the same host that also runs a local desktop), you can override it with the `--file-dialog` command-line flag:
+
+```bash
+# Force the in-process ImGui dialog regardless of detection
+roc-optiq --file-dialog=imgui
+
+# Force the native (xdg-desktop-portal) dialog
+roc-optiq --file-dialog=native
+
+# Let the app auto-detect (the default)
+roc-optiq --file-dialog=auto
+```
+
+If `xdg-desktop-portal` or D-Bus is not available on the host, the native dialog probe will fail gracefully at startup (or at the first dialog open) and the app will automatically fall back to the ImGui dialog for the remainder of the session.
+
+If you want to disable the native dialog entirely at build time (so ImGui is always used), configure with `-DUSE_NATIVE_FILE_DIALOG=OFF`.

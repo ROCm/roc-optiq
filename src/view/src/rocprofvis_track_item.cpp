@@ -202,11 +202,10 @@ TrackItem::RenderMetaArea()
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
     m_track_content_height      = m_track_height - metadata_shrink_padding.y * 2.0f;
 
-    // Global padding is too large for metadata must compress.
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(1, 2));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, 2));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 2));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(2, 3));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 3));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 3));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 4));
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_selected
@@ -248,7 +247,6 @@ TrackItem::RenderMetaArea()
         }
 
         // Reordering grip decoration
-        
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
         float arrow_width       = ImGui::GetTextLineHeight();
 
@@ -346,6 +344,14 @@ TrackItem::RenderMetaArea()
         m_pill.RenderPillLabel(content_size, m_settings, m_reorder_grip_width);
     }
     ImGui::EndChild();  // end metadata area
+
+    ImVec2      meta_min = ImGui::GetItemRectMin();
+    ImVec2      meta_max = ImGui::GetItemRectMax();
+    ImDrawList* dl       = ImGui::GetWindowDrawList();
+    dl->AddLine(ImVec2(meta_max.x - 1.0f, meta_min.y),
+                ImVec2(meta_max.x - 1.0f, meta_max.y),
+                m_settings.GetColor(Colors::kMetaDataSeparator), 1.0f);
+
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(4);
     if(ImGui::IsItemClicked(ImGuiMouseButton_Left))
@@ -848,14 +854,25 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     if (m_active)
     {
         ImDrawList* draw_list     = ImGui::GetWindowDrawList();
-        ImU32       pillbox_color = settings.GetColor(Colors::kBorderGray);
-        draw_list->AddRectFilled(ImGui::GetWindowPos() + pillbox_pos,
-                                 ImGui::GetWindowPos() + pillbox_pos + m_pillbox_size,
+        ImU32       pillbox_color = settings.GetColor(Colors::kBgFrame);
+        ImVec2      win_pos       = ImGui::GetWindowPos();
+        draw_list->AddRectFilled(win_pos + pillbox_pos,
+                                 win_pos + pillbox_pos + m_pillbox_size,
                                  pillbox_color, m_pillbox_size.y * 0.5f);
+        draw_list->AddRect(win_pos + pillbox_pos,
+                           win_pos + pillbox_pos + m_pillbox_size,
+                           settings.GetColor(Colors::kBorderGray),
+                           m_pillbox_size.y * 0.5f, 0, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     }
     else
     {
+        ImDrawList* draw_list     = ImGui::GetWindowDrawList();
+        ImVec2      win_pos       = ImGui::GetWindowPos();
+        draw_list->AddRectFilled(win_pos + pillbox_pos,
+                                 win_pos + pillbox_pos + m_pillbox_size,
+                                 settings.GetColor(Colors::kMetaDataColorSelected),
+                                 m_pillbox_size.y * 0.5f);
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
     }
 

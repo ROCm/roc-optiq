@@ -60,7 +60,7 @@ MetricTableBase::Render()
     if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
                          m_table_flags, table_hegth))
     {
-        ImGui::TableSetupScrollFreeze(m_freezed_columns, m_freezed_rows);
+        ImGui::TableSetupScrollFreeze(3, 1);
 
         for (const auto& column : m_columns)
         {
@@ -316,8 +316,6 @@ MetricTable::MetricTable(std::string event_source_id)
 {
     m_table_flags |= ImGuiTableFlags_ScrollY;
     m_max_rows_in_table = 40;
-    m_freezed_columns = 0;
-    m_freezed_rows = 1;
 }
 
 void
@@ -435,12 +433,9 @@ PinnedMetricTable::PinnedMetricTable(DataProvider&                     data_prov
 , m_client_id(client_id)
 {
     FillDefaultColumns(m_columns, m_last_column_index);
-    m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                    ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
+    m_table_flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
     m_table_title       = "Pinned Metrics";
     m_max_rows_in_table = 7;
-    m_freezed_columns   = 3;
-    m_freezed_rows      = 1;
 }
 
 void

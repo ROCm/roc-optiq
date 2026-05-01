@@ -264,7 +264,6 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& category)
 {
     bool category_has_data = false;
 
-    ImGui::BeginChild("scroll", ImVec2(-1, -1));
     for(const auto* table : category.ordered_tables)
     {
         uint64_t key = MetricId::GetTableKey(category.id, table->id);
@@ -280,8 +279,6 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& category)
     {
         ImGui::TextDisabled("No data available for this category.");
     }
-
-    ImGui::EndChild();
 }
 
 ComputeTableView::Preset::Preset(ComputeTableView& widget)

@@ -31,6 +31,10 @@ Traces contain event tracks and counter tracks:
   - Memory usage
   - Hardware counter values
   - Thermal readings
+
+.. note::
+
+   See the `ROCm Systems Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ for more information on tracing.
   
 .. _trace-file:
 

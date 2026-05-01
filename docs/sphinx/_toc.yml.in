@@ -25,7 +25,7 @@ subtrees:
 - caption: Reference
   entries:
   - file: reference/cli-support
-    title: Command-line support
+    title: Command line support
 
 - caption: About
   entries:

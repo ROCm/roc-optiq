@@ -25,8 +25,8 @@ Added
 
 New visualization features for analyzing data include: 
 
-- Summary View – Speed of Light: Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, showing utilization relative to architectural peak capabilities. The Percent-of-Peak values help quickly identify whether the workload is limited. 
-- Kernel Details - Kernel Selection Table: Added a bar chart visualization of metric values and a tooltip that displays kernels’ full names. 
+- Summary View -- Speed of Light: Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, showing utilization relative to architectural peak capabilities. The Percent-of-Peak values help quickly identify whether the workload is limited. 
+- Kernel Details -- Kernel Selection Table: Added a bar chart visualization of metric values and a tooltip that displays kernels’ full names. 
 - Baseline Comparison: Enables you to compare two workload measurements (baseline vs. target) side-by-side in a unified table. It helps to quickly spot regressions, improvements, and behavior changes. It highlights per-metric deltas (including percentage change) to make the performance impact easy to quantify. 
 - Added support for ROCm compute profiler's database schema 1.3 and related performance improvements. 
 - Presets: Save and recall pinned metric configurations for Table View and Baseline Comparison.
@@ -47,7 +47,7 @@ Changed
 
 Changes in viewing analysis data include: 
 
-- Roofline charts for Summary View and Kernel Details: legend can be repositioned; aspect ratio follows the window; multi-workload chart fixes and top-kernels presentation updates.
+- Roofline charts for Summary View and Kernel Details: The legend can be repositioned; aspect ratio follows the window; multi-workload chart fixes and top-kernels presentation updates.
 - Kernel Details updates: Added mini-graphs in cells, pinned title/header improvements, and a global toggle for inline charts. Added a tooltip to display clipped names and adjusted the name-column sizing to free up space for metrics. 
 
 Changes in viewing trace data include: 

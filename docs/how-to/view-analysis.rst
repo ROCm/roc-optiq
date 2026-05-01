@@ -15,6 +15,10 @@ ROCm Optiq provides intuitive, interactive profiling analysis for compute worklo
 ROCm Optiq provides intuitive, interactive profiling and analysis for compute workloads, moving from high-level performance summaries to detailed kernel- and metric-level analysis. 
 It enables rapid identification of performance hotspots and interactive exploration of kernel-level metrics for a profiled workload.
 
+.. note::
+
+   See the `ROCm Compute Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/index.html>`_ for more information.
+
 Open a ROCm Compute Profiler database file
 ==========================================
 

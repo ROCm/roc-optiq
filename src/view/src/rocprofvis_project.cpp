@@ -69,11 +69,22 @@ Project::Open(std::string& file_path)
         {
             result = OpenTrace(file_path);
         }
+
+        if(result == Failed)
+        {
+            // show error dialog
+            AppWindow::GetInstance()->ShowMessageDialog(
+                "Error",
+                "The file could not be opened:\n\n" + file_path +
+                    "\n\nPlease make sure the file is a valid trace or project file.");
+            spdlog::error("Failed to open file: {}, invalid trace or project file", file_path);                    
+        }
     }
     else
     {
         AppWindow::GetInstance()->ShowMessageDialog("Error",
                                                     "File does not exist: " + file_path);
+        spdlog::error("Failed to open file: {}, file does not exist", file_path);                                                    
     }
     return result;
 }

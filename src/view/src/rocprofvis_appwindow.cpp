@@ -643,11 +643,6 @@ AppWindow::OpenFile(std::string file_path)
         default:
         {
             SettingsManager::GetInstance().RemoveRecentFile(file_path);
-            // show error dialog
-            ShowMessageDialog(
-                "Failed to Open File",
-                "The file could not be opened:\n\n" + file_path +
-                    "\n\nPlease make sure the file is a valid trace or project file.");
             break;
         }
     }

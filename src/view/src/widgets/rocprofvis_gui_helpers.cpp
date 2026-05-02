@@ -8,8 +8,13 @@
 #include "spdlog/spdlog.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
+// Needed for ImGui::RegisterUserTexture / UnregisterUserTexture: the only portable way
+// (as of ImGui 1.92.x) to expose a non-font ImTextureData to the active backend's
+// per-frame texture loop. Works with both the OpenGL3 and Vulkan backends.
+#include "imgui_internal.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -31,10 +36,48 @@ EmbeddedImage::EmbeddedImage(const unsigned char* data, int data_len)
 
 EmbeddedImage::~EmbeddedImage()
 {
+    // Hand the GPU texture back to ImGui's backend; it will free the native handle on the
+    // next render pass. We intentionally do NOT IM_DELETE(m_tex): doing so before the
+    // backend honors WantDestroy would leak the GPU resource. The bounded per-instance
+    // leak of one ImTextureData is acceptable for app-lifetime images.
+    if(m_tex != nullptr && ImGui::GetCurrentContext() != nullptr)
+    {
+        m_tex->SetStatus(ImTextureStatus_WantDestroy);
+        ImGui::UnregisterUserTexture(m_tex);
+    }
+    m_tex = nullptr;
+
     if(m_pixels)
     {
         stbi_image_free(m_pixels);
     }
+}
+
+void
+EmbeddedImage::EnsureTextureUploaded() const
+{
+    if(m_tex_attempted) return;
+    if(!Valid()) return;
+    if(ImGui::GetCurrentContext() == nullptr) return;  // No context yet; try again next frame.
+
+    m_tex_attempted = true;
+
+    ImTextureData* tex = IM_NEW(ImTextureData)();
+    tex->Create(ImTextureFormat_RGBA32, m_width, m_height);
+    unsigned char* dst = static_cast<unsigned char*>(tex->GetPixels());
+    if(dst == nullptr)
+    {
+        IM_DELETE(tex);
+        spdlog::warn("EmbeddedImage: failed to allocate GPU texture ({}x{})", m_width,
+                     m_height);
+        return;
+    }
+
+    std::memcpy(dst, m_pixels, static_cast<size_t>(m_width) * m_height * 4);
+
+    tex->SetStatus(ImTextureStatus_WantCreate);
+    ImGui::RegisterUserTexture(tex);
+    m_tex = tex;
 }
 
 bool
@@ -70,66 +113,17 @@ EmbeddedImage::GetPixel(int x, int y) const
 }
 
 void
-EmbeddedImage::Render(ImVec2 top_left, float target_width, bool invert_colors) const
+EmbeddedImage::Render(ImVec2 top_left, float target_width) const
 {
     if(!Valid()) return;
 
-    constexpr unsigned char BG_THRESHOLD = 240;
+    EnsureTextureUploaded();
+    if(m_tex == nullptr) return;
 
-    const float scale = target_width / static_cast<float>(m_width);
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-    for(int y = 0; y < m_height; ++y)
-    {
-        int x = 0;
-        while(x < m_width)
-        {
-            const unsigned char* pixel = m_pixels + 4 * (y * m_width + x);
-
-            if(pixel[3] == 0 ||
-               (pixel[0] >= BG_THRESHOLD && pixel[1] >= BG_THRESHOLD &&
-                pixel[2] >= BG_THRESHOLD))
-            {
-                ++x;
-                continue;
-            }
-
-            unsigned char r = pixel[0], g = pixel[1], b = pixel[2];
-            if(invert_colors)
-            {
-                r = 255 - r;
-                g = 255 - g;
-                b = 255 - b;
-            }
-
-            const ImU32 color = IM_COL32(r, g, b, pixel[3]);
-            const int   run_start = x;
-            ++x;
-
-            while(x < m_width)
-            {
-                const unsigned char* next = m_pixels + 4 * (y * m_width + x);
-                if(next[3] == 0 ||
-                   (next[0] >= BG_THRESHOLD && next[1] >= BG_THRESHOLD &&
-                    next[2] >= BG_THRESHOLD))
-                    break;
-
-                unsigned char nr = next[0], ng = next[1], nb = next[2];
-                if(invert_colors)
-                {
-                    nr = 255 - nr;
-                    ng = 255 - ng;
-                    nb = 255 - nb;
-                }
-                if(IM_COL32(nr, ng, nb, next[3]) != color) break;
-                ++x;
-            }
-
-            draw_list->AddRectFilled(
-                ImVec2(top_left.x + run_start * scale, top_left.y + y * scale),
-                ImVec2(top_left.x + x * scale, top_left.y + (y + 1) * scale), color);
-        }
-    }
+    const float target_height =
+        target_width * static_cast<float>(m_height) / static_cast<float>(m_width);
+    const ImVec2 bottom_right(top_left.x + target_width, top_left.y + target_height);
+    ImGui::GetWindowDrawList()->AddImage(m_tex->GetTexRef(), top_left, bottom_right);
 }
 
 ImVec2

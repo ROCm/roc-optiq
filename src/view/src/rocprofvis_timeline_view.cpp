@@ -174,6 +174,8 @@ TimelineView::RenderInteractiveUI()
 
     m_arrow_layer.Render(draw_list, window_position, m_track_position_y, m_graphs, m_tpt);
 
+    RenderMeasurement(draw_list, window_position);
+
     RenderAnnotations(draw_list, window_position);
 
     ImGui::EndChild();
@@ -219,6 +221,127 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
     m_annotations->ShowStickyNotePopup();
     m_annotations->ShowStickyNoteEditPopup();
 }
+void
+TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
+{
+    auto& fm = TimelineFocusManager::GetInstance();
+    if(!fm.IsMeasurementMode()) return;
+
+    const auto& p1 = fm.GetPoint(0);
+    const auto& p2 = fm.GetPoint(1);
+    if(!p1.valid && !p2.valid) return;
+
+    SettingsManager& settings     = SettingsManager::GetInstance();
+    ImU32            color        = settings.GetColor(Colors::kMeasurementColor);
+    float            level_height = settings.GetEventLevelHeight();
+    const auto&      time_format  = settings.GetUserSettings().unit_settings.time_format;
+
+    constexpr float CURVE_THICK = 2.5f;
+    constexpr float VLINE_THICK = 1.5f;
+    constexpr float LABEL_PAD   = 8.0f;
+    constexpr float LABEL_ROUND = 6.0f;
+    ImU32 label_bg   = settings.GetColor(Colors::kMeasurementLabelBg);
+    ImU32 label_edge = settings.GetColor(Colors::kMeasurementLabelEdge);
+    ImU32 label_text = settings.GetColor(Colors::kMeasurementLabelText);
+
+    float top = window_position.y;
+    float bot = window_position.y + m_track_height_sum;
+
+    float visible_bot = window_position.y + m_scroll_position_y +
+                        m_tpt->GetGraphSizeY() - m_ruler_height -
+                        ARTIFICIAL_SCROLLBAR_HEIGHT;
+    float visible_center_y = m_scroll_position_y +
+                             (m_tpt->GetGraphSizeY() - m_ruler_height -
+                              ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
+    float label_y = visible_bot - ImGui::CalcTextSize("0").y - 8.0f;
+
+    // Draws a small timestamp label centered on a ruler line
+    auto draw_ruler_label = [&](float x, const char* text) {
+        ImVec2 sz = ImGui::CalcTextSize(text);
+        float  lx = x - sz.x * 0.5f;
+        draw_list->AddRectFilled(ImVec2(lx - 4.0f, label_y - 2.0f),
+                                 ImVec2(lx + sz.x + 4.0f, label_y + sz.y + 2.0f),
+                                 label_bg, 3.0f);
+        draw_list->AddText(ImVec2(lx, label_y), label_text, text);
+    };
+
+    // Draws a boxed label, Y-clamped to stay within visible area
+    auto draw_label = [&](float cx, float cy, const char* text) {
+        ImVec2 sz     = ImGui::CalcTextSize(text);
+        float  half_h = sz.y * 0.5f + LABEL_PAD;
+        cy            = std::clamp(cy, top + half_h, visible_bot - half_h);
+        float  lx     = cx - sz.x * 0.5f;
+        float  ly     = cy - sz.y * 0.5f;
+        ImVec2 mn(lx - LABEL_PAD, ly - LABEL_PAD);
+        ImVec2 mx(lx + sz.x + LABEL_PAD, ly + sz.y + LABEL_PAD);
+        draw_list->AddRectFilled(mn, mx, label_bg, LABEL_ROUND);
+        draw_list->AddRect(mn, mx, label_edge, LABEL_ROUND, 0, 1.0f);
+        draw_list->AddText(ImVec2(lx, ly), label_text, text);
+    };
+
+    // Resolves Y position for a measurement point
+    auto point_y = [&](const MeasurementPoint& pt) -> float {
+        if(pt.freehand) return visible_center_y;
+        auto it = m_track_position_y.find(pt.track_id);
+        if(it != m_track_position_y.end())
+            return it->second + level_height * pt.level + level_height * 0.5f;
+        return visible_center_y;
+    };
+
+    // Draw ruler + label for each valid point
+    int valid_count = 0;
+    float px[2]     = {};
+    for(int i = 0; i < 2; ++i)
+    {
+        const auto& pt = fm.GetPoint(i);
+        if(!pt.valid) continue;
+        ++valid_count;
+
+        double eff     = fm.GetEffectiveTimestamp(i);
+        px[i]          = window_position.x + m_tpt->RawTimeToPixel(eff);
+        draw_list->AddLine(ImVec2(px[i], top), ImVec2(px[i], bot), color, VLINE_THICK);
+
+        std::string ts_str =
+            nanosecond_to_formatted_str(eff - m_tpt->GetMinX(), time_format, true);
+        draw_ruler_label(px[i], ts_str.c_str());
+    }
+
+    if(valid_count < 2) return;
+
+    // Freehand notch markers at original event edges
+    if(fm.IsFreehandMode())
+    {
+        constexpr float NOTCH_H   = 10.0f;
+        ImU32           notch_col = settings.GetColor(Colors::kMeasurementNotch);
+        float           mid_y     = window_position.y + visible_center_y;
+
+        for(int i = 0; i < 2; ++i)
+        {
+            const auto& pt = fm.GetPoint(i);
+            if(pt.freehand) continue;
+            for(double ts : { pt.timestamp, pt.timestamp + pt.duration })
+            {
+                float nx = window_position.x + m_tpt->RawTimeToPixel(ts);
+                draw_list->AddLine(ImVec2(nx, mid_y - NOTCH_H),
+                                   ImVec2(nx, mid_y + NOTCH_H), notch_col, 1.0f);
+            }
+        }
+    }
+
+    // Straight horizontal line connecting the two rulers
+    float line_y = window_position.y + visible_center_y;
+    draw_list->AddLine(ImVec2(px[0], line_y), ImVec2(px[1], line_y), color, CURVE_THICK);
+
+    // Event name labels
+    if(!p1.name.empty()) draw_label(px[0], line_y - 20.0f, p1.name.c_str());
+    if(!p2.name.empty()) draw_label(px[1], line_y - 20.0f, p2.name.c_str());
+
+    // Delta label at midpoint
+    double      delta     = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
+    std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
+    draw_label((px[0] + px[1]) * 0.5f, line_y + 20.0f, delta_str.c_str());
+}
+
 ImVec2
 TimelineView::GetGraphSize()
 {
@@ -294,6 +417,33 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
             ImGui::CloseCurrentPopup();
         }
 
+        ImGui::Separator();
+
+        auto& fm = TimelineFocusManager::GetInstance();
+        if(!fm.IsMeasurementMode())
+        {
+            if(ImGui::MenuItem("Enter Measurement Mode"))
+            {
+                fm.EnterMeasurementMode();
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        else
+        {
+            if(fm.GetMeasurementState() == MeasurementState::kComplete)
+            {
+                if(ImGui::MenuItem("Clear Measurement"))
+                {
+                    fm.ClearMeasurement();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            if(ImGui::MenuItem("Exit Measurement Mode"))
+            {
+                fm.ExitMeasurementMode();
+                ImGui::CloseCurrentPopup();
+            }
+        }
 
         ImGui::EndPopup();
     }
@@ -1881,9 +2031,69 @@ TimelineView::HandleTopSurfaceTouch()
             m_pseudo_focus = true;
         }
 
-        // Handle drag start
+        // Measurement mode: ruler hover cursor, drag, and freehand click-to-place
+        auto& fm_touch = TimelineFocusManager::GetInstance();
+        static int dragging_ruler = -1;
+        if(fm_touch.IsMeasurementMode())
+        {
+            constexpr float GRAB_RADIUS = 8.0f;
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            float  mouse_x   = mouse_pos.x - graph_area_min.x;
+
+            if(fm_touch.IsFreehandMode() &&
+               fm_touch.GetMeasurementState() == MeasurementState::kComplete)
+            {
+                float rx[2] = {
+                    static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp(0))),
+                    static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp(1)))
+                };
+
+                bool hovering = std::abs(mouse_x - rx[0]) < GRAB_RADIUS ||
+                                std::abs(mouse_x - rx[1]) < GRAB_RADIUS;
+                if(hovering || dragging_ruler >= 0)
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+
+                if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                {
+                    if(std::abs(mouse_x - rx[0]) < GRAB_RADIUS)      dragging_ruler = 0;
+                    else if(std::abs(mouse_x - rx[1]) < GRAB_RADIUS) dragging_ruler = 1;
+                    else                                              dragging_ruler = -1;
+                }
+
+                if(dragging_ruler >= 0 && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
+                {
+                    double      mouse_time = m_tpt->PixelToTime(mouse_x) + m_tpt->GetMinX();
+                    const auto& pt   = fm_touch.GetPoint(dragging_ruler);
+                    double      base = pt.freehand
+                                           ? pt.timestamp
+                                           : (fm_touch.GetEdge(dragging_ruler) == MeasureEdge::kStart)
+                                                 ? pt.timestamp
+                                                 : pt.timestamp + pt.duration;
+                    fm_touch.SetFreehandOffset(dragging_ruler, mouse_time - base);
+                    fm_touch.RequestLayerFocus(Layer::kInteractiveLayer);
+                }
+            }
+
+            if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                dragging_ruler = -1;
+
+            MeasurementState state = fm_touch.GetMeasurementState();
+            if(fm_touch.IsFreehandMode() && dragging_ruler < 0 &&
+               ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+               (state == MeasurementState::kWaitingForFirst ||
+                state == MeasurementState::kWaitingForSecond))
+            {
+                float  clamped_x  = std::clamp(mouse_x, 0.0f, m_tpt->GetGraphSizeX());
+                double click_time = m_tpt->PixelToTime(clamped_x) + m_tpt->GetMinX();
+                fm_touch.SetFreehandMeasurementPoint(click_time);
+                fm_touch.RequestLayerFocus(Layer::kInteractiveLayer);
+            }
+        }
+
+        // Handle drag start — only suppress when actively dragging a measurement ruler
+        bool measurement_blocking = dragging_ruler >= 0;
         if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) &&
-           !m_is_selecting_region && !m_can_drag_to_pan)
+           !m_is_selecting_region && !m_can_drag_to_pan && !measurement_blocking)
         {
             if(HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect) &&
                TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)

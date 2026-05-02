@@ -91,10 +91,16 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(0, 0, 0, 255),        // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 180),        // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 200, 255, 255),    // Colors::kMeasurementColor
+    IM_COL32(30, 30, 30, 240),     // Colors::kMeasurementLabelBg
+    IM_COL32(70, 70, 70, 200),     // Colors::kMeasurementLabelEdge
+    IM_COL32(255, 255, 255, 255),  // Colors::kMeasurementLabelText
+    IM_COL32(255, 255, 255, 120),  // Colors::kMeasurementNotch
     IM_COL32(45, 60, 95, 255),     // Colors::kComparisonBase
     IM_COL32(30, 80, 75, 255),     // Colors::kComparisonTarget
     IM_COL32(95, 70, 30, 255),     // Colors::kComparisonLesser
     IM_COL32(70, 45, 90, 255),     // Colors::kComparisonGreater
+
     // This must follow the ordering of Colors enum.
 };
 constexpr std::array LIGHT_THEME_COLORS = {
@@ -167,10 +173,16 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(255, 255, 255, 255),  // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 60),         // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 160, 220, 255),    // Colors::kMeasurementColor
+    IM_COL32(240, 240, 240, 240),  // Colors::kMeasurementLabelBg
+    IM_COL32(180, 180, 180, 200),  // Colors::kMeasurementLabelEdge
+    IM_COL32(20, 20, 20, 255),     // Colors::kMeasurementLabelText
+    IM_COL32(80, 80, 80, 120),     // Colors::kMeasurementNotch
     IM_COL32(180, 195, 230, 255),  // Colors::kComparisonBase
     IM_COL32(175, 220, 215, 255),  // Colors::kComparisonTarget
     IM_COL32(235, 215, 175, 255),  // Colors::kComparisonLesser
     IM_COL32(210, 190, 230, 255),  // Colors::kComparisonGreater
+
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> DARK_FLAME_COLORS = {

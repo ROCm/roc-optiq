@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_sidebar.h"
-#include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_track_item.h"
@@ -19,7 +18,11 @@ namespace View
 constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_Framed |
                                             ImGuiTreeNodeFlags_DefaultOpen |
                                             ImGuiTreeNodeFlags_SpanLabelWidth;
-constexpr float TREE_LINE_W = 1.5f;
+constexpr float TREE_LINE_W   = 1.0f;
+constexpr float TREE_INDENT   = 20.0f;
+constexpr float TREE_ROW_PAD  = 3.0f;
+constexpr float MENU_PAD_X    = 8.0f;
+constexpr float MENU_PAD_Y    = 6.0f;
 
 class TreeConnector
 {
@@ -28,9 +31,10 @@ public:
     {
         float indent = ImGui::GetStyle().IndentSpacing;
         m_draw_list  = ImGui::GetWindowDrawList();
-        m_color      = s.GetColor(Colors::kMetaDataSeparator);
+        ImU32 base   = s.GetColor(Colors::kMetaDataSeparator);
+        m_color      = (base & 0x00FFFFFF) | (0x80u << 24);
         m_line_x     = ImGui::GetCursorScreenPos().x - indent * 0.5f;
-        m_branch_len = indent * 0.45f;
+        m_branch_len = indent * 0.55f;
         m_prev_y     = ImGui::GetCursorScreenPos().y;
     }
 
@@ -77,10 +81,10 @@ SideBar::Render()
             m_eye_state_dirty = false;
         }
 
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 14.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5, TREE_ROW_PAD));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, TREE_ROW_PAD));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, TREE_INDENT);
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
                               ImGui::ColorConvertU32ToFloat4(
@@ -129,79 +133,183 @@ SideBar::Update()
 {}
 
 void
-SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
+SideBar::RenderTrackItem(const uint64_t& index, bool allow_visibility_toggle)
 {
     if(!m_graphs || index >= m_graphs->size())
     {
         return;
     }
 
-    TrackGraph& graph = (*m_graphs)[index];
+    TrackGraph& graph     = (*m_graphs)[index];
+    bool        display   = graph.display;
+    bool        highlight = graph.selected;
 
     ImGui::PushID(static_cast<int>(graph.chart->GetID()));
-    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
 
-    bool display = graph.display;
-    if(show_eye_button)
-    {
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-        if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
-        {
-            graph.display         = !graph.display;
-            graph.display_changed = true;
-            m_eye_state_dirty     = true;
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
-                { graph.chart->GetID() }, graph.display);
-        }
-        ImGui::PopFont();
-        if(ImGui::IsItemHovered())
-            SetTooltipStyled("Toggle Track Visibility");
-
-        ImGui::SameLine();
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-        if(ImGui::Button(ICON_ARROWS_SHRINK))
-        {
-            EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
-                static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                graph.chart->GetID(), m_data_provider.GetTraceFilePath()));
-        }
-        ImGui::PopFont();
-        if(ImGui::IsItemHovered())
-            SetTooltipStyled("Scroll To Track");
-    }
-
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
-    if(show_eye_button)
-    {
-        ImGui::SameLine();
-    }
-
-    bool highlight = graph.selected;
-    if(!highlight)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    }
+    // Selectable uses ImGuiCol_Header for selection background. The parent Render()
+    // pushes Header to transparent for the surrounding tree nodes, so re-establish
+    // a visible color here only when this leaf is selected.
+    ImGui::PushStyleColor(ImGuiCol_Header,
+                          highlight ? ImGui::GetStyleColorVec4(ImGuiCol_Button)
+                                    : ImVec4(0, 0, 0, 0));
     if(!display)
     {
         ImGui::PushStyleColor(ImGuiCol_Text,
                               ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     }
-    if(ImGui::Button(graph.chart->GetName().c_str()))
+
+    if(ImGui::Selectable(graph.chart->GetName().c_str(), highlight,
+                         ImGuiSelectableFlags_AllowDoubleClick))
     {
-        m_timeline_selection->ToggleSelectTrack(graph);
+        if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+        {
+            ScrollToTrack(graph);
+        }
+        else
+        {
+            m_timeline_selection->ToggleSelectTrack(graph);
+        }
     }
+
     if(!display)
     {
         ImGui::PopStyleColor();
     }
-    if(!highlight)
+    ImGui::PopStyleColor();
+
+    if(allow_visibility_toggle)
     {
-        ImGui::PopStyleColor();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            ImVec2(MENU_PAD_X, MENU_PAD_Y));
+        if(ImGui::BeginPopupContextItem("##track_ctx"))
+        {
+            if(ImGui::MenuItem("Go to Track"))
+            {
+                ScrollToTrack(graph);
+            }
+
+            ImGui::Separator();
+
+            if(ImGui::MenuItem(graph.display ? "Hide Track" : "Show Track"))
+            {
+                std::vector<uint64_t> shown_chart_ids;
+                std::vector<uint64_t> hidden_chart_ids;
+                SetTrackVisibility(graph, !graph.display,
+                                   graph.display ? hidden_chart_ids : shown_chart_ids);
+                UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+            }
+            if(ImGui::MenuItem("Hide All But This Track"))
+            {
+                HideAllButTrack(index);
+            }
+
+            ImGui::Separator();
+
+            const bool has_selected_tracks =
+                m_timeline_selection && m_timeline_selection->HasSelectedTracks();
+            if(ImGui::MenuItem("Show Selected Tracks", nullptr, false,
+                               has_selected_tracks))
+            {
+                ApplySelectedTrackVisibility(true);
+            }
+            if(ImGui::MenuItem("Hide Selected Tracks", nullptr, false,
+                               has_selected_tracks))
+            {
+                ApplySelectedTrackVisibility(false);
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar();
     }
 
     ImGui::PopID();
+}
+
+void
+SideBar::ScrollToTrack(const TrackGraph& graph)
+{
+    if(!graph.chart)
+    {
+        return;
+    }
+
+    EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
+        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+        graph.chart->GetID(), m_data_provider.GetTraceFilePath()));
+}
+
+void
+SideBar::SetTrackVisibility(TrackGraph& graph, bool visible,
+                            std::vector<uint64_t>& chart_ids)
+{
+    if(!graph.chart || graph.display == visible)
+    {
+        return;
+    }
+
+    graph.display         = visible;
+    graph.display_changed = true;
+    m_eye_state_dirty     = true;
+    chart_ids.push_back(graph.chart->GetID());
+}
+
+void
+SideBar::UpdateHistogramForVisibility(
+    const std::vector<uint64_t>& shown_chart_ids,
+    const std::vector<uint64_t>& hidden_chart_ids)
+{
+    if(!shown_chart_ids.empty())
+    {
+        m_data_provider.DataModel().GetTimeline().UpdateHistogram(shown_chart_ids, true);
+    }
+    if(!hidden_chart_ids.empty())
+    {
+        m_data_provider.DataModel().GetTimeline().UpdateHistogram(hidden_chart_ids,
+                                                                  false);
+    }
+}
+
+void
+SideBar::HideAllButTrack(const uint64_t& index)
+{
+    if(!m_graphs || index >= m_graphs->size())
+    {
+        return;
+    }
+
+    std::vector<uint64_t> shown_chart_ids;
+    std::vector<uint64_t> hidden_chart_ids;
+
+    for(uint64_t i = 0; i < m_graphs->size(); ++i)
+    {
+        SetTrackVisibility((*m_graphs)[i], i == index,
+                           i == index ? shown_chart_ids : hidden_chart_ids);
+    }
+
+    UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+}
+
+void
+SideBar::ApplySelectedTrackVisibility(bool visible)
+{
+    if(!m_graphs)
+    {
+        return;
+    }
+
+    std::vector<uint64_t> shown_chart_ids;
+    std::vector<uint64_t> hidden_chart_ids;
+
+    for(auto& graph : *m_graphs)
+    {
+        if(graph.selected)
+        {
+            SetTrackVisibility(graph, visible,
+                               visible ? shown_chart_ids : hidden_chart_ids);
+        }
+    }
+
+    UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
 }
 
 SideBar::EyeButtonState
@@ -312,12 +420,7 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
                visited_graphs.insert(leaf.graph_index).second)
             {
                 TrackGraph& graph = (*m_graphs)[leaf.graph_index];
-                if(graph.display != visible)
-                {
-                    graph.display         = visible;
-                    graph.display_changed = true;
-                    chart_ids.push_back(graph.chart->GetID());
-                }
+                SetTrackVisibility(graph, visible, chart_ids);
             }
         }
 
@@ -360,21 +463,33 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
     const TreeNode& apply_target = target_node ? *target_node : node;
 
     ImGui::PushID(static_cast<const void*>(&node));
-    if(node.show_eye_button)
-    {
-        EyeButtonState current_state = GetTreeState(state_source);
-        EyeButtonState new_state     = DrawEyeButton(current_state);
-        if(new_state != current_state && new_state != EyeButtonState::kMixed)
-        {
-            ApplyVisibility(apply_target, new_state == EyeButtonState::kAllVisible);
-        }
-        ImGui::SameLine();
-    }
 
     bool open = true;
     if(node.collapsable)
     {
         open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS);
+
+        if(node.show_eye_button)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                ImVec2(MENU_PAD_X, MENU_PAD_Y));
+            if(ImGui::BeginPopupContextItem("##branch_ctx"))
+            {
+                EyeButtonState current = GetTreeState(state_source);
+                if(ImGui::MenuItem("Show All Tracks Below", nullptr, false,
+                                   current != EyeButtonState::kAllVisible))
+                {
+                    ApplyVisibility(apply_target, true);
+                }
+                if(ImGui::MenuItem("Hide All Tracks Below", nullptr, false,
+                                   current != EyeButtonState::kAllHidden))
+                {
+                    ApplyVisibility(apply_target, false);
+                }
+                ImGui::EndPopup();
+            }
+            ImGui::PopStyleVar();
+        }
     }
 
     if(open)
@@ -432,39 +547,6 @@ SideBar::InvalidateEyeStateCache(const TreeNode& node)
             InvalidateEyeStateCache(*child);
         }
     }
-}
-
-SideBar::EyeButtonState
-SideBar::DrawEyeButton(EyeButtonState eye_button_state)
-{
-    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-
-    ImVec2 eye_size = ImGui::CalcTextSize(ICON_EYE);
-    float  button_w = eye_size.x + ImGui::GetStyle().FramePadding.x * 2;
-    float  button_h = eye_size.y + ImGui::GetStyle().FramePadding.y * 2;
-
-    EyeButtonState new_button_state = eye_button_state;
-    if(ImGui::Button(eye_button_state == EyeButtonState::kAllHidden ? ICON_EYE_SLASH
-                                                                    : ICON_EYE,
-                     ImVec2(button_w, button_h)))
-    {
-        if(eye_button_state == EyeButtonState::kAllHidden)
-        {
-            new_button_state = EyeButtonState::kAllVisible;
-        }
-        else if(eye_button_state == EyeButtonState::kAllVisible ||
-                eye_button_state == EyeButtonState::kMixed)
-        {
-            new_button_state = EyeButtonState::kAllHidden;
-        }
-    }
-    ImGui::PopFont();
-    if(ImGui::IsItemHovered())
-        SetTooltipStyled("Toggle All Track Visibility");
-    ImGui::PopStyleColor();
-
-    return new_button_state;
 }
 
 }  // namespace View

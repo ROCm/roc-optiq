@@ -102,17 +102,43 @@ DrawBlockHeader(ImDrawList* draw_list, const char* title,
     return line_y + HEADER_SEP_GAP;
 }
 
-// Horizontal arrow pointing right
+enum class HorizontalArrowDirection
+{
+    kPointLeft,
+    kPointRight,
+    kBidirectional,
+};
+
+// Horizontal arrow with independent visual direction.
 static void
-DrawHorizontalArrow(ImDrawList* draw_list, ImVec2 from, ImVec2 to)
+DrawHorizontalArrow(ImDrawList* draw_list, ImVec2 from, ImVec2 to,
+                    HorizontalArrowDirection direction)
 {
     ImU32 color = Settings().GetColor(Colors::kArrowColor);
     draw_list->AddLine(from, to, color, ARROW_THICKNESS);
-    float head = ARROW_HEAD_SIZE;
-    draw_list->AddTriangleFilled(to,
-                                 ImVec2(to.x - head, to.y - head * 0.6f),
-                                 ImVec2(to.x - head, to.y + head * 0.6f),
-                                 color);
+
+    ImVec2 left_point  = from.x <= to.x ? from : to;
+    ImVec2 right_point = from.x <= to.x ? to : from;
+
+    auto draw_arrow_head = [&](ImVec2 tip, float x_direction) {
+        float head = ARROW_HEAD_SIZE;
+        draw_list->AddTriangleFilled(
+            tip,
+            ImVec2(tip.x - x_direction * head, tip.y - head * 0.6f),
+            ImVec2(tip.x - x_direction * head, tip.y + head * 0.6f),
+            color);
+    };
+
+    if(direction == HorizontalArrowDirection::kPointLeft ||
+       direction == HorizontalArrowDirection::kBidirectional)
+    {
+        draw_arrow_head(left_point, -1.0f);
+    }
+    if(direction == HorizontalArrowDirection::kPointRight ||
+       direction == HorizontalArrowDirection::kBidirectional)
+    {
+        draw_arrow_head(right_point, 1.0f);
+    }
 }
 
 // Horizontally centered text within [x, x+w]
@@ -808,8 +834,10 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
     auto ArrowWithLabel = [&](float src_x, float src_y,
                               float dst_x, float dst_y,
                               const char* label_text,
-                              MemChartMetric metric_id) {
-        DrawHorizontalArrow(draw_list, screen(src_x, src_y), screen(dst_x, dst_y));
+                              MemChartMetric metric_id,
+                              HorizontalArrowDirection direction) {
+        DrawHorizontalArrow(draw_list, screen(src_x, src_y), screen(dst_x, dst_y),
+                            direction);
         DrawTextWithTooltip(draw_list, screen(src_x + 5, src_y - ARROW_LABEL_ABOVE),
                             label_color, label_text, metric_id, true, true);
     };
@@ -858,7 +886,8 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
         float arrow_y = m_lds_block.MidY();
         snprintf(text_buf, sizeof(text_buf), "Req: %s", GetMetricText(LDS_REQ));
         ArrowWithLabel(m_active_cus_block.Right(), arrow_y,
-                       m_lds_block.x, arrow_y, text_buf, LDS_REQ);
+                       m_lds_block.x, arrow_y, text_buf, LDS_REQ,
+                       HorizontalArrowDirection::kPointLeft);
     }
 
     // Active CUs -> Vector L1 (3 arrows: Rd, Wr, Atomic)
@@ -869,15 +898,18 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
 
         snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(VL1_RD));
         ArrowWithLabel(src_x, mid_y - ARROW_VERT_SPACE,
-                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf, VL1_RD);
+                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf, VL1_RD,
+                       HorizontalArrowDirection::kPointLeft);
 
         snprintf(text_buf, sizeof(text_buf), "Wr: %s", GetMetricText(VL1_WR));
-        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf, VL1_WR);
+        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf, VL1_WR,
+                       HorizontalArrowDirection::kPointRight);
 
         snprintf(text_buf, sizeof(text_buf), "Atomic: %s",
                  GetMetricText(VL1_ATOMIC));
         ArrowWithLabel(src_x, mid_y + ARROW_VERT_SPACE,
-                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf, VL1_ATOMIC);
+                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf, VL1_ATOMIC,
+                       HorizontalArrowDirection::kBidirectional);
     }
 
     // Active CUs -> Scalar L1D
@@ -885,7 +917,8 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
         float arrow_y = m_scalar_l1d_block.MidY();
         snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(SL1D_RD));
         ArrowWithLabel(m_active_cus_block.Right(), arrow_y,
-                       m_scalar_l1d_block.x, arrow_y, text_buf, SL1D_RD);
+                       m_scalar_l1d_block.x, arrow_y, text_buf, SL1D_RD,
+                       HorizontalArrowDirection::kPointLeft);
     }
 
     // Instr L1 -> Instr Buff (L-shaped: left from Instr L1, then up to Instr Buff)
@@ -926,15 +959,18 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
 
         snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(VL1_L2_RD));
         ArrowWithLabel(src_x, mid_y - ARROW_VERT_SPACE,
-                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf, VL1_L2_RD);
+                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf, VL1_L2_RD,
+                       HorizontalArrowDirection::kPointLeft);
 
         snprintf(text_buf, sizeof(text_buf), "Wr: %s", GetMetricText(VL1_L2_WR));
-        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf, VL1_L2_WR);
+        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf, VL1_L2_WR,
+                       HorizontalArrowDirection::kPointRight);
 
         snprintf(text_buf, sizeof(text_buf), "Atomic: %s",
                  GetMetricText(VL1_L2_ATOMIC));
         ArrowWithLabel(src_x, mid_y + ARROW_VERT_SPACE,
-                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf, VL1_L2_ATOMIC);
+                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf, VL1_L2_ATOMIC,
+                       HorizontalArrowDirection::kBidirectional);
     }
 
     // Scalar L1D -> L2 (3 arrows)
@@ -945,15 +981,18 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
 
         snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(SL1D_L2_RD));
         ArrowWithLabel(src_x, mid_y - ARROW_VERT_SPACE,
-                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf, SL1D_L2_RD);
+                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf, SL1D_L2_RD,
+                       HorizontalArrowDirection::kPointLeft);
 
         snprintf(text_buf, sizeof(text_buf), "Wr: %s", GetMetricText(SL1D_L2_WR));
-        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf, SL1D_L2_WR);
+        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf, SL1D_L2_WR,
+                       HorizontalArrowDirection::kPointRight);
 
         snprintf(text_buf, sizeof(text_buf), "Atomic: %s",
                  GetMetricText(SL1D_L2_ATOMIC));
         ArrowWithLabel(src_x, mid_y + ARROW_VERT_SPACE,
-                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf, SL1D_L2_ATOMIC);
+                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf, SL1D_L2_ATOMIC,
+                       HorizontalArrowDirection::kBidirectional);
     }
 
     // Instr L1 -> L2
@@ -962,7 +1001,8 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
         snprintf(text_buf, sizeof(text_buf), "Req: %s",
                  GetMetricText(IL1_L2_RD));
         ArrowWithLabel(m_instr_l1_block.Right(), arrow_y,
-                       m_l2_block.x, arrow_y, text_buf, IL1_L2_RD);
+                       m_l2_block.x, arrow_y, text_buf, IL1_L2_RD,
+                       HorizontalArrowDirection::kPointLeft);
     }
 
     // --- L2 -> Fabric ---
@@ -974,16 +1014,19 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
         snprintf(text_buf, sizeof(text_buf), "Rd: %s",
                  GetMetricText(FABRIC_L2_RD));
         ArrowWithLabel(src_x, mid_y - ARROW_VERT_SPACE,
-                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf, FABRIC_L2_RD);
+                       dst_x, mid_y - ARROW_VERT_SPACE, text_buf, FABRIC_L2_RD,
+                       HorizontalArrowDirection::kPointLeft);
 
         snprintf(text_buf, sizeof(text_buf), "Wr: %s",
                  GetMetricText(FABRIC_L2_WR));
-        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf, FABRIC_L2_WR);
+        ArrowWithLabel(src_x, mid_y, dst_x, mid_y, text_buf, FABRIC_L2_WR,
+                       HorizontalArrowDirection::kPointRight);
 
         snprintf(text_buf, sizeof(text_buf), "Atomic: %s",
                  GetMetricText(FABRIC_L2_ATOMIC));
         ArrowWithLabel(src_x, mid_y + ARROW_VERT_SPACE,
-                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf, FABRIC_L2_ATOMIC);
+                       dst_x, mid_y + ARROW_VERT_SPACE, text_buf, FABRIC_L2_ATOMIC,
+                       HorizontalArrowDirection::kBidirectional);
     }
 
     // --- Fabric -> HBM ---
@@ -995,11 +1038,13 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
 
         snprintf(text_buf, sizeof(text_buf), "Rd: %s", GetMetricText(HBM_RD));
         ArrowWithLabel(src_x, mid_y - half_space,
-                       dst_x, mid_y - half_space, text_buf, HBM_RD);
+                       dst_x, mid_y - half_space, text_buf, HBM_RD,
+                       HorizontalArrowDirection::kPointLeft);
 
         snprintf(text_buf, sizeof(text_buf), "Wr: %s", GetMetricText(HBM_WR));
         ArrowWithLabel(src_x, mid_y + half_space,
-                       dst_x, mid_y + half_space, text_buf, HBM_WR);
+                       dst_x, mid_y + half_space, text_buf, HBM_WR,
+                       HorizontalArrowDirection::kPointRight);
     }
 }
 

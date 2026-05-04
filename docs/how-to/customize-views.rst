@@ -41,7 +41,7 @@ Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq
   .. image:: ../images/units.png
      :width: 600
 
-- The hotkey settings provide configurable keyboard shortcuts with conflict prevention, safe rebinding rules, and consistent modifier handling to enable reliable, efficient keyboard-driven workflows:
+- The hotkey settings allow keyboard shortcuts to be redefined:
 
   .. image:: ../images/hotkeys.png
      :width: 600
@@ -215,8 +215,8 @@ Persist the customizations made to tracks, bookmarks, and annotations by saving 
 - Select **File** > **Save As** to create a new project.
 - Select **File** > **Save** to overwrite the currently opened project.
 
-Data Cleanup in a project file 
-------------------------------
+Remove Optiq-specific metadata from an open trace file
+------------------------------------------------------
 
 You can remove metadata added by ROCm Optiq during processing trace data by selecting **File > Database > Full Cleanup**.
 
@@ -224,7 +224,7 @@ You can remove metadata added by ROCm Optiq during processing trace data by sele
    :width: 300
 
 Customize projects for ROCm Compute Profiler Analysis Data
-=====================================================================
+==========================================================
 
 .. _presets:
 

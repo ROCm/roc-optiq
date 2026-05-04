@@ -38,8 +38,6 @@ Other new features:
 - Data clean-up: Enables the removal of metadata added by ROCm Optiq in a database file. 
 - Command-line interface support. 
 - OpenGL backend as a fallback when Vulkan is unavailable; optional software rendering path; command-line option to force a specific graphics backend. 
-- Dear ImGui updated (docking-capable line, ImPlot aligned); Linux session defaults to X11 for compatibility. 
-- Microsoft Windows packages link GLFW statically by default (no separate ``glfw.dll`` in the installer). 
 - New settings panel allowing keyboard shortcuts to be customized. 
 
 Changed
@@ -60,19 +58,8 @@ Changes in viewing trace data include:
 Navigation and inspection:  
 
 - Use **Go To Event** in tables and the **Flow Data** panel to go to a specific event. Double-click the event, or click **Go To Event** from the right-click context menu, to open the event on the timeline with vertical track centering and highlighted feedback.
-- Highlight-on-navigate with a dedicated event path, pulsing indicator, and timed auto-clear; selection and highlight handled independently.
+- Highlight-on-navigate with a dedicated event path using a pulsing indicator.
 - Callstack experience improvements. 
-
-Resolved issues
----------------
-
-- Fixed an issue where metrics that reference ``None`` return N/A.
-- Fixed an issue where ``workload_name`` is missing in ``sysinfo.csv`` when using ``--output-directory``. 
-
-Known issues
-------------
-
-- On **Call Stack Data**, for instrumented threads, some call stack information such as address, file, and PC isn't available. 
 
 .. tip::
 

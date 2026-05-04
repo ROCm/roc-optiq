@@ -106,7 +106,7 @@ extern "C"
 
             g_rpv_log_ringbuffer = buffer_sink;
 
-            auto new_logger = std::make_shared<spdlog::logger>(std::move(std::string("rocprofvis-log")), sinks.begin(), sinks.end());
+            auto new_logger = std::make_shared<spdlog::logger>(std::move(std::string("roc-optiq-log")), sinks.begin(), sinks.end());
             new_logger->set_level(spdlog::level::debug);
             spdlog::details::registry::instance().initialize_logger(new_logger);
 

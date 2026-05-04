@@ -17,15 +17,15 @@ on:
         type: string
         default: 'Linux Release Build'
       enable_internal_banner:
-        description: 'Boolean to enable/disable the internal banner'
+        description: 'Enable the internal banner?'
         type: boolean
         default: false
       upload_to_github:
-        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
         default: false
       upload_to_s3:
-        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
   workflow_call:
@@ -43,15 +43,15 @@ on:
         type: string
         default: 'Linux Release Build'
       enable_internal_banner:
-        description: 'Boolean to enable/disable the internal banner'
+        description: 'Enable the internal banner?'
         type: boolean
         default: false
       upload_to_github:
-        description: 'Boolean to enable/disable uploading build artifacts to GitHub Artifacts'
+        description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
         default: false
       upload_to_s3:
-        description: 'Boolean to enable/disable uploading build artifacts to S3 Bucket'
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
 
@@ -65,6 +65,9 @@ jobs:
   ubuntu:
     name: Ubuntu ${{ matrix.os-version }} • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     container:
       image: ghcr.io/rocm/optiq-ci-ubuntu:${{ matrix.os-version }}
     strategy:
@@ -104,9 +107,7 @@ jobs:
         with:
           name: roc-optiq-ubuntu-${{ matrix.os-version }}-release
           path: |
-            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}
-            ${{ env.DIST_DIR }}/*.deb
-            ${{ env.DIST_DIR }}/*.tar.gz
+            ${{ env.DIST_DIR }}/
           retention-days: 2
 
       - name: Configure AWS credentials
@@ -121,5 +122,5 @@ jobs:
         shell: bash
         run: |
           TIMESTAMP=$(date +%Y_%m_%d)
-          aws s3 cp ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/ubuntu/${{ matrix.os-version }}/ \
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/ubuntu/${{ matrix.os-version }}/ \
             --no-progress

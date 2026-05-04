@@ -43,6 +43,7 @@ public:
     static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
     static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
+    static const uint64_t CLEANUP_DATABASE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
     static const uint64_t FETCH_SYSTEM_TRACE_REQUEST_ID;
     static const uint64_t SUMMARY_REQUEST_ID;
@@ -199,6 +200,9 @@ public:
         const std::function<void(const std::string&, bool)>& callback);
     void SetEventDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, bool)>& callback);
+    void SetRequestProgressUpdateCallback(
+        const std::function<void(const RequestInfo&, uint64_t, const std::string&)>&
+            callback);
 
     /*
      * Moves a graph inside the controller's timeline to a specified index and updates the
@@ -210,6 +214,10 @@ public:
     bool SetGraphIndex(uint64_t track_id, uint64_t index);
 
     bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
+
+    bool CleanupDatabase(bool rebuild);
+
+    void SetCleanupDatabaseCallback(const std::function<void(bool)>& callback);
 
     const TraceDataModel& DataModel() const { return m_model; };
     TraceDataModel&       DataModel() { return m_model; };
@@ -243,6 +251,7 @@ private:
 
     void HandleLoadTrackMetaData();
     void HandleRequests();
+    void UpdateRequestProgress(RequestInfo& req);
 
     void ProcessRequest(RequestInfo& req);
     void ProcessLoadSystemTrace(RequestInfo& req);
@@ -254,6 +263,7 @@ private:
     void ProcessTableRequest(RequestInfo& req);
     void ProcessTableExportRequest(RequestInfo& req);
     void ProcessSaveTrimmedTraceRequest(RequestInfo& req);
+    void ProcessCleanupDatabaseRequest(RequestInfo& req);
     void ProcessSummaryRequest(RequestInfo& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
@@ -298,8 +308,13 @@ private:
     std::function<void()> m_summary_data_ready_callback;
     // Callback when trace is saved
     std::function<void(bool)> m_save_trace_callback;
+    // Callback when database cleanup has completed
+    std::function<void(bool)> m_cleanup_database_callback;
     // Callback when table export has completed
     std::function<void(const std::string&, bool)> m_table_export_callback;
+    // Callback to update request progress
+    std::function<void(const RequestInfo&, uint64_t, const std::string&)>
+        m_request_progress_callback;
     // Current loading status message retrieved form data model
     std::string m_progress_mesage;
     // Current loading status progress in percents

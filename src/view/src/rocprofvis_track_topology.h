@@ -5,6 +5,11 @@
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_tree_node.h"
+#include <functional>
+#include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace RocProfVis
@@ -30,7 +35,19 @@ struct IterableModel
     const IterableInfo*    info;
     InfoTable              info_table;
     uint64_t               graph_index;
-    mutable bool           all_subitems_hidden = false;
+};
+
+struct ProcessorModel;
+
+struct StreamModel
+{
+    const StreamInfo*                           info;
+    InfoTable                                   info_table;
+    std::string                                 header;
+    std::string                                 processor_header;
+    std::vector<ProcessorModel>                   processors;
+    std::unordered_map<uint64_t, ProcessorModel*> processor_lut;
+    uint64_t                                    graph_index;
 };
 
 struct ProcessModel
@@ -39,16 +56,14 @@ struct ProcessModel
     InfoTable                                    info_table;
     std::string                                  header;
     std::string                                  stream_header;
-    std::vector<IterableModel>                   streams;
-    std::unordered_map<uint64_t, IterableModel*> stream_lut;
+    std::vector<StreamModel>                     streams;
+    std::unordered_map<uint64_t, StreamModel*>   stream_lut;
     std::string                                  instrumented_thread_header;
     std::vector<IterableModel>                   instrumented_threads;
     std::unordered_map<uint64_t, IterableModel*> instrumented_thread_lut;
     std::string                                  sampled_thread_header;
     std::vector<IterableModel>                   sampled_threads;
     std::unordered_map<uint64_t, IterableModel*> sampled_thread_lut;
-    mutable bool                                 all_subitems_hidden = false;
-
 };
 struct ProcessorModel
 {
@@ -61,8 +76,6 @@ struct ProcessorModel
     std::string                                  counter_header;
     std::vector<IterableModel>                   counters;
     std::unordered_map<uint64_t, IterableModel*> counter_lut;
-    mutable bool                                 all_subitems_hidden = false;
-
 };
 struct NodeModel
 {
@@ -74,7 +87,6 @@ struct NodeModel
     std::string                                 processor_header;
     std::vector<ProcessorModel>                   processors;
     std::unordered_map<uint64_t, ProcessorModel*> processor_lut;
-    mutable bool                                all_subitems_hidden = false;
 };
 struct TopologyModel
 {
@@ -82,7 +94,6 @@ struct TopologyModel
     std::string                              node_header;
     std::unordered_map<uint64_t, NodeModel*> node_lut;
     std::vector<uint64_t>                    uncategorized_graph_indices;
-    mutable bool                             all_subitems_hidden = false;
 };
 
 class TrackTopology
@@ -94,6 +105,7 @@ public:
 
     bool                 Dirty();
     const TopologyModel& GetTopology() const;
+    const SidebarTree&   GetSidebarTree() const;
     void FormatCells();
 
 private:
@@ -107,6 +119,7 @@ private:
      * Runs on graph index change.
      */
     void UpdateGraphs();
+    void BuildSidebarTree();
 
  
     bool FormatTimeCell(const std::string& raw, std::string& formatted_out);
@@ -121,6 +134,7 @@ private:
     EventManager::SubscriptionToken m_format_changed_token;
 
     TopologyModel m_topology;
+    SidebarTree   m_sidebar_tree;
 };
 
 }  // namespace View

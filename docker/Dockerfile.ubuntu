@@ -8,15 +8,21 @@ SHELL [ "/bin/bash", "-c" ]
 
 # Install Dependencies
 RUN apt update -y && \
-    apt install -y build-essential cmake git libncurses-dev libwayland-dev \
+    apt install -y build-essential cmake curl git libncurses-dev libwayland-dev \
     libx11-dev libxcursor-dev libxi-dev libxinerama-dev libxkbcommon-dev \
-    libxrandr-dev pkg-config wget xorg-dev libdbus-1-dev
+    libxrandr-dev pkg-config wget xorg-dev libdbus-1-dev unzip
 
 # Install Vulkan SDK
 RUN mkdir -p /opt/vulkan && \
     wget -q https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.xz -O /tmp/vulkansdk.tar.xz && \
     tar -xJvf /tmp/vulkansdk.tar.xz -C /opt/vulkan && \
     rm /tmp/vulkansdk.tar.xz
+
+# Install AWS CLI
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+    && unzip awscliv2.zip \
+    && ./aws/install \
+    && rm -rf awscliv2.zip ./aws
 
 WORKDIR /home
 SHELL [ "/bin/bash", "--login", "-c" ]

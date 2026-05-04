@@ -539,6 +539,45 @@ rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_p
 
 
 /*
+* Adds an environment variable to the profiler configuration.
+* These are set in the child process environment before exec.
+* @param config The profiler config object.
+* @param name Environment variable name (must not be null).
+* @param value Environment variable value (must not be null).
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_config_add_env_var(rocprofvis_profiler_config_t* config, char const* name, char const* value);
+
+/*
+* Adds a single argument to the profiler argument list.
+* Arguments added this way are passed before --output and -- target.
+* @param config The profiler config object.
+* @param arg The argument string (must not be null).
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_config_add_profiler_arg(rocprofvis_profiler_config_t* config, char const* arg);
+
+/*
+* Sets the connection type to local execution (default).
+* @param config The profiler config object.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_config_set_connection_local(rocprofvis_profiler_config_t* config);
+
+/*
+* Sets the connection type to SSH (not yet implemented, will return kRocProfVisResultNotSupported at launch).
+* @param config The profiler config object.
+* @param host Remote hostname (must not be null).
+* @param user Remote username (must not be null).
+* @param port SSH port number.
+* @param identity_file Path to SSH identity file (may be null for default).
+* @param remote_stage_dir Remote directory for staging output (may be null).
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_config_set_connection_ssh(rocprofvis_profiler_config_t* config,
+    char const* host, char const* user, int port, char const* identity_file, char const* remote_stage_dir);
+
+/*
 * Launches a profiler process asynchronously.
 * @param config The profiler configuration.
 * @param future The future object to track the profiler execution.

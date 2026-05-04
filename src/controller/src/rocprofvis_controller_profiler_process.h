@@ -4,15 +4,16 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_profiler_executor.h"
 #include <string>
 #include <vector>
 #include <memory>
 #include <mutex>
 #include <atomic>
+#include <utility>
 
 #ifdef _WIN32
 #include <windows.h>
-// Avoid colliding with Handle::GetObject and derived overrides in controller headers.
 #ifdef GetObject
 #undef GetObject
 #endif
@@ -26,6 +27,21 @@ namespace Controller
 {
 
 class Future;
+
+enum class ConnectionType
+{
+    kLocal,
+    kSsh
+};
+
+struct SshConnectionInfo
+{
+    std::string host;
+    std::string user;
+    int         port = 22;
+    std::string identity_file;
+    std::string remote_stage_dir;
+};
 
 /*
  * ProfilerConfig - Configuration for launching a profiler
@@ -43,6 +59,12 @@ public:
     rocprofvis_result_t SetTargetArgs(char const* args);
     rocprofvis_result_t SetProfilerArgs(char const* args);
     rocprofvis_result_t SetOutputDirectory(char const* path);
+    rocprofvis_result_t AddEnvVar(char const* name, char const* value);
+    rocprofvis_result_t AddProfilerArg(char const* arg);
+    rocprofvis_result_t SetConnectionLocal();
+    rocprofvis_result_t SetConnectionSsh(char const* host, char const* user,
+                                         int port, char const* identity_file,
+                                         char const* remote_stage_dir);
 
     rocprofvis_profiler_type_t GetProfilerType() const { return m_profiler_type; }
     std::string const& GetProfilerPath() const { return m_profiler_path; }
@@ -51,6 +73,12 @@ public:
     std::string const& GetProfilerArgs() const { return m_profiler_args; }
     std::string const& GetOutputDirectory() const { return m_output_directory; }
 
+    std::vector<std::pair<std::string, std::string>> const& GetEnvVars() const { return m_env_vars; }
+    std::vector<std::string> const& GetProfilerArgv() const { return m_profiler_argv; }
+
+    ConnectionType GetConnectionType() const { return m_connection_type; }
+    SshConnectionInfo const& GetSshInfo() const { return m_ssh_info; }
+
 private:
     rocprofvis_profiler_type_t m_profiler_type;
     std::string m_profiler_path;
@@ -58,36 +86,29 @@ private:
     std::string m_target_args;
     std::string m_profiler_args;
     std::string m_output_directory;
+
+    std::vector<std::pair<std::string, std::string>> m_env_vars;
+    std::vector<std::string> m_profiler_argv;
+
+    ConnectionType    m_connection_type;
+    SshConnectionInfo m_ssh_info;
 };
 
 /*
- * LocalProcessExecutor - Platform-specific process execution
+ * LocalProfilerExecutor - Platform-specific local process execution
+ * Implements IProfilerExecutor for launching profiler processes on the local machine.
  */
-class LocalProcessExecutor
+class LocalProfilerExecutor : public IProfilerExecutor
 {
 public:
-    LocalProcessExecutor();
-    ~LocalProcessExecutor();
+    LocalProfilerExecutor();
+    ~LocalProfilerExecutor() override;
 
-    // Launches the process with stdout/stderr captured
-    bool Launch(std::string const& executable_path,
-                std::vector<std::string> const& args,
-                std::string const& working_directory);
-
-    // Checks if process is still running
-    bool IsRunning();
-
-    // Waits for process to complete (with timeout in milliseconds, 0 = no timeout)
-    bool Wait(uint32_t timeout_ms = 0);
-
-    // Terminates the process
-    bool Terminate();
-
-    // Gets the process exit code (only valid after process has completed)
-    int GetExitCode() const;
-
-    // Reads available stdout/stderr output (non-blocking)
-    std::string ReadOutput();
+    bool Start(const ProfilerConfig& config) override;
+    bool IsRunning() override;
+    std::string ReadOutput() override;
+    int GetExitCode() const override;
+    bool Cancel() override;
 
 private:
     void CloseHandles();
@@ -119,25 +140,18 @@ public:
     ProfilerProcessController();
     ~ProfilerProcessController();
 
-    // Launches profiler asynchronously
     rocprofvis_result_t LaunchAsync(ProfilerConfig const* config);
 
-    // Gets current profiler state
     rocprofvis_profiler_state_t GetState() const;
 
-    // Gets accumulated output
     std::string GetOutput();
 
-    // Gets the path to the generated trace file (only valid when state = Completed)
     std::string GetTracePath() const;
 
-    // Gets the process exit code (only meaningful after state != Running)
     int GetExitCode() const;
 
-    // Cancels the running profiler
     rocprofvis_result_t Cancel();
 
-    // Job execution function (called by JobSystem worker thread)
     static void ExecuteJob(ProfilerProcessController* controller, Future* future);
 
 private:
@@ -146,7 +160,7 @@ private:
     std::string DetermineTracePath(ProfilerConfig const* config);
     std::vector<std::string> BuildCommandArgs(ProfilerConfig const* config);
 
-    std::unique_ptr<LocalProcessExecutor> m_executor;
+    std::unique_ptr<IProfilerExecutor> m_executor;
     std::unique_ptr<ProfilerConfig> m_config;
     std::atomic<rocprofvis_profiler_state_t> m_state;
     std::string m_output_text;

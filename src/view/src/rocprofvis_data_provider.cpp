@@ -4585,6 +4585,18 @@ bool DataProvider::LaunchProfiler(rocprofvis_profiler_type_t profiler_type,
                                     const std::string& output_directory,
                                     const std::string& profiler_args)
 {
+    return LaunchProfiler(profiler_type, profiler_path, target_executable,
+                          target_args, output_directory, profiler_args, {});
+}
+
+bool DataProvider::LaunchProfiler(rocprofvis_profiler_type_t profiler_type,
+                                    const std::string& profiler_path,
+                                    const std::string& target_executable,
+                                    const std::string& target_args,
+                                    const std::string& output_directory,
+                                    const std::string& profiler_args,
+                                    const std::vector<std::pair<std::string, std::string>>& env_vars)
+{
     // Clean up any existing profiler session
     CloseProfiler();
 
@@ -4603,6 +4615,12 @@ bool DataProvider::LaunchProfiler(rocprofvis_profiler_type_t profiler_type,
     rocprofvis_profiler_config_set_target_args(m_profiler_config, target_args.c_str());
     rocprofvis_profiler_config_set_output_directory(m_profiler_config, output_directory.c_str());
     rocprofvis_profiler_config_set_profiler_args(m_profiler_config, profiler_args.c_str());
+
+    // Set environment variables
+    for (auto const& kv : env_vars)
+    {
+        rocprofvis_profiler_config_add_env_var(m_profiler_config, kv.first.c_str(), kv.second.c_str());
+    }
 
     // Allocate future for async operation
     m_profiler_future = rocprofvis_controller_future_alloc();

@@ -50,6 +50,9 @@ typedef struct ProfilerSettings
     std::string profiler_path;
     std::string profiler_output_directory;
     bool        auto_load_trace = true;
+    std::vector<std::string> recent_targets;
+    std::string last_preset_name;
+    std::string last_profiler_id;
 } ProfilerSettings;
 
 typedef struct AppWindowSettings

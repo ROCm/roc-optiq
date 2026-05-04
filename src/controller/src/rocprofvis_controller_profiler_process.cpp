@@ -36,6 +36,10 @@ ProfilerConfig::ProfilerConfig()
     , m_target_args()
     , m_profiler_args()
     , m_output_directory()
+    , m_env_vars()
+    , m_profiler_argv()
+    , m_connection_type(ConnectionType::kLocal)
+    , m_ssh_info()
 {
 }
 
@@ -99,13 +103,57 @@ rocprofvis_result_t ProfilerConfig::SetOutputDirectory(char const* path)
     return kRocProfVisResultSuccess;
 }
 
+rocprofvis_result_t ProfilerConfig::AddEnvVar(char const* name, char const* value)
+{
+    if (name == nullptr || value == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+    m_env_vars.emplace_back(std::string(name), std::string(value));
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::AddProfilerArg(char const* arg)
+{
+    if (arg == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+    m_profiler_argv.emplace_back(arg);
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::SetConnectionLocal()
+{
+    m_connection_type = ConnectionType::kLocal;
+    m_ssh_info = SshConnectionInfo{};
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::SetConnectionSsh(char const* host, char const* user,
+                                                     int port, char const* identity_file,
+                                                     char const* remote_stage_dir)
+{
+    if (host == nullptr || user == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+    m_connection_type = ConnectionType::kSsh;
+    m_ssh_info.host = host;
+    m_ssh_info.user = user;
+    m_ssh_info.port = port;
+    m_ssh_info.identity_file = identity_file ? identity_file : "";
+    m_ssh_info.remote_stage_dir = remote_stage_dir ? remote_stage_dir : "";
+    return kRocProfVisResultSuccess;
+}
+
 // ==================================================================================
-// LocalProcessExecutor Implementation - Windows
+// LocalProfilerExecutor Implementation - Windows
 // ==================================================================================
 
 #ifdef _WIN32
 
-LocalProcessExecutor::LocalProcessExecutor()
+LocalProfilerExecutor::LocalProfilerExecutor()
     : m_process_handle(nullptr)
     , m_stdout_read_handle(nullptr)
     , m_stdout_write_handle(nullptr)
@@ -116,16 +164,16 @@ LocalProcessExecutor::LocalProcessExecutor()
 {
 }
 
-LocalProcessExecutor::~LocalProcessExecutor()
+LocalProfilerExecutor::~LocalProfilerExecutor()
 {
     if (IsRunning())
     {
-        Terminate();
+        Cancel();
     }
     CloseHandles();
 }
 
-void LocalProcessExecutor::CloseHandles()
+void LocalProfilerExecutor::CloseHandles()
 {
     if (m_stdout_read_handle)
     {
@@ -154,16 +202,53 @@ void LocalProcessExecutor::CloseHandles()
     }
 }
 
-bool LocalProcessExecutor::Launch(std::string const& executable_path,
-                                   std::vector<std::string> const& args,
-                                   std::string const& working_directory)
+bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
 {
+    if (config.GetConnectionType() != ConnectionType::kLocal)
+    {
+        spdlog::error("LocalProfilerExecutor: SSH connections are not yet supported");
+        return false;
+    }
+
     // Build command line
     std::ostringstream cmd_line;
-    cmd_line << "\"" << executable_path << "\"";
-    for (auto const& arg : args)
+    cmd_line << "\"" << config.GetProfilerPath() << "\"";
+
+    // Explicit profiler argv entries first
+    for (auto const& arg : config.GetProfilerArgv())
     {
         cmd_line << " " << arg;
+    }
+
+    // Legacy whitespace-split profiler_args (backwards compatibility)
+    if (!config.GetProfilerArgs().empty())
+    {
+        std::istringstream iss(config.GetProfilerArgs());
+        std::string token;
+        while (iss >> token)
+        {
+            cmd_line << " " << token;
+        }
+    }
+
+    if (!config.GetOutputDirectory().empty())
+    {
+        cmd_line << " --output " << config.GetOutputDirectory();
+    }
+
+    if (!config.GetTargetExecutable().empty())
+    {
+        cmd_line << " -- " << config.GetTargetExecutable();
+    }
+
+    if (!config.GetTargetArgs().empty())
+    {
+        std::istringstream iss(config.GetTargetArgs());
+        std::string token;
+        while (iss >> token)
+        {
+            cmd_line << " " << token;
+        }
     }
 
     // Create pipes for stdout and stderr
@@ -185,7 +270,31 @@ bool LocalProcessExecutor::Launch(std::string const& executable_path,
     }
     SetHandleInformation(m_stderr_read_handle, HANDLE_FLAG_INHERIT, 0);
 
-    // Setup process startup info
+    // Build environment block if we have custom env vars
+    std::string env_block;
+    if (!config.GetEnvVars().empty())
+    {
+        // Inherit current environment and add our vars
+        char* current_env = GetEnvironmentStrings();
+        if (current_env)
+        {
+            char* p = current_env;
+            while (*p)
+            {
+                size_t len = strlen(p);
+                env_block.append(p, len + 1);
+                p += len + 1;
+            }
+            FreeEnvironmentStrings(current_env);
+        }
+        for (auto const& kv : config.GetEnvVars())
+        {
+            std::string entry = kv.first + "=" + kv.second;
+            env_block.append(entry.c_str(), entry.size() + 1);
+        }
+        env_block.push_back('\0');
+    }
+
     STARTUPINFOA si = {};
     si.cb = sizeof(STARTUPINFOA);
     si.hStdOutput = m_stdout_write_handle;
@@ -194,26 +303,23 @@ bool LocalProcessExecutor::Launch(std::string const& executable_path,
 
     PROCESS_INFORMATION pi = {};
 
-    // Launch process
     std::string cmd_line_str = cmd_line.str();
-    char* cmd_line_buffer = new char[cmd_line_str.size() + 1];
-    strcpy_s(cmd_line_buffer, cmd_line_str.size() + 1, cmd_line_str.c_str());
+    std::vector<char> cmd_line_buffer(cmd_line_str.begin(), cmd_line_str.end());
+    cmd_line_buffer.push_back('\0');
 
-    char const* working_dir = working_directory.empty() ? nullptr : working_directory.c_str();
+    LPVOID env_ptr = env_block.empty() ? nullptr : env_block.data();
 
     BOOL success = CreateProcessA(
         nullptr,
-        cmd_line_buffer,
+        cmd_line_buffer.data(),
         nullptr,
         nullptr,
         TRUE,
         0,
+        env_ptr,
         nullptr,
-        working_dir,
         &si,
         &pi);
-
-    delete[] cmd_line_buffer;
 
     if (!success)
     {
@@ -224,7 +330,6 @@ bool LocalProcessExecutor::Launch(std::string const& executable_path,
     m_process_handle = pi.hProcess;
     CloseHandle(pi.hThread);
 
-    // Close write ends of pipes (child process owns them now)
     CloseHandle(m_stdout_write_handle);
     m_stdout_write_handle = nullptr;
     CloseHandle(m_stderr_write_handle);
@@ -234,7 +339,7 @@ bool LocalProcessExecutor::Launch(std::string const& executable_path,
     return true;
 }
 
-bool LocalProcessExecutor::IsRunning()
+bool LocalProfilerExecutor::IsRunning()
 {
     if (!m_is_running || m_process_handle == nullptr)
     {
@@ -255,31 +360,7 @@ bool LocalProcessExecutor::IsRunning()
     return true;
 }
 
-bool LocalProcessExecutor::Wait(uint32_t timeout_ms)
-{
-    if (m_process_handle == nullptr)
-    {
-        return false;
-    }
-
-    DWORD timeout = (timeout_ms == 0) ? INFINITE : timeout_ms;
-    DWORD result = WaitForSingleObject(m_process_handle, timeout);
-
-    if (result == WAIT_OBJECT_0)
-    {
-        DWORD exit_code = 0;
-        if (GetExitCodeProcess(m_process_handle, &exit_code))
-        {
-            m_exit_code = static_cast<int>(exit_code);
-        }
-        m_is_running = false;
-        return true;
-    }
-
-    return false;
-}
-
-bool LocalProcessExecutor::Terminate()
+bool LocalProfilerExecutor::Cancel()
 {
     if (m_process_handle == nullptr)
     {
@@ -296,12 +377,12 @@ bool LocalProcessExecutor::Terminate()
     return false;
 }
 
-int LocalProcessExecutor::GetExitCode() const
+int LocalProfilerExecutor::GetExitCode() const
 {
     return m_exit_code;
 }
 
-std::string LocalProcessExecutor::ReadOutput()
+std::string LocalProfilerExecutor::ReadOutput()
 {
     std::lock_guard<std::mutex> lock(m_output_mutex);
 
@@ -309,7 +390,6 @@ std::string LocalProcessExecutor::ReadOutput()
     DWORD bytes_available = 0;
     char buffer[4096];
 
-    // Read from stdout
     if (m_stdout_read_handle)
     {
         if (PeekNamedPipe(m_stdout_read_handle, nullptr, 0, nullptr, &bytes_available, nullptr))
@@ -326,7 +406,6 @@ std::string LocalProcessExecutor::ReadOutput()
         }
     }
 
-    // Read from stderr
     if (m_stderr_read_handle)
     {
         bytes_available = 0;
@@ -351,10 +430,10 @@ std::string LocalProcessExecutor::ReadOutput()
 #else
 
 // ==================================================================================
-// LocalProcessExecutor Implementation - Linux
+// LocalProfilerExecutor Implementation - Linux
 // ==================================================================================
 
-LocalProcessExecutor::LocalProcessExecutor()
+LocalProfilerExecutor::LocalProfilerExecutor()
     : m_process_id(-1)
     , m_stdout_fd(-1)
     , m_stderr_fd(-1)
@@ -363,16 +442,16 @@ LocalProcessExecutor::LocalProcessExecutor()
 {
 }
 
-LocalProcessExecutor::~LocalProcessExecutor()
+LocalProfilerExecutor::~LocalProfilerExecutor()
 {
     if (IsRunning())
     {
-        Terminate();
+        Cancel();
     }
     CloseHandles();
 }
 
-void LocalProcessExecutor::CloseHandles()
+void LocalProfilerExecutor::CloseHandles()
 {
     if (m_stdout_fd != -1)
     {
@@ -386,10 +465,14 @@ void LocalProcessExecutor::CloseHandles()
     }
 }
 
-bool LocalProcessExecutor::Launch(std::string const& executable_path,
-                                   std::vector<std::string> const& args,
-                                   std::string const& working_directory)
+bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
 {
+    if (config.GetConnectionType() != ConnectionType::kLocal)
+    {
+        spdlog::error("LocalProfilerExecutor: SSH connections are not yet supported");
+        return false;
+    }
+
     int stdout_pipe[2];
     int stderr_pipe[2];
 
@@ -421,33 +504,73 @@ bool LocalProcessExecutor::Launch(std::string const& executable_path,
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
 
-        // Change working directory if specified
-        if (!working_directory.empty())
+        // Set environment variables
+        for (auto const& kv : config.GetEnvVars())
         {
-            if (chdir(working_directory.c_str()) != 0)
-            {
-                _exit(1);
-            }
+            setenv(kv.first.c_str(), kv.second.c_str(), 1);
         }
 
         // Build argv array
+        std::vector<std::string> arg_storage;
         std::vector<char*> argv;
-        argv.push_back(const_cast<char*>(executable_path.c_str()));
-        for (auto const& arg : args)
+
+        argv.push_back(const_cast<char*>(config.GetProfilerPath().c_str()));
+
+        // Explicit profiler argv entries first
+        for (auto const& arg : config.GetProfilerArgv())
         {
-            argv.push_back(const_cast<char*>(arg.c_str()));
+            arg_storage.push_back(arg);
+            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
         }
+
+        // Legacy whitespace-split profiler_args (backwards compatibility)
+        if (!config.GetProfilerArgs().empty())
+        {
+            std::istringstream iss(config.GetProfilerArgs());
+            std::string token;
+            while (iss >> token)
+            {
+                arg_storage.push_back(token);
+                argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
+            }
+        }
+
+        if (!config.GetOutputDirectory().empty())
+        {
+            arg_storage.emplace_back("--output");
+            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
+            arg_storage.push_back(config.GetOutputDirectory());
+            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
+        }
+
+        if (!config.GetTargetExecutable().empty())
+        {
+            arg_storage.emplace_back("--");
+            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
+            arg_storage.push_back(config.GetTargetExecutable());
+            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
+        }
+
+        if (!config.GetTargetArgs().empty())
+        {
+            std::istringstream iss(config.GetTargetArgs());
+            std::string token;
+            while (iss >> token)
+            {
+                arg_storage.push_back(token);
+                argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
+            }
+        }
+
         argv.push_back(nullptr);
 
-        execvp(executable_path.c_str(), argv.data());
+        execvp(config.GetProfilerPath().c_str(), argv.data());
 
-        // execvp only returns on failure — write the error to stderr so the
-        // parent process can capture it in the output pipe.
         int exec_errno = errno;
         char err_buf[256];
         int n = snprintf(err_buf, sizeof(err_buf),
                          "execvp failed for '%s': %s (errno %d)\n",
-                         executable_path.c_str(), strerror(exec_errno), exec_errno);
+                         config.GetProfilerPath().c_str(), strerror(exec_errno), exec_errno);
         if (n > 0)
         {
             (void)write(STDERR_FILENO, err_buf, static_cast<size_t>(n));
@@ -462,7 +585,6 @@ bool LocalProcessExecutor::Launch(std::string const& executable_path,
     m_stdout_fd = stdout_pipe[0];
     m_stderr_fd = stderr_pipe[0];
 
-    // Set non-blocking mode
     fcntl(m_stdout_fd, F_SETFL, O_NONBLOCK);
     fcntl(m_stderr_fd, F_SETFL, O_NONBLOCK);
 
@@ -470,7 +592,7 @@ bool LocalProcessExecutor::Launch(std::string const& executable_path,
     return true;
 }
 
-bool LocalProcessExecutor::IsRunning()
+bool LocalProfilerExecutor::IsRunning()
 {
     if (!m_is_running || m_process_id == -1)
     {
@@ -497,49 +619,7 @@ bool LocalProcessExecutor::IsRunning()
     return true;
 }
 
-bool LocalProcessExecutor::Wait(uint32_t timeout_ms)
-{
-    if (m_process_id == -1)
-    {
-        return false;
-    }
-
-    auto start_time = std::chrono::steady_clock::now();
-
-    while (true)
-    {
-        int status;
-        pid_t result = waitpid(m_process_id, &status, WNOHANG);
-
-        if (result == m_process_id)
-        {
-            if (WIFEXITED(status))
-            {
-                m_exit_code = WEXITSTATUS(status);
-            }
-            else if (WIFSIGNALED(status))
-            {
-                m_exit_code = 128 + WTERMSIG(status);
-            }
-            m_is_running = false;
-            return true;
-        }
-
-        if (timeout_ms > 0)
-        {
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start_time).count();
-            if (static_cast<uint32_t>(elapsed) >= timeout_ms)
-            {
-                return false;
-            }
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-}
-
-bool LocalProcessExecutor::Terminate()
+bool LocalProfilerExecutor::Cancel()
 {
     if (m_process_id == -1)
     {
@@ -548,7 +628,6 @@ bool LocalProcessExecutor::Terminate()
 
     if (kill(m_process_id, SIGTERM) == 0)
     {
-        // Give process time to terminate gracefully
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         if (IsRunning())
@@ -564,19 +643,18 @@ bool LocalProcessExecutor::Terminate()
     return false;
 }
 
-int LocalProcessExecutor::GetExitCode() const
+int LocalProfilerExecutor::GetExitCode() const
 {
     return m_exit_code;
 }
 
-std::string LocalProcessExecutor::ReadOutput()
+std::string LocalProfilerExecutor::ReadOutput()
 {
     std::lock_guard<std::mutex> lock(m_output_mutex);
 
     std::string output;
     char buffer[4096];
 
-    // Read from stdout
     if (m_stdout_fd != -1)
     {
         ssize_t bytes_read;
@@ -587,7 +665,6 @@ std::string LocalProcessExecutor::ReadOutput()
         }
     }
 
-    // Read from stderr
     if (m_stderr_fd != -1)
     {
         ssize_t bytes_read;
@@ -638,27 +715,50 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
     }
 
     m_config = std::make_unique<ProfilerConfig>(*config);
-    m_executor = std::make_unique<LocalProcessExecutor>();
 
-    std::vector<std::string> args = BuildCommandArgs(config);
+    if (config->GetConnectionType() == ConnectionType::kSsh)
+    {
+        spdlog::error("ProfilerProcessController::LaunchAsync: SSH connections are not yet supported");
+        m_state = kRPVProfilerStateFailed;
+        return kRocProfVisResultNotSupported;
+    }
 
-    // Log the full command line for diagnostics
+    m_executor = std::make_unique<LocalProfilerExecutor>();
+
+    // Log env vars
+    for (auto const& kv : config->GetEnvVars())
+    {
+        spdlog::info("Profiler env: {}={}", kv.first, kv.second);
+    }
+
+    // Log command
     {
         std::ostringstream cmd_log;
         cmd_log << config->GetProfilerPath();
-        for (auto const& arg : args)
+        for (auto const& arg : config->GetProfilerArgv())
         {
             cmd_log << " " << arg;
         }
-        spdlog::info("Profiler launch: executable='{}' (inherits application working directory)",
-                     config->GetProfilerPath());
-        spdlog::info("Profiler command line: {}", cmd_log.str());
+        if (!config->GetProfilerArgs().empty())
+        {
+            cmd_log << " " << config->GetProfilerArgs();
+        }
+        if (!config->GetOutputDirectory().empty())
+        {
+            cmd_log << " --output " << config->GetOutputDirectory();
+        }
+        if (!config->GetTargetExecutable().empty())
+        {
+            cmd_log << " -- " << config->GetTargetExecutable();
+        }
+        if (!config->GetTargetArgs().empty())
+        {
+            cmd_log << " " << config->GetTargetArgs();
+        }
+        spdlog::info("Profiler launch: {}", cmd_log.str());
     }
 
-    bool launched = m_executor->Launch(
-        config->GetProfilerPath(),
-        args,
-        std::string());
+    bool launched = m_executor->Start(*config);
 
     if (!launched)
     {
@@ -712,7 +812,7 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
         return kRocProfVisResultNotSupported;
     }
 
-    if (m_executor && m_executor->Terminate())
+    if (m_executor && m_executor->Cancel())
     {
         m_state = kRPVProfilerStateCancelled;
         return kRocProfVisResultSuccess;
@@ -784,7 +884,8 @@ std::string ProfilerProcessController::DetermineTracePath(ProfilerConfig const* 
     std::filesystem::path best_path;
     std::filesystem::file_time_type best_time{};
 
-    for (auto const& entry : std::filesystem::directory_iterator(output_path))
+    std::error_code ec;
+    for (auto const& entry : std::filesystem::recursive_directory_iterator(output_path, ec))
     {
         if (!entry.is_regular_file())
         {
@@ -817,6 +918,11 @@ std::vector<std::string> ProfilerProcessController::BuildCommandArgs(ProfilerCon
         return args;
     }
 
+    for (auto const& arg : config->GetProfilerArgv())
+    {
+        args.push_back(arg);
+    }
+
     if (!config->GetProfilerArgs().empty())
     {
         std::istringstream iss(config->GetProfilerArgs());
@@ -833,7 +939,6 @@ std::vector<std::string> ProfilerProcessController::BuildCommandArgs(ProfilerCon
         args.push_back(config->GetOutputDirectory());
     }
 
-    // All ROCm profilers use "--" to separate profiler flags from the target
     if (!config->GetTargetExecutable().empty())
     {
         args.push_back("--");

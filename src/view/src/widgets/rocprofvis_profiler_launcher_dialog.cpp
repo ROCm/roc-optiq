@@ -6,31 +6,19 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#include "rocprofvis_launch_shared_tabs.h"
+#include "rocprofvis_rocprof_sys_backend.h"
 #include "imgui.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 #include <vector>
 
 namespace RocProfVis
 {
 namespace View
 {
-namespace
-{
-
-std::vector<FileFilter> executable_open_file_filters()
-{
-#ifdef _WIN32
-    return {{"Executables", {".exe"}}, {"All Files", {".*"}}};
-#else
-    // NFD: filterCount 0 shows every file (extensionless binaries, scripts, etc.).
-    // A synthetic ".*" filter hides files with no extension on Linux portals.
-    return {};
-#endif
-}
-
-}  // namespace
-
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     : m_app_window(app_window)
@@ -38,41 +26,24 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     , m_should_open(false)
     , m_show_window(false)
     , m_is_running(false)
-    , m_profiler_type_index(0)
+    , m_backend_index(0)
+    , m_tool_index(0)
+    , m_config()
+    , m_profiler_path_override()
+    , m_preset_manager()
+    , m_current_preset_name()
     , m_profiler_state(kRPVProfilerStateIdle)
     , m_output_text()
     , m_error_message()
     , m_auto_scroll_output(true)
-    , m_auto_load_trace(true)
 {
-    std::memset(m_profiler_path, 0, sizeof(m_profiler_path));
-    std::memset(m_target_executable, 0, sizeof(m_target_executable));
-    std::memset(m_target_args, 0, sizeof(m_target_args));
-    std::memset(m_output_directory, 0, sizeof(m_output_directory));
-    std::memset(m_profiler_args, 0, sizeof(m_profiler_args));
+    m_backends.push_back(std::make_unique<RocprofSysBackend>());
 
-    SettingsManager& settings = SettingsManager::Get();
-    ProfilerSettings& profiler_settings = settings.GetProfilerSettings();
+    m_config.profiler_id = m_backends[0]->Id();
+    m_config.tool_id = m_backends[0]->GetTools()[0].id;
+    m_config.backend_payload = m_backends[0]->DefaultPayload();
 
-    if (!profiler_settings.profiler_path.empty())
-    {
-        std::snprintf(
-            m_profiler_path,
-            sizeof(m_profiler_path),
-            "%s",
-            profiler_settings.profiler_path.c_str());
-    }
-
-    if (!profiler_settings.profiler_output_directory.empty())
-    {
-        std::snprintf(
-            m_output_directory,
-            sizeof(m_output_directory),
-            "%s",
-            profiler_settings.profiler_output_directory.c_str());
-    }
-
-    m_auto_load_trace = profiler_settings.auto_load_trace;
+    LoadFromSettings();
 }
 
 ProfilerLauncherDialog::~ProfilerLauncherDialog()
@@ -100,182 +71,245 @@ void ProfilerLauncherDialog::Render()
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(1000, 700), ImGuiCond_FirstUseEver);
 
     bool window_open = true;
     if (ImGui::Begin("Launch Profiler", &window_open, ImGuiWindowFlags_NoScrollbar))
     {
-        // Profiler type selection
-        ImGui::Text("Profiler Type:");
-        ImGui::SameLine();
-        const char* profiler_types[] = {
-            "ROCm Systems Profiler (Run)",
-            "ROCm Systems Profiler (Instrument)",
-            "ROCm Compute Profiler",
-            "ROCm rocprofv3"
-        };
-        ImGui::Combo("##ProfilerType", &m_profiler_type_index, profiler_types, IM_ARRAYSIZE(profiler_types));
+        // Top: Preset bar
+        IProfilerBackend const* backend = m_backends[m_backend_index].get();
+        std::string load_name = RenderPresetBar(
+            m_preset_manager, m_config.profiler_id,
+            m_current_preset_name, m_config, backend, m_app_window);
 
-        ImGui::Separator();
-
-        // Profiler path (optional - defaults to system PATH)
-        ImGui::Text("Profiler Path (optional):");
-        ImGui::InputText("##ProfilerPath", m_profiler_path, sizeof(m_profiler_path));
-        ImGui::SameLine();
-        if (ImGui::Button("Browse##Profiler"))
+        if (!load_name.empty())
         {
-            OnBrowseProfilerPath();
-        }
-        if (std::strlen(m_profiler_path) == 0)
-        {
-            ImGui::SameLine();
-            ImGui::TextDisabled("(will use system PATH)");
-        }
-
-        // Target executable
-        ImGui::Text("Target Executable:");
-        ImGui::InputText("##TargetExec", m_target_executable, sizeof(m_target_executable));
-        ImGui::SameLine();
-        if (ImGui::Button("Browse##Target"))
-        {
-            OnBrowseTargetExecutable();
-        }
-
-        // Target arguments
-        ImGui::Text("Target Arguments:");
-        ImGui::InputText("##TargetArgs", m_target_args, sizeof(m_target_args));
-
-        // Output directory
-        ImGui::Text("Output Directory:");
-        ImGui::InputText("##OutputDir", m_output_directory, sizeof(m_output_directory));
-        ImGui::SameLine();
-        if (ImGui::Button("Browse##Output"))
-        {
-            OnBrowseOutputDirectory();
-        }
-
-        // Profiler arguments
-        ImGui::Text("Profiler Arguments:");
-        ImGui::InputText("##ProfilerArgs", m_profiler_args, sizeof(m_profiler_args));
-
-        ImGui::Checkbox("Open trace when profiling completes", &m_auto_load_trace);
-
-        ImGui::Separator();
-
-        // Output section
-        ImGui::Text("Profiler Output:");
-
-        // State indicator
-        const char* state_text = "Idle";
-        ImVec4 state_color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-
-        switch (m_profiler_state)
-        {
-            case kRPVProfilerStateRunning:
-                state_text = "Running";
-                state_color = ImVec4(0.0f, 0.8f, 0.0f, 1.0f);
-                break;
-            case kRPVProfilerStateCompleted:
-                state_text = "Completed";
-                state_color = ImVec4(0.0f, 0.6f, 1.0f, 1.0f);
-                break;
-            case kRPVProfilerStateFailed:
-                state_text = "Failed";
-                state_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
-                break;
-            case kRPVProfilerStateCancelled:
-                state_text = "Cancelled";
-                state_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
-                break;
-            default:
-                break;
-        }
-
-        ImGui::SameLine();
-        ImGui::TextColored(state_color, "[%s]", state_text);
-
-        ImGui::SameLine();
-        ImGui::Checkbox("Auto-scroll", &m_auto_scroll_output);
-
-        ImGui::SameLine();
-        if (ImGui::Button("Copy output##ProfilerLauncher"))
-        {
-            std::string clip;
-            if (!m_error_message.empty())
+            LaunchConfig loaded;
+            if (m_preset_manager.LoadPreset(load_name, m_config.profiler_id, loaded))
             {
-                clip = m_error_message;
-                clip += "\n\n";
+                m_config = loaded;
+                // Find matching tool index
+                auto tools = backend->GetTools();
+                for (size_t i = 0; i < tools.size(); i++)
+                {
+                    if (tools[i].id == m_config.tool_id)
+                    {
+                        m_tool_index = static_cast<int>(i);
+                        break;
+                    }
+                }
             }
-            clip += m_output_text;
-            ImGui::SetClipboardText(clip.c_str());
         }
 
-        // Output text area
-        ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
-        ImGui::BeginChild("OutputText", ImVec2(0, -40), true, output_flags);
+        ImGui::Separator();
 
-        if (!m_error_message.empty())
-        {
-            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%s", m_error_message.c_str());
-            ImGui::Separator();
-        }
-
-        ImGui::TextUnformatted(m_output_text.c_str());
-
-        if (m_auto_scroll_output && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-        {
-            ImGui::SetScrollHereY(1.0f);
-        }
-
+        // Two-column layout: reserve bottom area for preview + output + buttons
+        float bottom_reserve = 280.0f;
+        float left_width = 200.0f;
+        ImGui::BeginChild("LeftPane", ImVec2(left_width, -bottom_reserve), true);
+        RenderLeftPane();
         ImGui::EndChild();
 
+        ImGui::SameLine();
+
+        ImGui::BeginChild("RightPane", ImVec2(0, -bottom_reserve), true);
+        RenderRightPane();
+        ImGui::EndChild();
+
+        // Command preview
+        RenderCommandPreview(backend, m_config, GetProfilerPath());
+
+        // Output console
+        RenderOutputConsole(m_output_text, m_error_message,
+                           static_cast<int>(m_profiler_state), m_auto_scroll_output);
+
         // Button row
-        ImGui::Separator();
-
-        bool can_launch = !m_is_running && (m_profiler_state == kRPVProfilerStateIdle || m_profiler_state == kRPVProfilerStateCompleted || m_profiler_state == kRPVProfilerStateFailed || m_profiler_state == kRPVProfilerStateCancelled);
-        bool can_cancel = m_is_running && m_profiler_state == kRPVProfilerStateRunning;
-
-        if (can_launch)
-        {
-            if (ImGui::Button("Launch", ImVec2(120, 0)))
-            {
-                OnLaunchClicked();
-            }
-        }
-        else
-        {
-            ImGui::BeginDisabled();
-            ImGui::Button("Launch", ImVec2(120, 0));
-            ImGui::EndDisabled();
-        }
-
-        ImGui::SameLine();
-
-        if (can_cancel)
-        {
-            if (ImGui::Button("Cancel", ImVec2(120, 0)))
-            {
-                OnCancelClicked();
-            }
-        }
-        else
-        {
-            ImGui::BeginDisabled();
-            ImGui::Button("Cancel", ImVec2(120, 0));
-            ImGui::EndDisabled();
-        }
-
-        ImGui::SameLine();
-
-        if (ImGui::Button("Close", ImVec2(120, 0)))
-        {
-            OnCloseClicked();
-            m_show_window = false;
-        }
+        RenderButtonRow();
     }
     ImGui::End();
 
     if (!window_open)
+    {
+        OnCloseClicked();
+        m_show_window = false;
+    }
+}
+
+void ProfilerLauncherDialog::RenderLeftPane()
+{
+    // Profiler selector
+    ImGui::Text("Profiler:");
+    ImGui::PushItemWidth(-1);
+    if (ImGui::BeginCombo("##ProfilerBackend",
+                          m_backends[m_backend_index]->DisplayName()))
+    {
+        for (size_t i = 0; i < m_backends.size(); i++)
+        {
+            bool selected = (static_cast<int>(i) == m_backend_index);
+            if (ImGui::Selectable(m_backends[i]->DisplayName(), selected))
+            {
+                SwitchBackend(static_cast<int>(i));
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::Spacing();
+
+    // Tool selector
+    IProfilerBackend const* backend = m_backends[m_backend_index].get();
+    auto tools = backend->GetTools();
+    ImGui::Text("Tool:");
+    ImGui::PushItemWidth(-1);
+    if (ImGui::BeginCombo("##ToolSelector",
+                          tools[m_tool_index].display_name.c_str()))
+    {
+        for (size_t i = 0; i < tools.size(); i++)
+        {
+            bool selected = (static_cast<int>(i) == m_tool_index);
+            if (ImGui::Selectable(tools[i].display_name.c_str(), selected))
+            {
+                m_tool_index = static_cast<int>(i);
+                m_config.tool_id = tools[i].id;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::Spacing();
+
+    // Connection
+    RenderConnectionSection(m_config.connection);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Profiler path override
+    ImGui::Text("Profiler Path:");
+    ImGui::TextDisabled("(empty = use PATH)");
+    char path_buf[512];
+    std::snprintf(path_buf, sizeof(path_buf), "%s", m_profiler_path_override.c_str());
+    ImGui::PushItemWidth(-1);
+    if (ImGui::InputText("##ProfPath", path_buf, sizeof(path_buf)))
+    {
+        m_profiler_path_override = path_buf;
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // Recent targets
+    SettingsManager& settings = SettingsManager::Get();
+    ProfilerSettings& prof_settings = settings.GetProfilerSettings();
+    if (!prof_settings.recent_targets.empty())
+    {
+        ImGui::Text("Recent:");
+        for (auto const& t : prof_settings.recent_targets)
+        {
+            std::string short_name = t;
+            if (short_name.size() > 25)
+            {
+                short_name = "..." + short_name.substr(short_name.size() - 22);
+            }
+            if (ImGui::Selectable(short_name.c_str(), false))
+            {
+                m_config.target.executable = t;
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("%s", t.c_str());
+            }
+        }
+    }
+}
+
+void ProfilerLauncherDialog::RenderRightPane()
+{
+    IProfilerBackend const* backend = m_backends[m_backend_index].get();
+
+    if (ImGui::BeginTabBar("LaunchTabs"))
+    {
+        // Target tab (shared)
+        if (ImGui::BeginTabItem("Target"))
+        {
+            RenderTargetSection(m_config.target, m_app_window);
+            ImGui::EndTabItem();
+        }
+
+        // Backend-provided tabs
+        auto tabs = backend->GetTabs(m_config.tool_id);
+        for (auto const& tab : tabs)
+        {
+            if (ImGui::BeginTabItem(tab.display_name.c_str()))
+            {
+                tab.render_fn(m_config.backend_payload);
+                ImGui::EndTabItem();
+            }
+        }
+
+        // Raw Env Vars tab (shared)
+        if (ImGui::BeginTabItem("Raw Env Vars"))
+        {
+            std::vector<std::pair<std::string, std::string>> curated_env;
+            std::vector<std::string> dummy_argv;
+            backend->FlattenToExecution(m_config, curated_env, dummy_argv);
+            RenderRawEnvVarsTab(m_config.extra_env, curated_env);
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
+    }
+}
+
+void ProfilerLauncherDialog::RenderButtonRow()
+{
+    ImGui::Separator();
+
+    bool can_launch = !m_is_running &&
+        (m_profiler_state == kRPVProfilerStateIdle ||
+         m_profiler_state == kRPVProfilerStateCompleted ||
+         m_profiler_state == kRPVProfilerStateFailed ||
+         m_profiler_state == kRPVProfilerStateCancelled);
+    bool can_cancel = m_is_running && m_profiler_state == kRPVProfilerStateRunning;
+
+    if (can_launch)
+    {
+        if (ImGui::Button("Launch", ImVec2(120, 0)))
+        {
+            OnLaunchClicked();
+        }
+    }
+    else
+    {
+        ImGui::BeginDisabled();
+        ImGui::Button("Launch", ImVec2(120, 0));
+        ImGui::EndDisabled();
+    }
+
+    ImGui::SameLine();
+
+    if (can_cancel)
+    {
+        if (ImGui::Button("Cancel", ImVec2(120, 0)))
+        {
+            OnCancelClicked();
+        }
+    }
+    else
+    {
+        ImGui::BeginDisabled();
+        ImGui::Button("Cancel", ImVec2(120, 0));
+        ImGui::EndDisabled();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Close", ImVec2(120, 0)))
     {
         OnCloseClicked();
         m_show_window = false;
@@ -287,22 +321,27 @@ void ProfilerLauncherDialog::Update()
     if (m_is_running)
     {
         PollProfilerState();
+    }
+
+    // Always try to fetch output while there's an active profiler session,
+    // even after the process has completed (output may arrive asynchronously)
+    if (m_profiler_state == kRPVProfilerStateRunning ||
+        m_profiler_state == kRPVProfilerStateCompleted ||
+        m_profiler_state == kRPVProfilerStateFailed)
+    {
         UpdateOutput();
     }
 }
 
 void ProfilerLauncherDialog::OnLaunchClicked()
 {
-    // Validate inputs
-    if (std::strlen(m_target_executable) == 0)
-    {
-        m_error_message = "Error: Target executable is required";
-        return;
-    }
+    IProfilerBackend const* backend = m_backends[m_backend_index].get();
 
-    if (std::strlen(m_output_directory) == 0)
+    // Validate
+    std::string err = backend->Validate(m_config);
+    if (!err.empty())
     {
-        m_error_message = "Error: Output directory is required";
+        m_error_message = "Error: " + err;
         return;
     }
 
@@ -314,81 +353,84 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     m_process_output_stripped.clear();
     m_output_text.clear();
 
-    // Map profiler type index to enum and determine default executable name
-    rocprofvis_profiler_type_t profiler_type;
-    std::string default_profiler_name;
+    // Build env vars and argv from backend
+    std::vector<std::pair<std::string, std::string>> env_vars;
+    std::vector<std::string> argv;
+    backend->FlattenToExecution(m_config, env_vars, argv);
 
-    switch (m_profiler_type_index)
+    // Merge extra_env (user raw env vars override curated)
+    for (auto const& kv : m_config.extra_env)
     {
-        case 0:
-            profiler_type = kRPVProfilerTypeRocprofSysRun;
-            default_profiler_name = "rocprof-sys-run";
-            break;
-        case 1:
-            profiler_type = kRPVProfilerTypeRocprofSysInstrument;
-            default_profiler_name = "rocprof-sys-instrument";
-            break;
-        case 2:
-            profiler_type = kRPVProfilerTypeRocprofCompute;
-            default_profiler_name = "rocprof-compute";
-            break;
-        case 3:
-            profiler_type = kRPVProfilerTypeRocprofV3;
-            default_profiler_name = "rocprofv3";
-            break;
-        default:
-            profiler_type = kRPVProfilerTypeRocprofSysRun;
-            default_profiler_name = "rocprof-sys-run";
-            break;
+        env_vars.emplace_back(kv.first, kv.second);
     }
 
-    // Use specified path or default to executable name (will be found in PATH)
-    std::string profiler_path = std::strlen(m_profiler_path) > 0
-        ? std::string(m_profiler_path)
-        : default_profiler_name;
+    // Determine profiler type enum for controller
+    rocprofvis_profiler_type_t profiler_type = kRPVProfilerTypeRocprofSysRun;
+    if (m_config.tool_id == "run" || m_config.tool_id == "sample")
+    {
+        profiler_type = kRPVProfilerTypeRocprofSysRun;
+    }
+    else if (m_config.tool_id == "instrument")
+    {
+        profiler_type = kRPVProfilerTypeRocprofSysInstrument;
+    }
 
-    // Launch profiler via DataProvider
+    std::string profiler_path = GetProfilerPath();
+
+    // Build profiler_args as empty (we pass argv individually via the new API)
+    // Join argv into a single string for the legacy API
+    std::string profiler_args_str;
+    for (size_t i = 0; i < argv.size(); i++)
+    {
+        if (i > 0) profiler_args_str += " ";
+        profiler_args_str += argv[i];
+    }
+
+    // Launch via DataProvider (uses the existing C API path for now)
     bool success = m_data_provider.LaunchProfiler(
         profiler_type,
         profiler_path,
-        std::string(m_target_executable),
-        std::string(m_target_args),
-        std::string(m_output_directory),
-        std::string(m_profiler_args)
-    );
+        m_config.target.executable,
+        m_config.target.arguments,
+        m_config.target.output_directory,
+        profiler_args_str,
+        env_vars);
 
     if (success)
     {
         m_is_running = true;
         m_profiler_state = kRPVProfilerStateRunning;
 
-        m_output_preamble = "$ " + profiler_path;
-        if (std::strlen(m_profiler_args) > 0)
+        // Build preamble
+        std::ostringstream preamble;
+        for (auto const& kv : env_vars)
         {
-            m_output_preamble += " ";
-            m_output_preamble += m_profiler_args;
+            if (!kv.second.empty())
+            {
+                preamble << kv.first << "=" << kv.second << " \\\n";
+            }
         }
-        if (std::strlen(m_output_directory) > 0)
+        preamble << "$ " << profiler_path;
+        if (!profiler_args_str.empty())
         {
-            m_output_preamble += " --output ";
-            m_output_preamble += m_output_directory;
+            preamble << " " << profiler_args_str;
         }
-        m_output_preamble += " -- ";
-        m_output_preamble += m_target_executable;
-        if (std::strlen(m_target_args) > 0)
+        if (!m_config.target.output_directory.empty())
         {
-            m_output_preamble += " ";
-            m_output_preamble += m_target_args;
+            preamble << " --output " << m_config.target.output_directory;
         }
-        m_output_preamble += "\n\n";
+        preamble << " -- " << m_config.target.executable;
+        if (!m_config.target.arguments.empty())
+        {
+            preamble << " " << m_config.target.arguments;
+        }
+        preamble << "\n\n";
+        m_output_preamble = preamble.str();
         RebuildComposedOutput();
 
-        SettingsManager& settings = SettingsManager::Get();
-        ProfilerSettings& profiler_settings = settings.GetProfilerSettings();
-        profiler_settings.profiler_path = std::string(m_profiler_path);
-        profiler_settings.profiler_output_directory = std::string(m_output_directory);
-        profiler_settings.auto_load_trace = m_auto_load_trace;
-        settings.SaveProfilerSettings();
+        // Save settings
+        SaveToSettings();
+        AddRecentTarget(m_config.target.executable);
     }
     else
     {
@@ -414,7 +456,6 @@ void ProfilerLauncherDialog::OnCancelClicked()
 
 void ProfilerLauncherDialog::OnCloseClicked()
 {
-    // Clean up profiler if still running
     if (m_is_running)
     {
         m_data_provider.CancelProfiler();
@@ -423,65 +464,6 @@ void ProfilerLauncherDialog::OnCloseClicked()
     m_data_provider.CloseProfiler();
     m_is_running = false;
     m_profiler_state = kRPVProfilerStateIdle;
-}
-
-void ProfilerLauncherDialog::OnBrowseProfilerPath()
-{
-    if (!m_app_window)
-    {
-        return;
-    }
-
-    m_app_window->ShowOpenFileDialog(
-        "Choose Profiler Executable",
-        executable_open_file_filters(),
-        "",
-        [this](const std::string& path) { OnProfilerPathSelected(path); }
-    );
-}
-
-void ProfilerLauncherDialog::OnBrowseTargetExecutable()
-{
-    if (!m_app_window)
-    {
-        return;
-    }
-
-    m_app_window->ShowOpenFileDialog(
-        "Choose Target Executable",
-        executable_open_file_filters(),
-        "",
-        [this](const std::string& path) { OnTargetExecutableSelected(path); }
-    );
-}
-
-void ProfilerLauncherDialog::OnBrowseOutputDirectory()
-{
-    if (!m_app_window)
-    {
-        return;
-    }
-
-    m_app_window->ShowPathPickerDialog(
-        "Choose Output Directory",
-        "",
-        [this](const std::string& path) { OnOutputDirectorySelected(path); }
-    );
-}
-
-void ProfilerLauncherDialog::OnProfilerPathSelected(const std::string& path)
-{
-    std::snprintf(m_profiler_path, sizeof(m_profiler_path), "%s", path.c_str());
-}
-
-void ProfilerLauncherDialog::OnTargetExecutableSelected(const std::string& path)
-{
-    std::snprintf(m_target_executable, sizeof(m_target_executable), "%s", path.c_str());
-}
-
-void ProfilerLauncherDialog::OnOutputDirectorySelected(const std::string& path)
-{
-    std::snprintf(m_output_directory, sizeof(m_output_directory), "%s", path.c_str());
 }
 
 void ProfilerLauncherDialog::PollProfilerState()
@@ -502,7 +484,7 @@ void ProfilerLauncherDialog::PollProfilerState()
             {
                 m_output_epilogue += "Trace file: " + trace_path + "\n";
 
-                if (m_auto_load_trace && m_app_window)
+                if (m_config.target.auto_load_trace && m_app_window)
                 {
                     m_app_window->OpenFile(trace_path);
                 }
@@ -550,6 +532,94 @@ void ProfilerLauncherDialog::UpdateOutput()
 void ProfilerLauncherDialog::RebuildComposedOutput()
 {
     m_output_text = m_output_preamble + m_process_output_stripped + m_output_epilogue;
+}
+
+void ProfilerLauncherDialog::SwitchBackend(int index)
+{
+    if (index < 0 || index >= static_cast<int>(m_backends.size()))
+    {
+        return;
+    }
+    m_backend_index = index;
+    m_tool_index = 0;
+    m_config.profiler_id = m_backends[index]->Id();
+    m_config.tool_id = m_backends[index]->GetTools()[0].id;
+    m_config.backend_payload = m_backends[index]->DefaultPayload();
+}
+
+void ProfilerLauncherDialog::LoadFromSettings()
+{
+    SettingsManager& settings = SettingsManager::Get();
+    ProfilerSettings& ps = settings.GetProfilerSettings();
+
+    m_profiler_path_override = ps.profiler_path;
+    m_config.target.output_directory = ps.profiler_output_directory;
+    m_config.target.auto_load_trace = ps.auto_load_trace;
+    m_current_preset_name = ps.last_preset_name;
+
+    if (!ps.last_profiler_id.empty())
+    {
+        for (size_t i = 0; i < m_backends.size(); i++)
+        {
+            if (m_backends[i]->Id() == ps.last_profiler_id)
+            {
+                m_backend_index = static_cast<int>(i);
+                m_config.profiler_id = ps.last_profiler_id;
+                break;
+            }
+        }
+    }
+}
+
+void ProfilerLauncherDialog::SaveToSettings()
+{
+    SettingsManager& settings = SettingsManager::Get();
+    ProfilerSettings& ps = settings.GetProfilerSettings();
+
+    ps.profiler_path = m_profiler_path_override;
+    ps.profiler_output_directory = m_config.target.output_directory;
+    ps.auto_load_trace = m_config.target.auto_load_trace;
+    ps.last_preset_name = m_current_preset_name;
+    ps.last_profiler_id = m_config.profiler_id;
+    settings.SaveProfilerSettings();
+}
+
+void ProfilerLauncherDialog::AddRecentTarget(std::string const& exe)
+{
+    if (exe.empty())
+    {
+        return;
+    }
+
+    SettingsManager& settings = SettingsManager::Get();
+    ProfilerSettings& ps = settings.GetProfilerSettings();
+
+    // Remove existing entry if present
+    auto& recents = ps.recent_targets;
+    recents.erase(
+        std::remove(recents.begin(), recents.end(), exe),
+        recents.end());
+
+    // Add to front
+    recents.insert(recents.begin(), exe);
+
+    // Cap at 10
+    if (recents.size() > 10)
+    {
+        recents.resize(10);
+    }
+
+    settings.SaveProfilerSettings();
+}
+
+std::string ProfilerLauncherDialog::GetProfilerPath() const
+{
+    if (!m_profiler_path_override.empty())
+    {
+        return m_profiler_path_override;
+    }
+    IProfilerBackend const* backend = m_backends[m_backend_index].get();
+    return backend->GetDefaultBinary(m_config.tool_id);
 }
 
 }  // namespace View

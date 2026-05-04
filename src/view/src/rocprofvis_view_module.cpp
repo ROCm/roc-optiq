@@ -32,10 +32,15 @@ rocprofvis_view_init(std::function<void(int)>                 notification_callb
 void
 rocprofvis_view_render(const rocprofvis_view_render_options_t& render_options)
 {
-    if(render_options ==
-       rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit)
+    if(static_cast<int>(render_options) &
+       static_cast<int>(rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit))
     {
         AppWindow::GetInstance()->ShowCloseConfirm();
+    }
+    if(static_cast<int>(render_options) &
+       static_cast<int>(rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_ShowProfilerLauncher))
+    {
+        AppWindow::GetInstance()->ShowProfilerLauncher();
     }
     AppWindow::GetInstance()->Render();
 }

@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace RocProfVis
@@ -262,6 +263,18 @@ public:
                         const std::string& target_args,
                         const std::string& output_directory,
                         const std::string& profiler_args);
+
+    /**
+     * Extended launch with explicit environment variables.
+     * @param env_vars: Environment variables to set in the child process.
+     */
+    bool LaunchProfiler(rocprofvis_profiler_type_t profiler_type,
+                        const std::string& profiler_path,
+                        const std::string& target_executable,
+                        const std::string& target_args,
+                        const std::string& output_directory,
+                        const std::string& profiler_args,
+                        const std::vector<std::pair<std::string, std::string>>& env_vars);
 
     /*
      * Gets the current state of the profiler execution.

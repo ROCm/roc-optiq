@@ -740,6 +740,17 @@ AppWindow::RenderEmptyState()
         SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
     }
 
+    ImGui::Dummy(ImVec2(0.0f, font_size * 0.4f));
+    CenterNextItem(button_width);
+    if(ImGui::Button("Launch Profiler", ImVec2(button_width, 0.0f)))
+    {
+        ShowProfilerLauncher();
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Launch ROCm profiler on a target application (Ctrl+L)");
+    }
+
     // --- Recent files ---
     if(!recent_files.empty())
     {

@@ -5,8 +5,13 @@
 
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_launch_config.h"
+#include "rocprofvis_profiler_backend.h"
+#include "rocprofvis_launch_preset_manager.h"
 #include "imgui.h"
 #include <string>
+#include <memory>
+#include <vector>
 #include <functional>
 
 namespace RocProfVis
@@ -14,7 +19,6 @@ namespace RocProfVis
 namespace View
 {
 
-// Forward declarations
 class AppWindow;
 class DataProvider;
 
@@ -32,32 +36,39 @@ private:
     void OnLaunchClicked();
     void OnCancelClicked();
     void OnCloseClicked();
-    void OnBrowseProfilerPath();
-    void OnBrowseTargetExecutable();
-    void OnBrowseOutputDirectory();
     void PollProfilerState();
     void UpdateOutput();
     void RebuildComposedOutput();
 
-    // File dialog callbacks
-    void OnProfilerPathSelected(const std::string& path);
-    void OnTargetExecutableSelected(const std::string& path);
-    void OnOutputDirectorySelected(const std::string& path);
+    void RenderLeftPane();
+    void RenderRightPane();
+    void RenderButtonRow();
+
+    void SwitchBackend(int index);
+    void LoadFromSettings();
+    void SaveToSettings();
+    void AddRecentTarget(std::string const& exe);
+    std::string GetProfilerPath() const;
 
     AppWindow* m_app_window;
-    DataProvider m_data_provider;  // Owns its own DataProvider
+    DataProvider m_data_provider;
 
     bool m_should_open;
     bool m_show_window;
     bool m_is_running;
 
-    // Configuration fields (ImGui input buffers)
-    int m_profiler_type_index;
-    char m_profiler_path[512];
-    char m_target_executable[512];
-    char m_target_args[512];
-    char m_output_directory[512];
-    char m_profiler_args[512];
+    // Backend system
+    std::vector<std::unique_ptr<IProfilerBackend>> m_backends;
+    int m_backend_index;
+    int m_tool_index;
+
+    // Config
+    LaunchConfig m_config;
+    std::string m_profiler_path_override;
+
+    // Presets
+    LaunchPresetManager m_preset_manager;
+    std::string m_current_preset_name;
 
     // Profiler state
     rocprofvis_profiler_state_t m_profiler_state;
@@ -70,7 +81,6 @@ private:
 
     // UI state
     bool m_auto_scroll_output;
-    bool m_auto_load_trace;
 };
 
 }  // namespace View

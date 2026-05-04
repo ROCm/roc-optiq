@@ -619,6 +619,51 @@ rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_p
     return cfg->SetOutputDirectory(output_directory);
 }
 
+rocprofvis_result_t rocprofvis_profiler_config_add_env_var(rocprofvis_profiler_config_t* config, char const* name, char const* value)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->AddEnvVar(name, value);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_add_profiler_arg(rocprofvis_profiler_config_t* config, char const* arg)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->AddProfilerArg(arg);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_connection_local(rocprofvis_profiler_config_t* config)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->SetConnectionLocal();
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_connection_ssh(rocprofvis_profiler_config_t* config,
+    char const* host, char const* user, int port, char const* identity_file, char const* remote_stage_dir)
+{
+    if (config == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
+    return cfg->SetConnectionSsh(host, user, port, identity_file, remote_stage_dir);
+}
+
 rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_config_t* config, rocprofvis_controller_future_t* future)
 {
     if (config == nullptr || future == nullptr)

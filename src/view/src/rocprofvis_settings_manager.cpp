@@ -820,6 +820,14 @@ SettingsManager::SerializeProfilerSettings(jt::Json& json)
     ps[JSON_KEY_SETTINGS_PROFILER_PATH] = m_profilersettings.profiler_path;
     ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR] = m_profilersettings.profiler_output_directory;
     ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD] = m_profilersettings.auto_load_trace;
+    ps["last_preset_name"] = m_profilersettings.last_preset_name;
+    ps["last_profiler_id"] = m_profilersettings.last_profiler_id;
+
+    int rt_idx = 0;
+    for (auto const& t : m_profilersettings.recent_targets)
+    {
+        ps["recent_targets"][rt_idx++] = t;
+    }
 }
 
 void
@@ -837,6 +845,25 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
     if(ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].isBool())
     {
         m_profilersettings.auto_load_trace = ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].getBool();
+    }
+    if(ps["last_preset_name"].isString())
+    {
+        m_profilersettings.last_preset_name = ps["last_preset_name"].getString();
+    }
+    if(ps["last_profiler_id"].isString())
+    {
+        m_profilersettings.last_profiler_id = ps["last_profiler_id"].getString();
+    }
+    if(ps["recent_targets"].isArray())
+    {
+        m_profilersettings.recent_targets.clear();
+        for (jt::Json& item : ps["recent_targets"].getArray())
+        {
+            if (item.isString())
+            {
+                m_profilersettings.recent_targets.push_back(item.getString());
+            }
+        }
     }
 }
 

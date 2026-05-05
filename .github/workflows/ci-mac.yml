@@ -74,6 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          lfs: true
           submodules: true
 
       - name: Install Vulkan SDK

@@ -78,7 +78,7 @@ Navigation and inspection:
 
   .. grid-item-card:: Reference
 
-    * :doc:`Command-line support <reference/cli-support>`
+    * :doc:`Command line support <reference/cli-support>`
 
 To contribute to the documentation, refer to the
 `Programming Guide in the GitHub repo <https://github.com/ROCm/roc-optiq/blob/main/CODING.md>`_.

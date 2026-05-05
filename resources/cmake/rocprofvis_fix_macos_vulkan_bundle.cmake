@@ -21,10 +21,6 @@ if(NOT EXISTS "${ROCPROFVIS_BUNDLED_VULKAN_LOADER}")
         "Bundled Vulkan loader not found: ${ROCPROFVIS_BUNDLED_VULKAN_LOADER}")
 endif()
 
-if(NOT EXISTS "${ROCPROFVIS_BUNDLED_MOLTENVK}")
-    message(FATAL_ERROR "Bundled MoltenVK not found: ${ROCPROFVIS_BUNDLED_MOLTENVK}")
-endif()
-
 execute_process(
     COMMAND otool -L "${ROCPROFVIS_APP_EXECUTABLE}"
     RESULT_VARIABLE _otool_result

@@ -107,6 +107,14 @@ jobs:
             exit 1
           }
 
+      - name: Run Tests
+        run: |
+          cd ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
+          ctest \
+            -C ${{ env.BINARY_DIR }} \
+            --output-on-failure \
+            --no-tests=error
+
       - name: Prepare Distribution Artifacts
         run: |
           mkdir ${{ env.DIST_DIR }}

@@ -92,6 +92,13 @@ jobs:
             echo "❌ ${{ env.BUILD_FILE_NAME }} was not built!"
             exit 1
           fi
+      
+      - name: Run Tests
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          ctest \
+            --output-on-failure \
+            --no-tests=error
 
       - name: Prepare Distribution Artifacts
         run: |

@@ -13,6 +13,7 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
+#include "rocprofvis_remote_uri.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_panel.h"
@@ -651,7 +652,7 @@ AppWindow::OpenFile(std::string file_path)
 void
 AppWindow::HandleOpenRecentFile(const std::string& file_path)
 {
-    if(!std::filesystem::exists(file_path))
+    if(!RocProfVis::DataModel::IsSshUri(file_path) && !std::filesystem::exists(file_path))
     {
         SettingsManager::GetInstance().RemoveRecentFile(file_path);
         ShowMessageDialog("Recent File Not Found",

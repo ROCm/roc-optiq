@@ -3,6 +3,12 @@
 
 #include "rocprofvis_db_sqlite.h"
 #include "rocprofvis_core_profile.h"
+#include "rocprofvis_remote_uri.h"
+
+#include <spdlog/spdlog.h>
+
+#include <chrono>
+#include <filesystem>
 #include <sstream>
 
 namespace RocProfVis
@@ -257,8 +263,31 @@ rocprofvis_dm_result_t SqliteDatabase::Open()
 
 rocprofvis_dm_result_t SqliteDatabase::OpenConnection(uint32_t db_node_id, sqlite3** connection)
 {
+    using clock_t = std::chrono::steady_clock;
+    auto t_open_total_0 = clock_t::now();
+
     *connection = nullptr;
-    if(sqlite3_open(m_db_nodes[db_node_id]->filepath.c_str(), connection) != SQLITE_OK)
+    std::string original_path = m_db_nodes[db_node_id]->filepath;
+    std::string open_path     = original_path;
+    bool        is_remote     = IsSshUri(open_path);
+    int64_t     materialize_ms = 0;
+
+    if(is_remote)
+    {
+        auto t0 = clock_t::now();
+        std::string cache_path;
+        if(!MaterializeRemoteCache(open_path, cache_path))
+        {
+            spdlog::error("Failed to materialize remote cache for {}", open_path);
+            return kRocProfVisDmResultDbAccessFailed;
+        }
+        materialize_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - t0).count();
+        open_path = cache_path;
+    }
+
+    auto t_open_0 = clock_t::now();
+    if(sqlite3_open(open_path.c_str(), connection) != SQLITE_OK)
     {
         spdlog::debug("Cannot open database connection - {}",
                       sqlite3_errmsg(*connection));
@@ -266,11 +295,35 @@ rocprofvis_dm_result_t SqliteDatabase::OpenConnection(uint32_t db_node_id, sqlit
         *connection = nullptr;
         return kRocProfVisDmResultUnknownError;
     }
+    sqlite3_exec(*connection, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+    sqlite3_exec(*connection, "PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
+    auto sqlite_open_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - t_open_0).count();
+
+    int64_t total_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - t_open_total_0).count();
+
+    int64_t file_bytes = 0;
+    {
+        std::error_code ec;
+        auto sz = std::filesystem::file_size(open_path, ec);
+        if(!ec) file_bytes = static_cast<int64_t>(sz);
+    }
+
+    if(is_remote)
+    {
+        spdlog::info("[db-open-metrics] kind=remote uri={} cache={} size_mb={:.1f} "
+                     "materialize_ms={} sqlite_open_ms={} total_ms={}",
+                     original_path, open_path, file_bytes / (1024.0 * 1024.0),
+                     materialize_ms, sqlite_open_ms, total_ms);
+    }
     else
     {
-        sqlite3_exec(*connection, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
-        sqlite3_exec(*connection, "PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
+        spdlog::info("[db-open-metrics] kind=local path={} size_mb={:.1f} "
+                     "sqlite_open_ms={} total_ms={}",
+                     open_path, file_bytes / (1024.0 * 1024.0), sqlite_open_ms, total_ms);
     }
+
     return kRocProfVisDmResultSuccess;
 }
 

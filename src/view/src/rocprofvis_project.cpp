@@ -10,6 +10,7 @@
 #    include "compute/rocprofvis_compute_view.h"
 #endif
 #include "widgets/rocprofvis_notification_manager.h"
+#include "rocprofvis_remote_uri.h"
 #include <fstream>
 
 namespace RocProfVis
@@ -58,9 +59,11 @@ Project::OpenResult
 Project::Open(std::string& file_path)
 {
     OpenResult result = Failed;
-    if(std::filesystem::exists(file_path))
+    const bool is_remote = RocProfVis::DataModel::IsSshUri(file_path);
+    if(is_remote || std::filesystem::exists(file_path))
     {
-        std::string file_ext = std::filesystem::path(file_path).extension().string();
+        std::string file_ext = is_remote ? std::string{}
+                                         : std::filesystem::path(file_path).extension().string();
         if(file_ext == ".rpv")
         {
             result = OpenProject(file_path);

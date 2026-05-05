@@ -4,6 +4,7 @@
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_db_expression_filter.h"
 #include "rocprofvis_c_interface.h"
+#include "rocprofvis_remote_uri.h"
 #include <sstream>
 #include <unordered_set>
 #include <cfloat>
@@ -1585,6 +1586,12 @@ rocprofvis_dm_result_t ProfileDatabase::DetectMultiNode(rocprofvis_db_filename_t
 
 rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename, std::vector<std::string> & multinode_files){
     sqlite3 *db;
+    if (filename != nullptr && IsSshUri(filename))
+    {
+        // Remote URIs always go through the SSH-cache path which materializes
+        // an rocpd-style sqlite database into /tmp.
+        return rocprofvis_db_type_t::kRocprofSqlite;
+    }
     if (DetectMultiNode(filename, multinode_files) == kRocProfVisDmResultSuccess)
     {
         return rocprofvis_db_type_t::kRocprofMultinodeSqlite;

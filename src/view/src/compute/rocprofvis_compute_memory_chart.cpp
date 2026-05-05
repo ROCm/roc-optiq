@@ -201,16 +201,16 @@ DrawDashedFlowLine(ImDrawList* draw_list, ImVec2 from, ImVec2 to, ImU32 color)
 static void
 DrawHorizontalArrow(ImDrawList* draw_list, ImVec2 from, ImVec2 to, ImU32 color)
 {
-    float length = to.x - from.x;
-    if(length <= 0.0f) return;
+    if(from.x == to.x) return;
 
-    DrawDashedFlowLine(draw_list, from, {to.x - ARROW_HEAD_SIZE, to.y}, color);
+    const float dir  = (to.x > from.x) ? 1.0f : -1.0f;
+    const float head = ARROW_HEAD_SIZE;
+
+    DrawDashedFlowLine(draw_list, from, {to.x - dir * head, to.y}, color);
     draw_list->AddCircleFilled(from, 2.25f, color);
-    float head = ARROW_HEAD_SIZE;
-    draw_list->AddTriangleFilled(to,
-                                 ImVec2(to.x - head, to.y - head * 0.6f),
-                                 ImVec2(to.x - head, to.y + head * 0.6f),
-                                 color);
+    draw_list->AddTriangleFilled(
+        to, ImVec2(to.x - dir * head, to.y - head * 0.6f),
+        ImVec2(to.x - dir * head, to.y + head * 0.6f), color);
 }
 
 static void
@@ -956,14 +956,18 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
         return {origin.x + local_x, origin.y + local_y};
     };
 
-    // Draw horizontal arrow + label (label placed at source x + 5, above arrow)
+    // Draw horizontal arrow + label (label placed at source x + 5, above arrow).
+    // Read flows point back toward the consumer (cache -> CU), so swap the
+    // endpoints when the label is a read.
     auto ArrowWithLabel = [&](float src_x, float src_y,
                               float dst_x, float dst_y,
                               const char* label_text,
                               MemChartMetric metric_id) {
-        ImU32 flow_color = ColorForFlowLabel(label_text);
-        DrawHorizontalArrow(draw_list, screen(src_x, src_y), screen(dst_x, dst_y),
-                            flow_color);
+        ImU32       flow_color = ColorForFlowLabel(label_text);
+        const bool  reverse    = StartsWith(label_text, "Rd:");
+        const ImVec2 tail = reverse ? screen(dst_x, dst_y) : screen(src_x, src_y);
+        const ImVec2 tip  = reverse ? screen(src_x, src_y) : screen(dst_x, dst_y);
+        DrawHorizontalArrow(draw_list, tail, tip, flow_color);
         ImVec2 label_pos = screen(src_x + 5, src_y - ARROW_LABEL_ABOVE);
         DrawFloatingTextBackground(draw_list, label_pos, label_text, flow_color);
         DrawTextWithTooltip(draw_list, label_pos,

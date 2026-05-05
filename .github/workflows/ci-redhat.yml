@@ -77,7 +77,6 @@ jobs:
 
     steps:
       - name: Install git-lfs
-        if: false
         run: |
           curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.rpm.sh | bash
           dnf install -y git-lfs

@@ -77,7 +77,6 @@ jobs:
 
     steps:
       - name: Install git-lfs
-        if: false
         run: |
           apt install -y git-lfs 
 

@@ -957,14 +957,15 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
     };
 
     // Draw horizontal arrow + label (label placed at source x + 5, above arrow).
-    // Read flows point back toward the consumer (cache -> CU), so swap the
-    // endpoints when the label is a read.
+    // Read and request flows point back toward the consumer (cache -> CU,
+    // L2 -> instr L1), so swap the endpoints when the label is a read/request.
     auto ArrowWithLabel = [&](float src_x, float src_y,
                               float dst_x, float dst_y,
                               const char* label_text,
                               MemChartMetric metric_id) {
         ImU32       flow_color = ColorForFlowLabel(label_text);
-        const bool  reverse    = StartsWith(label_text, "Rd:");
+        const bool  reverse =
+            StartsWith(label_text, "Rd:") || StartsWith(label_text, "Req:");
         const ImVec2 tail = reverse ? screen(dst_x, dst_y) : screen(src_x, src_y);
         const ImVec2 tip  = reverse ? screen(src_x, src_y) : screen(dst_x, dst_y);
         DrawHorizontalArrow(draw_list, tail, tip, flow_color);

@@ -67,6 +67,10 @@ protected:
     ImGuiTableFlags           m_table_flags;
     uint32_t                  m_max_rows_in_table;
 
+    uint32_t m_freezed_columns;
+    uint32_t m_freezed_rows;
+
+
 private:
     float GetTableHight() const;
     void  RenderPinCheckBox(std::pair<const MetricId, Row>& row);

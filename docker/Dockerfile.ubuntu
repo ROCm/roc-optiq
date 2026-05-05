@@ -8,7 +8,7 @@ SHELL [ "/bin/bash", "-c" ]
 
 # Install Dependencies
 RUN apt update -y && \
-    apt install -y build-essential cmake curl git libncurses-dev libwayland-dev \
+    apt install -y build-essential cmake curl git git-lfs libncurses-dev libwayland-dev \
     libx11-dev libxcursor-dev libxi-dev libxinerama-dev libxkbcommon-dev \
     libxrandr-dev pkg-config wget xorg-dev libdbus-1-dev unzip
 

@@ -95,6 +95,7 @@ jobs:
 
       - name: Run Tests
         run: |
+          apt install -y git-lfs 
           cd ${{ env.BUILD_DIR }}
           ctest \
             --output-on-failure \

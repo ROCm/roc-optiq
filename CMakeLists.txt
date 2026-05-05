@@ -234,6 +234,88 @@ target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(APPLE)
+    set(ROCPROFVIS_BUNDLE_VULKAN ON CACHE BOOL
+        "Bundle Vulkan loader and MoltenVK runtime into the macOS app")
+    if(ROCPROFVIS_BUNDLE_VULKAN)
+        set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "")
+        if(Vulkan_LIBRARY)
+            set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "${Vulkan_LIBRARY}")
+        elseif(Vulkan_LIBRARIES)
+            list(GET Vulkan_LIBRARIES 0 ROCPROFVIS_VULKAN_LOADER_LIBRARY)
+        endif()
+        if(ROCPROFVIS_VULKAN_LOADER_LIBRARY)
+            get_filename_component(ROCPROFVIS_VULKAN_LOADER_DIR
+                "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}" DIRECTORY)
+            if(EXISTS "${ROCPROFVIS_VULKAN_LOADER_DIR}/libvulkan.1.dylib")
+                set(ROCPROFVIS_VULKAN_LOADER_LIBRARY
+                    "${ROCPROFVIS_VULKAN_LOADER_DIR}/libvulkan.1.dylib")
+            endif()
+        endif()
+        if(NOT ROCPROFVIS_VULKAN_LOADER_LIBRARY OR
+           NOT EXISTS "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}")
+            message(FATAL_ERROR
+                "ROCPROFVIS_BUNDLE_VULKAN is ON, but the Vulkan loader library "
+                "was not found. Set Vulkan_LIBRARY to the SDK libvulkan.dylib.")
+        endif()
+
+        set(ROCPROFVIS_VULKAN_SDK_DIR "")
+        if(DEFINED ENV{VULKAN_SDK})
+            set(ROCPROFVIS_VULKAN_SDK_DIR "$ENV{VULKAN_SDK}")
+        endif()
+
+        find_library(ROCPROFVIS_MOLTENVK_LIBRARY
+            NAMES MoltenVK
+            PATHS
+                "${ROCPROFVIS_VULKAN_SDK_DIR}/lib"
+                "${ROCPROFVIS_VULKAN_SDK_DIR}/../MoltenVK/dylib/macOS"
+                "${ROCPROFVIS_VULKAN_SDK_DIR}/../MoltenVK/dylib"
+            NO_DEFAULT_PATH)
+        if(NOT ROCPROFVIS_MOLTENVK_LIBRARY)
+            find_library(ROCPROFVIS_MOLTENVK_LIBRARY NAMES MoltenVK)
+        endif()
+        if(NOT ROCPROFVIS_MOLTENVK_LIBRARY)
+            message(FATAL_ERROR
+                "ROCPROFVIS_BUNDLE_VULKAN is ON, but libMoltenVK.dylib was not "
+                "found. Install the Vulkan SDK or set CMAKE_PREFIX_PATH.")
+        endif()
+
+        find_file(ROCPROFVIS_MOLTENVK_ICD_JSON
+            NAMES MoltenVK_icd.json
+            PATHS
+                "${ROCPROFVIS_VULKAN_SDK_DIR}/share/vulkan/icd.d"
+                "${ROCPROFVIS_VULKAN_SDK_DIR}/../MoltenVK/icd"
+            NO_DEFAULT_PATH)
+        if(NOT ROCPROFVIS_MOLTENVK_ICD_JSON)
+            find_file(ROCPROFVIS_MOLTENVK_ICD_JSON
+                NAMES MoltenVK_icd.json
+                PATH_SUFFIXES share/vulkan/icd.d)
+        endif()
+
+        set(ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON
+            "${CMAKE_CURRENT_BINARY_DIR}/MoltenVK_icd.json")
+        if(ROCPROFVIS_MOLTENVK_ICD_JSON)
+            file(READ "${ROCPROFVIS_MOLTENVK_ICD_JSON}"
+                 ROCPROFVIS_MOLTENVK_ICD_CONTENTS)
+            string(REGEX REPLACE
+                "\"library_path\"[ \t]*:[ \t]*\"[^\"]+\""
+                "\"library_path\": \"../../../Frameworks/libMoltenVK.dylib\""
+                ROCPROFVIS_MOLTENVK_ICD_CONTENTS
+                "${ROCPROFVIS_MOLTENVK_ICD_CONTENTS}")
+            file(WRITE "${ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON}"
+                 "${ROCPROFVIS_MOLTENVK_ICD_CONTENTS}")
+        else()
+            file(WRITE "${ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON}"
+                "{\n"
+                "    \"file_format_version\": \"1.0.0\",\n"
+                "    \"ICD\": {\n"
+                "        \"library_path\": \"../../../Frameworks/libMoltenVK.dylib\",\n"
+                "        \"api_version\": \"1.3.0\",\n"
+                "        \"is_portability_driver\": true\n"
+                "    }\n"
+                "}\n")
+        endif()
+    endif()
+
     set_target_properties(${TARGET_NAME} PROPERTIES
         BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
         INSTALL_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
@@ -257,6 +339,47 @@ if(APPLE)
             "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
         COMMENT "Staging GLFW dylib into the app bundle"
     )
+    if(ROCPROFVIS_BUNDLE_VULKAN)
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/vulkan/icd.d"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROCPROFVIS_MOLTENVK_LIBRARY}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/licenses/Vulkan-Loader-LICENSE.txt"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/Vulkan-Loader-LICENSE.txt"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/licenses/MoltenVK-LICENSE.txt"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/MoltenVK-LICENSE.txt"
+            COMMAND install_name_tool -id "@rpath/libvulkan.1.dylib"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+            COMMAND install_name_tool -id "@rpath/libMoltenVK.dylib"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
+            COMMAND install_name_tool -change "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}"
+                "@executable_path/../Frameworks/libvulkan.1.dylib"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
+            COMMAND install_name_tool -change "@rpath/libvulkan.1.dylib"
+                "@executable_path/../Frameworks/libvulkan.1.dylib"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
+            COMMAND install_name_tool -change "/usr/local/lib/libvulkan.1.dylib"
+                "@executable_path/../Frameworks/libvulkan.1.dylib"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
+            COMMAND install_name_tool -change "/opt/homebrew/lib/libvulkan.1.dylib"
+                "@executable_path/../Frameworks/libvulkan.1.dylib"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
+            COMMENT "Staging Vulkan loader and MoltenVK into the app bundle"
+        )
+    endif()
 endif()
 
 # === NativeFileDialog Extended ===

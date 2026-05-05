@@ -4,6 +4,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_profiler.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 

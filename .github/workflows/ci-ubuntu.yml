@@ -76,10 +76,6 @@ jobs:
         os-version: ${{ fromJson(inputs.os_version) }}
 
     steps:
-      - name: Install git-lfs
-        run: |
-          apt install -y git-lfs 
-
       - uses: actions/checkout@v6
         with:
           lfs: true

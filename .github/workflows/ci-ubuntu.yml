@@ -76,8 +76,14 @@ jobs:
         os-version: ${{ fromJson(inputs.os_version) }}
 
     steps:
+      - name: Install git-lfs
+        if: false
+        run: |
+          apt install -y git-lfs 
+
       - uses: actions/checkout@v6
         with:
+          lfs: true
           submodules: true
 
       - name: Build, Make, and Verify Installation
@@ -95,7 +101,6 @@ jobs:
 
       - name: Run Tests
         run: |
-          apt install -y git-lfs 
           cd ${{ env.BUILD_DIR }}
           ctest \
             --output-on-failure \

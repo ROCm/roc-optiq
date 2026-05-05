@@ -20,6 +20,8 @@ The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-opt
 ROCm Optiq (Beta) 0.4.0 
 =======================
 
+ROCm Optiq (Beta) 0.4.0 is an incremental update that introduces new features and minor changes to data visualization. See :doc:`ROCm Optiq release history <release>` for the full release history. 
+
 Added
 -----
 
@@ -60,10 +62,6 @@ Navigation and inspection:
 - Use **Go To Event** in tables and the **Flow Data** panel to go to a specific event. Double-click the event, or click **Go To Event** from the right-click context menu, to open the event on the timeline with vertical track centering and highlighted feedback.
 - Highlight-on-navigate with a dedicated event path using a pulsing indicator.
 - Callstack experience improvements. 
-
-.. tip::
-
-  See :doc:`ROCm Optiq release history <release>` for the full release history. 
 
 .. grid:: 2
   :gutter: 3

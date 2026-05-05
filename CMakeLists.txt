@@ -361,22 +361,11 @@ if(APPLE)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_CURRENT_SOURCE_DIR}/resources/licenses/MoltenVK-LICENSE.txt"
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/MoltenVK-LICENSE.txt"
-            COMMAND install_name_tool -id "@rpath/libvulkan.1.dylib"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
-            COMMAND install_name_tool -id "@rpath/libMoltenVK.dylib"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
-            COMMAND install_name_tool -change "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}"
-                "@executable_path/../Frameworks/libvulkan.1.dylib"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
-            COMMAND install_name_tool -change "@rpath/libvulkan.1.dylib"
-                "@executable_path/../Frameworks/libvulkan.1.dylib"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
-            COMMAND install_name_tool -change "/usr/local/lib/libvulkan.1.dylib"
-                "@executable_path/../Frameworks/libvulkan.1.dylib"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
-            COMMAND install_name_tool -change "/opt/homebrew/lib/libvulkan.1.dylib"
-                "@executable_path/../Frameworks/libvulkan.1.dylib"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
+            COMMAND ${CMAKE_COMMAND}
+                -DROCPROFVIS_APP_EXECUTABLE="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
+                -DROCPROFVIS_BUNDLED_VULKAN_LOADER="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+                -DROCPROFVIS_BUNDLED_MOLTENVK="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/resources/cmake/rocprofvis_fix_macos_vulkan_bundle.cmake"
             COMMENT "Staging Vulkan loader and MoltenVK into the app bundle"
         )
     endif()

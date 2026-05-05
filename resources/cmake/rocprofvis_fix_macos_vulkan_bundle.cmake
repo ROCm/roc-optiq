@@ -7,8 +7,29 @@ function(rocprofvis_run_install_name_tool)
     if(NOT _result EQUAL 0)
         string(REPLACE "\n" " " _error "${_error}")
         string(REPLACE "\n" " " _output "${_output}")
-        message(WARNING
+        message(FATAL_ERROR
             "install_name_tool ${ARGN} failed with ${_result}: ${_error}${_output}")
+    endif()
+endfunction()
+
+function(rocprofvis_require_macho _path _name)
+    if(NOT EXISTS "${_path}")
+        message(FATAL_ERROR "${_name} not found: ${_path}")
+    endif()
+
+    execute_process(
+        COMMAND file -b "${_path}"
+        RESULT_VARIABLE _file_result
+        OUTPUT_VARIABLE _file_output
+        ERROR_VARIABLE _file_error
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_STRIP_TRAILING_WHITESPACE)
+    if(NOT _file_result EQUAL 0)
+        message(FATAL_ERROR "file failed for ${_name} at ${_path}: ${_file_error}")
+    endif()
+    if(NOT _file_output MATCHES "Mach-O")
+        message(FATAL_ERROR
+            "${_name} is not a Mach-O binary: ${_path} (${_file_output})")
     endif()
 endfunction()
 
@@ -16,10 +37,9 @@ if(NOT EXISTS "${ROCPROFVIS_APP_EXECUTABLE}")
     message(FATAL_ERROR "App executable not found: ${ROCPROFVIS_APP_EXECUTABLE}")
 endif()
 
-if(NOT EXISTS "${ROCPROFVIS_BUNDLED_VULKAN_LOADER}")
-    message(FATAL_ERROR
-        "Bundled Vulkan loader not found: ${ROCPROFVIS_BUNDLED_VULKAN_LOADER}")
-endif()
+rocprofvis_require_macho("${ROCPROFVIS_APP_EXECUTABLE}" "App executable")
+rocprofvis_require_macho("${ROCPROFVIS_BUNDLED_VULKAN_LOADER}" "Bundled Vulkan loader")
+rocprofvis_require_macho("${ROCPROFVIS_BUNDLED_MOLTENVK}" "Bundled MoltenVK")
 
 execute_process(
     COMMAND otool -L "${ROCPROFVIS_APP_EXECUTABLE}"

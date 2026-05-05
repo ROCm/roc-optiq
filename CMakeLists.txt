@@ -237,10 +237,21 @@ if(APPLE)
     set(ROCPROFVIS_BUNDLE_VULKAN ON CACHE BOOL
         "Bundle Vulkan loader and MoltenVK runtime into the macOS app")
     if(ROCPROFVIS_BUNDLE_VULKAN)
-        set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "")
-        if(Vulkan_LIBRARY)
+        set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "" CACHE FILEPATH
+            "Path to the macOS Vulkan loader dylib to bundle")
+        set(ROCPROFVIS_MOLTENVK_LIBRARY "" CACHE FILEPATH
+            "Path to the macOS MoltenVK dylib to bundle")
+        set(ROCPROFVIS_MOLTENVK_ICD_JSON "" CACHE FILEPATH
+            "Path to the macOS MoltenVK ICD JSON to bundle")
+
+        set(ROCPROFVIS_VULKAN_SDK_DIR "")
+        if(DEFINED ENV{VULKAN_SDK})
+            set(ROCPROFVIS_VULKAN_SDK_DIR "$ENV{VULKAN_SDK}")
+        endif()
+
+        if(NOT ROCPROFVIS_VULKAN_LOADER_LIBRARY AND Vulkan_LIBRARY)
             set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "${Vulkan_LIBRARY}")
-        elseif(Vulkan_LIBRARIES)
+        elseif(NOT ROCPROFVIS_VULKAN_LOADER_LIBRARY AND Vulkan_LIBRARIES)
             list(GET Vulkan_LIBRARIES 0 ROCPROFVIS_VULKAN_LOADER_LIBRARY)
         endif()
         if(ROCPROFVIS_VULKAN_LOADER_LIBRARY)
@@ -256,6 +267,74 @@ if(APPLE)
             message(FATAL_ERROR
                 "ROCPROFVIS_BUNDLE_VULKAN is ON, but the Vulkan loader library "
                 "was not found. Set Vulkan_LIBRARY to the SDK libvulkan.dylib.")
+        endif()
+        get_filename_component(ROCPROFVIS_VULKAN_LOADER_LIBRARY
+            "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}" REALPATH)
+
+        if(NOT ROCPROFVIS_MOLTENVK_LIBRARY)
+            foreach(_moltenvk_candidate
+                    "${ROCPROFVIS_VULKAN_SDK_DIR}/lib/libMoltenVK.dylib"
+                    "${ROCPROFVIS_VULKAN_SDK_DIR}/../MoltenVK/dylib/macOS/libMoltenVK.dylib"
+                    "${ROCPROFVIS_VULKAN_SDK_DIR}/../MoltenVK/dylib/libMoltenVK.dylib")
+                if(EXISTS "${_moltenvk_candidate}")
+                    set(ROCPROFVIS_MOLTENVK_LIBRARY "${_moltenvk_candidate}")
+                    break()
+                endif()
+            endforeach()
+        endif()
+        if(NOT ROCPROFVIS_MOLTENVK_LIBRARY)
+            find_file(ROCPROFVIS_MOLTENVK_LIBRARY
+                NAMES libMoltenVK.dylib
+                PATH_SUFFIXES lib MoltenVK/dylib/macOS MoltenVK/dylib)
+        endif()
+        if(NOT ROCPROFVIS_MOLTENVK_LIBRARY OR
+           NOT EXISTS "${ROCPROFVIS_MOLTENVK_LIBRARY}")
+            message(FATAL_ERROR
+                "ROCPROFVIS_BUNDLE_VULKAN is ON, but libMoltenVK.dylib was not "
+                "found. Install the Vulkan SDK or set ROCPROFVIS_MOLTENVK_LIBRARY.")
+        endif()
+        get_filename_component(ROCPROFVIS_MOLTENVK_LIBRARY
+            "${ROCPROFVIS_MOLTENVK_LIBRARY}" REALPATH)
+
+        if(NOT ROCPROFVIS_MOLTENVK_ICD_JSON)
+            foreach(_moltenvk_icd_candidate
+                    "${ROCPROFVIS_VULKAN_SDK_DIR}/share/vulkan/icd.d/MoltenVK_icd.json"
+                    "${ROCPROFVIS_VULKAN_SDK_DIR}/../MoltenVK/icd/MoltenVK_icd.json")
+                if(EXISTS "${_moltenvk_icd_candidate}")
+                    set(ROCPROFVIS_MOLTENVK_ICD_JSON "${_moltenvk_icd_candidate}")
+                    break()
+                endif()
+            endforeach()
+        endif()
+        if(NOT ROCPROFVIS_MOLTENVK_ICD_JSON)
+            find_file(ROCPROFVIS_MOLTENVK_ICD_JSON
+                NAMES MoltenVK_icd.json
+                PATH_SUFFIXES share/vulkan/icd.d MoltenVK/icd)
+        endif()
+
+        set(ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON
+            "${CMAKE_CURRENT_BINARY_DIR}/MoltenVK_icd.json")
+        if(ROCPROFVIS_MOLTENVK_ICD_JSON AND
+           EXISTS "${ROCPROFVIS_MOLTENVK_ICD_JSON}")
+            file(READ "${ROCPROFVIS_MOLTENVK_ICD_JSON}"
+                 ROCPROFVIS_MOLTENVK_ICD_CONTENTS)
+            string(REGEX REPLACE
+                "\"library_path\"[ \t]*:[ \t]*\"[^\"]+\""
+                "\"library_path\": \"../../../Frameworks/libMoltenVK.dylib\""
+                ROCPROFVIS_MOLTENVK_ICD_CONTENTS
+                "${ROCPROFVIS_MOLTENVK_ICD_CONTENTS}")
+            file(WRITE "${ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON}"
+                 "${ROCPROFVIS_MOLTENVK_ICD_CONTENTS}")
+        else()
+            file(WRITE "${ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON}"
+                "{\n"
+                "    \"file_format_version\": \"1.0.0\",\n"
+                "    \"ICD\": {\n"
+                "        \"library_path\": \"../../../Frameworks/libMoltenVK.dylib\",\n"
+                "        \"api_version\": \"1.3.0\",\n"
+                "        \"is_portability_driver\": true\n"
+                "    }\n"
+                "}\n")
         endif()
 
     endif()
@@ -288,14 +367,22 @@ if(APPLE)
             TARGET ${TARGET_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/vulkan/icd.d"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}"
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROCPROFVIS_MOLTENVK_LIBRARY}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json"
             COMMAND ${CMAKE_COMMAND}
                 -DROCPROFVIS_APP_EXECUTABLE="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
                 -DROCPROFVIS_BUNDLED_VULKAN_LOADER="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+                -DROCPROFVIS_BUNDLED_MOLTENVK="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/resources/cmake/rocprofvis_fix_macos_vulkan_bundle.cmake"
-            COMMENT "Staging Vulkan loader into the app bundle"
+            COMMENT "Staging Vulkan loader and MoltenVK into the app bundle"
         )
     endif()
 endif()

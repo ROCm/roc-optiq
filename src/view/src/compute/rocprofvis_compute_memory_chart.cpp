@@ -34,10 +34,10 @@ static constexpr float ROW_HEIGHT        = 20.0f;
 static constexpr float HEADER_SEP_GAP    = 6.0f;
 static constexpr float METRIC_VALUE_GAP  = 10.0f;
 
-static constexpr float ARROW_THICKNESS   = 2.0f;
-static constexpr float ARROW_HEAD_SIZE   = 5.0f;
-static constexpr float ARROW_LABEL_ABOVE = 21.0f;
-static constexpr float ARROW_VERT_SPACE  = 22.0f;
+static constexpr float ARROW_THICKNESS   = 3.0f;
+static constexpr float ARROW_HEAD_SIZE   = 8.0f;
+static constexpr float ARROW_LABEL_ABOVE = 4.0f;
+static constexpr float ARROW_VERT_SPACE  = 40.0f;
 static constexpr float ARROW_DASH_LENGTH = 6.0f;
 static constexpr float ARROW_DASH_GAP    = 4.0f;
 static constexpr float LEGEND_HEIGHT     = 28.0f;
@@ -203,14 +203,25 @@ DrawHorizontalArrow(ImDrawList* draw_list, ImVec2 from, ImVec2 to, ImU32 color)
 {
     if(from.x == to.x) return;
 
-    const float dir  = (to.x > from.x) ? 1.0f : -1.0f;
-    const float head = ARROW_HEAD_SIZE;
+    const float  dir       = (to.x > from.x) ? 1.0f : -1.0f;
+    const float  head      = ARROW_HEAD_SIZE;
+    const float  base_x    = to.x - dir * head;
+    const float  half_base = head * 0.6f;
 
-    DrawDashedFlowLine(draw_list, from, {to.x - dir * head, to.y}, color);
-    draw_list->AddCircleFilled(from, 2.25f, color);
-    draw_list->AddTriangleFilled(
-        to, ImVec2(to.x - dir * head, to.y - head * 0.6f),
-        ImVec2(to.x - dir * head, to.y + head * 0.6f), color);
+    DrawDashedFlowLine(draw_list, from, {base_x, to.y}, color);
+    draw_list->AddCircleFilled(from, ARROW_THICKNESS * 1.25f, color);
+    // Wind the triangle CCW in screen space regardless of direction so edge
+    // antialiasing produces identical results for left- and right-pointing arrows.
+    const ImVec2 base_top    = {base_x, to.y - half_base};
+    const ImVec2 base_bottom = {base_x, to.y + half_base};
+    if(dir > 0.0f)
+    {
+        draw_list->AddTriangleFilled(to, base_top, base_bottom, color);
+    }
+    else
+    {
+        draw_list->AddTriangleFilled(to, base_bottom, base_top, color);
+    }
 }
 
 static void
@@ -956,20 +967,26 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
         return {origin.x + local_x, origin.y + local_y};
     };
 
-    // Draw horizontal arrow + label (label placed at source x + 5, above arrow).
-    // Read and request flows point back toward the consumer (cache -> CU,
-    // L2 -> instr L1), so swap the endpoints when the label is a read/request.
+    // Draw horizontal arrow + label (label centered horizontally on the arrow
+    // and placed just above it). Read and request flows point back toward the
+    // consumer (cache -> CU, L2 -> instr L1), so swap the endpoints when the
+    // label is a read/request.
     auto ArrowWithLabel = [&](float src_x, float src_y,
                               float dst_x, float dst_y,
                               const char* label_text,
                               MemChartMetric metric_id) {
-        ImU32       flow_color = ColorForFlowLabel(label_text);
-        const bool  reverse =
+        ImU32        flow_color = ColorForFlowLabel(label_text);
+        const bool   reverse =
             StartsWith(label_text, "Rd:") || StartsWith(label_text, "Req:");
         const ImVec2 tail = reverse ? screen(dst_x, dst_y) : screen(src_x, src_y);
         const ImVec2 tip  = reverse ? screen(src_x, src_y) : screen(dst_x, dst_y);
         DrawHorizontalArrow(draw_list, tail, tip, flow_color);
-        ImVec2 label_pos = screen(src_x + 5, src_y - ARROW_LABEL_ABOVE);
+
+        const float  midpoint_x = (src_x + dst_x) * 0.5f;
+        const ImVec2 text_size  = ImGui::CalcTextSize(label_text);
+        const ImVec2 label_pos =
+            screen(midpoint_x - text_size.x * 0.5f,
+                   src_y - text_size.y - ARROW_LABEL_ABOVE);
         DrawFloatingTextBackground(draw_list, label_pos, label_text, flow_color);
         DrawTextWithTooltip(draw_list, label_pos,
                             flow_color, label_text, metric_id, true, true);
@@ -1072,8 +1089,14 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
 
         snprintf(text_buf, sizeof(text_buf), "Fetch: %s",
                  GetMetricText(IL1_FETCH));
-        float label_x = (corner_x + m_instr_l1_block.x) * 0.5f;
-        ImVec2 label_pos = screen(label_x, end_y - ARROW_LABEL_ABOVE);
+        // Anchor the label in the corridor between Active CUs and the cache
+        // column so it does not collide with dispatch/active-CU content.
+        const float  label_x =
+            (m_active_cus_block.Right() + m_instr_l1_block.x) * 0.5f;
+        const ImVec2 text_size = ImGui::CalcTextSize(text_buf);
+        ImVec2       label_pos =
+            screen(label_x - text_size.x * 0.5f,
+                   end_y - text_size.y - ARROW_LABEL_ABOVE);
         DrawFloatingTextBackground(draw_list, label_pos, text_buf, arrow_color);
         DrawTextWithTooltip(draw_list, label_pos,
                             arrow_color, text_buf, IL1_FETCH, true, true);

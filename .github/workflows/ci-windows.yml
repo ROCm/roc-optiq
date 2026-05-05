@@ -66,7 +66,7 @@ env:
 jobs:
   windows:
     name: Windows ${{ matrix.os-version }} • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
-    runs-on: windows-${{ matrix.os-version }}
+    runs-on: windows-${{ matrix.os-version }}-vs2026
     permissions:
       id-token: write
       contents: read

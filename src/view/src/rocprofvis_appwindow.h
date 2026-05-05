@@ -87,11 +87,13 @@ private:
 
     void RenderFileDialog();
     void RenderAboutDialog();
+    void RenderRemoteOpenDialog();
     void RenderEmptyState();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleOpenFile();
+    void HandleOpenRemote();
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
     void ConfigureFileDialogBackend();
@@ -132,7 +134,19 @@ private:
     bool         m_show_provider_test_widow;
 #endif
     bool m_open_about_dialog;
+    bool m_open_remote_dialog;
     bool m_disable_app_interaction;
+
+    char m_remote_uri_paste[1024];
+    char m_remote_host[256];
+    char m_remote_port[16];
+    char m_remote_user[128];
+    char m_remote_password[256];
+    char m_remote_path[512];
+    char m_remote_key[512];
+    bool m_remote_show_password;
+    bool m_remote_password_required;
+    std::string m_remote_status_msg;
 
     rocprofvis_view_file_dialog_preference_t m_file_dialog_preference;
 

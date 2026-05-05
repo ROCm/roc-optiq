@@ -252,27 +252,6 @@ if(APPLE)
                 "was not found. Set Vulkan_LIBRARY to the SDK libvulkan.dylib.")
         endif()
 
-        set(ROCPROFVIS_VULKAN_SDK_DIR "")
-        if(DEFINED ENV{VULKAN_SDK})
-            set(ROCPROFVIS_VULKAN_SDK_DIR "$ENV{VULKAN_SDK}")
-        endif()
-
-        find_library(ROCPROFVIS_MOLTENVK_LIBRARY
-            NAMES MoltenVK
-            PATHS
-                "${ROCPROFVIS_VULKAN_SDK_DIR}/lib"
-                "${ROCPROFVIS_VULKAN_SDK_DIR}/../MoltenVK/dylib/macOS"
-                "${ROCPROFVIS_VULKAN_SDK_DIR}/../MoltenVK/dylib"
-            NO_DEFAULT_PATH)
-        if(NOT ROCPROFVIS_MOLTENVK_LIBRARY)
-            find_library(ROCPROFVIS_MOLTENVK_LIBRARY NAMES MoltenVK)
-        endif()
-        if(NOT ROCPROFVIS_MOLTENVK_LIBRARY)
-            message(FATAL_ERROR
-                "ROCPROFVIS_BUNDLE_VULKAN is ON, but libMoltenVK.dylib was not "
-                "found. Install the Vulkan SDK or set CMAKE_PREFIX_PATH.")
-        endif()
-
     endif()
 
     set_target_properties(${TARGET_NAME} PROPERTIES
@@ -306,15 +285,11 @@ if(APPLE)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}"
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${ROCPROFVIS_MOLTENVK_LIBRARY}"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
             COMMAND ${CMAKE_COMMAND}
                 -DROCPROFVIS_APP_EXECUTABLE="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
                 -DROCPROFVIS_BUNDLED_VULKAN_LOADER="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
-                -DROCPROFVIS_BUNDLED_MOLTENVK="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/resources/cmake/rocprofvis_fix_macos_vulkan_bundle.cmake"
-            COMMENT "Staging Vulkan loader and MoltenVK into the app bundle"
+            COMMENT "Staging Vulkan loader into the app bundle"
         )
     endif()
 endif()

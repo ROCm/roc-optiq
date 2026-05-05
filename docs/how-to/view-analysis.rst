@@ -281,12 +281,12 @@ You can configure a delta-threshold for comparison metrics to suppress the noise
 
    - To generate a database that contains multiple workloads with ROCm Compute Profiler for comparison, profile each workload and then run analysis with database output enabled: 
 
-         .. code::
+     .. code::
 
-            $ rocprof-compute profile -n <workload_name_1> -- <application> 
-            ... 
-            $ rocprof-compute profile -n <workload_name_N> -- <application> 
+       $ rocprof-compute profile -n <workload_name_1> -- <application> 
+       ... 
+       $ rocprof-compute profile -n <workload_name_N> -- <application> 
 
-            $ rocprof-compute analyze -p <path to workload_name_1> ... -p <path to workload_name_N> --output-format db 
+       $ rocprof-compute analyze -p <path to workload_name_1> ... -p <path to workload_name_N> --output-format db 
 
-      Copy the generated ``.db`` file to the host system and open it in ROCm Optiq. Then, go to the **Baseline Comparison** tab and select a baseline workload under **Workload:** and a target workload under **Compare With:**. Select a kernel for each workload to compare. 
+     Copy the generated ``.db`` file to the host system and open it in ROCm Optiq. Then, go to the **Baseline Comparison** tab and select a baseline workload under **Workload:** and a target workload under **Compare With:**. Select a kernel for each workload to compare. 

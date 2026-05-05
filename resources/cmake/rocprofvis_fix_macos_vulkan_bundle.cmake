@@ -16,18 +16,12 @@ if(NOT EXISTS "${ROCPROFVIS_APP_EXECUTABLE}")
     message(FATAL_ERROR "App executable not found: ${ROCPROFVIS_APP_EXECUTABLE}")
 endif()
 
-if(EXISTS "${ROCPROFVIS_BUNDLED_VULKAN_LOADER}")
-    rocprofvis_run_install_name_tool(
-        -id "@rpath/libvulkan.1.dylib" "${ROCPROFVIS_BUNDLED_VULKAN_LOADER}")
-else()
+if(NOT EXISTS "${ROCPROFVIS_BUNDLED_VULKAN_LOADER}")
     message(FATAL_ERROR
         "Bundled Vulkan loader not found: ${ROCPROFVIS_BUNDLED_VULKAN_LOADER}")
 endif()
 
-if(EXISTS "${ROCPROFVIS_BUNDLED_MOLTENVK}")
-    rocprofvis_run_install_name_tool(
-        -id "@rpath/libMoltenVK.dylib" "${ROCPROFVIS_BUNDLED_MOLTENVK}")
-else()
+if(NOT EXISTS "${ROCPROFVIS_BUNDLED_MOLTENVK}")
     message(FATAL_ERROR "Bundled MoltenVK not found: ${ROCPROFVIS_BUNDLED_MOLTENVK}")
 endif()
 

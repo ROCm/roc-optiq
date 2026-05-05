@@ -279,41 +279,6 @@ if(APPLE)
                 "found. Install the Vulkan SDK or set CMAKE_PREFIX_PATH.")
         endif()
 
-        find_file(ROCPROFVIS_MOLTENVK_ICD_JSON
-            NAMES MoltenVK_icd.json
-            PATHS
-                "${ROCPROFVIS_VULKAN_SDK_DIR}/share/vulkan/icd.d"
-                "${ROCPROFVIS_VULKAN_SDK_DIR}/../MoltenVK/icd"
-            NO_DEFAULT_PATH)
-        if(NOT ROCPROFVIS_MOLTENVK_ICD_JSON)
-            find_file(ROCPROFVIS_MOLTENVK_ICD_JSON
-                NAMES MoltenVK_icd.json
-                PATH_SUFFIXES share/vulkan/icd.d)
-        endif()
-
-        set(ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON
-            "${CMAKE_CURRENT_BINARY_DIR}/MoltenVK_icd.json")
-        if(ROCPROFVIS_MOLTENVK_ICD_JSON)
-            file(READ "${ROCPROFVIS_MOLTENVK_ICD_JSON}"
-                 ROCPROFVIS_MOLTENVK_ICD_CONTENTS)
-            string(REGEX REPLACE
-                "\"library_path\"[ \t]*:[ \t]*\"[^\"]+\""
-                "\"library_path\": \"../../../Frameworks/libMoltenVK.dylib\""
-                ROCPROFVIS_MOLTENVK_ICD_CONTENTS
-                "${ROCPROFVIS_MOLTENVK_ICD_CONTENTS}")
-            file(WRITE "${ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON}"
-                 "${ROCPROFVIS_MOLTENVK_ICD_CONTENTS}")
-        else()
-            file(WRITE "${ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON}"
-                "{\n"
-                "    \"file_format_version\": \"1.0.0\",\n"
-                "    \"ICD\": {\n"
-                "        \"library_path\": \"../../../Frameworks/libMoltenVK.dylib\",\n"
-                "        \"api_version\": \"1.3.0\",\n"
-                "        \"is_portability_driver\": true\n"
-                "    }\n"
-                "}\n")
-        endif()
     endif()
 
     set_target_properties(${TARGET_NAME} PROPERTIES
@@ -344,23 +309,12 @@ if(APPLE)
             TARGET ${TARGET_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/vulkan/icd.d"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}"
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ROCPROFVIS_MOLTENVK_LIBRARY}"
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${ROCPROFVIS_BUNDLED_MOLTENVK_ICD_JSON}"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_SOURCE_DIR}/resources/licenses/Vulkan-Loader-LICENSE.txt"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/Vulkan-Loader-LICENSE.txt"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_CURRENT_SOURCE_DIR}/resources/licenses/MoltenVK-LICENSE.txt"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/MoltenVK-LICENSE.txt"
             COMMAND ${CMAKE_COMMAND}
                 -DROCPROFVIS_APP_EXECUTABLE="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
                 -DROCPROFVIS_BUNDLED_VULKAN_LOADER="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"

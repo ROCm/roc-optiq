@@ -207,30 +207,24 @@ ComputeKernelDetailsView::Update()
 void
 ComputeKernelDetailsView::Render()
 {
-    const ImGuiStyle& style = ImGui::GetStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(style.WindowPadding.x, style.WindowPadding.y));
     ImGui::BeginChild("kernel_details", ImVec2(0, 0),
                       ImGuiChildFlags_AlwaysUseWindowPadding);
     if(m_roofline_flex_item)
     {
         // Maintain 2:1 aspect ratio until 15-frame minimum.
-        m_roofline_flex_item->height = std::max(
-            ImGui::GetContentRegionAvail().x / 4.0f,
-            ImGui::GetFrameHeightWithSpacing() * 15.0f);
+        m_roofline_flex_item->height =
+            std::max(ImGui::GetContentRegionAvail().x / 4.0f,
+                     ImGui::GetFrameHeightWithSpacing() * 15.0f);
     }
     if(m_kernel_metric_table)
     {
         m_kernel_metric_table->Render();
     }
 
-    const float panel_gap = KERNEL_TABLE_PANEL_PADDING > ImGui::GetStyle().ItemSpacing.y
-                                ? KERNEL_TABLE_PANEL_PADDING
-                                : ImGui::GetStyle().ItemSpacing.y;
-    ImGui::Dummy(ImVec2(0.0f, panel_gap));
+    ImGui::Dummy(ImVec2(0.0f, std::max<float>(KERNEL_TABLE_PANEL_PADDING,
+                                              ImGui::GetStyle().ItemSpacing.y)));
     m_flex_container.Render();
     ImGui::EndChild();
-    ImGui::PopStyleVar();
 }
 
 }  // namespace View

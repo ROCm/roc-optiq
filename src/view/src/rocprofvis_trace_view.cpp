@@ -406,7 +406,6 @@ TraceView::HandleHotKeys()
 
     auto& hk = HotkeyManager::GetInstance();
 
-    // Do not process global hotkeys if ImGui wants the keyboard (e.g., typing in
     for(int i = 0; i <= 9; ++i)
     {
         std::string idx = std::to_string(i);

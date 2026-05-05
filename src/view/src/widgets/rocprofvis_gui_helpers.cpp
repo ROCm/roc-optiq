@@ -209,11 +209,8 @@ RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int
         ImGui::PopStyleColor();
     }
 
-    // Restoring the cursor leaves window->DC.IsSetPos = true. If the caller's
-    // next ImGui call is End()/EndChild() with no item between, ImGui's
-    // ErrorCheckUsingSetCursorPosToExtendParentBoundaries() will abort the
-    // process. Submit a zero-size Dummy to validate the position and clear
-    // the IsSetPos flag.
+    // Submit a zero-size Dummy after restoring the cursor so the trailing
+    // SetCursorPos does not trip ImGui's parent-boundary check on EndChild().
     ImGui::SetCursorPos(pos);
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
 }

@@ -201,28 +201,21 @@ MultiTrackTable::Render()
         if(ImGui::Button("Submit", ImVec2(-FLT_MIN, 0.0f)))
         {
             m_filter_requested = true;
-
-            if(m_group_by_selection_index == 0)
+            const bool grouping = (m_group_by_selection_index != 0);
+            if(!grouping && m_filter_store[0] != '\0')
             {
-                if(m_filter_store[0] != '\0')
-                {
-                    // restore previous filter
-                    snprintf(m_pending_filter_options.filter,
-                             IM_ARRAYSIZE(m_pending_filter_options.filter), "%s",
-                             m_filter_store);
-                    m_filter_store[0] = '\0';
-                }
+                // Reinstate the filter that was stashed when grouping was enabled.
+                snprintf(m_pending_filter_options.filter,
+                         IM_ARRAYSIZE(m_pending_filter_options.filter), "%s",
+                         m_filter_store);
+                m_filter_store[0] = '\0';
             }
-            else
+            else if(grouping && m_pending_filter_options.filter[0] != '\0')
             {
-                if(m_pending_filter_options.filter[0] != '\0')
-                {
-                    // backup current filter
-                    snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s",
-                             m_pending_filter_options.filter);
-                    // clear filter when group by is selected
-                    m_pending_filter_options.filter[0] = '\0';
-                }
+                // Stash and clear the filter so it cannot fight the group-by query.
+                snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s",
+                         m_pending_filter_options.filter);
+                m_pending_filter_options.filter[0] = '\0';
             }
         }
 

@@ -151,10 +151,7 @@ ComputeSummaryView::Update()
 void
 ComputeSummaryView::Render()
 {
-    const ImGuiStyle& style = ImGui::GetStyle();
-    SettingsManager&  settings = SettingsManager::GetInstance();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(style.WindowPadding.x, style.WindowPadding.y));
+    SettingsManager& settings = SettingsManager::GetInstance();
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         settings.GetDefaultStyle().ChildRounding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
@@ -168,10 +165,9 @@ ComputeSummaryView::Render()
     ImGui::Spacing();
     if(m_roofline)
     {
-        ImGui::BeginChild("roofline_container", ImVec2(ImGui::GetContentRegionAvail().x,
-                                                       ImGui::GetContentRegionAvail().x /
-                                                           (ImGui::GetWindowWidth() /
-                                                            ImGui::GetWindowHeight())));
+        const float avail = ImGui::GetContentRegionAvail().x;
+        const float aspect = ImGui::GetWindowWidth() / ImGui::GetWindowHeight();
+        ImGui::BeginChild("roofline_container", ImVec2(avail, avail / aspect));
         m_roofline->Render();
         ImGui::EndChild();
     }
@@ -182,7 +178,7 @@ ComputeSummaryView::Render()
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar();
 }
 
 ComputeTopKernels::ComputeTopKernels(DataProvider& dp)

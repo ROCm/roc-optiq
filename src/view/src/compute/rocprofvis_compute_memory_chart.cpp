@@ -20,9 +20,7 @@ namespace RocProfVis
 namespace View
 {
 
-// =============================================================================
 // Layout constants
-// =============================================================================
 static constexpr float CHART_PADDING     = 18.0f;
 static constexpr float BLOCK_GAP         = 14.0f;
 static constexpr float ARROW_COLUMN_GAP  = 160.0f;
@@ -44,10 +42,7 @@ static constexpr float ARROW_DASH_LENGTH = 6.0f;
 static constexpr float ARROW_DASH_GAP    = 4.0f;
 static constexpr float LEGEND_HEIGHT     = 28.0f;
 
-// =============================================================================
 // Helpers
-// =============================================================================
-
 static constexpr const char* UNAVAILABLE_METRIC_TEXT = "N/A";
 
 struct ChartColors
@@ -94,14 +89,6 @@ C()
                : LIGHT_CHART_COLORS;
 }
 
-static ImU32
-WithAlpha(ImU32 color, float alpha)
-{
-    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
-    rgba.w      = std::max(0.0f, std::min(alpha, 1.0f));
-    return ImGui::ColorConvertFloat4ToU32(rgba);
-}
-
 static bool
 StartsWith(const char* text, const char* prefix)
 {
@@ -140,21 +127,19 @@ IsAvailableMetricText(const char* text)
 static std::string
 FormatMetricValue(double value)
 {
-    if(value != value) return UNAVAILABLE_METRIC_TEXT;
+    if(std::isnan(value)) return UNAVAILABLE_METRIC_TEXT;
     return compact_number_format(value);
 }
 
 static std::string
 FormatMetricValueRaw(double value)
 {
-    if(value != value) return UNAVAILABLE_METRIC_TEXT;
+    if(std::isnan(value)) return UNAVAILABLE_METRIC_TEXT;
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%.2f", value);
     return std::string(buf);
 }
 
-
-// Rounded-rect block with fill + border
 static void
 DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right)
 {
@@ -164,15 +149,14 @@ DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right)
     draw_list->AddRectFilled(top_left, bottom_right, C().panel, BLOCK_ROUNDING);
     draw_list->AddRectFilled({top_left.x + 1.0f, top_left.y + 1.0f},
                              {bottom_right.x - 1.0f, top_left.y + 3.0f},
-                             WithAlpha(C().border_hot, 0.55f), 2.0f);
+                             ApplyAlpha(C().border_hot, 0.55f), 2.0f);
     draw_list->AddRect(top_left, bottom_right,
                        C().border, BLOCK_ROUNDING, 0, 1.0f);
     draw_list->AddRect({top_left.x + 1.0f, top_left.y + 1.0f},
                        {bottom_right.x - 1.0f, bottom_right.y - 1.0f},
-                       WithAlpha(C().border_hot, 0.25f), BLOCK_ROUNDING, 0, 1.0f);
+                       ApplyAlpha(C().border_hot, 0.25f), BLOCK_ROUNDING, 0, 1.0f);
 }
 
-// Header text + thin separator line. Returns cursor_y below the separator.
 static float
 DrawBlockHeader(ImDrawList* draw_list, const char* title,
                 float block_x, float block_y, float block_w)
@@ -189,7 +173,7 @@ DrawBlockHeader(ImDrawList* draw_list, const char* title,
     float line_y = text_y + text_h + 5.0f;
     draw_list->AddLine(ImVec2(block_x + BLOCK_TEXT_PAD, line_y),
                        ImVec2(block_x + block_w - BLOCK_TEXT_PAD, line_y),
-                       WithAlpha(C().border, 0.55f), 1.0f);
+                       ApplyAlpha(C().border, 0.55f), 1.0f);
     return line_y + HEADER_SEP_GAP;
 }
 
@@ -208,13 +192,12 @@ DrawDashedFlowLine(ImDrawList* draw_list, ImVec2 from, ImVec2 to, ImU32 color)
         ImVec2 dash_from(from.x + dir.x * cursor, from.y + dir.y * cursor);
         ImVec2 dash_to(from.x + dir.x * dash_end, from.y + dir.y * dash_end);
         draw_list->AddLine(dash_from, dash_to,
-                           WithAlpha(color, 0.22f), ARROW_THICKNESS + 3.0f);
+                           ApplyAlpha(color, 0.22f), ARROW_THICKNESS + 3.0f);
         draw_list->AddLine(dash_from, dash_to, color, ARROW_THICKNESS);
         cursor = dash_end + ARROW_DASH_GAP;
     }
 }
 
-// Horizontal arrow pointing right
 static void
 DrawHorizontalArrow(ImDrawList* draw_list, ImVec2 from, ImVec2 to, ImU32 color)
 {
@@ -230,7 +213,6 @@ DrawHorizontalArrow(ImDrawList* draw_list, ImVec2 from, ImVec2 to, ImU32 color)
                                  color);
 }
 
-// Horizontally centered text within [x, x+w]
 static void
 DrawCenteredText(ImDrawList* draw_list, const char* text,
                  float region_x, float text_y, float region_w, ImU32 color)
@@ -249,11 +231,10 @@ DrawFloatingTextBackground(ImDrawList* draw_list, ImVec2 pos, const char* text,
     ImVec2 min(pos.x - pad.x, pos.y - pad.y);
     ImVec2 max(pos.x + text_size.x + pad.x, pos.y + text_size.y + pad.y);
 
-    draw_list->AddRectFilled(min, max, WithAlpha(C().bg, 0.92f), 4.0f);
-    draw_list->AddRect(min, max, WithAlpha(accent_color, 0.7f), 4.0f, 0, 1.0f);
+    draw_list->AddRectFilled(min, max, ApplyAlpha(C().bg, 0.92f), 4.0f);
+    draw_list->AddRect(min, max, ApplyAlpha(accent_color, 0.7f), 4.0f, 0, 1.0f);
 }
 
-// Small inset card (frame-colored rect + dim text)
 static void
 DrawInsetCard(ImDrawList* draw_list, float card_x, float card_y,
               float card_w, float card_h, const char* text)
@@ -262,7 +243,7 @@ DrawInsetCard(ImDrawList* draw_list, float card_x, float card_y,
     ImVec2 bottom_right(card_x + card_w, card_y + card_h);
     draw_list->AddRectFilled(top_left, bottom_right, C().panel_alt, 4.0f);
     draw_list->AddRect(top_left, bottom_right,
-                       WithAlpha(C().border, 0.75f), 4.0f, 0, 1.0f);
+                       ApplyAlpha(C().border, 0.75f), 4.0f, 0, 1.0f);
 
     float text_h = ImGui::CalcTextSize(text).y;
     draw_list->AddText(ImVec2(card_x + BLOCK_TEXT_PAD,
@@ -280,12 +261,12 @@ DrawChartBackdrop(ImDrawList* draw_list, ImVec2 origin, float canvas_w, float ca
     for(float x = min.x + CHART_PADDING; x < max.x; x += 36.0f)
     {
         draw_list->AddLine({x, min.y}, {x, max.y},
-                           WithAlpha(C().border, 0.08f), 1.0f);
+                           ApplyAlpha(C().border, 0.08f), 1.0f);
     }
     for(float y = min.y + CHART_PADDING; y < max.y; y += 36.0f)
     {
         draw_list->AddLine({min.x, y}, {max.x, y},
-                           WithAlpha(C().border, 0.08f), 1.0f);
+                           ApplyAlpha(C().border, 0.08f), 1.0f);
     }
 }
 
@@ -315,10 +296,6 @@ DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y)
         pos.x += 17.0f + ImGui::CalcTextSize(item.text).x + 16.0f;
     }
 }
-
-// =============================================================================
-// Core — data loading
-// =============================================================================
 
 ComputeMemoryChartView::ComputeMemoryChartView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : m_data_provider(data_provider)
@@ -403,10 +380,6 @@ ComputeMemoryChartView::UpdateMetrics()
     }
 }
 
-// =============================================================================
-// Render — single draw list, no child windows per block
-// =============================================================================
-
 void
 ComputeMemoryChartView::Render()
 {
@@ -434,9 +407,6 @@ ComputeMemoryChartView::Render()
 
     DrawChartBackdrop(draw_list, window_position, backdrop_w, canvas_h);
 
-    // -----------------------------------------------------------------
-    // Draw every block
-    // -----------------------------------------------------------------
     DrawInstrBuff(draw_list, window_position);
     DrawInstrDispatch(draw_list, window_position);
     DrawActiveCUs(draw_list, window_position);
@@ -453,9 +423,6 @@ ComputeMemoryChartView::Render()
     DrawGMI(draw_list, window_position);
     DrawHBM(draw_list, window_position);
 
-    // -----------------------------------------------------------------
-    // Draw connection arrows + labels (on top to allow stacks in instr buff to connect)
-    // -----------------------------------------------------------------
     DrawConnections(draw_list, window_position);
     DrawLegend(draw_list, window_position, canvas_h - CHART_PADDING - LEGEND_HEIGHT);
 
@@ -502,7 +469,6 @@ ComputeMemoryChartView::ComputeLayout()
                    m_fabric_block.y, 160, 140};
 }
 
-// Dim label on left, bright value on right. Returns cursor_y for next row.
 float
 ComputeMemoryChartView::DrawMetricRow(ImDrawList* draw_list, float block_x, float cursor_y, float block_w,
               const char* label, MemChartMetric metric_id, const char* unit /*= ""*/)
@@ -514,14 +480,14 @@ ComputeMemoryChartView::DrawMetricRow(ImDrawList* draw_list, float block_x, floa
        ImGui::IsMouseHoveringRect(row_min, row_max))
     {
         draw_list->AddRectFilled(row_min, row_max,
-                                 WithAlpha(C().border_hot, 0.16f),
+                                 ApplyAlpha(C().border_hot, 0.16f),
                                  4.0f);
     }
 
     ImU32 label_accent = ColorForMetricLabel(label);
     draw_list->AddRectFilled({block_x + BLOCK_TEXT_PAD, cursor_y + 4.0f},
                              {block_x + BLOCK_TEXT_PAD + 3.0f, cursor_y + 12.0f},
-                             WithAlpha(label_accent, 0.85f), 2.0f);
+                             ApplyAlpha(label_accent, 0.85f), 2.0f);
     DrawTextWithTooltip(draw_list, {block_x + BLOCK_TEXT_PAD + 7.0f, cursor_y},
                         C().text_dim,
                         label, metric_id, true, false);
@@ -601,10 +567,6 @@ ComputeMemoryChartView::DrawTextWithTooltip(ImDrawList* draw_list, ImVec2 pos, u
     ShowMetricTooltip(pos, {pos.x + sz.x, pos.y + sz.y},
                       metric_id, show_description, show_raw_value);
 }
-
-// =============================================================================
-// Block drawing — each reads its stored ChartBlock and draws via draw list
-// =============================================================================
 
 void
 ComputeMemoryChartView::DrawInstrBuff(ImDrawList* draw_list, ImVec2 origin)
@@ -700,9 +662,9 @@ ComputeMemoryChartView::DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin)
     };
 
     ImU32 arrow_color     = C().read;
-    ImU32 pill_border_col = WithAlpha(C().border, 0.85f);
+    ImU32 pill_border_col = ApplyAlpha(C().border, 0.85f);
     ImU32 title_bg_col    = C().panel_alt;
-    ImU32 value_bg_col    = WithAlpha(C().read, 0.18f);
+    ImU32 value_bg_col    = ApplyAlpha(C().read, 0.18f);
     ImU32 title_text_col  = C().text_main;
     ImU32 value_text_col  = C().text_main;
 
@@ -760,8 +722,8 @@ ComputeMemoryChartView::DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin)
     }
 
     // --- Draw trapezoids LAST (on top of arrows) ---
-    ImU32 fill_color   = WithAlpha(C().panel_alt, 0.92f);
-    ImU32 border_color = WithAlpha(C().border, 0.75f);
+    ImU32 fill_color   = ApplyAlpha(C().panel_alt, 0.92f);
+    ImU32 border_color = ApplyAlpha(C().border, 0.75f);
     for(int i = 0; i < kNumTraps; ++i)
     {
         draw_list->AddConvexPolyFilled(small_trap_pts[i], 4, fill_color);
@@ -796,7 +758,7 @@ ComputeMemoryChartView::DrawActiveCUs(ImDrawList* draw_list, ImVec2 origin)
     // Thin separator
     draw_list->AddLine({block_x + BLOCK_TEXT_PAD, cursor_y},
                        {block_x + block.w - BLOCK_TEXT_PAD, cursor_y},
-                       WithAlpha(C().border, 0.55f), 1.0f);
+                       ApplyAlpha(C().border, 0.55f), 1.0f);
     cursor_y += 8;
 
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "VGPRs:", VGPR);
@@ -1010,7 +972,7 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
 
     // --- Instr Buff stacks -> Trapezoids (3 horizontal lines per trap) ---
     {
-        ImU32 wire_color = WithAlpha(C().read, 0.55f);
+        ImU32 wire_color = ApplyAlpha(C().read, 0.55f);
 
         const int   kNumStacks   = 3;
         const int kStackStep   = 8;

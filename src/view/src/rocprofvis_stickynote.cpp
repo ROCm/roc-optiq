@@ -18,19 +18,6 @@ namespace RocProfVis
 namespace View
 {
 
-namespace
-{
-
-ImU32
-WithAlpha(ImU32 color, float alpha)
-{
-    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
-    rgba.w      = std::clamp(alpha, 0.0f, 1.0f);
-    return ImGui::ColorConvertFloat4ToU32(rgba);
-}
-
-}  // namespace
-
 static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
                        const std::string& text, const std::string& title,
@@ -136,8 +123,10 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
                                                        : IM_COL32(255, 247, 204, 248);
     ImU32            shadow_color      = use_dark_mode ? IM_COL32(0, 0, 0, 85)
                                                        : IM_COL32(76, 95, 128, 35);
-    ImU32            icon_hover_color  = WithAlpha(settings.GetColor(Colors::kButtonHovered), 0.74f);
-    ImU32            icon_active_color = WithAlpha(settings.GetColor(Colors::kButtonActive), 0.86f);
+    ImU32            icon_hover_color =
+        ApplyAlpha(settings.GetColor(Colors::kButtonHovered), 0.74f);
+    ImU32 icon_active_color =
+        ApplyAlpha(settings.GetColor(Colors::kButtonActive), 0.86f);
     ImU32            text_color        = use_dark_mode ? IM_COL32(238, 243, 255, 255)
                                                        : IM_COL32(25, 38, 56, 255);
     ImU32            muted_text_color  = use_dark_mode ? IM_COL32(145, 156, 174, 255)
@@ -270,11 +259,11 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
                                       ImDrawFlags_RoundCornersTop);
         note_draw_list->AddRectFilled(header_min,
                                       ImVec2(note_min.x + 3.0f, note_min.y + sticky_size.y),
-                                      WithAlpha(accent_color, 0.78f), rounding,
+                                      ApplyAlpha(accent_color, 0.78f), rounding,
                                       ImDrawFlags_RoundCornersLeft);
         note_draw_list->AddLine(ImVec2(note_min.x, header_max.y),
                                 ImVec2(note_min.x + sticky_size.x, header_max.y),
-                                WithAlpha(border_color, 0.42f));
+                                ApplyAlpha(border_color, 0.42f));
 
         // Title (left)
         ImGui::SetCursorPos(

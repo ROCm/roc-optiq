@@ -297,7 +297,7 @@ MultiTrackTable::Update()
     {
         if(!m_data_provider.IsRequestPending(GetRequestID()))
         {
-            // try to repocess the deferred track selection event
+            // Try to reprocess the deferred track selection event.
             spdlog::debug(
                 "Reprocessing deferred track selection changed event for table type: {}",
                 m_table_type == TableType::kEventTable ? "Event Table" : "Sample Table");

@@ -49,7 +49,8 @@ protected:
     void RenderRowValues(uint32_t index, std::pair<const MetricId, Row>& row,
                          std::function<void(const char* value_to_copy)> menu_func);
     void RenderUnitValue(std::pair<const MetricId, Row>& row);
-    void FillDefaultColumns(std::map<uint32_t, std::string>& columns, std::uint32_t& last_column_index);
+    void FillDefaultColumns(std::map<uint32_t, std::string>& columns,
+                            std::uint32_t&                    last_column_index);
     void AddMetricToKernelDetails(const MetricId& metric_id, const std::string& value_name);
     bool IsValueColumn(uint32_t column_index) const;
     bool CanBePinned();
@@ -68,7 +69,7 @@ protected:
     uint32_t                  m_max_rows_in_table;
 
 private:
-    float GetTableHight() const;
+    float GetTableHeight() const;
     void  RenderPinCheckBox(std::pair<const MetricId, Row>& row);
 };
 

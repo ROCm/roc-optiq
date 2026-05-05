@@ -36,7 +36,8 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_kernel_metric_table(nullptr)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
-, m_sol_table(std::make_shared<MetricTableWidget>(data_provider, compute_selection, METRIC_CAT_SOL, METRIC_TABLE_SOL))
+, m_sol_table(std::make_shared<MetricTableWidget>(data_provider, compute_selection,
+                                                  METRIC_CAT_SOL, METRIC_TABLE_SOL))
 , m_workload_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_new_table_data_token(EventManager::InvalidSubscriptionToken)
@@ -45,8 +46,11 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 {
     SubscribeToEvents();
 
-    m_roofline = std::make_shared<RocProfVis::View::Roofline>(data_provider, Roofline::SingleKernel);
-    m_kernel_metric_table = std::make_shared<RocProfVis::View::KernelMetricTable>(data_provider, compute_selection);
+    m_roofline =
+        std::make_shared<RocProfVis::View::Roofline>(data_provider, Roofline::SingleKernel);
+    m_kernel_metric_table =
+        std::make_shared<RocProfVis::View::KernelMetricTable>(data_provider,
+                                                              compute_selection);
 
     auto memory_chart_wrapper = std::make_shared<RocCustomWidget>([this]() {
         SectionTitle("Memory Chart");
@@ -54,9 +58,10 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
     });
 
     m_flex_container.items = {
-        {"memory_chart", memory_chart_wrapper,  MEMORY_CHART_MIN_WIDTH, 0.0f, FLEX_ITEM_GROW, true},
-        {"sol_table",    m_sol_table,           SOL_TABLE_MIN_WIDTH,    0.0f, FLEX_ITEM_GROW},
-        {"roofline",     m_roofline,            ROOFLINE_MIN_WIDTH,     0.0f, FLEX_ITEM_GROW},
+        {"memory_chart", memory_chart_wrapper, MEMORY_CHART_MIN_WIDTH, 0.0f,
+         FLEX_ITEM_GROW, true},
+        {"sol_table", m_sol_table, SOL_TABLE_MIN_WIDTH, 0.0f, FLEX_ITEM_GROW},
+        {"roofline", m_roofline, ROOFLINE_MIN_WIDTH, 0.0f, FLEX_ITEM_GROW},
     };
     m_roofline_flex_item = m_flex_container.GetItem("roofline");
     m_widget_name        = GenUniqueName("ComputeKernelDetailsView");
@@ -79,16 +84,15 @@ ComputeKernelDetailsView::~ComputeKernelDetailsView()
         m_send_metric_to_kernel_details_token);
 }
 
-void ComputeKernelDetailsView::SubscribeToEvents()
+void
+ComputeKernelDetailsView::SubscribeToEvents()
 {
     auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            // Fetch pivot table data
             if(m_kernel_metric_table)
             {
-                //clear existing model table data
                 m_data_provider.ComputeModel().GetKernelSelectionTable().Clear();
                 m_kernel_metric_table->FetchData(evt->GetId());
             }
@@ -100,7 +104,6 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             {
                 m_sol_table->Clear();
             }
-            
         }
     };
 
@@ -145,9 +148,8 @@ void ComputeKernelDetailsView::SubscribeToEvents()
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
 
-    // subscribe to fetch table data event 
     auto new_table_data_handler = [this](std::shared_ptr<RocEvent> e) {
-        if(auto table_data_event = std::dynamic_pointer_cast<TableDataEvent>(e) )
+        if(auto table_data_event = std::dynamic_pointer_cast<TableDataEvent>(e))
         {
             if(m_data_provider.GetTraceFilePath() != table_data_event->GetSourceId())
             {
@@ -187,7 +189,7 @@ void ComputeKernelDetailsView::SubscribeToEvents()
     m_send_metric_to_kernel_details_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeShowMetricInKernelDetails),
         metric_navigation_handler);
-}   
+}
 
 void
 ComputeKernelDetailsView::Update()
@@ -214,7 +216,8 @@ ComputeKernelDetailsView::Render()
     {
         // Maintain 2:1 aspect ratio until 15-frame minimum.
         m_roofline_flex_item->height = std::max(
-            ImGui::GetContentRegionAvail().x / 4.0f, ImGui::GetFrameHeightWithSpacing() * 15.0f);
+            ImGui::GetContentRegionAvail().x / 4.0f,
+            ImGui::GetFrameHeightWithSpacing() * 15.0f);
     }
     if(m_kernel_metric_table)
     {

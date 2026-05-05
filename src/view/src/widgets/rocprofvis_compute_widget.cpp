@@ -21,8 +21,7 @@ MetricTableBase::MetricTableBase(std::string event_source_id)
 , m_table_title("")
 , m_last_column_index(0)
 {
-    m_table_flags =
-        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg ;
+    m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
 }
 
 void
@@ -59,17 +58,17 @@ MetricTableBase::Render()
     const std::string table_id = child_id + "_table";
 
     if(ImGui::BeginChild(RocWidget::GenUniqueName(child_id).c_str(),
-                         ImVec2(0, GetTableHight()), false,
+                         ImVec2(0, GetTableHeight()), false,
                          ImGuiWindowFlags_HorizontalScrollbar))
     {
         if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
                              m_table_flags))
         {
-            for (const auto& column : m_columns)
+            for(const auto& column : m_columns)
             {
-                if (column.first == 0)
+                if(column.first == 0)
                 {
-                    if (CanBePinned())
+                    if(CanBePinned())
                     {
                         const float font_size = ImGui::GetFontSize();
                         ImGui::TableSetupColumn(column.second.c_str(),
@@ -128,14 +127,14 @@ MetricTableBase::ChangePinState(const MetricId& metric_id)
 }
 
 float
-MetricTableBase::GetTableHight() const
+MetricTableBase::GetTableHeight() const
 {
     const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
     float             line_height =
         ImGui::GetTextLineHeightWithSpacing() + style.CellPadding.y * 2.0f;
 
     uint32_t max_rows = 0;
-    if (m_max_rows_in_table == 0)
+    if(m_max_rows_in_table == 0)
     {
         max_rows = m_rows.size();
     }
@@ -174,7 +173,7 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
                                  std::pair<const MetricId, Row>& row,
     std::function<void(const char* value_to_copy)> menu_func)
 {
-    if (column_index == 0)
+    if(column_index == 0)
     {
         RenderPinCheckBox(row);
     }
@@ -188,7 +187,7 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
                                    static_cast<int>(column_index));
             ImGui::TextDisabled("N/A");
         }
-        else if (row.second.values.at(column_index).value.empty())
+        else if(row.second.values.at(column_index).value.empty())
         {
             ImVec4 disabled_col = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
             ImGui::PushStyleColor(ImGuiCol_Text, disabled_col);
@@ -358,7 +357,7 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
     FillDefaultColumns(m_columns, m_last_column_index);
     m_table_title = table.name;
 
-    if (table.value_names.empty())
+    if(table.value_names.empty())
     {
         m_columns[m_last_column_index++] = "Value";
     }

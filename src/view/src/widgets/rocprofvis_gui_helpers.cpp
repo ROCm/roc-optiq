@@ -209,7 +209,29 @@ RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int
         ImGui::PopStyleColor();
     }
 
+    // Restoring the cursor leaves window->DC.IsSetPos = true. If the caller's
+    // next ImGui call is End()/EndChild() with no item between, ImGui's
+    // ErrorCheckUsingSetCursorPosToExtendParentBoundaries() will abort the
+    // process. Submit a zero-size Dummy to validate the position and clear
+    // the IsSetPos flag.
     ImGui::SetCursorPos(pos);
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+}
+
+ImU32
+ApplyAlpha(ImU32 color, float alpha)
+{
+    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
+    rgba.w      = std::clamp(alpha, 0.0f, 1.0f);
+    return ImGui::ColorConvertFloat4ToU32(rgba);
+}
+
+ImVec4
+ThemeColor(SettingsManager& settings, Colors color, float alpha)
+{
+    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color));
+    rgba.w      = std::clamp(rgba.w * alpha, 0.0f, 1.0f);
+    return rgba;
 }
 
 ImVec2

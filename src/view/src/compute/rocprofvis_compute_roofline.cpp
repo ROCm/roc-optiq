@@ -57,25 +57,6 @@ constexpr const char* DISPLAY_NAMES_PRESET[] = {
 
 constexpr const char* CHART_ZOOM_HINT = "Click chart to enable zoom";
 
-namespace
-{
-
-ImVec4
-Color(SettingsManager& settings, Colors color)
-{
-    return ImGui::ColorConvertU32ToFloat4(settings.GetColor(color));
-}
-
-ImVec4
-ColorWithAlpha(SettingsManager& settings, Colors color, float alpha)
-{
-    ImVec4 rgba = Color(settings, color);
-    rgba.w      = std::clamp(alpha, 0.0f, 1.0f);
-    return rgba;
-}
-
-}  // namespace
-
 Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 : m_data_provider(data_provider)
 , m_settings(SettingsManager::GetInstance())
@@ -362,36 +343,38 @@ Roofline::Render()
     }
     else
     {
-        ImPlot::PushStyleColor(ImPlotCol_FrameBg, Color(m_settings, Colors::kTransparent));
-        ImPlot::PushStyleColor(ImPlotCol_PlotBg, Color(m_settings, Colors::kBgFrame));
+        ImPlot::PushStyleColor(ImPlotCol_FrameBg,
+                               ThemeColor(m_settings, Colors::kTransparent));
+        ImPlot::PushStyleColor(ImPlotCol_PlotBg,
+                               ThemeColor(m_settings, Colors::kBgFrame));
         ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
-                               ColorWithAlpha(m_settings, Colors::kBorderColor, 0.85f));
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.85f));
         ImPlot::PushStyleColor(ImPlotCol_LegendBg,
-                               ColorWithAlpha(m_settings, Colors::kBgPanel, 0.96f));
+                               ThemeColor(m_settings, Colors::kBgPanel, 0.96f));
         ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
-                               ColorWithAlpha(m_settings, Colors::kBorderColor, 0.85f));
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.85f));
         ImPlot::PushStyleColor(ImPlotCol_LegendText,
-                               Color(m_settings, Colors::kTextMain));
+                               ThemeColor(m_settings, Colors::kTextMain));
         ImPlot::PushStyleColor(ImPlotCol_TitleText,
-                               Color(m_settings, Colors::kTextMain));
+                               ThemeColor(m_settings, Colors::kTextMain));
         ImPlot::PushStyleColor(ImPlotCol_InlayText,
-                               Color(m_settings, Colors::kTextDim));
+                               ThemeColor(m_settings, Colors::kTextDim));
         ImPlot::PushStyleColor(ImPlotCol_AxisText,
-                               Color(m_settings, Colors::kTextDim));
+                               ThemeColor(m_settings, Colors::kTextDim));
         ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
-                               ColorWithAlpha(m_settings, Colors::kBorderColor, 0.34f));
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.34f));
         ImPlot::PushStyleColor(ImPlotCol_AxisTick,
-                               ColorWithAlpha(m_settings, Colors::kTextDim, 0.56f));
+                               ThemeColor(m_settings, Colors::kTextDim, 0.56f));
         ImPlot::PushStyleColor(ImPlotCol_AxisBg,
-                               Color(m_settings, Colors::kTransparent));
+                               ThemeColor(m_settings, Colors::kTransparent));
         ImPlot::PushStyleColor(ImPlotCol_AxisBgHovered,
-                               ColorWithAlpha(m_settings, Colors::kButtonHovered, 0.72f));
+                               ThemeColor(m_settings, Colors::kButtonHovered, 0.72f));
         ImPlot::PushStyleColor(ImPlotCol_AxisBgActive,
-                               ColorWithAlpha(m_settings, Colors::kButtonActive, 0.80f));
+                               ThemeColor(m_settings, Colors::kButtonActive, 0.80f));
         ImPlot::PushStyleColor(ImPlotCol_Selection,
-                               Color(m_settings, Colors::kSelectionBorder));
+                               ThemeColor(m_settings, Colors::kSelectionBorder));
         ImPlot::PushStyleColor(ImPlotCol_Crosshairs,
-                               ColorWithAlpha(m_settings, Colors::kSelectionBorder, 0.72f));
+                               ThemeColor(m_settings, Colors::kSelectionBorder, 0.72f));
         ImPlot::PushColormap(m_settings.GetFlameColormapName());
         ImGui::PushID(m_workload->id);
         bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
@@ -947,9 +930,7 @@ Roofline::PlotHoverIdx()
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
         float  distance  = FLT_MAX;
-        // This has to be a separate pass (as opposed to being part of render pass)
-        // to prevent case where multiple items become hovered due to a higher index
-        // item being a better canidate than a lower index item.
+        // Pick the closest visible item after plotting all candidates.
         for(size_t i = 0; i < m_items.size(); i++)
         {
             if(m_items[i].visible)

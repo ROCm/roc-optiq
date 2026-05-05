@@ -45,14 +45,12 @@ FontManager::GetFontByIndex(int idx)
 int
 FontManager::GetDPIScaledFontIndex()
 {
-    constexpr float DPI_EXPONENT =
-        0.75f;  // Adjust as needed. Higher values increase size more rapidly.
+    constexpr float DPI_EXPONENT = 0.75f;
 
-    float           scaled_size =
-        BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT); 
- 
+    float scaled_size =
+        BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT);
 
-    // Find the index of the font size closest to scaled_size
+    // Find the loaded size closest to the DPI-scaled default.
     int best_index = 0;
     for(int i = 1; i < m_all_fonts.size(); i++)
     {
@@ -71,7 +69,7 @@ FontManager::SetFontSize(int idx)
 
     if(num_types == 0 || m_all_fonts.empty()) return;
     if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return;
- 
+
     static const int offsets[] = { -1, 0, 1, 2 };
 
     m_fonts.resize(num_types);
@@ -110,7 +108,6 @@ FontManager::Init()
     };
 #elif __APPLE__
     const char* font_paths[] = {
-        // macOS system UI fonts
         "/System/Library/Fonts/SFNS.ttf",
         "/System/Library/Fonts/SFNSDisplay.ttf",
         "/System/Library/Fonts/SFNSRounded.ttf",
@@ -123,7 +120,6 @@ FontManager::Init()
     };
 #else
     const char* font_paths[] = {
-        // Preferred modern UI fonts
         "/usr/share/fonts/truetype/inter/Inter-Regular.ttf",
         "/usr/share/fonts/opentype/inter/Inter-Regular.otf",
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",

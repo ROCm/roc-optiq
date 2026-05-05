@@ -20,9 +20,7 @@ namespace RocProfVis
 namespace View
 {
 
-
-// Restrained near-monochrome dark theme: deep neutral shell, single blue accent,
-// borrowed-from-modern-product-design grayscale ramp.
+// Theme color tables must follow the Colors enum order.
 constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(34, 37, 48, 255),     // Colors::kMetaDataColor
     IM_COL32(39, 43, 56, 255),     // Colors::kMetaDataColorSelected
@@ -95,12 +93,11 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
     IM_COL32(42, 82, 118, 255),    // Colors::kComparisonBase
     IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
-    IM_COL32(205, 170, 82, 255),    // Colors::kComparisonLesser
+    IM_COL32(205, 170, 82, 255),   // Colors::kComparisonLesser
     IM_COL32(92, 62, 132, 255),    // Colors::kComparisonGreater
     // This must follow the ordering of Colors enum.
 };
-// Restrained near-monochrome light theme: neutral whites, soft borders, single
-// blue accent.
+
 constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(255, 255, 255, 255),  // Colors::kMetaDataColor
     IM_COL32(238, 240, 244, 255),  // Colors::kMetaDataColorSelected
@@ -195,9 +192,9 @@ inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
 inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
 inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
 inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
-inline constexpr const char*  SETTINGS_FILE_NAME = "settings_application.json";
-inline constexpr float        EVENT_LEVEL_HEIGHT = 40.0f;
-inline constexpr float        COMPACT_EVENT_HEIGHT = 6.0f;
+inline constexpr const char* SETTINGS_FILE_NAME           = "settings_application.json";
+inline constexpr float       EVENT_LEVEL_HEIGHT           = 40.0f;
+inline constexpr float       COMPACT_EVENT_HEIGHT         = 6.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -205,8 +202,6 @@ SettingsManager::GetInstance()
     static SettingsManager instance;
     return instance;
 }
-
- 
 
 void
 SettingsManager::ApplyColorStyling()
@@ -256,7 +251,7 @@ SettingsManager::ApplyColorStyling()
     // Menu bar
     style.Colors[ImGuiCol_MenuBarBg] = bgPanel;
 
-    // Modern table styling
+    // Table styling
     ImVec4 tableHeaderBg =
         ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTableHeaderBg));
     ImVec4 tableBorderStrong =
@@ -323,7 +318,7 @@ SettingsManager::ApplyColorStyling()
     // Navigation highlight
     style.Colors[ImGuiCol_NavHighlight] = accentRedHover;
 
-    // Plot/graph backgrounds (if you use ImPlot)
+    // Plot colors
     style.Colors[ImGuiCol_PlotLines]            = accentRed;
     style.Colors[ImGuiCol_PlotLinesHovered]     = accentRedHover;
     style.Colors[ImGuiCol_PlotHistogram]        = accentRed;
@@ -331,8 +326,6 @@ SettingsManager::ApplyColorStyling()
 
     // Modal window dim
     style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0, 0, 0, 0.7f);
-
-    return;
 }
 
 FontManager&
@@ -438,7 +431,7 @@ SettingsManager::SetDPI(float dpi)
 }
 
 float
-SettingsManager ::GetDPI()
+SettingsManager::GetDPI()
 {
     return m_display_dpi;
 }
@@ -469,7 +462,7 @@ SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
 void
 SettingsManager::ApplyUserUnitSettings(const UserSettings& old_settings)
 {
-    // notify that time format has changed
+    // Notify views when time labels need to be rebuilt.
     if(old_settings.unit_settings.time_format != m_usersettings.unit_settings.time_format)
     {
         EventManager::GetInstance()->AddEvent(
@@ -554,7 +547,7 @@ void
 SettingsManager::InitStyling()
 {
     ImGuiStyle& style     = ImGui::GetStyle();
-    m_default_imgui_style = style;  // Store the default imgui style
+    m_default_imgui_style = style;  // Store the default ImGui style.
 
     // Set sizes and rounding
     style.CellPadding       = ImVec2(12, 8);
@@ -566,7 +559,7 @@ SettingsManager::InitStyling()
     style.TabRounding       = 6.0f;
     style.WindowRounding    = 12.0f;
     style.ScrollbarRounding = 8.0f;
-    style.ScrollbarSize     = 9.0f;
+    style.ScrollbarSize     = 14.0f;
     style.FramePadding      = ImVec2(12, 6);
     style.ItemSpacing       = ImVec2(10, 8);
     style.ItemInnerSpacing  = ImVec2(8, 6);
@@ -575,8 +568,8 @@ SettingsManager::InitStyling()
     style.PopupRounding     = 10.0f;
     style.GrabMinSize       = 12.0f;
     style.IndentSpacing     = 18.0f;
- 
-    m_default_style = style;  // Store the our customized style
+
+    m_default_style = style;  // Store the customized style.
 
     const auto add_flame_colormap = [](const char* name,
                                        const std::vector<ImU32>& flame_colors) {

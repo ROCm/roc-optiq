@@ -93,7 +93,7 @@ ComputeView::ComputeView()
                     NotificationLevel::Error);
             }
 
-             // trigger new table data event to update the UI
+            // Trigger new table data event to update the UI.
             EventManager::GetInstance()->AddEvent(
                 std::make_shared<TableDataEvent>(trace_path, request_id, response_code));
         });
@@ -104,7 +104,6 @@ ComputeView::~ComputeView() {}
 void
 ComputeView::Update()
 {
-    auto last_state = m_data_provider.GetState();
     m_data_provider.Update();
 
     if(!m_view_created)
@@ -114,11 +113,6 @@ ComputeView::Update()
     }
 
     auto new_state = m_data_provider.GetState();
-
-    // new file loaded
-    if(last_state != new_state && new_state == ProviderState::kReady)
-    {
-    }
 
     if(new_state == ProviderState::kReady)
     {
@@ -137,24 +131,43 @@ void
 ComputeView::CreateView()
 {
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
-    // When launched remotely, for example over ssh, the UI make take long to init, and the data provider
-    // may have already loaded an analysis if the application was launched with --file flag.
-    // Check if one exists and if it does set the workload.
+    // When launched remotely, the data provider may load an analysis before the
+    // UI is ready. Select the first workload if one already exists.
     const std::vector<const WorkloadInfo*>& workloads =
         m_data_provider.ComputeModel().GetWorkloadList();
     if(!workloads.empty())
     {
         m_compute_selection->SelectWorkload(workloads.front()->id);
     }
-    m_preset_browser    = std::make_unique<PresetBrowser>();
+    m_preset_browser = std::make_unique<PresetBrowser>();
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Baseline Comparison", "compute_comparison_view", std::make_shared<ComputeComparisonView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(
+        TabItem{"Summary View", "compute_summary_view",
+                std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection),
+                false});
+    m_tab_container->AddTab(
+        TabItem{"Kernel Details", "compute_kernel_details_view",
+                std::make_shared<ComputeKernelDetailsView>(m_data_provider,
+                                                           m_compute_selection),
+                false});
+    m_tab_container->AddTab(
+        TabItem{"Table View", "compute_table_view",
+                std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection),
+                false});
+    m_tab_container->AddTab(
+        TabItem{"Workload Details", "compute_workload_view",
+                std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
+                false});
+    m_tab_container->AddTab(
+        TabItem{"Baseline Comparison", "compute_comparison_view",
+                std::make_shared<ComputeComparisonView>(m_data_provider,
+                                                        m_compute_selection),
+                false});
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-    m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(
+        TabItem{"Compute Tester", "compute_tester_view",
+                std::make_shared<ComputeTester>(m_data_provider, m_compute_selection),
+                false});
 #endif
     m_tab_container->SetAllowToolTips(false);
 }

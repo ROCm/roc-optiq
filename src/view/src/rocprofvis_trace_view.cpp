@@ -406,7 +406,7 @@ TraceView::HandleHotKeys()
 
     auto& hk = HotkeyManager::GetInstance();
 
-    // xDon’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
+    // Do not process global hotkeys if ImGui wants the keyboard (e.g., typing in
     for(int i = 0; i <= 9; ++i)
     {
         std::string idx = std::to_string(i);
@@ -680,7 +680,7 @@ TraceView::RenderToolbar()
     VerticalSeparator(&m_settings_manager);
     RenderBookmarkControls();
     VerticalSeparator(&m_settings_manager);
-    
+
     ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
@@ -698,7 +698,6 @@ TraceView::RenderToolbar()
     }
     VerticalSeparator(&m_settings_manager);
 
-    // Quiet, minimal action: outline-style instead of a heavy filled accent.
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(
         m_settings_manager.GetColor(Colors::kBgFrame)));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::ColorConvertU32ToFloat4(

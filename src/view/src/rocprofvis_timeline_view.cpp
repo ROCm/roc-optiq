@@ -35,19 +35,6 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 
-namespace
-{
-
-ImU32
-WithAlpha(ImU32 color, float alpha)
-{
-    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
-    rgba.w      = std::clamp(alpha, 0.0f, 1.0f);
-    return ImGui::ColorConvertFloat4ToU32(rgba);
-}
-
-}  // namespace
-
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotations)
@@ -677,8 +664,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::SetNextWindowSize(m_tpt->GetGraphSize(), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    // overlayed windows need to have fully trasparent bg otherwise they will overlay
-    // (with no alpha) over their predecessors
+    // Overlay children need transparent backgrounds so they do not hide earlier layers.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
     ImGui::SetNextItemAllowOverlap();
@@ -695,7 +681,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImVec2 relative_mouse_pos = ImVec2(mouse_position.x - window_position.x,
                                        mouse_position.y - window_position.y);
 
-    // Render range selction box
+    // Render range selection box
     ImVec2 cursor_position = screen_pos;
 
     ImVec2      mouse_pos     = ImGui::GetMousePos();
@@ -1023,8 +1009,7 @@ TimelineView::RenderGraphView()
     ImVec2 container_size = ImGui::GetWindowSize();
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    // overlayed windows need to have fully trasparent bg otherwise they will overlay
-    // (with no alpha) over their predecessors
+    // Overlay children need transparent backgrounds so they do not hide earlier layers.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("Graph View Main",
                       ImVec2(container_size.x, container_size.y - m_ruler_height), false,
@@ -1204,7 +1189,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         selection_color = m_settings.GetColor(Colors::kHighlightChart);
     }
 
-    // Lane plate: subtle alternating bands give scannable rows without screaming.
+    // Alternating bands make dense tracks easier to scan.
     ImVec2 lane_min = ImGui::GetCursorScreenPos();
     ImVec2 lane_max(lane_min.x + ImGui::GetContentRegionAvail().x,
                     lane_min.y + track_height - 1.0f);
@@ -1224,9 +1209,9 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         const float  graph_min_x       = lane_min.x + m_sidebar_size;
         const float  graph_max_x       = graph_min_x + m_tpt->GetGraphSizeX();
         const ImU32  minor_grid_color =
-            WithAlpha(m_settings.GetColor(Colors::kGridColor), 0.10f);
+            ApplyAlpha(m_settings.GetColor(Colors::kGridColor), 0.10f);
         const ImU32 major_grid_color =
-            WithAlpha(m_settings.GetColor(Colors::kBoundBox), 0.12f);
+            ApplyAlpha(m_settings.GetColor(Colors::kBoundBox), 0.12f);
 
         for(int i = 0; i < m_grid_interval_count; ++i)
         {
@@ -1252,7 +1237,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
 
     if(track_graph.selected)
     {
-        // Quiet 2px accent rail on the inner edge of the selected lane.
+        // Mark the selected lane without covering the track contents.
         lane_dl->AddRectFilled(
             ImVec2(lane_min.x, lane_min.y),
             ImVec2(lane_min.x + 2.0f, lane_max.y),
@@ -1337,7 +1322,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     // This is done after the child window to ensure it is on top
     ImVec2 p_min = ImGui::GetItemRectMin();
     ImVec2 p_max = ImGui::GetItemRectMax();
-    // Replace heavy lane border with a single subtle bottom rule. Cleaner read.
+    // Draw only the bottom rule; the alternating lane fill supplies the row body.
     ImGui::GetWindowDrawList()->AddLine(
         ImVec2(p_min.x, p_max.y - 0.5f),
         ImVec2(p_max.x, p_max.y - 0.5f),
@@ -1745,8 +1730,7 @@ TimelineView::RenderTraceView()
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
 
-    // Quiet canvas surface: filled panel + a single hairline border, no
-    // shadow/glow. Lets the data own the visual weight.
+    // Filled panel with a single hairline border.
     ImDrawList* bg_draw_list = ImGui::GetWindowDrawList();
     bg_draw_list->AddRectFilled(screen_pos,
                                 screen_pos + subcomponent_size_main,

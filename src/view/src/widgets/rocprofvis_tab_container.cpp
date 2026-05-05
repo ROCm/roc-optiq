@@ -95,8 +95,7 @@ TabContainer::Render()
     SettingsManager& settings = SettingsManager::GetInstance();
     const ImGuiStyle& style = settings.GetDefaultStyle();
 
-    // Modern app-style tab strip: tinted band so the active tab visibly
-    // "lifts" out as the canvas color underneath.
+    // Keep active tabs visually connected to the content panel.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         ImVec2(style.WindowPadding.x + 2.0f, style.WindowPadding.y));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
@@ -130,7 +129,7 @@ TabContainer::Render()
                         ? ImGuiTabItemFlags_SetSelected
                         : 0;
 
-                //This line prevents truncated tab names from showing tooltips
+                // Prevent truncated tab names from showing tooltips.
                 if(!m_allow_tool_tips)
                     flags |= ImGuiTabItemFlags_NoTooltip;
 

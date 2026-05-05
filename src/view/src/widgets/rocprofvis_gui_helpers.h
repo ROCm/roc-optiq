@@ -11,6 +11,7 @@ namespace View
 {
 
 class SettingsManager;
+enum class Colors;
 
 constexpr float PI = 3.14159265358979323846f;  // Define PI constant
 
@@ -24,6 +25,12 @@ void
 RenderLoadingIndicator(ImU32 color, const char* window_id = nullptr,
                        float dot_radius = 5.0f, int num_dots = 3,
                        float dot_spacing = 5.0f, float anim_speed = 5.0f);
+
+ImU32
+ApplyAlpha(ImU32 color, float alpha);
+
+ImVec4
+ThemeColor(SettingsManager& settings, Colors color, float alpha = 1.0f);
 
 ImVec2
 GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size = ImVec2(0.0f, 0.0f),

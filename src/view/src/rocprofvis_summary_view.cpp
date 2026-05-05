@@ -29,25 +29,22 @@ constexpr float  INITIAL_RELATIVE_SIZE           = 0.8f;
 namespace
 {
 
-ImVec4
-ThemeColor(SettingsManager& settings, Colors color, float alpha = 1.0f)
-{
-    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color));
-    rgba.w *= alpha;
-    return rgba;
-}
-
 void
 PushPlotChrome(SettingsManager& settings)
 {
     ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
     ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
-    ImPlot::PushStyleColor(ImPlotCol_PlotBorder, ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
+                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
     ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextDim));
-    ImPlot::PushStyleColor(ImPlotCol_AxisGrid, ThemeColor(settings, Colors::kBorderColor, 0.34f));
-    ImPlot::PushStyleColor(ImPlotCol_AxisTick, ThemeColor(settings, Colors::kTextDim, 0.56f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendBg, ThemeColor(settings, Colors::kBgPanel, 0.96f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendBorder, ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
+                           ThemeColor(settings, Colors::kBorderColor, 0.34f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisTick,
+                           ThemeColor(settings, Colors::kTextDim, 0.56f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBg,
+                           ThemeColor(settings, Colors::kBgPanel, 0.96f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
+                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
     ImPlot::PushStyleColor(ImPlotCol_LegendText, ThemeColor(settings, Colors::kTextMain));
 }
 

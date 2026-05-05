@@ -297,7 +297,7 @@ HSplitContainer::GetItemSize()
 
 //------------------------------------------------------------------
 VSplitContainer::VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
-: SplitContainerBase(top, bottom, 3.0f, 200.0f, 100.0f, 0.6f)
+: SplitContainerBase(top, bottom, 6.0f, 200.0f, 100.0f, 0.6f)
 {
     m_widget_name = GenUniqueName("VSplitContainer");
     m_first_name  = GenUniqueName("TopRow");

@@ -36,11 +36,6 @@ SettingsPanel::SettingsPanel(SettingsManager& settings)
 , m_font_settings({ m_usersettings.display_settings.dpi_based_scaling,
                     m_usersettings.display_settings.font_size_index })
 {
-    for(float size : m_fonts.GetAvailableSizes())
-    {
-        m_font_sizes.emplace_back(std::to_string(static_cast<int>(size)));
-        m_font_sizes_ptr.emplace_back(m_font_sizes.back().c_str());
-    }
 }
 
 SettingsPanel::~SettingsPanel() {}
@@ -255,8 +250,20 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("00").x + 2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
-    ImGui::Combo("##font_size", &m_font_settings.size_index, m_font_sizes_ptr.data(),
-                 static_cast<int>(m_font_sizes_ptr.size()));
+    const auto& available_sizes   = m_fonts.GetAvailableSizes();
+    std::string current_label     = std::to_string(static_cast<int>(available_sizes[m_font_settings.size_index]));
+    if(ImGui::BeginCombo("##font_size", current_label.c_str()))
+    {
+        for(int i = 0; i < static_cast<int>(available_sizes.size()); ++i)
+        {
+            std::string label = std::to_string(static_cast<int>(available_sizes[i]));
+            if(ImGui::Selectable(label.c_str(), i == m_font_settings.size_index))
+                m_font_settings.size_index = i;
+            if(i == m_font_settings.size_index)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
     ImGui::SameLine();
     ImGui::BeginDisabled(m_font_settings.size_index >
                          static_cast<int>(m_fonts.GetAvailableSizes().size()) - 2);
@@ -277,7 +284,6 @@ SettingsPanel::RenderDisplayOptions()
     ImFont* preview_font = m_fonts.GetFont(FontType::kDefault);
     int     preview_idx  = m_font_settings.dpi_scaling ? m_fonts.GetDPIScaledFontIndex()
                                                         : m_font_settings.size_index;
-    const auto& available_sizes = m_fonts.GetAvailableSizes();
     float preview_size = available_sizes.empty() ? m_fonts.GetFontSize(FontType::kDefault)
                        : available_sizes[std::max(0, std::min(preview_idx,
                              static_cast<int>(available_sizes.size()) - 1))];

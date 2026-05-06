@@ -54,7 +54,8 @@ FontManager::GetDPIScaledFontIndex()
 void
 FontManager::SetFontSize(int idx)
 {
-    if(m_available_sizes.empty()) return;
+    if(m_available_sizes.empty())
+        return;
     idx = std::max(0, std::min(idx, static_cast<int>(m_available_sizes.size()) - 1));
 
     for(int i = 0; i < kNumTypes; ++i)
@@ -138,7 +139,9 @@ FontManager::Init()
     int default_idx = static_cast<int>(std::distance(
         FONT_AVAILABLE_SIZES.begin(),
         std::find(FONT_AVAILABLE_SIZES.begin(), FONT_AVAILABLE_SIZES.end(), BASE_FONT_SIZE)));
-    if(default_idx >= static_cast<int>(m_available_sizes.size())) default_idx = 6; // fallback to index of 13.0f
+
+    if(default_idx >= static_cast<int>(m_available_sizes.size()))
+        default_idx = 6; // fallback to index of 13.0f
     SetFontSize(default_idx);
 
     // Don't call Build() - ImGui 1.92+ backend handles font atlas building automatically.
@@ -169,7 +172,8 @@ float
 FontManager::GetFontSize(FontType font_type) const
 {
     int idx = static_cast<int>(font_type);
-    if(idx < 0 || idx >= kNumTypes) return BASE_FONT_SIZE;
+    if(idx < 0 || idx >= kNumTypes)
+        return BASE_FONT_SIZE;
     return m_sizes[idx];
 }
 

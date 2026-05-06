@@ -37,19 +37,12 @@ public:
      */
     bool Init();
 
-    // Returns the available base sizes (one entry per loaded atlas size slot).
     const std::vector<float> GetAvailableSizes() const;
-
-    // Returns the single text/icon ImFont* (same for all FontTypes in 1.92 dynamic sizing).
-    ImFont* GetFont(FontType font_type);
-    ImFont* GetIconFont(FontType font_type);
-
-    // Returns the pixel size to pass to PushFont() for a given FontType.
-    float GetFontSize(FontType font_type) const;
-
-    int     GetDPIScaledFontIndex();
-
-    void SetFontSize(int idx);
+    ImFont*                  GetFont(FontType font_type);
+    ImFont*                  GetIconFont(FontType font_type);
+    float                    GetFontSize(FontType font_type) const;
+    int                      GetDPIScaledFontIndex();
+    void                     SetFontSize(int idx);
 
     static constexpr int kNumTypes = static_cast<int>(FontType::__kLastFont);
 

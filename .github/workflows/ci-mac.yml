@@ -63,8 +63,8 @@ env:
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
 
 jobs:
-  ubuntu:
-    name: macOS ${{ matrix.os-version }} • Build Optiq • Upload to S3 (${{ inputs.upload_to_s3 }})
+  mac:
+    name: macOS ${{ matrix.os-version }} • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
     runs-on: macos-${{ matrix.os-version }}
     strategy:
       fail-fast: false

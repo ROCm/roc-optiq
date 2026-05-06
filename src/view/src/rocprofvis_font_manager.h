@@ -47,9 +47,6 @@ public:
     // Returns the pixel size to pass to PushFont() for a given FontType.
     float GetFontSize(FontType font_type) const;
 
-    // Legacy index-based accessors kept for settings panel compatibility.
-    ImFont* GetFontByIndex(int idx);
-    ImFont* GetIconFontByIndex(int idx);
     int     GetDPIScaledFontIndex();
 
     void SetFontSize(int idx);

@@ -31,22 +31,11 @@ FontManager::FontManager() {}
 
 FontManager::~FontManager() {}
 
-ImFont*
-FontManager::GetIconFontByIndex(int /*idx*/)
-{
-    return m_icon_font;
-}
-
-ImFont*
-FontManager::GetFontByIndex(int /*idx*/)
-{
-    return m_text_font;
-}
-
 int
 FontManager::GetDPIScaledFontIndex()
 {
-    constexpr float DPI_EXPONENT = 0.75f;
+    constexpr float DPI_EXPONENT =
+        0.75f;  // Adjust as needed. Higher values increase size more rapidly.
 
     float scaled_size =
         BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT);
@@ -92,22 +81,27 @@ FontManager::Init()
     const char* font_paths[] = { "C:\\Windows\\Fonts\\arial.ttf" };
 #elif __APPLE__
     const char* font_paths[] = {
+        // macOS system fonts
         "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/HelveticaNeue.ttc",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/System/Library/Fonts/Supplemental/Verdana.ttf",
         "/Library/Fonts/Arial.ttf",
         "/Library/Fonts/Microsoft/Arial.ttf",
+        // SF Pro (newer macOS)
         "/System/Library/Fonts/SFNSDisplay.ttf",
         "/System/Library/Fonts/SFNS.ttf"
     };
 #else
     const char* font_paths[] = {
+        // Ubuntu / Debian
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
         "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
         "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+        // RedHat 8, Oracle 8
         "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        // RedHat 9 / 10, Oracle 9 / 10
         "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
         "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf"
     };
@@ -125,8 +119,6 @@ FontManager::Init()
 
     m_available_sizes.assign(FONT_AVAILABLE_SIZES.begin(), FONT_AVAILABLE_SIZES.end());
 
-    // In ImGui 1.92+ a single ImFont* is dynamically sizable — load one atlas entry per
-    // typeface (size 0.0f lets the backend choose the rasterisation density automatically).
     if(font_path)
     {
         m_text_font = io.Fonts->AddFontFromFileTTF(font_path, 0.0f);
@@ -140,12 +132,9 @@ FontManager::Init()
 
     ImFontConfig icon_config;
     icon_config.FontDataOwnedByAtlas = false;
-    // Merge icon glyphs into a separate font object so icon PushFont() still works.
     m_icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
         &icon_font_compressed_data, icon_font_compressed_size, 0.0f, &icon_config, icon_ranges);
 
-    // Initialise sizes to the default base index so GetFontSize() is valid before
-    // SetFontSize() is called for the first time.
     int default_idx = static_cast<int>(std::distance(
         FONT_AVAILABLE_SIZES.begin(),
         std::find(FONT_AVAILABLE_SIZES.begin(), FONT_AVAILABLE_SIZES.end(), BASE_FONT_SIZE)));

@@ -4,6 +4,10 @@ run-name: roc-optiq-ci
 on:
   workflow_dispatch:
     inputs:
+      enable_full_os_versions:
+        description: 'Run CI for all os variations?'
+        type: boolean
+        default: false
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
@@ -53,7 +57,7 @@ jobs:
       - name: Set OS versions
         id: setup-os-versions
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
+          if [ "${{ github.event_name }}" = "schedule" || ${{ github.event.inputs.enable_full_os_versions }} != '' ]; then
             echo "ubuntu-os-versions=${{ env.UBUNTU_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "redhat-os-versions=${{ env.REDHAT_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "windows-os-versions=${{ env.WINDOWS_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"

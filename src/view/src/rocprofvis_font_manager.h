@@ -54,8 +54,9 @@ public:
 
     void SetFontSize(int idx);
 
-private:
     static constexpr int kNumTypes = static_cast<int>(FontType::__kLastFont);
+
+private:
 
     ImFont* m_text_font = nullptr;
     ImFont* m_icon_font = nullptr;

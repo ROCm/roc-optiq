@@ -50,11 +50,7 @@ private:
 
     ImFont* m_text_font = nullptr;
     ImFont* m_icon_font = nullptr;
-
-    // Per-FontType sizes derived from the chosen base index.
     std::array<float, kNumTypes> m_sizes{};
-
-    // Available base sizes (mirrors FONT_AVAILABLE_SIZES for the settings combo).
     std::vector<float> m_available_sizes;
 };
 

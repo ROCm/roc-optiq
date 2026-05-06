@@ -659,7 +659,7 @@ TraceView::RenderToolbar()
                               m_settings_manager.GetColor(Colors::kBorderColor)));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         ImVec2(style.WindowPadding.x + 4.0f, style.WindowPadding.y + 2.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
 
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);

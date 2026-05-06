@@ -338,13 +338,11 @@ KernelMetricTable::Render()
     bool request_pending =
         m_data_provider.IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID);
 
-    float       line_height   = ImGui::GetTextLineHeightWithSpacing();
-    //ImGuiStyle& style         = ImGui::GetStyle();
     float       row_padding_v = style.CellPadding.y * 2.0f;
-    line_height += row_padding_v;
+    float       line_height   = ImGui::GetTextLineHeight() + row_padding_v;
 
     // Filter row height (InputText widgets are taller than text)
-    float filter_row_height = ImGui::GetFrameHeightWithSpacing() + row_padding_v;
+    float filter_row_height = ImGui::GetFrameHeight() + row_padding_v;
 
     int data_row_count = static_cast<int>(data.size());
     int rows_to_render = std::max(std::min(10, data_row_count), 5);
@@ -532,6 +530,13 @@ KernelMetricTable::Render()
                     }
                 }
 
+                ImGui::PushStyleColor(ImGuiCol_Header,
+                                      settings.GetColor(Colors::kSelection));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                                      settings.GetColor(Colors::kHighlightChart));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                                      settings.GetColor(Colors::kHighlightChart));
+
                 if(request_pending)
                 {
                     ImGui::BeginDisabled();
@@ -670,6 +675,7 @@ KernelMetricTable::Render()
                     ImGui::EndDisabled();
                 }
 
+                ImGui::PopStyleColor(3);
                 ImGui::EndTable();
             }
         }

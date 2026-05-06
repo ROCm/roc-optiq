@@ -222,12 +222,15 @@ ComputeView::RenderToolbar()
     ImGui::PushStyleColor(ImGuiCol_Border,
                           ImGui::ColorConvertU32ToFloat4(
                               m_settings_manager.GetColor(Colors::kBorderColor)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x + 4.0f,
+                               style.WindowPadding.y + 2.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 

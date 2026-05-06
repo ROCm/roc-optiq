@@ -10,7 +10,6 @@
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
 #include "rocprofvis_cli_parser.h"
-#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_gui_helpers.h"

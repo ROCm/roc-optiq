@@ -141,10 +141,9 @@ TabContainer::Render()
                 {
                     p_open = nullptr;
                 }
-                bool is_active_tab = (static_cast<int>(i) == m_active_tab_index);
                 ImGui::PushStyleColor(ImGuiCol_Text,
-                    ImGui::ColorConvertU32ToFloat4(settings.GetColor(
-                        is_active_tab ? Colors::kTextMain : Colors::kTextDim)));
+                                      ImGui::ColorConvertU32ToFloat4(
+                                          settings.GetColor(Colors::kTextMain)));
 
                 bool tab_visible = false;
                 ImGui::PushID(tab.m_id.c_str());

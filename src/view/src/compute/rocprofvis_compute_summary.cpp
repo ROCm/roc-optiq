@@ -42,9 +42,9 @@ void
 PushPlotChrome(SettingsManager& settings)
 {
     ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kTransparent));
     ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
-                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
+                           ThemeColor(settings, Colors::kTransparent));
     ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextDim));
     ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
                            ThemeColor(settings, Colors::kBorderColor, 0.34f));

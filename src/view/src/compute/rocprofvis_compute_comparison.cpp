@@ -36,6 +36,32 @@ constexpr const char* JSON_KEY_PINNED_METRICS      = "pins";
 constexpr const char* JSON_KEY_PINNED_METRICS_ID   = "id";
 constexpr const char* JSON_KEY_PINNED_METRICS_NAME = "name";
 
+static float
+TableRowHeight()
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    return ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
+}
+
+static float
+QuantizedTableHeight(float desired_height, float max_height, float fixed_rows,
+                     bool include_horizontal_scrollbar)
+{
+    const float row_height = TableRowHeight();
+    const float scrollbar_height =
+        include_horizontal_scrollbar ? ImGui::GetStyle().ScrollbarSize : 0.0f;
+    const float available_rows_height =
+        std::max(0.0f, max_height - scrollbar_height);
+    const float requested_rows_height =
+        std::max(row_height, desired_height - scrollbar_height);
+    const float visible_rows =
+        std::max(fixed_rows, std::floor(std::min(requested_rows_height,
+                                                available_rows_height) /
+                                        row_height));
+
+    return visible_rows * row_height + scrollbar_height;
+}
+
 ComputeComparisonView::ComputeComparisonView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -186,8 +212,11 @@ ComputeComparisonView::Render()
 {
     m_loading = m_data_provider.IsRequestPending(m_baseline_request_id) ||
                 m_data_provider.IsRequestPending(m_target_request_id);
-    m_max_pinned_height =
+    const float max_pinned_height =
         ImGui::GetWindowHeight() * 0.5f - ImGui::GetFrameHeightWithSpacing();
+    m_max_pinned_height =
+        std::max(TableRowHeight() * 2.0f,
+                 std::floor(max_pinned_height / TableRowHeight()) * TableRowHeight());
     if(m_layout)
     {
         m_layout->Render();
@@ -569,12 +598,15 @@ ComputeComparisonView::RenderToolbar()
     ImGui::PushStyleColor(
         ImGuiCol_Border,
         ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kBorderColor)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x + 4.0f,
+                               style.WindowPadding.y + 2.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::BeginChild("toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Compare With:");
@@ -807,13 +839,10 @@ ComputeComparisonView::RenderPinnedMetrics() const
 {
     if(m_pinned_table)
     {
-        ImGui::SetNextWindowSizeConstraints(
-            ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeightWithSpacing()),
-            ImVec2(ImGui::GetContentRegionAvail().x, m_max_pinned_height));
-        ImGui::BeginChild("pinned", ImVec2(0.0f, 0.0f),
-                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         if(m_pinned_metrics.empty())
         {
+            ImGui::BeginChild("pinned", ImVec2(0.0f, TableRowHeight() * 2.0f),
+                              ImGuiChildFlags_Borders);
             CenterNextItem(ImGui::CalcTextSize("Use () checkbox to pin metrics.").x +
                            ImGui::GetFontSize());
             ImGui::SetCursorPosY(ImGui::GetStyle().FramePadding.y);
@@ -827,10 +856,12 @@ ComputeComparisonView::RenderPinnedMetrics() const
             ImGui::SameLine();
             ImGui::TextUnformatted(") checkbox to pin metrics.");
             ImGui::EndDisabled();
+            ImGui::EndChild();
         }
         else
         {
-            m_pinned_table->SetMaxSize(ImVec2(FLT_MAX, m_max_pinned_height));
+            m_pinned_table->SetMaxSize(
+                ImVec2(ImGui::GetContentRegionAvail().x, m_max_pinned_height));
             m_pinned_table->Render();
             if(m_loading)
             {
@@ -838,7 +869,6 @@ ComputeComparisonView::RenderPinnedMetrics() const
                                        "loading_indicator");
             }
         }
-        ImGui::EndChild();
     }
 }
 
@@ -1222,16 +1252,21 @@ ComputeComparisonView::Table::Update()
 void
 ComputeComparisonView::Table::Render()
 {
+    const float row_height = TableRowHeight();
+    const float fixed_rows = m_title.empty() ? 1.0f : 2.0f;
+    const float desired_height =
+        (m_visible_row_count == 0 ? 2.0f
+                                  : m_visible_row_count + fixed_rows) *
+            row_height +
+        (m_h_scrollable ? ImGui::GetStyle().ScrollbarSize : 0.0f);
+    const float child_height =
+        QuantizedTableHeight(desired_height, m_max_size.y, fixed_rows,
+                             m_h_scrollable);
+
     ImGui::BeginChild(
         m_widget_name.c_str(),
         ImVec2(std::min(m_max_size.x, ImGui::GetContentRegionAvail().x),
-               m_visible_row_count == 0
-                   ? ImGui::GetFrameHeightWithSpacing() * 2.0f
-                   : std::min(
-                         m_max_size.y,
-                         ImGui::GetFrameHeightWithSpacing() *
-                                 (m_visible_row_count + (m_title.empty() ? 1.0f : 2.0f)) +
-                             (m_h_scrollable ? ImGui::GetStyle().ScrollbarSize : 0.0f))),
+               child_height),
         ImGuiChildFlags_Borders);
     float title_height = 0.0f;
     if(!m_title.empty())
@@ -1261,6 +1296,18 @@ ComputeComparisonView::Table::Render()
                 {
                     ImGui::PushID(static_cast<int>(i));
                     ImGui::TableNextRow();
+                    const ImVec2 row_min(ImGui::GetWindowPos().x,
+                                          ImGui::GetCursorScreenPos().y);
+                    const ImVec2 row_max(
+                        ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
+                        row_min.y + row_height);
+                    if(ImGui::IsWindowHovered() &&
+                       ImGui::IsMouseHoveringRect(row_min, row_max, true))
+                    {
+                        ImGui::TableSetBgColor(
+                            ImGuiTableBgTarget_RowBg0,
+                            m_settings.GetColor(Colors::kHighlightChart));
+                    }
                     for(size_t j = 0; j < m_columns.size(); j++)
                     {
                         ImGui::PushID(static_cast<int>(j));

@@ -54,6 +54,11 @@ MetricTableBase::Render()
         }
     }
 
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style   = settings.GetDefaultStyle();
+    const float row_hover_height =
+        ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
+
     const std::string child_id = "##" + m_table_title + "_layout_";
     const std::string table_id = child_id + "_table";
 
@@ -89,6 +94,16 @@ MetricTableBase::Render()
             {
                 ImGui::PushID(row_idx++);
                 ImGui::TableNextRow();
+                const ImVec2 row_min(ImGui::GetWindowPos().x,
+                                      ImGui::GetCursorScreenPos().y);
+                const ImVec2 row_max(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
+                                      row_min.y + row_hover_height);
+                if(ImGui::IsWindowHovered() &&
+                   ImGui::IsMouseHoveringRect(row_min, row_max, true))
+                {
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                           settings.GetColor(Colors::kHighlightChart));
+                }
 
                 for(auto column_index = 0; column_index < m_last_column_index;
                     column_index++)
@@ -98,8 +113,7 @@ MetricTableBase::Render()
                         continue;
                     }
                     auto menu_func = [&](const char* value_to_copy) {
-                        ImU32 mainColor =
-                            SettingsManager::GetInstance().GetColor(Colors::kTextMain);
+                        ImU32 mainColor = settings.GetColor(Colors::kTextMain);
                         ImGui::PushStyleColor(ImGuiCol_Text, mainColor);
                         this->ContextMenu(value_to_copy, column_index, row);
                         ImGui::PopStyleColor();
@@ -131,7 +145,7 @@ MetricTableBase::GetTableHeight() const
 {
     const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
     float             line_height =
-        ImGui::GetTextLineHeightWithSpacing() + style.CellPadding.y * 2.0f;
+        ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
 
     uint32_t max_rows = 0;
     if(m_max_rows_in_table == 0)

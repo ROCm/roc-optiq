@@ -631,9 +631,9 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
 {
     plot_pos -= ImGui::GetWindowPos();
     float menus_width      = region.x * 0.25f;
-    float max_menus_height = plot_size.y - plot_style.PlotPadding.y * 2.0f -
-                             ImGui::GetFrameHeightWithSpacing();
-    float button_size = ImGui::GetFrameHeightWithSpacing();
+    float button_size       = ImGui::GetFrameHeight();
+    float max_menus_height  = plot_size.y - plot_style.PlotPadding.y * 2.0f -
+                              button_size;
 
     bool menus_on_right = m_menus_placement == InsideTopRight ||
                           m_menus_placement == InsideBottomRight ||

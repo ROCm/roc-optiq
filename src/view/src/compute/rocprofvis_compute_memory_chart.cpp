@@ -268,17 +268,6 @@ DrawChartBackdrop(ImDrawList* draw_list, ImVec2 origin, float canvas_w, float ca
     ImVec2 min = origin;
     ImVec2 max(origin.x + canvas_w, origin.y + canvas_h);
     draw_list->AddRectFilled(min, max, C().bg);
-
-    for(float x = min.x + CHART_PADDING; x < max.x; x += 36.0f)
-    {
-        draw_list->AddLine({x, min.y}, {x, max.y},
-                           ApplyAlpha(C().border, 0.08f), 1.0f);
-    }
-    for(float y = min.y + CHART_PADDING; y < max.y; y += 36.0f)
-    {
-        draw_list->AddLine({min.x, y}, {max.x, y},
-                           ApplyAlpha(C().border, 0.08f), 1.0f);
-    }
 }
 
 static void

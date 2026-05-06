@@ -285,20 +285,7 @@ TrackItem::RenderMetaArea()
 
         if(available_for_text < 0.0f) available_for_text = 0.0f;
 
-        std::string primary_label   = m_meta_area_label;
-        std::string secondary_label = "";
-        if(size_t qualifier_pos = primary_label.find(" ("); qualifier_pos != std::string::npos)
-        {
-            secondary_label = primary_label.substr(qualifier_pos);
-            primary_label   = primary_label.substr(0, qualifier_pos);
-        }
-
-        ImVec2 text_size = ImGui::CalcTextSize(primary_label.c_str(), nullptr, false,
-                                               available_for_text);
-        if(!secondary_label.empty())
-        {
-            text_size.y += ImGui::GetTextLineHeightWithSpacing();
-        }
+        ImVec2 text_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
 
         if(content_size.y - text_size.y < m_pill.GetPillSize().y)
             m_pill.Hide();
@@ -307,16 +294,13 @@ TrackItem::RenderMetaArea()
 
         ImGui::BeginGroup();
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + available_for_text);
-        ImGui::TextUnformatted(primary_label.c_str());
-        ImGui::PopTextWrapPos();
-        ImGui::PopStyleColor();
-        if(!secondary_label.empty())
+        if(available_for_text > 0.0f)
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
-            ImGui::TextUnformatted(secondary_label.c_str());
-            ImGui::PopStyleColor();
+            ImGui::PushID("meta_area_label");
+            ElidedText(m_meta_area_label.c_str(), available_for_text);
+            ImGui::PopID();
         }
+        ImGui::PopStyleColor();
         ImGui::EndGroup();
 
         if(!m_meta_area_tooltip.empty() && ImGui::IsItemHovered())

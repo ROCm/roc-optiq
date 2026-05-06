@@ -183,6 +183,8 @@ jobs:
         run: |
           mkdir ${{ env.DIST_DIR }}/
           cp -a ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/
+          ditto -c -k --keepParent ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip
+          rm -rf ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app
           ls -l ${{ env.DIST_DIR }}/
 
       - name: Upload GitHub Artifacts
@@ -191,7 +193,7 @@ jobs:
         with:
           name: roc-optiq-macos-${{ matrix.os-version }}-release
           path: |
-            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app
+            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip
           retention-days: 2
       
       - name: Configure AWS credentials

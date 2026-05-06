@@ -322,7 +322,7 @@ PresetBrowser::Render()
         popup_style.PushPopupStyles();
         if(ImGui::BeginPopup("preset_browser"))
         {
-            ImGui::PushFont(icons);
+            ImGui::PushFont(icons, m_settings.GetFontManager().GetFontSize(FontType::kDefault));
             float manage_width =
                 ImGui::CalcTextSize(ICON_OPEN).x + ImGui::CalcTextSize(ICON_ARCHIVE).x +
                 ImGui::CalcTextSize(ICON_TRASH_CAN).x + 2.0f * style.ItemSpacing.x;

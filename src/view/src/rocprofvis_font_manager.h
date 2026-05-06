@@ -4,6 +4,7 @@
 #pragma once
 
 #include "imgui.h"
+#include <array>
 #include <vector>
 
 namespace RocProfVis
@@ -36,20 +37,34 @@ public:
      */
     bool Init();
 
-    const std::vector<ImFont*> GetAvailableFonts() const;
-    ImFont*                    GetFont(FontType font_type);
-    ImFont*                    GetIconFont(FontType font_type);
-    ImFont*                    GetFontByIndex(int idx);
-    ImFont*                    GetIconFontByIndex(int idx);
-    int                        GetDPIScaledFontIndex();
+    // Returns the available base sizes (one entry per loaded atlas size slot).
+    const std::vector<float> GetAvailableSizes() const;
+
+    // Returns the single text/icon ImFont* (same for all FontTypes in 1.92 dynamic sizing).
+    ImFont* GetFont(FontType font_type);
+    ImFont* GetIconFont(FontType font_type);
+
+    // Returns the pixel size to pass to PushFont() for a given FontType.
+    float GetFontSize(FontType font_type) const;
+
+    // Legacy index-based accessors kept for settings panel compatibility.
+    ImFont* GetFontByIndex(int idx);
+    ImFont* GetIconFontByIndex(int idx);
+    int     GetDPIScaledFontIndex();
 
     void SetFontSize(int idx);
 
 private:
-    std::vector<ImFont*> m_fonts;
-    std::vector<ImFont*> m_icon_fonts;
-    std::vector<ImFont*> m_all_fonts;
-    std::vector<ImFont*> m_all_icon_fonts;
+    static constexpr int kNumTypes = static_cast<int>(FontType::__kLastFont);
+
+    ImFont* m_text_font = nullptr;
+    ImFont* m_icon_font = nullptr;
+
+    // Per-FontType sizes derived from the chosen base index.
+    std::array<float, kNumTypes> m_sizes{};
+
+    // Available base sizes (mirrors FONT_AVAILABLE_SIZES for the settings combo).
+    std::vector<float> m_available_sizes;
 };
 
 }  // namespace View

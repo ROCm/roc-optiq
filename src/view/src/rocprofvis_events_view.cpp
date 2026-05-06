@@ -102,7 +102,7 @@ EventsView::RenderBasicData(const EventInfo* event_data)
 
     ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
 
-    ImGui::PushFont(large_font);
+    ImGui::PushFont(large_font, m_settings.GetFontManager().GetFontSize(FontType::kLarge));
 
     const auto& info = event_data->basic_info;
 

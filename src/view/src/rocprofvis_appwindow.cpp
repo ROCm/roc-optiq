@@ -502,7 +502,7 @@ AppWindow::RenderEmptyState()
 
     // --- Title ---
     ImFont* title_font = settings.GetFontManager().GetFont(FontType::kLarge);
-    if(title_font) ImGui::PushFont(title_font);
+    if(title_font) ImGui::PushFont(title_font, settings.GetFontManager().GetFontSize(FontType::kLarge));
     CenterNextTextItem("Open a trace or project");
     ImGui::TextUnformatted("Open a trace or project");
     if(title_font) ImGui::PopFont();
@@ -1027,7 +1027,7 @@ AppWindow::RenderAboutDialog()
     {
         ImFont* large_font =
             SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
-        if(large_font) ImGui::PushFont(large_font);
+        if(large_font) ImGui::PushFont(large_font, SettingsManager::GetInstance().GetFontManager().GetFontSize(FontType::kLarge));
 
         ImGui::SetCursorPosX(
             (ImGui::GetWindowSize().x - ImGui::CalcTextSize(NAME_LABEL).x) * 0.5f);

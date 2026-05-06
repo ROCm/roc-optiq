@@ -36,9 +36,9 @@ SettingsPanel::SettingsPanel(SettingsManager& settings)
 , m_font_settings({ m_usersettings.display_settings.dpi_based_scaling,
                     m_usersettings.display_settings.font_size_index })
 {
-    for(const ImFont* font : m_fonts.GetAvailableFonts())
+    for(float size : m_fonts.GetAvailableSizes())
     {
-        m_font_sizes.emplace_back(std::to_string(static_cast<int>(font->LegacySize)));
+        m_font_sizes.emplace_back(std::to_string(static_cast<int>(size)));
         m_font_sizes_ptr.emplace_back(m_font_sizes.back().c_str());
     }
 }
@@ -259,7 +259,7 @@ SettingsPanel::RenderDisplayOptions()
                  static_cast<int>(m_font_sizes_ptr.size()));
     ImGui::SameLine();
     ImGui::BeginDisabled(m_font_settings.size_index >
-                         m_fonts.GetAvailableFonts().size() - 2);
+                         static_cast<int>(m_fonts.GetAvailableSizes().size()) - 2);
     if(ImGui::Button("+", ImVec2(button_width, 0)))
     {
         m_font_settings.size_index++;
@@ -274,14 +274,18 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Preview");
     ImGui::SameLine();
-    ImFont* preview_font = m_fonts.GetFontByIndex(m_font_settings.dpi_scaling
-                                                      ? m_fonts.GetDPIScaledFontIndex()
-                                                      : m_font_settings.size_index);
+    ImFont* preview_font = m_fonts.GetFont(FontType::kDefault);
+    int     preview_idx  = m_font_settings.dpi_scaling ? m_fonts.GetDPIScaledFontIndex()
+                                                        : m_font_settings.size_index;
+    const auto& available_sizes = m_fonts.GetAvailableSizes();
+    float preview_size = available_sizes.empty() ? m_fonts.GetFontSize(FontType::kDefault)
+                       : available_sizes[std::max(0, std::min(preview_idx,
+                             static_cast<int>(available_sizes.size()) - 1))];
     if(preview_font)
     {
         ImGui::Spacing();
         ImGui::SameLine();
-        ImGui::PushFont(preview_font);
+        ImGui::PushFont(preview_font, preview_size);
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
             ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm(TM) Optiq") +
@@ -367,7 +371,7 @@ SettingsPanel::ResetButton()
                           m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushFont(m_fonts.GetIconFont(FontType::kDefault));
+    ImGui::PushFont(m_fonts.GetIconFont(FontType::kDefault), m_fonts.GetFontSize(FontType::kDefault));
     clicked = ImGui::Button(ICON_ARROWS_CYCLE);
     ImGui::PopFont();
     ImGui::PopStyleColor(3);

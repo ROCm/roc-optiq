@@ -145,7 +145,8 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     bool display = graph.display;
     if(show_eye_button)
     {
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+                        m_settings.GetFontManager().GetFontSize(FontType::kDefault));
         if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
         {
             graph.display         = !graph.display;
@@ -159,7 +160,8 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
             SetTooltipStyled("Toggle Track Visibility");
 
         ImGui::SameLine();
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+                        m_settings.GetFontManager().GetFontSize(FontType::kDefault));
         if(ImGui::Button(ICON_ARROWS_SHRINK))
         {
             EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
@@ -438,7 +440,8 @@ SideBar::EyeButtonState
 SideBar::DrawEyeButton(EyeButtonState eye_button_state)
 {
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+                    m_settings.GetFontManager().GetFontSize(FontType::kDefault));
 
     ImVec2 eye_size = ImGui::CalcTextSize(ICON_EYE);
     float  button_w = eye_size.x + ImGui::GetStyle().FramePadding.x * 2;

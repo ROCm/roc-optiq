@@ -153,7 +153,7 @@ EditableTextField::ButtonSize() const
 {
     ImFont* icon_font =
         SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
-    ImGui::PushFont(icon_font);
+    ImGui::PushFont(icon_font, SettingsManager::GetInstance().GetFontManager().GetFontSize(FontType::kDefault));
     float size = ImGui::CalcTextSize(ICON_ARROWS_CYCLE).x;
     ImGui::PopFont();
     return size;

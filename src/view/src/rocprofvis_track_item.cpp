@@ -253,7 +253,8 @@ TrackItem::RenderMetaArea()
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+                        m_settings.GetFontManager().GetFontSize(FontType::kDefault));
 
         ImGui::TextUnformatted(ICON_GRID);
         float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
@@ -278,7 +279,7 @@ TrackItem::RenderMetaArea()
         //     }
         // }
         ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
-        ImGui::PushFont(large_font);
+        ImGui::PushFont(large_font, m_settings.GetFontManager().GetFontSize(FontType::kLarge));
 
         float available_for_text =
             content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
@@ -847,7 +848,8 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     {
         return;
     }
-    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kSmall));
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kSmall),
+                    settings.GetFontManager().GetFontSize(FontType::kSmall));
 
     ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
 

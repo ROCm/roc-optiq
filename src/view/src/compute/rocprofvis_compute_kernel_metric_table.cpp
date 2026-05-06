@@ -223,7 +223,8 @@ KernelMetricTable::Render()
     int remove_index = -1;
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    ImFont*          icon_font  = settings.GetFontManager().GetIconFont(FontType::kDefault);
+    ImFont*          icon_font      = settings.GetFontManager().GetIconFont(FontType::kDefault);
+    float            icon_font_size = settings.GetFontManager().GetFontSize(FontType::kDefault);
     const ImGuiStyle &style = settings.GetDefaultStyle();
     const float      cell_padding = style.CellPadding.x * 2.0f;
     const float      char_width = ImGui::CalcTextSize("M").x;
@@ -249,7 +250,7 @@ KernelMetricTable::Render()
     ImGui::AlignTextToFramePadding();
     const char* icon = m_show_kernel_table ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
     
-    ImGui::PushFont(icon_font);
+    ImGui::PushFont(icon_font, icon_font_size);
     ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN); // use larger icon for consistent spacing
     ImGui::PopFont();
 

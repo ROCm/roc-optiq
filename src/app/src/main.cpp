@@ -12,7 +12,7 @@
 #include "rocprofvis_cli_parser.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
-#include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_image_helpers.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>

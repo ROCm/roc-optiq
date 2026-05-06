@@ -8,6 +8,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_image_helpers.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
 

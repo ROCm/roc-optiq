@@ -6,6 +6,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_utils.h"
+#include "widgets/rocprofvis_image_helpers.h"
 #include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;

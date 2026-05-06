@@ -12,7 +12,12 @@ View ROCm Compute Profiler analysis data in ROCm Optiq
 .. |gear| image:: ../images/gear.png
 
 ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel- and metric-level analysis. 
+ROCm Optiq provides intuitive, interactive profiling and analysis for compute workloads, moving from high-level performance summaries to detailed kernel- and metric-level analysis. 
 It enables rapid identification of performance hotspots and interactive exploration of kernel-level metrics for a profiled workload.
+
+.. note::
+
+   See the `ROCm Compute Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/index.html>`_ for more information.
 
 Open a ROCm Compute Profiler database file
 ==========================================
@@ -41,18 +46,18 @@ Summary View
 
 The **Summary View** displays a high-level overview of the captured data. 
 
-Table
------
+Summary View -- Table
+---------------------
  
 The table in **Summary View** lists the top 10 longest-running kernels sorted by Total Execution Time. 
-The table displays kernel names, the number of invocations, and statistics including Total, Min, Max, Mean, Median durations.  
+The table displays kernel names, the number of invocations, and statistics including Total, Min, Max, Mean, and Median durations.  
 
 .. image:: ../images/summary-view-table.png
    :width: 800
    :align: center
 
-Charts
-------
+Summary View -- Charts
+----------------------
 
 Charts display as bar or pie charts.
 
@@ -75,10 +80,10 @@ The bar chart displays per-kernel metrics including the number of invocations, a
    :width: 800
    :align: center
 
-Selected kernels are highlighted white in both charts.  
+Selected kernels are highlighted in white in both charts.  
 
-Summary View Roofline Chart
----------------------------
+Summary View -- Roofline Chart
+------------------------------
 
 The chart plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels.
 Showing where kernels are positioned relative to these rooflines helps determine whether performance is memory-bound or compute-bound, and identify the most impactful optimization direction. 
@@ -87,17 +92,32 @@ Showing where kernels are positioned relative to these rooflines helps determine
    :width: 800
    :align: center
 
-Kernel performance at each cache level is displayed as individual dots in the roofline chart.  
-The size of each dot represents the kernel's duration. 
+- The kernel performance at each cache level is displayed as individual dots in the roofline chart. The size of each dot represents the kernel's duration. 
+- Click |gear| in the menu to show or hide rooflines or arithmetic intensity points. 
+- Hold your cursor over a dot to view detailed information about the kernel it represents. The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
+- Use presets to display information specific to a particular data type. 
+- Use the Roofline **Legend/Menu position** control options to reposition the Roofline Legend/Menu. The options include: 
 
-Click |gear| in the menu to show or hide rooflines or arithmetic intensity points. 
+  - Inside, Top Left
+  - Inside, Top Right
+  - Inside, Bottom Left
+  - Inside, Bottom Right
+  - Outside (which pushes the legend outside of the plot area)
 
-Hold your cursor over a dot to view detailed information about the kernel it represents. 
-The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
-
-There are also presets available to display information specific to a particular data type. 
+  .. image:: ../images/Roofline-legend.png
+     :width: 800
+     :align: center
 
 .. _kernel-details:
+
+Summary View -- System Speed-of-Light
+-------------------------------------
+
+- Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, highlighting utilization relative to architectural peak capabilities. 
+- The Summary View -- System Speed-of-Light table includes the following columns: **Metric ID**, **Metric Name**, **Average Value**, **Peak, Percent-of-Peak**, and **Unit**. 
+- Metrics are aggregated across kernels to reflect overall application behavior rather than per-kernel performance. 
+- Use the **Percent-of-Peak** column to quickly identify whether execution is limited. Execution could be limited by compute, memory, or other hardware subsystems. 
+- Hover over a metric name to see a tooltip with a detailed description. 
 
 Kernel Details
 ==============
@@ -109,8 +129,8 @@ Kernel Details
 - **System Speed-of-Light**: A table view of kernel metrics with their unit, average, peak, and percentage of peak values.  
 - **Roofline analysis**: Displays kernel performance relative to the system's capabilities for the selected kernel. 
 
-Kernel Selection Table
-----------------------
+Kernel Details -- Kernel Selection Table
+----------------------------------------
 
 The **Kernel Selection Table** displays kernel information, including names and GPU metrics.  
 
@@ -127,10 +147,13 @@ The **Kernel Selection Table** displays kernel information, including names and 
 
 - The Duration column enables you to sort (ascending or descending).  
 - Selecting a kernel through the **Kernel Selection Table** or kernel selector drop-down updates the Memory Chart, System Speed-of-Light, Kernel-level Roofline Analysis, and Table View accordingly. 
-- You can hide this table clicking |eye| to maximize space for charts.
+- You can hide this table by clicking |eye| to maximize space for charts.
+- To show or hide bar charts for metric values in the **Kernel Selection Table**, select **Show Bar Charts** or **Hide Bar Charts**.  
+- To show or hide bar charts for a specific metric, right-click the metric's column header and select **Show Bar Chart** or **Hide Bar Charts**. 
+- Hover over a clipped kernel name to view the full name in a tooltip. 
 
-Memory Chart
-------------
+Kernel Details -- Memory Chart
+------------------------------
 
 The **Memory Chart** displays memory transactions and throughput at each cache hierarchy level. Each cache level presents its associated counter values and derived metrics, helping users understand memory behavior across the hardware memory hierarchy.
 
@@ -142,8 +165,8 @@ This visual diagram displays counter values and calculations to help you underst
 
 Select a kernel in the **Kernel Selection Table** or the kernel selector drop-down to view the memory chart of the selected kernel. 
 
-System Speed-of-Light 
----------------------
+Kernel Details -- System Speed-of-Light 
+---------------------------------------
 
 The **System Speed-of-Light** displays key kernel-level performance metrics to show the overall compute performance and hardware utilization.  
 
@@ -151,13 +174,14 @@ The **System Speed-of-Light** displays key kernel-level performance metrics to s
    :width: 800
    :align: center
 
-Kernel Roofline Chart
----------------------
+Kernel Details -- Kernel Roofline Chart
+---------------------------------------
 
 The **Kernel Roofline Chart** displays a kernel-specific roofline analysis, which helps you determine whether the kernel is compute-bound or memory-bound. 
 
 - Click |gear| to show or hide rooflines or arithmetic intensity points. 
 - Hold your cursor over a dot to view detailed information of the kernel. 
+- Use the **Menu** position control to choose options to reposition the Roofline Legend/Menu.
 
 .. _analysis-table:
 
@@ -188,6 +212,17 @@ Metrics are grouped into tabs that match compute categories, including:
 - L2 Cache 
 - L2 Cache (per channel) 
 
+You can pin a metric for focused analysis by selecting the checkbox beside the metric. Pinned metric configurations can be saved to be persisted across sessions (see :ref:`Presets` for more information).
+
+You can add a metric to the Kernel Details by right-clicking that metric in Table View and selecting **Send Metric to kernel details**. 
+Here's an example:
+
+.. image:: ../images/send-metric.png
+   :width: 800
+   :align: center
+
+Clicking the **Avg** cell of the **VALU FLOPs** adds the VALU FLOPs average to the Kernel Selection Table.
+
 .. _analysis-workload:
 
 Workload Details 
@@ -201,3 +236,57 @@ Workload Details
 .. image:: ../images/workload-details.png
    :width: 800
    :align: center
+
+.. _baseline-comparison:
+
+Baseline Comparison
+===================
+
+The **Baseline Comparison** shows performance differences between two workload measurements (baseline and target) side-by-side. It's useful for scenarios such as: 
+
+- Comparing results before and after optimization or tuning changes. 
+- Measuring the impact of code, algorithm, or kernel changes. 
+- Evaluating the effect of environment updates. 
+- Validating performance stability across multiple runs. 
+
+**Baseline Comparison** presents a unified table of available metrics for both runs, making it easy to identify regressions, improvements, and other behavior changes. 
+
+Use the drop-down menus to select the baseline, target workload, and kernel. The comparison table updates to show statistics for the selected selections. 
+You can also compare two kernels within the same workload.
+
+.. image:: ../images/baseline-comparison.png
+   :width: 800
+   :align: center
+
+Choose how metrics are displayed by selecting **Show Common Metrics** or **Show All Metrics**. You can also pin metrics for focused analysis. Pinned metrics can be persisted across sessions (See :ref:`presets` for more information).
+
+For each metric, **Baseline Comparison** shows: 
+
+- Baseline statistics available in the database (for example, average, median, minimum, and maximum). 
+- Target statistics available in the database (for example, average, median, minimum, and maximum). 
+- The difference (delta) between baseline and target values. 
+- The percentage change between baseline and target values. 
+- The **Baseline**, **Target**, **Difference**, and **Difference (%)** columns are color-coded to make changes easy to spot and quantify.
+- A combination of side-by-side statistics with clear delta reporting to provide a fast way to understand performance trends across workloads.
+
+You can configure a delta-threshold for comparison metrics to suppress the noise of minor deviations or filter out changes below a certain level.
+
+.. image:: ../images/delta-threshold.png
+   :width: 800
+   :align: center
+
+.. note::
+
+   - To compare two runs in ROCm Optiq, both sets of analysis results must be present in the same database.
+
+   - To generate a database that contains multiple workloads with ROCm Compute Profiler for comparison, profile each workload and then run analysis with database output enabled: 
+
+     .. code::
+
+       $ rocprof-compute profile -n <workload_name_1> -- <application> 
+       ... 
+       $ rocprof-compute profile -n <workload_name_N> -- <application> 
+
+       $ rocprof-compute analyze -p <path to workload_name_1> ... -p <path to workload_name_N> --output-format db 
+
+     Copy the generated ``.db`` file to the host system and open it in ROCm Optiq. Then, go to the **Baseline Comparison** tab and select a baseline workload under **Workload:** and a target workload under **Compare With:**. Select a kernel for each workload to compare. 

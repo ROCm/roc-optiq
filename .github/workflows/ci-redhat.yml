@@ -78,6 +78,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          lfs: true
           submodules: true
 
       - name: Build, Make, and Verify Installation
@@ -92,6 +93,13 @@ jobs:
             echo "❌ ${{ env.BUILD_FILE_NAME }} was not built!"
             exit 1
           fi
+      
+      - name: Run Tests
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          ctest \
+            --output-on-failure \
+            --no-tests=error
 
       - name: Prepare Distribution Artifacts
         run: |

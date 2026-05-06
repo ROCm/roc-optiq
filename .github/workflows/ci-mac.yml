@@ -66,6 +66,9 @@ jobs:
   mac:
     name: macOS ${{ matrix.os-version }} • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
     runs-on: macos-${{ matrix.os-version }}
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       fail-fast: false
       matrix: 

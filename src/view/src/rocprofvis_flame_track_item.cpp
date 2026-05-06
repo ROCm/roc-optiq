@@ -408,9 +408,14 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
             m_deferred_click_handled = true;
 
             if(TimelineFocusManager::GetInstance().IsMeasurementMode() &&
-               !TimelineFocusManager::GetInstance().IsFreehandMode() &&
-               TimelineFocusManager::GetInstance().GetMeasurementState() != MeasurementState::kComplete)
+               !TimelineFocusManager::GetInstance().IsFreehandMode())
             {
+                if(TimelineFocusManager::GetInstance().GetMeasurementState() ==
+                   MeasurementState::kComplete)
+                {
+                    m_timeline_selection->UnhighlightPersistentEvents();
+                    TimelineFocusManager::GetInstance().ClearMeasurement();
+                }
                 TimelineFocusManager::GetInstance().SetMeasurementPoint(
                     chart_item.event.m_start_ts, chart_item.event.m_duration,
                     m_track_id, chart_item.event.m_level, chart_item.event.m_name,

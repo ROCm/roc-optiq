@@ -225,8 +225,6 @@ void
 TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 {
     auto& fm = TimelineFocusManager::GetInstance();
-    if(!fm.IsMeasurementMode()) return;
-
     const auto& p1 = fm.GetPoint(0);
     const auto& p2 = fm.GetPoint(1);
     if(!p1.valid && !p2.valid) return;
@@ -427,14 +425,24 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                 fm.EnterMeasurementMode();
                 ImGui::CloseCurrentPopup();
             }
-        }
-        else
-        {
-            if(fm.GetMeasurementState() == MeasurementState::kComplete)
+            if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
             {
                 if(ImGui::MenuItem("Clear Measurement"))
                 {
                     fm.ClearMeasurement();
+                    m_timeline_selection->UnhighlightPersistentEvents();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+        }
+        else
+        {
+            if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
+            {
+                if(ImGui::MenuItem("Clear Measurement"))
+                {
+                    fm.ClearMeasurement();
+                    m_timeline_selection->UnhighlightPersistentEvents();
                     ImGui::CloseCurrentPopup();
                 }
             }

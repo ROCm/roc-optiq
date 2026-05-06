@@ -74,19 +74,18 @@ TimelineFocusManager::ClearRightClickLayer()
 void
 TimelineFocusManager::EnterMeasurementMode()
 {
-    m_measurement_state = MeasurementState::kWaitingForFirst;
-    m_points[0]         = {};
-    m_points[1]         = {};
-    m_freehand_offsets[0] = 0.0;
-    m_freehand_offsets[1] = 0.0;
+    if(m_points[0].valid && m_points[1].valid)
+        m_measurement_state = MeasurementState::kComplete;
+    else if(m_points[0].valid)
+        m_measurement_state = MeasurementState::kWaitingForSecond;
+    else
+        m_measurement_state = MeasurementState::kWaitingForFirst;
 }
 
 void
 TimelineFocusManager::ExitMeasurementMode()
 {
     m_measurement_state = MeasurementState::kInactive;
-    m_points[0]         = {};
-    m_points[1]         = {};
 }
 
 bool
@@ -124,14 +123,14 @@ TimelineFocusManager::SetFreehandMeasurementPoint(double timestamp)
 {
     if(m_measurement_state == MeasurementState::kWaitingForFirst)
     {
-        m_points[0]           = { timestamp, 0.0, 0, 0, {}, true, true };
+        m_points[0]           = { timestamp, 0.0, 0, 0, {}, 0, true, true };
         m_freehand_offsets[0] = 0.0;
         m_measurement_state   = MeasurementState::kWaitingForSecond;
     }
     else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
             m_measurement_state == MeasurementState::kComplete)
     {
-        m_points[1]           = { timestamp, 0.0, 0, 0, {}, true, true };
+        m_points[1]           = { timestamp, 0.0, 0, 0, {}, 0, true, true };
         m_freehand_offsets[1] = 0.0;
         m_measurement_state   = MeasurementState::kComplete;
     }
@@ -140,12 +139,13 @@ TimelineFocusManager::SetFreehandMeasurementPoint(double timestamp)
 void
 TimelineFocusManager::ClearMeasurement()
 {
+    bool was_active       = m_measurement_state != MeasurementState::kInactive;
     m_points[0]           = {};
     m_points[1]           = {};
     m_freehand_offsets[0] = 0.0;
     m_freehand_offsets[1] = 0.0;
-    if(m_measurement_state == MeasurementState::kComplete)
-        m_measurement_state = MeasurementState::kWaitingForFirst;
+    m_measurement_state   = was_active ? MeasurementState::kWaitingForFirst
+                                       : MeasurementState::kInactive;
 }
 
 const MeasurementPoint&

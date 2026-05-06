@@ -18,6 +18,7 @@
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_track_topology.h"
+#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -664,35 +665,45 @@ TraceView::RenderToolbar()
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
+    bool measurement_active = TimelineFocusManager::GetInstance().IsMeasurementMode();
+
     // Toolbar Controls
     ImGui::BeginGroup();
-    RenderFlowControls();
-    VerticalSeparator(&m_settings_manager);
-    RenderAnnotationControls();
-    VerticalSeparator(&m_settings_manager);
-    RenderEventSearch();
-    VerticalSeparator(&m_settings_manager);
-    RenderBookmarkControls();
-    VerticalSeparator(&m_settings_manager);
-    RenderMeasurementControls();
-    VerticalSeparator(&m_settings_manager);
-    
-    ImFont* icon_font =
-        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushFont(icon_font);
-    if(ImGui::Button(ICON_COMPASS))
+    if(measurement_active)
     {
-        m_show_minimap_popup = !m_show_minimap_popup;
+        RenderMeasurementControls();
+        VerticalSeparator(&m_settings_manager);
     }
-    ImGui::PopFont();
-    ImGui::PopStyleColor();
+    else
+    {
+        RenderFlowControls();
+        VerticalSeparator(&m_settings_manager);
+        RenderAnnotationControls();
+        VerticalSeparator(&m_settings_manager);
+        RenderEventSearch();
+        VerticalSeparator(&m_settings_manager);
+        RenderBookmarkControls();
+        VerticalSeparator(&m_settings_manager);
+        RenderMeasurementControls();
+        VerticalSeparator(&m_settings_manager);
 
-    if(ImGui::IsItemHovered())
-    {
-        SetTooltipStyled("Show Minimap");
+        ImFont* icon_font =
+            m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushFont(icon_font);
+        if(ImGui::Button(ICON_COMPASS))
+        {
+            m_show_minimap_popup = !m_show_minimap_popup;
+        }
+        ImGui::PopFont();
+        ImGui::PopStyleColor();
+
+        if(ImGui::IsItemHovered())
+        {
+            SetTooltipStyled("Show Minimap");
+        }
+        VerticalSeparator(&m_settings_manager);
     }
-    VerticalSeparator(&m_settings_manager);
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(
         m_settings_manager.GetColor(Colors::kAccentRed)));
@@ -1177,93 +1188,59 @@ TraceView::RenderMeasurementControls()
         m_settings_manager.GetColor(Colors::kTextOnAccent));
     ImVec4 measure_col    = ImGui::ColorConvertU32ToFloat4(
         m_settings_manager.GetColor(Colors::kMeasurementColor));
-
-    // Pushes accent or default styling depending on toggle state
-    auto push_toggle_style = [&](bool selected) {
-        if(selected)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, accent);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
-            ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
-        }
-        else
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, transparent);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                  ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered));
-            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text));
-        }
-    };
-
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kTextDim)));
-    ImGui::TextUnformatted("Measure");
-    ImGui::PopStyleColor();
-
-    auto default_style = m_settings_manager.GetDefaultStyle();
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x * 0.5f, 0));
-    ImGui::SameLine();
+    ImVec4 text_dim       = ImGui::ColorConvertU32ToFloat4(
+        m_settings_manager.GetColor(Colors::kTextDim));
 
     bool active = fm.IsMeasurementMode();
 
-    ImGui::PushID("measure_toggle");
-    push_toggle_style(active);
-    if(ImGui::Button(active ? "On" : "Off"))
+    if(!active)
     {
-        if(active)
-        {
-            fm.ExitMeasurementMode();
-            m_timeline_selection->UnhighlightPersistentEvents();
-        }
-        else
+        ImGui::PushID("measure_start");
+        ImGui::PushStyleColor(ImGuiCol_Button, transparent);
+        if(ImGui::Button("Measure"))
         {
             fm.EnterMeasurementMode();
         }
-    }
-    ImGui::PopStyleColor(3);
-    if(ImGui::IsItemHovered())
-    {
-        SetTooltipStyled(active ? "Exit measurement mode" : "Enter measurement mode");
-    }
-    ImGui::PopID();
-
-    if(!active) return;
-
-    bool freehand = fm.IsFreehandMode();
-
-    if(!freehand)
-    {
-        ImGui::SameLine();
-        for(int i = 0; i < 2; ++i)
+        ImGui::PopStyleColor();
+        if(ImGui::IsItemHovered())
         {
-            MeasureEdge edge  = fm.GetEdge(i);
-            const char* label = (edge == MeasureEdge::kStart)
-                                    ? (i == 0 ? "E1:Start" : "E2:Start")
-                                    : (i == 0 ? "E1:End" : "E2:End");
-            ImGui::PushID(i);
-            ImGui::PushStyleColor(ImGuiCol_Button, transparent);
-            ImGui::PushStyleColor(ImGuiCol_Text, measure_col);
-            if(ImGui::Button(label))
-            {
-                fm.SetEdge(i, edge == MeasureEdge::kStart ? MeasureEdge::kEnd
-                                                          : MeasureEdge::kStart);
-            }
-            ImGui::PopStyleColor(2);
-            if(ImGui::IsItemHovered())
-            {
-                SetTooltipStyled("Toggle measurement edge (start/end)");
-            }
-            ImGui::PopID();
-            ImGui::SameLine();
+            SetTooltipStyled("Measure time between two events or timeline points");
         }
+        ImGui::PopID();
+        return;
     }
+
+    bool freehand  = fm.IsFreehandMode();
+    bool has_start = fm.GetPoint(0).valid;
+    bool has_end   = fm.GetPoint(1).valid;
+    bool complete  = has_start && has_end;
+
+    // Exit (text button so it does not look like a destructive close)
+    ImGui::PushID("measure_exit");
+    ImGui::PushStyleColor(ImGuiCol_Button, transparent);
+    if(ImGui::Button("Exit"))
+    {
+        ImGui::PopStyleColor();
+        ImGui::PopID();
+        fm.ExitMeasurementMode();
+        return;
+    }
+    ImGui::PopStyleColor();
+    if(ImGui::IsItemHovered())
+        SetTooltipStyled("Exit measurement mode and restore the normal toolbar");
+    ImGui::PopID();
+    VerticalSeparator(&m_settings_manager);
+
+    ImGui::PushID("measure_mode_toggle");
+    ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+    ImGui::TextUnformatted("Mode");
+    ImGui::PopStyleColor();
     ImGui::SameLine();
-    ImGui::Dummy(ImVec2(default_style.ItemSpacing.x * 0.5f, 0));
-    ImGui::SameLine();
-    ImGui::PushID("measure_freehand");
-    push_toggle_style(freehand);
-    if(ImGui::Button("Freehand"))
+    const char* mode_label = freehand ? "Anywhere" : "Events";
+    ImVec2 mode_button_size(
+        ImGui::CalcTextSize(mode_label).x + m_settings_manager.GetDefaultStyle().FramePadding.x * 3.0f,
+        0.0f);
+    if(ImGui::Button(mode_label, mode_button_size))
     {
         fm.SetFreehandMode(!freehand);
         if(!freehand)
@@ -1272,27 +1249,88 @@ TraceView::RenderMeasurementControls()
             fm.SetFreehandOffset(1, 0.0);
         }
     }
-    ImGui::PopStyleColor(3);
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Toggle freehand ruler placement");
+        SetTooltipStyled(freehand ? "Currently placing rulers anywhere. Click to snap to events"
+                                  : "Currently snapping to event edges. Click to place anywhere");
     }
     ImGui::PopID();
 
-    if(fm.GetMeasurementState() == MeasurementState::kComplete)
+    VerticalSeparator(&m_settings_manager);
+
+    // Status hint or measurement result, prominent in the middle.
+    if(complete)
     {
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, transparent);
-        if(ImGui::Button("Reset"))
+        const auto& time_format =
+            m_settings_manager.GetUserSettings().unit_settings.time_format;
+        double delta = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
+        std::string delta_str =
+            std::string("Duration: ") + nanosecond_to_formatted_str(delta, time_format, true);
+        ImGui::PushStyleColor(ImGuiCol_Text, measure_col);
+        ImGui::TextUnformatted(delta_str.c_str());
+        ImGui::PopStyleColor();
+    }
+    else
+    {
+        const char* status =
+            freehand ? "Click the timeline to drop the start ruler"
+                     : "Click an event to set the start";
+        if(has_start && !has_end)
+            status = freehand ? "Start placed. Click the timeline to set the end"
+                              : "Start selected. Click another event to set the end";
+
+        ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+        ImGui::TextUnformatted(status);
+        ImGui::PopStyleColor();
+    }
+
+    // Trailing controls use full text buttons so they do not read like cramped glyphs.
+    bool has_trailing = (!freehand) || has_start || has_end;
+    if(has_trailing)
+    {
+        VerticalSeparator(&m_settings_manager);
+    }
+
+    if(!freehand)
+    {
+        if(ImGui::Button("Options", ImVec2(86.0f, 0.0f)))
+        {
+            ImGui::OpenPopup("MeasurementEdgePopup");
+        }
+        if(ImGui::IsItemHovered())
+            SetTooltipStyled("Measurement edge options");
+        if(ImGui::BeginPopup("MeasurementEdgePopup"))
+        {
+            ImGui::TextUnformatted("Snap rulers to:");
+            ImGui::Separator();
+            for(int i = 0; i < 2; ++i)
+            {
+                MeasureEdge edge = fm.GetEdge(i);
+                const char* row  = (i == 0) ? "Start ruler" : "End ruler";
+                ImGui::TextUnformatted(row);
+                ImGui::SameLine(120.0f);
+                ImGui::PushID(i);
+                if(ImGui::RadioButton("Event start", edge == MeasureEdge::kStart))
+                    fm.SetEdge(i, MeasureEdge::kStart);
+                ImGui::SameLine();
+                if(ImGui::RadioButton("Event end", edge == MeasureEdge::kEnd))
+                    fm.SetEdge(i, MeasureEdge::kEnd);
+                ImGui::PopID();
+            }
+            ImGui::EndPopup();
+        }
+    }
+
+    if(has_start || has_end)
+    {
+        if(!freehand) ImGui::SameLine();
+        if(ImGui::Button("Clear", ImVec2(70.0f, 0.0f)))
         {
             fm.ClearMeasurement();
             m_timeline_selection->UnhighlightPersistentEvents();
         }
-        ImGui::PopStyleColor();
         if(ImGui::IsItemHovered())
-        {
-            SetTooltipStyled("Clear measurement and re-measure");
-        }
+            SetTooltipStyled("Clear measurement");
     }
 }
 

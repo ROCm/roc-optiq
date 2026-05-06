@@ -121,19 +121,28 @@ TimelineFocusManager::SetMeasurementPoint(double timestamp, double duration,
 void
 TimelineFocusManager::SetFreehandMeasurementPoint(double timestamp)
 {
+    int slot = 0;
     if(m_measurement_state == MeasurementState::kWaitingForFirst)
     {
-        m_points[0]           = { timestamp, 0.0, 0, 0, {}, 0, true, true };
-        m_freehand_offsets[0] = 0.0;
-        m_measurement_state   = MeasurementState::kWaitingForSecond;
+        slot                = 0;
+        m_measurement_state = MeasurementState::kWaitingForSecond;
     }
     else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
             m_measurement_state == MeasurementState::kComplete)
     {
-        m_points[1]           = { timestamp, 0.0, 0, 0, {}, 0, true, true };
-        m_freehand_offsets[1] = 0.0;
-        m_measurement_state   = MeasurementState::kComplete;
+        slot                = 1;
+        m_measurement_state = MeasurementState::kComplete;
     }
+    else
+    {
+        return;
+    }
+
+    m_points[slot]           = MeasurementPoint{};
+    m_points[slot].timestamp = timestamp;
+    m_points[slot].valid     = true;
+    m_points[slot].freehand  = true;
+    m_freehand_offsets[slot] = 0.0;
 }
 
 void

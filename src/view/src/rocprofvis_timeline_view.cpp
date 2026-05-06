@@ -417,38 +417,29 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 
         ImGui::Separator();
 
-        auto& fm = TimelineFocusManager::GetInstance();
-        if(!fm.IsMeasurementMode())
+        TimelineFocusManager& fm = TimelineFocusManager::GetInstance();
+        if(fm.IsMeasurementMode())
+        {
+            if(ImGui::MenuItem("Exit Measurement Mode"))
+            {
+                fm.ExitMeasurementMode();
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        else
         {
             if(ImGui::MenuItem("Enter Measurement Mode"))
             {
                 fm.EnterMeasurementMode();
                 ImGui::CloseCurrentPopup();
             }
-            if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
-            {
-                if(ImGui::MenuItem("Clear Measurement"))
-                {
-                    fm.ClearMeasurement();
-                    m_timeline_selection->UnhighlightPersistentEvents();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
         }
-        else
+        if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
         {
-            if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
+            if(ImGui::MenuItem("Clear Measurement"))
             {
-                if(ImGui::MenuItem("Clear Measurement"))
-                {
-                    fm.ClearMeasurement();
-                    m_timeline_selection->UnhighlightPersistentEvents();
-                    ImGui::CloseCurrentPopup();
-                }
-            }
-            if(ImGui::MenuItem("Exit Measurement Mode"))
-            {
-                fm.ExitMeasurementMode();
+                fm.ClearMeasurement();
+                m_timeline_selection->UnhighlightPersistentEvents();
                 ImGui::CloseCurrentPopup();
             }
         }

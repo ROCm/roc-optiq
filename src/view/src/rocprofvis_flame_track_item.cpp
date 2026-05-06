@@ -406,23 +406,25 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                     Layer::kGraphLayer)
         {
             m_deferred_click_handled = true;
+            TimelineFocusManager& focus = TimelineFocusManager::GetInstance();
 
-            if(TimelineFocusManager::GetInstance().IsMeasurementMode() &&
-               !TimelineFocusManager::GetInstance().IsFreehandMode())
+            if(focus.IsMeasurementMode() && !focus.IsFreehandMode())
             {
-                if(TimelineFocusManager::GetInstance().GetMeasurementState() ==
-                   MeasurementState::kComplete)
+                // Clicking after a complete measurement starts a new one.
+                if(focus.GetMeasurementState() == MeasurementState::kComplete)
                 {
                     m_timeline_selection->UnhighlightPersistentEvents();
-                    TimelineFocusManager::GetInstance().ClearMeasurement();
+                    focus.ClearMeasurement();
                 }
-                TimelineFocusManager::GetInstance().SetMeasurementPoint(
-                    chart_item.event.m_start_ts, chart_item.event.m_duration,
-                    m_track_id, chart_item.event.m_level, chart_item.event.m_name,
-                    chart_item.event.m_id.uuid);
-                m_timeline_selection->HighlightTrackEventPersistent(m_track_id, chart_item.event.m_id.uuid);
+                focus.SetMeasurementPoint(chart_item.event.m_start_ts,
+                                          chart_item.event.m_duration, m_track_id,
+                                          chart_item.event.m_level,
+                                          chart_item.event.m_name,
+                                          chart_item.event.m_id.uuid);
+                m_timeline_selection->HighlightTrackEventPersistent(
+                    m_track_id, chart_item.event.m_id.uuid);
             }
-            else if(!TimelineFocusManager::GetInstance().IsMeasurementMode())
+            else if(!focus.IsMeasurementMode())
             {
                 chart_item.selected = !chart_item.selected;
 
@@ -435,7 +437,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                     ? m_timeline_selection->SelectTrackEvent(m_track_id, chart_item.event.m_id.uuid)
                     : m_timeline_selection->UnselectTrackEvent(m_track_id, chart_item.event.m_id.uuid);
             }
-            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
+            focus.RequestLayerFocus(Layer::kNone);
         }
 
         // only show one tooltip per render cycle and if no other layer has focus

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_rocprof.h"
+#include "rocprofvis_db_thread_compat.h"
 #include <sstream>
 #include <string.h>
 #include <filesystem>
@@ -569,7 +570,7 @@ RocprofDatabase::CreateIndexes()
         else
         if (file_node_id != guid_info.first.FileIndex() && vec.size() > 0)
         {
-            threads.emplace_back(task, vec, file_node_id);            
+            DispatchOrRunInline(threads, task, vec, file_node_id);            
             vec.clear();
             if (result != kRocProfVisDmResultSuccess)
             {
@@ -619,7 +620,7 @@ RocprofDatabase::CreateIndexes()
     }
     if (vec.size() > 0 && file_node_id!=-1)
     {
-        threads.emplace_back(task, vec, file_node_id);            
+        DispatchOrRunInline(threads, task, vec, file_node_id);            
     }
     for (auto& t : threads)
         t.join();
@@ -641,7 +642,7 @@ rocprofvis_dm_result_t RocprofDatabase::RunCacheQueriesAsync(Future* future, std
     {
         for (auto table : info_table_list)
         {
-            threads.emplace_back(
+            DispatchOrRunInline(threads, 
                 get_info_table_task, 
                 &guid_info.first,
                 table.second, 
@@ -718,14 +719,14 @@ rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
         std::string table_name = m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryActivity) + GuidAt(guid_info.first.GuidIndex());
         if (false == m_metadata_version_control.MustRebuild(guid_info.first.FileIndex(), m_metadata_version_control.kRocOptiqTableMemoryActivity))
         {
-            threads.emplace_back(
+            DispatchOrRunInline(threads, 
                 get_memory_allocation_activity_task,
                 &guid_info.first,
                 m_query_factory.GetRocprofMemoryAllocActivityLoadQuery());
         }
         else
         {
-            threads.emplace_back(
+            DispatchOrRunInline(threads, 
                 get_memory_allocation_activity_task,
                 &guid_info.first,
                 m_query_factory.GetRocprofMemoryAllocActivityQuery());
@@ -974,7 +975,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();
@@ -1005,7 +1006,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();
@@ -1034,7 +1035,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();
@@ -1063,7 +1064,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();
@@ -1102,7 +1103,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();
@@ -1132,7 +1133,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();
@@ -1162,7 +1163,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();
@@ -1191,7 +1192,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();
@@ -1232,7 +1233,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();
@@ -1252,7 +1253,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
-                threads.emplace_back(task, &guid_info.first);
+                DispatchOrRunInline(threads, task, &guid_info.first);
             }
             for (auto& t : threads)
                 t.join();

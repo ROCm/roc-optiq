@@ -65,6 +65,14 @@ namespace DataModel
 
             if (!m_action) return;
 
+#ifdef __EMSCRIPTEN__
+            // WASM preview currently runs without pthreads. Execute the
+            // deferred cleanup immediately rather than starting a timer
+            // worker thread, which would abort in a non-pthread build.
+            (void) delay;
+            m_action();
+            return;
+#else
             m_delay = delay;
             m_paused = false;
             m_pending = true;
@@ -74,6 +82,7 @@ namespace DataModel
             }
 
             m_cv.notify_all();
+#endif
         }
 
         void pause() {

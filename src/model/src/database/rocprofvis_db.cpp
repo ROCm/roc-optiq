@@ -58,6 +58,9 @@ rocprofvis_dm_result_t  Database::CleanupAsync(
     Future* future = (Future*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+#ifdef __EMSCRIPTEN__
+    return CleanupStatic(this, future, rebuild);
+#else
     try {
         future->SetWorker(std::move(std::thread(Database::CleanupStatic, this, future, rebuild)));
     }
@@ -66,6 +69,7 @@ rocprofvis_dm_result_t  Database::CleanupAsync(
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+#endif
 }
 
 rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
@@ -73,6 +77,9 @@ rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
     Future* future = (Future*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+#ifdef __EMSCRIPTEN__
+    return ReadTraceMetadataStatic(this, future);
+#else
     try {
         future->SetWorker(std::move(std::thread(Database::ReadTraceMetadataStatic, this, future)));
     }
@@ -81,6 +88,7 @@ rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+#endif
 }
 
 rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
@@ -98,6 +106,9 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
         spdlog::debug("Slice ({},{}) exists!", start, end);
         return future->SetPromise(result);
     }
+#ifdef __EMSCRIPTEN__
+    return ReadTraceSliceStatic(this, start, end, num, tracks, future);
+#else
     try {
         future->SetWorker(std::move(std::thread(Database::ReadTraceSliceStatic, this, start, end, num, tracks, future)));
     }
@@ -106,6 +117,7 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+#endif
 }
 
 rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
@@ -120,6 +132,9 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
     {
         return future->SetPromise(kRocProfVisDmResultResourceBusy);
     }
+#ifdef __EMSCRIPTEN__
+    return ReadEventPropertyStatic(this, type, event_id, future);
+#else
     try {
         future->SetWorker(std::move(std::thread(ReadEventPropertyStatic, this, type, event_id, future)));
     }
@@ -128,6 +143,7 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+#endif
 }
 
 rocprofvis_dm_result_t Database::ExportTableCSVAsync(rocprofvis_dm_string_t query,
@@ -141,6 +157,9 @@ rocprofvis_dm_result_t Database::ExportTableCSVAsync(rocprofvis_dm_string_t quer
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED,
                                  kRocProfVisDmResultResourceBusy);
+#ifdef __EMSCRIPTEN__
+    return ExportTableCSVStatic(this, query, file_path, future);
+#else
     try
     {
         future->SetWorker(std::move(std::thread(&ExportTableCSVStatic, this, query, file_path, future)));
@@ -149,6 +168,7 @@ rocprofvis_dm_result_t Database::ExportTableCSVAsync(rocprofvis_dm_string_t quer
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+#endif
 }
 
 rocprofvis_dm_result_t Database::ExportTableCSVStatic(Database* db,
@@ -187,6 +207,9 @@ Database::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED,
                                  kRocProfVisDmResultResourceBusy);
     rocprofvis_dm_result_t result = kRocProfVisDmResultUnknownError;
+#ifdef __EMSCRIPTEN__
+    return SaveTrimmedDataStatic(this, start, end, new_db_path, future);
+#else
     try
     {
         future->SetWorker(std::move(std::thread(&SaveTrimmedDataStatic, this, start, end, new_db_path, future)));
@@ -195,6 +218,7 @@ Database::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+#endif
 }
 
 rocprofvis_dm_result_t Database::SaveTrimmedDataStatic(Database* db, rocprofvis_dm_timestamp_t start,
@@ -242,6 +266,9 @@ rocprofvis_dm_result_t  Database::ExecuteQueryAsync(
     {
         return future->SetPromise(result);
     }
+#ifdef __EMSCRIPTEN__
+    return ExecuteQueryStatic(this, query, description, future);
+#else
     try {
         future->SetWorker(std::move(std::thread(ExecuteQueryStatic, this, query, description, future)));
     }
@@ -250,6 +277,7 @@ rocprofvis_dm_result_t  Database::ExecuteQueryAsync(
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+#endif
 }
 
 rocprofvis_dm_result_t  Database::ExecuteComputeQueryAsync(
@@ -267,6 +295,9 @@ rocprofvis_dm_result_t  Database::ExecuteComputeQueryAsync(
     {
         return future->SetPromise(result);
     }
+#ifdef __EMSCRIPTEN__
+    return ExecuteComputeQueryStatic(this, use_case, query, future);
+#else
     try {
         future->SetWorker(std::move(std::thread(ExecuteComputeQueryStatic, this, use_case, query, future)));
     }
@@ -275,6 +306,7 @@ rocprofvis_dm_result_t  Database::ExecuteComputeQueryAsync(
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+#endif
 }
 
 rocprofvis_dm_result_t  Database::CleanupStatic(Database* db, Future* future, bool rebuild) {

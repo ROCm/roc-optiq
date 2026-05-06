@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_common_types.h"
+#include "rocprofvis_db_thread_compat.h"
 #include <atomic>
 #include <future>
 #include <thread>
@@ -74,7 +75,11 @@ class Future
                                                         rocprofvis_db_status_t status);
         // increases processed rows counter
         // the row counter is used for testing (data integrity validation) and detecting first row
-        void 								CountThisRow() { m_processed_rows++; }
+        void 								CountThisRow()
+        {
+            uint32_t processed_rows = ++m_processed_rows;
+            YieldToBrowserEvery(processed_rows);
+        }
         // returns processed rows counter
         uint32_t 							GetProcessedRowsCount() { return m_processed_rows; }
 

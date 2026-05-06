@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 #include "rocprofvis_db_table_processor.h"
+#include "rocprofvis_db_thread_compat.h"
 #include "rocprofvis_db_expression_filter.h"
 #include "rocprofvis_db_profile.h"
 #include <sstream>
@@ -620,9 +621,9 @@ namespace DataModel
                         size_t rows_per_task = thread_count == 0 ? 0 : m_merged_table.RowCount() / thread_count;
                         size_t leftover_rows_count = m_merged_table.RowCount() - (rows_per_task * thread_count);
                         for (int i = 0; i < thread_count; ++i)
-                            threads.emplace_back(task, rows_per_task * i, rows_per_task * (i + 1), std::ref(eptr));
+                            DispatchOrRunInline(threads, task, rows_per_task * i, rows_per_task * (i + 1), std::ref(eptr));
                         if (leftover_rows_count > 0)
-                            threads.emplace_back(task, rows_per_task * thread_count, leftover_rows_count, std::ref(eptr));
+                            DispatchOrRunInline(threads, task, rows_per_task * thread_count, leftover_rows_count, std::ref(eptr));
 
                         for (auto& t : threads)
                             t.join();
@@ -682,8 +683,8 @@ namespace DataModel
                             };
 
                         for (int i = 0; i < thread_count-1; ++i)
-                            threads.emplace_back(task, i, rows_per_task * i, rows_per_task * (i + 1));
-                        threads.emplace_back(task, thread_count, rows_per_task * (thread_count-1), m_merged_table.RowCount());
+                            DispatchOrRunInline(threads, task, i, rows_per_task * i, rows_per_task * (i + 1));
+                        DispatchOrRunInline(threads, task, thread_count, rows_per_task * (thread_count-1), m_merged_table.RowCount());
 
                         for (auto& t : threads)
                             t.join();

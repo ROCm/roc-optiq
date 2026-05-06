@@ -82,7 +82,20 @@ JobSystem JobSystem::s_self;
 JobSystem::JobSystem()
 : m_terminate(false)
 {
+#ifdef __EMSCRIPTEN__
+    // The WASM build runs controller jobs synchronously in IssueJob(). This
+    // avoids relying on SharedArrayBuffer/pthreads inside VS Code webviews,
+    // where the browser runtime can otherwise hang during worker startup.
+    return;
+#else
     size_t thread_count = std::thread::hardware_concurrency();
+    if(thread_count == 0)
+    {
+        // Browser/WASM runtimes can report 0 hardware threads even when
+        // pthreads are enabled. Keep at least one worker so queued controller
+        // jobs (notably trace loading) are not left pending forever.
+        thread_count = 1;
+    }
     for (size_t i = 0; i < thread_count; ++i)
     {
         m_workers.emplace_back([this]()
@@ -114,6 +127,7 @@ JobSystem::JobSystem()
             }
         });
     }
+#endif
 }
 
 JobSystem::~JobSystem()
@@ -145,12 +159,16 @@ Job* JobSystem::IssueJob(JobFunction function, Future* future)
     try
     {
         job = new Job(function, future);
+#ifdef __EMSCRIPTEN__
+        job->Execute();
+#else
         if(EnqueueJob(job) != kRocProfVisResultSuccess)
         {
             spdlog::error("Failed to enqueue job");
             delete job;
             job = nullptr;
         }
+#endif
     }
     catch (std::exception)
     {

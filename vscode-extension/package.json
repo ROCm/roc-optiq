@@ -1,0 +1,117 @@
+{
+  "name": "roc-optiq-launcher",
+  "displayName": "ROCm Optiq Launcher",
+  "description": "Launch the ROCm Optiq (rocprofiler-visualizer) desktop app from VS Code.",
+  "version": "0.5.0",
+  "publisher": "amd",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "rocOptiq.openVisualizer",
+        "title": "ROCm Optiq: Open Visualizer",
+        "category": "ROCm Optiq"
+      },
+      {
+        "command": "rocOptiq.openFile",
+        "title": "ROCm Optiq: Open File in Visualizer...",
+        "category": "ROCm Optiq"
+      },
+      {
+        "command": "rocOptiq.openActiveFile",
+        "title": "ROCm Optiq: Open Current File in Visualizer",
+        "category": "ROCm Optiq"
+      },
+      {
+        "command": "rocOptiq.locateExecutable",
+        "title": "ROCm Optiq: Locate Executable...",
+        "category": "ROCm Optiq"
+      },
+      {
+        "command": "rocOptiq.openInPanel",
+        "title": "ROCm Optiq: Open in Panel (WebAssembly preview)",
+        "category": "ROCm Optiq"
+      },
+      {
+        "command": "rocOptiq.openFileInPanel",
+        "title": "ROCm Optiq: Open File in Panel...",
+        "category": "ROCm Optiq"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "rocOptiq.openFile",
+          "when": "resourceExtname == .rpd || resourceExtname == .db || resourceExtname == .yaml || resourceExtname == .rpv",
+          "group": "navigation@99"
+        },
+        {
+          "command": "rocOptiq.openFileInPanel",
+          "when": "resourceExtname == .rpd || resourceExtname == .db || resourceExtname == .yaml || resourceExtname == .rpv",
+          "group": "navigation@100"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "rocOptiq.openActiveFile",
+          "when": "resourceExtname == .rpd || resourceExtname == .db || resourceExtname == .yaml || resourceExtname == .rpv",
+          "group": "navigation@99"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ROCm Optiq",
+      "properties": {
+        "rocOptiq.executablePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Absolute path to the roc-optiq executable. Leave empty to auto-detect from common build output folders in the workspace."
+        },
+        "rocOptiq.backend": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "vulkan",
+            "opengl"
+          ],
+          "default": "auto",
+          "description": "Render backend to pass to roc-optiq via --backend."
+        },
+        "rocOptiq.fileDialog": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "native",
+            "imgui"
+          ],
+          "default": "auto",
+          "description": "File dialog backend to pass to roc-optiq via --file-dialog. Use 'imgui' when running over SSH."
+        },
+        "rocOptiq.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional command-line arguments forwarded verbatim to roc-optiq."
+        },
+        "rocOptiq.wasmBuildDir": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Directory containing the WebAssembly build artifacts (index.html, index.js, index.wasm). Leave empty to auto-detect 'build-wasm' inside any open workspace folder. Used by 'ROCm Optiq: Open in Panel'."
+        }
+      }
+    }
+  }
+}

@@ -56,16 +56,21 @@ else()
     message(STATUS "TBB not found - parallel execution will use platform default")
 endif()
 
-add_executable(${PROJECT_NAME}-test ${MAIN_SRC} )
-target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
-target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
-target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
-target_link_libraries(${PROJECT_NAME}-test roc-optiq-core)
-target_link_libraries(${PROJECT_NAME}-test spdlog)
-target_link_libraries(${PROJECT_NAME}-test sqlite3)
-target_link_libraries(${PROJECT_NAME}-test json)
-
 if(BUILD_TESTING)
+    # The legacy datamodel-test harness pulls in <curses.h> which isn't
+    # available in cross-compilation toolchains (e.g. Emscripten). Gating
+    # it on BUILD_TESTING keeps the default native build (BUILD_TESTING=ON)
+    # unchanged while letting the WASM build skip it via -DBUILD_TESTING=OFF.
+    add_executable(${PROJECT_NAME}-test ${MAIN_SRC} )
+    target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
+    target_include_directories(${PROJECT_NAME}-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
+    target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
+    target_link_libraries(${PROJECT_NAME}-test roc-optiq-core)
+    target_link_libraries(${PROJECT_NAME}-test spdlog)
+    target_link_libraries(${PROJECT_NAME}-test sqlite3)
+    target_link_libraries(${PROJECT_NAME}-test json)
+
+
 	set(SYSTEM_TEST_NAME ${PROJECT_NAME}-system-tests)
 	set(COMPUTE_TEST_NAME ${PROJECT_NAME}-compute-tests)
     add_executable(${SYSTEM_TEST_NAME} src/tests/rocprofvis_dm_system_tests.cpp)

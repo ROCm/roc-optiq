@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<!--
+    Copyright Advanced Micro Devices, Inc.
+    SPDX-License-Identifier: MIT
+
+    Minimal Emscripten shell for the ROCm Optiq WASM build. Designed to be
+    loaded both directly in a browser and inside a VS Code/Cursor webview
+    panel. Keep this lean: no external scripts, no remote fonts, no inline
+    eval — VS Code webviews ship with a strict CSP.
+-->
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>ROCm Optiq</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #1e1f22;
+            color: #e6e6e6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+        #status {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            text-align: center;
+            transform: translateY(-50%);
+            font-size: 14px;
+            opacity: 0.85;
+            pointer-events: none;
+            transition: opacity 200ms ease;
+        }
+        #status.hidden {
+            opacity: 0;
+        }
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            outline: none;
+            background: #1e1f22;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Loading ROCm Optiq...</div>
+    <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+    <script>
+        var statusEl = document.getElementById('status');
+        var canvas = document.getElementById('canvas');
+
+        function setStatus(text) {
+            if (!statusEl) return;
+            if (!text) {
+                statusEl.classList.add('hidden');
+            } else {
+                statusEl.textContent = text;
+                statusEl.classList.remove('hidden');
+            }
+        }
+
+        function postToHost(type, payload) {
+            if (!window.parent) return;
+            window.parent.postMessage(Object.assign({ type: type }, payload || {}), '*');
+        }
+
+        function logToHost(level, text) {
+            postToHost('rocOptiq:log', {
+                level: level,
+                message: text == null ? '' : String(text)
+            });
+        }
+
+        var pendingOpenFiles = [];
+
+        function sanitizeFileName(name) {
+            var fallback = 'trace.rpd';
+            if (!name || typeof name !== 'string') return fallback;
+            var base = name.replace(/\\/g, '/').split('/').pop();
+            base = base.replace(/[^A-Za-z0-9._-]/g, '_');
+            return base || fallback;
+        }
+
+        function ensureWorkDir() {
+            try {
+                Module.FS.mkdir('/workspace');
+            } catch (e) {
+                // EEXIST is fine; anything else will surface on write/open.
+            }
+        }
+
+        async function openTransferredFile(payload) {
+            if (!Module.calledRun) {
+                pendingOpenFiles.push(payload);
+                return;
+            }
+
+            try {
+                ensureWorkDir();
+                var fileName = sanitizeFileName(payload.name);
+                var virtualPath = '/workspace/' + fileName;
+                var bytes = payload.data instanceof Uint8Array
+                    ? payload.data
+                    : new Uint8Array(payload.data);
+
+                logToHost('info', 'Writing ' + fileName + ' to ' + virtualPath +
+                    ' (' + bytes.byteLength + ' bytes)');
+                Module.FS.writeFile(virtualPath, bytes);
+                logToHost('info', 'Calling rocprofvis_wasm_open_file(' + virtualPath + ')');
+                await Module.ccall(
+                    'rocprofvis_wasm_open_file',
+                    null,
+                    ['string'],
+                    [virtualPath],
+                    { async: true }
+                );
+                logToHost('info', 'rocprofvis_wasm_open_file returned for ' + virtualPath);
+
+                postToHost('rocOptiq:fileOpened', {
+                    name: fileName,
+                    virtualPath: virtualPath
+                });
+            } catch (e) {
+                var message = e && e.message ? e.message : String(e);
+                console.error('[wasm] failed to open transferred file', e);
+                logToHost('error', 'failed to open transferred file: ' + message);
+                if (e && e.stack) logToHost('error', e.stack);
+                postToHost('rocOptiq:fileOpenError', { message: message });
+            }
+        }
+
+        window.addEventListener('message', function (event) {
+            var payload = event.data;
+            if (!payload || payload.type !== 'rocOptiq:openFile') return;
+            openTransferredFile(payload);
+        });
+
+        logToHost('info', 'crossOriginIsolated=' + String(window.crossOriginIsolated) +
+            ', SharedArrayBuffer=' + (typeof SharedArrayBuffer));
+
+        var Module = {
+            preRun: [],
+            postRun: [function () {
+                setStatus('');
+                logToHost('info', 'WASM runtime started');
+                while (pendingOpenFiles.length > 0) {
+                    openTransferredFile(pendingOpenFiles.shift());
+                }
+            }],
+            print: function (text) {
+                console.log('[wasm]', text);
+                logToHost('stdout', text);
+            },
+            printErr: function (text) {
+                console.error('[wasm]', text);
+                logToHost('stderr', text);
+            },
+            canvas: canvas,
+            // When hosted inside a VS Code/Cursor webview, the extension sets
+            // window.WASM_ARTIFACT_BASE to a webview-resource URI (because the
+            // .js / .wasm files cannot be loaded via the implicit relative
+            // path Emscripten assumes). Fall back to the default behaviour
+            // when running directly in a browser.
+            locateFile: function (path, prefix) {
+                if (window.WASM_ARTIFACT_BASE) {
+                    return window.WASM_ARTIFACT_BASE + path;
+                }
+                return prefix + path;
+            },
+            setStatus: function (text) {
+                if (text) logToHost('status', text);
+                if (text && text.indexOf('Downloading') === 0) {
+                    setStatus(text);
+                } else if (!text) {
+                    setStatus('');
+                } else {
+                    setStatus(text);
+                }
+            },
+            totalDependencies: 0,
+            monitorRunDependencies: function (left) {
+                this.totalDependencies = Math.max(this.totalDependencies, left);
+                Module.setStatus(left
+                    ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')'
+                    : '');
+            }
+        };
+        window.Module = Module;
+        Module.setStatus('Downloading...');
+        window.onerror = function (msg) {
+            var message = 'Error: ' + msg;
+            Module.setStatus(message);
+            logToHost('error', message);
+        };
+        window.addEventListener('unhandledrejection', function (event) {
+            var reason = event.reason;
+            var message = reason && reason.message ? reason.message : String(reason);
+            logToHost('error', 'Unhandled rejection: ' + message);
+            if (reason && reason.stack) logToHost('error', reason.stack);
+        });
+    </script>
+    {{{ SCRIPT }}}
+</body>
+</html>

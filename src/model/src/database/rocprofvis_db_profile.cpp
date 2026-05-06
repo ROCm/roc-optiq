@@ -866,6 +866,11 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
             async_query += suffix;
             futures.back()->SetAsyncQuery(async_query);
             
+#ifdef __EMSCRIPTEN__
+            result = SqliteDatabase::ExecuteSQLQueryStatic(
+                this, futures.back(), db_instance,
+                futures.back()->GetAsyncQueryPtr(), callback);
+#else
             try
             {
                 futures.back()->SetWorker(std::move(
@@ -879,6 +884,7 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
                 result = kRocProfVisDmResultUnknownError;
                 ROCPROFVIS_ASSERT_MSG_BREAK(false, ex.what());
             }
+#endif
         }
     }
     for(int i = 0; i < futures.size(); i++)
@@ -914,6 +920,11 @@ ProfileDatabase::ExecuteQueriesAsync(
     for(int i = 0; i < queries.size(); i++)
     {
         futures[i]     = (Future*)rocprofvis_db_future_alloc(nullptr);
+#ifdef __EMSCRIPTEN__
+        result = SqliteDatabase::ExecuteSQLQueryStaticWithHandle(
+            this, futures[i], queries[i].first, queries[i].second.c_str(),
+            handle, i, callback);
+#else
         try
         {
             futures[i]->SetWorker(std::move(
@@ -926,6 +937,7 @@ ProfileDatabase::ExecuteQueriesAsync(
             result = kRocProfVisDmResultUnknownError;
             ROCPROFVIS_ASSERT_MSG_BREAK(false, ex.what());
         }       
+#endif
     }
     for(int i = 0; i < queries.size(); i++)
     {

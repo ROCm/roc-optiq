@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_compute.h"
+#include "rocprofvis_db_thread_compat.h"
 
 namespace RocProfVis
 {
@@ -609,7 +610,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			vec.push_back("CREATE INDEX IF NOT EXISTS idx_metric_value_metric_uuid ON compute_metric_value(metric_uuid);");
 		}
 		
-	    threads.emplace_back(task, vec, file_node_id);      
+	    DispatchOrRunInline(threads, task, vec, file_node_id);      
 
 		for (auto& t : threads)
 			t.join();

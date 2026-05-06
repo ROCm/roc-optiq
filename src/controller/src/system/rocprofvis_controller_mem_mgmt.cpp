@@ -15,6 +15,10 @@
 #include <mach/mach.h>
 #include <sys/sysctl.h>
 #include <unistd.h>
+#elif defined(__EMSCRIPTEN__)
+// Emscripten's libc has no <sys/sysinfo.h>; the WASM heap is the only
+// addressable memory and the JS host owns the actual machine. Use a
+// conservative fixed budget for the in-memory LRU cache instead.
 #elif defined(__GNUC__)
 #include <sys/sysinfo.h>
 #endif
@@ -109,6 +113,11 @@ void MemoryManager::Init(size_t trace_size)
         }
 
         s_physical_memory_avail = (avail_phys_mem / 100) * kUseVailMemoryPercent;
+#elif defined(__EMSCRIPTEN__)
+        // Default to a 256 MiB cache budget for the WebAssembly build. The
+        // browser cannot tell us the user's free RAM and the WASM heap is
+        // capped by ALLOW_MEMORY_GROWTH limits anyway.
+        s_physical_memory_avail = static_cast<uint64_t>(256) * 1024 * 1024;
 #elif defined(__GNUC__)
         struct sysinfo mem_info;
         sysinfo(&mem_info);
@@ -134,8 +143,14 @@ void MemoryManager::Init(size_t trace_size)
     spdlog::debug("Physical memory = {}!", s_physical_memory_avail);
     spdlog::debug("Memory manager memory allocation block  size = {}!", m_mem_block_size);
     
-    m_lru_thread         = std::thread(&MemoryManager::ManageLRU, this);
+#ifdef __EMSCRIPTEN__
+    // Browser WASM build is single-threaded for now. Keep memory management
+    // deterministic and avoid creating an LRU worker thread.
+    m_mem_mgmt_initialized = false;
+#else
+    m_lru_thread           = std::thread(&MemoryManager::ManageLRU, this);
     m_mem_mgmt_initialized = true;
+#endif
 
     {
         std::unique_lock lock(s_lru_config_mutex);

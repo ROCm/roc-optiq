@@ -183,8 +183,6 @@ jobs:
         run: |
           mkdir ${{ env.DIST_DIR }}/
           cp -a ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/
-          ditto -c -k --keepParent ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip
-          rm -rf ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app
           ls -l ${{ env.DIST_DIR }}/
 
       - name: Upload GitHub Artifacts
@@ -193,7 +191,7 @@ jobs:
         with:
           name: roc-optiq-macos-${{ matrix.os-version }}-release
           path: |
-            ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip
+            ${{ env.DIST_DIR }}
           retention-days: 2
       
       - name: Configure AWS credentials
@@ -206,6 +204,7 @@ jobs:
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
+          ditto -c -k --keepParent ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip
           TIMESTAMP=$(date +%Y_%m_%d)
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/mac/${{ matrix.os-version }}/ \
+          aws s3 cp ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/mac/${{ matrix.os-version }}/ \
             --no-progress

@@ -330,10 +330,6 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     float line_y = window_position.y + visible_center_y;
     draw_list->AddLine(ImVec2(px[0], line_y), ImVec2(px[1], line_y), color, CURVE_THICK);
 
-    // Event name labels
-    if(!p1.name.empty()) draw_label(px[0], line_y - 20.0f, p1.name.c_str());
-    if(!p2.name.empty()) draw_label(px[1], line_y - 20.0f, p2.name.c_str());
-
     // Delta label at midpoint
     double      delta     = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
     std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);

@@ -377,7 +377,7 @@ SettingsPanel::ResetButton()
                           m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushFont(m_fonts.GetIconFont(FontType::kDefault), m_fonts.GetFontSize(FontType::kDefault));
+    ImGui::PushFont(m_fonts.GetIconFont(FontType::kDefault), 0.0f);
     clicked = ImGui::Button(ICON_ARROWS_CYCLE);
     ImGui::PopFont();
     ImGui::PopStyleColor(3);

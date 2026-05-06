@@ -253,8 +253,7 @@ TrackItem::RenderMetaArea()
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                        m_settings.GetFontManager().GetFontSize(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault), 0.0f);
 
         ImGui::TextUnformatted(ICON_GRID);
         float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;

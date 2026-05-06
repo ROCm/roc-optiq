@@ -676,9 +676,8 @@ TraceView::RenderToolbar()
     
     ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
-    float icon_font_size = m_settings_manager.GetFontManager().GetFontSize(FontType::kDefault);
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushFont(icon_font, icon_font_size);
+    ImGui::PushFont(icon_font, 0.0f);
     if(ImGui::Button(ICON_COMPASS))
     {
         m_show_minimap_popup = !m_show_minimap_popup;
@@ -751,8 +750,7 @@ TraceView::RenderAnnotationControls()
 
     ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
-    float icon_font_size = m_settings_manager.GetFontManager().GetFontSize(FontType::kDefault);
-    ImGui::PushFont(icon_font, icon_font_size);
+    ImGui::PushFont(icon_font, 0.0f);
     ImGui::BeginGroup();
 
     bool   is_sticky_visible = m_annotations->IsVisibile();
@@ -788,7 +786,7 @@ TraceView::RenderAnnotationControls()
     {
         ImGui::PopFont();
         SetTooltipStyled("Show Annotation Layer");
-        ImGui::PushFont(icon_font, icon_font_size);
+        ImGui::PushFont(icon_font, 0.0f);
     }
     ImGui::PopID();
     ImGui::SameLine();
@@ -817,7 +815,7 @@ TraceView::RenderAnnotationControls()
     {
         ImGui::PopFont();
         SetTooltipStyled("Hide Annotation Layer");
-        ImGui::PushFont(icon_font, icon_font_size);
+        ImGui::PushFont(icon_font, 0.0f);
     }
     ImGui::PopID();
     ImGui::SameLine();
@@ -845,7 +843,7 @@ TraceView::RenderAnnotationControls()
     {
         ImGui::PopFont();
         SetTooltipStyled("Add New Annotation");
-        ImGui::PushFont(icon_font, icon_font_size);
+        ImGui::PushFont(icon_font, 0.0f);
     }
     ImGui::PopID();
 
@@ -911,8 +909,7 @@ TraceView::RenderBookmarkControls()
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(0, 0, 0, 0));
                 ImFont* icon_font =
                     m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
-                float icon_font_size = m_settings_manager.GetFontManager().GetFontSize(FontType::kDefault);
-                ImGui::PushFont(icon_font, icon_font_size);
+                ImGui::PushFont(icon_font, 0.0f);
                 if(used)
                 {
                     if(ImGui::Button(ICON_DELETE))
@@ -925,8 +922,8 @@ TraceView::RenderBookmarkControls()
                 }
                 else
                 {
-                    ImGui::PushFont(icon_font, icon_font_size);
-                    ImGui::PushFont(icon_font, icon_font_size);
+                    ImGui::PushFont(icon_font, 0.0f);
+                    ImGui::PushFont(icon_font, 0.0f);
                     if(ImGui::Button(ICON_ADD_NOTE))
                     {
                         m_bookmarks[i] = m_timeline_view->GetViewCoords();
@@ -983,8 +980,7 @@ TraceView::RenderFlowControls()
 
     ImFont* icon_font =
         m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
-    float icon_font_size = m_settings_manager.GetFontManager().GetFontSize(FontType::kDefault);
-    ImGui::PushFont(icon_font, icon_font_size);
+    ImGui::PushFont(icon_font, 0.0f);
 
     ImGui::BeginGroup();
     for(int i = 0; i <= static_cast<int>(FlowDisplayMode::__kLastMode); ++i)
@@ -1015,7 +1011,7 @@ TraceView::RenderFlowControls()
         {
             ImGui::PopFont();
             SetTooltipStyled("%s", flow_tool_tips[i]);
-            ImGui::PushFont(icon_font, icon_font_size);
+            ImGui::PushFont(icon_font, 0.0f);
         }
 
         ImGui::PopID();
@@ -1042,7 +1038,7 @@ TraceView::RenderFlowControls()
     {
         ImGui::PopFont();
         SetTooltipStyled("Flow Render Style");
-        ImGui::PushFont(icon_font, icon_font_size);
+        ImGui::PushFont(icon_font, 0.0f);
     }
     ImGui::PopFont();
 

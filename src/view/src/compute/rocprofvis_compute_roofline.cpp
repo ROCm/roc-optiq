@@ -696,8 +696,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         }
         ImGui::SetCursorPos(button_pos +
                             ImVec2(0.0f, menus_on_bottom ? -button_size : button_size));
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                        m_settings.GetFontManager().GetFontSize(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault), 0.0f);
         if(ImGui::Button(m_menus_mode == Legend ? ICON_GEAR : ICON_LIST,
                          ImVec2(button_size, button_size)))
         {
@@ -829,8 +828,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                 }
                 else
                 {
-                    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                                    m_settings.GetFontManager().GetFontSize(FontType::kDefault));
+                    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault), 0.0f);
                     ImGui::TextUnformatted(m_items[i].visible ? ICON_EYE
                                                               : ICON_EYE_SLASH);
                     ImGui::PopFont();

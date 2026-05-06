@@ -676,8 +676,7 @@ ComputeComparisonView::RenderToolbar()
     ImGui::SameLine(0.0f, style.FramePadding.x);
     ImGui::TextUnformatted("Difference");
     ImGui::SameLine();
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                    m_settings.GetFontManager().GetFontSize(FontType::kDefault));
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault), 0.0f);
     ImGui::TextUnformatted(ICON_ARROW_DOWN);
     ImGui::PopFont();
     ImGui::SameLine(0.0f, style.FramePadding.x);
@@ -685,8 +684,7 @@ ComputeComparisonView::RenderToolbar()
     ImGui::SameLine(0.0f, style.FramePadding.x);
     ImGui::TextUnformatted("Difference");
     ImGui::SameLine();
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                    m_settings.GetFontManager().GetFontSize(FontType::kDefault));
+    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault), 0.0f);
     ImGui::TextUnformatted(ICON_ARROW_UP);
     ImGui::PopFont();
     ImGui::SameLine(0.0f, style.FramePadding.x);
@@ -1306,8 +1304,7 @@ ComputeComparisonView::Table::Render()
                             }
                             if(m_rows[i].cells[j].display_props->icon)
                             {
-                                ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                                                m_settings.GetFontManager().GetFontSize(FontType::kDefault));
+                                ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault), 0.0f);
                                 ImGui::TextUnformatted(
                                     m_rows[i].cells[j].display_props->icon.value());
                                 ImGui::PopFont();

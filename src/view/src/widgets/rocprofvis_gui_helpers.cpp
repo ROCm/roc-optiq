@@ -8,19 +8,129 @@
 #include "spdlog/spdlog.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
-// Needed for ImGui::RegisterUserTexture / UnregisterUserTexture: the only portable way
-// (as of ImGui 1.92.x) to expose a non-font ImTextureData to the active backend's
-// per-frame texture loop. Works with both the OpenGL3 and Vulkan backends.
-#include "imgui_internal.h"
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 namespace RocProfVis
 {
 
 namespace View
 {
+
+CreateGuiTextureRGBA32Fn GuiTexture::s_create_texture    = nullptr;
+DestroyGuiTextureFn      GuiTexture::s_destroy_texture   = nullptr;
+void*                    GuiTexture::s_texture_user_data = nullptr;
+
+void
+GuiTexture::SetBackend(CreateGuiTextureRGBA32Fn create_texture,
+                       DestroyGuiTextureFn      destroy_texture,
+                       void*                    user_data)
+{
+    s_create_texture    = create_texture;
+    s_destroy_texture   = destroy_texture;
+    s_texture_user_data = user_data;
+}
+
+GuiTexture::~GuiTexture()
+{
+    Destroy();
+}
+
+GuiTexture::GuiTexture(GuiTexture&& other) noexcept
+: m_texture_id(other.m_texture_id)
+, m_width(other.m_width)
+, m_height(other.m_height)
+{
+    other.m_texture_id = ImTextureID_Invalid;
+    other.m_width      = 0;
+    other.m_height     = 0;
+}
+
+GuiTexture&
+GuiTexture::operator=(GuiTexture&& other) noexcept
+{
+    if(this != &other)
+    {
+        Destroy();
+        m_texture_id       = other.m_texture_id;
+        m_width            = other.m_width;
+        m_height           = other.m_height;
+        other.m_texture_id = ImTextureID_Invalid;
+        other.m_width      = 0;
+        other.m_height     = 0;
+    }
+    return *this;
+}
+
+bool
+GuiTexture::CreateRGBA32(const unsigned char* pixels, int width, int height)
+{
+    Destroy();
+    if(!pixels || width <= 0 || height <= 0 || !s_create_texture)
+    {
+        return false;
+    }
+
+    m_texture_id = s_create_texture(s_texture_user_data, pixels, width, height);
+    if(m_texture_id == ImTextureID_Invalid)
+    {
+        return false;
+    }
+
+    m_width  = width;
+    m_height = height;
+    return true;
+}
+
+void
+GuiTexture::Destroy()
+{
+    if(m_texture_id != ImTextureID_Invalid)
+    {
+        if(s_destroy_texture)
+        {
+            s_destroy_texture(s_texture_user_data, m_texture_id);
+        }
+        m_texture_id = ImTextureID_Invalid;
+        m_width      = 0;
+        m_height     = 0;
+    }
+}
+
+bool
+GuiTexture::Valid() const
+{
+    return m_texture_id != ImTextureID_Invalid && m_width > 0 && m_height > 0;
+}
+
+ImTextureID
+GuiTexture::GetTextureID() const
+{
+    return m_texture_id;
+}
+
+int
+GuiTexture::GetWidth() const
+{
+    return m_width;
+}
+
+int
+GuiTexture::GetHeight() const
+{
+    return m_height;
+}
+
+void
+GuiTexture::Render(ImVec2 top_left, float target_width) const
+{
+    if(!Valid()) return;
+
+    const float target_height =
+        target_width * static_cast<float>(m_height) / static_cast<float>(m_width);
+    const ImVec2 bottom_right(top_left.x + target_width, top_left.y + target_height);
+    ImGui::GetWindowDrawList()->AddImage(m_texture_id, top_left, bottom_right);
+}
 
 EmbeddedImage::EmbeddedImage(const unsigned char* data, int data_len)
 {
@@ -36,48 +146,62 @@ EmbeddedImage::EmbeddedImage(const unsigned char* data, int data_len)
 
 EmbeddedImage::~EmbeddedImage()
 {
-    // Hand the GPU texture back to ImGui's backend; it will free the native handle on the
-    // next render pass. We intentionally do NOT IM_DELETE(m_tex): doing so before the
-    // backend honors WantDestroy would leak the GPU resource. The bounded per-instance
-    // leak of one ImTextureData is acceptable for app-lifetime images.
-    if(m_tex != nullptr && ImGui::GetCurrentContext() != nullptr)
-    {
-        m_tex->SetStatus(ImTextureStatus_WantDestroy);
-        ImGui::UnregisterUserTexture(m_tex);
-    }
-    m_tex = nullptr;
-
     if(m_pixels)
     {
         stbi_image_free(m_pixels);
     }
 }
 
-void
-EmbeddedImage::EnsureTextureUploaded() const
+EmbeddedImage::EmbeddedImage(EmbeddedImage&& other) noexcept
+: m_width(other.m_width)
+, m_height(other.m_height)
+, m_pixels(other.m_pixels)
+, m_texture(std::move(other.m_texture))
+, m_create_texture_attempted(other.m_create_texture_attempted)
 {
-    if(m_tex_attempted) return;
-    if(!Valid()) return;
-    if(ImGui::GetCurrentContext() == nullptr) return;  // No context yet; try again next frame.
+    other.m_width                    = 0;
+    other.m_height                   = 0;
+    other.m_pixels                   = nullptr;
+    other.m_create_texture_attempted = false;
+}
 
-    m_tex_attempted = true;
-
-    ImTextureData* tex = IM_NEW(ImTextureData)();
-    tex->Create(ImTextureFormat_RGBA32, m_width, m_height);
-    unsigned char* dst = static_cast<unsigned char*>(tex->GetPixels());
-    if(dst == nullptr)
+EmbeddedImage&
+EmbeddedImage::operator=(EmbeddedImage&& other) noexcept
+{
+    if(this != &other)
     {
-        IM_DELETE(tex);
-        spdlog::warn("EmbeddedImage: failed to allocate GPU texture ({}x{})", m_width,
-                     m_height);
-        return;
+        m_texture.Destroy();
+        if(m_pixels)
+        {
+            stbi_image_free(m_pixels);
+        }
+
+        m_width             = other.m_width;
+        m_height            = other.m_height;
+        m_pixels            = other.m_pixels;
+        m_texture           = std::move(other.m_texture);
+        m_create_texture_attempted = other.m_create_texture_attempted;
+
+        other.m_width                    = 0;
+        other.m_height                   = 0;
+        other.m_pixels                   = nullptr;
+        other.m_create_texture_attempted = false;
     }
+    return *this;
+}
 
-    std::memcpy(dst, m_pixels, static_cast<size_t>(m_width) * m_height * 4);
+void
+EmbeddedImage::EnsureTextureCreated() const
+{
+    if(m_create_texture_attempted) return;
+    if(!Valid()) return;
 
-    tex->SetStatus(ImTextureStatus_WantCreate);
-    ImGui::RegisterUserTexture(tex);
-    m_tex = tex;
+    m_create_texture_attempted = true;
+    if(!m_texture.CreateRGBA32(m_pixels, m_width, m_height))
+    {
+        spdlog::warn("EmbeddedImage: failed to create renderer texture ({}x{})",
+                     m_width, m_height);
+    }
 }
 
 bool
@@ -117,13 +241,8 @@ EmbeddedImage::Render(ImVec2 top_left, float target_width) const
 {
     if(!Valid()) return;
 
-    EnsureTextureUploaded();
-    if(m_tex == nullptr) return;
-
-    const float target_height =
-        target_width * static_cast<float>(m_height) / static_cast<float>(m_width);
-    const ImVec2 bottom_right(top_left.x + target_width, top_left.y + target_height);
-    ImGui::GetWindowDrawList()->AddImage(m_tex->GetTexRef(), top_left, bottom_right);
+    EnsureTextureCreated();
+    m_texture.Render(top_left, target_width);
 }
 
 ImVec2

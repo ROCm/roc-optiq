@@ -74,6 +74,15 @@ rocprofvis_view_set_fullscreen_state(bool is_fullscreen)
     AppWindow::GetInstance()->SetFullscreenState(is_fullscreen);
 }
 
+void
+rocprofvis_view_set_texture_backend(
+    rocprofvis_view_create_texture_rgba32_t create_texture,
+    rocprofvis_view_destroy_texture_t       destroy_texture,
+    void*                                  user_data)
+{
+    GuiTexture::SetBackend(create_texture, destroy_texture, user_data);
+}
+
 std::string
 rocprofvis_get_application_config_path()
 {

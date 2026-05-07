@@ -45,7 +45,9 @@ private:
         const std::vector<uint64_t>& shown_chart_ids,
         const std::vector<uint64_t>& hidden_chart_ids);
     void               HideAllButTrack(const uint64_t& index);
+    void               ApplyAllTrackVisibility(bool visible);
     void               ApplySelectedTrackVisibility(bool visible);
+    bool               HasTrackVisibility(bool visible) const;
     EyeButtonState     MergeEyeButtonState(EyeButtonState lhs,
                                            EyeButtonState rhs) const;
     EyeButtonState     GetLeafState(const LeafNode& leaf) const;

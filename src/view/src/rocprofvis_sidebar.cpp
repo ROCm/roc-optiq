@@ -198,6 +198,11 @@ SideBar::RenderTrackItem(const uint64_t& index, bool allow_visibility_toggle)
                                    graph.display ? hidden_chart_ids : shown_chart_ids);
                 UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
             }
+            if(ImGui::MenuItem("Show All Tracks", nullptr, false,
+                               HasTrackVisibility(false)))
+            {
+                ApplyAllTrackVisibility(true);
+            }
             if(ImGui::MenuItem("Hide All But This Track"))
             {
                 HideAllButTrack(index);
@@ -290,6 +295,26 @@ SideBar::HideAllButTrack(const uint64_t& index)
 }
 
 void
+SideBar::ApplyAllTrackVisibility(bool visible)
+{
+    if(!m_graphs)
+    {
+        return;
+    }
+
+    std::vector<uint64_t> shown_chart_ids;
+    std::vector<uint64_t> hidden_chart_ids;
+
+    for(auto& graph : *m_graphs)
+    {
+        SetTrackVisibility(graph, visible,
+                           visible ? shown_chart_ids : hidden_chart_ids);
+    }
+
+    UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+}
+
+void
 SideBar::ApplySelectedTrackVisibility(bool visible)
 {
     if(!m_graphs)
@@ -310,6 +335,25 @@ SideBar::ApplySelectedTrackVisibility(bool visible)
     }
 
     UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+}
+
+bool
+SideBar::HasTrackVisibility(bool visible) const
+{
+    if(!m_graphs)
+    {
+        return false;
+    }
+
+    for(const auto& graph : *m_graphs)
+    {
+        if(graph.display == visible)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 SideBar::EyeButtonState

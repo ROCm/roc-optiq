@@ -45,6 +45,10 @@ typedef struct rocprofvis_imgui_vk_data_t
     std::vector<rocprofvis_imgui_vk_texture_t*>* m_textures = nullptr;
 } rocprofvis_imgui_vk_data_t;
 
+static constexpr uint32_t kRPVGuiTextureDescriptorPoolSize = 1024;
+static constexpr uint32_t kRPVMaxGuiTextures =
+    kRPVGuiTextureDescriptorPoolSize - IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE;
+
 static void
 rocprofvis_imgui_backend_vk_check_result(VkResult err)
 {
@@ -384,14 +388,15 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
                                 // textures, so we need a larger descriptor pool.
                                 {
                                     VkDescriptorPoolSize pool_sizes[] = {
-                                        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 },
+                                        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                          kRPVGuiTextureDescriptorPoolSize },
                                     };
                                     VkDescriptorPoolCreateInfo pool_info = {};
                                     pool_info.sType =
                                         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
                                     pool_info.flags =
                                         VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-                                    pool_info.maxSets = 100;
+                                    pool_info.maxSets = kRPVGuiTextureDescriptorPoolSize;
                                     pool_info.poolSizeCount =
                                         (uint32_t) IM_ARRAYSIZE(pool_sizes);
                                     pool_info.pPoolSizes = pool_sizes;
@@ -405,6 +410,14 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
 
                             if(!bResult)
                             {
+                                if(backend_data->m_descriptor_pool != VK_NULL_HANDLE)
+                                {
+                                    vkDestroyDescriptorPool(
+                                        backend_data->m_device,
+                                        backend_data->m_descriptor_pool,
+                                        backend_data->m_allocator);
+                                    backend_data->m_descriptor_pool = VK_NULL_HANDLE;
+                                }
                                 vkDestroyDevice(backend_data->m_device,
                                                 backend_data->m_allocator);
                             }
@@ -505,6 +518,21 @@ rocprofvis_imgui_backend_vk_create_texture_rgba32(rocprofvis_imgui_backend_t* ba
         (rocprofvis_imgui_vk_data_t*) backend->m_private_data;
     if(backend_data->m_device == VK_NULL_HANDLE || !backend_data->m_textures)
     {
+        return ImTextureID_Invalid;
+    }
+
+    // Work around ImGui_ImplVulkan_AddTexture() not reporting descriptor allocation
+    // failure. Ideally ImGui would initialize and check its descriptor set as:
+    //   VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    //   VkResult err = vkAllocateDescriptorSets(v->Device, &alloc_info, &descriptor_set);
+    //   check_vk_result(err);
+    //   if(err != VK_SUCCESS) return VK_NULL_HANDLE;
+    // Until then, keep user textures below the pool capacity before calling AddTexture().
+    if(backend_data->m_textures->size() >= kRPVMaxGuiTextures)
+    {
+        spdlog::warn("[vulkan] Refusing to create GUI texture: descriptor pool limit "
+                     "reached ({}/{})",
+                     backend_data->m_textures->size(), kRPVMaxGuiTextures);
         return ImTextureID_Invalid;
     }
 
@@ -721,6 +749,9 @@ rocprofvis_imgui_backend_vk_create_texture_rgba32(rocprofvis_imgui_backend_t* ba
     texture->m_descriptor_set =
         ImGui_ImplVulkan_AddTexture(texture->m_sampler, texture->m_image_view,
                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    if(texture->m_descriptor_set == VK_NULL_HANDLE)
+        return fail(VK_ERROR_OUT_OF_POOL_MEMORY);
+
     backend_data->m_textures->push_back(texture);
     return (ImTextureID) texture->m_descriptor_set;
 }

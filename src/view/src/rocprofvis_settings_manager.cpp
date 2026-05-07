@@ -68,9 +68,9 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(39, 43, 56, 255),     // Colors::kButton
     IM_COL32(50, 59, 76, 255),     // Colors::kButtonHovered
     IM_COL32(62, 76, 102, 255),    // Colors::kButtonActive
-    IM_COL32(225, 203, 78, 255),   // Colors::kBgWarning
-    IM_COL32(235, 82, 98, 255),    // Colors::kBgError
-    IM_COL32(113, 217, 138, 255),  // Colors::kBgSuccess
+    IM_COL32(180, 160, 60, 255),   // Colors::kBgWarning
+    IM_COL32(160, 60, 60, 255),    // Colors::kBgError
+    IM_COL32(60, 160, 60, 255),    // Colors::kBgSuccess
     IM_COL32(62, 74, 96, 255),     // Colors::kStickyNoteYellow
     IM_COL32(47, 214, 220, 120),   // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
@@ -145,9 +145,9 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(244, 246, 250, 255),  // Colors::kButton
     IM_COL32(232, 236, 244, 255),  // Colors::kButtonHovered
     IM_COL32(220, 226, 238, 255),  // Colors::kButtonActive
-    IM_COL32(225, 203, 78, 255),   // Colors::kBgWarning
-    IM_COL32(224, 84, 82, 255),    // Colors::kBgError
-    IM_COL32(58, 145, 26, 255),    // Colors::kBgSuccess
+    IM_COL32(250, 250, 100, 255),  // Colors::kBgWarning
+    IM_COL32(250, 100, 100, 255),  // Colors::kBgError
+    IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
     IM_COL32(255, 244, 182, 255),  // Colors::kStickyNoteYellow
     IM_COL32(42, 190, 196, 105),   // Colors::kLineChartColorAlt
     IM_COL32(255, 0, 0, 64),       // Colors::kTrackWarningBand
@@ -175,18 +175,18 @@ constexpr std::array LIGHT_THEME_COLORS = {
     // This must follow the ordering of Colors enum.
 };
 const std::vector<ImU32> DARK_FLAME_COLORS = {
-    IM_COL32(64, 176, 186, 235),  IM_COL32(90, 136, 208, 235),
-    IM_COL32(138, 104, 198, 235), IM_COL32(205, 170, 82, 235),
-    IM_COL32(92, 174, 104, 235),  IM_COL32(72, 150, 198, 235),
-    IM_COL32(202, 144, 82, 235),  IM_COL32(202, 104, 124, 235),
-    IM_COL32(112, 184, 220, 235), IM_COL32(164, 136, 218, 235)
+    IM_COL32(68, 156, 218, 235),  IM_COL32(38, 178, 138, 235),
+    IM_COL32(218, 202, 84, 235),  IM_COL32(210, 126, 172, 235),
+    IM_COL32(96, 188, 230, 235),  IM_COL32(224, 139, 68, 235),
+    IM_COL32(54, 198, 126, 235),  IM_COL32(214, 166, 62, 235),
+    IM_COL32(164, 156, 238, 235), IM_COL32(232, 154, 76, 235)
 };
 const std::vector<ImU32> LIGHT_FLAME_COLORS = {
-    IM_COL32(96, 198, 204, 215),  IM_COL32(112, 158, 226, 215),
-    IM_COL32(170, 132, 220, 215), IM_COL32(244, 219, 153, 215),
-    IM_COL32(128, 190, 104, 215), IM_COL32(92, 176, 214, 215),
-    IM_COL32(237, 204, 140, 215),  IM_COL32(220, 118, 132, 215),
-    IM_COL32(144, 204, 234, 215), IM_COL32(194, 166, 232, 215)
+    IM_COL32(74, 148, 212, 215),  IM_COL32(24, 156, 118, 215),
+    IM_COL32(224, 203, 88, 215),  IM_COL32(202, 116, 160, 215),
+    IM_COL32(86, 176, 226, 215),  IM_COL32(224, 132, 58, 215),
+    IM_COL32(30, 185, 112, 215),  IM_COL32(218, 158, 48, 215),
+    IM_COL32(154, 148, 236, 215), IM_COL32(236, 146, 66, 215)
 };
 inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
 inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";

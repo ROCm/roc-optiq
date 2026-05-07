@@ -176,19 +176,23 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(224, 206, 244, 255),  // Colors::kComparisonGreater
     // This must follow the ordering of Colors enum.
 };
+// Same hue order as origin/main (blue, green, yellow, rose, sky, orange,
+// emerald, amber, purple, coral) but desaturated to harmonize with the new
+// muted blue redesign. Alphas are nudged down slightly so flame fills blend
+// gracefully with the kBgPanel surfaces.
 const std::vector<ImU32> DARK_FLAME_COLORS = {
-    IM_COL32(68, 156, 218, 235),  IM_COL32(38, 178, 138, 235),
-    IM_COL32(218, 202, 84, 235),  IM_COL32(210, 126, 172, 235),
-    IM_COL32(96, 188, 230, 235),  IM_COL32(224, 139, 68, 235),
-    IM_COL32(54, 198, 126, 235),  IM_COL32(214, 166, 62, 235),
-    IM_COL32(164, 156, 238, 235), IM_COL32(232, 154, 76, 235)
+    IM_COL32(82, 154, 210, 220),  IM_COL32(72, 174, 156, 220),
+    IM_COL32(208, 188, 116, 220), IM_COL32(204, 142, 174, 220),
+    IM_COL32(118, 184, 220, 220), IM_COL32(212, 148, 102, 220),
+    IM_COL32(106, 188, 144, 220), IM_COL32(206, 170, 102, 220),
+    IM_COL32(160, 162, 224, 220), IM_COL32(216, 156, 116, 220)
 };
 const std::vector<ImU32> LIGHT_FLAME_COLORS = {
-    IM_COL32(74, 148, 212, 215),  IM_COL32(24, 156, 118, 215),
-    IM_COL32(224, 203, 88, 215),  IM_COL32(202, 116, 160, 215),
-    IM_COL32(86, 176, 226, 215),  IM_COL32(224, 132, 58, 215),
-    IM_COL32(30, 185, 112, 215),  IM_COL32(218, 158, 48, 215),
-    IM_COL32(154, 148, 236, 215), IM_COL32(236, 146, 66, 215)
+    IM_COL32(96, 154, 208, 200),  IM_COL32(72, 166, 148, 200),
+    IM_COL32(214, 192, 124, 200), IM_COL32(202, 142, 174, 200),
+    IM_COL32(118, 178, 218, 200), IM_COL32(214, 148, 102, 200),
+    IM_COL32(94, 178, 138, 200),  IM_COL32(212, 168, 102, 200),
+    IM_COL32(158, 160, 222, 200), IM_COL32(220, 156, 118, 200)
 };
 inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
 inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";

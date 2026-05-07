@@ -33,12 +33,40 @@ MetricTableBase::SetPinMetricCallback(std::function<void(MetricId)> callback)
 void
 MetricTableBase::Render()
 {
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style   = settings.GetDefaultStyle();
+
+    // Outer panel: title + content sit inside one rounded white card on the
+    // grey backdrop. Skipped when m_no_panel is set so embedding containers
+    // can avoid double-cards.
+    const bool paint_panel = !m_no_panel;
+    if(paint_panel)
+    {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
+        const std::string panel_id = "##" + m_table_title + "_panel_";
+        ImGui::BeginChild(RocWidget::GenUniqueName(panel_id).c_str(), ImVec2(0, 0),
+                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                              ImGuiChildFlags_AlwaysUseWindowPadding);
+    }
+
+    auto pop_panel = [paint_panel]() {
+        if(paint_panel)
+        {
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
+        }
+    };
+
     if(!m_table_title.empty())
         SectionTitle(m_table_title.c_str());
 
     if(m_rows.empty())
     {
         RenderEmptyTable();
+        pop_panel();
         return;
     }
 
@@ -50,12 +78,11 @@ MetricTableBase::Render()
         if(num_columns == 0)
         {
             RenderEmptyTable();
+            pop_panel();
             return;
         }
     }
 
-    SettingsManager& settings = SettingsManager::GetInstance();
-    const ImGuiStyle& style   = settings.GetDefaultStyle();
     const float row_hover_height =
         ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
 
@@ -128,6 +155,8 @@ MetricTableBase::Render()
         }
     }
     ImGui::EndChild();
+
+    pop_panel();
 }
 
 void

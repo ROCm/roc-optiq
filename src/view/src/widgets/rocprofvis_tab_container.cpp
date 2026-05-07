@@ -163,6 +163,9 @@ TabContainer::Render()
                     new_selected_tab = static_cast<int>(i);
                     if(tab.m_widget)
                     {
+                       
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() -
+                                             ImGui::GetStyle().ItemSpacing.y);
                         tab.m_widget->Render();
                     }
                     ImGui::EndTabItem();

@@ -46,6 +46,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(29, 30, 38, 255),     // Colors::kBgMain
     IM_COL32(34, 37, 48, 255),     // Colors::kBgPanel
     IM_COL32(39, 43, 56, 255),     // Colors::kBgFrame
+    IM_COL32(48, 56, 76, 255),     // Colors::kComboFill
     IM_COL32(106, 164, 232, 255),  // Colors::kAccentRed
     IM_COL32(140, 190, 245, 255),  // Colors::kAccentRedHover
     IM_COL32(78, 132, 202, 255),   // Colors::kAccentRedActive
@@ -123,6 +124,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(247, 248, 250, 255),  // Colors::kBgMain
     IM_COL32(255, 255, 255, 255),  // Colors::kBgPanel
     IM_COL32(244, 246, 250, 255),  // Colors::kBgFrame
+    IM_COL32(232, 240, 251, 255),  // Colors::kComboFill
     IM_COL32(54, 132, 214, 255),   // Colors::kAccentRed
     IM_COL32(88, 164, 232, 255),   // Colors::kAccentRedHover
     IM_COL32(32, 102, 180, 255),   // Colors::kAccentRedActive

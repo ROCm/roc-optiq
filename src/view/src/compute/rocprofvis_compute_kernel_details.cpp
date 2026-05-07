@@ -7,6 +7,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_compute_kernel_metric_table.h"
+#include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
 #include "imgui.h"
@@ -53,8 +54,19 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
                                                               compute_selection);
 
     auto memory_chart_wrapper = std::make_shared<RocCustomWidget>([this]() {
+        SettingsManager& settings = SettingsManager::GetInstance();
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                            settings.GetDefaultStyle().ChildRounding);
+        ImGui::BeginChild("memory_chart_card", ImVec2(0, 0),
+                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                              ImGuiChildFlags_AlwaysUseWindowPadding);
         SectionTitle("Memory Chart");
         m_memory_chart.Render();
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
     });
 
     m_flex_container.items = {

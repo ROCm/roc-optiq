@@ -36,6 +36,14 @@ ImVec2
 GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size = ImVec2(0.0f, 0.0f),
                         float viewport_margin = 32.0f);
 
+// Push the combo/dropdown frame fill so dropdowns read as a distinct surface
+// from text inputs and other framed widgets. Always pair with PopComboStyles.
+void
+PushComboStyles();
+
+void
+PopComboStyles();
+
 bool
 IconButton(const char* icon, ImFont* icon_font, ImVec2 size = ImVec2(0, 0),
            const char* tooltip = nullptr, bool frameless = true,

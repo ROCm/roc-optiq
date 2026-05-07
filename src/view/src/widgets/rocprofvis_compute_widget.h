@@ -67,6 +67,9 @@ protected:
     static constexpr uint32_t LAST_INDEX = std::numeric_limits<uint32_t>::max();
     ImGuiTableFlags           m_table_flags;
     uint32_t                  m_max_rows_in_table;
+    // When true, suppress the outer kBgPanel card; the embedding container is
+    // already painting one (avoids nested cards inside flex containers, etc).
+    bool                      m_no_panel = false;
 
 private:
     float GetTableHeight() const;

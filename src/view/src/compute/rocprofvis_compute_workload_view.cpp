@@ -64,21 +64,32 @@ ComputeWorkloadView::Render()
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     m_workload_info      = m_data_provider.ComputeModel().GetWorkload(workload_id);
 
-    SectionTitle("Workload Information");
-
     if(m_workload_info)
     {
-        if(ImGui::BeginChild("info", ImVec2(0, 0), ImGuiChildFlags_None))
+        SettingsManager& settings = SettingsManager::GetInstance();
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                            settings.GetDefaultStyle().ChildRounding);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                              settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border,
+                              settings.GetColor(Colors::kBorderColor));
+        if(ImGui::BeginChild("info", ImVec2(0, 0),
+                             ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                                 ImGuiChildFlags_AlwaysUseWindowPadding))
         {
+            SectionTitle("Workload Information");
             if(m_content_container)
             {
                 m_content_container->Render();
             }
         }
         ImGui::EndChild();
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar();
     }
     else
     {
+        SectionTitle("Workload Information");
         const char* label = "Workload Information Unavailable";
         RenderUnavailableMessage(label);
     }

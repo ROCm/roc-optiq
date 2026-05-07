@@ -98,15 +98,33 @@ FlexContainer::Render()
                 h = 0.0f;
             }
 
+            // Items are transparent: each inner widget is responsible for
+            // painting its own kBgPanel card. In subcomponent_layout mode a
+            // thin separator line is drawn between adjacent items so they
+            // still read as distinct subcomponents inside one outer card.
+            SettingsManager& settings = SettingsManager::GetInstance();
             ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                SettingsManager::GetInstance().GetColor(Colors::kFillerColor));
+                                  settings.GetColor(Colors::kTransparent));
 
             ImGui::BeginChild(ImGui::GetID(&item), ImVec2(w, h), item_flags,
                               ImGuiWindowFlags_NoScrollWithMouse);
             if(item.widget) item.widget->Render();
             ImGui::EndChild();
 
+            const ImVec2 item_min = ImGui::GetItemRectMin();
+            const ImVec2 item_max = ImGui::GetItemRectMax();
+
             ImGui::PopStyleColor();
+
+            if(subcomponent_layout && column_index + 1 < row.count)
+            {
+                const float sep_x = item_max.x + gap * 0.5f;
+                const float pad   = 4.0f;
+                ImGui::GetWindowDrawList()->AddLine(
+                    ImVec2(sep_x, item_min.y + pad),
+                    ImVec2(sep_x, item_max.y - pad),
+                    settings.GetColor(Colors::kBorderColor));
+            }
 
             if(column_index + 1 < row.count) ImGui::SameLine(0.0f, gap);
         }

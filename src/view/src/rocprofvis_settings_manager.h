@@ -80,6 +80,7 @@ enum class Colors
     kBgMain,
     kBgPanel,
     kBgFrame,
+    kComboFill,
     kAccentRed,
     kAccentRedHover,
     kAccentRedActive,

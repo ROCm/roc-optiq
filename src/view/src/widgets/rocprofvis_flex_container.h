@@ -34,6 +34,11 @@ public:
 
     std::vector<FlexItem> items;
     float                 gap = DEFAULT_GAP;
+
+    // When true, items render transparent (subcomponents inside one outer
+    // card) and a thin separator line is drawn between adjacent items.
+    // When false (default), each item renders as its own kBgPanel white card.
+    bool subcomponent_layout = false;
 };
 
 }  // namespace View

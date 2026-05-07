@@ -231,6 +231,19 @@ ThemeColor(SettingsManager& settings, Colors color, float alpha)
     return rgba;
 }
 
+void
+PushComboStyles()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, settings.GetColor(Colors::kComboFill));
+}
+
+void
+PopComboStyles()
+{
+    ImGui::PopStyleColor();
+}
+
 ImVec2
 GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size, float viewport_margin)
 {

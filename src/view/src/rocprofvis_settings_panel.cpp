@@ -219,11 +219,13 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("Light").x + 2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
+    PushComboStyles();
     if(ImGui::Combo("##theme", &theme_index, "Light\0Dark\0\0"))
     {
         m_usersettings.display_settings.use_dark_mode = (theme_index == 0) ? false : true;
         m_settings_changed                            = true;
     }
+    PopComboStyles();
     if(ImGui::IsItemHovered())
     {
         SetTooltipStyled("Switch between dark and light UI themes.");
@@ -255,8 +257,10 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("00").x + 2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
+    PushComboStyles();
     ImGui::Combo("##font_size", &m_font_settings.size_index, m_font_sizes_ptr.data(),
                  static_cast<int>(m_font_sizes_ptr.size()));
+    PopComboStyles();
     ImGui::SameLine();
     ImGui::BeginDisabled(m_font_settings.size_index >
                          m_fonts.GetAvailableFonts().size() - 2);
@@ -308,6 +312,7 @@ SettingsPanel::RenderUnitOptions()
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
     // Options must match TimeFormat enum
+    PushComboStyles();
     if(ImGui::Combo("##time_format", &time_format_index,
                     "Timecode\0"
                     "Condensed Timecode\0"
@@ -320,6 +325,7 @@ SettingsPanel::RenderUnitOptions()
             static_cast<TimeFormat>(time_format_index);
         m_settings_changed = true;
     }
+    PopComboStyles();
 }
 
 void

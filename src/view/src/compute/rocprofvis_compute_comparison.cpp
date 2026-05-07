@@ -617,6 +617,7 @@ ComputeComparisonView::RenderToolbar()
         m_data_provider.ComputeModel().GetWorkload(m_target_workload_id);
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
     ImGui::BeginDisabled(workloads.empty());
+    PushComboStyles();
     if(ImGui::BeginCombo("##TargetWorkloads",
                          target_workload ? target_workload->name.c_str() : "-"))
     {
@@ -645,6 +646,7 @@ ComputeComparisonView::RenderToolbar()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
     ImGui::EndDisabled();
     VerticalSeparator(&m_settings);
     const KernelInfo* target_kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
@@ -653,6 +655,7 @@ ComputeComparisonView::RenderToolbar()
         m_data_provider.ComputeModel().GetKernelInfoList(m_target_workload_id);
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
     ImGui::BeginDisabled(target_kernel_list.empty());
+    PushComboStyles();
     if(ImGui::BeginCombo("##target_kernels",
                          target_kernel_info ? target_kernel_info->name.c_str() : "-"))
     {
@@ -669,6 +672,7 @@ ComputeComparisonView::RenderToolbar()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
     ImGui::EndDisabled();
     ImGui::SameLine();
 
@@ -821,16 +825,26 @@ void
 ComputeComparisonView::RenderCategory(const size_t i)
 {
     ImGui::PushID(static_cast<int>(i));
+    // Transparent so the grey tab-container backdrop shows through; each
+    // Table below paints its own white card.
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("category_container");
-    for(const std::shared_ptr<Table>& table : m_categories[i].tables)
+    for(size_t t = 0; t < m_categories[i].tables.size(); ++t)
     {
+        const std::shared_ptr<Table>& table = m_categories[i].tables[t];
         if(table)
         {
             table->SetMaxSize(ImGui::GetWindowSize());
             table->Render();
+            if(t + 1 < m_categories[i].tables.size())
+            {
+                ImGui::Spacing();
+            }
         }
     }
     ImGui::EndChild();
+    ImGui::PopStyleColor();
     ImGui::PopID();
 }
 
@@ -841,8 +855,15 @@ ComputeComparisonView::RenderPinnedMetrics() const
     {
         if(m_pinned_metrics.empty())
         {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                                  m_settings.GetColor(Colors::kBgPanel));
+            ImGui::PushStyleColor(ImGuiCol_Border,
+                                  m_settings.GetColor(Colors::kBorderColor));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                                m_settings.GetDefaultStyle().ChildRounding);
             ImGui::BeginChild("pinned", ImVec2(0.0f, TableRowHeight() * 2.0f),
-                              ImGuiChildFlags_Borders);
+                              ImGuiChildFlags_Borders |
+                                  ImGuiChildFlags_AlwaysUseWindowPadding);
             CenterNextItem(ImGui::CalcTextSize("Use () checkbox to pin metrics.").x +
                            ImGui::GetFontSize());
             ImGui::SetCursorPosY(ImGui::GetStyle().FramePadding.y);
@@ -857,6 +878,8 @@ ComputeComparisonView::RenderPinnedMetrics() const
             ImGui::TextUnformatted(") checkbox to pin metrics.");
             ImGui::EndDisabled();
             ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
         }
         else
         {
@@ -1263,11 +1286,17 @@ ComputeComparisonView::Table::Render()
         QuantizedTableHeight(desired_height, m_max_size.y, fixed_rows,
                              m_h_scrollable);
 
+    // Match the rest of the app: each table is a rounded white card on the
+    // grey backdrop with the title sitting inside it.
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
     ImGui::BeginChild(
         m_widget_name.c_str(),
         ImVec2(std::min(m_max_size.x, ImGui::GetContentRegionAvail().x),
                child_height),
-        ImGuiChildFlags_Borders);
+        ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
     float title_height = 0.0f;
     if(!m_title.empty())
     {
@@ -1440,6 +1469,8 @@ ComputeComparisonView::Table::Render()
         ImGui::TextDisabled("No data available.");
     }
     ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
 }
 
 const std::vector<ComputeComparisonView::Table::Row>&

@@ -868,6 +868,7 @@ TraceView::RenderBookmarkControls()
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("BookMarks").x +
                             2 * ImGui::GetStyle().FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
+    PushComboStyles();
     if(ImGui::BeginCombo("", "Bookmarks"))
     {
         if(ImGui::BeginTable("BookmarkTable", 2, ImGuiTableFlags_SizingStretchProp))
@@ -949,6 +950,7 @@ TraceView::RenderBookmarkControls()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
 
     ImGui::PopID();
     ImGui::SameLine();

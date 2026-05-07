@@ -276,6 +276,7 @@ ComputeView::RenderWorkloadSelection()
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
     ImGui::BeginDisabled(workloads.empty());
+    PushComboStyles();
     if(ImGui::BeginCombo("##Workloads",
                          selected_workload ? selected_workload->name.c_str() : "-"))
     {
@@ -290,6 +291,7 @@ ComputeView::RenderWorkloadSelection()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
     ImGui::EndDisabled();
     ImGui::SameLine(0, style.ItemSpacing.x);
     VerticalSeparator();
@@ -303,6 +305,7 @@ ComputeView::RenderWorkloadSelection()
         m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
     ImGui::BeginDisabled(kernel_info_list.empty());
+    PushComboStyles();
     if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str() : "-"))
     {
         for(const KernelInfo* info : kernel_info_list)
@@ -314,6 +317,7 @@ ComputeView::RenderWorkloadSelection()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
     ImGui::EndDisabled();
 }
 

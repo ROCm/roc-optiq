@@ -175,9 +175,13 @@ MultiTrackTable::Render()
 
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-FLT_MIN);
-        if(ImGui::Combo("##group_by", &m_group_by_selection_index,
-                        m_group_by_choices_ptr.data(),
-                        static_cast<int>(m_group_by_choices_ptr.size())))
+        PushComboStyles();
+        const bool group_by_changed =
+            ImGui::Combo("##group_by", &m_group_by_selection_index,
+                         m_group_by_choices_ptr.data(),
+                         static_cast<int>(m_group_by_choices_ptr.size()));
+        PopComboStyles();
+        if(group_by_changed)
         {
             if(m_group_by_selection_index == 0)
             {
@@ -277,7 +281,6 @@ MultiTrackTable::Render()
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
 
-    ImGui::Spacing();
     InfiniteScrollTable::Render();
     RenderContextMenu();
 }

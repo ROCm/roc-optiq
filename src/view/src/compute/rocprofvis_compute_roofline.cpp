@@ -318,6 +318,16 @@ Roofline::Update()
 void
 Roofline::Render()
 {
+    // Outer card fills whatever space the parent gives us (FlexContainer items
+    // and the summary's roofline_container both have a fixed height); using
+    // AutoResizeY here would collapse to 0 because the inner plot uses (0,0).
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::BeginChild("roofline_card", ImVec2(0, 0),
+                      ImGuiChildFlags_Borders |
+                          ImGuiChildFlags_AlwaysUseWindowPadding);
     SectionTitle("Roofline Analysis");
     ImGui::BeginChild("roofline");
     const ImVec2       region     = ImGui::GetContentRegionAvail();
@@ -358,11 +368,11 @@ Roofline::Render()
         ImPlot::PushStyleColor(ImPlotCol_TitleText,
                                ThemeColor(m_settings, Colors::kTextMain));
         ImPlot::PushStyleColor(ImPlotCol_InlayText,
-                               ThemeColor(m_settings, Colors::kTextDim));
+                               ThemeColor(m_settings, Colors::kTextMain));
         ImPlot::PushStyleColor(ImPlotCol_AxisText,
-                               ThemeColor(m_settings, Colors::kTextDim));
+                               ThemeColor(m_settings, Colors::kTextMain));
         ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
-                               ThemeColor(m_settings, Colors::kBorderColor, 0.34f));
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.7f));
         ImPlot::PushStyleColor(ImPlotCol_AxisTick,
                                ThemeColor(m_settings, Colors::kTextDim, 0.56f));
         ImPlot::PushStyleColor(ImPlotCol_AxisBg,
@@ -607,7 +617,10 @@ Roofline::Render()
         ImPlot::PopColormap();
         ImPlot::PopStyleColor(16);
     }
-    ImGui::EndChild();
+    ImGui::EndChild();  // "roofline" inner
+    ImGui::EndChild();  // "roofline_card" outer
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
 }
 
 void
@@ -904,6 +917,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                        plot_size.x * 0.5f, Alignment_Left, true);
             ImGui::SetNextItemWidth(-1.0f);
             int placement_idx = static_cast<int>(m_menus_placement);
+            PushComboStyles();
             if(ImGui::Combo("##placement", &placement_idx,
                             "Inside, Top Left\0"
                             "Inside, Top Right\0"
@@ -913,6 +927,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
             {
                 m_menus_placement = static_cast<MenusPlacement>(placement_idx);
             }
+            PopComboStyles();
             ImGui::PopID();
         }
         m_menus_rendered_height = ImGui::GetWindowHeight();

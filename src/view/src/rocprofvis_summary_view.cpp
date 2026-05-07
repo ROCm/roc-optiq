@@ -36,9 +36,9 @@ PushPlotChrome(SettingsManager& settings)
     ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
     ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
                            ThemeColor(settings, Colors::kBorderColor, 0.85f));
-    ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextDim));
+    ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextMain));
     ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
-                           ThemeColor(settings, Colors::kBorderColor, 0.34f));
+                           ThemeColor(settings, Colors::kBorderColor, 0.7f));
     ImPlot::PushStyleColor(ImPlotCol_AxisTick,
                            ThemeColor(settings, Colors::kTextDim, 0.56f));
     ImPlot::PushStyleColor(ImPlotCol_LegendBg,
@@ -610,12 +610,14 @@ TopKernels::Render()
         ImGui::TextUnformatted("Node:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(region.x * 0.25f);
+        PushComboStyles();
         if(ImGui::Combo("##node_combo", &m_node_combo.selected_idx,
                         m_node_combo.labels.data(),
                         static_cast<int>(m_node_combo.labels.size())))
         {
             m_filter_dirty = true;
         }
+        PopComboStyles();
         ImGui::EndDisabled();
         ImGui::SameLine();
 
@@ -623,12 +625,14 @@ TopKernels::Render()
         ImGui::TextUnformatted("GPU:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(region.x * 0.25f);
+        PushComboStyles();
         if(ImGui::Combo("##gpu_combo", &m_gpu_combo.selected_idx,
                         m_gpu_combo.labels_ptr.data(),
                         static_cast<int>(m_gpu_combo.labels.size())))
         {
             m_filter_dirty = true;
         }
+        PopComboStyles();
         ImGui::EndDisabled();
         ImGui::PopStyleVar();
         // Update size requirements...

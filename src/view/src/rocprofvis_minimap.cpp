@@ -310,11 +310,16 @@ Minimap::Render()
     float  top_padding = 5.0f;
     ImVec2 avail       = ImGui::GetContentRegionAvail();
 
-    // Minimum content region needed for the minimap layout:
-    // width  = legend_w + pad*3 + minimum map width
-    // height = top_padding + pad*2 + minimum map height
-    const float min_avail_x = legend_w + pad * 3.0f + 20.0f;
-    const float min_avail_y = top_padding + pad * 2.0f + 20.0f;
+    // Minimum content region needed for the full minimap layout:
+    // - legend column needs ~120 wide and ~130 tall (Max/Min text,
+    //   color bar, checkboxes)
+    // - map area needs some breathing room next to the legend
+    // Below this we skip rendering entirely; the dock split can still
+    // shrink (SetNextWindowSizeConstraints is ignored for docked
+    // windows in ImGui), but the area renders empty rather than
+    // half-laid-out.
+    const float min_avail_x = 200.0f;
+    const float min_avail_y = 150.0f;
 
     // Guard: skip the entire child window when there is not enough
     // space for the layout.  Creating a child and bailing mid-layout

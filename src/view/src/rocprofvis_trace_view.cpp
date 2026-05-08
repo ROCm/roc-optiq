@@ -373,16 +373,11 @@ TraceView::Render()
                                      ImGuiCond_FirstUseEver);
             ImGui::SetNextWindowSizeConstraints(ImVec2(200.0f, 150.0f),
                                                 ImVec2(FLT_MAX, FLT_MAX));
-            {
-                ImGuiWindowClass wc;
-                wc.ViewportFlagsOverrideSet = ImGuiViewportFlags_NoRendererClear;
-                ImGui::SetNextWindowClass(&wc);
-            }
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoCollapse))
             {
                 const ImVec2 content = ImGui::GetContentRegionAvail();
-                if(content.x >= 164.0f && content.y >= 41.0f)
+                if(content.x >= 200.0f && content.y >= 150.0f)
                 {
                     m_minimap->Render();
                 }

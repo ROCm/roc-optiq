@@ -325,6 +325,7 @@ Minimap::Render()
         ImVec2      window_position = ImGui::GetWindowPos();
 
         ImGui::SetCursorPos(ImVec2(pad, pad));
+        ImGui::Dummy(ImVec2(0, 0));
 
         ImVec2 map_pos(window_position.x + pad, window_position.y + top_padding);
         ImVec2 map_size(avail.x - legend_w - pad * 3, avail.y - top_padding - pad * 2);
@@ -355,7 +356,9 @@ Minimap::Render()
         RenderViewport(draw_list, map_pos, map_size);
         HandleNavigation(map_pos, map_size);
 
-        ImGui::SetCursorPos(ImVec2(avail.x - legend_w - pad, top_padding));
+        float legend_x = std::max(0.0f, avail.x - legend_w - pad);
+        ImGui::SetCursorPos(ImVec2(legend_x, top_padding));
+        ImGui::Dummy(ImVec2(0, 0));
         RenderLegend(legend_w, avail.y - top_padding - pad * 2);
     }
     ImGui::EndChild();
@@ -466,6 +469,7 @@ Minimap::HandleNavigation(ImVec2 map_pos, ImVec2 map_size)
     double end_time = m_data_provider.DataModel().GetTimeline().GetEndTime() - start_time;
 
     ImGui::SetCursorScreenPos(map_pos);
+    ImGui::Dummy(ImVec2(0, 0));
     ImGui::InvisibleButton("Hit", map_size);
 
     if(ImGui::IsItemClicked())
@@ -561,10 +565,12 @@ Minimap::RenderLegend(float w, float h)
     // Checkboxes
     float chk_y = bar_y + bar_h + gap + text_height + gap;
     ImGui::SetCursorScreenPos(ImVec2(bar_x1 - (checkbox_sz - bar_w) * 0.5f, chk_y));
+    ImGui::Dummy(ImVec2(0, 0));
     ImGui::Checkbox("##events", &m_show_events);
     if(ImGui::IsItemHovered())
         SetTooltipStyled("Show/Hide Event Tracks");
     ImGui::SetCursorScreenPos(ImVec2(bar_x2 - (checkbox_sz - bar_w) * 0.5f, chk_y));
+    ImGui::Dummy(ImVec2(0, 0));
     ImGui::Checkbox("##counters", &m_show_counters);
     if(ImGui::IsItemHovered())
         SetTooltipStyled("Show/Hide Counter Tracks");

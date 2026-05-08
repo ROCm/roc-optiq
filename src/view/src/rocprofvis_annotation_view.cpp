@@ -49,8 +49,6 @@ AnnotationView::Render()
                                 ImGui::GetFontSize() * 5.5f);
         ImGui::TableHeadersRow();
 
-        double trace_start_time =
-            m_data_provider.DataModel().GetTimeline().GetStartTime();
         const auto& time_format =
             SettingsManager::GetInstance().GetUserSettings().unit_settings.time_format;
         std::string time_label;
@@ -76,13 +74,16 @@ AnnotationView::Render()
 
             const std::string display_title =
                 note.GetTitle().empty() ? "Untitled" : note.GetTitle();
-            const std::string selectable_id =
-                "##sticky_note_" + std::to_string(note.GetID());
+            std::string note_preview = note.GetText();
+            for(char& c : note_preview)
+            {
+                if(c == '\n' || c == '\r' || c == '\t') c = ' ';
+            }
+            const std::string selectable_label =
+                display_title + "##sticky_note_" + std::to_string(note.GetID());
             const float row_height = ImGui::GetFrameHeight();
 
-            // Empty selectable for the row-wide highlight; elided text is drawn on top.
-            const ImVec2 cell_cursor = ImGui::GetCursorPos();
-            if(ImGui::Selectable(selectable_id.c_str(), is_selected,
+            if(ImGui::Selectable(selectable_label.c_str(), is_selected,
                                  ImGuiSelectableFlags_SpanAllColumns |
                                      ImGuiSelectableFlags_AllowOverlap,
                                  ImVec2(0.0f, row_height)))
@@ -98,14 +99,12 @@ AnnotationView::Render()
                 ImGui::PopStyleColor(3);
             }
 
-            ImGui::SetCursorPos(cell_cursor);
-            ImGui::AlignTextToFramePadding();
-            ElidedText(display_title.c_str(), ImGui::GetContentRegionAvail().x);
-
             // Text column
             ImGui::TableNextColumn();
             ImGui::AlignTextToFramePadding();
-            ElidedText(note.GetText().c_str(), ImGui::GetContentRegionAvail().x);
+            ImGui::PushID("note_preview");
+            ElidedText(note_preview.c_str(), ImGui::GetContentRegionAvail().x);
+            ImGui::PopID();
 
             // Time column
             ImGui::TableNextColumn();

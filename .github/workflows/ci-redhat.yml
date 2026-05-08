@@ -86,7 +86,7 @@ jobs:
         shell: bash
         run: |
           source /opt/vulkan/**/setup-env.sh
-          if [ "${{ matrix.os-release }}" = "8" ]; then
+          if [ "${{ matrix.os-version }}" = "8" ]; then
             source /opt/rh/gcc-toolset-11/enable
             EXTRA_LINK_FLAGS="-ldl -ltbb"
           else

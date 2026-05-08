@@ -1161,4 +1161,23 @@ SystemTraceProjectSettings::Valid() const
     return valid;
 }
 
-std::unordered_m
+std::unordered_map<int, ViewCoords>
+SystemTraceProjectSettings::Bookmarks()
+{
+    std::unordered_map<int, ViewCoords> bookmarks;
+    for(jt::Json& bookmark :
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK].getArray())
+    {
+        bookmarks[static_cast<int>(
+            bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].getNumber())] = ViewCoords{
+            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y].getNumber()),
+            static_cast<float>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z].getNumber()),
+            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X].getNumber()),
+            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X].getNumber())
+        };
+    }
+    return bookmarks;
+}
+
+}  // namespace View
+}  // namespace RocProfVis

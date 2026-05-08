@@ -129,6 +129,21 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Generate Metadata for S3
+        if: ${{ inputs.upload_to_s3 }}
+        shell: bash
+        working-directory: ${{ env.DIST_DIR }}
+        run: |
+          dpkg-scanpackages . /dev/null > Packages
+          gzip -k -f Packages
+          APT_SUITE="optiq-nightly"
+          apt-ftparchive \
+              -o APT::FTPArchive::Release::Origin="ROCm Optiq" \
+              -o APT::FTPArchive::Release::Label="${APT_SUITE}" \
+              -o APT::FTPArchive::Release::Suite="${APT_SUITE}" \
+              -o APT::FTPArchive::Release::Codename="${APT_SUITE}" \
+              release . > Release
+
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}
         shell: bash

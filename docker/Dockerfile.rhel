@@ -6,6 +6,10 @@ ARG VULKAN_SDK_VERSION=1.4.328.1
 WORKDIR /tmp
 SHELL [ "/bin/bash", "-c" ]
 
+# Clean
+RUN dnf clean all && \
+    dnf upgrade -y --refresh
+
 # Install Dependencies
 RUN dnf groupinstall -y "Development Tools" && \
     if [ "${VERSION}" -eq 8 ]; then \

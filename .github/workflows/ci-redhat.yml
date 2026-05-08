@@ -33,7 +33,7 @@ on:
       os_version:
         description: 'JSON array of OS version(s) to test'
         type: string
-        default: '[ "9", "10" ]'
+        default: '[ "8", "9", "10" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string

@@ -40,7 +40,7 @@ jobs:
     env:
       # Full OS Coverage (for nightly scheduled builds)
       UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04" ]'
-      REDHAT_FULL_OS_VERSIONS: '[ "9", "10" ]'
+      REDHAT_FULL_OS_VERSIONS: '[ "8", "9", "10" ]'
       WINDOWS_FULL_OS_VERSIONS: '[ "2025" ]'
       MAC_FULL_OS_VERSIONS: '[ "14", "15", "26" ]'
       # Minimal OS Coverage (for all other builds)

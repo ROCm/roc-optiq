@@ -310,6 +310,15 @@ Minimap::Render()
     float  top_padding = 5.0f;
     ImVec2 avail       = ImGui::GetContentRegionAvail();
 
+    // Guard against zero or negative content region to prevent
+    // division-by-zero crashes when the window is sized too small.
+    if(avail.x < 1.0f || avail.y < 1.0f)
+    {
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor();
+        return;
+    }
+
     if(ImGui::BeginChild("Minimap", avail, true))
     {
         ImDrawList* draw_list       = ImGui::GetWindowDrawList();
@@ -319,6 +328,15 @@ Minimap::Render()
 
         ImVec2 map_pos(window_position.x + pad, window_position.y + top_padding);
         ImVec2 map_size(avail.x - legend_w - pad * 3, avail.y - top_padding - pad * 2);
+
+        // Skip rendering if the computed map area is too small
+        if(map_size.x < 1.0f || map_size.y < 1.0f)
+        {
+            ImGui::EndChild();
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor();
+            return;
+        }
 
         // Fill background of minimap area with white (light mode) or black (dark mode)
         draw_list->AddRectFilled(map_pos,
@@ -349,6 +367,7 @@ void
 Minimap::RenderMinimapData(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
 {
     if(m_visible_tracks.empty() || m_data_width == 0 || m_data_height == 0) return;
+    if(map_size.x < 1.0f || map_size.y < 1.0f) return;
 
     float bw = map_size.x / m_data_width, bh = map_size.y / m_data_height;
     for(size_t y = 0; y < m_data_height && y < m_visible_tracks.size(); ++y)
@@ -490,6 +509,9 @@ Minimap::RenderLegend(float w, float h)
     float checkbox_sz = ImGui::GetFrameHeight();
     float gap         = 4.0f;
     float bar_h       = h - (text_height * 2) - (gap * 3) - checkbox_sz;
+
+    // Skip legend rendering if there is not enough vertical space
+    if(bar_h < 1.0f) return;
 
     float bar_x1 = pos.x + (w * 0.25f) - (bar_w * 0.5f);
     float bar_x2 = pos.x + (w * 0.75f) - (bar_w * 0.5f);

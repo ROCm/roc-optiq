@@ -376,7 +376,11 @@ TraceView::Render()
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoCollapse))
             {
-                m_minimap->Render();
+                const ImVec2 content = ImGui::GetContentRegionAvail();
+                if(content.x >= 1.0f && content.y >= 1.0f)
+                {
+                    m_minimap->Render();
+                }
             }
             ImGui::End();
             popup_style.PopStyles();

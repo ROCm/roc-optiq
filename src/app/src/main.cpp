@@ -301,10 +301,6 @@ main(int argc, char** argv)
                 // compositor manage the window surfaces correctly and
                 // avoids stale framebuffer ghosts.
                 io.ConfigViewportsNoDecoration = false;
-                // Prevent auto-merging viewports back into the main
-                // window during drag — reduces flicker from repeated
-                // viewport create/destroy cycles under Xwayland.
-                io.ConfigViewportsNoAutoMerge = true;
 #endif
 
                 ImGui::StyleColorsLight();

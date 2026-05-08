@@ -106,21 +106,29 @@ SummaryView::Render()
         ImGui::Begin("Summary", &m_settings.GetAppWindowSettings().show_summary,
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
                          ImGuiWindowFlags_NoScrollWithMouse);
-        if(m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID) ||
-           m_data_provider.GetState() == ProviderState::kLoading)
         {
-            RenderLoadingIndicator(m_settings.GetColor(Colors::kTextMain));
-        }
-        else
-        {
-            ImGui::SetNextWindowSizeConstraints(
-                ImVec2(m_h_container->GetMinSize(), m_v_container->GetMinSize()),
-                ImVec2(FLT_MAX, FLT_MAX));
-            ImGui::BeginChild("summary_clamped_view", ImVec2(0, 0), ImGuiChildFlags_None,
-                              ImGuiWindowFlags_NoScrollbar |
-                                  ImGuiWindowFlags_NoScrollWithMouse);
-            m_h_container->Render();
-            ImGui::EndChild();
+            const ImVec2 content = ImGui::GetContentRegionAvail();
+            if(content.x < 1.0f || content.y < 1.0f)
+            {
+                // Window too small to render safely; skip content this frame.
+            }
+            else if(m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID) ||
+                    m_data_provider.GetState() == ProviderState::kLoading)
+            {
+                RenderLoadingIndicator(m_settings.GetColor(Colors::kTextMain));
+            }
+            else
+            {
+                ImGui::SetNextWindowSizeConstraints(
+                    ImVec2(m_h_container->GetMinSize(), m_v_container->GetMinSize()),
+                    ImVec2(FLT_MAX, FLT_MAX));
+                ImGui::BeginChild("summary_clamped_view", ImVec2(0, 0),
+                                  ImGuiChildFlags_None,
+                                  ImGuiWindowFlags_NoScrollbar |
+                                      ImGuiWindowFlags_NoScrollWithMouse);
+                m_h_container->Render();
+                ImGui::EndChild();
+            }
         }
         ImGui::End();
     }

@@ -104,7 +104,8 @@ TabContainer::Render()
                         ImVec2(style.FramePadding.x + 2.0f, style.FramePadding.y + 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, style.FrameRounding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
-    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None);
+    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None,
+                      ImGuiWindowFlags_NoScrollWithMouse);
     int new_selected_tab = m_active_tab_index;
     if(!m_tabs.empty())
     {

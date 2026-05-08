@@ -87,7 +87,8 @@ enum MemChartMetric
     HBM_RD,
     HBM_WR,
 
-    // Placeholder for rows that always show N/A.
+    // Chart-only placeholder for rows that intentionally display N/A instead
+    // of looking up a metric value.
     MEMCHART_METRIC_NA,
     MEMCHART_METRIC_COUNT = MEMCHART_METRIC_NA  // sentinel: total number of chart slots
 };

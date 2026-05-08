@@ -70,6 +70,9 @@ protected:
     // Suppress the outer card when an embedding container paints its own.
     bool                      m_no_panel = false;
 
+    uint32_t m_freezed_columns = 0;
+    uint32_t m_freezed_rows    = 0;
+
 private:
     float GetTableHeight() const;
     void  RenderPinCheckBox(std::pair<const MetricId, Row>& row);

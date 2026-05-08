@@ -38,6 +38,8 @@
 
 **Misc UI**
 - New settings panel allowing keyboard shortcuts to be customized.
+- Recent file list can now be cleared.
+- Changed log file names to match application name.
 
 ### Fixes
 
@@ -60,7 +62,8 @@
 - Fix issue where file dialog does not work if D-Bus is mis-configured.
 - Fix for issues with Vulkan driver crashing when display is forwarded over ssh.
 - Fix mismatched sidebar header sizes.
-
+- Fix edge case where events overlap instead of stack in the flamechart.
+- Fix memory chart values. (Certain metrics were placed in the wrong places).
 
 ## Optiq Beta 0.3.0
 

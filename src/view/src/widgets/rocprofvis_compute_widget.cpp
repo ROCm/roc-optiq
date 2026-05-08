@@ -84,75 +84,70 @@ MetricTableBase::Render()
     const float row_hover_height =
         ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
 
-    const std::string child_id = "##" + m_table_title + "_layout_";
-    const std::string table_id = child_id + "_table";
-
-    if(ImGui::BeginChild(RocWidget::GenUniqueName(child_id).c_str(),
-                         ImVec2(0, GetTableHeight()), false,
-                         ImGuiWindowFlags_HorizontalScrollbar))
+    const std::string table_id   = "##" + m_table_title + "_table";
+    const ImVec2      table_size = { 0, GetTableHeight() };
+    if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
+                         m_table_flags, table_size))
     {
-        if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
-                             m_table_flags))
+        ImGui::TableSetupScrollFreeze(m_freezed_columns, m_freezed_rows);
+
+        for(const auto& column : m_columns)
         {
-            for(const auto& column : m_columns)
+            if(column.first == 0)
             {
-                if(column.first == 0)
+                if(CanBePinned())
                 {
-                    if(CanBePinned())
-                    {
-                        const float font_size = ImGui::GetFontSize();
-                        ImGui::TableSetupColumn(column.second.c_str(),
-                                                ImGuiTableColumnFlags_WidthFixed,
-                                                font_size);
-                    }
-                }
-                else
-                {
-                    ImGui::TableSetupColumn(column.second.c_str());
+                    const float font_size = ImGui::GetFontSize();
+                    ImGui::TableSetupColumn(column.second.c_str(),
+                                            ImGuiTableColumnFlags_WidthFixed,
+                                            font_size);
                 }
             }
-
-            ImGui::TableHeadersRow();
-
-            uint32_t row_idx = 0;
-            for(auto& row : m_rows)
+            else
             {
-                ImGui::PushID(row_idx++);
-                ImGui::TableNextRow();
-                const ImVec2 row_min(ImGui::GetWindowPos().x,
-                                      ImGui::GetCursorScreenPos().y);
-                const ImVec2 row_max(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
-                                      row_min.y + row_hover_height);
-                if(ImGui::IsWindowHovered() &&
-                   ImGui::IsMouseHoveringRect(row_min, row_max, true))
-                {
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                                           settings.GetColor(Colors::kHighlightChart));
-                }
-
-                for(auto column_index = 0; column_index < m_last_column_index;
-                    column_index++)
-                {
-                    if(column_index == 0 && !CanBePinned())
-                    {
-                        continue;
-                    }
-                    auto menu_func = [&](const char* value_to_copy) {
-                        ImU32 mainColor = settings.GetColor(Colors::kTextMain);
-                        ImGui::PushStyleColor(ImGuiCol_Text, mainColor);
-                        this->ContextMenu(value_to_copy, column_index, row);
-                        ImGui::PopStyleColor();
-                    };
-                    RenderRowValues(column_index, row, menu_func);
-                }
-
-                RenderUnitValue(row);
-                ImGui::PopID();
+                ImGui::TableSetupColumn(column.second.c_str());
             }
-            ImGui::EndTable();
         }
+
+        ImGui::TableHeadersRow();
+
+        uint32_t row_idx = 0;
+        for(auto& row : m_rows)
+        {
+            ImGui::PushID(row_idx++);
+            ImGui::TableNextRow();
+            const ImVec2 row_min(ImGui::GetWindowPos().x,
+                                 ImGui::GetCursorScreenPos().y);
+            const ImVec2 row_max(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
+                                 row_min.y + row_hover_height);
+            if(ImGui::IsWindowHovered() &&
+               ImGui::IsMouseHoveringRect(row_min, row_max, true))
+            {
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                       settings.GetColor(Colors::kHighlightChart));
+            }
+
+            for(auto column_index = 0; column_index < m_last_column_index;
+                column_index++)
+            {
+                if(column_index == 0 && !CanBePinned())
+                {
+                    continue;
+                }
+                auto menu_func = [&](const char* value_to_copy) {
+                    ImU32 mainColor = settings.GetColor(Colors::kTextMain);
+                    ImGui::PushStyleColor(ImGuiCol_Text, mainColor);
+                    this->ContextMenu(value_to_copy, column_index, row);
+                    ImGui::PopStyleColor();
+                };
+                RenderRowValues(column_index, row, menu_func);
+            }
+
+            RenderUnitValue(row);
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
     }
-    ImGui::EndChild();
 
     pop_panel();
 }
@@ -356,6 +351,15 @@ MetricTableBase::CanBePinned()
 
 //---------------------------------------------------------
 
+MetricTable::MetricTable(std::string event_source_id)
+: MetricTableBase(std::move(event_source_id))
+{
+    m_table_flags |= ImGuiTableFlags_ScrollY;
+    m_max_rows_in_table = 40;
+    m_freezed_columns   = 3;
+    m_freezed_rows      = 1;
+}
+
 void
 MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
                                  std::pair<const MetricId, Row>& row)
@@ -386,10 +390,6 @@ MetricTable::RenderEmptyTable()
 {
     ImGui::TextDisabled("This table is empty for current selection");
 }
-
-MetricTable::MetricTable(std::string event_source_id)
-: MetricTableBase(std::move(event_source_id))
-{}
 
 void
 MetricTable::Populate(const AvailableMetrics::Table& table,
@@ -475,9 +475,11 @@ PinnedMetricTable::PinnedMetricTable(DataProvider&                     data_prov
 , m_client_id(client_id)
 {
     FillDefaultColumns(m_columns, m_last_column_index);
-    m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollX;
-    m_table_title = "Pinned Metrics";
+    m_table_flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
+    m_table_title       = "Pinned Metrics";
     m_max_rows_in_table = 7;
+    m_freezed_columns = 3;
+    m_freezed_rows = 1;
 }
 
 void

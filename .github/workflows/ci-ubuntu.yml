@@ -1,0 +1,126 @@
+name: Ubuntu Continuous Integration
+run-name: roc-optiq-ubuntu-ci
+
+on:
+  workflow_dispatch:
+    inputs:
+      os_version:
+        description: 'JSON array of OS versions to test'
+        type: string
+        default: '[ "22.04", "24.04" ]'
+      cmake_config_preset:
+        description: 'CMake Config Preset to Use'
+        type: string
+        default: 'linux-release'
+      cmake_build_preset:
+        description: 'CMake Build Preset to Use'
+        type: string
+        default: 'Linux Release Build'
+      enable_internal_banner:
+        description: 'Enable the internal banner?'
+        type: boolean
+        default: false
+      upload_to_github:
+        description: 'Upload build artifacts to GitHub Artifacts?'
+        type: boolean
+        default: false
+      upload_to_s3:
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      os_version:
+        description: 'JSON array of OS versions to test'
+        type: string
+        default: '[ "22.04", "24.04" ]'
+      cmake_config_preset:
+        description: 'CMake Config Preset to Use'
+        type: string
+        default: 'linux-release'
+      cmake_build_preset:
+        description: 'CMake Build Preset to Use'
+        type: string
+        default: 'Linux Release Build'
+      enable_internal_banner:
+        description: 'Enable the internal banner?'
+        type: boolean
+        default: false
+      upload_to_github:
+        description: 'Upload build artifacts to GitHub Artifacts?'
+        type: boolean
+        default: false
+      upload_to_s3:
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
+        type: boolean
+        default: false
+
+env:
+  BUILD_DIR: "build"
+  DIST_DIR: "dist"
+  BUILD_FILE_NAME: "roc-optiq"
+  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+
+jobs:
+  ubuntu:
+    name: Ubuntu ${{ matrix.os-version }} • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    container:
+      image: ghcr.io/rocm/optiq-ci-ubuntu:${{ matrix.os-version }}
+    strategy:
+      fail-fast: false
+      matrix: 
+        os-version: ${{ fromJson(inputs.os_version) }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Build, Make, and Verify Installation
+        shell: bash
+        run: |
+          source /opt/vulkan/**/setup-env.sh
+          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
+          if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
+            echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"
+          else
+            echo "❌ ${{ env.BUILD_FILE_NAME }} was not built!"
+            exit 1
+          fi
+
+      - name: Prepare Distribution Artifacts
+        run: |
+          mkdir ${{ env.DIST_DIR }}
+          cp ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/*.tar.gz ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/*.deb ${{ env.DIST_DIR }}/
+          ls -l ${{ env.DIST_DIR }}/
+      
+      - name: Upload GitHub Artifacts
+        if: ${{ inputs.upload_to_github }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: roc-optiq-ubuntu-${{ matrix.os-version }}-release
+          path: |
+            ${{ env.DIST_DIR }}/
+          retention-days: 2
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.upload_to_s3 }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload Build to S3
+        if: ${{ inputs.upload_to_s3 }}
+        shell: bash
+        run: |
+          TIMESTAMP=$(date +%Y_%m_%d)
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/ubuntu/${{ matrix.os-version }}/ \
+            --no-progress

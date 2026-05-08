@@ -61,6 +61,7 @@ env:
   BUILD_FILE_NAME: "roc-optiq"
   VULKAN_SDK_VERSION: "1.4.328.1"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  AWS_S3_BUCKET_BASE_PATH: "test"
 
 jobs:
   mac:
@@ -209,7 +210,7 @@ jobs:
         run: |
           ditto -c -k --keepParent ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip
           TIMESTAMP=$(date +%Y_%m_%d)
-          aws s3 cp ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/mac/${{ matrix.os-version }}/ \
+          aws s3 cp ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.AWS_S3_BUCKET_BASE_PATH }}/$TIMESTAMP/mac/${{ matrix.os-version }}/ \
             --no-progress
       
       - name: Announce Test Failure

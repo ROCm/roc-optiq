@@ -61,7 +61,7 @@ env:
   BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || 'Release' }}
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
-  
+  AWS_S3_BUCKET_BASE_PATH: "test"
 
 jobs:
   windows:
@@ -146,7 +146,7 @@ jobs:
         shell: pwsh
         run: |
           $timestamp = Get-Date -Format "yyyy_MM_dd"
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$timeStamp/windows/ `
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.AWS_S3_BUCKET_BASE_PATH }}/$timeStamp/windows/ `
             --no-progress
       
       - name: Announce Test Failure

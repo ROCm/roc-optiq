@@ -369,6 +369,18 @@ TraceView::Render()
             popup_style.PushTitlebarColors();
 
             float dpi = SettingsManager::GetInstance().GetDPI();
+            // Anchor first appearance inside the main viewport so the
+            // window does not get promoted to a separate OS-level
+            // viewport.  When the window lives inside its own OS
+            // viewport, ImGui refuses to dock it with windows that are
+            // hosted by the main viewport.
+            const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+            const ImVec2         center        = main_viewport->GetCenter();
+            // Use Appearing (not FirstUseEver) so a previously-saved
+            // position outside the main viewport doesn't keep the
+            // window stranded in a secondary OS viewport across runs.
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing,
+                                    ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi),
                                      ImGuiCond_FirstUseEver);
             ImGui::SetNextWindowSizeConstraints(ImVec2(200.0f, 150.0f),
@@ -1149,23 +1161,4 @@ SystemTraceProjectSettings::Valid() const
     return valid;
 }
 
-std::unordered_map<int, ViewCoords>
-SystemTraceProjectSettings::Bookmarks()
-{
-    std::unordered_map<int, ViewCoords> bookmarks;
-    for(jt::Json& bookmark :
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK].getArray())
-    {
-        bookmarks[static_cast<int>(
-            bookmark[JSON_KEY_TIMELINE_BOOKMARK_KEY].getNumber())] = ViewCoords{
-            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Y].getNumber()),
-            static_cast<float>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_Z].getNumber()),
-            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X].getNumber()),
-            static_cast<double>(bookmark[JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X].getNumber())
-        };
-    }
-    return bookmarks;
-}
-
-}  // namespace View
-}  // namespace RocProfVis
+std::unordered_m

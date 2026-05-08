@@ -308,7 +308,7 @@ Minimap::Render()
     float  pad         = 8.0f;
     float  legend_w    = 120.0f;
     float  top_padding = 5.0f;
-    ImVec2 avail       = ImGui::GetContentRegionAvail();
+    ImVec2 outer_avail = ImGui::GetContentRegionAvail();
 
     // Minimum content region needed for the full minimap layout:
     // - legend column needs ~120 wide and ~130 tall (Max/Min text,
@@ -324,46 +324,59 @@ Minimap::Render()
     // Guard: skip the entire child window when there is not enough
     // space for the layout.  Creating a child and bailing mid-layout
     // corrupts ImGui internal state and causes visual artifacts.
-    if(avail.x < min_avail_x || avail.y < min_avail_y)
+    if(outer_avail.x < min_avail_x || outer_avail.y < min_avail_y)
     {
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor();
         return;
     }
 
-    if(ImGui::BeginChild("Minimap", avail, true))
+    if(ImGui::BeginChild("Minimap", outer_avail, true))
     {
-        ImDrawList* draw_list       = ImGui::GetWindowDrawList();
-        ImVec2      window_position = ImGui::GetWindowPos();
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-        ImGui::SetCursorPos(ImVec2(pad, pad));
+        // Compute layout from the child's inner content rect, not the
+        // outer avail captured before BeginChild.  Using the outer size
+        // misaligns the map (drawn with raw ImDrawList) and the legend
+        // (positioned via SetCursorPos, which is offset by WindowPadding
+        // and border) by ~8px and causes visible overlap at small sizes.
+        ImVec2 avail   = ImGui::GetContentRegionAvail();
+        ImVec2 map_pos = ImGui::GetCursorScreenPos();
+        // Nudge map slightly inward so the border of the child window
+        // is not overlapped.
+        map_pos.y += top_padding;
+        ImVec2 map_size(std::max(0.0f, avail.x - legend_w - pad * 2),
+                        std::max(0.0f, avail.y - top_padding - pad));
+
         ImGui::Dummy(ImVec2(0, 0));
 
-        ImVec2 map_pos(window_position.x + pad, window_position.y + top_padding);
-        ImVec2 map_size(avail.x - legend_w - pad * 3, avail.y - top_padding - pad * 2);
+        if(map_size.x > 1.0f && map_size.y > 1.0f)
+        {
+            // Fill background of minimap area with white (light mode) or
+            // black (dark mode)
+            draw_list->AddRectFilled(
+                map_pos, ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
+                sm.GetColor(Colors::kMinimapBg));
 
+            RenderMinimapData(draw_list, map_pos, map_size);
 
-        // Fill background of minimap area with white (light mode) or black (dark mode)
-        draw_list->AddRectFilled(map_pos,
-                                 ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
-                                 sm.GetColor(Colors::kMinimapBg));
+            // Draw border around minimap
+            ImU32 border_color     = sm.GetColor(Colors::kBorderColor);
+            float border_thickness = 1.5f;
+            draw_list->AddRect(
+                map_pos, ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
+                border_color, 0.0f, 0, border_thickness);
 
-        RenderMinimapData(draw_list, map_pos, map_size);
+            RenderViewport(draw_list, map_pos, map_size);
+            HandleNavigation(map_pos, map_size);
+        }
 
-        // Draw border around minimap
-        ImU32 border_color     = sm.GetColor(Colors::kBorderColor);
-        float border_thickness = 1.5f;
-        draw_list->AddRect(map_pos,
-                           ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
-                           border_color, 0.0f, 0, border_thickness);
-
-        RenderViewport(draw_list, map_pos, map_size);
-        HandleNavigation(map_pos, map_size);
-
-        float legend_x = std::max(0.0f, avail.x - legend_w - pad);
+        // Position the legend column at the right edge of the inner
+        // content area, leaving `pad` between it and the map.
+        float legend_x = std::max(0.0f, avail.x - legend_w);
         ImGui::SetCursorPos(ImVec2(legend_x, top_padding));
         ImGui::Dummy(ImVec2(0, 0));
-        RenderLegend(legend_w, avail.y - top_padding - pad * 2);
+        RenderLegend(legend_w, std::max(0.0f, avail.y - top_padding - pad));
     }
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
@@ -592,24 +605,4 @@ Minimap::RenderLegend(float w, float h)
         int v_end = dl->VtxBuffer.Size;
 
         // Rotate 90� CCW: (x,y) -> (y, -x) relative to center
-        for(int i = v_start; i < v_end; ++i)
-        {
-            ImDrawVert& v  = dl->VtxBuffer[i];
-            float       dx = v.pos.x - center.x;
-            float       dy = v.pos.y - center.y;
-            v.pos.x        = center.x + dy;
-            v.pos.y        = center.y - dx;
-        }
-    };
-
-    // Event Density (Left of bar 1)
-    DrawRotatedText("Event Density", ImVec2(bar_x1 - gap * 3.0f, bar_y + bar_h * 0.5f),
-                    !m_show_events);
-
-    // Counter Value (Left of bar 2)
-    DrawRotatedText("Counter Value", ImVec2(bar_x2 - gap * 3.0f, bar_y + bar_h * 0.5f),
-                    !m_show_counters);
-}
-
-}  // namespace View
-}  // namespace RocProfVis
+   

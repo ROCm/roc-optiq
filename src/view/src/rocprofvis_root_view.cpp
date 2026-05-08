@@ -26,6 +26,12 @@ void
 RootView::RenderEditMenuOptions()
 {}
 
+std::optional<DataProviderCleanupWork>
+RootView::DetachProviderCleanup()
+{
+    return std::nullopt;
+}
+
 void
 RootView::RenderLoadingScreen(const char* progress_label)
 {

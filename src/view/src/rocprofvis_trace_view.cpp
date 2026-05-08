@@ -200,6 +200,13 @@ TraceView::~TraceView()
         m_progress_update_event_token);
 }
 
+std::optional<DataProviderCleanupWork>
+TraceView::DetachProviderCleanup()
+{
+    DataProviderCleanupWork cleanup_work = m_data_provider.DetachCleanupWork();
+    return cleanup_work;
+}
+
 void
 TraceView::Update()
 {
@@ -515,6 +522,7 @@ TraceView::CleanupDatabase(bool rebuild, std::function<void()> on_complete)
         return false;
     }
 
+    //Todo: FreeRequests() will block the UI thread.
     m_data_provider.FreeRequests();
 
     m_data_provider.SetCleanupDatabaseCallback(

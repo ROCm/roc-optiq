@@ -28,6 +28,7 @@
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
 #include <sstream>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -38,6 +39,8 @@ constexpr ImVec2      FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
 constexpr const char* FILE_DIALOG_NAME       = "ChooseFileDlgKey";
 constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
+constexpr const char* APP_SHUTDOWN_NOTIFICATION_ID = "provider_cleanup_app_shutdown";
+constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
 constexpr float EMPTY_STATE_CONTENT_EM      = 32.0f;
 constexpr float EMPTY_STATE_BUTTON_EM       = 10.0f;
 constexpr float EMPTY_STATE_LOGO_EM         = 12.0f;
@@ -104,7 +107,10 @@ AppWindow::AppWindow()
 , m_is_native_file_dialog_open(false)
 #endif
 , m_disable_app_interaction(false)
+, m_shutdown_requested(false)
+, m_exit_notification_sent(false)
 , m_restore_fullscreen_later(false)
+, m_next_provider_cleanup_id(0)
 {}
 
 AppWindow::~AppWindow()
@@ -113,6 +119,14 @@ AppWindow::~AppWindow()
                                              m_tabclosed_event_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
+    for(auto& job : m_provider_cleanup_jobs)
+    {
+        if(job.future.valid())
+        {
+            job.future.get();
+        }
+    }
+    m_provider_cleanup_jobs.clear();
     m_projects.clear();
 }
 
@@ -151,7 +165,11 @@ AppWindow::Init()
     m_tab_container->EnableSendChangeEvent(true);
 
     main_area_item.m_item = std::make_shared<RocCustomWidget>([this]() {
-        if(m_tab_container && !m_tab_container->GetTabs().empty())
+        if(m_shutdown_requested)
+        {
+            RenderShutdownState();
+        }
+        else if(m_tab_container && !m_tab_container->GetTabs().empty())
         {
             m_tab_container->Render();
         }
@@ -270,12 +288,16 @@ AppWindow::SetTabLabel(const std::string& label, const std::string& id)
 void
 AppWindow::ShowCloseConfirm()
 {
+    if(m_shutdown_requested)
+    {
+        RequestExitIfProviderCleanupsComplete();
+        return;
+    }
+
     if(m_tab_container->GetTabs().size() == 0 ||
        SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit)
     {
-        if(m_notification_callback)
-            m_notification_callback(
-                rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
+        BeginAppShutdown();
         return;
     }
 
@@ -284,11 +306,7 @@ AppWindow::ShowCloseConfirm()
         "Confirm Close",
         "Are you sure you want to close the application? Any "
         "unsaved data will be lost.",
-        [this]() {
-            if(m_notification_callback)
-                m_notification_callback(
-                    rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
-        });
+        [this]() { BeginAppShutdown(); });
 }
 
 void
@@ -372,11 +390,170 @@ AppWindow::GetCurrentProject()
 }
 
 void
+AppWindow::BeginAppShutdown()
+{
+    if(m_shutdown_requested)
+    {
+        RequestExitIfProviderCleanupsComplete();
+        return;
+    }
+
+    m_shutdown_requested      = true;
+    m_disable_app_interaction = true;
+
+    for(auto& item : m_projects)
+    {
+        if(item.second)
+        {
+            item.second->Close();
+            DetachProjectProviderCleanup(*item.second,
+                                         ProviderCleanupReason::kAppShutdown);
+        }
+    }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    StartProviderCleanup(m_test_data_provider.DetachCleanupWork(),
+                         "developer data provider",
+                         ProviderCleanupReason::kAppShutdown);
+#endif
+
+    m_projects.clear();
+    if(m_main_view)
+    {
+        m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
+    }
+
+    if(!m_provider_cleanup_jobs.empty())
+    {
+        NotificationManager::GetInstance().ShowPersistent(
+            APP_SHUTDOWN_NOTIFICATION_ID, "Closing traces...",
+            NotificationLevel::Info);
+    }
+
+    RequestExitIfProviderCleanupsComplete();
+}
+
+void
+AppWindow::DetachProjectProviderCleanup(Project& project, ProviderCleanupReason reason)
+{
+    std::shared_ptr<RootView> root_view =
+        std::dynamic_pointer_cast<RootView>(project.GetView());
+    if(!root_view)
+    {
+        return;
+    }
+
+    std::optional<DataProviderCleanupWork> cleanup_work =
+        root_view->DetachProviderCleanup();
+    if(cleanup_work)
+    {
+        StartProviderCleanup(std::move(*cleanup_work), project.GetName(), reason);
+    }
+}
+
+void
+AppWindow::StartProviderCleanup(DataProviderCleanupWork cleanup_work,
+                                const std::string&    label,
+                                ProviderCleanupReason reason)
+{
+    if(cleanup_work.requests.empty() && !cleanup_work.controller)
+    {
+        return;
+    }
+
+    const std::string cleanup_label =
+        label.empty() ? cleanup_work.trace_file_path : label;
+    ProviderCleanupJob job;
+    job.label           = cleanup_label;
+    job.reason          = reason;
+    job.notification_id = "provider_cleanup_" +
+                          std::to_string(++m_next_provider_cleanup_id);
+
+    const std::string message =
+        "Closing trace: " + cleanup_label + " (" +
+        std::to_string(cleanup_work.requests.size()) + " request(s))";
+    NotificationManager::GetInstance().ShowPersistent(job.notification_id, message,
+                                                      NotificationLevel::Info);
+
+    job.future = std::async(
+        std::launch::async,
+        [cleanup_work = std::move(cleanup_work)]() mutable {
+            return DataProvider::CleanupDetachedResources(std::move(cleanup_work));
+        });
+    m_provider_cleanup_jobs.push_back(std::move(job));
+}
+
+void
+AppWindow::UpdateProviderCleanups()
+{
+    for(auto it = m_provider_cleanup_jobs.begin(); it != m_provider_cleanup_jobs.end();)
+    {
+        if(it->future.valid() &&
+           it->future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        {
+            DataProviderCleanupResult result = it->future.get();
+            spdlog::info("Provider cleanup completed for {} ({} request(s))",
+                         result.trace_file_path.empty() ? it->label
+                                                        : result.trace_file_path,
+                         result.request_count);
+            NotificationManager::GetInstance().Hide(it->notification_id);
+            it = m_provider_cleanup_jobs.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    if(m_shutdown_requested)
+    {
+        if(m_provider_cleanup_jobs.empty())
+        {
+            NotificationManager::GetInstance().Hide(APP_SHUTDOWN_NOTIFICATION_ID);
+        }
+        else
+        {
+            NotificationManager::GetInstance().ShowPersistent(
+                APP_SHUTDOWN_NOTIFICATION_ID,
+                "Closing traces... " +
+                    std::to_string(m_provider_cleanup_jobs.size()) +
+                    " cleanup job(s) remaining",
+                NotificationLevel::Info);
+        }
+        RequestExitIfProviderCleanupsComplete();
+    }
+}
+
+void
+AppWindow::RequestExitIfProviderCleanupsComplete()
+{
+    if(!m_shutdown_requested || m_exit_notification_sent ||
+       !m_provider_cleanup_jobs.empty())
+    {
+        return;
+    }
+
+    m_exit_notification_sent = true;
+    m_disable_app_interaction = false;
+    if(m_notification_callback)
+    {
+        m_notification_callback(
+            rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
+    }
+}
+
+void
 AppWindow::Update()
 {
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     UpdateNativeFileDialog();
 #endif
+    UpdateProviderCleanups();
+    if(m_shutdown_requested)
+    {
+        return;
+    }
+
     HotkeyManager::GetInstance().ProcessInput();
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
@@ -384,6 +561,7 @@ AppWindow::Update()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
+    UpdateProviderCleanups();
 }
 
 void
@@ -598,6 +776,38 @@ AppWindow::RenderEmptyState()
 }
 
 void
+AppWindow::RenderShutdownState()
+{
+    ImGui::OpenPopup(SHUTDOWN_DIALOG_NAME);
+
+    const float dpi = SettingsManager::GetInstance().GetDPI();
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+               viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
+        ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(360.0f * dpi, 0.0f), ImGuiCond_Always);
+
+    if(ImGui::BeginPopupModal(SHUTDOWN_DIALOG_NAME, nullptr,
+                              ImGuiWindowFlags_NoResize |
+                                  ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoCollapse))
+    {
+        if(m_provider_cleanup_jobs.empty())
+        {
+            ImGui::TextUnformatted("Closing...");
+        }
+        else
+        {
+            ImGui::TextUnformatted("Waiting for requests to finish cleanup...");
+            ImGui::Spacing();
+            ImGui::Text("Cleanup jobs remaining: %zu", m_provider_cleanup_jobs.size());
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void
 AppWindow::RenderFileDialog()
 {
     if(!ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME))
@@ -684,6 +894,11 @@ AppWindow::HandleOpenRecentFile(const std::string& file_path)
 void
 AppWindow::RenderDisableScreen()
 {
+    if(m_shutdown_requested)
+    {
+        return;
+    }
+
     if(m_disable_app_interaction)
     {
         ImGui::OpenPopup("GhostModal");
@@ -957,7 +1172,10 @@ void
 AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 {
     auto tab_closed_event = std::dynamic_pointer_cast<TabEvent>(e);
-    if(tab_closed_event && m_projects.count(tab_closed_event->GetTabId()) > 0)
+    auto project_it =
+        tab_closed_event ? m_projects.find(tab_closed_event->GetTabId())
+                         : m_projects.end();
+    if(tab_closed_event && project_it != m_projects.end())
     {
         auto activeProject = GetCurrentProject();
         if(!activeProject)
@@ -978,8 +1196,10 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
             }
         }
         spdlog::debug("Tab closed: {}", tab_closed_event->GetTabId());
-        m_projects[tab_closed_event->GetTabId()]->Close();
-        m_projects.erase(tab_closed_event->GetTabId());
+        project_it->second->Close();
+        DetachProjectProviderCleanup(*project_it->second,
+                                     ProviderCleanupReason::kTabClose);
+        m_projects.erase(project_it);
     }
 }
 

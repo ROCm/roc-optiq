@@ -164,8 +164,12 @@ SideBar::RenderTrackItem(const uint64_t& index, bool allow_visibility_toggle)
         if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
         {
             ScrollToTrack(graph);
+            if(m_timeline_selection)
+            {
+                m_timeline_selection->ToggleSelectTrack(graph);
+            }
         }
-        else
+        else if(m_timeline_selection)
         {
             m_timeline_selection->ToggleSelectTrack(graph);
         }

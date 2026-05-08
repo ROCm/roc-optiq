@@ -101,6 +101,8 @@ SummaryView::Render()
                                 ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(viewport_size * INITIAL_RELATIVE_SIZE,
                                  ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSizeConstraints(ImVec2(200.0f, 150.0f),
+                                            ImVec2(FLT_MAX, FLT_MAX));
         ImGui::Begin("Summary", &m_settings.GetAppWindowSettings().show_summary,
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
                          ImGuiWindowFlags_NoScrollWithMouse);

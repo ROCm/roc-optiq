@@ -8,12 +8,28 @@ on:
         description: 'Run CI for all OS versions?'
         type: boolean
         default: false
+      enable_ci_redhat:
+        description: 'Run RedHat CI?'
+        type: boolean
+        default: true
+      enable_ci_ubuntu:
+        description: 'Run Ubuntu CI?'
+        type: boolean
+        default: true
+      enable_ci_windows:
+        description: 'Run Windows CI?'
+        type: boolean
+        default: true
+      enable_ci_mac:
+        description: 'Run macOS CI?'
+        type: boolean
+        default: true
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
         default: false
       upload_to_s3:
-        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
+        description: 'Upload build artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
   schedule:
@@ -72,6 +88,7 @@ jobs:
   ci-redhat:
     name: RedHat CI
     needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_redhat }}
     uses: ./.github/workflows/ci-redhat.yml
     secrets: inherit
     with:
@@ -82,6 +99,7 @@ jobs:
   ci-ubuntu:
     name: Ubuntu CI
     needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_ubuntu }}
     uses: ./.github/workflows/ci-ubuntu.yml
     secrets: inherit
     with:
@@ -92,6 +110,7 @@ jobs:
   ci-windows:
     name: Windows CI
     needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_windows }}
     uses: ./.github/workflows/ci-windows.yml
     secrets: inherit
     with:
@@ -102,6 +121,7 @@ jobs:
   ci-mac:
     name: macOS CI
     needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_mac }}
     uses: ./.github/workflows/ci-mac.yml
     secrets: inherit
     with:

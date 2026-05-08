@@ -8,9 +8,17 @@ SHELL [ "/bin/bash", "-c" ]
 
 # Install Dependencies
 RUN dnf groupinstall -y "Development Tools" && \
+    if [ "${VERSION}" -eq 8 ]; then \
+        dnf install -y epel-release && dnf config-manager --set-enabled powertools \
+    else \
+        dnf install -y epel-release && crb enable \
+    fi \
     dnf install -y epel-release && crb enable && \
     dnf install -y cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget && \
-    dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel unzip
+    dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel unzip && \
+    if [ "${VERSION}" -eq 8 ]; then \
+        dnf install -y gcc-toolset-11 \
+    fi
 
 # Install Vulkan SDK
 RUN mkdir -p /opt/vulkan && \

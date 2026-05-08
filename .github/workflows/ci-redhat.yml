@@ -86,7 +86,13 @@ jobs:
         shell: bash
         run: |
           source /opt/vulkan/**/setup-env.sh
-          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          if [ "${{ matrix.os-release }}" = "8" ]; then
+            source /opt/rh/gcc-toolset-11/enable
+            EXTRA_LINK_FLAGS="-ldl -ltbb"
+          else
+            EXTRA_LINK_FLAGS=""
+          fi
+          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DGLFW_LINK_STATIC=ON ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e build/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

@@ -605,4 +605,24 @@ Minimap::RenderLegend(float w, float h)
         int v_end = dl->VtxBuffer.Size;
 
         // Rotate 90� CCW: (x,y) -> (y, -x) relative to center
-   
+        for(int i = v_start; i < v_end; ++i)
+        {
+            ImDrawVert& v  = dl->VtxBuffer[i];
+            float       dx = v.pos.x - center.x;
+            float       dy = v.pos.y - center.y;
+            v.pos.x        = center.x + dy;
+            v.pos.y        = center.y - dx;
+        }
+    };
+
+    // Event Density (Left of bar 1)
+    DrawRotatedText("Event Density", ImVec2(bar_x1 - gap * 3.0f, bar_y + bar_h * 0.5f),
+                    !m_show_events);
+
+    // Counter Value (Left of bar 2)
+    DrawRotatedText("Counter Value", ImVec2(bar_x2 - gap * 3.0f, bar_y + bar_h * 0.5f),
+                    !m_show_counters);
+}
+
+}  // namespace View
+}  // namespace RocProfVis

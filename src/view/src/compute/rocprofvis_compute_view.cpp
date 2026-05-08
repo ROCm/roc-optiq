@@ -338,9 +338,10 @@ ComputeView::RenderPresets()
         {
             m_preset_browser->Show();
         }
-        m_preset_browser->SetPosition(
-            ImGui::GetItemRectMax().x + 0.5f * style.ItemSpacing.x,
-            ImGui::GetItemRectMax().y + 0.5f * style.ItemSpacing.y);
+        m_preset_browser->SetPosition(ImGui::GetItemRectMax().x + style.WindowPadding.x +
+                                          0.5f * style.ItemSpacing.x,
+                                      ImGui::GetItemRectMax().y + style.WindowPadding.y +
+                                          0.5f * style.ItemSpacing.y);
     }
 }
 

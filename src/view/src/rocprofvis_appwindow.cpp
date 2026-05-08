@@ -473,8 +473,8 @@ AppWindow::StartProviderCleanup(DataProviderCleanupWork cleanup_work,
                           std::to_string(++m_next_provider_cleanup_id);
 
     const std::string message =
-        "Closing trace: " + cleanup_label + " (" +
-        std::to_string(cleanup_work.requests.size()) + " request(s))";
+        "Closing trace: " + cleanup_label + ", canceling " +
+        std::to_string(cleanup_work.requests.size()) + " request(s)";
     NotificationManager::GetInstance().ShowPersistent(job.notification_id, message,
                                                       NotificationLevel::Info);
 

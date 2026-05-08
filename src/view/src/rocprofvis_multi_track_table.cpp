@@ -156,15 +156,17 @@ MultiTrackTable::Render()
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
                         ImVec2(style.FramePadding.x, style.ItemSpacing.y * 0.35f));
-    if(ImGui::BeginTable("##table_filter_controls", 4,
+    if(ImGui::BeginTable("##table_filter_controls", 3,
                          ImGuiTableFlags_SizingStretchProp |
                              ImGuiTableFlags_NoSavedSettings))
     {
+        ImFont*           icon_font   = m_settings.GetFontManager().GetIconFont(FontType::kDefault);
+        const ImGuiStyle& base_style  = m_settings.GetDefaultStyle();
+        const ImU32       input_bg    = m_settings.GetColor(Colors::kBgFrame);
+
         ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::GetFontSize() * 10.0f);
         ImGui::TableSetupColumn("control", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("clear", ImGuiTableColumnFlags_WidthFixed,
-                                ImGui::GetFrameHeight());
         ImGui::TableSetupColumn("submit", ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::GetFontSize() * 7.5f);
 
@@ -192,13 +194,6 @@ MultiTrackTable::Render()
                 m_pending_filter_options.group_by =
                     m_group_by_choices_ptr[m_group_by_selection_index];
             }
-        }
-
-        ImGui::TableNextColumn();
-        if(m_pending_filter_options.group_by != "" && XButton("clear_group"))
-        {
-            m_pending_filter_options.group_by = "";
-            m_group_by_selection_index        = 0;
         }
 
         ImGui::TableNextColumn();
@@ -230,20 +225,16 @@ MultiTrackTable::Render()
         ImGui::TextDisabled("Group columns");
 
         ImGui::TableNextColumn();
-        ImGui::SetNextItemWidth(-FLT_MIN);
         ImGui::BeginDisabled(m_filter_options.group_by == "");
-        ImGui::InputTextWithHint(
-            "##group_columns",
+        const float group_cols_width = ImGui::GetContentRegionAvail().x;
+        const std::pair<bool, bool> group_cols_input = InputTextWithClear(
+            "group_columns",
             "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
             "MIN(duration) as min_duration, MAX(duration) as max_duration",
             m_pending_filter_options.group_columns,
-            IM_ARRAYSIZE(m_pending_filter_options.group_columns));
-        ImGui::EndDisabled();
-
-        ImGui::TableNextColumn();
-        ImGui::BeginDisabled(m_filter_options.group_by == "");
-        if(strlen(m_pending_filter_options.group_columns) > 0 &&
-           XButton("clear_group_columns"))
+            IM_ARRAYSIZE(m_pending_filter_options.group_columns), icon_font, input_bg,
+            base_style, group_cols_width);
+        if(group_cols_input.second)
         {
             m_pending_filter_options.group_columns[0] = '\0';
         }
@@ -257,17 +248,14 @@ MultiTrackTable::Render()
         ImGui::TextDisabled("Filter");
 
         ImGui::TableNextColumn();
-        ImGui::SetNextItemWidth(-FLT_MIN);
         // Filter disabled when "group by" is selected
         ImGui::BeginDisabled(m_filter_options.group_by != "");
-        ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
-                                 m_pending_filter_options.filter,
-                                 IM_ARRAYSIZE(m_pending_filter_options.filter));
-        ImGui::EndDisabled();
-
-        ImGui::TableNextColumn();
-        ImGui::BeginDisabled(m_filter_options.group_by != "");
-        if(strlen(m_pending_filter_options.filter) > 0 && XButton("clear_filters"))
+        const float filter_width = ImGui::GetContentRegionAvail().x;
+        const std::pair<bool, bool> filter_input = InputTextWithClear(
+            "filters", "SQL WHERE comparisons", m_pending_filter_options.filter,
+            IM_ARRAYSIZE(m_pending_filter_options.filter), icon_font, input_bg,
+            base_style, filter_width);
+        if(filter_input.second)
         {
             m_pending_filter_options.filter[0] = '\0';
         }

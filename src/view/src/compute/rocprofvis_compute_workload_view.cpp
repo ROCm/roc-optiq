@@ -74,7 +74,7 @@ ComputeWorkloadView::Render()
         ImGui::PushStyleColor(ImGuiCol_Border,
                               settings.GetColor(Colors::kBorderColor));
         if(ImGui::BeginChild("info", ImVec2(0, 0),
-                             ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                             ImGuiChildFlags_Borders |
                                  ImGuiChildFlags_AlwaysUseWindowPadding))
         {
             SectionTitle("Workload Information");

@@ -604,8 +604,16 @@ TopKernels::Render()
                                        region.x / 2.0f - 4.0f * plot_style.PlotPadding.x,
                                    region.y - ImGui::GetFrameHeightWithSpacing() -
                                        plot_style.PlotPadding.y));
+        // Restore the default ItemSpacing/FramePadding for the filter combos so
+        // they match the height/popup line spacing of combos elsewhere in the
+        // app — the surrounding split container pushes (0,0) for both, which
+        // would otherwise produce squished dropdowns.
+        const ImGuiStyle& base_style = m_settings.GetDefaultStyle();
+        ImGui::PushStyleVar(
+            ImGuiStyleVar_ItemSpacing,
+            ImVec2(plot_style.PlotPadding.x, base_style.ItemSpacing.y));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base_style.FramePadding);
         ImGui::AlignTextToFramePadding();
-        ImGui::PushStyleVarX(ImGuiStyleVar_ItemSpacing, plot_style.PlotPadding.x);
         ImGui::BeginDisabled(m_node_combo.info.size() < 2);
         ImGui::TextUnformatted("Node:");
         ImGui::SameLine();
@@ -634,7 +642,7 @@ TopKernels::Render()
         }
         PopComboStyles();
         ImGui::EndDisabled();
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
         // Update size requirements...
         m_min_size.x =
             ImGui::GetFrameHeightWithSpacing() * FILTER_COMBO_RELATIVE_MIN_WIDTH;

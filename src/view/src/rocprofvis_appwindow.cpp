@@ -522,10 +522,21 @@ AppWindow::RenderEmptyState()
     // --- Open button ---
     const float button_width = font_size * EMPTY_STATE_BUTTON_EM;
     CenterNextItem(button_width);
+    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccentRed));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          settings.GetColor(Colors::kAccentRedHover));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          settings.GetColor(Colors::kAccentRedActive));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextOnAccent));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(ImGui::GetStyle().FramePadding.x,
+                               ImGui::GetStyle().FramePadding.y + 4.0f));
     if(ImGui::Button("Open File", ImVec2(button_width, 0.0f)))
     {
         HandleOpenFile();
     }
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
     if(ImGui::IsItemHovered())
     {
         SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
@@ -547,6 +558,11 @@ AppWindow::RenderEmptyState()
         const float rf_width =
             std::min(ImGui::GetContentRegionAvail().x * 0.78f,
                      font_size * EMPTY_STATE_RECENT_FILES_EM);
+
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              settings.GetColor(Colors::kSelection));
         int shown = 0;
         for(const std::string& file : recent_files)
         {
@@ -569,6 +585,7 @@ AppWindow::RenderEmptyState()
 
             ImGui::PopID();
         }
+        ImGui::PopStyleColor(2);
     }
 
     ImGui::EndChild();

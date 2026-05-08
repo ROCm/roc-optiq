@@ -1189,14 +1189,11 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         selection_color = m_settings.GetColor(Colors::kHighlightChart);
     }
 
-    // Alternating bands make dense tracks easier to scan.
     ImVec2 lane_min = ImGui::GetCursorScreenPos();
     ImVec2 lane_max(lane_min.x + ImGui::GetContentRegionAvail().x,
                     lane_min.y + track_height - 1.0f);
-    ImU32 lane_color = (track_index % 2 == 0)
-                           ? m_settings.GetColor(Colors::kBgPanel)
-                           : m_settings.GetColor(Colors::kBgFrame);
-    ImDrawList* lane_dl = ImGui::GetWindowDrawList();
+    ImU32       lane_color = m_settings.GetColor(Colors::kBgPanel);
+    ImDrawList* lane_dl    = ImGui::GetWindowDrawList();
     lane_dl->AddRectFilled(lane_min, lane_max, lane_color);
 
     if(m_grid_interval_ns > 0.0 && m_grid_interval_count > 0)
@@ -1322,7 +1319,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     // This is done after the child window to ensure it is on top
     ImVec2 p_min = ImGui::GetItemRectMin();
     ImVec2 p_max = ImGui::GetItemRectMax();
-    // Draw only the bottom rule; the alternating lane fill supplies the row body.
+    // Draw only the bottom rule; the lane fill supplies the row body.
     ImGui::GetWindowDrawList()->AddLine(
         ImVec2(p_min.x, p_max.y - 0.5f),
         ImVec2(p_max.x, p_max.y - 0.5f),
@@ -1681,19 +1678,33 @@ TimelineView::RenderHistogram()
         HandleHistogramTouch();
     }
 
-    if(ImGui::BeginPopupContextWindow("##HistogramOptions"))
     {
-        TimelineModel& tl = m_data_provider.DataModel().GetTimeline();
-        bool           is_global = tl.IsNormalizeGlobal();
-        if(ImGui::MenuItem("Normalize: All Tracks", nullptr, is_global))
+        const ImGuiStyle& popup_style = m_settings.GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, popup_style.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, popup_style.ItemSpacing);
+        if(ImGui::BeginPopupContextWindow("##HistogramOptions"))
         {
-            if(!is_global) { tl.ToggleNormalization(); tl.UpdateHistogram({}, false); }
+            TimelineModel& tl        = m_data_provider.DataModel().GetTimeline();
+            bool           is_global = tl.IsNormalizeGlobal();
+            if(ImGui::MenuItem("Normalize: All Tracks", nullptr, is_global))
+            {
+                if(!is_global)
+                {
+                    tl.ToggleNormalization();
+                    tl.UpdateHistogram({}, false);
+                }
+            }
+            if(ImGui::MenuItem("Normalize: Visible Tracks", nullptr, !is_global))
+            {
+                if(is_global)
+                {
+                    tl.ToggleNormalization();
+                    tl.UpdateHistogram({}, false);
+                }
+            }
+            ImGui::EndPopup();
         }
-        if(ImGui::MenuItem("Normalize: Visible Tracks", nullptr, !is_global))
-        {
-            if(is_global) { tl.ToggleNormalization(); tl.UpdateHistogram({}, false); }
-        }
-        ImGui::EndPopup();
+        ImGui::PopStyleVar(2);
     }
 
     ImGui::EndChild();  // Histogram Bars

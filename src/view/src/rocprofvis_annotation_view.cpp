@@ -6,6 +6,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include <imgui.h>
 #include <iostream>
 namespace RocProfVis
@@ -56,27 +57,13 @@ AnnotationView::Render()
 
         for(auto& note : m_annotations->GetStickyNotes())
         {
+            ImGui::PushID(note.GetID());
             ImGui::TableNextRow();
 
-            // Calculate max row height needed for highlight to cover entire row
-            float id_height    = ImGui::GetTextLineHeightWithSpacing();
-            float title_height = ImGui::CalcTextSize(note.GetTitle().c_str()).y +
-                                 ImGui::GetStyle().ItemSpacing.y;
-            float text_height = ImGui::CalcTextSize(note.GetText().c_str()).y +
-                                ImGui::GetStyle().ItemSpacing.y;
-            float time_height     = ImGui::GetTextLineHeightWithSpacing();
-            float checkbox_height = ImGui::GetFrameHeight();
-
-            float max_row_height = id_height;
-            max_row_height       = std::max(max_row_height, title_height);
-            max_row_height       = std::max(max_row_height, text_height);
-            max_row_height       = std::max(max_row_height, time_height);
-            max_row_height       = std::max(max_row_height, checkbox_height);
-
-            // Title column with selection logic
+            // Title column with selection logic.
             ImGui::TableNextColumn();
-            bool is_selected = (note.GetID() == m_selected_note_id);
-      
+            const bool is_selected = (note.GetID() == m_selected_note_id);
+
             if(is_selected)
             {
                 ImGui::PushStyleColor(ImGuiCol_Header,
@@ -86,14 +73,21 @@ AnnotationView::Render()
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                                       settings.GetColor(Colors::kSelection));
             }
-            std::string selectable_label =
-                (note.GetTitle().empty() ? "Untitled" : note.GetTitle()) +
-                "##sticky_note_" + std::to_string(note.GetID());
 
-            if(ImGui::Selectable(selectable_label.c_str(), is_selected,
+            const std::string display_title =
+                note.GetTitle().empty() ? "Untitled" : note.GetTitle();
+            const std::string selectable_id =
+                "##sticky_note_" + std::to_string(note.GetID());
+            const float row_height = ImGui::GetFrameHeight();
+
+            // Empty selectable draws the row-wide hover/selection highlight; the
+            // actual text is rendered on top so we can elide it consistently with
+            // the rest of the app's tables.
+            const ImVec2 cell_cursor = ImGui::GetCursorPos();
+            if(ImGui::Selectable(selectable_id.c_str(), is_selected,
                                  ImGuiSelectableFlags_SpanAllColumns |
                                      ImGuiSelectableFlags_AllowOverlap,
-                                 ImVec2(0, max_row_height)))
+                                 ImVec2(0.0f, row_height)))
             {
                 m_selected_note_id = note.GetID();
                 auto event         = std::make_shared<NavigationEvent>(
@@ -106,12 +100,18 @@ AnnotationView::Render()
                 ImGui::PopStyleColor(3);
             }
 
+            ImGui::SetCursorPos(cell_cursor);
+            ImGui::AlignTextToFramePadding();
+            ElidedText(display_title.c_str(), ImGui::GetContentRegionAvail().x);
+
             // Text column
             ImGui::TableNextColumn();
-            ImGui::TextWrapped("%s", note.GetText().c_str());
+            ImGui::AlignTextToFramePadding();
+            ElidedText(note.GetText().c_str(), ImGui::GetContentRegionAvail().x);
 
             // Time column
             ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
             time_label = nanosecond_to_formatted_str(note.GetTimeNs(), time_format,
                                         true);
             ImGui::TextUnformatted(time_label.c_str());
@@ -122,6 +122,8 @@ AnnotationView::Render()
             std::string checkbox_id = "##visible_" + std::to_string(note.GetID());
             ImGui::Checkbox(checkbox_id.c_str(), &visible);
             if(visible != note.IsVisible()) note.SetVisibility(visible);
+
+            ImGui::PopID();
         }
 
         ImGui::EndTable();

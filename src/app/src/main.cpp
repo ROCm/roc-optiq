@@ -412,4 +412,35 @@ main(int argc, char** argv)
 
                 rocprofvis_view_destroy();
                 ImGui_ImplGlfw_Shutdown();
-       
+                ImGui::DestroyContext();
+
+                backend.m_destroy(&backend);
+            }
+            else
+            {
+                spdlog::error(
+                    "GLFW: Failed to initialize graphics device (Vulkan and/or OpenGL)");
+                app_result_code = 1;
+            }
+
+            if(window)
+            {
+                glfwDestroyWindow(window);
+            }
+        }
+        else
+        {
+            spdlog::error("GLFW: Failed to initialize window & graphics API backend");
+            app_result_code = 1;
+        }
+
+        glfwTerminate();
+    }
+    else
+    {
+        spdlog::error("GLFW: Failed to initialize GLFW library");
+        app_result_code = 1;
+    }
+
+    return app_result_code;
+}

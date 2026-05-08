@@ -53,6 +53,9 @@ constexpr const char* SUPPORTED_FILE_TYPES_HINT   = "Supported types: .db, .rpd,
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
 
+constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
+constexpr const char* CLOSING_MESSAGE = "Closing...";
+
 // For testing DataProvider
 void
 RenderProviderTest(DataProvider& provider);
@@ -788,6 +791,9 @@ AppWindow::RenderShutdownState()
         ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(360.0f * dpi, 0.0f), ImGuiCond_Always);
 
+    PopUpStyle ps;
+    ps.PushPopupStyles();
+    ps.CenterPopup();
     if(ImGui::BeginPopupModal(SHUTDOWN_DIALOG_NAME, nullptr,
                               ImGuiWindowFlags_NoResize |
                                   ImGuiWindowFlags_NoMove |
@@ -795,16 +801,27 @@ AppWindow::RenderShutdownState()
     {
         if(m_provider_cleanup_jobs.empty())
         {
-            ImGui::TextUnformatted("Closing...");
+            CenterNextTextItem(CLOSING_MESSAGE);
+            ImGui::TextUnformatted(CLOSING_MESSAGE);
         }
         else
         {
-            ImGui::TextUnformatted("Waiting for requests to finish cleanup...");
+            CenterNextTextItem(CLEANUP_MESSAGE);
+            ImGui::TextUnformatted(CLEANUP_MESSAGE);
             ImGui::Spacing();
-            ImGui::Text("Cleanup jobs remaining: %zu", m_provider_cleanup_jobs.size());
+            // Draw indicator dots to show that the app is still responsive
+            RenderLoadingIndicator(SettingsManager::GetInstance().GetColor(Colors::kTextMain),
+                                   nullptr, kCenterHorizontal);
+            ImGui::Spacing();
+            const std::string remaining_message =
+                "Cleanup jobs remaining: " +
+                std::to_string(m_provider_cleanup_jobs.size());
+            CenterNextTextItem(remaining_message.c_str());
+            ImGui::TextUnformatted(remaining_message.c_str());
         }
         ImGui::EndPopup();
     }
+    ps.PopStyles();
 }
 
 void

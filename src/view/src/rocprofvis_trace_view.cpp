@@ -389,13 +389,13 @@ TraceView::Render()
             ImGui::End();
             popup_style.PopStyles();
         }
+    }
 
-        if(m_popup_info.show_popup)
-        {
-            m_popup_info.show_popup = false;
-            AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
-                                                        m_popup_info.message);
-        }
+    if(m_popup_info.show_popup)
+    {
+        m_popup_info.show_popup = false;
+        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
+                                                    m_popup_info.message);
     }
 
     if(m_summary_view)
@@ -516,9 +516,26 @@ TraceView::SaveSelection(const std::string& file_path)
 bool
 TraceView::CleanupDatabase(bool rebuild, std::function<void()> on_complete)
 {
+    //show error lambda
+     auto show_error = [this](const std::string& message) {
+        m_popup_info.show_popup = true;
+        m_popup_info.title      = "Error";
+        m_popup_info.message    = message;
+    };
+
     if(m_data_provider.IsRequestPending(DataProvider::CLEANUP_DATABASE_REQUEST_ID))
     {
+        show_error("Database cleanup already in progress.");
         spdlog::debug("Database cleanup already in progress.");
+        return false;
+    }
+
+    //check if dataprovider is in a state that allows cleanup
+    auto state = m_data_provider.GetState();
+    if(state != ProviderState::kReady)
+    {
+        show_error("Cannot cleanup database while trace is loading");
+        spdlog::debug("Cannot cleanup database while trace is loading. Current state: {}", static_cast<int>(state));
         return false;
     }
 
@@ -552,6 +569,10 @@ TraceView::CleanupDatabase(bool rebuild, std::function<void()> on_complete)
             rebuild ? "Cleaning and rebuilding database..." : "Cleaning database...",
             NotificationLevel::Info);
         return true;
+    }
+    else
+    {
+        show_error("Database cleanup request failed to start.");
     }
 
     return false;

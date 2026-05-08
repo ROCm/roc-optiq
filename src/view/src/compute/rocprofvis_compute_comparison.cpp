@@ -825,8 +825,6 @@ void
 ComputeComparisonView::RenderCategory(const size_t i)
 {
     ImGui::PushID(static_cast<int>(i));
-    // Transparent so the grey tab-container backdrop shows through; each
-    // Table below paints its own white card.
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("category_container");
@@ -1286,8 +1284,6 @@ ComputeComparisonView::Table::Render()
         QuantizedTableHeight(desired_height, m_max_size.y, fixed_rows,
                              m_h_scrollable);
 
-    // Match the rest of the app: each table is a rounded white card on the
-    // grey backdrop with the title sitting inside it.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,

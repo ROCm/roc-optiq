@@ -318,9 +318,7 @@ Roofline::Update()
 void
 Roofline::Render()
 {
-    // Outer card fills whatever space the parent gives us (FlexContainer items
-    // and the summary's roofline_container both have a fixed height); using
-    // AutoResizeY here would collapse to 0 because the inner plot uses (0,0).
+    // Fill the parent. AutoResizeY would collapse here since the plot uses (0,0).
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,

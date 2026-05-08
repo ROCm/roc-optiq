@@ -209,8 +209,7 @@ RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int
         ImGui::PopStyleColor();
     }
 
-    // Submit a zero-size Dummy after restoring the cursor so the trailing
-    // SetCursorPos does not trip ImGui's parent-boundary check on EndChild().
+    // Zero-size Dummy avoids EndChild parent-boundary check after SetCursorPos.
     ImGui::SetCursorPos(pos);
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
 }

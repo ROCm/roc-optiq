@@ -284,8 +284,7 @@ TraceView::CreateView()
     m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible = m_settings_manager.GetAppWindowSettings().show_sidebar;
     m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
-    // Drop the child border on these split-container panes so the splitter
-    // alone defines the visual separation.
+    // No child border; the splitter handles separation.
     m_sidebar_item->m_child_flags = ImGuiChildFlags_None;
 
     m_analysis_item = LayoutItem::CreateFromWidget(analysis);

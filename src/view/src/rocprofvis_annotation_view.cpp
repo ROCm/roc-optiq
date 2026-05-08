@@ -80,9 +80,7 @@ AnnotationView::Render()
                 "##sticky_note_" + std::to_string(note.GetID());
             const float row_height = ImGui::GetFrameHeight();
 
-            // Empty selectable draws the row-wide hover/selection highlight; the
-            // actual text is rendered on top so we can elide it consistently with
-            // the rest of the app's tables.
+            // Empty selectable for the row-wide highlight; elided text is drawn on top.
             const ImVec2 cell_cursor = ImGui::GetCursorPos();
             if(ImGui::Selectable(selectable_id.c_str(), is_selected,
                                  ImGuiSelectableFlags_SpanAllColumns |

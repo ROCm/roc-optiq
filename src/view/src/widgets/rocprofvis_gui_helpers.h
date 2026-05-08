@@ -36,8 +36,8 @@ ImVec2
 GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size = ImVec2(0.0f, 0.0f),
                         float viewport_margin = 32.0f);
 
-// Push the combo/dropdown frame fill so dropdowns read as a distinct surface
-// from text inputs and other framed widgets. Always pair with PopComboStyles.
+// Push combo frame fill so dropdowns stand out from text inputs. Pair with
+// PopComboStyles.
 void
 PushComboStyles();
 

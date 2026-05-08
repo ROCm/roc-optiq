@@ -155,8 +155,6 @@ ComputeSummaryView::Render()
     const float      rounding = settings.GetDefaultStyle().ChildRounding;
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
 
-    // Outer container is transparent so the grey tab-container backdrop shows
-    // through; each panel below paints its own white card.
     ImGui::BeginChild("summary", ImVec2(0, 0),
                       ImGuiChildFlags_AlwaysUseWindowPadding);
     if(m_top_kernels)
@@ -168,7 +166,7 @@ ComputeSummaryView::Render()
     {
         const float avail  = ImGui::GetContentRegionAvail().x;
         const float aspect = ImGui::GetWindowWidth() / ImGui::GetWindowHeight();
-        // Roofline paints its own kBgPanel card; just give it a sized region.
+        // Roofline paints its own card; just give it a sized region.
         ImGui::BeginChild("roofline_container", ImVec2(avail, avail / aspect));
         m_roofline->Render();
         ImGui::EndChild();
@@ -176,7 +174,6 @@ ComputeSummaryView::Render()
     ImGui::Spacing();
     if(m_sol_table)
     {
-        // m_sol_table is a MetricTableWidget -> MetricTableBase paints the card.
         m_sol_table->Render();
     }
     ImGui::EndChild();
@@ -231,8 +228,7 @@ ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
         {"top_kernels_table", table_widget, TABLE_PANEL_MIN_WIDTH, 0.0f, TABLE_PANEL_FLEX_GROW},
         {"top_kernels_chart", chart_widget, CHART_PANEL_MIN_WIDTH, 0.0f, CHART_PANEL_FLEX_GROW},
     };
-    // Table + chart are subcomponents of the same panel; render them inside
-    // one outer card with a separator line between them.
+    // Table + chart share one outer card with a separator between them.
     m_flex_container.subcomponent_layout = true;
 }
 

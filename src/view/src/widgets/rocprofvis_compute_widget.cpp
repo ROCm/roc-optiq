@@ -36,9 +36,7 @@ MetricTableBase::Render()
     SettingsManager& settings = SettingsManager::GetInstance();
     const ImGuiStyle& style   = settings.GetDefaultStyle();
 
-    // Outer panel: title + content sit inside one rounded white card on the
-    // grey backdrop. Skipped when m_no_panel is set so embedding containers
-    // can avoid double-cards.
+    // Outer card; skipped when an embedding container already paints one.
     const bool paint_panel = !m_no_panel;
     if(paint_panel)
     {

@@ -126,8 +126,7 @@ void SplitContainerBase::Render()
             UpdateSplitRatio(mouse_pos, window_pos, available_size);
             fill_active = true;
         }
-        // Invisible by default; only paint on hover/drag so the chrome stays
-        // out of the way of the data.
+        // Only paint on hover/drag.
         if(fill_active)
         {
             ImGui::GetWindowDrawList()->AddRectFilled(

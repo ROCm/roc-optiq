@@ -131,8 +131,7 @@ void
 ComputeView::CreateView()
 {
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
-    // When launched remotely, the data provider may load an analysis before the
-    // UI is ready. Select the first workload if one already exists.
+    // Data provider may load before the UI is ready; pick first workload if so.
     const std::vector<const WorkloadInfo*>& workloads =
         m_data_provider.ComputeModel().GetWorkloadList();
     if(!workloads.empty())

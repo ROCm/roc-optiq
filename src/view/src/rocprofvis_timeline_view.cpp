@@ -664,7 +664,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::SetNextWindowSize(m_tpt->GetGraphSize(), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    // Overlay children need transparent backgrounds so they do not hide earlier layers.
+    // Overlay children need transparent bg so earlier layers stay visible.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
     ImGui::SetNextItemAllowOverlap();
@@ -1009,7 +1009,7 @@ TimelineView::RenderGraphView()
     ImVec2 container_size = ImGui::GetWindowSize();
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    // Overlay children need transparent backgrounds so they do not hide earlier layers.
+    // Overlay children need transparent bg so earlier layers stay visible.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("Graph View Main",
                       ImVec2(container_size.x, container_size.y - m_ruler_height), false,

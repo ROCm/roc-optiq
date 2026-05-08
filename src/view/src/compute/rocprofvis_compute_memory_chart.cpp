@@ -210,8 +210,7 @@ DrawHorizontalArrow(ImDrawList* draw_list, ImVec2 from, ImVec2 to, ImU32 color)
 
     DrawDashedFlowLine(draw_list, from, {base_x, to.y}, color);
     draw_list->AddCircleFilled(from, ARROW_THICKNESS * 1.25f, color);
-    // Wind the triangle CCW in screen space regardless of direction so edge
-    // antialiasing produces identical results for left- and right-pointing arrows.
+    // CCW winding so AA matches in both directions.
     const ImVec2 base_top    = {base_x, to.y - half_base};
     const ImVec2 base_bottom = {base_x, to.y + half_base};
     if(dir > 0.0f)
@@ -956,10 +955,8 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
         return {origin.x + local_x, origin.y + local_y};
     };
 
-    // Draw horizontal arrow + label (label centered horizontally on the arrow
-    // and placed just above it). Read and request flows point back toward the
-    // consumer (cache -> CU, L2 -> instr L1), so swap the endpoints when the
-    // label is a read/request.
+    // Read/request flows point back toward the consumer; swap endpoints when
+    // the label starts with "Rd:" or "Req:".
     auto ArrowWithLabel = [&](float src_x, float src_y,
                               float dst_x, float dst_y,
                               const char* label_text,
@@ -1078,8 +1075,7 @@ ComputeMemoryChartView::DrawConnections(ImDrawList* draw_list, ImVec2 origin)
 
         snprintf(text_buf, sizeof(text_buf), "Fetch: %s",
                  GetMetricText(IL1_FETCH));
-        // Anchor the label in the corridor between Active CUs and the cache
-        // column so it does not collide with dispatch/active-CU content.
+        // Anchor label in the corridor between Active CUs and the cache column.
         const float  label_x =
             (m_active_cus_block.Right() + m_instr_l1_block.x) * 0.5f;
         const ImVec2 text_size = ImGui::CalcTextSize(text_buf);

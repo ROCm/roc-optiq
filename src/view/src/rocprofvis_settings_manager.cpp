@@ -176,10 +176,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(224, 206, 244, 255),  // Colors::kComparisonGreater
     // This must follow the ordering of Colors enum.
 };
-// Same hue order as origin/main (blue, green, yellow, rose, sky, orange,
-// emerald, amber, purple, coral) but desaturated to harmonize with the new
-// muted blue redesign. Alphas are nudged down slightly so flame fills blend
-// gracefully with the kBgPanel surfaces.
+// Same hue order as origin/main, desaturated for the redesign.
 const std::vector<ImU32> DARK_FLAME_COLORS = {
     IM_COL32(82, 154, 210, 220),  IM_COL32(72, 174, 156, 220),
     IM_COL32(208, 188, 116, 220), IM_COL32(204, 142, 174, 220),

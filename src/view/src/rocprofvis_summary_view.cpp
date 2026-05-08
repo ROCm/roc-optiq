@@ -604,10 +604,7 @@ TopKernels::Render()
                                        region.x / 2.0f - 4.0f * plot_style.PlotPadding.x,
                                    region.y - ImGui::GetFrameHeightWithSpacing() -
                                        plot_style.PlotPadding.y));
-        // Restore the default ItemSpacing/FramePadding for the filter combos so
-        // they match the height/popup line spacing of combos elsewhere in the
-        // app — the surrounding split container pushes (0,0) for both, which
-        // would otherwise produce squished dropdowns.
+        // Split container pushes (0,0); restore defaults so combos aren't squished.
         const ImGuiStyle& base_style = m_settings.GetDefaultStyle();
         ImGui::PushStyleVar(
             ImGuiStyleVar_ItemSpacing,

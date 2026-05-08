@@ -228,8 +228,6 @@ KernelMetricTable::Render()
     const float      cell_padding = style.CellPadding.x * 2.0f;
     const float      char_width = ImGui::CalcTextSize("M").x;
 
-    // Outer panel: title + content live inside a single rounded white card
-    // so this widget reads as one cohesive panel on the grey backdrop.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
@@ -245,7 +243,7 @@ KernelMetricTable::Render()
     const std::vector<std::string>&              header = table.GetTableHeader();
     const std::vector<std::vector<std::string>>& data   = table.GetTableData();
 
-    // Toolbar row inside the card (transparent, just a horizontal control row).
+    // Toolbar row.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::BeginChild("toolbar", ImVec2(-1, 0),

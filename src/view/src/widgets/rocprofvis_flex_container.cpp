@@ -98,10 +98,8 @@ FlexContainer::Render()
                 h = 0.0f;
             }
 
-            // Items are transparent: each inner widget is responsible for
-            // painting its own kBgPanel card. In subcomponent_layout mode a
-            // thin separator line is drawn between adjacent items so they
-            // still read as distinct subcomponents inside one outer card.
+            // Items are transparent; each widget paints its own card. In
+            // subcomponent layout, draw a thin separator between siblings.
             SettingsManager& settings = SettingsManager::GetInstance();
             ImGui::PushStyleColor(ImGuiCol_ChildBg,
                                   settings.GetColor(Colors::kTransparent));

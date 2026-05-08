@@ -162,10 +162,8 @@ InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
 void
 InfiniteScrollTable::Render()
 {
-    // Match the actual ImGui table row height: text-line height (no item
-    // spacing) plus cell padding. Using *WithSpacing here would over-estimate
-    // each row's height by ItemSpacing.y, causing the clipper to drop visible
-    // rows as the panel grows and the table to appear clipped at the bottom.
+    // Matches the actual table row height; *WithSpacing would over-estimate
+    // it and the clipper would drop bottom rows as the panel grows.
     ImGuiStyle& style         = ImGui::GetStyle();
     float       row_padding_v = style.CellPadding.y * 2.0f;
     float       row_height    = ImGui::GetTextLineHeight() + row_padding_v;

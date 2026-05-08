@@ -4,6 +4,10 @@ run-name: roc-optiq-ci
 on:
   workflow_dispatch:
     inputs:
+      enable_full_os_versions:
+        description: 'Run CI for all os variations?'
+        type: boolean
+        default: false
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
@@ -38,26 +42,31 @@ jobs:
       UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04" ]'
       REDHAT_FULL_OS_VERSIONS: '[ "9", "10" ]'
       WINDOWS_FULL_OS_VERSIONS: '[ "2025" ]'
+      MAC_FULL_OS_VERSIONS: '[ "14", "15", "26" ]'
       # Minimal OS Coverage (for all other builds)
       UBUNTU_CI_OS_VERSIONS: '[ "24.04" ]'
       REDHAT_CI_OS_VERSIONS: '[ "10" ]'
       WINDOWS_CI_OS_VERSIONS: '[ "2025" ]'
+      MAC_CI_OS_VERSIONS: '[ "26" ]'
     outputs:
       ubuntu-os-versions: ${{ steps.setup-os-versions.outputs.ubuntu-os-versions }}
       redhat-os-versions: ${{ steps.setup-os-versions.outputs.redhat-os-versions }}
       windows-os-versions: ${{ steps.setup-os-versions.outputs.windows-os-versions }}
+      mac-os-versions: ${{ steps.setup-os-versions.outputs.mac-os-versions }}
     steps:
       - name: Set OS versions
         id: setup-os-versions
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
+          if [ "${{ github.event_name }}" = "schedule" || "${{ github.event.inputs.enable_full_os_versions }}" == "true" ]; then
             echo "ubuntu-os-versions=${{ env.UBUNTU_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "redhat-os-versions=${{ env.REDHAT_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "windows-os-versions=${{ env.WINDOWS_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
+            echo "mac-os-versions=${{ env.MAC_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
           else
             echo "ubuntu-os-versions=${{ env.UBUNTU_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "redhat-os-versions=${{ env.REDHAT_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "windows-os-versions=${{ env.WINDOWS_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
+            echo "mac-os-versions=${{ env.MAC_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
           fi
 
   ci-redhat:
@@ -67,8 +76,8 @@ jobs:
     secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.redhat-os-versions }}
-      upload_to_github: ${{ github.event_name == 'schedule' ||  github.event.inputs.upload_to_github != '' }}
-      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 != '' }}
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
 
   ci-ubuntu:
     name: Ubuntu CI
@@ -77,8 +86,8 @@ jobs:
     secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
-      upload_to_github: ${{ github.event_name == 'schedule' ||  github.event.inputs.upload_to_github != '' }}
-      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 != '' }}
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
 
   ci-windows:
     name: Windows CI
@@ -87,5 +96,15 @@ jobs:
     secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.windows-os-versions }}
-      upload_to_github: ${{ github.event_name == 'schedule' ||  github.event.inputs.upload_to_github != '' }}
-      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 != '' }}
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+
+  ci-mac:
+    name: macOS CI
+    needs: setup
+    uses: ./.github/workflows/ci-mac.yml
+    secrets: inherit
+    with:
+      os_version: ${{ needs.setup.outputs.mac-os-versions }}
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}

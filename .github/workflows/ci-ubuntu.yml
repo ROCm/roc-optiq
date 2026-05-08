@@ -95,6 +95,9 @@ jobs:
           fi
 
       - name: Run Tests
+        id: run_tests
+        continue-on-error: true
+        timeout-minutes: 10
         run: |
           cd ${{ env.BUILD_DIR }}
           ctest \
@@ -132,3 +135,9 @@ jobs:
           TIMESTAMP=$(date +%Y_%m_%d)
           aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/ubuntu/${{ matrix.os-version }}/ \
             --no-progress
+
+      - name: Announce Test Failure
+        if: steps.run_tests.outcome == 'failure'
+        run: |
+          echo "Tests have failed!"
+          exit 1

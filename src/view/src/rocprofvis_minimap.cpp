@@ -310,9 +310,16 @@ Minimap::Render()
     float  top_padding = 5.0f;
     ImVec2 avail       = ImGui::GetContentRegionAvail();
 
-    // Guard against zero or negative content region to prevent
-    // division-by-zero crashes when the window is sized too small.
-    if(avail.x < 1.0f || avail.y < 1.0f)
+    // Minimum content region needed for the minimap layout:
+    // width  = legend_w + pad*3 + minimum map width
+    // height = top_padding + pad*2 + minimum map height
+    const float min_avail_x = legend_w + pad * 3.0f + 20.0f;
+    const float min_avail_y = top_padding + pad * 2.0f + 20.0f;
+
+    // Guard: skip the entire child window when there is not enough
+    // space for the layout.  Creating a child and bailing mid-layout
+    // corrupts ImGui internal state and causes visual artifacts.
+    if(avail.x < min_avail_x || avail.y < min_avail_y)
     {
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor();
@@ -330,14 +337,6 @@ Minimap::Render()
         ImVec2 map_pos(window_position.x + pad, window_position.y + top_padding);
         ImVec2 map_size(avail.x - legend_w - pad * 3, avail.y - top_padding - pad * 2);
 
-        // Skip rendering if the computed map area is too small
-        if(map_size.x < 1.0f || map_size.y < 1.0f)
-        {
-            ImGui::EndChild();
-            ImGui::PopStyleVar(2);
-            ImGui::PopStyleColor();
-            return;
-        }
 
         // Fill background of minimap area with white (light mode) or black (dark mode)
         draw_list->AddRectFilled(map_pos,

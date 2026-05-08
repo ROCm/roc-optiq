@@ -103,12 +103,17 @@ SummaryView::Render()
                                  ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSizeConstraints(ImVec2(200.0f, 150.0f),
                                             ImVec2(FLT_MAX, FLT_MAX));
+        {
+            ImGuiWindowClass wc;
+            wc.ViewportFlagsOverrideSet = ImGuiViewportFlags_NoRendererClear;
+            ImGui::SetNextWindowClass(&wc);
+        }
         ImGui::Begin("Summary", &m_settings.GetAppWindowSettings().show_summary,
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
                          ImGuiWindowFlags_NoScrollWithMouse);
         {
             const ImVec2 content = ImGui::GetContentRegionAvail();
-            if(content.x < 1.0f || content.y < 1.0f)
+            if(content.x < 100.0f || content.y < 50.0f)
             {
                 // Window too small to render safely; skip content this frame.
             }

@@ -293,6 +293,20 @@ main(int argc, char** argv)
                 // Keep undocked windows out of the OS taskbar.
                 io.ConfigViewportsNoTaskBarIcon = false;
 
+#ifdef __linux__
+                // On Linux (especially RHEL10 under Wayland/Xwayland),
+                // secondary viewports rendered without WM decorations
+                // cause shadow lag and black-box artifacts when dragged
+                // near screen edges.  Keeping WM decorations lets the
+                // compositor manage the window surfaces correctly and
+                // avoids stale framebuffer ghosts.
+                io.ConfigViewportsNoDecoration = false;
+                // Prevent auto-merging viewports back into the main
+                // window during drag — reduces flicker from repeated
+                // viewport create/destroy cycles under Xwayland.
+                io.ConfigViewportsNoAutoMerge = true;
+#endif
+
                 ImGui::StyleColorsLight();
 
                 rocprofvis_view_init([window](int notification) -> void {
@@ -398,35 +412,4 @@ main(int argc, char** argv)
 
                 rocprofvis_view_destroy();
                 ImGui_ImplGlfw_Shutdown();
-                ImGui::DestroyContext();
-
-                backend.m_destroy(&backend);
-            }
-            else
-            {
-                spdlog::error(
-                    "GLFW: Failed to initialize graphics device (Vulkan and/or OpenGL)");
-                app_result_code = 1;
-            }
-
-            if(window)
-            {
-                glfwDestroyWindow(window);
-            }
-        }
-        else
-        {
-            spdlog::error("GLFW: Failed to initialize window & graphics API backend");
-            app_result_code = 1;
-        }
-
-        glfwTerminate();
-    }
-    else
-    {
-        spdlog::error("GLFW: Failed to initialize GLFW library");
-        app_result_code = 1;
-    }
-
-    return app_result_code;
-}
+       

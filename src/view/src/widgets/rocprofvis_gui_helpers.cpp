@@ -596,6 +596,12 @@ VerticalSeparator(SettingsManager* settings)
     ImGui::SameLine();
 }
 
+float
+TableRowHeight()
+{
+    return ImGui::GetTextLineHeight() + ImGui::GetStyle().CellPadding.y * 2.0f;
+}
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
 void

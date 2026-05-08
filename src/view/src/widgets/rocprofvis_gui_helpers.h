@@ -122,6 +122,9 @@ SectionTitle(const char* text, bool large = true, SettingsManager* settings = nu
 void
 VerticalSeparator(SettingsManager* settings = nullptr);
 
+float
+TableRowHeight();
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void
 DrawInternalBuildBanner(const char* text = "Internal Build");

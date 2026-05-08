@@ -36,32 +36,6 @@ constexpr const char* JSON_KEY_PINNED_METRICS      = "pins";
 constexpr const char* JSON_KEY_PINNED_METRICS_ID   = "id";
 constexpr const char* JSON_KEY_PINNED_METRICS_NAME = "name";
 
-static float
-TableRowHeight()
-{
-    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
-    return ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
-}
-
-static float
-QuantizedTableHeight(float desired_height, float max_height, float fixed_rows,
-                     bool include_horizontal_scrollbar)
-{
-    const float row_height = TableRowHeight();
-    const float scrollbar_height =
-        include_horizontal_scrollbar ? ImGui::GetStyle().ScrollbarSize : 0.0f;
-    const float available_rows_height =
-        std::max(0.0f, max_height - scrollbar_height);
-    const float requested_rows_height =
-        std::max(row_height, desired_height - scrollbar_height);
-    const float visible_rows =
-        std::max(fixed_rows, std::floor(std::min(requested_rows_height,
-                                                available_rows_height) /
-                                        row_height));
-
-    return visible_rows * row_height + scrollbar_height;
-}
-
 ComputeComparisonView::ComputeComparisonView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -212,11 +186,8 @@ ComputeComparisonView::Render()
 {
     m_loading = m_data_provider.IsRequestPending(m_baseline_request_id) ||
                 m_data_provider.IsRequestPending(m_target_request_id);
-    const float max_pinned_height =
-        ImGui::GetWindowHeight() * 0.5f - ImGui::GetFrameHeightWithSpacing();
     m_max_pinned_height =
-        std::max(TableRowHeight() * 2.0f,
-                 std::floor(max_pinned_height / TableRowHeight()) * TableRowHeight());
+        ImGui::GetWindowHeight() * 0.5f - ImGui::GetFrameHeightWithSpacing();
     if(m_layout)
     {
         m_layout->Render();
@@ -598,9 +569,9 @@ ComputeComparisonView::RenderToolbar()
     ImGui::PushStyleColor(
         ImGuiCol_Border,
         ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kBorderColor)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(style.WindowPadding.x + 4.0f,
-                               style.WindowPadding.y + 2.0f));
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_WindowPadding,
+        ImVec2(style.WindowPadding.x + 4.0f, style.WindowPadding.y + 2.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::BeginChild("toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
@@ -825,24 +796,16 @@ void
 ComputeComparisonView::RenderCategory(const size_t i)
 {
     ImGui::PushID(static_cast<int>(i));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("category_container");
-    for(size_t t = 0; t < m_categories[i].tables.size(); ++t)
+    for(const std::shared_ptr<Table>& table : m_categories[i].tables)
     {
-        const std::shared_ptr<Table>& table = m_categories[i].tables[t];
         if(table)
         {
             table->SetMaxSize(ImGui::GetWindowSize());
             table->Render();
-            if(t + 1 < m_categories[i].tables.size())
-            {
-                ImGui::Spacing();
-            }
         }
     }
     ImGui::EndChild();
-    ImGui::PopStyleColor();
     ImGui::PopID();
 }
 
@@ -851,17 +814,18 @@ ComputeComparisonView::RenderPinnedMetrics() const
 {
     if(m_pinned_table)
     {
+        ImGui::SetNextWindowSizeConstraints(
+            ImVec2(ImGui::GetContentRegionAvail().x, TableRowHeight()),
+            ImVec2(ImGui::GetContentRegionAvail().x, m_max_pinned_height));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+        ImGui::BeginChild("pinned", ImVec2(0.0f, 0.0f),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            ImVec2(m_settings.GetDefaultStyle().WindowPadding.x + 2.0f,
+                                   m_settings.GetDefaultStyle().WindowPadding.y));
         if(m_pinned_metrics.empty())
         {
-            ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                                  m_settings.GetColor(Colors::kBgPanel));
-            ImGui::PushStyleColor(ImGuiCol_Border,
-                                  m_settings.GetColor(Colors::kBorderColor));
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
-                                m_settings.GetDefaultStyle().ChildRounding);
-            ImGui::BeginChild("pinned", ImVec2(0.0f, TableRowHeight() * 2.0f),
-                              ImGuiChildFlags_Borders |
-                                  ImGuiChildFlags_AlwaysUseWindowPadding);
             CenterNextItem(ImGui::CalcTextSize("Use () checkbox to pin metrics.").x +
                            ImGui::GetFontSize());
             ImGui::SetCursorPosY(ImGui::GetStyle().FramePadding.y);
@@ -875,14 +839,10 @@ ComputeComparisonView::RenderPinnedMetrics() const
             ImGui::SameLine();
             ImGui::TextUnformatted(") checkbox to pin metrics.");
             ImGui::EndDisabled();
-            ImGui::EndChild();
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor(2);
         }
         else
         {
-            m_pinned_table->SetMaxSize(
-                ImVec2(ImGui::GetContentRegionAvail().x, m_max_pinned_height));
+            m_pinned_table->SetMaxSize(ImVec2(FLT_MAX, m_max_pinned_height));
             m_pinned_table->Render();
             if(m_loading)
             {
@@ -890,6 +850,9 @@ ComputeComparisonView::RenderPinnedMetrics() const
                                        "loading_indicator");
             }
         }
+        ImGui::PopStyleVar();
+        ImGui::EndChild();
+        ImGui::PopStyleColor(2);
     }
 }
 
@@ -1273,26 +1236,24 @@ ComputeComparisonView::Table::Update()
 void
 ComputeComparisonView::Table::Render()
 {
-    const float row_height = TableRowHeight();
-    const float fixed_rows = m_title.empty() ? 1.0f : 2.0f;
-    const float desired_height =
-        (m_visible_row_count == 0 ? 2.0f
-                                  : m_visible_row_count + fixed_rows) *
-            row_height +
-        (m_h_scrollable ? ImGui::GetStyle().ScrollbarSize : 0.0f);
-    const float child_height =
-        QuantizedTableHeight(desired_height, m_max_size.y, fixed_rows,
-                             m_h_scrollable);
-
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
-                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                          m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                          m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild(
         m_widget_name.c_str(),
         ImVec2(std::min(m_max_size.x, ImGui::GetContentRegionAvail().x),
-               child_height),
-        ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+               std::min(
+                   m_max_size.y,
+                   (m_visible_row_count == 0
+                        ? TableRowHeight()
+                        : TableRowHeight() * (m_visible_row_count + 1) +
+                              (m_h_scrollable ? ImGui::GetStyle().ScrollbarSize : 0.0f)) +
+                       (m_title.empty() ? 0.0f : ImGui::GetFrameHeight()) +
+                       ImGui::GetStyle().WindowPadding.y * 2.0f)),
+        ImGuiChildFlags_Borders);
     float title_height = 0.0f;
     if(!m_title.empty())
     {
@@ -1321,22 +1282,15 @@ ComputeComparisonView::Table::Render()
                 {
                     ImGui::PushID(static_cast<int>(i));
                     ImGui::TableNextRow();
-                    const ImVec2 row_min(ImGui::GetWindowPos().x,
-                                          ImGui::GetCursorScreenPos().y);
-                    const ImVec2 row_max(
-                        ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
-                        row_min.y + row_height);
-                    if(ImGui::IsWindowHovered() &&
-                       ImGui::IsMouseHoveringRect(row_min, row_max, true))
-                    {
-                        ImGui::TableSetBgColor(
-                            ImGuiTableBgTarget_RowBg0,
-                            m_settings.GetColor(Colors::kHighlightChart));
-                    }
+                    ImGui::TableNextColumn();
+                    ImGui::Selectable("##hover", false,
+                                      ImGuiSelectableFlags_SpanAllColumns |
+                                          ImGuiSelectableFlags_AllowOverlap);
+                    ImGui::SameLine(0.0f, 0.0f);
                     for(size_t j = 0; j < m_columns.size(); j++)
                     {
                         ImGui::PushID(static_cast<int>(j));
-                        ImGui::TableNextColumn();
+                        ImGui::TableSetColumnIndex(static_cast<int>(j));
                         if(m_rows[i].cells[j].display_props)
                         {
                             if(m_rows[i].cells[j].display_props->bg_color)
@@ -1362,6 +1316,12 @@ ComputeComparisonView::Table::Render()
                                                  .alpha /
                                              255
                                          << IM_COL32_A_SHIFT));
+                            }
+                            else if(ImGui::IsItemHovered())
+                            {
+                                ImGui::TableSetBgColor(
+                                    ImGuiTableBgTarget_RowBg0,
+                                    m_settings.GetColor(Colors::kHighlightChart));
                             }
                             if(m_rows[i].cells[j].display_props->text_color)
                             {
@@ -1389,7 +1349,7 @@ ComputeComparisonView::Table::Render()
                             {
                                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
                                                     ImVec2(0, 0));
-                                if(ImGui::Checkbox("", &m_rows[i].selected))
+                                if(ImGui::Checkbox("##check", &m_rows[i].selected))
                                 {
                                     if(m_row_selection_callback)
                                     {
@@ -1465,8 +1425,7 @@ ComputeComparisonView::Table::Render()
         ImGui::TextDisabled("No data available.");
     }
     ImGui::EndChild();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
+    ImGui::PopStyleColor(4);
 }
 
 const std::vector<ComputeComparisonView::Table::Row>&

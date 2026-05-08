@@ -158,18 +158,9 @@ SideBar::RenderTrackItem(const uint64_t& index, bool allow_visibility_toggle)
                               ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     }
 
-    if(ImGui::Selectable(graph.chart->GetName().c_str(), highlight,
-                         ImGuiSelectableFlags_AllowDoubleClick))
+    if(ImGui::Selectable(graph.chart->GetName().c_str(), highlight))
     {
-        if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
-        {
-            ScrollToTrack(graph);
-            if(m_timeline_selection)
-            {
-                m_timeline_selection->ToggleSelectTrack(graph);
-            }
-        }
-        else if(m_timeline_selection)
+        if(m_timeline_selection)
         {
             m_timeline_selection->ToggleSelectTrack(graph);
         }

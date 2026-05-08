@@ -21,8 +21,17 @@ RenderLoadingIndicatorDots(float dot_radius, int num_dots, float spacing,
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots, float spacing);
 
+enum LoadingIndicatorCentering
+{
+    kCenterNone,
+    kCenterHorizontal,
+    kCenterVertical,
+    kCenterBoth,
+};
+
 void
 RenderLoadingIndicator(ImU32 color, const char* window_id = nullptr,
+                       LoadingIndicatorCentering centering = kCenterBoth,
                        float dot_radius = 5.0f, int num_dots = 3,
                        float dot_spacing = 5.0f, float anim_speed = 5.0f);
 

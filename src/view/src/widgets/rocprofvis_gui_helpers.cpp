@@ -184,7 +184,6 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
                        LoadingIndicatorCentering centering, float dot_radius,
                        int num_dots, float dot_spacing, float anim_speed)
 {
-    //ImVec2 pos = ImGui::GetCursorPos();
     bool   use_overlay_child = window_id && centering != kCenterNone;
 
     if(use_overlay_child)

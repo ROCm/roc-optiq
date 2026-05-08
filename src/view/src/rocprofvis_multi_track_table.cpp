@@ -183,6 +183,42 @@ MultiTrackTable::Render()
                          m_group_by_choices_ptr.data(),
                          static_cast<int>(m_group_by_choices_ptr.size()));
         PopComboStyles();
+
+        if(m_group_by_selection_index != 0)
+        {
+            const ImVec2 combo_min  = ImGui::GetItemRectMin();
+            const ImVec2 combo_max  = ImGui::GetItemRectMax();
+            ImGui::PushFont(icon_font);
+            const ImVec2 icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
+            ImGui::PopFont();
+
+            const float button_w = icon_size.x + base_style.FramePadding.x * 2.0f;
+            const float arrow_w  = ImGui::GetFrameHeight();
+            const ImVec2 clear_min(combo_max.x - arrow_w - button_w, combo_min.y);
+            const ImVec2 clear_max(combo_max.x - arrow_w, combo_max.y);
+            const bool   clear_hovered = ImGui::IsMouseHoveringRect(clear_min, clear_max);
+
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            if(clear_hovered)
+            {
+                draw_list->AddRectFilled(clear_min, clear_max,
+                                         m_settings.GetColor(Colors::kButtonHovered),
+                                         base_style.FrameRounding);
+                SetTooltipStyled("Clear");
+            }
+            const ImVec2 text_pos(
+                clear_min.x + (button_w - icon_size.x) * 0.5f,
+                clear_min.y + ((clear_max.y - clear_min.y) - icon_size.y) * 0.5f);
+            draw_list->AddText(icon_font, icon_font->LegacySize, text_pos,
+                               m_settings.GetColor(Colors::kTextDim), ICON_X_CIRCLED);
+
+            if(clear_hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                m_pending_filter_options.group_by = "";
+                m_group_by_selection_index        = 0;
+            }
+        }
+
         if(group_by_changed)
         {
             if(m_group_by_selection_index == 0)

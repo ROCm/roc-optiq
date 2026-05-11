@@ -177,26 +177,48 @@ MultiTrackTable::Render()
 
         ImGui::TableNextColumn();
         ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::PushFont(icon_font);
+        const ImVec2 clear_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
+        ImGui::PopFont();
+        const float  clear_button_w =
+            clear_icon_size.x + base_style.FramePadding.x * 2.0f;
+        const float  combo_arrow_w = ImGui::GetFrameHeight();
+        const ImVec2 combo_min     = ImGui::GetCursorScreenPos();
+        const ImVec2 combo_max(combo_min.x + ImGui::CalcItemWidth(),
+                               combo_min.y + ImGui::GetFrameHeight());
+        const ImVec2 clear_min(combo_max.x - combo_arrow_w - clear_button_w,
+                               combo_min.y);
+        const ImVec2 clear_max(combo_max.x - combo_arrow_w, combo_max.y);
+        const bool has_group_by_selection = (m_group_by_selection_index != 0);
+        const bool clear_hovered_before_combo =
+            has_group_by_selection &&
+            ImGui::IsMouseHoveringRect(clear_min, clear_max, false);
+
         PushComboStyles();
+        ImGui::SetNextItemAllowOverlap();
+        if(clear_hovered_before_combo)
+        {
+            ImGui::BeginDisabled();
+        }
         const bool group_by_changed =
             ImGui::Combo("##group_by", &m_group_by_selection_index,
                          m_group_by_choices_ptr.data(),
                          static_cast<int>(m_group_by_choices_ptr.size()));
+        if(clear_hovered_before_combo)
+        {
+            ImGui::EndDisabled();
+        }
         PopComboStyles();
 
-        if(m_group_by_selection_index != 0)
+        if(has_group_by_selection)
         {
-            const ImVec2 combo_min  = ImGui::GetItemRectMin();
-            const ImVec2 combo_max  = ImGui::GetItemRectMax();
-            ImGui::PushFont(icon_font);
-            const ImVec2 icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
-            ImGui::PopFont();
+            const ImVec2 clear_size(clear_max.x - clear_min.x, clear_max.y - clear_min.y);
 
-            const float button_w = icon_size.x + base_style.FramePadding.x * 2.0f;
-            const float arrow_w  = ImGui::GetFrameHeight();
-            const ImVec2 clear_min(combo_max.x - arrow_w - button_w, combo_min.y);
-            const ImVec2 clear_max(combo_max.x - arrow_w, combo_max.y);
-            const bool   clear_hovered = ImGui::IsMouseHoveringRect(clear_min, clear_max);
+            ImGui::SetCursorScreenPos(clear_min);
+            ImGui::PushID("group_by_clear");
+            const bool clear_clicked = ImGui::InvisibleButton("##button", clear_size);
+            const bool clear_hovered = ImGui::IsItemHovered();
+            ImGui::PopID();
 
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             if(clear_hovered)
@@ -207,15 +229,16 @@ MultiTrackTable::Render()
                 SetTooltipStyled("Clear");
             }
             const ImVec2 text_pos(
-                clear_min.x + (button_w - icon_size.x) * 0.5f,
-                clear_min.y + ((clear_max.y - clear_min.y) - icon_size.y) * 0.5f);
+                clear_min.x + (clear_button_w - clear_icon_size.x) * 0.5f,
+                clear_min.y + ((clear_max.y - clear_min.y) - clear_icon_size.y) * 0.5f);
             draw_list->AddText(icon_font, icon_font->LegacySize, text_pos,
-                               m_settings.GetColor(Colors::kTextDim), ICON_X_CIRCLED);
+                               m_settings.GetColor(Colors::kTextMain), ICON_X_CIRCLED);
 
-            if(clear_hovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            if(clear_clicked)
             {
                 m_pending_filter_options.group_by = "";
                 m_group_by_selection_index        = 0;
+                ImGui::CloseCurrentPopup();
             }
         }
 

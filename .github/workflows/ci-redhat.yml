@@ -140,7 +140,6 @@ jobs:
         shell: bash
         working-directory: ${{ env.DIST_DIR }}
         run: |
-          dnf install -y createrepo
           createrepo .
 
       - name: Upload Build to S3

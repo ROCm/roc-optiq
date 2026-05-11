@@ -6,125 +6,14 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb-image/stb_image.h"
-// Needed for ImGui::RegisterUserTexture / UnregisterUserTexture: the only portable way
-// (as of ImGui 1.92.x) to expose a non-font ImTextureData to the active backend's
-// per-frame texture loop. Works with both the OpenGL3 and Vulkan backends.
-#include "imgui_internal.h"
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 namespace RocProfVis
 {
 
 namespace View
 {
-
-EmbeddedImage::EmbeddedImage(const unsigned char* data, int data_len)
-{
-    int channels = 0;
-    m_pixels =
-        stbi_load_from_memory(data, data_len, &m_width, &m_height, &channels, STBI_rgb_alpha);
-    if(!Valid())
-    {
-        spdlog::warn("EmbeddedImage: failed to load image ({} bytes): {}", data_len,
-                     stbi_failure_reason());
-    }
-}
-
-EmbeddedImage::~EmbeddedImage()
-{
-    // Hand the GPU texture back to ImGui's backend; it will free the native handle on the
-    // next render pass. We intentionally do NOT IM_DELETE(m_tex): doing so before the
-    // backend honors WantDestroy would leak the GPU resource. The bounded per-instance
-    // leak of one ImTextureData is acceptable for app-lifetime images.
-    if(m_tex != nullptr && ImGui::GetCurrentContext() != nullptr)
-    {
-        m_tex->SetStatus(ImTextureStatus_WantDestroy);
-        ImGui::UnregisterUserTexture(m_tex);
-    }
-    m_tex = nullptr;
-
-    if(m_pixels)
-    {
-        stbi_image_free(m_pixels);
-    }
-}
-
-void
-EmbeddedImage::EnsureTextureUploaded() const
-{
-    if(m_tex_attempted) return;
-    if(!Valid()) return;
-    if(ImGui::GetCurrentContext() == nullptr) return;  // No context yet; try again next frame.
-
-    m_tex_attempted = true;
-
-    ImTextureData* tex = IM_NEW(ImTextureData)();
-    tex->Create(ImTextureFormat_RGBA32, m_width, m_height);
-    unsigned char* dst = static_cast<unsigned char*>(tex->GetPixels());
-    if(dst == nullptr)
-    {
-        IM_DELETE(tex);
-        spdlog::warn("EmbeddedImage: failed to allocate GPU texture ({}x{})", m_width,
-                     m_height);
-        return;
-    }
-
-    std::memcpy(dst, m_pixels, static_cast<size_t>(m_width) * m_height * 4);
-
-    tex->SetStatus(ImTextureStatus_WantCreate);
-    ImGui::RegisterUserTexture(tex);
-    m_tex = tex;
-}
-
-bool
-EmbeddedImage::Valid() const
-{
-    return m_pixels != nullptr && m_width > 0 && m_height > 0;
-}
-
-int
-EmbeddedImage::GetWidth() const
-{
-    return m_width;
-}
-
-int
-EmbeddedImage::GetHeight() const
-{
-    return m_height;
-}
-
-unsigned char*
-EmbeddedImage::GetPixels()
-{
-    return m_pixels;
-}
-
-const unsigned char*
-EmbeddedImage::GetPixel(int x, int y) const
-{
-    if(!Valid() || x < 0 || x >= m_width || y < 0 || y >= m_height)
-        return nullptr;
-    return m_pixels + 4 * (y * m_width + x);
-}
-
-void
-EmbeddedImage::Render(ImVec2 top_left, float target_width) const
-{
-    if(!Valid()) return;
-
-    EnsureTextureUploaded();
-    if(m_tex == nullptr) return;
-
-    const float target_height =
-        target_width * static_cast<float>(m_height) / static_cast<float>(m_width);
-    const ImVec2 bottom_right(top_left.x + target_width, top_left.y + target_height);
-    ImGui::GetWindowDrawList()->AddImage(m_tex->GetTexRef(), top_left, bottom_right);
-}
 
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots,

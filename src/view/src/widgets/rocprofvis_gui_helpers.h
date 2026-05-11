@@ -65,38 +65,6 @@ ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);
 
-// Decodes an in-memory image (PNG/JPG/etc. via stb_image) into RGBA8 pixels and uploads it
-// to the GPU as an ImGui-managed texture on first Render(). The decoded CPU pixels are
-// retained and exposed via GetPixels() for callers that need them outside of ImGui (e.g.
-// to feed glfwSetWindowIcon).
-class EmbeddedImage
-{
-public:
-    EmbeddedImage(const unsigned char* data, int data_len);
-    ~EmbeddedImage();
-
-    EmbeddedImage(const EmbeddedImage&)            = delete;
-    EmbeddedImage& operator=(const EmbeddedImage&) = delete;
-
-    bool                 Valid() const;
-    int                  GetWidth() const;
-    int                  GetHeight() const;
-    const unsigned char* GetPixel(int x, int y) const;
-    unsigned char*       GetPixels();
-
-    void Render(ImVec2 top_left, float target_width) const;
-
-private:
-    // Lazy GPU upload on first Render(). m_tex_attempted prevents retry on failure.
-    void EnsureTextureUploaded() const;
-
-    int                    m_width  = 0;
-    int                    m_height = 0;
-    unsigned char*         m_pixels = nullptr;
-    mutable ImTextureData* m_tex            = nullptr;
-    mutable bool           m_tex_attempted  = false;
-};
-
 void
 CenterNextTextItem(const char* text);
 

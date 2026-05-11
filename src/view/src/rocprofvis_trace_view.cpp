@@ -369,31 +369,11 @@ TraceView::Render()
             popup_style.PushTitlebarColors();
 
             float dpi = SettingsManager::GetInstance().GetDPI();
-            // Anchor first appearance inside the main viewport so the
-            // window does not get promoted to a separate OS-level
-            // viewport.  When the window lives inside its own OS
-            // viewport, ImGui refuses to dock it with windows that are
-            // hosted by the main viewport.
-            const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-            const ImVec2         center        = main_viewport->GetCenter();
-            // Use FirstUseEver (not Appearing) so that once the user
-            // docks the Minimap with another window (e.g. the Summary),
-            // toggling visibility off and on does not reset its
-            // position and undock it from the saved dock node.
-            ImGui::SetNextWindowPos(center, ImGuiCond_FirstUseEver,
-                                    ImVec2(0.5f, 0.5f));
-            ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi),
-                                     ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(200.0f, 150.0f),
-                                                ImVec2(FLT_MAX, FLT_MAX));
+            ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
-                            ImGuiWindowFlags_NoCollapse))
+                            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {
-                const ImVec2 content = ImGui::GetContentRegionAvail();
-                if(content.x >= 200.0f && content.y >= 150.0f)
-                {
-                    m_minimap->Render();
-                }
+                m_minimap->Render();
             }
             ImGui::End();
             popup_style.PopStyles();

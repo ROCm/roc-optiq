@@ -308,75 +308,37 @@ Minimap::Render()
     float  pad         = 8.0f;
     float  legend_w    = 120.0f;
     float  top_padding = 5.0f;
-    ImVec2 outer_avail = ImGui::GetContentRegionAvail();
+    ImVec2 avail       = ImGui::GetContentRegionAvail();
 
-    // Minimum content region needed for the full minimap layout:
-    // - legend column needs ~120 wide and ~130 tall (Max/Min text,
-    //   color bar, checkboxes)
-    // - map area needs some breathing room next to the legend
-    // Below this we skip rendering entirely; the dock split can still
-    // shrink (SetNextWindowSizeConstraints is ignored for docked
-    // windows in ImGui), but the area renders empty rather than
-    // half-laid-out.
-    const float min_avail_x = 200.0f;
-    const float min_avail_y = 150.0f;
-
-    // Guard: skip the entire child window when there is not enough
-    // space for the layout.  Creating a child and bailing mid-layout
-    // corrupts ImGui internal state and causes visual artifacts.
-    if(outer_avail.x < min_avail_x || outer_avail.y < min_avail_y)
+    if(ImGui::BeginChild("Minimap", avail, true))
     {
-        ImGui::PopStyleVar(2);
-        ImGui::PopStyleColor();
-        return;
-    }
+        ImDrawList* draw_list       = ImGui::GetWindowDrawList();
+        ImVec2      window_position = ImGui::GetWindowPos();
 
-    if(ImGui::BeginChild("Minimap", outer_avail, true))
-    {
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        ImGui::SetCursorPos(ImVec2(pad, pad));
 
-        // Compute layout from the child's inner content rect, not the
-        // outer avail captured before BeginChild.  Using the outer size
-        // misaligns the map (drawn with raw ImDrawList) and the legend
-        // (positioned via SetCursorPos, which is offset by WindowPadding
-        // and border) by ~8px and causes visible overlap at small sizes.
-        ImVec2 avail   = ImGui::GetContentRegionAvail();
-        ImVec2 map_pos = ImGui::GetCursorScreenPos();
-        // Nudge map slightly inward so the border of the child window
-        // is not overlapped.
-        map_pos.y += top_padding;
-        ImVec2 map_size(std::max(0.0f, avail.x - legend_w - pad * 2),
-                        std::max(0.0f, avail.y - top_padding - pad));
+        ImVec2 map_pos(window_position.x + pad, window_position.y + top_padding);
+        ImVec2 map_size(avail.x - legend_w - pad * 3, avail.y - top_padding - pad * 2);
 
-        ImGui::Dummy(ImVec2(0, 0));
+        // Fill background of minimap area with white (light mode) or black (dark mode)
+        draw_list->AddRectFilled(map_pos,
+                                 ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
+                                 sm.GetColor(Colors::kMinimapBg));
 
-        if(map_size.x > 1.0f && map_size.y > 1.0f)
-        {
-            // Fill background of minimap area with white (light mode) or
-            // black (dark mode)
-            draw_list->AddRectFilled(
-                map_pos, ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
-                sm.GetColor(Colors::kMinimapBg));
+        RenderMinimapData(draw_list, map_pos, map_size);
 
-            RenderMinimapData(draw_list, map_pos, map_size);
+        // Draw border around minimap
+        ImU32 border_color     = sm.GetColor(Colors::kBorderColor);
+        float border_thickness = 1.5f;
+        draw_list->AddRect(map_pos,
+                           ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
+                           border_color, 0.0f, 0, border_thickness);
 
-            // Draw border around minimap
-            ImU32 border_color     = sm.GetColor(Colors::kBorderColor);
-            float border_thickness = 1.5f;
-            draw_list->AddRect(
-                map_pos, ImVec2(map_pos.x + map_size.x, map_pos.y + map_size.y),
-                border_color, 0.0f, 0, border_thickness);
+        RenderViewport(draw_list, map_pos, map_size);
+        HandleNavigation(map_pos, map_size);
 
-            RenderViewport(draw_list, map_pos, map_size);
-            HandleNavigation(map_pos, map_size);
-        }
-
-        // Position the legend column at the right edge of the inner
-        // content area, leaving `pad` between it and the map.
-        float legend_x = std::max(0.0f, avail.x - legend_w);
-        ImGui::SetCursorPos(ImVec2(legend_x, top_padding));
-        ImGui::Dummy(ImVec2(0, 0));
-        RenderLegend(legend_w, std::max(0.0f, avail.y - top_padding - pad));
+        ImGui::SetCursorPos(ImVec2(avail.x - legend_w - pad, top_padding));
+        RenderLegend(legend_w, avail.y - top_padding - pad * 2);
     }
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
@@ -387,7 +349,6 @@ void
 Minimap::RenderMinimapData(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
 {
     if(m_visible_tracks.empty() || m_data_width == 0 || m_data_height == 0) return;
-    if(map_size.x < 1.0f || map_size.y < 1.0f) return;
 
     float bw = map_size.x / m_data_width, bh = map_size.y / m_data_height;
     for(size_t y = 0; y < m_data_height && y < m_visible_tracks.size(); ++y)
@@ -486,7 +447,6 @@ Minimap::HandleNavigation(ImVec2 map_pos, ImVec2 map_size)
     double end_time = m_data_provider.DataModel().GetTimeline().GetEndTime() - start_time;
 
     ImGui::SetCursorScreenPos(map_pos);
-    ImGui::Dummy(ImVec2(0, 0));
     ImGui::InvisibleButton("Hit", map_size);
 
     if(ImGui::IsItemClicked())
@@ -530,9 +490,6 @@ Minimap::RenderLegend(float w, float h)
     float checkbox_sz = ImGui::GetFrameHeight();
     float gap         = 4.0f;
     float bar_h       = h - (text_height * 2) - (gap * 3) - checkbox_sz;
-
-    // Skip legend rendering if there is not enough vertical space
-    if(bar_h < 1.0f) return;
 
     float bar_x1 = pos.x + (w * 0.25f) - (bar_w * 0.5f);
     float bar_x2 = pos.x + (w * 0.75f) - (bar_w * 0.5f);
@@ -582,12 +539,10 @@ Minimap::RenderLegend(float w, float h)
     // Checkboxes
     float chk_y = bar_y + bar_h + gap + text_height + gap;
     ImGui::SetCursorScreenPos(ImVec2(bar_x1 - (checkbox_sz - bar_w) * 0.5f, chk_y));
-    ImGui::Dummy(ImVec2(0, 0));
     ImGui::Checkbox("##events", &m_show_events);
     if(ImGui::IsItemHovered())
         SetTooltipStyled("Show/Hide Event Tracks");
     ImGui::SetCursorScreenPos(ImVec2(bar_x2 - (checkbox_sz - bar_w) * 0.5f, chk_y));
-    ImGui::Dummy(ImVec2(0, 0));
     ImGui::Checkbox("##counters", &m_show_counters);
     if(ImGui::IsItemHovered())
         SetTooltipStyled("Show/Hide Counter Tracks");

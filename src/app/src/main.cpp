@@ -293,16 +293,6 @@ main(int argc, char** argv)
                 // Keep undocked windows out of the OS taskbar.
                 io.ConfigViewportsNoTaskBarIcon = false;
 
-#ifdef __linux__
-                // On Linux (especially RHEL10 under Wayland/Xwayland),
-                // secondary viewports rendered without WM decorations
-                // cause shadow lag and black-box artifacts when dragged
-                // near screen edges.  Keeping WM decorations lets the
-                // compositor manage the window surfaces correctly and
-                // avoids stale framebuffer ghosts.
-                io.ConfigViewportsNoDecoration = false;
-#endif
-
                 ImGui::StyleColorsLight();
 
                 rocprofvis_view_init([window](int notification) -> void {

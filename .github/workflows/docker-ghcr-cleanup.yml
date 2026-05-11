@@ -25,5 +25,4 @@ jobs:
         uses: dataaxiom/ghcr-cleanup-action@v1
         with:
           package: optiq-ci-${{ matrix.os }}
-          older-than: 7 days
           dry-run: ${{ github.event_name == 'pull_request' }}

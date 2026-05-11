@@ -73,7 +73,7 @@ jobs:
       - name: Set OS versions
         id: setup-os-versions
         run: |
-          if [ "${{ github.event_name }}" = "schedule" || "${{ github.event.inputs.enable_full_os_versions }}" == "true" ]; then
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event.inputs.enable_full_os_versions }}" == "true" ]]; then
             echo "ubuntu-os-versions=${{ env.UBUNTU_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "redhat-os-versions=${{ env.REDHAT_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "windows-os-versions=${{ env.WINDOWS_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"

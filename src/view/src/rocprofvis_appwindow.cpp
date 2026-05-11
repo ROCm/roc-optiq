@@ -404,6 +404,12 @@ AppWindow::BeginAppShutdown()
     m_shutdown_requested      = true;
     m_disable_app_interaction = true;
 
+    NotificationManager::GetInstance().ShowPersistent(
+        APP_SHUTDOWN_NOTIFICATION_ID,
+        "Closing traces... " + std::to_string(m_provider_cleanup_jobs.size()) +
+            " cleanup job(s) remaining",
+        NotificationLevel::Info);
+
     for(auto& item : m_projects)
     {
         if(item.second)
@@ -513,15 +519,6 @@ AppWindow::UpdateProviderCleanups()
         if(m_provider_cleanup_jobs.empty())
         {
             NotificationManager::GetInstance().Hide(APP_SHUTDOWN_NOTIFICATION_ID);
-        }
-        else
-        {
-            NotificationManager::GetInstance().ShowPersistent(
-                APP_SHUTDOWN_NOTIFICATION_ID,
-                "Closing traces... " +
-                    std::to_string(m_provider_cleanup_jobs.size()) +
-                    " cleanup job(s) remaining",
-                NotificationLevel::Info);
         }
         RequestExitIfProviderCleanupsComplete();
     }

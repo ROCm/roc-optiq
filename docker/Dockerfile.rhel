@@ -1,16 +1,29 @@
 ARG VERSION=10
 FROM rockylinux/rockylinux:${VERSION}
 
+ARG VERSION
 ARG VULKAN_SDK_VERSION=1.4.328.1
 
 WORKDIR /tmp
 SHELL [ "/bin/bash", "-c" ]
 
+# Clean
+RUN dnf clean all && \
+    dnf upgrade -y --refresh
+
 # Install Dependencies
-RUN dnf groupinstall -y "Development Tools" && \
-    dnf install -y epel-release && crb enable && \
-    dnf install -y cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget && \
-    dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel unzip
+RUN OS_VERSION=$(grep '^VERSION_ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"' | cut -d'.' -f1) && \
+    dnf groupinstall -y "Development Tools" && \
+    if [ "${OS_VERSION}" -eq 8 ]; then \
+        dnf install -y tbb-devel epel-release && dnf config-manager --set-enabled powertools; \
+    else \
+        dnf install -y epel-release && crb enable; \
+    fi && \
+    dnf install -y cmake createrepo libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget && \
+    dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel unzip && \
+    if [ "${OS_VERSION}" -eq 8 ]; then \
+        dnf install -y gcc-toolset-11; \
+    fi
 
 # Install Vulkan SDK
 RUN mkdir -p /opt/vulkan && \

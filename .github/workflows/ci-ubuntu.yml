@@ -60,6 +60,7 @@ env:
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  AWS_S3_BUCKET_BASE_PATH: "test"
 
 jobs:
   ubuntu:
@@ -128,12 +129,27 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Generate Metadata for S3
+        if: ${{ inputs.upload_to_s3 }}
+        shell: bash
+        working-directory: ${{ env.DIST_DIR }}
+        run: |
+          dpkg-scanpackages . /dev/null > Packages
+          gzip -k -f Packages
+          APT_SUITE="optiq-nightly"
+          apt-ftparchive \
+              -o APT::FTPArchive::Release::Origin="ROCm Optiq" \
+              -o APT::FTPArchive::Release::Label="${APT_SUITE}" \
+              -o APT::FTPArchive::Release::Suite="${APT_SUITE}" \
+              -o APT::FTPArchive::Release::Codename="${APT_SUITE}" \
+              release . > Release
+
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}
         shell: bash
         run: |
           TIMESTAMP=$(date +%Y_%m_%d)
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/ubuntu/${{ matrix.os-version }}/ \
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.AWS_S3_BUCKET_BASE_PATH }}/$TIMESTAMP/ubuntu/${{ matrix.os-version }}/ \
             --no-progress
 
       - name: Announce Test Failure

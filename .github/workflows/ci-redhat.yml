@@ -33,7 +33,7 @@ on:
       os_version:
         description: 'JSON array of OS version(s) to test'
         type: string
-        default: '[ "9", "10" ]'
+        default: '[ "8", "9", "10" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -60,6 +60,7 @@ env:
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  AWS_S3_BUCKET_BASE_PATH: "test"
 
 jobs:
   rocky-linux:
@@ -85,7 +86,13 @@ jobs:
         shell: bash
         run: |
           source /opt/vulkan/**/setup-env.sh
-          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          if [ "${{ matrix.os-version }}" = "8" ]; then
+            source /opt/rh/gcc-toolset-11/enable
+            EXTRA_LINK_FLAGS="-ldl -ltbb"
+          else
+            EXTRA_LINK_FLAGS=""
+          fi
+          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DGLFW_LINK_STATIC=ON ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e build/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"
@@ -128,12 +135,19 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Generate Metadata for S3
+        if: ${{ inputs.upload_to_s3 }}
+        shell: bash
+        working-directory: ${{ env.DIST_DIR }}
+        run: |
+          createrepo .
+
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}
         shell: bash
         run: |
           TIMESTAMP=$(date +%Y_%m_%d)
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$TIMESTAMP/rhel/${{ matrix.os-version }}/ \
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.AWS_S3_BUCKET_BASE_PATH }}/$TIMESTAMP/rhel/${{ matrix.os-version }}/ \
             --no-progress
 
       - name: Announce Test Failure

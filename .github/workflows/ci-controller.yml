@@ -5,15 +5,31 @@ on:
   workflow_dispatch:
     inputs:
       enable_full_os_versions:
-        description: 'Run CI for all os variations?'
+        description: 'Run CI for all OS versions?'
         type: boolean
         default: false
+      enable_ci_redhat:
+        description: 'Run RedHat CI?'
+        type: boolean
+        default: true
+      enable_ci_ubuntu:
+        description: 'Run Ubuntu CI?'
+        type: boolean
+        default: true
+      enable_ci_windows:
+        description: 'Run Windows CI?'
+        type: boolean
+        default: true
+      enable_ci_mac:
+        description: 'Run macOS CI?'
+        type: boolean
+        default: true
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
         default: false
       upload_to_s3:
-        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
+        description: 'Upload build artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
   schedule:
@@ -38,15 +54,15 @@ jobs:
     name: Setup
     runs-on: ubuntu-latest
     env:
-      # Full OS Coverage (for nightly scheduled builds)
+      # Full OS Coverage (default for scheduled runs)
       UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04" ]'
-      REDHAT_FULL_OS_VERSIONS: '[ "9", "10" ]'
-      WINDOWS_FULL_OS_VERSIONS: '[ "2025" ]'
+      REDHAT_FULL_OS_VERSIONS: '[ "8", "9", "10" ]'
+      WINDOWS_FULL_OS_VERSIONS: '[ "2022" ]'
       MAC_FULL_OS_VERSIONS: '[ "14", "15", "26" ]'
-      # Minimal OS Coverage (for all other builds)
+      # Minimal OS Coverage (default for all other runs)
       UBUNTU_CI_OS_VERSIONS: '[ "24.04" ]'
       REDHAT_CI_OS_VERSIONS: '[ "10" ]'
-      WINDOWS_CI_OS_VERSIONS: '[ "2025" ]'
+      WINDOWS_CI_OS_VERSIONS: '[ "2022" ]'
       MAC_CI_OS_VERSIONS: '[ "26" ]'
     outputs:
       ubuntu-os-versions: ${{ steps.setup-os-versions.outputs.ubuntu-os-versions }}
@@ -57,7 +73,7 @@ jobs:
       - name: Set OS versions
         id: setup-os-versions
         run: |
-          if [ "${{ github.event_name }}" = "schedule" || "${{ github.event.inputs.enable_full_os_versions }}" == "true" ]; then
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event.inputs.enable_full_os_versions }}" == "true" ]]; then
             echo "ubuntu-os-versions=${{ env.UBUNTU_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "redhat-os-versions=${{ env.REDHAT_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "windows-os-versions=${{ env.WINDOWS_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
@@ -72,6 +88,7 @@ jobs:
   ci-redhat:
     name: RedHat CI
     needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_redhat }}
     uses: ./.github/workflows/ci-redhat.yml
     secrets: inherit
     with:
@@ -82,6 +99,7 @@ jobs:
   ci-ubuntu:
     name: Ubuntu CI
     needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_ubuntu }}
     uses: ./.github/workflows/ci-ubuntu.yml
     secrets: inherit
     with:
@@ -92,6 +110,7 @@ jobs:
   ci-windows:
     name: Windows CI
     needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_windows }}
     uses: ./.github/workflows/ci-windows.yml
     secrets: inherit
     with:
@@ -102,6 +121,7 @@ jobs:
   ci-mac:
     name: macOS CI
     needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_mac }}
     uses: ./.github/workflows/ci-mac.yml
     secrets: inherit
     with:

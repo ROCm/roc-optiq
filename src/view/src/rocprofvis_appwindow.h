@@ -13,11 +13,10 @@
 #include "widgets/rocprofvis_tab_container.h"
 
 #include <atomic>
-#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+#include <chrono>
 #include <future>
 #include <thread>
-#include <chrono>
-#endif
+#include <vector>
 
 namespace RocProfVis
 {
@@ -76,10 +75,25 @@ public:
     void SetFileDialogPreference(rocprofvis_view_file_dialog_preference_t pref);
 
 private:
+    enum class ProviderCleanupReason
+    {
+        kTabClose,
+        kAppShutdown
+    };
+
+    struct ProviderCleanupJob
+    {
+        std::string                            label;
+        std::string                            notification_id;
+        ProviderCleanupReason                  reason;
+        std::future<DataProviderCleanupResult> future;
+    };
+
     AppWindow();
     ~AppWindow();
 
     void RenderDisableScreen();
+    void RenderShutdownState();
     void RenderFileMenu(Project* project);
     void RenderEditMenu(Project* project);
     void RenderViewMenu(Project* project);
@@ -95,6 +109,13 @@ private:
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
     void ConfigureFileDialogBackend();
+    void BeginAppShutdown();
+    void DetachProjectProviderCleanup(Project& project, ProviderCleanupReason reason);
+    void StartProviderCleanup(DataProviderCleanupWork cleanup_work,
+                              const std::string&    label,
+                              ProviderCleanupReason reason);
+    void UpdateProviderCleanups();
+    void RequestExitIfProviderCleanupsComplete();
 
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
@@ -133,6 +154,8 @@ private:
 #endif
     bool m_open_about_dialog;
     bool m_disable_app_interaction;
+    bool m_shutdown_requested;
+    bool m_exit_notification_sent;
 
     rocprofvis_view_file_dialog_preference_t m_file_dialog_preference;
 
@@ -155,6 +178,8 @@ private:
     std::function<void(int)>         m_notification_callback;
     bool                             m_is_fullscreen;
     bool                             m_restore_fullscreen_later;
+    std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
+    uint64_t                         m_next_provider_cleanup_id;
 };
 
 }  // namespace View

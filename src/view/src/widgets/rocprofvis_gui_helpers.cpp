@@ -180,10 +180,11 @@ RenderLoadingIndicatorDots(float dot_radius, int num_dots,
 }
 
 void
-RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int num_dots,
-                       float dot_spacing, float anim_speed)
+RenderLoadingIndicator(ImU32 color, const char* window_id,
+                       LoadingIndicatorCentering centering, float dot_radius,
+                       int num_dots, float dot_spacing, float anim_speed)
 {
-    ImVec2 pos = ImGui::GetCursorPos();
+    ImVec2 orig_pos = ImGui::GetCursorPos();
 
     if(window_id)
     {
@@ -197,21 +198,30 @@ RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int
     ImVec2 dot_size   = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
     ImVec2 window_pos = ImGui::GetWindowPos();
     ImVec2 view_rect  = ImGui::GetWindowSize();
-    ImVec2 center_pos = ImVec2(window_pos.x + (view_rect.x - dot_size.x) * 0.5f,
-                               window_pos.y + (view_rect.y - dot_size.y) * 0.5f);
+    ImVec2 draw_pos   = ImGui::GetCursorScreenPos();
 
-    ImGui::SetCursorScreenPos(center_pos);
+    if(centering == kCenterHorizontal || centering == kCenterBoth)
+    {
+        draw_pos.x = window_pos.x + (view_rect.x - dot_size.x) * 0.5f;
+    }
+    if(centering == kCenterVertical || centering == kCenterBoth)
+    {
+        draw_pos.y = window_pos.y + (view_rect.y - dot_size.y) * 0.5f;
+    }
+
+    if(centering != kCenterNone)
+    {
+        ImGui::SetCursorScreenPos(draw_pos);
+    }
     RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing, color, anim_speed);
 
     if(window_id)
     {
         ImGui::EndChild();
         ImGui::PopStyleColor();
+        // Restore cursor position in the parent window
+        ImGui::SetCursorPos(orig_pos);
     }
-
-    // Zero-size Dummy avoids EndChild parent-boundary check after SetCursorPos.
-    ImGui::SetCursorPos(pos);
-    ImGui::Dummy(ImVec2(0.0f, 0.0f));
 }
 
 ImU32

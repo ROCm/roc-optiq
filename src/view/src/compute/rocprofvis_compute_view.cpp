@@ -101,6 +101,13 @@ ComputeView::ComputeView()
 
 ComputeView::~ComputeView() {}
 
+std::optional<DataProviderCleanupWork>
+ComputeView::DetachProviderCleanup()
+{
+    DataProviderCleanupWork cleanup_work = m_data_provider.DetachCleanupWork();
+    return cleanup_work;
+}
+
 void
 ComputeView::Update()
 {

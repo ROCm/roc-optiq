@@ -21,8 +21,31 @@ RenderLoadingIndicatorDots(float dot_radius, int num_dots, float spacing,
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots, float spacing);
 
+enum LoadingIndicatorCentering
+{
+    kCenterNone,
+    kCenterHorizontal,
+    kCenterVertical,
+    kCenterBoth,
+};
+
+/**
+ * @brief Render a loading indicator with animated dots.
+ *
+ * @param color The color of the dots (including alpha for transparency).
+ * @param window_id Optional ID for an overlay child window to render the indicator in.
+ * If null, the indicator will be rendered in the current window. The overlay window will
+ * be sized to fill the parent window.
+ * @param centering How to center the indicator within the window (horizontal, vertical,
+ * both, or none).
+ * @param dot_radius The radius of each dot in the indicator.
+ * @param num_dots The number of dots in the indicator.
+ * @param dot_spacing The spacing between each dot.
+ * @param anim_speed The speed of the dot animation.
+ */
 void
 RenderLoadingIndicator(ImU32 color, const char* window_id = nullptr,
+                       LoadingIndicatorCentering centering = kCenterBoth,
                        float dot_radius = 5.0f, int num_dots = 3,
                        float dot_spacing = 5.0f, float anim_speed = 5.0f);
 

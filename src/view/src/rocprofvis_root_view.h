@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include "rocprofvis_data_provider.h"
 #include "widgets/rocprofvis_widget.h"
 #include <memory>
+#include <optional>
 
 namespace RocProfVis
 {
@@ -22,6 +24,8 @@ public:
     virtual std::shared_ptr<RocWidget> GetToolbar();
 
     virtual void RenderEditMenuOptions();
+
+    virtual std::optional<DataProviderCleanupWork> DetachProviderCleanup();
 
 protected:
     void RenderLoadingScreen(const char* progress_label);

@@ -58,10 +58,7 @@ EventsView::Render()
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
     ImGui::BeginChild("events_view", ImVec2(0, 0),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-    // Nested borders and table borders should sit much closer to the background
-    // than the outer panel border, otherwise they stack into a bright "frame"
-    // around the section. Override the relevant ImGui color slots only inside
-    // the events_view scope so the rest of the app is unaffected.
+    // Use subtler borders for nested event panes.
     ImGui::PushStyleColor(ImGuiCol_Border,
                           m_settings.GetColor(Colors::kPanelBorderSubtle));
     ImGui::PushStyleColor(ImGuiCol_TableBorderStrong,

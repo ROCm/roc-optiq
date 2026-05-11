@@ -190,13 +190,13 @@ MultiTrackTable::Render()
                                combo_min.y);
         const ImVec2 clear_max(combo_max.x - combo_arrow_w, combo_max.y);
         const bool has_group_by_selection = (m_group_by_selection_index != 0);
-        const bool clear_hovered_before_combo =
+        const bool clear_region_hovered =
             has_group_by_selection &&
             ImGui::IsMouseHoveringRect(clear_min, clear_max, false);
 
         PushComboStyles();
         ImGui::SetNextItemAllowOverlap();
-        if(clear_hovered_before_combo)
+        if(clear_region_hovered)
         {
             ImGui::BeginDisabled();
         }
@@ -204,7 +204,7 @@ MultiTrackTable::Render()
             ImGui::Combo("##group_by", &m_group_by_selection_index,
                          m_group_by_choices_ptr.data(),
                          static_cast<int>(m_group_by_choices_ptr.size()));
-        if(clear_hovered_before_combo)
+        if(clear_region_hovered)
         {
             ImGui::EndDisabled();
         }
@@ -217,11 +217,11 @@ MultiTrackTable::Render()
             ImGui::SetCursorScreenPos(clear_min);
             ImGui::PushID("group_by_clear");
             const bool clear_clicked = ImGui::InvisibleButton("##button", clear_size);
-            const bool clear_hovered = ImGui::IsItemHovered();
+            const bool clear_button_hovered = ImGui::IsItemHovered();
             ImGui::PopID();
 
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
-            if(clear_hovered)
+            if(clear_button_hovered)
             {
                 draw_list->AddRectFilled(clear_min, clear_max,
                                          m_settings.GetColor(Colors::kButtonHovered),

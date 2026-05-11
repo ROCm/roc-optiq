@@ -19,7 +19,7 @@ RUN OS_VERSION=$(grep '^VERSION_ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"'
     else \
         dnf install -y epel-release && crb enable; \
     fi && \
-    dnf install -y cmake libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget && \
+    dnf install -y cmake createrepo libxkbcommon-devel mesa-libGL-devel ncurses-devel ninja-build wayland-devel wget && \
     dnf install -y libX11-devel libXcursor-devel libXi-devel libXinerama-devel libXrandr-devel dbus-devel unzip && \
     if [ "${OS_VERSION}" -eq 8 ]; then \
         dnf install -y gcc-toolset-11; \

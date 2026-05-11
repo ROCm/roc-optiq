@@ -21,7 +21,7 @@ jobs:
         os: [ 'ubuntu', 'rhel' ]
 
     steps:
-      - name: Clean up GHCR rocprofiler-${{ matrix.os }} Docker CI Images
+      - name: Clean up GHCR optiq-ci-${{ matrix.os }} Docker Images
         uses: dataaxiom/ghcr-cleanup-action@v1
         with:
           package: optiq-ci-${{ matrix.os }}

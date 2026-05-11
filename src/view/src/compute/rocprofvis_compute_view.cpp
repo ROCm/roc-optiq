@@ -93,7 +93,7 @@ ComputeView::ComputeView()
                     NotificationLevel::Error);
             }
 
-             // trigger new table data event to update the UI
+            // Trigger new table data event to update the UI.
             EventManager::GetInstance()->AddEvent(
                 std::make_shared<TableDataEvent>(trace_path, request_id, response_code));
         });
@@ -104,7 +104,6 @@ ComputeView::~ComputeView() {}
 void
 ComputeView::Update()
 {
-    auto last_state = m_data_provider.GetState();
     m_data_provider.Update();
 
     if(!m_view_created)
@@ -114,11 +113,6 @@ ComputeView::Update()
     }
 
     auto new_state = m_data_provider.GetState();
-
-    // new file loaded
-    if(last_state != new_state && new_state == ProviderState::kReady)
-    {
-    }
 
     if(new_state == ProviderState::kReady)
     {
@@ -137,24 +131,42 @@ void
 ComputeView::CreateView()
 {
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
-    // When launched remotely, for example over ssh, the UI make take long to init, and the data provider
-    // may have already loaded an analysis if the application was launched with --file flag.
-    // Check if one exists and if it does set the workload.
+    // Data provider may load before the UI is ready; pick first workload if so.
     const std::vector<const WorkloadInfo*>& workloads =
         m_data_provider.ComputeModel().GetWorkloadList();
     if(!workloads.empty())
     {
         m_compute_selection->SelectWorkload(workloads.front()->id);
     }
-    m_preset_browser    = std::make_unique<PresetBrowser>();
+    m_preset_browser = std::make_unique<PresetBrowser>();
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(TabItem{"Summary View", "compute_summary_view", std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Kernel Details", "compute_kernel_details_view", std::make_shared<ComputeKernelDetailsView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
-    m_tab_container->AddTab(TabItem{"Baseline Comparison", "compute_comparison_view", std::make_shared<ComputeComparisonView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(
+        TabItem{"Summary View", "compute_summary_view",
+                std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection),
+                false});
+    m_tab_container->AddTab(
+        TabItem{"Kernel Details", "compute_kernel_details_view",
+                std::make_shared<ComputeKernelDetailsView>(m_data_provider,
+                                                           m_compute_selection),
+                false});
+    m_tab_container->AddTab(
+        TabItem{"Table View", "compute_table_view",
+                std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection),
+                false});
+    m_tab_container->AddTab(
+        TabItem{"Workload Details", "compute_workload_view",
+                std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
+                false});
+    m_tab_container->AddTab(
+        TabItem{"Baseline Comparison", "compute_comparison_view",
+                std::make_shared<ComputeComparisonView>(m_data_provider,
+                                                        m_compute_selection),
+                false});
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-    m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(
+        TabItem{"Compute Tester", "compute_tester_view",
+                std::make_shared<ComputeTester>(m_data_provider, m_compute_selection),
+                false});
 #endif
     m_tab_container->SetAllowToolTips(false);
 }
@@ -209,12 +221,15 @@ ComputeView::RenderToolbar()
     ImGui::PushStyleColor(ImGuiCol_Border,
                           ImGui::ColorConvertU32ToFloat4(
                               m_settings_manager.GetColor(Colors::kBorderColor)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x + 4.0f,
+                               style.WindowPadding.y + 2.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
@@ -260,6 +275,7 @@ ComputeView::RenderWorkloadSelection()
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
     ImGui::BeginDisabled(workloads.empty());
+    PushComboStyles();
     if(ImGui::BeginCombo("##Workloads",
                          selected_workload ? selected_workload->name.c_str() : "-"))
     {
@@ -274,6 +290,7 @@ ComputeView::RenderWorkloadSelection()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
     ImGui::EndDisabled();
     ImGui::SameLine(0, style.ItemSpacing.x);
     VerticalSeparator();
@@ -287,6 +304,7 @@ ComputeView::RenderWorkloadSelection()
         m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
     ImGui::BeginDisabled(kernel_info_list.empty());
+    PushComboStyles();
     if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str() : "-"))
     {
         for(const KernelInfo* info : kernel_info_list)
@@ -298,6 +316,7 @@ ComputeView::RenderWorkloadSelection()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
     ImGui::EndDisabled();
 }
 
@@ -319,9 +338,10 @@ ComputeView::RenderPresets()
         {
             m_preset_browser->Show();
         }
-        m_preset_browser->SetPosition(
-            ImGui::GetItemRectMax().x + 0.5f * style.ItemSpacing.x,
-            ImGui::GetItemRectMax().y + 0.5f * style.ItemSpacing.y);
+        m_preset_browser->SetPosition(ImGui::GetItemRectMax().x + style.WindowPadding.x +
+                                          0.5f * style.ItemSpacing.x,
+                                      ImGui::GetItemRectMax().y + style.WindowPadding.y +
+                                          0.5f * style.ItemSpacing.y);
     }
 }
 

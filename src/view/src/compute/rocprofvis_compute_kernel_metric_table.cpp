@@ -228,6 +228,14 @@ KernelMetricTable::Render()
     const float      cell_padding = style.CellPadding.x * 2.0f;
     const float      char_width = ImGui::CalcTextSize("M").x;
 
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
+    ImGui::BeginChild("kernel_metric_table_card", ImVec2(0, 0),
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                          ImGuiChildFlags_AlwaysUseWindowPadding);
+
     SectionTitle("Kernel Selection Table");
 
     ComputeKernelSelectionTable& table =
@@ -235,16 +243,11 @@ KernelMetricTable::Render()
     const std::vector<std::string>&              header = table.GetTableHeader();
     const std::vector<std::vector<std::string>>& data   = table.GetTableData();
 
-    // Toolbar with actions
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::ColorConvertU32ToFloat4(
-                                                SettingsManager::GetInstance().GetColor(Colors::kBgPanel)));
-    ImGui::PushStyleColor(
-        ImGuiCol_Border,
-        ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kBorderColor)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+    // Toolbar row.
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::BeginChild("toolbar", ImVec2(-1, 0),
-                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+                      ImGuiChildFlags_AutoResizeY);
 
     ImGui::AlignTextToFramePadding();
     const char* icon = m_show_kernel_table ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
@@ -332,19 +335,17 @@ KernelMetricTable::Render()
 
     // End toolbar
     ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
 
     bool request_pending =
         m_data_provider.IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID);
 
-    float       line_height   = ImGui::GetTextLineHeightWithSpacing();
-    //ImGuiStyle& style         = ImGui::GetStyle();
     float       row_padding_v = style.CellPadding.y * 2.0f;
-    line_height += row_padding_v;
+    float       line_height   = ImGui::GetTextLineHeight() + row_padding_v;
 
     // Filter row height (InputText widgets are taller than text)
-    float filter_row_height = ImGui::GetFrameHeightWithSpacing() + row_padding_v;
+    float filter_row_height = ImGui::GetFrameHeight() + row_padding_v;
 
     int data_row_count = static_cast<int>(data.size());
     int rows_to_render = std::max(std::min(10, data_row_count), 5);
@@ -532,6 +533,13 @@ KernelMetricTable::Render()
                     }
                 }
 
+                ImGui::PushStyleColor(ImGuiCol_Header,
+                                      settings.GetColor(Colors::kSelection));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                                      settings.GetColor(Colors::kHighlightChart));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                                      settings.GetColor(Colors::kHighlightChart));
+
                 if(request_pending)
                 {
                     ImGui::BeginDisabled();
@@ -670,6 +678,7 @@ KernelMetricTable::Render()
                     ImGui::EndDisabled();
                 }
 
+                ImGui::PopStyleColor(3);
                 ImGui::EndTable();
             }
         }
@@ -727,6 +736,10 @@ KernelMetricTable::Render()
         spdlog::debug("Removed metric column at index {}", remove_index);
     }
     }
+
+    ImGui::EndChild();  // kernel_metric_table_card
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
 
     m_query_builder.Render();
 }

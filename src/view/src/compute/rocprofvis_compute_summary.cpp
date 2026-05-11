@@ -35,6 +35,30 @@ constexpr const char* DISPLAY_STRING_METRICS[]{ "Invocation(s)", "Total Duration
                                                 "Min Duration",  "Max Duration",
                                                 "Mean Duration", "Median Duration" };
 
+namespace
+{
+
+void
+PushPlotChrome(SettingsManager& settings)
+{
+    ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kTransparent));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
+                           ThemeColor(settings, Colors::kTransparent));
+    ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextMain));
+    ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
+                           ThemeColor(settings, Colors::kBorderColor, 0.7f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisTick,
+                           ThemeColor(settings, Colors::kTextDim, 0.56f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBg,
+                           ThemeColor(settings, Colors::kBgPanel, 0.96f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
+                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendText, ThemeColor(settings, Colors::kTextMain));
+}
+
+}  // namespace
+
 ComputeSummaryView::ComputeSummaryView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -127,25 +151,33 @@ ComputeSummaryView::Update()
 void
 ComputeSummaryView::Render()
 {
-    ImGui::BeginChild("summary");
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const float      rounding = settings.GetDefaultStyle().ChildRounding;
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
+
+    ImGui::BeginChild("summary", ImVec2(0, 0),
+                      ImGuiChildFlags_AlwaysUseWindowPadding);
     if(m_top_kernels)
     {
         m_top_kernels->Render();
     }
+    ImGui::Spacing();
     if(m_roofline)
     {
-        ImGui::BeginChild("roofline_container", ImVec2(ImGui::GetContentRegionAvail().x,
-                                                       ImGui::GetContentRegionAvail().x /
-                                                           (ImGui::GetWindowWidth() /
-                                                            ImGui::GetWindowHeight())));
+        const float avail  = ImGui::GetContentRegionAvail().x;
+        const float aspect = ImGui::GetWindowWidth() / ImGui::GetWindowHeight();
+        // Roofline paints its own card; just give it a sized region.
+        ImGui::BeginChild("roofline_container", ImVec2(avail, avail / aspect));
         m_roofline->Render();
         ImGui::EndChild();
     }
+    ImGui::Spacing();
     if(m_sol_table)
     {
         m_sol_table->Render();
     }
     ImGui::EndChild();
+    ImGui::PopStyleVar();
 }
 
 ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
@@ -196,6 +228,8 @@ ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
         {"top_kernels_table", table_widget, TABLE_PANEL_MIN_WIDTH, 0.0f, TABLE_PANEL_FLEX_GROW},
         {"top_kernels_chart", chart_widget, CHART_PANEL_MIN_WIDTH, 0.0f, CHART_PANEL_FLEX_GROW},
     };
+    // Table + chart share one outer card with a separator between them.
+    m_flex_container.subcomponent_layout = true;
 }
 
 ComputeTopKernels::~ComputeTopKernels()
@@ -374,11 +408,23 @@ ComputeTopKernels::Update()
 void
 ComputeTopKernels::Render()
 {
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
+    ImGui::BeginChild("top_kernels_card", ImVec2(0, 0),
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                          ImGuiChildFlags_AlwaysUseWindowPadding);
+
     SectionTitle("Top Kernels by Execution Time");
 
     if(!m_workload || m_kernels.empty())
     {
         ImGui::TextDisabled("No data available.");
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
         return;
     }
 
@@ -391,6 +437,10 @@ ComputeTopKernels::Render()
     m_flex_container.gap = plot_style.PlotPadding.x;
     m_flex_container.Render();
     ImPlot::PopColormap();
+
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
 }
 
 void
@@ -463,6 +513,7 @@ ComputeTopKernels::RenderChartContent()
     ImGui::TextUnformatted("Plot:");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(avail_w * 0.25f);
+    PushComboStyles();
     if(selected_metric &&
        ImGui::BeginCombo("##plot_combo",
                          DISPLAY_STRING_METRICS[static_cast<int>(*selected_metric)]))
@@ -478,6 +529,7 @@ ComputeTopKernels::RenderChartContent()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
     ImGui::PopStyleVar();
 }
 
@@ -492,8 +544,7 @@ void
 ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time_format)
 {
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     ImGui::PushID(m_workload->id);
     if(ImPlot::BeginPlot(
            "##Pie", ImVec2(-1, -1),
@@ -558,7 +609,7 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::EndPlot();
     }
     ImGui::PopID();
-    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleColor(9);
     ImPlot::PopStyleVar();
 }
 
@@ -568,8 +619,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
     ImGui::BeginChild("bar_area", ImVec2(0, 0));
     float y_axis_width = 0.15f * ImGui::GetContentRegionAvail().x;
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     ImGui::SetCursorPos(ImVec2(y_axis_width, 0.0f));
     if(ImPlot::BeginPlot("##Bar", ImVec2(-1, -1),
                          ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
@@ -656,7 +706,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleColor(9);
     ImPlot::PopStyleVar();
     ImGui::EndChild();
 }

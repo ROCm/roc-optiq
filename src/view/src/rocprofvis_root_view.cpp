@@ -76,7 +76,7 @@ RootView::RenderLoadingScreen(const char* progress_label)
                             start_y + label_size.y + item_spacing);
     ImGui::SetCursorScreenPos(dot_pos);
     RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing,
-                               IM_COL32(85, 85, 85, 255), anim_speed);
+                               m_settings_manager.GetColor(Colors::kTextDim), anim_speed);
 
     // Draw progress label centered using ImGui text
     ImVec2 progress_pos = ImVec2(center_screen.x - progress_label_size.x * 0.5f,

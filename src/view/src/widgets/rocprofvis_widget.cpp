@@ -141,7 +141,7 @@ CopyableTextUnformatted(
         }
         else if(ImGui::BeginPopupContextItem())
         {
-            if(ImGui::MenuItem(" Copy"))
+            if(ImGui::MenuItem("Copy"))
             {
                 ImGui::SetClipboardText(text);
                 if(!notification.empty())

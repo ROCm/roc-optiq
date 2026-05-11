@@ -162,11 +162,11 @@ InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
 void
 InfiniteScrollTable::Render()
 {
-    float       row_height    = ImGui::GetTextLineHeightWithSpacing();
+    // Matches the actual table row height; *WithSpacing would over-estimate
+    // it and the clipper would drop bottom rows as the panel grows.
     ImGuiStyle& style         = ImGui::GetStyle();
     float       row_padding_v = style.CellPadding.y * 2.0f;
-    // Adjust row height to include padding
-    row_height += row_padding_v;
+    float       row_height    = ImGui::GetTextLineHeight() + row_padding_v;
 
     // track the frame number for debugging purposes
     static uint64_t frame_count = 0;
@@ -175,7 +175,12 @@ InfiniteScrollTable::Render()
     // Flag to show loading spinner
     bool show_loading_indicator = false;
 
-    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), true);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0),
+                      ImGuiChildFlags_Borders);
     const auto& table_model = m_data_provider.DataModel().GetTables();
 
     const std::vector<std::vector<std::string>>& table_data =
@@ -330,7 +335,7 @@ InfiniteScrollTable::Render()
                     ImGui::TableSetBgColor(
                         ImGuiTableBgTarget_RowBg0,
                         (row_n == m_hovered_row)
-                            ? m_settings.GetColor(Colors::kAccentRedHover)
+                            ? m_settings.GetColor(Colors::kHighlightChart)
                             : 0);
 
                     // Render actual cells after the row hit-box
@@ -473,7 +478,14 @@ InfiniteScrollTable::Render()
         }
         else if(!m_no_data_text.empty())
         {
-            ImGui::TextUnformatted(m_no_data_text.c_str());
+            const float empty_state_y =
+                std::max(style.ItemSpacing.y, ImGui::GetTextLineHeightWithSpacing());
+            ImGui::Dummy(ImVec2(0.0f, empty_state_y));
+            CenterNextTextItem(m_no_data_text.c_str());
+            ImGui::TextDisabled("%s", m_no_data_text.c_str());
+            const char* hint = "Select compatible tracks or adjust the current filters.";
+            CenterNextTextItem(hint);
+            ImGui::TextDisabled("%s", hint);
         }
         ImGui::PopStyleColor();
         ImGui::PopID();
@@ -486,6 +498,8 @@ InfiniteScrollTable::Render()
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar();
 
     if(sort_requested || m_filter_requested)
     {

@@ -412,8 +412,9 @@ AppWindow::Render()
                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
                      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14, m_default_spacing.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 6));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
     if(ImGui::BeginMenuBar())
     {
         Project* project = GetCurrentProject();
@@ -426,7 +427,7 @@ AppWindow::Render()
 #endif
         ImGui::EndMenuBar();
     }
-    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
+    ImGui::PopStyleVar(3);  // ItemSpacing, WindowPadding, FramePadding
 
     if(m_main_view)
     {
@@ -478,7 +479,8 @@ AppWindow::RenderEmptyState()
     ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(card_padding, card_padding));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
     ImGui::BeginChild("welcome_dialog", ImVec2(card_width, 0.0f),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                       ImGuiWindowFlags_NoScrollbar);
@@ -520,10 +522,21 @@ AppWindow::RenderEmptyState()
     // --- Open button ---
     const float button_width = font_size * EMPTY_STATE_BUTTON_EM;
     CenterNextItem(button_width);
+    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccentRed));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          settings.GetColor(Colors::kAccentRedHover));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          settings.GetColor(Colors::kAccentRedActive));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextOnAccent));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(ImGui::GetStyle().FramePadding.x,
+                               ImGui::GetStyle().FramePadding.y + 4.0f));
     if(ImGui::Button("Open File", ImVec2(button_width, 0.0f)))
     {
         HandleOpenFile();
     }
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
     if(ImGui::IsItemHovered())
     {
         SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
@@ -545,6 +558,11 @@ AppWindow::RenderEmptyState()
         const float rf_width =
             std::min(ImGui::GetContentRegionAvail().x * 0.78f,
                      font_size * EMPTY_STATE_RECENT_FILES_EM);
+
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              settings.GetColor(Colors::kSelection));
         int shown = 0;
         for(const std::string& file : recent_files)
         {
@@ -567,6 +585,7 @@ AppWindow::RenderEmptyState()
 
             ImGui::PopID();
         }
+        ImGui::PopStyleColor(2);
     }
 
     ImGui::EndChild();
@@ -1018,8 +1037,8 @@ AppWindow::RenderAboutDialog()
     popup_style.PushTitlebarColors();
     popup_style.CenterPopup();
 
-    // Set window size
-    ImGui::SetNextWindowSize(ImVec2(580, 0));
+    ImGui::SetNextWindowSize(
+        GetResponsiveWindowSize(ImVec2(580.0f, 0.0f), ImVec2(360.0f, 0.0f)));
 
     if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize |

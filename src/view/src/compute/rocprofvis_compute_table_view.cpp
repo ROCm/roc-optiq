@@ -91,7 +91,9 @@ ComputeTableView::~ComputeTableView()
 void
 ComputeTableView::RebuildTabs()
 {
-    if(m_tabs)
+    // GetActiveTab() returns null until the container has rendered at least
+    // one frame, so guard against a workload change firing before then.
+    if(m_tabs && m_tabs->GetActiveTab())
         m_active_tab_id = m_tabs->GetActiveTab()->m_id;
     m_tabs.reset();
     m_table_widgets.clear();

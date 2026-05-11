@@ -209,7 +209,76 @@ RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int
         ImGui::PopStyleColor();
     }
 
+    // Zero-size Dummy avoids EndChild parent-boundary check after SetCursorPos.
     ImGui::SetCursorPos(pos);
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+}
+
+ImU32
+ApplyAlpha(ImU32 color, float alpha)
+{
+    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
+    rgba.w      = std::clamp(alpha, 0.0f, 1.0f);
+    return ImGui::ColorConvertFloat4ToU32(rgba);
+}
+
+ImVec4
+ThemeColor(SettingsManager& settings, Colors color, float alpha)
+{
+    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color));
+    rgba.w      = std::clamp(rgba.w * alpha, 0.0f, 1.0f);
+    return rgba;
+}
+
+void
+PushComboStyles()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, settings.GetColor(Colors::kComboFill));
+}
+
+void
+PopComboStyles()
+{
+    ImGui::PopStyleColor();
+}
+
+ImVec2
+GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size, float viewport_margin)
+{
+    constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
+    const float     scale = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
+
+    ImVec2 result(desired_size.x > 0.0f ? desired_size.x * scale : desired_size.x,
+                  desired_size.y > 0.0f ? desired_size.y * scale : desired_size.y);
+    const ImVec2 scaled_min(min_size.x > 0.0f ? min_size.x * scale : min_size.x,
+                            min_size.y > 0.0f ? min_size.y * scale : min_size.y);
+
+    if(result.x > 0.0f && scaled_min.x > 0.0f)
+    {
+        result.x = std::max(result.x, scaled_min.x);
+    }
+    if(result.y > 0.0f && scaled_min.y > 0.0f)
+    {
+        result.y = std::max(result.y, scaled_min.y);
+    }
+
+    if(const ImGuiViewport* viewport = ImGui::GetMainViewport())
+    {
+        const float margin = std::max(0.0f, viewport_margin * scale);
+        const ImVec2 max_size(std::max(0.0f, viewport->WorkSize.x - margin * 2.0f),
+                              std::max(0.0f, viewport->WorkSize.y - margin * 2.0f));
+        if(result.x > 0.0f && max_size.x > 0.0f)
+        {
+            result.x = std::min(result.x, max_size.x);
+        }
+        if(result.y > 0.0f && max_size.y > 0.0f)
+        {
+            result.y = std::min(result.y, max_size.y);
+        }
+    }
+
+    return result;
 }
 
 bool
@@ -525,6 +594,12 @@ VerticalSeparator(SettingsManager* settings)
                        settings->GetColor(Colors::kMetaDataSeparator), 2.0f);
     ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
     ImGui::SameLine();
+}
+
+float
+TableRowHeight()
+{
+    return ImGui::GetTextLineHeight() + ImGui::GetStyle().CellPadding.y * 2.0f;
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER

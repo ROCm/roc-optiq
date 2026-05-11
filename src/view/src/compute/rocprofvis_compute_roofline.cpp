@@ -318,6 +318,14 @@ Roofline::Update()
 void
 Roofline::Render()
 {
+    // Fill the parent. AutoResizeY would collapse here since the plot uses (0,0).
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::BeginChild("roofline_card", ImVec2(0, 0),
+                      ImGuiChildFlags_Borders |
+                          ImGuiChildFlags_AlwaysUseWindowPadding);
     SectionTitle("Roofline Analysis");
     ImGui::BeginChild("roofline");
     const ImVec2       region     = ImGui::GetContentRegionAvail();
@@ -343,10 +351,38 @@ Roofline::Render()
     }
     else
     {
-        ImPlot::PushStyleColor(ImPlotCol_PlotBg,
-                               ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
         ImPlot::PushStyleColor(ImPlotCol_FrameBg,
-                               m_settings.GetColor(Colors::kTransparent));
+                               ThemeColor(m_settings, Colors::kTransparent));
+        ImPlot::PushStyleColor(ImPlotCol_PlotBg,
+                               ThemeColor(m_settings, Colors::kBgFrame));
+        ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.85f));
+        ImPlot::PushStyleColor(ImPlotCol_LegendBg,
+                               ThemeColor(m_settings, Colors::kBgPanel, 0.96f));
+        ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.85f));
+        ImPlot::PushStyleColor(ImPlotCol_LegendText,
+                               ThemeColor(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_TitleText,
+                               ThemeColor(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_InlayText,
+                               ThemeColor(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_AxisText,
+                               ThemeColor(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.7f));
+        ImPlot::PushStyleColor(ImPlotCol_AxisTick,
+                               ThemeColor(m_settings, Colors::kTextDim, 0.56f));
+        ImPlot::PushStyleColor(ImPlotCol_AxisBg,
+                               ThemeColor(m_settings, Colors::kTransparent));
+        ImPlot::PushStyleColor(ImPlotCol_AxisBgHovered,
+                               ThemeColor(m_settings, Colors::kButtonHovered, 0.72f));
+        ImPlot::PushStyleColor(ImPlotCol_AxisBgActive,
+                               ThemeColor(m_settings, Colors::kButtonActive, 0.80f));
+        ImPlot::PushStyleColor(ImPlotCol_Selection,
+                               ThemeColor(m_settings, Colors::kSelectionBorder));
+        ImPlot::PushStyleColor(ImPlotCol_Crosshairs,
+                               ThemeColor(m_settings, Colors::kSelectionBorder, 0.72f));
         ImPlot::PushColormap(m_settings.GetFlameColormapName());
         ImGui::PushID(m_workload->id);
         bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
@@ -577,9 +613,12 @@ Roofline::Render()
             m_hovered_item_distance = FLT_MAX;
         }
         ImPlot::PopColormap();
-        ImPlot::PopStyleColor(2);
+        ImPlot::PopStyleColor(16);
     }
-    ImGui::EndChild();
+    ImGui::EndChild();  // "roofline" inner
+    ImGui::EndChild();  // "roofline_card" outer
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
 }
 
 void
@@ -603,9 +642,9 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
 {
     plot_pos -= ImGui::GetWindowPos();
     float menus_width      = region.x * 0.25f;
-    float max_menus_height = plot_size.y - plot_style.PlotPadding.y * 2.0f -
-                             ImGui::GetFrameHeightWithSpacing();
-    float button_size = ImGui::GetFrameHeightWithSpacing();
+    float button_size       = ImGui::GetFrameHeight();
+    float max_menus_height  = plot_size.y - plot_style.PlotPadding.y * 2.0f -
+                              button_size;
 
     bool menus_on_right = m_menus_placement == InsideTopRight ||
                           m_menus_placement == InsideBottomRight ||
@@ -692,7 +731,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
             ImGui::GetWindowDrawList()->AddRectFilled(
                 ImGui::GetCursorScreenPos(),
                 ImGui::GetCursorScreenPos() + ImVec2(menus_width, plot_size.y),
-                ImGui::GetColorU32(plot_style.Colors[ImPlotCol_PlotBg]));
+                m_settings.GetColor(Colors::kBgFrame));
         }
         ImGui::SetCursorPos(button_pos +
                             ImVec2(0.0f, menus_on_bottom ? -button_size : button_size));
@@ -715,7 +754,8 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::SetNextWindowSizeConstraints(ImVec2(menus_width, button_size * 2.0f),
                                             ImVec2(menus_width, max_menus_height));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
         ImGui::BeginChild("menus_window", ImVec2(menus_width, 0.0f),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         float menus_content_width =
@@ -875,6 +915,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                        plot_size.x * 0.5f, Alignment_Left, true);
             ImGui::SetNextItemWidth(-1.0f);
             int placement_idx = static_cast<int>(m_menus_placement);
+            PushComboStyles();
             if(ImGui::Combo("##placement", &placement_idx,
                             "Inside, Top Left\0"
                             "Inside, Top Right\0"
@@ -884,11 +925,12 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
             {
                 m_menus_placement = static_cast<MenusPlacement>(placement_idx);
             }
+            PopComboStyles();
             ImGui::PopID();
         }
         m_menus_rendered_height = ImGui::GetWindowHeight();
         ImGui::EndChild();
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(2);
         ImGui::PopStyleVar();
         ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
     }
@@ -901,9 +943,7 @@ Roofline::PlotHoverIdx()
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
         float  distance  = FLT_MAX;
-        // This has to be a separate pass (as opposed to being part of render pass)
-        // to prevent case where multiple items become hovered due to a higher index
-        // item being a better canidate than a lower index item.
+        // Pick the closest visible item after plotting all candidates.
         for(size_t i = 0; i < m_items.size(); i++)
         {
             if(m_items[i].visible)

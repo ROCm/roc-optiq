@@ -24,7 +24,6 @@ enum class EventColorMode
 {
     kNone,
     kByEventName,
-    kByTimeLevel,
     __kCount
 };
 
@@ -98,10 +97,15 @@ private:
     void RenderTooltip(ChartItem& chart_item, int color_index);
     void RecalculateTrackHeight();
 
+    // Track height needed to fully display every level (including the inter-level
+    // padding and the metadata area's vertical shrink allowance).
+    float FullTrackHeight() const;
+
     std::vector<ChartItem>             m_chart_items;
     EventColorMode                     m_event_color_mode;
     ImVec2                             m_text_padding;
     float                              m_level_height;
+    float                              m_level_padding;
     std::vector<uint64_t>              m_selected_event_id;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     FlameTrackProjectSettings          m_flame_track_project_settings;

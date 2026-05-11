@@ -248,16 +248,15 @@ TrackItem::RenderMetaArea()
 
         // Reordering grip decoration
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
-        float arrow_width       = ImGui::GetTextLineHeight();
+        float arrow_width     = ImGui::GetTextLineHeight();
 
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
         ImGui::TextUnformatted(ICON_GRID);
-        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
-      
+        ImGui::PopStyleColor();
         ImGui::PopFont();
 
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
@@ -281,7 +280,7 @@ TrackItem::RenderMetaArea()
         ImGui::PushFont(large_font);
 
         float available_for_text =
-            content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
+            content_size.x - (m_meta_area_scale_width + grid_icon_width + arrow_width +
             4.0f * m_metadata_padding.x + 2.0f);
 
         if(available_for_text < 0.0f) available_for_text = 0.0f;
@@ -316,23 +315,13 @@ TrackItem::RenderMetaArea()
             EndTooltipStyled();
         }
 
-        ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
-                                       m_meta_area_scale_width - menu_button_width,
-                                   m_metadata_padding.y));
-        IconButton(ICON_GEAR,
-                   m_settings.GetFontManager().GetIconFont(FontType::kDefault));
-        if(ImGui::IsItemHovered())
-            SetTooltipStyled("Track Options");
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             m_settings.GetDefaultStyle().WindowPadding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
                             m_settings.GetDefaultStyle().FrameRounding);
-        ImGui::SetNextWindowPos(ImGui::GetCursorScreenPos() +
-                                ImVec2(content_size.x - m_meta_area_scale_width -
-                                           menu_button_width -
-                                           ImGui::GetStyle().FramePadding.x,
-                                       0));
-        if(ImGui::BeginPopupContextItem("", ImGuiPopupFlags_MouseButtonLeft))
+        if(ImGui::BeginPopupContextWindow("##TrackOptionsPopup",
+                                          ImGuiPopupFlags_MouseButtonRight |
+                                              ImGuiPopupFlags_NoOpenOverItems))
         {
             RenderMetaAreaOptions();
             ImGui::EndPopup();

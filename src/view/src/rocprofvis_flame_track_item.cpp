@@ -53,6 +53,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_event_color_mode(EventColorMode::kByEventName)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
+, m_level_padding(SettingsManager::GetInstance().GetEventLevelPadding())
 , m_timeline_selection(timeline_selection)
 , m_deferred_click_handled(false)
 , m_has_drawn_tool_tip(false)
@@ -102,7 +103,8 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
         m_compact_mode     = m_flame_track_project_settings.CompactMode();
         if(m_compact_mode)
         {
-            m_level_height = m_settings.GetEventLevelCompactHeight();
+            m_level_height  = m_settings.GetEventLevelCompactHeight();
+            m_level_padding = m_settings.GetEventLevelCompactPadding();
         }
     }
 }
@@ -110,6 +112,25 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 void
 FlameTrackItem::RenderMetaAreaExpand()
 {
+    // Decide which arrow (if any) to draw before touching the cursor. SetCursorPos
+    // without a follow-up item trips ImGui's CursorMaxPos assert (imgui issue #5548).
+    const float level_stride = m_level_height + m_level_padding;
+    int visible_levels =
+        (level_stride > 0.0f)
+            ? static_cast<int>(
+                  std::floor((m_track_content_height + m_level_padding) / level_stride))
+            : 0;
+
+    const float full_track_height = FullTrackHeight();
+
+    const bool show_expand   = visible_levels < m_max_level + 1;
+    const bool show_contract = !show_expand &&
+                               m_track_height > std::max(full_track_height,
+                                                         DEFAULT_TRACK_HEIGHT);
+
+    if(!show_expand && !show_contract)
+        return;
+
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
                           m_settings.GetColor(Colors::kTransparent));
@@ -119,9 +140,7 @@ FlameTrackItem::RenderMetaAreaExpand()
         ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
                ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight())));
 
-    int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
-
-    if(visible_levels <= m_max_level + 1)
+    if(show_expand)
     {
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
@@ -130,9 +149,7 @@ FlameTrackItem::RenderMetaAreaExpand()
         }
         if(ImGui::IsItemHovered()) SetTooltipStyled("Expand track to see all events");
     }
-    else if(m_track_height >
-            std::max(m_max_level * m_level_height + m_level_height,
-                     DEFAULT_TRACK_HEIGHT))  // stand-in for default height..
+    else
     {
         if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
         {
@@ -346,14 +363,22 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         rectColor = m_settings.GetColorWheel()[color_index];
     }
 
-    float rounding = 2.0f;
+    const float rounding = std::min(3.0f, (rectMax.y - rectMin.y) * 0.2f);
     draw_list->AddRectFilled(rectMin, rectMax, rectColor, rounding);
 
     if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH)
     {
         draw_list->PushClipRect(rectMin, rectMax, true);
+
+        // Center label vertically; fall back to top padding when the box is shorter
+        // than the text (compact mode).
+        const float text_line_height = ImGui::GetTextLineHeight();
+        const float box_height       = rectMax.y - rectMin.y;
+        const float centered_offset_y =
+            std::max(m_text_padding.y, (box_height - text_line_height) * 0.5f);
+
         ImVec2 textPos =
-            ImVec2(rectMin.x + m_text_padding.x, rectMin.y + m_text_padding.y);
+            ImVec2(rectMin.x + m_text_padding.x, rectMin.y + centered_offset_y);
 
         if(chart_item.event.m_child_count > 1)
         {
@@ -370,7 +395,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 // If the rectangle is partially outside the viewport then start rendering
                 // the text at the viewport edge to maintain readability.
                 textPos = ImVec2(draw_list->GetClipRectMin().x + m_text_padding.x,
-                                 rectMin.y + m_text_padding.y);
+                                 rectMin.y + centered_offset_y);
                 draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
                                    chart_item.event.m_name.c_str());
             }
@@ -616,9 +641,19 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 void
 FlameTrackItem::RecalculateTrackHeight()
 {
-    m_track_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
-                              DEFAULT_TRACK_HEIGHT);
+    m_track_height         = std::max(FullTrackHeight(), DEFAULT_TRACK_HEIGHT);
     m_track_height_changed = true;
+}
+
+float
+FlameTrackItem::FullTrackHeight() const
+{
+    // Parent TrackItem shrinks the chart's content area by 1 px on top and bottom
+    // (metadata_shrink_padding); add that 2 px back so a "fully expanded" track
+    // actually fits every level + the inter-level padding.
+    constexpr float kMetaShrinkAllowance = 2.0f;
+    return (m_max_level + 1.0f) * m_level_height +
+           m_max_level * m_level_padding + kMetaShrinkAllowance;
 }
 
 void
@@ -646,9 +681,9 @@ FlameTrackItem::RenderChart(float graph_width)
 
         ImVec2 start_position;
 
-        // Calculate the start position based on the normalized start time and level
         start_position = ImVec2(static_cast<float>(normalized_start),
-                                item.event.m_level * m_level_height);
+                                item.event.m_level *
+                                    (m_level_height + m_level_padding));
 
         if(normalized_end < container_pos.x ||
            normalized_start > container_pos.x + graph_width)
@@ -656,13 +691,7 @@ FlameTrackItem::RenderChart(float graph_width)
             continue;  // Skip if the item is not visible in the current view
         }
 
-        if(m_event_color_mode == EventColorMode::kByTimeLevel)
-        {
-            color_index =
-                static_cast<uint64_t>(item.event.m_start_ts + item.event.m_level) %
-                colorCount;
-        }
-        else if(m_event_color_mode == EventColorMode::kByEventName)
+        if(m_event_color_mode == EventColorMode::kByEventName)
         {
             color_index = static_cast<uint64_t>(item.name_hash) % colorCount;
         }
@@ -685,10 +714,10 @@ FlameTrackItem::RenderChart(float graph_width)
         double normalized_duration =
             std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
 
-        float  rounding = 2.0f;
+        const float rounding = std::min(3.0f, m_level_height * 0.2f) + 1.0f;
         ImVec2 start_position =
             ImVec2(static_cast<float>(normalized_start),
-                   item.event.m_level * m_level_height);
+                   item.event.m_level * (m_level_height + m_level_padding));
 
         ImVec2 cursor_position = ImGui::GetCursorScreenPos();
 
@@ -746,33 +775,23 @@ FlameTrackItem::RenderMetaAreaScale()
 void
 FlameTrackItem::RenderMetaAreaOptions()
 {
-    EventColorMode mode = m_event_color_mode;
-
-    if(ImGui::RadioButton("Color by Name", mode == EventColorMode::kByEventName))
-        mode = EventColorMode::kByEventName;
-    ImGui::SameLine();
-    if(ImGui::RadioButton("Color by Time Level", mode == EventColorMode::kByTimeLevel))
-        mode = EventColorMode::kByTimeLevel;
-    ImGui::SameLine();
-    if(ImGui::RadioButton("No Color", mode == EventColorMode::kNone))
-        mode = EventColorMode::kNone;
-    m_event_color_mode = mode;
-
     if(ImGui::Checkbox("Compact Mode", &m_compact_mode))
     {
         if(m_compact_mode)
         {
-            m_level_height = m_settings.GetEventLevelCompactHeight();
+            m_level_height  = m_settings.GetEventLevelCompactHeight();
+            m_level_padding = m_settings.GetEventLevelCompactPadding();
         }
         else
         {
-            m_level_height = m_settings.GetEventLevelHeight();
+            m_level_height  = m_settings.GetEventLevelHeight();
+            m_level_padding = m_settings.GetEventLevelPadding();
             if(m_is_expanded)
             {
                 RecalculateTrackHeight();
             }
         }
-        if(m_track_height > std::max(m_max_level * m_level_height + m_level_height, DEFAULT_TRACK_HEIGHT))
+        if(m_track_height > std::max(FullTrackHeight(), DEFAULT_TRACK_HEIGHT))
         {
             RecalculateTrackHeight();
         }

@@ -16,7 +16,7 @@ namespace RocProfVis
 namespace View
 {
 
-inline constexpr float DEFAULT_TRACK_HEIGHT = 75.0f;
+inline constexpr float DEFAULT_TRACK_HEIGHT = 83.0f;
 
 class SettingsManager;
 class TrackItem;

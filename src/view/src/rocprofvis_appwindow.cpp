@@ -561,7 +561,6 @@ AppWindow::Update()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
-    UpdateProviderCleanups();
 }
 
 void

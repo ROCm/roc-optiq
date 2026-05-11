@@ -181,7 +181,8 @@ jobs:
           cd ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
           ctest \
             --output-on-failure \
-            --no-tests=error
+            --no-tests=error \
+            --output-junit ctest-results.xml
 
       - name: Prepare Distribution Artifacts
         run: |
@@ -218,3 +219,14 @@ jobs:
         run: |
           echo "Tests have failed!"
           exit 1
+
+      - name: Upload Test Logs (on failure)
+        if: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-mac-${{ matrix.os-version }}
+          path: |
+            ${{ env.BUILD_DIR }}/ctest-results.xml
+            ${{ env.BUILD_DIR }}/Testing/Temporary/**
+          retention-days: 1
+

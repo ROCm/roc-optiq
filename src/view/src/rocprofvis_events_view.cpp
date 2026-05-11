@@ -58,6 +58,16 @@ EventsView::Render()
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
     ImGui::BeginChild("events_view", ImVec2(0, 0),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+    // Nested borders and table borders should sit much closer to the background
+    // than the outer panel border, otherwise they stack into a bright "frame"
+    // around the section. Override the relevant ImGui color slots only inside
+    // the events_view scope so the rest of the app is unaffected.
+    ImGui::PushStyleColor(ImGuiCol_Border,
+                          m_settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::PushStyleColor(ImGuiCol_TableBorderStrong,
+                          m_settings.GetColor(Colors::kTableBorderOuter));
+    ImGui::PushStyleColor(ImGuiCol_TableBorderLight,
+                          m_settings.GetColor(Colors::kTableBorderInner));
     if(m_event_items.empty())
     {
         ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
@@ -118,6 +128,7 @@ EventsView::Render()
             }
         }
     }
+    ImGui::PopStyleColor(3);
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
@@ -544,7 +555,7 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             });
             left->m_window_padding = default_style.WindowPadding;
             left->m_item_spacing   = default_style.ItemSpacing;
-            left->m_bg_color       = m_settings.GetColor(Colors::kBgPanel);
+            left->m_inherit_bg_color = true;
             left->m_child_flags =
                 ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
                 ImGuiChildFlags_AlwaysUseWindowPadding;
@@ -563,7 +574,7 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             });
             right->m_window_padding = default_style.WindowPadding;
             right->m_item_spacing   = default_style.ItemSpacing;
-            right->m_bg_color       = m_settings.GetColor(Colors::kBgPanel);
+            right->m_inherit_bg_color = true;
             right->m_child_flags =
                 ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
                 ImGuiChildFlags_AlwaysUseWindowPadding;

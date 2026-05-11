@@ -50,7 +50,8 @@ public:
     float                      m_width   = 0;
     bool                       m_visible = true;
 
-    int32_t m_bg_color = 0;
+    int32_t m_bg_color         = 0;
+    bool    m_inherit_bg_color = false;
 
     ImVec2 m_item_spacing   = ImVec2(0, 0);
     ImVec2 m_window_padding = ImVec2(0, 0);

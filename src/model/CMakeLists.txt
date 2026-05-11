@@ -44,6 +44,37 @@ target_link_libraries(${PROJECT_NAME} spdlog)
 target_link_libraries(${PROJECT_NAME} yaml-cpp)
 target_link_libraries(${PROJECT_NAME} json)
 
+# libssh2 — required for the SFTP-backed "Open Remote Database" feature.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(LIBSSH2 QUIET libssh2)
+endif()
+if(LIBSSH2_FOUND)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${LIBSSH2_INCLUDE_DIRS})
+    target_link_directories(${PROJECT_NAME} PRIVATE ${LIBSSH2_LIBRARY_DIRS})
+    target_link_libraries(${PROJECT_NAME} ${LIBSSH2_LIBRARIES})
+else()
+    find_path(LIBSSH2_INCLUDE_DIR libssh2.h
+        HINTS ${LIBSSH2_DIR}/include ${LIBSSH2_DIR}
+              $ENV{LIBSSH2_DIR}/include $ENV{LIBSSH2_DIR}
+              /usr/include /usr/local/include /opt/homebrew/include
+              "C:/msys64/mingw64/include" "C:/Program Files/libssh2/include")
+    find_library(LIBSSH2_LIBRARY NAMES ssh2 libssh2
+        HINTS ${LIBSSH2_DIR}/lib ${LIBSSH2_DIR}
+              $ENV{LIBSSH2_DIR}/lib $ENV{LIBSSH2_DIR}
+              /usr/lib /usr/local/lib /opt/homebrew/lib
+              "C:/msys64/mingw64/lib" "C:/Program Files/libssh2/lib")
+    if(LIBSSH2_INCLUDE_DIR AND LIBSSH2_LIBRARY)
+        target_include_directories(${PROJECT_NAME} PRIVATE ${LIBSSH2_INCLUDE_DIR})
+        target_link_libraries(${PROJECT_NAME} ${LIBSSH2_LIBRARY})
+    else()
+        message(FATAL_ERROR "libssh2 not found. Install libssh2-1-dev (Linux) or set LIBSSH2_DIR.")
+    endif()
+endif()
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} ws2_32)
+endif()
+
 # TBB is conditionally required on Linux when libtbb-dev is installed
 # - Windows MSVC: Has its own parallel backend, doesn't need TBB
 # - macOS: Parallel execution not yet supported in libc++

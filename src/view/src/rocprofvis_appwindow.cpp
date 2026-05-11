@@ -26,6 +26,13 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "widgets/rocprofvis_ssh_auth_modal.h"
+#include "rocprofvis_remote_fetch.h"
+#include "rocprofvis_remote_uri.h"
+#include "rocprofvis_ssh_auth_bridge.h"
+#include "rocprofvis_ssh_session.h"
+#include <cfloat>
+#include <cstring>
 #include <filesystem>
 #include <sstream>
 
@@ -85,6 +92,7 @@ AppWindow::AppWindow()
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
+, m_ssh_auth_bridge(std::make_unique<DataModel::AuthBridge>())
 , m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 #ifdef ROCPROFVIS_DEVELOPER_MODE
@@ -440,6 +448,18 @@ AppWindow::Render()
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
+    if(m_open_remote_dialog)
+    {
+        ImGui::OpenPopup("Open Remote Database");
+        m_open_remote_dialog = false;
+    }
+    RenderRemoteOpenDialog();
+    // Render the auth modal before the progress modal. ImGui can't stack a
+    // popup opened from outside the currently-active modal, so the auth
+    // request must "win" the OpenPopup race.
+    RenderSshAuthModal(*m_ssh_auth_bridge);
+    RenderRemoteProgressDialog();
+    PollRemoteFetch();
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
     m_settings_panel->Render();
@@ -670,6 +690,20 @@ AppWindow::OpenFile(std::string file_path)
 void
 AppWindow::HandleOpenRecentFile(const std::string& file_path)
 {
+    if(DataModel::IsSshUri(file_path))
+    {
+        auto parsed = DataModel::ParseRemoteUri(file_path);
+        if(!parsed)
+        {
+            SettingsManager::GetInstance().RemoveRecentFile(file_path);
+            ShowMessageDialog("Recent File",
+                              "This recent ssh:// URI is malformed and was removed:\n\n" +
+                                  file_path);
+            return;
+        }
+        OpenRemoteFile(*parsed);
+        return;
+    }
     if(!std::filesystem::exists(file_path))
     {
         SettingsManager::GetInstance().RemoveRecentFile(file_path);
@@ -722,6 +756,11 @@ AppWindow::RenderFileMenu(Project* project)
         if(ImGui::MenuItem("Open", nullptr, false, !is_open_file_dialog_open))
         {
             HandleOpenFile();
+        }
+        if(ImGui::MenuItem("Open Remote...", nullptr, false,
+                           !is_open_file_dialog_open && !m_remote_fetch))
+        {
+            HandleOpenRemote();
         }
         if(ImGui::MenuItem("Save", nullptr, false,
                            !is_open_file_dialog_open && (project && project->IsProject())))
@@ -932,6 +971,345 @@ AppWindow::HandleOpenFile()
     ShowOpenFileDialog(
         "Choose File", file_filters, "",
         [this](std::string file_path) -> void { this->OpenFile(file_path); });
+}
+
+// ============================================================================
+// "Open Remote Database" feature
+// ============================================================================
+
+namespace
+{
+void CopyToBuf(char* dst, size_t dst_size, const std::string& src)
+{
+    if(dst_size == 0) return;
+    size_t n = std::min(src.size(), dst_size - 1);
+    std::memcpy(dst, src.data(), n);
+    dst[n] = '\0';
+}
+
+DataModel::RemoteUri RemoteUriFromForm(const char* host, const char* port,
+                                       const char* user, const char* password,
+                                       const char* path, const char* key,
+                                       const char* key_passphrase)
+{
+    DataModel::RemoteUri u;
+    u.host           = host;
+    u.user           = user;
+    u.password       = password;
+    u.path           = path;
+    u.identity_file  = key;
+    u.key_passphrase = key_passphrase ? key_passphrase : "";
+    if(port && port[0] != '\0')
+    {
+        try { u.port = std::stoi(port); } catch(...) { u.port = 22; }
+    }
+    // Path is stored exactly as the user typed it. A leading '/' means
+    // absolute on the remote server; no leading '/' means relative to the
+    // user's home directory (SFTP interprets relative paths that way).
+    return u;
+}
+}  // namespace
+
+AppWindow::RemoteFetchInProgress::~RemoteFetchInProgress()
+{
+    if(worker.joinable()) worker.join();
+}
+
+void
+AppWindow::HandleOpenRemote()
+{
+    m_open_remote_dialog       = true;
+    m_remote_password_required = false;
+    m_remote_status_msg.clear();
+    m_ssh_auth_bridge->Reset();
+}
+
+void
+AppWindow::RenderRemoteOpenDialog()
+{
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+
+    ImGui::SetNextWindowSize(ImVec2(580, 0));
+
+    if(ImGui::BeginPopupModal("Open Remote Database", nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+    {
+        ImGui::TextWrapped("Open a SQLite database on a remote host over SSH (SFTP). "
+                           "The full file is materialized into a local cache on first open.");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::TextUnformatted("Paste ssh:// URI");
+        ImGui::SetNextItemWidth(-FLT_MIN - 90.0f);
+        ImGui::InputTextWithHint(
+            "##rpasteuri",
+            "ssh://[user[:password]@]host[:port]/relative/or//absolute/path.db[?key=/path/to/id]",
+            m_remote_uri_paste, sizeof(m_remote_uri_paste));
+        ImGui::SameLine();
+        if(ImGui::Button("Parse", ImVec2(80, 0)))
+        {
+            auto parsed = DataModel::ParseRemoteUri(m_remote_uri_paste);
+            if(parsed)
+            {
+                CopyToBuf(m_remote_host, sizeof(m_remote_host), parsed->host);
+                CopyToBuf(m_remote_user, sizeof(m_remote_user), parsed->user);
+                CopyToBuf(m_remote_password, sizeof(m_remote_password), parsed->password);
+                CopyToBuf(m_remote_path, sizeof(m_remote_path), parsed->path);
+                CopyToBuf(m_remote_key, sizeof(m_remote_key), parsed->identity_file);
+                if(parsed->port != 22)
+                    CopyToBuf(m_remote_port, sizeof(m_remote_port), std::to_string(parsed->port));
+                else
+                    m_remote_port[0] = '\0';
+                m_remote_status_msg        = "Parsed.";
+                m_remote_password_required = false;
+            }
+            else
+            {
+                m_remote_status_msg = "Malformed ssh:// URI.";
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        const float label_w = 110.0f;
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Host"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputText("##rhost", m_remote_host, sizeof(m_remote_host));
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Port"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##rport", "22", m_remote_port, sizeof(m_remote_port));
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("User"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputText("##ruser", m_remote_user, sizeof(m_remote_user));
+
+        const char* pwd_label = m_remote_password_required ? "Password*" : "Password";
+        ImGui::AlignTextToFramePadding(); ImGui::Text("%s", pwd_label); ImGui::SameLine(label_w);
+        ImGuiInputTextFlags pwd_flags = m_remote_show_password ? 0 : ImGuiInputTextFlags_Password;
+        ImGui::SetNextItemWidth(-FLT_MIN - 90.0f);
+        ImGui::InputText("##rpass", m_remote_password, sizeof(m_remote_password), pwd_flags);
+        ImGui::SameLine();
+        ImGui::Checkbox("Show", &m_remote_show_password);
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Remote Path"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint(
+            "##rpath",
+            "relative/to/home.db  or  /absolute/path.db",
+            m_remote_path, sizeof(m_remote_path));
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("SSH Key"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint(
+            "##rkey",
+            "Optional private key (e.g. ~/.ssh/id_ed25519). "
+            "Leave blank for default keys, agent, or password.",
+            m_remote_key, sizeof(m_remote_key));
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Key Passphrase"); ImGui::SameLine(label_w);
+        ImGuiInputTextFlags pass_flags =
+            m_remote_show_passphrase ? 0 : ImGuiInputTextFlags_Password;
+        ImGui::SetNextItemWidth(-FLT_MIN - 90.0f);
+        ImGui::InputTextWithHint(
+            "##rkeypass", "Leave blank if key is unencrypted or loaded in ssh-agent",
+            m_remote_key_passphrase, sizeof(m_remote_key_passphrase), pass_flags);
+        ImGui::SameLine();
+        ImGui::Checkbox("Show##kpshow", &m_remote_show_passphrase);
+
+        ImGui::Spacing();
+
+        DataModel::RemoteUri preview_uri =
+            RemoteUriFromForm(m_remote_host, m_remote_port, m_remote_user,
+                              m_remote_password, m_remote_path, m_remote_key,
+                              m_remote_key_passphrase);
+        std::string preview = "ssh://";
+        if(!preview_uri.user.empty())
+        {
+            preview += preview_uri.user;
+            if(!preview_uri.password.empty())
+                preview += ":" + std::string(preview_uri.password.size(), '*');
+            preview += "@";
+        }
+        preview += preview_uri.host;
+        if(preview_uri.port != 22) preview += ":" + std::to_string(preview_uri.port);
+        // Always emit the URI separator '/'; absolute paths therefore show
+        // as '//path' (SCP-style convention).
+        preview += "/";
+        preview += preview_uri.path;
+        if(!preview_uri.identity_file.empty())
+            preview += "?key=" + preview_uri.identity_file;
+        ImGui::TextDisabled("URI: %s", preview.c_str());
+
+        if(!m_remote_status_msg.empty())
+        {
+            ImVec4 color = m_remote_password_required ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f)
+                                                       : ImVec4(0.6f, 0.8f, 0.6f, 1.0f);
+            ImGui::TextColored(color, "%s", m_remote_status_msg.c_str());
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        bool can_open = m_remote_host[0] != '\0' && m_remote_path[0] != '\0';
+        if(!can_open) ImGui::BeginDisabled();
+        if(ImGui::Button("Open", ImVec2(110, 0)))
+        {
+            DataModel::RemoteUri uri = RemoteUriFromForm(
+                m_remote_host, m_remote_port, m_remote_user, m_remote_password,
+                m_remote_path, m_remote_key, m_remote_key_passphrase);
+            ImGui::CloseCurrentPopup();
+            OpenRemoteFile(uri);
+        }
+        if(!can_open) ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        if(ImGui::Button("Cancel", ImVec2(110, 0)))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+    popup_style.PopStyles();
+}
+
+void
+AppWindow::OpenRemoteFile(const DataModel::RemoteUri& uri)
+{
+    if(m_remote_fetch)
+    {
+        ShowMessageDialog("Open Remote", "A remote download is already in progress.");
+        return;
+    }
+
+    std::filesystem::path config_root = get_application_config_path(true);
+    std::filesystem::path cache_root  = config_root / "remote_cache";
+    std::filesystem::path cache_dir   = cache_root / DataModel::RemoteCacheKey(uri);
+    std::filesystem::path cache_path  = cache_dir / DataModel::RemoteBasenameForCache(uri);
+
+    auto fetch         = std::make_unique<RemoteFetchInProgress>();
+    fetch->cache_path  = cache_path;
+    fetch->display_name = DataModel::RemoteBasenameForCache(uri);
+    fetch->sanitized_uri = DataModel::SanitizeForRecent(uri);
+    fetch->sink         = std::make_unique<DataModel::ProgressSink>();
+
+    DataModel::AuthBridge* bridge = m_ssh_auth_bridge.get();
+    bridge->Reset();
+
+    auto* sink_ptr   = fetch->sink.get();
+    auto* err_ptr    = &fetch->err;
+    auto* result_ptr = &fetch->result_code;
+    auto* done_ptr   = &fetch->done;
+    DataModel::RemoteUri uri_copy = uri;
+
+    fetch->worker = std::thread([uri_copy, cache_path, bridge, sink_ptr,
+                                 err_ptr, result_ptr, done_ptr]() {
+        DataModel::SshAuthResult r =
+            DataModel::FetchRemoteFile(uri_copy, cache_path, *bridge, *sink_ptr, *err_ptr);
+        *result_ptr = static_cast<int>(r);
+        done_ptr->store(true, std::memory_order_release);
+    });
+
+    m_remote_fetch = std::move(fetch);
+}
+
+void
+AppWindow::PollRemoteFetch()
+{
+    if(!m_remote_fetch) return;
+    if(!m_remote_fetch->done.load(std::memory_order_acquire)) return;
+
+    auto fetch     = std::move(m_remote_fetch);  // resets the member
+    if(fetch->worker.joinable()) fetch->worker.join();
+
+    auto result = static_cast<DataModel::SshAuthResult>(fetch->result_code);
+    spdlog::info("[ssh] PollRemoteFetch: result={} err='{}' cache_path={}",
+                 fetch->result_code, fetch->err, fetch->cache_path.string());
+    switch(result)
+    {
+        case DataModel::SshAuthResult::Ok:
+        {
+            OpenFile(fetch->cache_path.string());
+            SettingsManager::GetInstance().AddRecentFile(fetch->sanitized_uri);
+            break;
+        }
+        case DataModel::SshAuthResult::NeedsPassword:
+        {
+            m_open_remote_dialog       = true;
+            m_remote_password_required = true;
+            m_remote_status_msg =
+                "Server requires a password. Enter it and click Open again.";
+            break;
+        }
+        case DataModel::SshAuthResult::Cancelled:
+        {
+            m_remote_status_msg = "Cancelled.";
+            break;
+        }
+        default:
+        {
+            std::string msg = fetch->err.empty() ? "Unknown error" : fetch->err;
+            ShowMessageDialog("Remote Open Failed", msg);
+            break;
+        }
+    }
+}
+
+void
+AppWindow::RenderRemoteProgressDialog()
+{
+    if(!m_remote_fetch) return;
+
+    // Step aside while an auth modal is pending — ImGui won't stack a second
+    // modal opened from outside the first one, and the progress bar is
+    // meaningless until auth completes anyway. Just don't open ours.
+    bool auth_pending =
+        !std::holds_alternative<std::monostate>(m_ssh_auth_bridge->Peek());
+    if(auth_pending) return;
+
+    if(!ImGui::IsPopupOpen("Remote Download"))
+    {
+        ImGui::OpenPopup("Remote Download");
+    }
+
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+    ImGui::SetNextWindowSize(ImVec2(440, 0));
+
+    if(ImGui::BeginPopupModal("Remote Download", nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize |
+                                  ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoTitleBar))
+    {
+        ImGui::Text("Downloading: %s", m_remote_fetch->display_name.c_str());
+        uint64_t done  = m_remote_fetch->sink->bytes_read.load(std::memory_order_relaxed);
+        uint64_t total = m_remote_fetch->sink->total;
+        if(total > 0)
+        {
+            float frac = static_cast<float>(done) / static_cast<float>(total);
+            ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0),
+                               (std::to_string(done / 1024) + " / " +
+                                std::to_string(total / 1024) + " KiB").c_str());
+        }
+        else
+        {
+            ImGui::Text("Connecting...");
+        }
+        // Modal closes when the fetch completes (PollRemoteFetch resets member).
+        if(!m_remote_fetch) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    popup_style.PopStyles();
 }
 
 void

@@ -13,14 +13,24 @@
 #include "widgets/rocprofvis_tab_container.h"
 
 #include <atomic>
+#include <filesystem>
+#include <thread>
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 #include <future>
-#include <thread>
 #include <chrono>
 #endif
 
 namespace RocProfVis
 {
+
+namespace DataModel
+{
+class AuthBridge;
+struct ProgressSink;
+struct RemoteUri;
+enum class SshAuthResult;
+}  // namespace DataModel
+
 namespace View
 {
 
@@ -87,13 +97,18 @@ private:
 
     void RenderFileDialog();
     void RenderAboutDialog();
+    void RenderRemoteOpenDialog();
+    void RenderRemoteProgressDialog();
     void RenderEmptyState();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleOpenFile();
+    void HandleOpenRemote();
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
+    void OpenRemoteFile(const DataModel::RemoteUri& uri);
+    void PollRemoteFetch();
     void ConfigureFileDialogBackend();
 
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
@@ -133,6 +148,39 @@ private:
 #endif
     bool m_open_about_dialog;
     bool m_disable_app_interaction;
+
+    // ---- "Open Remote" feature ----
+    bool m_open_remote_dialog          = false;
+    bool m_remote_show_password        = false;
+    bool m_remote_show_passphrase      = false;
+    bool m_remote_password_required    = false;
+    char m_remote_uri_paste[1024]      = {};
+    char m_remote_host[256]            = {};
+    char m_remote_port[16]             = {};
+    char m_remote_user[128]            = {};
+    char m_remote_password[256]        = {};
+    char m_remote_path[512]            = {};
+    char m_remote_key[512]             = {};
+    char m_remote_key_passphrase[256]  = {};
+    std::string m_remote_status_msg;
+
+    std::unique_ptr<DataModel::AuthBridge> m_ssh_auth_bridge;
+
+    struct RemoteFetchInProgress
+    {
+        std::thread                            worker;
+        std::atomic<bool>                      done{false};
+        std::filesystem::path                  cache_path;
+        std::string                            display_name;
+        std::string                            sanitized_uri;
+        std::string                            err;
+        // SshAuthResult is incomplete here; the cpp owns the actual value
+        // through this small int wrapper.
+        int                                    result_code = 0;
+        std::unique_ptr<DataModel::ProgressSink> sink;
+        ~RemoteFetchInProgress();
+    };
+    std::unique_ptr<RemoteFetchInProgress> m_remote_fetch;
 
     rocprofvis_view_file_dialog_preference_t m_file_dialog_preference;
 

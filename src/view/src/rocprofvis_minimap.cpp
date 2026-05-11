@@ -310,6 +310,11 @@ Minimap::Render()
     float  top_padding = 5.0f;
     ImVec2 avail       = ImGui::GetContentRegionAvail();
 
+    constexpr float MINIMAP_CHILD_MIN_W = 200.0f;
+    constexpr float MINIMAP_CHILD_MIN_H = 150.0f;
+    avail.x = std::max(avail.x, MINIMAP_CHILD_MIN_W);
+    avail.y = std::max(avail.y, MINIMAP_CHILD_MIN_H);
+
     if(ImGui::BeginChild("Minimap", avail, true))
     {
         ImDrawList* draw_list       = ImGui::GetWindowDrawList();

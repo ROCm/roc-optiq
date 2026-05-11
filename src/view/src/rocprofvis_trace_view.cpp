@@ -370,6 +370,8 @@ TraceView::Render()
 
             float dpi = SettingsManager::GetInstance().GetDPI();
             ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
+            ImGui::SetNextWindowSizeConstraints(
+                ImVec2(200.0f * dpi, 150.0f * dpi), ImVec2(FLT_MAX, FLT_MAX));
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {

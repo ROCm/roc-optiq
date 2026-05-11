@@ -25,6 +25,7 @@ constexpr ImVec2 CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
 constexpr float  FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
 constexpr ImVec2 INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
 constexpr float  INITIAL_RELATIVE_SIZE           = 0.8f;
+constexpr ImVec2 SUMMARY_WINDOW_MIN_SIZE         = ImVec2(200.0f, 150.0f);
 
 SummaryView::SummaryView(DataProvider& dp)
 : m_data_provider(dp)
@@ -101,6 +102,8 @@ SummaryView::Render()
                                 ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(viewport_size * INITIAL_RELATIVE_SIZE,
                                  ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSizeConstraints(SUMMARY_WINDOW_MIN_SIZE,
+                                            ImVec2(FLT_MAX, FLT_MAX));
         ImGui::Begin("Summary", &m_settings.GetAppWindowSettings().show_summary,
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
                          ImGuiWindowFlags_NoScrollWithMouse);

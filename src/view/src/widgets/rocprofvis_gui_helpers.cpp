@@ -184,9 +184,9 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
                        LoadingIndicatorCentering centering, float dot_radius,
                        int num_dots, float dot_spacing, float anim_speed)
 {
-    bool   use_overlay_child = window_id && centering != kCenterNone;
+    ImVec2 orig_pos = ImGui::GetCursorPos();
 
-    if(use_overlay_child)
+    if(window_id)
     {
         // Create an overlay child window to display the loading indicator if requested
         ImGui::SetCursorPos(ImVec2(0, 0));
@@ -198,8 +198,7 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
     ImVec2 dot_size   = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
     ImVec2 window_pos = ImGui::GetWindowPos();
     ImVec2 view_rect  = ImGui::GetWindowSize();
-    ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
-    ImVec2 draw_pos   = cursor_pos;
+    ImVec2 draw_pos   = ImGui::GetCursorScreenPos();
 
     if(centering == kCenterHorizontal || centering == kCenterBoth)
     {
@@ -216,10 +215,12 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
     }
     RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing, color, anim_speed);
 
-    if(use_overlay_child)
+    if(window_id)
     {
         ImGui::EndChild();
         ImGui::PopStyleColor();
+        // Restore cursor position in the parent window
+        ImGui::SetCursorPos(orig_pos);
     }
 }
 

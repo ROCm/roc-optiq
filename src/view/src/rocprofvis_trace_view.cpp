@@ -376,10 +376,11 @@ TraceView::Render()
             // hosted by the main viewport.
             const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
             const ImVec2         center        = main_viewport->GetCenter();
-            // Use Appearing (not FirstUseEver) so a previously-saved
-            // position outside the main viewport doesn't keep the
-            // window stranded in a secondary OS viewport across runs.
-            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing,
+            // Use FirstUseEver (not Appearing) so that once the user
+            // docks the Minimap with another window (e.g. the Summary),
+            // toggling visibility off and on does not reset its
+            // position and undock it from the saved dock node.
+            ImGui::SetNextWindowPos(center, ImGuiCond_FirstUseEver,
                                     ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi),
                                      ImGuiCond_FirstUseEver);

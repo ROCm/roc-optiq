@@ -7,7 +7,7 @@ on:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
-        default: '[ "2025" ]'
+        default: '[ "2022" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -33,7 +33,7 @@ on:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
-        default: '[ "2025" ]'
+        default: '[ "2022" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -99,7 +99,7 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           mkdir build
-          cmake --preset "${{ inputs.cmake_config_preset }}" -G "Visual Studio 18 2026" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
           if (Test-Path "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"

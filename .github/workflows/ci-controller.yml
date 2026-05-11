@@ -57,12 +57,12 @@ jobs:
       # Full OS Coverage (default for scheduled runs)
       UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04" ]'
       REDHAT_FULL_OS_VERSIONS: '[ "8", "9", "10" ]'
-      WINDOWS_FULL_OS_VERSIONS: '[ "2025" ]'
+      WINDOWS_FULL_OS_VERSIONS: '[ "2022" ]'
       MAC_FULL_OS_VERSIONS: '[ "14", "15", "26" ]'
       # Minimal OS Coverage (default for all other runs)
       UBUNTU_CI_OS_VERSIONS: '[ "24.04" ]'
       REDHAT_CI_OS_VERSIONS: '[ "10" ]'
-      WINDOWS_CI_OS_VERSIONS: '[ "2025" ]'
+      WINDOWS_CI_OS_VERSIONS: '[ "2022" ]'
       MAC_CI_OS_VERSIONS: '[ "26" ]'
     outputs:
       ubuntu-os-versions: ${{ steps.setup-os-versions.outputs.ubuntu-os-versions }}

@@ -22,6 +22,22 @@ restore_secondary_viewport_intended_pos(
 void
 raise_dragged_viewport_after_release();
 
+// Workaround for the "black box left on the desktop" artifact seen on
+// Wayland (RHEL 10 confirmed) when a secondary (floating) viewport is
+// dragged so that part of it leaves the screen.  Wayland's compositor
+// keeps compositing the previous buffer at the previous surface
+// position for an extra frame, leaving a stale rectangle on the
+// desktop where the window used to overlap.
+//
+// Call once per frame, AFTER ImGui::RenderPlatformWindowsDefault() but
+// BEFORE the main backend present.  No-op on non-Wayland sessions and
+// on frames where no secondary viewport moved.  See implementation for
+// the exact mechanism (re-issue Platform_SetWindowPos + post a wakeup
+// event so the compositor processes the move on the same frame the
+// new buffer is presented).
+void
+nudge_wayland_viewports_after_render();
+
 // Override the policy that decides whether the post-drag click-through
 // fix runs (raise_dragged_viewport_after_release).  This does NOT
 // affect the always-on corner-lock cursor-offset fix, which is

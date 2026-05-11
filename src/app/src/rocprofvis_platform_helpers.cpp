@@ -348,4 +348,86 @@ raise_dragged_viewport_after_release()
     }
     g_prev_mouse_left_down = curr_mouse_down;
 }
+
+// Workaround for the "black box on the desktop" artifact when a
+// secondary (floating) viewport is dragged partially off-screen on
+// Wayland.
+//
+// Symptom: while the user drags a floating ImGui viewport (e.g. a
+// docked Summary+Minimap group that has been popped out into its own
+// OS window) past a monitor edge, the compositor keeps compositing
+// the window's previous buffer at the previous surface position for
+// an extra frame.  The result is a black/garbled rectangle left on
+// the desktop on the side the window is being dragged off, the same
+// size as the window, persisting until the next paint catches up.
+//
+// Cause: GLFW's Wayland backend issues wl_surface_attach +
+// wl_surface_commit per swap, but the move requested via
+// Platform_SetWindowPos this frame and the new buffer presented this
+// frame are not always coalesced into the same compositor commit
+// cycle when the window is moving rapidly past a screen edge.
+// Mutter ends up showing the previous buffer at the previous position
+// for one extra composite, which is what the user perceives as a
+// trailing rectangle on the desktop.
+//
+// Mitigation: after RenderPlatformWindowsDefault() (which is what
+// triggers each secondary viewport's swap), re-issue
+// Platform_SetWindowPos for any secondary viewport whose Pos changed
+// since the previous frame, and post one empty event to wake up the
+// compositor's main loop so the just-committed buffer and the just-
+// re-issued position are processed together on the next composite.
+// On non-Wayland sessions (X11, native; Windows / macOS reach this
+// file only as no-ops because the whole TU is gated on __linux__)
+// this is skipped entirely.
+//
+// Bookkeeping is keyed on viewport ID (not pointer) because ImGui can
+// recycle the ImGuiViewport* slot.
+static std::unordered_map<ImGuiID, ImVec2> g_prev_secondary_viewport_pos;
+
+void
+nudge_wayland_viewports_after_render()
+{
+    if(!is_wayland_session())
+    {
+        return;
+    }
+    ImGuiPlatformIO& pio = ImGui::GetPlatformIO();
+    if(pio.Platform_SetWindowPos == nullptr)
+    {
+        return;
+    }
+    bool any_moved = false;
+    std::unordered_map<ImGuiID, ImVec2> next_positions;
+    next_positions.reserve(static_cast<size_t>(pio.Viewports.Size));
+    for(int i = 1; i < pio.Viewports.Size; ++i)
+    {
+        ImGuiViewport* vp = pio.Viewports[i];
+        if(!vp->PlatformWindowCreated || vp->PlatformHandle == nullptr)
+        {
+            continue;
+        }
+        next_positions[vp->ID] = vp->Pos;
+        auto it = g_prev_secondary_viewport_pos.find(vp->ID);
+        if(it == g_prev_secondary_viewport_pos.end())
+        {
+            // First time we see this viewport.  Record but don't nudge:
+            // brand-new viewports already get a fresh commit cycle.
+            continue;
+        }
+        if(it->second.x == vp->Pos.x && it->second.y == vp->Pos.y)
+        {
+            continue;
+        }
+        // Viewport moved this frame.  Re-issue the OS pos so the
+        // compositor sees move + new buffer in the same wakeup.
+        pio.Platform_SetWindowPos(vp, vp->Pos);
+        any_moved = true;
+    }
+    g_prev_secondary_viewport_pos.swap(next_positions);
+    if(any_moved)
+    {
+        // Single wakeup is enough; multiple posts coalesce in GLFW.
+        glfwPostEmptyEvent();
+    }
+}
 #endif

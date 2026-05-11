@@ -386,6 +386,16 @@ main(int argc, char** argv)
                         ImGui::UpdatePlatformWindows();
                         ImGui::RenderPlatformWindowsDefault();
                         glfwMakeContextCurrent(backup_current_context);
+#ifdef __linux__
+                        // Hook C: on Wayland, re-issue Platform_SetWindowPos
+                        // and post an empty event for any secondary viewport
+                        // that moved this frame, so the compositor processes
+                        // the new buffer and the new position on the same
+                        // composite.  Eliminates the "black box on the
+                        // desktop" trail when a floating viewport is dragged
+                        // partially off-screen.  No-op off Wayland.
+                        nudge_wayland_viewports_after_render();
+#endif
                     }
 
                     if(!is_minimized)

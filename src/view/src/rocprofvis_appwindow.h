@@ -9,11 +9,12 @@
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_image_helpers.h"
+#include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
 
-#ifdef USE_NATIVE_FILE_DIALOG
 #include <atomic>
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 #include <future>
 #include <thread>
 #include <chrono>
@@ -73,6 +74,8 @@ public:
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;
 
+    void SetFileDialogPreference(rocprofvis_view_file_dialog_preference_t pref);
+
 private:
     AppWindow();
     ~AppWindow();
@@ -92,20 +95,20 @@ private:
     void HandleOpenFile();
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
+    void ConfigureFileDialogBackend();
 
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
 
     void ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback,
                               bool                             save_dialog);
-#else
+#endif
     void ShowImGuiFileDialog(const std::string&             title,
                         const std::vector<FileFilter>& file_filters,
                         const std::string& initial_path, const bool& confirm_overwrite,
                         std::function<void(std::string)> callback);
-#endif
     static AppWindow* s_instance;
 
     std::shared_ptr<VFixedContainer> m_main_view;
@@ -133,9 +136,14 @@ private:
     bool m_open_about_dialog;
     bool m_disable_app_interaction;
 
-#ifndef USE_NATIVE_FILE_DIALOG
+    rocprofvis_view_file_dialog_preference_t m_file_dialog_preference;
+
+    // Decided at Init() time; can be downgraded to false if NFD_Init fails at
+    // runtime. Atomic because the async native-dialog lambda can flip it.
+    std::atomic<bool>                m_use_native_file_dialog;
+
     bool                             m_init_file_dialog;
-#else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     std::atomic<bool>                m_is_native_file_dialog_open;
     std::future<std::string>         m_file_dialog_future;
 #endif

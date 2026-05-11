@@ -82,7 +82,6 @@ private:
     std::deque<Notification> m_notifications;
     float                    m_default_duration;
     float                    m_default_fade_duration;
-    float                    m_notification_spacing;
     uint64_t                 m_next_uid;
 };
 

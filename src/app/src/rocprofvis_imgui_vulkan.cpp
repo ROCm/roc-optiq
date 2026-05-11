@@ -470,6 +470,17 @@ rocprofvis_imgui_backend_vk_release_after_failed_init(rocprofvis_imgui_backend_t
     }
     backend_data->m_descriptor_pool = VK_NULL_HANDLE;
 
+    // Explicitly destroy the surface before destroying the device and instance
+    // to ensure proper resource cleanup order per Vulkan spec
+    if(backend_data->m_instance != VK_NULL_HANDLE &&
+       backend_data->m_window_data.Surface != VK_NULL_HANDLE)
+    {
+        vkDestroySurfaceKHR(backend_data->m_instance,
+                            backend_data->m_window_data.Surface,
+                            backend_data->m_allocator);
+        backend_data->m_window_data.Surface = VK_NULL_HANDLE;
+    }
+
 #ifdef _DEBUG
     if(backend_data->m_debug_report != VK_NULL_HANDLE &&
        backend_data->m_instance != VK_NULL_HANDLE)
@@ -1101,6 +1112,15 @@ rocprofvis_imgui_backend_vk_destroy(rocprofvis_imgui_backend_t* backend)
 
         delete backend_data->m_textures;
         backend_data->m_textures = nullptr;
+        // Explicitly destroy the surface before destroying the device and instance
+        // to ensure proper resource cleanup order per Vulkan spec
+        if(backend_data->m_window_data.Surface != VK_NULL_HANDLE)
+        {
+            vkDestroySurfaceKHR(backend_data->m_instance,
+                                backend_data->m_window_data.Surface,
+                                backend_data->m_allocator);
+            backend_data->m_window_data.Surface = VK_NULL_HANDLE;
+        }
 
 #ifdef _DEBUG
         // Remove the debug report callback

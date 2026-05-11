@@ -1698,6 +1698,7 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
     id_value.bitfield.event_node = db_instance->GuidIndex();
     id_value.bitfield.event_op = op;
     params->m_active_events.push_back({id_value.value, start_time, end_time, level});
+    params->m_active_events.sort([](const rocprofvis_event_timing_params_t& a, const rocprofvis_event_timing_params_t& b) { return a.level < b.level;});
     callback_params->future->CountThisRow();
     {
         std::lock_guard<std::mutex> lock(db->m_level_lock);

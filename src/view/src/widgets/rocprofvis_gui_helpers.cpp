@@ -92,13 +92,81 @@ RenderLoadingIndicator(ImU32 color, const char* window_id, float dot_radius, int
         ImGui::PopStyleColor();
     }
 
+    // Zero-size Dummy avoids EndChild parent-boundary check after SetCursorPos.
     ImGui::SetCursorPos(pos);
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+}
+
+ImU32
+ApplyAlpha(ImU32 color, float alpha)
+{
+    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
+    rgba.w      = std::clamp(alpha, 0.0f, 1.0f);
+    return ImGui::ColorConvertFloat4ToU32(rgba);
+}
+
+ImVec4
+ThemeColor(SettingsManager& settings, Colors color, float alpha)
+{
+    ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color));
+    rgba.w      = std::clamp(rgba.w * alpha, 0.0f, 1.0f);
+    return rgba;
+}
+
+void
+PushComboStyles()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, settings.GetColor(Colors::kComboFill));
+}
+
+void
+PopComboStyles()
+{
+    ImGui::PopStyleColor();
+}
+
+ImVec2
+GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size, float viewport_margin)
+{
+    constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
+    const float     scale = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
+
+    ImVec2 result(desired_size.x > 0.0f ? desired_size.x * scale : desired_size.x,
+                  desired_size.y > 0.0f ? desired_size.y * scale : desired_size.y);
+    const ImVec2 scaled_min(min_size.x > 0.0f ? min_size.x * scale : min_size.x,
+                            min_size.y > 0.0f ? min_size.y * scale : min_size.y);
+
+    if(result.x > 0.0f && scaled_min.x > 0.0f)
+    {
+        result.x = std::max(result.x, scaled_min.x);
+    }
+    if(result.y > 0.0f && scaled_min.y > 0.0f)
+    {
+        result.y = std::max(result.y, scaled_min.y);
+    }
+
+    if(const ImGuiViewport* viewport = ImGui::GetMainViewport())
+    {
+        const float margin = std::max(0.0f, viewport_margin * scale);
+        const ImVec2 max_size(std::max(0.0f, viewport->WorkSize.x - margin * 2.0f),
+                              std::max(0.0f, viewport->WorkSize.y - margin * 2.0f));
+        if(result.x > 0.0f && max_size.x > 0.0f)
+        {
+            result.x = std::min(result.x, max_size.x);
+        }
+        if(result.y > 0.0f && max_size.y > 0.0f)
+        {
+            result.y = std::min(result.y, max_size.y);
+        }
+    }
+
+    return result;
 }
 
 bool
-IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
-           const char* tooltip, ImVec2 tooltip_padding, bool frameless,
-           ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
+IconButton(const char* icon, ImFont* icon_font, ImVec2 size, const char* tooltip,
+           bool frameless, ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
            ImU32 bg_color_active, const char* id)
 {
     if(id && strlen(id) > 0)
@@ -126,15 +194,10 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size,
     ImGui::PushFont(icon_font);
     bool clicked = ImGui::Button(icon, size);
     ImGui::PopFont();
-    if(tooltip && strlen(tooltip) > 0)
+    if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, tooltip_padding);
-        if(BeginItemTooltipStyled())
-        {
-            ImGui::TextUnformatted(tooltip);
-            EndTooltipStyled();
-        }
-        ImGui::PopStyleVar();
+        ImGui::TextUnformatted(tooltip);
+        EndTooltipStyled();
     }
     ImGui::PopStyleColor(3);
     ImGui::PopStyleVar();
@@ -179,13 +242,15 @@ InputTextWithClear(const char* id, const char* hint, char* buf,
         if(width >= ImGui::CalcTextSize(ICON_X_CIRCLED).x + 2 * style.FramePadding.x)
         {
             ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetItemRectMax().x - 2 * style.FramePadding.x -
-                                 ImGui::CalcTextSize(ICON_X_CIRCLED).x);
+            ImGui::SetCursorScreenPos(
+                ImVec2(ImGui::GetItemRectMax().x - 2 * style.FramePadding.x -
+                           ImGui::CalcTextSize(ICON_X_CIRCLED).x,
+                       ImGui::GetCursorScreenPos().y));
             ImGui::PopFont();
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
-            input_cleared = IconButton(ICON_X_CIRCLED, icon_font, ImVec2(0, 0), "Clear",
-                                       style.WindowPadding, false, style.FramePadding,
-                                       bg_color, bg_color, bg_color);
+            input_cleared =
+                IconButton(ICON_X_CIRCLED, icon_font, ImVec2(0, 0), "Clear", false,
+                           style.FramePadding, bg_color, bg_color, bg_color);
             ImGui::PopStyleVar();
         }
         else
@@ -412,6 +477,12 @@ VerticalSeparator(SettingsManager* settings)
                        settings->GetColor(Colors::kMetaDataSeparator), 2.0f);
     ImGui::Dummy(ImVec2(style.ItemSpacing.x, 0));
     ImGui::SameLine();
+}
+
+float
+TableRowHeight()
+{
+    return ImGui::GetTextLineHeight() + ImGui::GetStyle().CellPadding.y * 2.0f;
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER

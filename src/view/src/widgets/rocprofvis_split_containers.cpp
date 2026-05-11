@@ -126,10 +126,13 @@ void SplitContainerBase::Render()
             UpdateSplitRatio(mouse_pos, window_pos, available_size);
             fill_active = true;
         }
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            splitter_min, splitter_max,
-            SettingsManager::GetInstance().GetColor(
-                fill_active ? Colors::kAccentRedActive : Colors::kSplitterColor));
+        // Only paint on hover/drag.
+        if(fill_active)
+        {
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                splitter_min, splitter_max,
+                SettingsManager::GetInstance().GetColor(Colors::kBorderGray));
+        }
         AddSameLine();
     }
 
@@ -182,7 +185,7 @@ SplitContainerBase::SetMinSecondSize(float size)
 
 //------------------------------------------------------------------
 HSplitContainer::HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
-: SplitContainerBase(left, right, 4.0f, 100.0f, 100.0f, 0.25f)
+: SplitContainerBase(left, right, 3.0f, 100.0f, 100.0f, 0.25f)
 {
     m_widget_name = GenUniqueName("HSplitContainer");
     m_first_name  = GenUniqueName("LeftColumn");
@@ -282,7 +285,7 @@ HSplitContainer::GetSplitterSize(const ImVec2& total_size)
 void
 HSplitContainer::AddSameLine()
 {
-    ImGui::SameLine();
+    ImGui::SameLine(0.0f, 0.0f);
 };
 
 float
@@ -293,7 +296,7 @@ HSplitContainer::GetItemSize()
 
 //------------------------------------------------------------------
 VSplitContainer::VSplitContainer(LayoutItem::Ptr top, LayoutItem::Ptr bottom)
-: SplitContainerBase(top, bottom, 4.0f, 200.0f, 100.0f, 0.6f)
+: SplitContainerBase(top, bottom, 6.0f, 200.0f, 100.0f, 0.6f)
 {
     m_widget_name = GenUniqueName("VSplitContainer");
     m_first_name  = GenUniqueName("TopRow");

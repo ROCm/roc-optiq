@@ -55,6 +55,8 @@ constexpr const char* DISPLAY_NAMES_PRESET[] = {
     "FP64",  // PresetModel::Type::FP64
 };
 
+constexpr const char* CHART_ZOOM_HINT = "Click chart to enable zoom";
+
 Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 : m_data_provider(data_provider)
 , m_settings(SettingsManager::GetInstance())
@@ -68,6 +70,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_kernel_changed(false)
 , m_kernel_mode(kernel_mode)
 , m_options_changed(false)
+, m_plot_zoom_enabled(false)
 , m_workload(nullptr)
 , m_requested_workload_id(0)
 , m_kernel(nullptr)
@@ -111,13 +114,8 @@ Roofline::Update()
 {
     if(m_workload_changed)
     {
-        m_workload = nullptr;
-        const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
-            m_data_provider.ComputeModel().GetWorkloads();
-        if(workloads.count(m_requested_workload_id) > 0)
-        {
-            m_workload = &workloads.at(m_requested_workload_id);
-        }
+        m_workload =
+            m_data_provider.ComputeModel().GetWorkload(m_requested_workload_id);
         if(m_workload)
         {
             m_items.resize(__KRPVControllerRooflineCeilingComputeTypeLast +
@@ -320,6 +318,14 @@ Roofline::Update()
 void
 Roofline::Render()
 {
+    // Fill the parent. AutoResizeY would collapse here since the plot uses (0,0).
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::BeginChild("roofline_card", ImVec2(0, 0),
+                      ImGuiChildFlags_Borders |
+                          ImGuiChildFlags_AlwaysUseWindowPadding);
     SectionTitle("Roofline Analysis");
     ImGui::BeginChild("roofline");
     const ImVec2       region     = ImGui::GetContentRegionAvail();
@@ -345,24 +351,58 @@ Roofline::Render()
     }
     else
     {
-        ImPlot::PushStyleColor(ImPlotCol_PlotBg,
-                               ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
         ImPlot::PushStyleColor(ImPlotCol_FrameBg,
-                               m_settings.GetColor(Colors::kTransparent));
+                               ThemeColor(m_settings, Colors::kTransparent));
+        ImPlot::PushStyleColor(ImPlotCol_PlotBg,
+                               ThemeColor(m_settings, Colors::kBgFrame));
+        ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.85f));
+        ImPlot::PushStyleColor(ImPlotCol_LegendBg,
+                               ThemeColor(m_settings, Colors::kBgPanel, 0.96f));
+        ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.85f));
+        ImPlot::PushStyleColor(ImPlotCol_LegendText,
+                               ThemeColor(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_TitleText,
+                               ThemeColor(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_InlayText,
+                               ThemeColor(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_AxisText,
+                               ThemeColor(m_settings, Colors::kTextMain));
+        ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
+                               ThemeColor(m_settings, Colors::kBorderColor, 0.7f));
+        ImPlot::PushStyleColor(ImPlotCol_AxisTick,
+                               ThemeColor(m_settings, Colors::kTextDim, 0.56f));
+        ImPlot::PushStyleColor(ImPlotCol_AxisBg,
+                               ThemeColor(m_settings, Colors::kTransparent));
+        ImPlot::PushStyleColor(ImPlotCol_AxisBgHovered,
+                               ThemeColor(m_settings, Colors::kButtonHovered, 0.72f));
+        ImPlot::PushStyleColor(ImPlotCol_AxisBgActive,
+                               ThemeColor(m_settings, Colors::kButtonActive, 0.80f));
+        ImPlot::PushStyleColor(ImPlotCol_Selection,
+                               ThemeColor(m_settings, Colors::kSelectionBorder));
+        ImPlot::PushStyleColor(ImPlotCol_Crosshairs,
+                               ThemeColor(m_settings, Colors::kSelectionBorder, 0.72f));
         ImPlot::PushColormap(m_settings.GetFlameColormapName());
         ImGui::PushID(m_workload->id);
         bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
         ImVec2 plot_pos;
         ImVec2 plot_size;
+
         if(ImPlot::BeginPlot("plot", ImVec2(menus_outside ? 0.75f * region.x : -1, -1),
                              ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
                                  ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
                                  ImPlotFlags_Crosshairs))
         {
-            ImPlot::SetupAxis(ImAxis_X1, "Arithmetic Intensity (FLOP/Byte)",
-                              ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
-            ImPlot::SetupAxis(ImAxis_Y1, "Performance (GFLOP/s)",
-                              ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight);
+            ImPlotAxisFlags axis_flags =
+                ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight;
+            if(!m_plot_zoom_enabled)
+            {
+                axis_flags |= ImPlotAxisFlags_Lock;
+            }
+            ImPlot::SetupAxis(ImAxis_X1, "Arithmetic Intensity (FLOP/Byte)", axis_flags);
+            ImPlot::SetupAxis(ImAxis_Y1, "Performance (GFLOP/s)", axis_flags);
+
             ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
             ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
             ImPlot::SetupAxisLimits(ImAxis_X1, m_workload->roofline.min.x,
@@ -374,7 +414,8 @@ Roofline::Render()
             ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, m_workload->roofline.min.y / 10,
                                                m_workload->roofline.max.y * 10);
             PlotHoverIdx();
-            for(size_t i = 0; i < m_items.size(); i++)
+            int item_count = static_cast<int>(m_items.size());
+            for(int i = 0; i < item_count; i++)
             {
                 bool display = false;
                 switch(m_items[i].type)
@@ -540,17 +581,44 @@ Roofline::Render()
             ImPlot::EndPlot();
         }
         ImGui::PopID();
+        bool roofline_hovered = plot_size.x > 0.0f && plot_size.y > 0.0f &&
+                                ImGui::IsMouseHoveringRect(
+                                    plot_pos, plot_pos + plot_size, false);
+        if(!m_plot_zoom_enabled && roofline_hovered)
+        {
+            ImVec2      hint_size = ImGui::CalcTextSize(CHART_ZOOM_HINT);
+            ImVec2      hint_pos = plot_pos +
+                              ImVec2(plot_size.x - hint_size.x, 0.0f) * 0.5f +
+                              ImVec2(0.0f, plot_style.PlotPadding.y);
+            ImGui::GetWindowDrawList()->AddText(
+                hint_pos, ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]),
+                CHART_ZOOM_HINT);
+        }
         bool menus_item_hovered = false;
         RenderMenus(region, plot_pos, plot_size, style, plot_style, menus_item_hovered);
+        if(!m_plot_zoom_enabled && roofline_hovered &&
+           ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_plot_zoom_enabled = true;
+        }
+        else if(m_plot_zoom_enabled &&
+                (ImGui::IsKeyPressed(ImGuiKey_Escape) ||
+                 (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !roofline_hovered)))
+        {
+            m_plot_zoom_enabled = false;
+        }
         if(!menus_item_hovered)
         {
             m_hovered_item_idx      = std::nullopt;
             m_hovered_item_distance = FLT_MAX;
         }
         ImPlot::PopColormap();
-        ImPlot::PopStyleColor(2);
+        ImPlot::PopStyleColor(16);
     }
-    ImGui::EndChild();
+    ImGui::EndChild();  // "roofline" inner
+    ImGui::EndChild();  // "roofline_card" outer
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
 }
 
 void
@@ -574,9 +642,9 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
 {
     plot_pos -= ImGui::GetWindowPos();
     float menus_width      = region.x * 0.25f;
-    float max_menus_height = plot_size.y - plot_style.PlotPadding.y * 2.0f -
-                             ImGui::GetFrameHeightWithSpacing();
-    float button_size = ImGui::GetFrameHeightWithSpacing();
+    float button_size       = ImGui::GetFrameHeight();
+    float max_menus_height  = plot_size.y - plot_style.PlotPadding.y * 2.0f -
+                              button_size;
 
     bool menus_on_right = m_menus_placement == InsideTopRight ||
                           m_menus_placement == InsideBottomRight ||
@@ -663,7 +731,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
             ImGui::GetWindowDrawList()->AddRectFilled(
                 ImGui::GetCursorScreenPos(),
                 ImGui::GetCursorScreenPos() + ImVec2(menus_width, plot_size.y),
-                ImGui::GetColorU32(plot_style.Colors[ImPlotCol_PlotBg]));
+                m_settings.GetColor(Colors::kBgFrame));
         }
         ImGui::SetCursorPos(button_pos +
                             ImVec2(0.0f, menus_on_bottom ? -button_size : button_size));
@@ -686,7 +754,8 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::SetNextWindowSizeConstraints(ImVec2(menus_width, button_size * 2.0f),
                                             ImVec2(menus_width, max_menus_height));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
         ImGui::BeginChild("menus_window", ImVec2(menus_width, 0.0f),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         float menus_content_width =
@@ -728,7 +797,9 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                           ImGuiChildFlags_AutoResizeY,
                           ImGuiWindowFlags_NoScrollWithMouse);
         bool empty = true;
-        for(size_t i = 0; i < m_items.size(); i++)
+
+        int item_count = static_cast<int>(m_items.size());
+        for(int i = 0; i < item_count; i++)
         {
             bool display = false;
             switch(m_items[i].type)
@@ -844,6 +915,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                        plot_size.x * 0.5f, Alignment_Left, true);
             ImGui::SetNextItemWidth(-1.0f);
             int placement_idx = static_cast<int>(m_menus_placement);
+            PushComboStyles();
             if(ImGui::Combo("##placement", &placement_idx,
                             "Inside, Top Left\0"
                             "Inside, Top Right\0"
@@ -853,11 +925,12 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
             {
                 m_menus_placement = static_cast<MenusPlacement>(placement_idx);
             }
+            PopComboStyles();
             ImGui::PopID();
         }
         m_menus_rendered_height = ImGui::GetWindowHeight();
         ImGui::EndChild();
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(2);
         ImGui::PopStyleVar();
         ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
     }
@@ -870,9 +943,7 @@ Roofline::PlotHoverIdx()
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
         float  distance  = FLT_MAX;
-        // This has to be a separate pass (as opposed to being part of render pass)
-        // to prevent case where multiple items become hovered due to a higher index
-        // item being a better canidate than a lower index item.
+        // Pick the closest visible item after plotting all candidates.
         for(size_t i = 0; i < m_items.size(); i++)
         {
             if(m_items[i].visible)

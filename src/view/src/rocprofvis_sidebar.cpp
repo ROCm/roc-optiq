@@ -16,8 +16,9 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr ImGuiTreeNodeFlags CATEGORY_HEADER_FLAGS =
-    ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanLabelWidth;
+constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_Framed |
+                                            ImGuiTreeNodeFlags_DefaultOpen |
+                                            ImGuiTreeNodeFlags_SpanLabelWidth;
 constexpr float TREE_LINE_W = 1.5f;
 
 class TreeConnector
@@ -76,16 +77,16 @@ SideBar::Render()
             m_eye_state_dirty = false;
         }
 
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5, 3));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 2));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,
+                            m_settings.GetDefaultStyle().FrameRounding);
         ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 14.0f);
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
                               ImGui::ColorConvertU32ToFloat4(
                                   m_settings.GetColor(Colors::kBgFrame)));
-        if(ImGui::TreeNodeEx("Project",
-                             CATEGORY_HEADER_FLAGS | ImGuiTreeNodeFlags_Framed))
+        if(ImGui::TreeNodeEx("Project", HEADER_FLAGS))
         {
             TreeConnector project_tc(m_settings);
             if(sidebar_tree.root)
@@ -277,17 +278,6 @@ SideBar::GetSubtreeEyeState(const TreeNode& node, bool cross_boundaries) const
     return result;
 }
 
-ImGuiTreeNodeFlags
-SideBar::GetTreeNodeFlags(const TreeNode& node) const
-{
-    ImGuiTreeNodeFlags flags = CATEGORY_HEADER_FLAGS;
-    if(node.framed)
-    {
-        flags |= ImGuiTreeNodeFlags_Framed;
-    }
-    return flags;
-}
-
 void
 SideBar::ApplyVisibility(const TreeNode& node, bool visible)
 {
@@ -385,7 +375,7 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
     bool open = true;
     if(node.collapsable)
     {
-        open = ImGui::TreeNodeEx(node.label.c_str(), GetTreeNodeFlags(node));
+        open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS);
     }
 
     if(open)

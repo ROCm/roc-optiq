@@ -601,7 +601,9 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
         ImGui::Text("Duration: %s", label.c_str());
+#ifdef ROCPROFVIS_DEVELOPER_MODE
         ImGui::Text("UUID: %llu", chart_item.event.m_id.uuid);
+#endif
         ImGui::Text("ID: %llu", event_id.bitfield.event_id);
     }
 

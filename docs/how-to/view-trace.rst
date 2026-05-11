@@ -31,6 +31,10 @@ Traces contain event tracks and counter tracks:
   - Memory usage
   - Hardware counter values
   - Thermal readings
+
+.. note::
+
+   See the `ROCm Systems Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ for more information on tracing.
   
 .. _trace-file:
 
@@ -87,15 +91,20 @@ The **System Topology View** displays a hierarchical representation of the hardw
    :width: 800
    :align: center
 
-- Click |eye| to show or hide tracks. 
+- Click |eye| to show or hide tracks. Hiding a higher-level element automatically hides all underlying queues, streams, and events.
 - Click |scroll| to go to the track in the :ref:`timeline`. 
+
+ROCm Optiq displays ROCm events in both Stream view and Queue view simultaneously: 
+
+- **Stream view**: Groups events (kernels and memory copies) by the HIP stream to which they were submitted. This view reflects your application's intended dependencies. 
+- **Queue view**: Groups the same events by the HSA queue to which they were scheduled. This view reflects what the runtime and hardware actually used. 
 
 .. _timeline:
 
 Timeline View
 -------------
 
-The **Timeline View** displays CPU and GPU activities, events, and performance metrics chronologically. You can:
+The **Timeline View** displays CPU and GPU activities, events, and performance metrics in chronological order. You can:
 
 - Review events such as API calls, kernel dispatches, and more.
 - See performance counter data as charts displaying the data points.
@@ -116,11 +125,15 @@ Navigate the Timeline
 
 You can pan and scroll through the **Timeline View** using the scrollbars or by dragging your mouse across the **Graph** area of the **Timeline View**.
 
-The **WASD** and arrow keys can be also used to zoom and pan the view:
+The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the view:
 
 - **W** / **S**: Zoom in and out, respectively.
 - **A** or **Left Arrow** / **D** or **Right Arrow**: Pan left and right, respectively.
 - **Up Arrow** / **Down Arrow**: Scroll the track list up and down.
+
+.. note::
+
+   See :ref:`change-settings` to customize these hotkeys.
 
 Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
 Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
@@ -166,7 +179,6 @@ The **Histogram** provides two display modes:
 - A display across all tracks, visible and hidden.
 
 .. image:: ../images/histogram.png
-   :align: center
 
 When the **Timeline View** is zoomed in, the area currently in view is highlighted on the **Histogram**. 
 The highlighted area in the **Histogram** can be dragged to scroll the **Timeline View**.
@@ -191,11 +203,15 @@ This section provides an interface for multiple data perspectives, offering gran
   .. tip::
 
      - Right-click on the column headers to show/hide columns, size a column to fit, or size all columns to fit your screen.
-     - Right-click on a table row and select **Go to event** to navigate to the **Timeline View** to the highlighted event.
+     - Right-click on a table row and select **Go To Event** to navigate to the **Timeline View** to the highlighted event.
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs, and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
+
+  - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 
+  - The **Call Stack Data** shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. 
+
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
 

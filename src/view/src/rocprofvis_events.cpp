@@ -162,6 +162,41 @@ ComputeMetricsFetchedEvent::GetClientId() const
     return m_client_id;
 }
 
+ComputeAddMetricToKernelDetailsEvent::ComputeAddMetricToKernelDetailsEvent(
+    uint32_t category_id, uint32_t table_id, uint32_t entry_id, const std::string& value_name, const std::string& source_id)
+: RocEvent(static_cast<int>(RocEvents::kComputeShowMetricInKernelDetails), source_id)
+, m_category_id(category_id)
+, m_table_id(table_id)
+, m_entry_id(entry_id)
+, m_value_name(value_name)
+{
+    m_event_type = RocEventType::kComputeAddMetricToKernelDetailsEvent;
+}
+
+uint32_t
+ComputeAddMetricToKernelDetailsEvent::GetCategoryId() const
+{
+    return m_category_id;
+}
+
+uint32_t
+ComputeAddMetricToKernelDetailsEvent::GetTableId() const
+{
+    return m_table_id;
+}
+
+uint32_t
+ComputeAddMetricToKernelDetailsEvent::GetEntryId() const
+{
+    return m_entry_id;
+}
+
+const std::string&
+ComputeAddMetricToKernelDetailsEvent::GetValueName() const
+{
+    return m_value_name;
+}
+
 #endif
 
 TabEvent::TabEvent(int event_id, const std::string& tab_id, const std::string& source_id)

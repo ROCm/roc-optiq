@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "widgets/rocprofvis_widget.h"
+#include "model/compute/rocprofvis_compute_model_types.h"
+#include "rocprofvis_presets.h"
 #include "widgets/rocprofvis_query_builder.h"
+#include "widgets/rocprofvis_widget.h"
 #include <memory>
 #include <set>
 #include <unordered_map>
@@ -27,6 +29,8 @@ public:
     void ClearData();
     void FetchData(uint32_t workload_id);
     void HandleNewData();
+    void SetQuery(const std::string& query);
+    void SetExternalQuery(MetricId metric_id, const std::string& value_name);
 
 private:
     void RenderColumnFilter(int column_index);
@@ -35,6 +39,21 @@ private:
     bool ValidateFilterExpression(const char* expr, bool is_numeric_column);
     void ComputeColumnMaxValues(const std::vector<std::vector<std::string>>& data);
     void RenderBarChartContextMenu(int col);
+    void AppendMetricQuery(const std::string& query, const AvailableMetrics::Entry& entry,
+                           const std::string& value_name);
+
+    class Preset : public PresetComponent
+    {
+    public:
+        Preset(KernelMetricTable& widget);
+
+        bool ToJson(jt::Json& json) override;
+        bool FromJson(jt::Json& json) override;
+        void Reset() override;
+
+    private:
+        KernelMetricTable& m_widget;
+    };
 
     struct MetricInfo
     {
@@ -81,11 +100,13 @@ private:
     // Vector size = PERMANENT_COLUMN_COUNT + m_metrics_params.size()
     // Index 0-3: permanent columns (ID, Name, Duration, Invocations)
     // Index 4+: metric columns
-    std::vector<ColumnFilter> m_column_filters;        // Active filters
-    std::vector<ColumnFilter> m_pending_column_filters; // User editing
+    std::vector<ColumnFilter> m_column_filters;          // Active filters
+    std::vector<ColumnFilter> m_pending_column_filters;  // User editing
 
-    std::set<int>                     m_bar_chart_columns;
-    std::unordered_map<int, double>   m_column_max_values;
+    std::set<int>                   m_bar_chart_columns;
+    std::unordered_map<int, double> m_column_max_values;
+
+    std::unique_ptr<Preset> m_preset;
 };
 
 }  // namespace View

@@ -43,6 +43,7 @@ private:
     void ResetDisplayOptions();
     void ResetUnitOptions();
     void ResetHotkeySettings();
+    void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 
     bool ResetButton();
 

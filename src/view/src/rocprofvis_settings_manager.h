@@ -80,6 +80,7 @@ enum class Colors
     kBgMain,
     kBgPanel,
     kBgFrame,
+    kComboFill,
     kAccentRed,
     kAccentRedHover,
     kAccentRedActive,
@@ -197,6 +198,7 @@ public:
     InternalSettings& GetInternalSettings();
     void              AddRecentFile(const std::string& file_path);
     void              RemoveRecentFile(const std::string& file_path);
+    void              ClearRecentFiles();
 
     AppWindowSettings& GetAppWindowSettings();
 

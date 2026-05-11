@@ -16,7 +16,6 @@ constexpr float kContentwidth             = 550.0f;
 constexpr float kContentHeight            = 450.0f;
 constexpr float kHotkeyCategoryColWidth   = 90.0f;
 constexpr float kHotkeyBindingColWidth    = 120.0f;
-constexpr float kHotkeyTableBottomMargin  = 60.0f;
 
 namespace RocProfVis
 {
@@ -395,10 +394,12 @@ SettingsPanel::RenderHotkeySettings()
     ImGui::Separator();
     ImGui::Spacing();
 
+    const float hotkey_table_height = std::max(ImGui::GetContentRegionAvail().y,
+                                               ImGui::GetFrameHeightWithSpacing());
     if(ImGui::BeginTable("##hotkeys_table", 4,
                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                              ImGuiTableFlags_ScrollY,
-                         ImVec2(0, kContentHeight - kHotkeyTableBottomMargin)))
+                         ImVec2(0, hotkey_table_height)))
     {
         ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, kHotkeyCategoryColWidth);
         ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);

@@ -15,7 +15,7 @@ RUN dnf clean all && \
 RUN OS_VERSION=$(grep '^VERSION_ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"' | cut -d'.' -f1) && \
     dnf groupinstall -y "Development Tools" && \
     if [ "${OS_VERSION}" -eq 8 ]; then \
-        dnf install -y epel-release && dnf config-manager --set-enabled powertools; \
+        dnf install -y tbb-devel epel-release && dnf config-manager --set-enabled powertools; \
     else \
         dnf install -y epel-release && crb enable; \
     fi && \

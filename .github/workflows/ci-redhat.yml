@@ -135,6 +135,14 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Generate Metadata for S3
+        if: ${{ inputs.upload_to_s3 }}
+        shell: bash
+        working-directory: ${{ env.DIST_DIR }}
+        run: |
+          yum install -y createrepo
+          createrepo .
+
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}
         shell: bash

@@ -37,6 +37,6 @@ jobs:
         shell: bash
         run: |
           echo "deb [trusted=yes] https://${{ secrets.AWS_S3_BUCKET }}.s3.amazonaws.com/test/2026_05_12/ubuntu/${{ matrix.os-version }} /" \
-            | sudo tee /etc/apt/sources.list.d/optiq-nightly
+            | tee /etc/apt/sources.list.d/optiq-nightly
           apt update
           apt install optiq-nightly

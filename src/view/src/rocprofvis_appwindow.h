@@ -131,7 +131,7 @@ private:
                               std::function<void(std::string)> callback,
                               bool                             save_dialog,
                               bool                             path_picker = false);
-#else
+#endif
     void ShowImGuiFileDialog(const std::string&             title,
                         const std::vector<FileFilter>& file_filters,
                         const std::string& initial_path, const bool& confirm_overwrite,

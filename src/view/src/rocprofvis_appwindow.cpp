@@ -374,12 +374,20 @@ void
 AppWindow::ShowPathPickerDialog(const std::string& title, const std::string& initial_path,
                                 std::function<void(std::string)> callback)
 {
-    #ifdef USE_NATIVE_FILE_DIALOG
-    (void)title;
-    ShowNativeFileDialog({}, initial_path, callback, false, true);
-    #else
-    ShowImGuiFileDialog(title, {}, initial_path, false, callback);
-    #endif
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_use_native_file_dialog.load())
+    {
+        (void)title;
+        ShowNativeFileDialog({}, initial_path, callback, false, true);
+        return;
+    }
+#endif
+    m_file_dialog_callback = callback;
+    m_init_file_dialog     = true;
+    IGFD::FileDialogConfig config;
+    config.path = initial_path;
+    config.flags = ImGuiFileDialogFlags_Modal;
+    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, nullptr, config);
 }
 
 Project*

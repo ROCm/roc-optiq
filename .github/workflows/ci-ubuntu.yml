@@ -7,7 +7,7 @@ on:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
-        default: '[ "22.04", "24.04" ]'
+        default: '[ "22.04", "24.04", "26.04" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -33,7 +33,7 @@ on:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
-        default: '[ "22.04", "24.04" ]'
+        default: '[ "22.04", "24.04", "26.04" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string

@@ -825,28 +825,6 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
     }
 
-    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
-       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
-    {
-        float normalized_start_box_highlighted =
-            window_position.x + m_tpt->TimeToPixel(m_highlighted_region.first);
-
-        float normalized_start_box_highlighted_end =
-            window_position.x + m_tpt->TimeToPixel(m_highlighted_region.second);
-
-        // Clamp to not overlap scrollbar
-        float min_x         = window_position.x;
-        float max_x         = window_position.x + m_tpt->GetGraphSizeX();
-        float clamped_start = std::clamp(normalized_start_box_highlighted, min_x, max_x);
-        float clamped_end =
-            std::clamp(normalized_start_box_highlighted_end, min_x, max_x);
-
-        draw_list->AddRectFilled(
-            ImVec2(clamped_start, cursor_position.y),
-            ImVec2(clamped_end, cursor_position.y + container_size.y - m_ruler_height),
-            m_settings.GetColor(Colors::kSelection));
-    }
-
     // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(window_position,
                                   ImVec2(window_position.x + m_tpt->GetGraphSizeX(),
@@ -1232,6 +1210,8 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         }
     }
 
+    RenderTimeRangeSelectionFill(lane_dl, lane_min, lane_max);
+
     if(track_graph.selected)
     {
         // Mark the selected lane without covering the track contents.
@@ -1324,6 +1304,35 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         ImVec2(p_min.x, p_max.y - 0.5f),
         ImVec2(p_max.x, p_max.y - 0.5f),
         m_settings.GetColor(Colors::kTableBorderLight), 1.0f);
+}
+
+void
+TimelineView::RenderTimeRangeSelectionFill(ImDrawList* draw_list, ImVec2 lane_min,
+                                           ImVec2 lane_max)
+{
+    if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME ||
+       m_highlighted_region.second == TimelineSelection::INVALID_SELECTION_TIME)
+    {
+        return;
+    }
+
+    const float  graph_min_x = lane_min.x + m_sidebar_size;
+    const float  graph_max_x = graph_min_x + m_tpt->GetGraphSizeX();
+    const double range_min_ns =
+        std::min(m_highlighted_region.first, m_highlighted_region.second);
+    const double range_max_ns =
+        std::max(m_highlighted_region.first, m_highlighted_region.second);
+
+    const float fill_start = std::clamp(graph_min_x + m_tpt->TimeToPixel(range_min_ns),
+                                        graph_min_x, graph_max_x);
+    const float fill_end   = std::clamp(graph_min_x + m_tpt->TimeToPixel(range_max_ns),
+                                        graph_min_x, graph_max_x);
+
+    if(fill_start >= fill_end) return;
+
+    draw_list->AddRectFilled(ImVec2(fill_start, lane_min.y),
+                             ImVec2(fill_end, lane_max.y),
+                             m_settings.GetColor(Colors::kSelection));
 }
 
 void

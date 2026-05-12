@@ -162,6 +162,6 @@ jobs:
         with:
           name: test-logs-windows-${{ matrix.os-version }}
           path: |
-            ${{ env.BUILD_DIR }}/ctest-results.xml
-            ${{ env.BUILD_DIR }}/Testing/Temporary/**
+            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/ctest-results.xml
+            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/Testing/Temporary/**
           retention-days: 1

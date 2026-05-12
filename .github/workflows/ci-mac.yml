@@ -226,7 +226,7 @@ jobs:
         with:
           name: test-logs-mac-${{ matrix.os-version }}
           path: |
-            ${{ env.BUILD_DIR }}/ctest-results.xml
-            ${{ env.BUILD_DIR }}/Testing/Temporary/**
+            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/ctest-results.xml
+            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/Testing/Temporary/**
           retention-days: 1
 

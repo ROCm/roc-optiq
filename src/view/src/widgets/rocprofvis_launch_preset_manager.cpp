@@ -151,7 +151,8 @@ bool LaunchPresetManager::ExportCfg(std::string const& file_path, LaunchConfig c
         return false;
     }
 
-    std::string cfg_content = backend->ExportCfg(config.backend_payload);
+    (void)config;
+    std::string cfg_content = backend->ExportCfg();
     if (cfg_content.empty())
     {
         spdlog::warn("Backend '{}' does not support .cfg export", backend->Id());

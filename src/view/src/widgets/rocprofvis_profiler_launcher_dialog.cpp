@@ -41,7 +41,8 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
 
     m_config.profiler_id = m_backends[0]->Id();
     m_config.tool_id = m_backends[0]->GetTools()[0].id;
-    m_config.backend_payload = m_backends[0]->DefaultPayload();
+    m_backends[0]->LoadSettings(jt::Json());
+    m_config.backend_payload = m_backends[0]->SaveSettings();
 
     LoadFromSettings();
 }
@@ -76,8 +77,11 @@ void ProfilerLauncherDialog::Render()
     bool window_open = true;
     if (ImGui::Begin("Launch Profiler", &window_open, ImGuiWindowFlags_NoScrollbar))
     {
+        // Sync typed settings to backend_payload so preset save sees current values
+        IProfilerBackend* backend = m_backends[m_backend_index].get();
+        m_config.backend_payload = backend->SaveSettings();
+
         // Top: Preset bar
-        IProfilerBackend const* backend = m_backends[m_backend_index].get();
         std::string load_name = RenderPresetBar(
             m_preset_manager, m_config.profiler_id,
             m_current_preset_name, m_config, backend, m_app_window);
@@ -88,6 +92,7 @@ void ProfilerLauncherDialog::Render()
             if (m_preset_manager.LoadPreset(load_name, m_config.profiler_id, loaded))
             {
                 m_config = loaded;
+                m_backends[m_backend_index]->LoadSettings(m_config.backend_payload);
                 // Find matching tool index
                 auto tools = backend->GetTools();
                 for (size_t i = 0; i < tools.size(); i++)
@@ -247,7 +252,7 @@ void ProfilerLauncherDialog::RenderRightPane()
         {
             if (ImGui::BeginTabItem(tab.display_name.c_str()))
             {
-                tab.render_fn(m_config.backend_payload);
+                tab.render_fn();
                 ImGui::EndTabItem();
             }
         }
@@ -335,7 +340,10 @@ void ProfilerLauncherDialog::Update()
 
 void ProfilerLauncherDialog::OnLaunchClicked()
 {
-    IProfilerBackend const* backend = m_backends[m_backend_index].get();
+    IProfilerBackend* backend = m_backends[m_backend_index].get();
+
+    // Sync typed settings to payload before launch/validation
+    m_config.backend_payload = backend->SaveSettings();
 
     // Validate
     std::string err = backend->Validate(m_config);
@@ -544,7 +552,8 @@ void ProfilerLauncherDialog::SwitchBackend(int index)
     m_tool_index = 0;
     m_config.profiler_id = m_backends[index]->Id();
     m_config.tool_id = m_backends[index]->GetTools()[0].id;
-    m_config.backend_payload = m_backends[index]->DefaultPayload();
+    m_backends[index]->LoadSettings(jt::Json());
+    m_config.backend_payload = m_backends[index]->SaveSettings();
 }
 
 void ProfilerLauncherDialog::LoadFromSettings()

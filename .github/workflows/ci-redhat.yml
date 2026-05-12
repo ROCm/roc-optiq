@@ -112,6 +112,16 @@ jobs:
             --no-tests=error \
             --output-junit ctest-results.xml
 
+      - name: Upload Test Logs (on failure)
+        if: steps.run_tests.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-rhel-${{ matrix.os-version }}
+          path: |
+            ${{ env.BUILD_DIR }}/ctest-results.xml
+            ${{ env.BUILD_DIR }}/Testing/Temporary/**
+          retention-days: 7
+
       - name: Prepare Distribution Artifacts
         run: |
           mkdir ${{ env.DIST_DIR }}
@@ -154,15 +164,5 @@ jobs:
       - name: Announce Test Failure
         if: steps.run_tests.outcome == 'failure'
         run: |
-          echo "Tests have failed!"
+          echo "Tests have failed! Please see uploaded CTest logs for more information"
           exit 1
-
-      - name: Upload Test Logs (on failure)
-        if: steps.run_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-logs-rhel-${{ matrix.os-version }}
-          path: |
-            ${{ env.BUILD_DIR }}/ctest-results.xml
-            ${{ env.BUILD_DIR }}/Testing/Temporary/**
-          retention-days: 7

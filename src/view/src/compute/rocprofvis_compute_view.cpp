@@ -18,6 +18,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "rocprofvis_compute_code_view.h"
 
 #include "spdlog/spdlog.h"
 
@@ -153,6 +154,7 @@ ComputeView::CreateView()
     m_tab_container->AddTab(TabItem{"Table View", "compute_table_view", std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Workload Details", "compute_workload_view", std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection), false});
     m_tab_container->AddTab(TabItem{"Baseline Comparison", "compute_comparison_view", std::make_shared<ComputeComparisonView>(m_data_provider, m_compute_selection), false});
+    m_tab_container->AddTab(TabItem{ "Source Code View", "compute_code_view", std::make_shared<ComputeCodeView>(), false });
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_tab_container->AddTab(TabItem{"Compute Tester", "compute_tester_view", std::make_shared<ComputeTester>(m_data_provider, m_compute_selection), false});
 #endif

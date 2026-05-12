@@ -26,7 +26,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "widgets/rocprofvis_profiler_launcher_dialog.h"
+#include "rocprofvis_profiler_launcher_dialog.h"
 #include <filesystem>
 #include <sstream>
 #include <utility>

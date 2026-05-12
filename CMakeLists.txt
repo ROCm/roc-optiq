@@ -114,17 +114,17 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
     src/view/src/widgets/rocprofvis_dialog.cpp
     src/view/src/widgets/rocprofvis_notification_manager.cpp
-    src/view/src/widgets/rocprofvis_profiler_launcher_dialog.cpp
-    src/view/src/widgets/rocprofvis_profiler_launcher_dialog.h
-    src/view/src/widgets/rocprofvis_launch_config.cpp
-    src/view/src/widgets/rocprofvis_launch_config.h
-    src/view/src/widgets/rocprofvis_profiler_backend.h
-    src/view/src/widgets/rocprofvis_rocprof_sys_backend.cpp
-    src/view/src/widgets/rocprofvis_rocprof_sys_backend.h
-    src/view/src/widgets/rocprofvis_launch_preset_manager.cpp
-    src/view/src/widgets/rocprofvis_launch_preset_manager.h
-    src/view/src/widgets/rocprofvis_launch_shared_tabs.cpp
-    src/view/src/widgets/rocprofvis_launch_shared_tabs.h
+    src/view/src/profiler/rocprofvis_profiler_launcher_dialog.cpp
+    src/view/src/profiler/rocprofvis_profiler_launcher_dialog.h
+    src/view/src/profiler/rocprofvis_launch_config.cpp
+    src/view/src/profiler/rocprofvis_launch_config.h
+    src/view/src/profiler/rocprofvis_profiler_backend.h
+    src/view/src/profiler/rocprofvis_rocprof_sys_backend.cpp
+    src/view/src/profiler/rocprofvis_rocprof_sys_backend.h
+    src/view/src/profiler/rocprofvis_launch_preset_manager.cpp
+    src/view/src/profiler/rocprofvis_launch_preset_manager.h
+    src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp
+    src/view/src/profiler/rocprofvis_launch_shared_tabs.h
     )
 
 if(COMPUTE_UI_SUPPORT) 
@@ -223,6 +223,7 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)

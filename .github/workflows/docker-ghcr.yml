@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os-release: [ 'ubuntu-22.04', 'ubuntu-24.04', 'rhel-8', 'rhel-9', 'rhel-10' ]
+        os-release: [ 'ubuntu-22.04', 'ubuntu-24.04', 'ubuntu-26.04', 'rhel-8', 'rhel-9', 'rhel-10' ]
 
     steps:
       - name: Checkout Repository

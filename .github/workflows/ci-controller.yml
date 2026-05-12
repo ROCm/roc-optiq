@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Full OS Coverage (default for scheduled runs)
-      UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04" ]'
+      UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04", "26.04" ]'
       REDHAT_FULL_OS_VERSIONS: '[ "8", "9", "10" ]'
       WINDOWS_FULL_OS_VERSIONS: '[ "2022" ]'
       MAC_FULL_OS_VERSIONS: '[ "14", "15", "26" ]'

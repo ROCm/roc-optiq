@@ -675,7 +675,7 @@ TraceView::RenderToolbar()
     VerticalSeparator(&m_settings_manager);
     
     ImFont* icon_font =
-        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+        m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushFont(icon_font, 0.0f);
     if(ImGui::Button(ICON_COMPASS))
@@ -749,7 +749,7 @@ TraceView::RenderAnnotationControls()
     ImGui::SameLine();
 
     ImFont* icon_font =
-        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+        m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
     ImGui::PushFont(icon_font, 0.0f);
     ImGui::BeginGroup();
 
@@ -908,7 +908,7 @@ TraceView::RenderBookmarkControls()
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(0, 0, 0, 0));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(0, 0, 0, 0));
                 ImFont* icon_font =
-                    m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+                    m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
                 ImGui::PushFont(icon_font, 0.0f);
                 if(used)
                 {
@@ -979,7 +979,7 @@ TraceView::RenderFlowControls()
     FlowDisplayMode mode = current_mode;
 
     ImFont* icon_font =
-        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+        m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
     ImGui::PushFont(icon_font, 0.0f);
 
     ImGui::BeginGroup();
@@ -1061,7 +1061,7 @@ TraceView::RenderEventSearch()
         std::pair<bool, bool> search_bar = InputTextWithClear(
             "search_bar", "Search: hipLaunchKernel or \"hip\"\"kernel\"",
             m_event_search->TextInput(), m_event_search->TextInputLimit(),
-            settings.GetFontManager().GetIconFont(FontType::kDefault),
+            settings.GetFontManager().GetFont(FontType::kIcon),
             settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),
             m_event_search->Width());
         if(ImGui::IsItemClicked() && m_event_search->Searched())

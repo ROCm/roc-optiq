@@ -14,12 +14,21 @@ namespace View
 
 enum class FontType
 {
+    kMainText,
+    kIcon,
+    // Used to get the size of the enum, insert new fonts before this line
+    __kLastFont,
+    kDefault = kMainText
+};
+
+enum class FontSize
+{
     kSmall,
     kMedium,
     kMedLarge,
     kLarge,
     // Used to get the size of the enum, insert new fonts before this line
-    __kLastFont,
+    __kLastSize,
     kDefault = kMedium
 };
 
@@ -39,18 +48,17 @@ public:
 
     const std::vector<float> GetAvailableSizes() const;
     ImFont*                  GetFont(FontType font_type);
-    ImFont*                  GetIconFont(FontType font_type);
-    float                    GetFontSize(FontType font_type) const;
+    float                    GetFontSize(FontSize font_type) const;
     int                      GetDPIScaledFontIndex();
     void                     SetFontSize(int idx);
 
-    static constexpr int kNumTypes = static_cast<int>(FontType::__kLastFont);
+    static constexpr int kNumSizes = static_cast<int>(FontSize::__kLastSize);
 
 private:
 
     ImFont* m_text_font = nullptr;
     ImFont* m_icon_font = nullptr;
-    std::array<float, kNumTypes> m_sizes{};
+    std::array<float, kNumSizes> m_sizes{};
     std::vector<float> m_available_sizes;
 };
 

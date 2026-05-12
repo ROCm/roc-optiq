@@ -311,7 +311,7 @@ ComputeView::RenderPresets()
         ImGui::SameLine();
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + style.ItemSpacing.x);
         if(IconButton(ICON_CHEVRON_DOWN,
-                      m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault),
+                      m_settings_manager.GetFontManager().GetFont(FontType::kIcon),
                       ImVec2(0.0f, 0.0f), nullptr, false, style.FramePadding,
                       m_settings_manager.GetColor(Colors::kTransparent),
                       m_settings_manager.GetColor(Colors::kButtonHovered),

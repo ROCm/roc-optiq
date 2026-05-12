@@ -25,7 +25,7 @@ constexpr std::array FONT_AVAILABLE_SIZES = { 7.0f,  8.0f,  9.0f,  10.0f, 11.0f,
                                               23.0f, 25.0f, 27.0f, 29.0f, 33.0f };
 
 // Size offsets applied to the base index to produce kSmall/kMedium/kMedLarge/kLarge.
-static constexpr int kSizeOffsets[FontManager::kNumTypes] = { -1, 0, 1, 2 };
+static constexpr int kSizeOffsets[FontManager::kNumSizes] = { -1, 0, 1, 2 };
 
 FontManager::FontManager() {}
 
@@ -58,7 +58,7 @@ FontManager::SetFontSize(int idx)
         return;
     idx = std::max(0, std::min(idx, static_cast<int>(m_available_sizes.size()) - 1));
 
-    for(int i = 0; i < kNumTypes; ++i)
+    for(int i = 0; i < kNumSizes; ++i)
     {
         int size_idx = std::max(0, std::min(idx + kSizeOffsets[i],
                                             static_cast<int>(m_available_sizes.size()) - 1));
@@ -157,22 +157,22 @@ FontManager::GetAvailableSizes() const
 ImFont*
 FontManager::GetFont(FontType font_type)
 {
-    (void)font_type;
-    return m_text_font;
-}
-
-ImFont*
-FontManager::GetIconFont(FontType font_type)
-{
-    (void)font_type;
-    return m_icon_font;
+    switch(font_type)
+    {
+        case FontType::kMainText:
+            return m_text_font;
+        case FontType::kIcon:
+            return m_icon_font;
+        default:
+            return m_text_font;
+    }
 }
 
 float
-FontManager::GetFontSize(FontType font_type) const
+FontManager::GetFontSize(FontSize font_size) const
 {
-    int idx = static_cast<int>(font_type);
-    if(idx < 0 || idx >= kNumTypes)
+    int idx = static_cast<int>(font_size);
+    if(idx < 0 || idx >= kNumSizes)
         return BASE_FONT_SIZE;
     return m_sizes[idx];
 }

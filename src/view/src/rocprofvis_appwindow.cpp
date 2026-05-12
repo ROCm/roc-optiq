@@ -501,11 +501,11 @@ AppWindow::RenderEmptyState()
     }
 
     // --- Title ---
-    ImFont* title_font = settings.GetFontManager().GetFont(FontType::kLarge);
-    if(title_font) ImGui::PushFont(title_font, settings.GetFontManager().GetFontSize(FontType::kLarge));
+
+    ImGui::PushFont(NULL, settings.GetFontManager().GetFontSize(FontSize::kLarge));
     CenterNextTextItem("Open a trace or project");
     ImGui::TextUnformatted("Open a trace or project");
-    if(title_font) ImGui::PopFont();
+    ImGui::PopFont();
 
     ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
 
@@ -1025,14 +1025,13 @@ AppWindow::RenderAboutDialog()
                               ImGuiWindowFlags_AlwaysAutoResize |
                                   ImGuiWindowFlags_NoMove))
     {
-        ImFont* large_font =
-            SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kLarge);
-        if(large_font) ImGui::PushFont(large_font, SettingsManager::GetInstance().GetFontManager().GetFontSize(FontType::kLarge));
+        ImGui::PushFont(NULL, SettingsManager::GetInstance().GetFontManager().GetFontSize(
+                                  FontSize::kLarge));
 
         ImGui::SetCursorPosX(
             (ImGui::GetWindowSize().x - ImGui::CalcTextSize(NAME_LABEL).x) * 0.5f);
         ImGui::TextUnformatted(NAME_LABEL);
-        if(large_font) ImGui::PopFont();
+        ImGui::PopFont();
 
         ImGui::Spacing();
         ImGui::Separator();

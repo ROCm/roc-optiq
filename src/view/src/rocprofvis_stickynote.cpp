@@ -136,8 +136,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
         ImGui::BeginChild(child_id.c_str(), m_size, false, ImGuiWindowFlags_None);
 
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
         ImGui::PushFont(icon_font, 0.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kTransparent));
@@ -223,7 +222,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         // Edit button (left of close)
         ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size * 2 - margin,
                                    (header_height - edit_btn_size) / 2));
-        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault), 0.0f);
+        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon), 0.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kTransparent));
@@ -240,7 +239,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 
         ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size - margin / 2,
                                    (header_height - edit_btn_size) / 2));
-        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault), 0.0f);
+        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon), 0.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kTransparent));
@@ -307,8 +306,7 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     {
         ImVec2 icon_pos = ImVec2(window_position.x + x, window_position.y + y);
 
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
         ImGui::PushFont(icon_font, 0.0f);
         ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
         ImGui::PopFont();

@@ -470,7 +470,7 @@ XButton(const char* id, const char * tool_tip_label, SettingsManager* settings)
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           settings->GetColor(Colors::kTransparent));
     ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
-    ImGui::PushFont(settings->GetFontManager().GetIconFont(FontType::kDefault), 0.0f);
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kIcon), 0.0f);
     if(id && strlen(id) > 0)
     {
         ImGui::PushID(id);
@@ -499,9 +499,9 @@ SectionTitle(const char* text, bool large, SettingsManager* settings)
         settings = &SettingsManager::GetInstance();
     }
 
-    FontType font_type = large ? FontType::kLarge : FontType::kMedLarge;
-    ImGui::PushFont(settings->GetFontManager().GetFont(font_type),
-                    settings->GetFontManager().GetFontSize(font_type));
+    FontSize font_size = large ? FontSize::kLarge : FontSize::kMedLarge;
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kDefault),
+                    settings->GetFontManager().GetFontSize(font_size));
     ImGui::SeparatorText(text);
     ImGui::PopFont();
 }

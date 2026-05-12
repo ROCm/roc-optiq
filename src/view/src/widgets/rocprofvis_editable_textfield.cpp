@@ -55,7 +55,7 @@ EditableTextField::DrawPlainText()
     if(m_show_reset_button)
     {
         if(IconButton(ICON_ARROWS_CYCLE,
-                      settings.GetFontManager().GetIconFont(FontType::kDefault)))
+                      settings.GetFontManager().GetFont(FontType::kIcon)))
         {
             RevertToDefault();
         }
@@ -152,7 +152,7 @@ float
 EditableTextField::ButtonSize() const
 {
     ImFont* icon_font =
-        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+        SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
     ImGui::PushFont(icon_font, 0.0f);
     float size = ImGui::CalcTextSize(ICON_ARROWS_CYCLE).x;
     ImGui::PopFont();

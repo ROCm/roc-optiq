@@ -485,8 +485,8 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         }
 
         ImGui::Text("%u events", chart_item.event.m_child_count);
-        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kSmall),
-                        m_settings.GetFontManager().GetFontSize(FontType::kSmall));
+        ImGui::PushFont(NULL,
+                        m_settings.GetFontManager().GetFontSize(FontSize::kSmall));
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
                             ImVec2(ImGui::GetStyle().CellPadding.x, 0.0f));
         if(ImGui::BeginTable("ChildEventsTable", 3,

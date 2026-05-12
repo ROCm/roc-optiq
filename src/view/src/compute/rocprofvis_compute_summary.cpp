@@ -426,8 +426,7 @@ ComputeTopKernels::RenderChartContent()
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + plot_style.PlotPadding.y);
     ImGui::BeginGroup();
-    if(IconButton(ICON_CHART_PIE,
-                  m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+    if(IconButton(ICON_CHART_PIE, m_settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(0, 0), nullptr, false, style.FramePadding,
                   m_settings.GetColor(m_display_mode == Pie ? Colors::kButton
                                                             : Colors::kTransparent),
@@ -437,8 +436,7 @@ ComputeTopKernels::RenderChartContent()
         m_display_mode = Pie;
     }
     ImGui::SameLine();
-    if(IconButton(ICON_CHART_BAR,
-                  m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+    if(IconButton(ICON_CHART_BAR, m_settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(0, 0), nullptr, false, style.FramePadding,
                   m_settings.GetColor(m_display_mode == Bar ? Colors::kButton
                                                             : Colors::kTransparent),

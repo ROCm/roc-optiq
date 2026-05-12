@@ -284,7 +284,7 @@ SettingsPanel::RenderDisplayOptions()
     ImFont* preview_font = m_fonts.GetFont(FontType::kDefault);
     int     preview_idx  = m_font_settings.dpi_scaling ? m_fonts.GetDPIScaledFontIndex()
                                                         : m_font_settings.size_index;
-    float preview_size = available_sizes.empty() ? m_fonts.GetFontSize(FontType::kDefault)
+    float preview_size = available_sizes.empty() ? m_fonts.GetFontSize(FontSize::kDefault)
                        : available_sizes[std::max(0, std::min(preview_idx,
                              static_cast<int>(available_sizes.size()) - 1))];
     if(preview_font)
@@ -377,7 +377,7 @@ SettingsPanel::ResetButton()
                           m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushFont(m_fonts.GetIconFont(FontType::kDefault), 0.0f);
+    ImGui::PushFont(m_fonts.GetFont(FontType::kIcon), 0.0f);
     clicked = ImGui::Button(ICON_ARROWS_CYCLE);
     ImGui::PopFont();
     ImGui::PopStyleColor(3);

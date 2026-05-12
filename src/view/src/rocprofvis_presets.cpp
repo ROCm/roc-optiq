@@ -314,7 +314,7 @@ PresetBrowser::Render()
     if(ImGui::IsPopupOpen("preset_browser"))
     {
         const ImGuiStyle& style = m_settings.GetDefaultStyle();
-        ImFont* icons = m_settings.GetFontManager().GetIconFont(FontType::kDefault);
+        ImFont* icons = m_settings.GetFontManager().GetFont(FontType::kIcon);
         ImGui::SetNextWindowSize(ImGui::GetWindowSize() * 0.2f);
         ImGui::SetNextWindowPos(
             ImVec2(m_pos_x - ImGui::GetWindowWidth() * 0.2f, m_pos_y));

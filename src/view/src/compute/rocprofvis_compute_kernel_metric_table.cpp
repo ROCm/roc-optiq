@@ -223,7 +223,7 @@ KernelMetricTable::Render()
     int remove_index = -1;
 
     SettingsManager& settings     = SettingsManager::GetInstance();
-    ImFont*          icon_font = settings.GetFontManager().GetIconFont(FontType::kDefault);
+    ImFont*           icon_font    = settings.GetFontManager().GetFont(FontType::kIcon);
     const ImGuiStyle &style = settings.GetDefaultStyle();
     const float      cell_padding = style.CellPadding.x * 2.0f;
     const float      char_width = ImGui::CalcTextSize("M").x;

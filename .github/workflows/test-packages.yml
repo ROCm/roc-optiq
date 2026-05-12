@@ -6,7 +6,8 @@ on:
     # 1 Hour after nightly builds
     - cron: '0 5 * * *'
   pull_request:
-    - '.github/workflows/test-packages.yml'
+    paths:
+      - '.github/workflows/test-packages.yml'
 
 env:
   AWS_S3_BUCKET_BASE_PATH: "test"

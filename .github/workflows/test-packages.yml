@@ -39,4 +39,5 @@ jobs:
           echo "deb [trusted=yes] https://${{ secrets.AWS_S3_BUCKET }}.s3.amazonaws.com/test/2026_05_12/ubuntu/${{ matrix.os-version }} /" \
             | tee /etc/apt/sources.list.d/optiq-nightly
           apt update
+          apt list --upgradable
           apt install roc-optiq

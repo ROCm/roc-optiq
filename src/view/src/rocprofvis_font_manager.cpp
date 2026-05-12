@@ -131,6 +131,9 @@ FontManager::Init()
         m_text_font                = io.Fonts->AddFontDefault(&fallback_config);
     }
 
+    const char* code_font_path = "C:\\ROCm\\JetBrainsMono\\fonts\\ttf\\JetBrainsMono-Regular.ttf";
+    m_code_font = io.Fonts->AddFontFromFileTTF(code_font_path, 0.0f);
+
     ImFontConfig icon_config;
     icon_config.FontDataOwnedByAtlas = false;
     m_icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
@@ -163,6 +166,8 @@ FontManager::GetFont(FontType font_type)
             return m_text_font;
         case FontType::kIcon:
             return m_icon_font;
+        case FontType::kCode: 
+            return m_code_font;
         default:
             return m_text_font;
     }

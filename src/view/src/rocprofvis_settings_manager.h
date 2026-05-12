@@ -99,6 +99,7 @@ enum class Colors
     kTableRowBgAlt,
     kEventHighlight,
     kEventSearchHighlight,
+    kAreaOfInterest,
     kLineChartColor,
     kButton,
     kButtonHovered,

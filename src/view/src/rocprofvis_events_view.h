@@ -3,8 +3,10 @@
 
 #pragma once
 #include "widgets/rocprofvis_split_containers.h"
-#include <string>
+#include <cstdint>
 #include <list>
+#include <string>
+#include <string_view>
 
 namespace RocProfVis
 {
@@ -57,6 +59,14 @@ private:
     int                                      m_event_item_id;
     int                                      m_context_menu_flow_index;
     int                                      m_context_menu_flow_column;
+    // Flow row hovered last frame. Used to paint the row background
+    // (InfiniteScrollTable-style) and to drive the timeline event highlight.
+    uint64_t                                 m_flow_hover_owner_event_id;
+    uint64_t                                 m_flow_hover_flow_event_id;
+    uint64_t                                 m_flow_hover_flow_track_id;
+    uint64_t                                 m_frame_flow_hover_owner_event_id;
+    uint64_t                                 m_frame_flow_hover_flow_event_id;
+    uint64_t                                 m_frame_flow_hover_flow_track_id;
     const std::string_view DATA_COPIED_NOTIFICATION = "Data was copied";
 };
 

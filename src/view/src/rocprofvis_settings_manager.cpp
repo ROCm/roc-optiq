@@ -65,6 +65,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(39, 43, 56, 255),     // Colors::kTableRowBgAlt
     IM_COL32(106, 164, 232, 230),  // Colors::kEventHighlight
     IM_COL32(130, 210, 178, 230),  // Colors::kEventSearchHighlight
+    IM_COL32(106, 164, 232, 85),   // Colors::kAreaOfInterest
     IM_COL32(120, 162, 255, 120),  // Colors::kLineChartColor
     IM_COL32(39, 43, 56, 255),     // Colors::kButton
     IM_COL32(50, 59, 76, 255),     // Colors::kButtonHovered
@@ -143,6 +144,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(250, 251, 253, 255),  // Colors::kTableRowBgAlt
     IM_COL32(54, 132, 214, 220),   // Colors::kEventHighlight
     IM_COL32(72, 174, 136, 220),   // Colors::kEventSearchHighlight
+    IM_COL32(54, 132, 214, 35),    // Colors::kAreaOfInterest
     IM_COL32(88, 132, 245, 105),   // Colors::kLineChartColor
     IM_COL32(244, 246, 250, 255),  // Colors::kButton
     IM_COL32(232, 236, 244, 255),  // Colors::kButtonHovered

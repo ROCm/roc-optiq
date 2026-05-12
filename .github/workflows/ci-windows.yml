@@ -125,10 +125,6 @@ jobs:
           mkdir ${{ env.DIST_DIR }}
           cp ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
-          ls -l ${{ env.BUILD_DIR }}/
-          ls -l ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/
-          ls -l ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/
-
       
       - name: Upload GitHub Artifacts
         if: ${{ inputs.upload_to_github }}
@@ -166,6 +162,6 @@ jobs:
         with:
           name: test-logs-windows-${{ matrix.os-version }}
           path: |
-            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/ctest-results.xml
-            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/Testing/Temporary/**
+            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/ctest-results.xml
+            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/Testing/Temporary/**
           retention-days: 1

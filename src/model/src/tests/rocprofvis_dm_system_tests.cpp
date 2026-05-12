@@ -702,8 +702,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
                                          "Record id={0}, timestamp={1}, op={2}, "
                                          "op_str={3}, type={4}, symbol={5}, "
                                          "level={6}",
-                                         event_id, timestamp, op, op_str, type_str, symbol_str,
-                                         event_level);
+                                         event_id, timestamp, op, op_str, type_str,
+                                         symbol_str, event_level);
 
                             spdlog::info("Testing multithreaded access to "
                                          "database retrieving flow, stack and "
@@ -794,8 +794,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
                                                            "event_id={2}, timestamp={3}, "
                                                            "end_ts={4}, category={5}, "
                                                            "symbol={6}, level={7}",
-                                        k, endpoint_track_id, event_id_num, event_timestamp,
-                                        end_timestamp,
+                                        k, endpoint_track_id, event_id_num,
+                                        event_timestamp, end_timestamp,
                                         endpoint_category ? endpoint_category : "(null)",
                                         endpoint_symbol ? endpoint_symbol : "(null)",
                                         endpoint_level);
@@ -1077,9 +1077,13 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
         std::string sort_column             = "total_duration";
         char*       built_query             = nullptr;
         rocprofvis_dm_result_t build_result = rocprofvis_db_build_table_query(
-            m_db, m_start_time, m_end_time, 1, (rocprofvis_db_track_selection_t) op,
-            nullptr, nullptr, nullptr, nullptr, sort_column.c_str(), kRPVDMSortOrderAsc,
-            0, nullptr, 0, 0, false, true, &built_query);
+            m_db, kRPVDMTableUseCaseEventTrackTable, m_start_time, m_end_time, 1,
+            (rocprofvis_db_track_selection_t) op, nullptr, nullptr,
+            "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, "
+            "MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) "
+            "AS total_duration",
+            "name", sort_column.c_str(), kRPVDMSortOrderDesc, 0, nullptr, 0, 0, false,
+            &built_query);
         REQUIRE(kRocProfVisDmResultSuccess == build_result);
         REQUIRE(built_query != nullptr);
 
@@ -1143,9 +1147,13 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
         std::string sort_column             = "total_duration";
         char*       csv_query               = nullptr;
         rocprofvis_dm_result_t build_result = rocprofvis_db_build_table_query(
-            m_db, m_start_time, m_end_time, 1, (rocprofvis_db_track_selection_t) op,
-            nullptr, nullptr, nullptr, nullptr, sort_column.c_str(), kRPVDMSortOrderAsc,
-            0, nullptr, 0, 0, false, true, &csv_query);
+            m_db, kRPVDMTableUseCaseEventTrackTable, m_start_time, m_end_time, 1,
+            (rocprofvis_db_track_selection_t) op, nullptr, nullptr,
+            "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, "
+            "MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) "
+            "AS total_duration",
+            "name", sort_column.c_str(), kRPVDMSortOrderDesc, 0, nullptr, 0, 0, false,
+            &csv_query);
         REQUIRE(kRocProfVisDmResultSuccess == build_result);
         REQUIRE(csv_query != nullptr);
 

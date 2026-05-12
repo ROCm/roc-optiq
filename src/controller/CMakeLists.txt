@@ -23,6 +23,7 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_table.cpp    
     src/rocprofvis_controller.cpp    
     src/rocprofvis_controller_job_system.cpp	
+	src/rocprofvis_controller_analysis.cpp
     src/system/rocprofvis_controller_event.cpp
     src/system/rocprofvis_controller_graph.cpp
     src/system/rocprofvis_controller_sample.cpp

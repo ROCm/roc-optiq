@@ -393,6 +393,14 @@ typedef enum rocprofvis_dm_table_row_property_t {
     kRPVDMExtTableRowCellValueCharPtrIndexed
 } rocprofvis_dm_table_row_property_t;
 
+// Table use cases
+typedef enum rocprofvis_dm_table_use_case_enum_t {
+    kRPVDMTableUseCaseEventTrackTable,
+    kRPVDMTableUseCaseSampleTrackTable,
+    kRPVDMTableUseCaseEventSearch,
+    kRPVDMTableUseCaseAnalysis,
+} rocprofvis_dm_table_use_case_enum_t;
+
 // Type of data can be requested per event
 typedef enum rocprofvis_dm_event_property_type_t {
     // Flow trace

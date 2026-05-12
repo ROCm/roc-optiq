@@ -134,16 +134,15 @@ private:
     void                            ClearTimeRangeSelection();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
-
     EventManager::SubscriptionToken m_new_track_token;
     EventManager::SubscriptionToken m_font_changed_token;
     EventManager::SubscriptionToken m_set_view_range_token;
-    int                             m_dragged_sticky_id;
-    const std::vector<double>*      m_histogram;
-    float                           m_ruler_height;
-    float                           m_ruler_padding;
-    double                              m_min_y;
-    double                              m_max_y;
+    EventManager::SubscriptionToken m_timeline_time_range_changed_token;
+
+    int                                 m_dragged_sticky_id;
+    const std::vector<double>*          m_histogram;
+    float                               m_ruler_height;
+    float                               m_ruler_padding;
     float                               m_sidebar_size;
     float                               m_scroll_position_y;
     float                               m_content_max_y_scroll;

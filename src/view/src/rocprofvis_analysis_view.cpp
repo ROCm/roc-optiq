@@ -79,6 +79,9 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     m_timeline_track_selection_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimelineTrackSelectionChanged),
         time_line_selection_changed_handler);
+    m_timeline_range_selection_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged),
+        time_line_selection_changed_handler);
     m_timeline_event_selection_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         time_line_selection_changed_handler);
@@ -90,6 +93,9 @@ AnalysisView::~AnalysisView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineTrackSelectionChanged),
         m_timeline_track_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged),
+        m_timeline_range_selection_changed_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         m_timeline_event_selection_changed_token);
@@ -132,6 +138,22 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
                     m_track_details->HandleTrackSelectionChanged(
                         selection_changed_event->GetTrackID(),
                         selection_changed_event->TrackSelected());
+                }
+            }
+        }
+        else if(event_type == RocEventType::kTimelineTimeRangeChangedEvent)
+        {
+            std::shared_ptr<TimeRangeSelectionChangedEvent> selection_changed_event =
+                std::static_pointer_cast<TimeRangeSelectionChangedEvent>(e);
+            if(selection_changed_event)
+            {
+                if(m_event_table)
+                {
+                    m_event_table->HandleTrackSelectionChanged();
+                }
+                if(m_sample_table)
+                {
+                    m_sample_table->HandleTrackSelectionChanged();
                 }
             }
         }

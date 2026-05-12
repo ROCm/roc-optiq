@@ -48,9 +48,8 @@ private:
         uint64_t m_sort_column;
         rocprofvis_controller_sort_order_t m_sort_order;
         std::vector<uint32_t> m_tracks;
-        rocprofvis_controller_track_type_t m_track_type;
         std::vector<std::string> m_string_table_filters;
-        bool m_summary;
+        rocprofvis_dm_table_use_case_enum_t m_use_case;
         double m_start_ts;
         double m_end_ts;
     };
@@ -58,10 +57,9 @@ private:
     rocprofvis_result_t UnpackArguments(Arguments& args, QueryArguments& out) const;
 
     std::vector<uint32_t> m_tracks;
-    rocprofvis_controller_track_type_t m_track_type;
     std::vector<std::string> m_string_table_filters;
     std::vector<const char*> m_string_table_filters_ptr;
-    bool m_summary;
+    rocprofvis_dm_table_use_case_enum_t m_use_case;
     double m_start_ts;
     double m_end_ts;
 };

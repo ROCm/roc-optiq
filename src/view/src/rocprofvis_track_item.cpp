@@ -28,6 +28,7 @@ inline constexpr uint64_t DEFAULT_CHUNK_DURATION   = TimeConstants::ns_per_s * 3
 TrackItem::TrackItem(DataProvider& dp, uint64_t id,
                      std::shared_ptr<TimePixelTransform> tpt)
 : m_data_provider(dp)
+, m_track_metadata(nullptr)
 , m_track_id(id)
 , m_track_height(DEFAULT_TRACK_HEIGHT)
 , m_track_content_height(0.0f)
@@ -49,6 +50,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 , m_meta_area_label("")
 , m_pill("", false, false)
 , m_distance_to_view_y(0.0f)
+, m_analysis_request_pending(false)
 {
     if(m_track_project_settings.Valid())
     {
@@ -63,7 +65,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
         spdlog::error("TrackItem: failed to get TrackInfo for track_id {}", m_track_id);
         return;
     }
-
+    m_track_metadata = track_info;
     m_name = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
     SetDefaultPillLabel(track_info);
@@ -468,6 +470,10 @@ TrackItem::Update()
             FetchHelper();
         }
     }
+    if(m_analysis_request_pending)
+    {
+        RequestAnalysis();
+    }
 }
 
 void
@@ -750,6 +756,12 @@ bool
 TrackItem::HasPendingRequests() const
 {
     return !m_pending_requests.empty();
+}
+
+void
+TrackItem::RequestAnalysis()
+{
+    // no op
 }
 
 TrackProjectSettings::TrackProjectSettings(const std::string& project_id,

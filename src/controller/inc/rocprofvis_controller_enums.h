@@ -638,7 +638,6 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
     kRPVControllerTableArgsOpTypesIndexed            = 0xE000000E,
     kRPVControllerTableArgsNumStringTableFilters     = 0xE000000F,
     kRPVControllerTableArgsStringTableFiltersIndexed = 0xE0000010,
-    kRPVControllerTableArgsSummary                   = 0xE0000011,   
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t

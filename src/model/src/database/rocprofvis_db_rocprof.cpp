@@ -1863,31 +1863,6 @@ rocprofvis_dm_string_t RocprofDatabase::GetEventOperationQuery(const rocprofvis_
     }
 }
 
-rocprofvis_dm_result_t
-RocprofDatabase::BuildTableSummaryClause(bool sample_query,
-                                   rocprofvis_dm_string_t& select,
-                                   rocprofvis_dm_string_t& group_by)
-{
-    if(sample_query)
-    {
-        select += Builder::COUNTER_ID_PUBLIC_NAME;
-        select += ", AVG(";
-        select += Builder::COUNTER_VALUE_PUBLIC_NAME;
-        select += ") AS avg_value, MIN(";
-        select += Builder::COUNTER_VALUE_PUBLIC_NAME;
-        select += ") AS min_value, MAX(";
-        select += Builder::COUNTER_VALUE_PUBLIC_NAME;
-        select += ") AS max_value";
-        group_by += Builder::COUNTER_ID_PUBLIC_NAME;
-    }
-    else
-    {
-        select = "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration";
-        group_by = "name";
-    }
-    return kRocProfVisDmResultSuccess;
-}
-
 rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)

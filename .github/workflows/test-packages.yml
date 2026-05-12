@@ -1,0 +1,41 @@
+name: Test Uploaed Packages
+run-name: test-packages
+
+on:
+  schedule:
+    # 1 Hour after nightly builds
+    - cron: '0 5 * * *'
+  pull_request:
+    - '.github/workflows/test-packages.yml'
+
+env:
+  AWS_S3_BUCKET_BASE_PATH: "test"
+
+jobs:
+  ubuntu:
+    name: Ubuntu ${{ matrix.os-version }} • Test .deb Package
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    container:
+      image: ghcr.io/rocm/optiq-ci-ubuntu:${{ matrix.os-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os-version: [ '22.04', '24.04', '26.04' ]
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Repository
+        shell: bash
+        run: |
+          echo "deb [trusted=yes] https://${{ secrets.AWS_S3_BUCKET }}.s3.amazonaws.com/test/2026_05_12/ubuntu/${{ matrix.os-version }} /" \
+            | sudo tee /etc/apt/sources.list.d/optiq-nightly
+          apt update
+          apt install optiq-nightly

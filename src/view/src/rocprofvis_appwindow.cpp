@@ -704,133 +704,297 @@ AppWindow::Render()
 void
 AppWindow::RenderEmptyState()
 {
-    SettingsManager&            settings     = SettingsManager::GetInstance();
-    const InternalSettings&     internal     = settings.GetInternalSettings();
+    SettingsManager&              settings     = SettingsManager::GetInstance();
+    const InternalSettings&       internal     = settings.GetInternalSettings();
     const std::list<std::string>& recent_files = internal.recent_files;
-    const float font_size     = ImGui::GetFontSize();
-    const float window_width  = ImGui::GetContentRegionAvail().x;
-    const float window_height = ImGui::GetContentRegionAvail().y;
-    const float card_width    = std::min(window_width - font_size * 2.0f,
-                                         font_size * EMPTY_STATE_CONTENT_EM);
-    const float card_padding  = font_size * 1.8f;
+    const float fs = ImGui::GetFontSize();
+    const float win_w = ImGui::GetContentRegionAvail().x;
+    const float win_h = ImGui::GetContentRegionAvail().y;
+    const ImVec4 accent_v = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kAccentRed));
+    const ImVec4 dim_v    = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+    ImFont* title_font    = settings.GetFontManager().GetFont(FontType::kLarge);
     std::string recent_file_to_open;
 
-    // Vertically center the dialog card
-    ImGui::SetCursorPosY(window_height * 0.18f);
-    ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
+    // ═══ TOP PANEL — Logo Bar ═══
+    float top_h = fs * 3.8f;
+    ImVec2 top_start = ImGui::GetCursorScreenPos();
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        top_start, ImVec2(top_start.x + win_w, top_start.y + top_h),
+        ImGui::GetColorU32(ImGuiCol_FrameBg));
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(top_start.x, top_start.y + top_h - 2),
+        ImVec2(top_start.x + win_w, top_start.y + top_h - 2),
+        settings.GetColor(Colors::kAccentRed), 2.0f);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(card_padding, card_padding));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
-                        settings.GetDefaultStyle().ChildRounding);
-    ImGui::BeginChild("welcome_dialog", ImVec2(card_width, 0.0f),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
-                      ImGuiWindowFlags_NoScrollbar);
-
-    // --- Logo ---
     if(m_amd_logo.Valid())
     {
-        const float avail      = ImGui::GetContentRegionAvail().x;
-        const float logo_width = std::min(avail * 0.42f, font_size * EMPTY_STATE_LOGO_EM);
-        const float logo_height =
-            logo_width * static_cast<float>(m_amd_logo.GetHeight()) /
-            static_cast<float>(m_amd_logo.GetWidth());
-        const float offset = (avail - logo_width) * 0.5f;
-        ImVec2      logo_pos = ImGui::GetCursorScreenPos();
-        logo_pos.x += offset;
-        ImGui::Dummy(ImVec2(avail, logo_height));
+        const float logo_target_h = top_h * 0.55f;
+        const float aspect = static_cast<float>(m_amd_logo.GetWidth()) /
+                              static_cast<float>(m_amd_logo.GetHeight());
+        const float logo_w = logo_target_h * aspect;
+        const float logo_y = top_start.y + (top_h - logo_target_h) * 0.5f;
+        ImVec2 logo_pos = ImVec2(top_start.x + fs * 1.2f, logo_y);
         bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
-        m_amd_logo.Render(logo_pos, logo_width, is_dark);
-        ImGui::Dummy(ImVec2(0.0f, font_size));
+        m_amd_logo.Render(logo_pos, logo_w, is_dark);
+
+        ImGui::SetCursorScreenPos(ImVec2(logo_pos.x + logo_w + fs * 0.8f,
+                                          top_start.y + (top_h - fs * 2.0f) * 0.5f));
+    }
+    else
+    {
+        ImGui::SetCursorScreenPos(ImVec2(top_start.x + fs * 1.2f,
+                                          top_start.y + (top_h - fs * 2.0f) * 0.5f));
     }
 
-    // --- Title ---
-    ImFont* title_font = settings.GetFontManager().GetFont(FontType::kLarge);
+    float text_y = ImGui::GetCursorScreenPos().y;
+
     if(title_font) ImGui::PushFont(title_font);
-    CenterNextTextItem("Open a trace or project");
-    ImGui::TextUnformatted("Open a trace or project");
+    float title_h = ImGui::GetFontSize();
+    ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x,
+                                      top_start.y + (top_h - title_h) * 0.5f));
+    ImGui::TextColored(accent_v, "ROCm");
+    ImGui::SameLine(0, 4);
+    ImGui::TextUnformatted("Optiq");
     if(title_font) ImGui::PopFont();
 
-    ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
+    ImGui::SameLine(0, fs * 0.8f);
+    float badge_y = top_start.y + (top_h - fs) * 0.5f;
+    ImVec2 badge_pos = ImVec2(ImGui::GetCursorScreenPos().x, badge_y);
+    ImGui::SetCursorScreenPos(badge_pos);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.05f, 0.05f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.05f, 0.05f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.3f, 0.05f, 0.05f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, accent_v);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(fs * 0.4f, 2.0f));
+    ImGui::SmallButton("BETA");
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(4);
 
-    // --- Subtitle ---
-    CenterNextTextItem("Drag and drop files here, or open one from disk.");
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextUnformatted("Drag and drop files here, or open one from disk.");
-    ImGui::PopStyleColor();
+    ImGui::SetCursorPosY(top_start.y - ImGui::GetWindowPos().y + top_h + fs * 0.5f);
 
-    ImGui::Dummy(ImVec2(0.0f, font_size * 0.9f));
+    // ═══ BOTTOM SPLIT — Left + Right panels ═══
+    float left_w = win_w * 0.32f;
+    if(left_w < fs * 18.0f) left_w = fs * 18.0f;
+    if(left_w > fs * 26.0f) left_w = fs * 26.0f;
+    float bottom_h = win_h - top_h - fs * 0.5f;
 
-    // --- Open button ---
-    const float button_width = font_size * EMPTY_STATE_BUTTON_EM;
-    CenterNextItem(button_width);
-    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccentRed));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          settings.GetColor(Colors::kAccentRedHover));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          settings.GetColor(Colors::kAccentRedActive));
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextOnAccent));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                        ImVec2(ImGui::GetStyle().FramePadding.x,
-                               ImGui::GetStyle().FramePadding.y + 4.0f));
-    if(ImGui::Button("Open File", ImVec2(button_width, 0.0f)))
+    // ─── LEFT PANEL — File Options ───
+    ImGui::BeginChild("##left_panel", ImVec2(left_w, bottom_h), ImGuiChildFlags_None);
+    ImGui::Dummy(ImVec2(0, fs * 0.3f));
+
+    ImGui::TextColored(accent_v, "  Start");
+    ImGui::Dummy(ImVec2(0, fs * 0.3f));
+
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, settings.GetColor(Colors::kHighlightChart));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, settings.GetColor(Colors::kSelection));
+
+    ImGui::Indent(fs * 0.8f);
+    if(ImGui::Selectable("  Open Trace File...", false, 0, ImVec2(left_w - fs * 2.0f, fs * 2.2f)))
     {
         HandleOpenFile();
     }
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(4);
-    if(ImGui::IsItemHovered())
-    {
-        SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
-    }
+    if(ImGui::IsItemHovered()) SetTooltipStyled("Open a .db, .rpd, .csv, or .yaml trace file");
+    ImGui::PushStyleColor(ImGuiCol_Text, dim_v);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - fs * 1.1f);
+    ImGui::Indent(fs * 1.2f);
+    ImGui::TextUnformatted("Open a .db, .rpd, or .csv trace file");
+    ImGui::Unindent(fs * 1.2f);
+    ImGui::PopStyleColor();
+    ImGui::Dummy(ImVec2(0, fs * 0.2f));
 
-    // --- Recent files ---
+    if(ImGui::Selectable("  Open Project...", false, 0, ImVec2(left_w - fs * 2.0f, fs * 2.2f)))
+    {
+        HandleOpenFile();
+    }
+    if(ImGui::IsItemHovered()) SetTooltipStyled("Open a saved .rpv project file");
+    ImGui::PushStyleColor(ImGuiCol_Text, dim_v);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - fs * 1.1f);
+    ImGui::Indent(fs * 1.2f);
+    ImGui::TextUnformatted("Load a previously saved .rpv project");
+    ImGui::Unindent(fs * 1.2f);
+    ImGui::PopStyleColor();
+    ImGui::Dummy(ImVec2(0, fs * 0.2f));
+
+    ImGui::TextColored(dim_v, "    Drag & drop files onto the window");
+    ImGui::Unindent(fs * 0.8f);
+
+    ImGui::PopStyleColor(2);
+
+    ImGui::Dummy(ImVec2(0, fs * 0.5f));
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0, fs * 0.5f));
+
+    ImGui::TextColored(accent_v, "  Recent");
+    ImGui::Dummy(ImVec2(0, fs * 0.3f));
+
     if(!recent_files.empty())
     {
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
-        ImGui::Separator();
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
-
-        CenterNextTextItem("Recent Files");
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextUnformatted("Recent Files");
-        ImGui::PopStyleColor();
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
-
-        const float rf_width =
-            std::min(ImGui::GetContentRegionAvail().x * 0.78f,
-                     font_size * EMPTY_STATE_RECENT_FILES_EM);
-
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                              settings.GetColor(Colors::kHighlightChart));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                              settings.GetColor(Colors::kSelection));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, settings.GetColor(Colors::kSelection));
+        ImGui::Indent(fs * 0.8f);
         int shown = 0;
         for(const std::string& file : recent_files)
         {
             if(shown++ >= static_cast<int>(MAX_RECENT_FILES)) break;
-
             const std::filesystem::path fpath(file);
             const std::string fname = fpath.filename().empty() ? file : fpath.filename().string();
-
             ImGui::PushID(file.c_str());
-            CenterNextItem(rf_width);
-
-            if(ImGui::Selectable(fname.c_str(), false, 0, ImVec2(rf_width, 0.0f)))
+            if(ImGui::Selectable(fname.c_str(), false, 0, ImVec2(left_w - fs * 2.5f, 0)))
             {
                 recent_file_to_open = file;
             }
-            if(ImGui::IsItemHovered())
-            {
-                SetTooltipStyled("%s", file.c_str());
-            }
-
+            if(ImGui::IsItemHovered()) SetTooltipStyled("%s", file.c_str());
             ImGui::PopID();
         }
+        ImGui::Unindent(fs * 0.8f);
         ImGui::PopStyleColor(2);
     }
+    else
+    {
+        ImGui::Indent(fs * 0.8f);
+        ImGui::TextColored(dim_v, "Recent files will appear here.");
+        ImGui::Unindent(fs * 0.8f);
+    }
+
+    ImGui::Dummy(ImVec2(0, fs * 0.5f));
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0, fs * 0.5f));
+
+    ImGui::TextColored(accent_v, "  Formats");
+    ImGui::Dummy(ImVec2(0, fs * 0.2f));
+    ImGui::Indent(fs * 0.8f);
+    ImGui::TextColored(ImVec4(0.35f, 0.6f, 0.85f, 1.0f), ".db");
+    ImGui::SameLine(); ImGui::TextColored(dim_v, "rocprofv3");
+    ImGui::TextColored(ImVec4(0.35f, 0.6f, 0.85f, 1.0f), ".rpd");
+    ImGui::SameLine(); ImGui::TextColored(dim_v, "RPD tracer");
+    ImGui::TextColored(ImVec4(0.35f, 0.6f, 0.85f, 1.0f), ".csv");
+    ImGui::SameLine(); ImGui::TextColored(dim_v, "Compute Profiler");
+    ImGui::TextColored(ImVec4(0.35f, 0.6f, 0.85f, 1.0f), ".rpv");
+    ImGui::SameLine(); ImGui::TextColored(dim_v, "Optiq Project");
+    ImGui::Unindent(fs * 0.8f);
 
     ImGui::EndChild();
-    ImGui::PopStyleVar(2);
+
+    // ─── Vertical separator line ───
+    ImGui::SameLine();
+    ImVec2 sep_pos = ImGui::GetCursorScreenPos();
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(sep_pos.x, sep_pos.y),
+        ImVec2(sep_pos.x, sep_pos.y + bottom_h),
+        settings.GetColor(Colors::kAccentRed));
+    ImGui::SameLine(0, 1);
+
+    // ─── RIGHT PANEL — Features ───
+    ImGui::BeginChild("##right_panel", ImVec2(0, bottom_h), ImGuiChildFlags_None);
+    ImGui::Indent(fs * 1.5f);
+    ImGui::Dummy(ImVec2(0, fs * 0.3f));
+
+    if(title_font) ImGui::PushFont(title_font);
+    ImGui::TextUnformatted("Welcome to ROCm Optiq");
+    if(title_font) ImGui::PopFont();
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - fs * 2.0f);
+    ImGui::TextColored(dim_v,
+        "ROCm Optiq is a unified visualization and analysis tool for performance data "
+        "collected by ROCm profiling tools, specifically ROCm Systems Profiler and ROCm "
+        "Compute Profiler. It provides deep insights into both system-level behavior and "
+        "kernel-level performance for applications running on the ROCm stack.");
+    ImGui::Dummy(ImVec2(0, fs * 0.3f));
+    ImGui::TextColored(dim_v,
+        "ROCm Optiq enables developers to visualize execution traces and profiling analysis "
+        "data in a single interface, helping to identify performance bottlenecks, understand "
+        "hardware utilization, optimize workloads, and efficiently scale applications across "
+        "CPUs and GPUs.");
+    ImGui::PopTextWrapPos();
+    ImGui::Dummy(ImVec2(0, fs * 0.6f));
+
+    auto section_header = [&](const char* label) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.42f, 0.48f, 1.0f));
+        ImGui::TextUnformatted(label);
+        ImGui::PopStyleColor();
+        ImGui::Separator();
+        ImGui::Dummy(ImVec2(0, fs * 0.4f));
+    };
+
+    ImVec4 red    = accent_v;
+    ImVec4 blue   = ImVec4(0.35f, 0.6f, 0.85f, 1.0f);
+    ImVec4 green  = ImVec4(0.4f, 0.75f, 0.47f, 1.0f);
+    ImVec4 purple = ImVec4(0.65f, 0.55f, 0.98f, 1.0f);
+    ImVec4 orange = ImVec4(0.96f, 0.62f, 0.04f, 1.0f);
+
+    float avail_w = ImGui::GetContentRegionAvail().x - fs * 1.0f;
+    float tile_w  = (avail_w - fs * 0.6f) * 0.5f;
+    float tile_h  = fs * 3.6f;
+    int tile_id = 0;
+
+    auto render_tile = [&](const ImVec4& dot_color, const char* name, const char* desc) {
+        ImGui::PushID(tile_id++);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(fs * 0.7f, fs * 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg,
+            ImGui::ColorConvertU32ToFloat4(ImGui::GetColorU32(ImGuiCol_FrameBg)));
+        ImGui::BeginChild("##tile", ImVec2(tile_w, tile_h),
+                          ImGuiChildFlags_Borders);
+
+        ImVec2 dot_pos = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddCircleFilled(
+            ImVec2(dot_pos.x + 4, dot_pos.y + fs * 0.45f),
+            4.0f, ImGui::ColorConvertFloat4ToU32(dot_color));
+        ImGui::Indent(fs * 0.85f);
+        ImGui::TextUnformatted(name);
+        ImGui::PushStyleColor(ImGuiCol_Text, dim_v);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + tile_w - fs * 1.8f);
+        ImGui::TextWrapped("%s", desc);
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+        ImGui::Unindent(fs * 0.85f);
+
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
+        ImGui::PopID();
+    };
+
+    auto two_tiles = [&](const ImVec4& c1, const char* n1, const char* d1,
+                          const ImVec4& c2, const char* n2, const char* d2) {
+        render_tile(c1, n1, d1);
+        ImGui::SameLine(0, fs * 0.6f);
+        render_tile(c2, n2, d2);
+        ImGui::Dummy(ImVec2(0, fs * 0.15f));
+    };
+
+    section_header("SYSTEMS PROFILER");
+    two_tiles(red,    "Timeline View",   "Chronological CPU & GPU activities, kernel dispatches, API calls with zoom, filter, and bookmark.",
+              blue,   "System Topology", "Hardware and software hierarchy \xe2\x80\x94 processors, queues, processes, threads, and streams.");
+    two_tiles(green,  "Summary View",    "Top kernels by execution time as pie charts, bar charts, or tables with GPU/node filtering.",
+              purple, "Advanced Details", "Event & sample tables with SQL-like filtering, call stacks, flow visualization, and annotations.");
+    two_tiles(orange, "Minimap",         "Compact event density & counter overview across the entire trace for rapid navigation.",
+              red,    "Projects",        "Save sessions as .rpv files to persist bookmarks, annotations, and view customizations.");
+
+    ImGui::Dummy(ImVec2(0, fs * 0.2f));
+    section_header("COMPUTE PROFILER");
+    two_tiles(red,    "Kernel Metrics",      "Per-kernel GPU metrics, memory cache hierarchy charts, and Speed-of-Light indicators.",
+              blue,   "Roofline Analysis",   "Plot kernel performance against hardware ceilings \xe2\x80\x94 compute-bound vs memory-bound.");
+    two_tiles(green,  "Metric Table",        "All GPU metrics grouped by category with custom filters, expressions, and presets.",
+              purple, "Baseline Comparison", "Side-by-side comparison of kernel metrics against a baseline for regression analysis.");
+
+    ImGui::Dummy(ImVec2(0, fs * 0.2f));
+    section_header("KEYBOARD SHORTCUTS");
+
+    float shortcut_label_w = fs * 12.0f;
+    auto shortcut_row = [&](const char* label, const char* keys) {
+        ImGui::TextColored(dim_v, "%s", label);
+        ImGui::SameLine(shortcut_label_w);
+        ImGui::TextUnformatted(keys);
+    };
+    shortcut_row("Zoom in / out",           "W  /  S");
+    shortcut_row("Pan left / right",        "A  /  D");
+    shortcut_row("Scroll tracks",           "Up  /  Down");
+    shortcut_row("Time range filter",       "Ctrl + Drag");
+    shortcut_row("Set / go to bookmark",    "Ctrl+0-9  /  0-9");
+
+    ImGui::Unindent(fs * 1.5f);
+    ImGui::EndChild();
 
     if(!recent_file_to_open.empty())
     {

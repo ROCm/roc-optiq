@@ -103,7 +103,18 @@ jobs:
           cd ${{ env.BUILD_DIR }}
           ctest \
             --output-on-failure \
-            --no-tests=error
+            --no-tests=error \
+            --output-junit ctest-results.xml
+
+      - name: Upload Test Logs (on failure)
+        if: steps.run_tests.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-ubuntu-${{ matrix.os-version }}
+          path: |
+            ${{ env.BUILD_DIR }}/ctest-results.xml
+            ${{ env.BUILD_DIR }}/Testing/Temporary/**
+          retention-days: 7
 
       - name: Prepare Distribution Artifacts
         run: |
@@ -155,5 +166,5 @@ jobs:
       - name: Announce Test Failure
         if: steps.run_tests.outcome == 'failure'
         run: |
-          echo "Tests have failed!"
+          echo "Tests have failed! Please see uploaded CTest logs for more information"
           exit 1

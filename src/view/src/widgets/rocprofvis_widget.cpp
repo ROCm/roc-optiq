@@ -102,6 +102,21 @@ WithPadding(float left, float right, float top, float bottom,
 }
 
 bool
+IconMenuItem(const char* icon, const char* label)
+{
+    ImVec2 item_pos    = ImGui::GetCursorPos();
+    bool   clicked     = ImGui::Selectable(std::string("##icon_menu_item_").append(label).c_str());
+    ImGui::SetCursorPos(item_pos);
+    ImGui::PushFont(
+        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::TextUnformatted(icon);
+    ImGui::PopFont();
+    ImGui::SameLine(0.f, ImGui::GetStyle().ItemSpacing.x);
+    ImGui::TextUnformatted(label);
+    return clicked;
+}
+
+bool
 CopyableTextUnformatted(
     const char* text, std::string_view unique_id, std::string_view notification,
     bool one_click_copy, bool context_menu,
@@ -141,7 +156,7 @@ CopyableTextUnformatted(
         }
         else if(ImGui::BeginPopupContextItem())
         {
-            if(ImGui::MenuItem("Copy"))
+            if(IconMenuItem(ICON_COPY, "Copy"))
             {
                 ImGui::SetClipboardText(text);
                 if(!notification.empty())

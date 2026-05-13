@@ -28,6 +28,19 @@ on:
         description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
+      s3_root_directory:
+        description: 'The root directory to use when uploading to the roc-optiq S3 bucket'
+        type: choice
+        default: 'test'
+        options: 
+          - test
+          - nightly
+          - rc
+          - release
+      release_version:
+        description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
+        type: string
+        default: ''
   workflow_call:
     inputs:
       os_version:
@@ -54,18 +67,30 @@ on:
         description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
+      s3_root_directory:
+        description: 'The root directory to use when uploading to the roc-optiq S3 bucket'
+        type: string
+        default: 'test'
+      release_version:
+        description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
+        type: string
+        default: ''
 
 env:
   BUILD_DIR: "build"
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
-  AWS_S3_BUCKET_BASE_PATH: "test"
+  S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
+  RELEASE_VERSION: ${{ inputs.release_version }}
 
 jobs:
   ubuntu:
     name: Ubuntu ${{ matrix.os-version }} • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     permissions:
       id-token: write
       contents: read
@@ -83,7 +108,6 @@ jobs:
           submodules: true
 
       - name: Build, Make, and Verify Installation
-        shell: bash
         run: |
           source /opt/vulkan/**/setup-env.sh
           cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
@@ -142,7 +166,6 @@ jobs:
 
       - name: Generate Metadata for S3
         if: ${{ inputs.upload_to_s3 }}
-        shell: bash
         working-directory: ${{ env.DIST_DIR }}
         run: |
           dpkg-scanpackages . /dev/null > Packages
@@ -157,10 +180,15 @@ jobs:
 
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}
-        shell: bash
         run: |
-          TIMESTAMP=$(date +%Y_%m_%d)
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.AWS_S3_BUCKET_BASE_PATH }}/$TIMESTAMP/ubuntu/${{ matrix.os-version }}/ \
+          if [ -z "${{ env.RELEASE_VERSION }}" ]; then
+            echo "No release version provided, defaulting to using TIMESTAMP as S3_SECONDARY_DIRECTORY"
+            S3_SECONDARY_DIRECTORY=$(date +%Y_%m_%d)
+          else
+            echo "Release Version ${{ env.RELEASE_VERSION }} provided, using ${{ env.RELEASE_VERSION }} as S3_SECONDARY_DIRECTORY"
+            S3_SECONDARY_DIRECTORY="${{ env.RELEASE_VERSION }}"
+          fi
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/ubuntu/${{ matrix.os-version }}/ \
             --no-progress
 
       - name: Announce Test Failure

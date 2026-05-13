@@ -104,15 +104,19 @@ WithPadding(float left, float right, float top, float bottom,
 bool
 IconMenuItem(const char* icon, const char* label)
 {
-    ImVec2 item_pos    = ImGui::GetCursorPos();
-    bool   clicked     = ImGui::Selectable(std::string("##icon_menu_item_").append(label).c_str());
-    ImGui::SetCursorPos(item_pos);
-    ImGui::PushFont(
-        SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault));
+    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+
+    ImGui::BeginGroup();
+    ImGui::PushFont(icon_font);
     ImGui::TextUnformatted(icon);
     ImGui::PopFont();
     ImGui::SameLine(0.f, ImGui::GetStyle().ItemSpacing.x);
     ImGui::TextUnformatted(label);
+    ImGui::EndGroup();
+
+    bool clicked = ImGui::IsItemClicked();
+    if(clicked)
+        ImGui::CloseCurrentPopup();
     return clicked;
 }
 

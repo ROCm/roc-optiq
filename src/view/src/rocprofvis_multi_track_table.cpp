@@ -160,7 +160,7 @@ MultiTrackTable::Render()
                          ImGuiTableFlags_SizingStretchProp |
                              ImGuiTableFlags_NoSavedSettings))
     {
-        ImFont*           icon_font   = m_settings.GetFontManager().GetIconFont(FontType::kDefault);
+        ImFont* icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
         const ImGuiStyle& base_style  = m_settings.GetDefaultStyle();
         const ImU32       input_bg    = m_settings.GetColor(Colors::kBgFrame);
 

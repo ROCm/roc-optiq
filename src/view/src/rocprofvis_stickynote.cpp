@@ -103,7 +103,7 @@ StickyNote::SetTitle(std::string title)
 {
     m_title = title;
 }
-void
+bool
 StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
                    std::shared_ptr<TimePixelTransform> tpt)
 {
@@ -111,7 +111,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     {
         spdlog::error(
             "StickyNote::Render: conversion_manager shared_ptr is null, cannot render");
-        return;
+        return false;
     }
     SettingsManager& settings      = SettingsManager::GetInstance();
     const bool       use_dark_mode = settings.GetUserSettings().display_settings.use_dark_mode;
@@ -184,7 +184,8 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PopStyleColor(4);
         ImGui::PopFont();
 
-        if(ImGui::IsMouseHoveringRect(sticky_pos, btn_max))
+        bool blocks_timeline_input = ImGui::IsMouseHoveringRect(sticky_pos, btn_max);
+        if(blocks_timeline_input)
         {
             TimelineFocusManager::GetInstance().RequestLayerFocus(
                 Layer::kInteractiveLayer);
@@ -195,6 +196,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         }
 
         ImGui::EndChild();
+        return blocks_timeline_input;
     }
     else
     {
@@ -336,8 +338,10 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         // Cover hover case for input control
         ImVec2 sticky_max =
             ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
-        if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) &&
-           !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
+        bool blocks_timeline_input =
+            ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) &&
+            !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect);
+        if(blocks_timeline_input)
         {
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
         }
@@ -348,6 +352,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(3);
+        return blocks_timeline_input;
     }
 }
 
@@ -398,8 +403,10 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         {
             drag_pos = ImVec2(window_position.x + x, window_position.y + y);
         }
+        // Expanded notes drag by the header so the scrollable body can own
+        // scrollbar/body interactions.
         drag_w   = m_size.x;
-        drag_h   = m_size.y;
+        drag_h   = 36.0f;
         drag_max = ImVec2(drag_pos.x + drag_w, drag_pos.y + drag_h);
     }
 
@@ -410,8 +417,10 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     if(!m_is_minimized)
     {
         const float handle_size = 12.0f;
-        ImVec2      handle_pos  = ImVec2(drag_max.x - handle_size, drag_max.y - handle_size);
-        if(ImGui::IsMouseHoveringRect(handle_pos, drag_max))
+        ImVec2      sticky_max  = ImVec2(drag_pos.x + m_size.x, drag_pos.y + m_size.y);
+        ImVec2      handle_pos  = ImVec2(sticky_max.x - handle_size,
+                                         sticky_max.y - handle_size);
+        if(ImGui::IsMouseHoveringRect(handle_pos, sticky_max))
             return false;
     }
 

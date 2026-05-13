@@ -676,7 +676,7 @@ ComputeComparisonView::RenderToolbar()
     ImGui::SameLine(0.0f, style.FramePadding.x);
     ImGui::TextUnformatted("Difference");
     ImGui::SameLine();
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
     ImGui::TextUnformatted(ICON_ARROW_DOWN);
     ImGui::PopFont();
     ImGui::SameLine(0.0f, style.FramePadding.x);
@@ -684,7 +684,7 @@ ComputeComparisonView::RenderToolbar()
     ImGui::SameLine(0.0f, style.FramePadding.x);
     ImGui::TextUnformatted("Difference");
     ImGui::SameLine();
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
     ImGui::TextUnformatted(ICON_ARROW_UP);
     ImGui::PopFont();
     ImGui::SameLine(0.0f, style.FramePadding.x);
@@ -756,10 +756,11 @@ ComputeComparisonView::RenderToolbar()
         ImGui::TextUnformatted("Pinned");
         ImGui::SameLine();
 
-        ImFont* icon_font = m_settings.GetFontManager().GetIconFont(FontType::kDefault);
+        ImFont* icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
+        float   icon_font_size = m_settings.GetFontManager().GetFontSize(FontSize::kDefault);
         const char* icon =
             m_pinned_item->m_visible ? ICON_CHEVRON_DOWN : ICON_CHEVRON_LEFT;
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, icon_font_size);
         // use larger icon for consistent spacing
         ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
         ImGui::PopFont();
@@ -1303,8 +1304,9 @@ ComputeComparisonView::Table::Render()
                             }
                             if(m_rows[i].cells[j].display_props->icon)
                             {
-                                ImGui::PushFont(m_settings.GetFontManager().GetIconFont(
-                                    FontType::kDefault));
+                                ImGui::PushFont(
+                                    m_settings.GetFontManager().GetFont(FontType::kIcon),
+                                    0.0f);
                                 ImGui::TextUnformatted(
                                     m_rows[i].cells[j].display_props->icon.value());
                                 ImGui::PopFont();

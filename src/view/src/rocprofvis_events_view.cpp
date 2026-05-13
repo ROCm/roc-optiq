@@ -100,9 +100,7 @@ EventsView::RenderBasicData(const EventInfo* event_data)
     ImVec4 headerColor =
         ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
 
-    ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kLarge);
-
-    ImGui::PushFont(large_font);
+    ImGui::PushFont(NULL, m_settings.GetFontManager().GetFontSize(FontSize::kLarge));
 
     const auto& info = event_data->basic_info;
 

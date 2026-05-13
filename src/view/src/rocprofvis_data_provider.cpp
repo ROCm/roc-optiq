@@ -2280,12 +2280,22 @@ DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
                 event_info->call_stack_info[i].address =
                     GetString(callstack_handle, kRPVControllerCallstackLineAddress, i);
 
+                uint64_t region_id = 0;
+                if(rocprofvis_controller_get_uint64(callstack_handle,
+                                                    kRPVControllerCallstackRegionId, i,
+                                                    &region_id) == kRocProfVisResultSuccess)
+                {
+                    event_info->call_stack_info[i].region_id = region_id;
+                }
+
                 spdlog::debug(
-                    "Call stack entry {}: file: {}, pc: {}, name: {}, address: {}", i,
-                    event_info->call_stack_info[i].file,
+                    "Call stack entry {}: file: {}, pc: {}, name: {}, address: {}, "
+                    "region_id: {}",
+                    i, event_info->call_stack_info[i].file,
                     event_info->call_stack_info[i].pc,
                     event_info->call_stack_info[i].name,
-                    event_info->call_stack_info[i].address);
+                    event_info->call_stack_info[i].address,
+                    event_info->call_stack_info[i].region_id);
             }
         }
     }

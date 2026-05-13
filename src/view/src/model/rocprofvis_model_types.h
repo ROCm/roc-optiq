@@ -125,6 +125,7 @@ struct CallStackData
     std::string pc;
     std::string name;
     std::string address;
+    uint64_t    region_id = 0;
 };
 
 struct BasicEventData

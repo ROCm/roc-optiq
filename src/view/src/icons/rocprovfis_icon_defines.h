@@ -29,6 +29,7 @@ constexpr ImWchar icon_ranges[] = {
     0xF472, 0xF472,
     0xF484, 0xF484,
     0xF41B, 0xF41B,
+    0xF30F, 0xF30F,
     0
 };
 
@@ -59,6 +60,7 @@ inline constexpr const char* ICON_LIST          = u8"\uF454";
 inline constexpr const char* ICON_STICKY_NOTE   = u8"\uF472";
 inline constexpr const char* ICON_CHART_PIE     = u8"\uF484";
 inline constexpr const char* ICON_COPY          = u8"\uF41B";
+inline constexpr const char* ICON_ARROW_FORWARD = u8"\uF30F";
 
 }  // namespace View
 }  // namespace RocProfVis

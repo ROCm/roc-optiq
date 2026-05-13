@@ -126,6 +126,8 @@ private:
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
     void RenderNormalTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
                    bool is_reordering);
+    void RenderTimeRangeSelectionFill(ImDrawList* draw_list, ImVec2 lane_min,
+                                      ImVec2 lane_max);
     void RenderEmptyTrack(TrackItem* track_item);
     void RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size);
 

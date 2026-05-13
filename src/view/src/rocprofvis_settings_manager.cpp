@@ -191,6 +191,20 @@ const std::vector<ImU32> LIGHT_FLAME_COLORS = {
     IM_COL32(94, 178, 138, 200),  IM_COL32(212, 168, 102, 200),
     IM_COL32(158, 160, 222, 200), IM_COL32(220, 156, 118, 200)
 };
+const std::vector<ImU32> DARK_HIGHLIGHTED_EVENT_COLORS = {
+    IM_COL32(50, 145, 210, 215),  IM_COL32(0, 158, 115, 215),
+    IM_COL32(240, 228, 66, 215),  IM_COL32(204, 121, 167, 215),
+    IM_COL32(86, 180, 233, 215),  IM_COL32(235, 130, 45, 215),
+    IM_COL32(0, 204, 102, 215),   IM_COL32(230, 159, 0, 215),
+    IM_COL32(153, 153, 255, 215), IM_COL32(255, 153, 51, 215)
+};
+const std::vector<ImU32> LIGHT_HIGHLIGHTED_EVENT_COLORS = {
+    IM_COL32(50, 145, 210, 220),  IM_COL32(0, 158, 115, 220),
+    IM_COL32(240, 228, 66, 220),  IM_COL32(204, 121, 167, 220),
+    IM_COL32(86, 180, 233, 220),  IM_COL32(235, 130, 45, 220),
+    IM_COL32(0, 204, 102, 220),   IM_COL32(230, 159, 0, 220),
+    IM_COL32(153, 153, 255, 220), IM_COL32(255, 153, 51, 220)
+};
 inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
 inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
 inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
@@ -484,6 +498,13 @@ SettingsManager::GetColorWheel() const
 {
     return m_usersettings.display_settings.use_dark_mode ? DARK_FLAME_COLORS
                                                          : LIGHT_FLAME_COLORS;
+}
+
+const std::vector<ImU32>&
+SettingsManager::GetHighlightedEventColorWheel() const
+{
+    return m_usersettings.display_settings.use_dark_mode ? DARK_HIGHLIGHTED_EVENT_COLORS
+                                                         : LIGHT_HIGHLIGHTED_EVENT_COLORS;
 }
 
 const char*

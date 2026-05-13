@@ -95,6 +95,10 @@ CopyableTextUnformatted(
     std::function<void(const char* value_to_copy)> menu_func = nullptr);
 
 
+// Renders a selectable menu item with an icon (from the icon font) followed by a text label.
+// Returns true when clicked. Intended for use inside BeginPopup/BeginPopupContextItem blocks.
+bool IconMenuItem(const char* icon, const char* label);
+
 inline constexpr std::string_view COPY_DATA_NOTIFICATION = "Cell data was copied";
 
 class PopUpStyle

@@ -35,6 +35,57 @@ typedef struct rocprofvis_imgui_gl_data_t
     const char* m_glsl_version = nullptr;
 } rocprofvis_imgui_gl_data_t;
 
+ImTextureID
+rocprofvis_imgui_backend_gl_create_texture_rgba32(rocprofvis_imgui_backend_t* backend,
+                                                  const unsigned char* pixels,
+                                                  int32_t width,
+                                                  int32_t height)
+{
+    if(!backend || !backend->m_private_data || !pixels || width <= 0 || height <= 0)
+    {
+        return ImTextureID_Invalid;
+    }
+
+    rocprofvis_imgui_gl_data_t* backend_data =
+        (rocprofvis_imgui_gl_data_t*) backend->m_private_data;
+    glfwMakeContextCurrent(backend_data->m_window);
+
+    GLint previous_texture = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_texture);
+
+    GLuint texture_id = 0;
+    glGenTextures(1, &texture_id);
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
+                 GL_UNSIGNED_BYTE, pixels);
+
+    glBindTexture(GL_TEXTURE_2D, (GLuint) previous_texture);
+
+    return (ImTextureID) (intptr_t) texture_id;
+}
+
+void
+rocprofvis_imgui_backend_gl_destroy_texture(rocprofvis_imgui_backend_t* backend,
+                                            ImTextureID texture_id)
+{
+    if(!backend || !backend->m_private_data || texture_id == ImTextureID_Invalid)
+    {
+        return;
+    }
+
+    rocprofvis_imgui_gl_data_t* backend_data =
+        (rocprofvis_imgui_gl_data_t*) backend->m_private_data;
+    glfwMakeContextCurrent(backend_data->m_window);
+
+    GLuint gl_texture_id = (GLuint) (intptr_t) texture_id;
+    glDeleteTextures(1, &gl_texture_id);
+}
+
 bool
 rocprofvis_imgui_backend_gl_init(rocprofvis_imgui_backend_t* backend, void* window)
 {
@@ -189,6 +240,9 @@ rocprofvis_imgui_backend_setup_opengl(rocprofvis_imgui_backend_t* backend,
             backend->m_present   = &rocprofvis_imgui_backend_gl_present;
             backend->m_shutdown  = &rocprofvis_imgui_backend_gl_shutdown;
             backend->m_destroy   = &rocprofvis_imgui_backend_gl_destroy;
+            backend->m_create_texture_rgba32 =
+                &rocprofvis_imgui_backend_gl_create_texture_rgba32;
+            backend->m_destroy_texture = &rocprofvis_imgui_backend_gl_destroy_texture;
             bOk                  = true;
 
             spdlog::info("[rpv] Using OpenGL backend (GLSL version: {})",

@@ -8,6 +8,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_image_helpers.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
@@ -133,7 +134,8 @@ private:
 
     std::shared_ptr<VFixedContainer> m_main_view;
     std::shared_ptr<TabContainer>    m_tab_container;
-    EmbeddedImage                    m_amd_logo;
+    EmbeddedImage                    m_amd_logo_light;
+    EmbeddedImage                    m_amd_logo_dark;
 
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;

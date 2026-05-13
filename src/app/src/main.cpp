@@ -12,7 +12,7 @@
 #include "rocprofvis_cli_parser.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
-#include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_image_helpers.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -291,6 +291,9 @@ main(int argc, char** argv)
                 }, fd_pref);
 
                 backend.m_config(&backend, window);
+                rocprofvis_view_set_texture_backend(
+                    rocprofvis_imgui_backend_create_gui_texture_rgba32,
+                    rocprofvis_imgui_backend_destroy_gui_texture, &backend);
 
                 if(cli_parser.WasOptionFound("file") &&
                    !cli_parser.GetOptionValue("file").empty())
@@ -350,9 +353,10 @@ main(int argc, char** argv)
                     }
                 }
 
+                rocprofvis_view_destroy();
+                rocprofvis_view_set_texture_backend(nullptr, nullptr, nullptr);
                 backend.m_shutdown(&backend);
 
-                rocprofvis_view_destroy();
                 ImGui_ImplGlfw_Shutdown();
                 ImGui::DestroyContext();
 

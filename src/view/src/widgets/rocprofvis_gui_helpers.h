@@ -106,29 +106,6 @@ ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);
 
-class EmbeddedImage
-{
-public:
-    EmbeddedImage(const unsigned char* data, int data_len);
-    ~EmbeddedImage();
-
-    EmbeddedImage(const EmbeddedImage&)            = delete;
-    EmbeddedImage& operator=(const EmbeddedImage&) = delete;
-
-    bool                 Valid() const;
-    int                  GetWidth() const;
-    int                  GetHeight() const;
-    const unsigned char* GetPixel(int x, int y) const;
-    unsigned char*       GetPixels();
-
-    void Render(ImVec2 top_left, float target_width, bool invert_colors = false) const;
-
-private:
-    int            m_width  = 0;
-    int            m_height = 0;
-    unsigned char* m_pixels = nullptr;
-};
-
 void
 CenterNextTextItem(const char* text);
 

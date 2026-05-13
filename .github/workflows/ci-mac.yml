@@ -37,6 +37,10 @@ on:
           - nightly
           - rc
           - release
+      release_version:
+        description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
+        type: string
+        default: ''
   workflow_call:
     inputs:
       os_version:
@@ -67,6 +71,10 @@ on:
         description: 'The root directory to use when uploading to the roc-optiq S3 bucket'
         type: string
         default: 'test'
+      release_version:
+        description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
+        type: string
+        default: ''
 
 env:
   BUILD_DIR: "build"
@@ -75,6 +83,7 @@ env:
   VULKAN_SDK_VERSION: "1.4.328.1"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
+  RELEASE_VERSION: ${{ inputs.release_version }}
 
 jobs:
   mac:
@@ -233,8 +242,14 @@ jobs:
         if: ${{ inputs.upload_to_s3 }}
         run: |
           ditto -c -k --keepParent ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip
-          TIMESTAMP=$(date +%Y_%m_%d)
-          aws s3 cp ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$TIMESTAMP/mac/${{ matrix.os-version }}/ \
+          if [ -z "${{ env.RELEASE_VERSION }}" ]; then
+            echo "No release version provided, defaulting to using TIMESTAMP as S3_SECONDARY_DIRECTORY"
+            S3_SECONDARY_DIRECTORY=$(date +%Y_%m_%d)
+          else
+            echo "Release Version ${{ env.RELEASE_VERSION }} provided, using ${{ env.RELEASE_VERSION }} as S3_SECONDARY_DIRECTORY"
+            S3_SECONDARY_DIRECTORY="${{ env.RELEASE_VERSION }}"
+          fi
+          aws s3 cp ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/mac/${{ matrix.os-version }}/ \
             --no-progress
       
       - name: Announce Test Failure

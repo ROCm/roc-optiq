@@ -126,6 +126,11 @@ EventsView::Render()
 bool
 EventsView::RenderBasicData(const EventInfo* event_data)
 {
+    ImVec4 headerColor =
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kSplitterColor));
+
+    ImGui::PushFont(NULL, m_settings.GetFontManager().GetFontSize(FontSize::kLarge));
+
     const auto& info = event_data->basic_info;
     const uint64_t& db_id = event_data->basic_info.id.bitfield.event_id;
     double trace_start_time = m_data_provider.DataModel().GetTimeline().GetStartTime();

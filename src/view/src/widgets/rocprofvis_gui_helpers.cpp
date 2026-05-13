@@ -318,7 +318,7 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size, const char* tooltip
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bg_color_hover);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, bg_color_active);
     }
-    ImGui::PushFont(icon_font);
+    ImGui::PushFont(icon_font, 0.0f);
     bool clicked = ImGui::Button(icon, size);
     ImGui::PopFont();
     if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
@@ -365,7 +365,7 @@ InputTextWithClear(const char* id, const char* hint, char* buf,
     ImGui::PopStyleColor();
     if(strlen(buf) > 0)
     {
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, 0.0f);
         if(width >= ImGui::CalcTextSize(ICON_X_CIRCLED).x + 2 * style.FramePadding.x)
         {
             ImGui::SameLine();
@@ -549,7 +549,7 @@ XButton(const char* id, const char * tool_tip_label, SettingsManager* settings)
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           settings->GetColor(Colors::kTransparent));
     ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
-    ImGui::PushFont(settings->GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kIcon), 0.0f);
     if(id && strlen(id) > 0)
     {
         ImGui::PushID(id);
@@ -578,8 +578,9 @@ SectionTitle(const char* text, bool large, SettingsManager* settings)
         settings = &SettingsManager::GetInstance();
     }
 
-    FontType font_type = large ? FontType::kLarge : FontType::kMedLarge;
-    ImGui::PushFont(settings->GetFontManager().GetFont(font_type));
+    FontSize font_size = large ? FontSize::kLarge : FontSize::kMedLarge;
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kDefault),
+                    settings->GetFontManager().GetFontSize(font_size));
     ImGui::SeparatorText(text);
     ImGui::PopFont();
 }

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "imgui.h"
+#include <array>
 #include <vector>
 
 namespace RocProfVis
@@ -13,12 +14,21 @@ namespace View
 
 enum class FontType
 {
+    kMainText,
+    kIcon,
+    // Used to get the size of the enum, insert new fonts before this line
+    __kLastFont,
+    kDefault = kMainText
+};
+
+enum class FontSize
+{
     kSmall,
     kMedium,
     kMedLarge,
     kLarge,
     // Used to get the size of the enum, insert new fonts before this line
-    __kLastFont,
+    __kLastSize,
     kDefault = kMedium
 };
 
@@ -36,20 +46,20 @@ public:
      */
     bool Init();
 
-    const std::vector<ImFont*> GetAvailableFonts() const;
-    ImFont*                    GetFont(FontType font_type);
-    ImFont*                    GetIconFont(FontType font_type);
-    ImFont*                    GetFontByIndex(int idx);
-    ImFont*                    GetIconFontByIndex(int idx);
-    int                        GetDPIScaledFontIndex();
+    const std::vector<float> GetAvailableSizes() const;
+    ImFont*                  GetFont(FontType font_type);
+    float                    GetFontSize(FontSize font_type) const;
+    int                      GetDPIScaledFontIndex();
+    void                     SetFontSize(int idx);
 
-    void SetFontSize(int idx);
+    static constexpr int kNumSizes = static_cast<int>(FontSize::__kLastSize);
 
 private:
-    std::vector<ImFont*> m_fonts;
-    std::vector<ImFont*> m_icon_fonts;
-    std::vector<ImFont*> m_all_fonts;
-    std::vector<ImFont*> m_all_icon_fonts;
+
+    ImFont* m_text_font = nullptr;
+    ImFont* m_icon_font = nullptr;
+    std::array<float, kNumSizes> m_sizes{};
+    std::vector<float> m_available_sizes;
 };
 
 }  // namespace View

@@ -152,23 +152,8 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
         ImGui::BeginChild(child_id.c_str(), m_size, false, ImGuiWindowFlags_None);
 
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
-        ImGui::PushFont(icon_font);
-        ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
-        ImVec2 padding   = ImGui::GetStyle().FramePadding;
-        const float minimized_btn_size =
-            std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
-        ImVec2 btn_max = ImVec2(sticky_pos.x + minimized_btn_size,
-                                sticky_pos.y + minimized_btn_size);
-        if(draw_list)
-        {
-            draw_list->AddRectFilled(ImVec2(sticky_pos.x + 2.0f, sticky_pos.y + 3.0f),
-                                     ImVec2(btn_max.x + 2.0f, btn_max.y + 3.0f),
-                                     shadow_color, rounding * 0.6f);
-            draw_list->AddRectFilled(sticky_pos, btn_max, bg_color, rounding * 0.6f);
-            draw_list->AddRect(sticky_pos, btn_max, border_color, rounding * 0.6f);
-        }
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+        ImGui::PushFont(icon_font, 0.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
@@ -273,18 +258,9 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PopStyleColor();
 
         // Edit button (left of close)
-        ImFont* action_icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
-        ImGui::PushFont(action_icon_font);
-        ImVec2 edit_icon_size  = ImGui::CalcTextSize(ICON_EDIT);
-        ImVec2 close_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
-        const float action_btn_size =
-            std::max({34.0f, edit_icon_size.x + 14.0f, close_icon_size.x + 14.0f});
-        const float action_btn_y = (header_height - action_btn_size) * 0.5f;
-
-        ImGui::SetCursorPos(ImVec2(sticky_size.x - action_btn_size * 2.0f - margin -
-                                       icon_btn_gap,
-                                   action_btn_y));
+        ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size * 2 - margin,
+                                   (header_height - edit_btn_size) / 2));
+        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon), 0.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
@@ -299,8 +275,9 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         }
         ImGui::PopStyleColor(4);
 
-        ImGui::SetCursorPos(ImVec2(sticky_size.x - action_btn_size - margin,
-                                   action_btn_y));
+        ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size - margin / 2,
+                                   (header_height - edit_btn_size) / 2));
+        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon), 0.0f);
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
@@ -375,9 +352,8 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     {
         ImVec2 icon_pos = ImVec2(window_position.x + x, window_position.y + y);
 
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
-        ImGui::PushFont(icon_font);
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+        ImGui::PushFont(icon_font, 0.0f);
         ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
         ImGui::PopFont();
 

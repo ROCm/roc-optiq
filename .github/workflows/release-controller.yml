@@ -14,7 +14,7 @@ on:
         default: ''
 
 jobs:
-  ci-redhat:
+  release-redhat:
     name: RedHat Release
     uses: ./.github/workflows/ci-redhat.yml
     secrets: inherit
@@ -25,7 +25,7 @@ jobs:
       s3_root_directory: release
       release_version: ${{ inputs.release_version }}
 
-  ci-ubuntu:
+  release-ubuntu:
     name: Ubuntu Release
     uses: ./.github/workflows/ci-ubuntu.yml
     secrets: inherit
@@ -36,7 +36,7 @@ jobs:
       s3_root_directory: release
       release_version: ${{ inputs.release_version }}
 
-  ci-windows:
+  release-windows:
     name: Windows Release
     uses: ./.github/workflows/ci-windows.yml
     secrets: inherit
@@ -47,8 +47,8 @@ jobs:
       s3_root_directory: release
       release_version: ${{ inputs.release_version }}
 
-  ci-mac:
-    name: macOS CI
+  release-mac:
+    name: macOS Release
     uses: ./.github/workflows/ci-mac.yml
     secrets: inherit
     with:

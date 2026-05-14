@@ -199,7 +199,7 @@ int main(int argc, char** argv)
                                 );
                                 bool load_slice = false;
                                 for(int j = 0; j < num_tracks; j++)
-                                    if(tracks_selection[j] == i)
+                                    if(tracks_selection[j] == static_cast<uint32_t>(i))
                                     {
                                         load_slice = true;
                                         break;
@@ -262,11 +262,11 @@ int main(int argc, char** argv)
                                             PrintHeader("Track id=%llu node=%llu category=%s process=%s subprocess=%s", id, node_id, track_category_name, track_process_name, track_sub_process_name);
                                             if (!NextTest("Press Entre to run test for this track, Esc to continue?")) continue;
                                             printf(ANSI_COLOR_CYAN "\t%s : %s : %lld\n", "Properties", "Memory usage", memory_usage);
-                                            for (int i = 0; i < num_ext_data; i++)
+                                            for (int ext_data_index = 0; ext_data_index < num_ext_data; ext_data_index++)
                                             {
-                                                char* ext_data_category = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackExtDataCategoryCharPtrIndexed, i);
-                                                char* ext_data_name = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackExtDataNameCharPtrIndexed, i);
-                                                char* ext_data_value = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackExtDataValueCharPtrIndexed, i);
+                                                char* ext_data_category = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackExtDataCategoryCharPtrIndexed, ext_data_index);
+                                                char* ext_data_name = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackExtDataNameCharPtrIndexed, ext_data_index);
+                                                char* ext_data_value = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackExtDataValueCharPtrIndexed, ext_data_index);
                                                 printf(ANSI_COLOR_CYAN "\t%s : %s : %s\n", ext_data_category, ext_data_name, ext_data_value);
                                             }
                                             if (nullptr != slice)

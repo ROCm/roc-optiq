@@ -75,7 +75,6 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, uint64
 
 
 rocprofvis_dm_result_t   TopologyNodeRoot::AddProperty(rocprofvis_dm_track_identifiers_t* track_identifiers, rocprofvis_db_topology_data_type_t type, const char* table, const char* name, void* value) {
-	rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
 	DbInstance* db_instance = (DbInstance*)track_identifiers->db_instance;
 	TopologyNode* node = FindRelevantPropertyNode(track_identifiers, table);
 	if (node)
@@ -189,7 +188,6 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsUint64(rocprofvis_dm_property_
 			auto it = m_properties.begin();
 			std::advance(it, index);
 			return GetPropertyType(it->second.index(), value);
-			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultInvalidProperty);
 		}
 		case kRPVControllerTopologyNodePropertyTypeKeyed:
 		{

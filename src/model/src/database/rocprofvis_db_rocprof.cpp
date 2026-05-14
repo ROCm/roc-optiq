@@ -192,7 +192,7 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
     ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
-    rocprofvis_db_memalloc_activity_t memact;
+    rocprofvis_db_memalloc_activity_t memact = {};
     memact.start = db->Sqlite3ColumnInt64(func, stmt, azColName, 7);
     memact.end = db->Sqlite3ColumnInt64(func, stmt, azColName, 8);
     memact.address = db->Sqlite3ColumnInt64(func, stmt, azColName, 9);
@@ -205,11 +205,14 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
     memact.track_id = db->Sqlite3ColumnInt(func, stmt, azColName, 11);
     std::string type_str = db->Sqlite3ColumnText(func, stmt, azColName, 5);
     std::string level_str = db->Sqlite3ColumnText(func, stmt, azColName, 6);
+    bool type_found = false;
+    bool level_found = false;
     for (int i=kRPVMemActivityAlloc; i < kRPVMemActivityNumTypes; i++)
     {
         if (type_str == Builder::mem_alloc_types[i])
         {
             memact.type = (rocprofvis_db_memalloc_type_t)i;
+            type_found = true;
             break;
         }
     }
@@ -218,8 +221,14 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
         if (level_str == Builder::mem_alloc_levels[i])
         {
             memact.level = (rocprofvis_db_memalloc_level_t)i;
+            level_found = true;
             break;
         }
+    }
+    if (!type_found || !level_found)
+    {
+        spdlog::error("Memory activity type or level not found: type={}, level={}", type_str, level_str);
+        return 0; // Skip this record
     }
     auto& vec = db->m_memalloc_activity[callback_params->db_instance->GuidIndex()];
     if (memact.type == kRPVMemActivityFree)
@@ -687,7 +696,6 @@ rocprofvis_dm_result_t RocprofDatabase::GenerateInterdependencyTables(Future* fu
 rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
 
     std::vector<std::thread> threads;
-    rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
 
     std::vector<std::pair<std::string, std::string>> info_table_list = {
         {"Node", "SELECT * from rocpd_info_node_%GUID%;"},
@@ -740,7 +748,6 @@ rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
 
 rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance ){
     TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle("StreamToHw");
-    uint32_t num_columns = table->NumColumns();
     uint32_t stream_id = TrackPropertiesAt(stream_track_index)->track_indentifiers.id[TRACK_ID_STREAM];
 
     for (int ind = 0; ind < table->NumRows(); ind++)
@@ -771,7 +778,6 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(u
                 queue_id, 
                 db_instance, track))
             {
-                rocprofvis_dm_track_params_t* track_properties = TrackPropertiesAt(track);
                 rocprofvis_dm_result_t result = BindObject()->FuncAddTopologyNodeProperty(
                     BindObject()->trace_object,
                     &TrackPropertiesAt(stream_track_index)->track_indentifiers,
@@ -949,7 +955,6 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             m_query_factory.GetRocprofPerformanceCountersTrackQuery() +
             m_query_factory.GetRocprofSMIPerformanceCountersTrackQuery() +
             m_query_factory.GetRocprofMemoryActivityTrackQuery();
-        size_t track_queries_hash_value = std::hash<std::string>{}(track_queries);
         uint32_t load_id = 0;
 
         ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );

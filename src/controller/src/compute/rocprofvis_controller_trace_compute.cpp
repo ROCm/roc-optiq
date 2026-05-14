@@ -512,9 +512,9 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                         std::optional<double> max_intensity_y;
                                         std::optional<double> min_intensity_y;
                                         double uint_data = 0;
-                                        for(const uint32_t& id : kernel_ids)
+                                        for(const uint32_t& kernel_id : kernel_ids)
                                         {
-                                            m_query_arguments = { {kRPVComputeParamKernelId, std::to_string(id)} };
+                                            m_query_arguments = { {kRPVComputeParamKernelId, std::to_string(kernel_id)} };
                                             m_query_output = { 
                                                 { 
                                                     { kRPVComputeColumnKernelUUID, std::nullopt },
@@ -527,7 +527,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 {} 
                                             };
                                             future->ResetProgress();
-                                            dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelRooflineIntensities, m_query_arguments, m_query_output, [&roofline, &id, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
+                                            dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelRooflineIntensities, m_query_arguments, m_query_output, [&roofline, &kernel_id, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
                                                 if(data_store.rows.size() == 1)
                                                 {
                                                     const char* data = data_store.rows[0][data_store.columns.at(kRPVComputeColumnRooflineTotalFlops).value()];
@@ -548,7 +548,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                                         if(value > 0.0)
                                                                         {
                                                                             roofline->SetUInt64(kRPVControllerRooflineNumKernels, 0, uint_data + 1);
-                                                                            roofline->SetUInt64(kRPVControllerRooflineKernelIdIndexed, uint_data, id);
+                                                                            roofline->SetUInt64(kRPVControllerRooflineKernelIdIndexed, uint_data, kernel_id);
                                                                             roofline->SetUInt64(kRPVControllerRooflineKernelIntensityTypeIndexed, uint_data, type);
                                                                             roofline->SetDouble(kRPVControllerRooflineKernelIntensityXIndexed, uint_data, value);
                                                                             roofline->SetDouble(kRPVControllerRooflineKernelIntensityYIndexed, uint_data, flops);

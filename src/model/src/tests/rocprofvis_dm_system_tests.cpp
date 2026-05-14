@@ -506,7 +506,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
             bool load_slice = false;
             for(int j = 0; j < m_num_tracks; j++)
             {
-                if(m_tracks_selection[j] == i)
+                if(m_tracks_selection[j] == static_cast<uint32_t>(i))
                 {
                     load_slice = true;
                     break;
@@ -633,14 +633,14 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
 
                 spdlog::info(ANSI_COLOR_CYAN "\t{0} : {1} : {2}", "Properties",
                              "Memory usage", memory_usage);
-                for(int i = 0; i < num_ext_data; i++)
+                for(int ext_data_index = 0; ext_data_index < num_ext_data; ext_data_index++)
                 {
                     char* ext_data_category = rocprofvis_dm_get_property_as_charptr(
-                        track, kRPVDMTrackExtDataCategoryCharPtrIndexed, i);
+                        track, kRPVDMTrackExtDataCategoryCharPtrIndexed, ext_data_index);
                     char* ext_data_name = rocprofvis_dm_get_property_as_charptr(
-                        track, kRPVDMTrackExtDataNameCharPtrIndexed, i);
+                        track, kRPVDMTrackExtDataNameCharPtrIndexed, ext_data_index);
                     char* ext_data_value = rocprofvis_dm_get_property_as_charptr(
-                        track, kRPVDMTrackExtDataValueCharPtrIndexed, i);
+                        track, kRPVDMTrackExtDataValueCharPtrIndexed, ext_data_index);
                     REQUIRE(ext_data_category);
                     REQUIRE(ext_data_name);
                     REQUIRE(ext_data_value);

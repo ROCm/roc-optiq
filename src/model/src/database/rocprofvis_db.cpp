@@ -25,7 +25,7 @@ rocprofvis_dm_result_t Database::AddTrackProperties(
     try {
         m_track_properties.push_back(std::make_unique<rocprofvis_dm_track_params_t>(props));
     }
-    catch (const std::exception& ex)
+    catch (const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, kRocProfVisDmResultAllocFailure);
     }
@@ -186,7 +186,6 @@ Database::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED,
                                  kRocProfVisDmResultResourceBusy);
-    rocprofvis_dm_result_t result = kRocProfVisDmResultUnknownError;
     try
     {
         future->SetWorker(std::move(std::thread(&SaveTrimmedDataStatic, this, start, end, new_db_path, future)));

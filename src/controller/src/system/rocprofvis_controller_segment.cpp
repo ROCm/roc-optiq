@@ -66,52 +66,6 @@ Segment::~Segment()
 }
 
 
-static void AddSamples(std::vector<Sample*>& samples, Sample* sample, uint64_t lod)
-{
-    if (lod != 0)
-    {
-        uint64_t children = 0;
-        rocprofvis_result_t result = sample->GetUInt64(kRPVControllerSampleNumChildren, 0, &children);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        ROCPROFVIS_ASSERT(children > 0);
-        for(uint64_t i = 0; i < children; i++)
-        {
-            rocprofvis_handle_t* child = nullptr;
-            result = sample->GetObject(kRPVControllerSampleChildIndex, i, &child);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ROCPROFVIS_ASSERT(child);
-            samples.push_back((Sample*)child);
-        }
-    }
-    else
-    {
-        samples.push_back(sample);
-    }
-}
-
-static void AddEvents(std::vector<Event*>& events, Event* event, uint64_t lod)
-{
-    if (lod != 0)
-    {
-        uint64_t children = 0;
-        rocprofvis_result_t result = event->GetUInt64(kRPVControllerEventNumChildren, 0, &children);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        ROCPROFVIS_ASSERT(children > 0);
-        for(uint64_t i = 0; i < children; i++)
-        {
-            rocprofvis_handle_t* child = nullptr;
-            result = event->GetObject(kRPVControllerEventChildIndexed, i, &child);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ROCPROFVIS_ASSERT(child);
-            events.push_back((Event*)child);
-        }
-    }
-    else
-    {
-        events.push_back(event);
-    }
-}
-
 double Segment::GetStartTimestamp()
 {
     return m_start_timestamp;

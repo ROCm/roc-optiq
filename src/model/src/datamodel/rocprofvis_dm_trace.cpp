@@ -659,14 +659,14 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
         {
             if(trace->m_tracks[i]->TrackId() == tracks[n])
             {
-                rocprofvis_dm_slice_t  object = nullptr;
+                rocprofvis_dm_slice_t  slice_object = nullptr;
                 rocprofvis_dm_result_t result =
-                    trace->m_tracks[i].get()->GetSliceAtTime(hash_combine(start,end), object);
+                    trace->m_tracks[i].get()->GetSliceAtTime(hash_combine(start,end), slice_object);
                 if(result == kRocProfVisDmResultSuccess)
                 {
-                    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
+                    ROCPROFVIS_ASSERT_MSG_RETURN(slice_object, ERROR_SLICE_CANNOT_BE_NULL,
                                                     kRocProfVisDmResultUnknownError);
-                    TrackSlice* slice = (TrackSlice*) object;
+                    TrackSlice* slice = (TrackSlice*) slice_object;
                     lock.unlock();
 
                     slice->WaitComplete();

@@ -229,7 +229,6 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     char* symbol = nullptr;
-                                    char* args     = nullptr;
                                     char* codeline    = nullptr;
                                     uint64_t id = 0;
                                     uint64_t depth = 0;
@@ -460,17 +459,11 @@ Event::Fetch(rocprofvis_property_t property, Array& array,
              rocprofvis_dm_trace_t dm_trace_handle)
 {
     (void) array;
+    (void) property;
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     if(dm_trace_handle)
     {
-        switch(property)
-        {
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
-        }
+        result = kRocProfVisResultInvalidEnum;
     }
     return result;
 }

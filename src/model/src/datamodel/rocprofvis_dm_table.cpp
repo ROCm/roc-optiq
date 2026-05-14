@@ -152,8 +152,8 @@ InfoTable::InfoTable(Trace* ctx, uint32_t id,  rocprofvis_dm_node_id_t node, roc
     size_t num_rows = m_ctx->BindingInfo()->FuncGetInfoTableNumRows(m_handle);
     for (int i = 0; i < num_rows; i++)
     {
-        rocprofvis_dm_table_row_t handle = m_ctx->BindingInfo()->FuncGetInfoTableRowHandle(m_handle, i);
-        m_row_wrappers.push_back(std::make_unique<InfoTableRow>(this, handle));
+        rocprofvis_dm_table_row_t row_handle = m_ctx->BindingInfo()->FuncGetInfoTableRowHandle(m_handle, i);
+        m_row_wrappers.push_back(std::make_unique<InfoTableRow>(this, row_handle));
     }
 };
 

@@ -442,14 +442,14 @@ namespace DataModel
                     if (group_by == param.column) continue;
                     std::string column = param.column;
                     MergedColumnDef& column_info = m_aggregation.column_def[column];
-                    uint8_t size = ColumnTypeSize(column_info.m_type[op]);
-                    if (size > 0)
+                    uint8_t agg_size = ColumnTypeSize(column_info.m_type[op]);
+                    if (agg_size > 0)
                     {
-                        value = column_info.m_type[op] == ColumnType::Double ?  r->Get<double>(column_info.m_offset[op]) :  r->Get<uint64_t>(column_info.m_offset[op], size);
+                        value = column_info.m_type[op] == ColumnType::Double ?  r->Get<double>(column_info.m_offset[op]) :  r->Get<uint64_t>(column_info.m_offset[op], agg_size);
                     }
-                    bool numeric_string = false;
-                    const char* str =  PackedTable::ConvertSqlStringReference(db, column_info.m_schema_index[op], value, db_instance->GuidIndex(), numeric_string);
-                    if (str == nullptr){
+                    bool agg_numeric_string = false;
+                    const char* agg_str =  PackedTable::ConvertSqlStringReference(db, column_info.m_schema_index[op], value, db_instance->GuidIndex(), agg_numeric_string);
+                    if (agg_str == nullptr){
                         if (column_info.m_type[op] == ColumnType::Double)
                         {
                             it->second.result[param.public_name].numeric.data.d = value;
@@ -464,7 +464,7 @@ namespace DataModel
                     else
                     {
                         it->second.result[param.public_name].type = NotNumeric;
-                        it->second.result[param.public_name].numeric.data.u64 = m_aggregation.m_string_data.ToInt(str);
+                        it->second.result[param.public_name].numeric.data.u64 = m_aggregation.m_string_data.ToInt(agg_str);
                     }
                 }
                 else
@@ -512,25 +512,25 @@ namespace DataModel
                 {
                     std::string column = param.column;
                     MergedColumnDef& column_info = m_aggregation.column_def[column];
-                    uint8_t size = ColumnTypeSize(column_info.m_type[op]);
-                    double value = 0;
-                    if (size > 0)
+                    uint8_t agg_size = ColumnTypeSize(column_info.m_type[op]);
+                    double agg_value = 0;
+                    if (agg_size > 0)
                     {
-                        value = column_info.m_type[op] == ColumnType::Double ? r->Get<double>(column_info.m_offset[op]) : r->Get<uint64_t>(column_info.m_offset[op], size);
+                        agg_value = column_info.m_type[op] == ColumnType::Double ? r->Get<double>(column_info.m_offset[op]) : r->Get<uint64_t>(column_info.m_offset[op], agg_size);
                     }
                     switch (param.command)
                     {
                     case FilterExpression::SqlCommand::Avg:
-                        it_val->second.numeric.data.d += (value - it_val->second.numeric.data.d) / it->second.count;
+                        it_val->second.numeric.data.d += (agg_value - it_val->second.numeric.data.d) / it->second.count;
                         break;
                     case FilterExpression::SqlCommand::Min:
-                        it_val->second.numeric.data.d = std::min(value, it_val->second.numeric.data.d);
+                        it_val->second.numeric.data.d = std::min(agg_value, it_val->second.numeric.data.d);
                         break;
                     case FilterExpression::SqlCommand::Max:
-                        it_val->second.numeric.data.d = std::max(value, it_val->second.numeric.data.d);
+                        it_val->second.numeric.data.d = std::max(agg_value, it_val->second.numeric.data.d);
                         break;
                     case FilterExpression::SqlCommand::Sum:
-                        it_val->second.numeric.data.d += value;
+                        it_val->second.numeric.data.d += agg_value;
                         break;
                     default:
                         break;

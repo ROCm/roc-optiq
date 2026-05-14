@@ -421,7 +421,7 @@ namespace DataModel
             bool numeric = false;
             try {
                 size_t pos;
-                double d = std::stod(r.first, &pos);
+                (void)std::stod(r.first, &pos);
                 numeric = pos == r.first.size(); 
             } catch (...) {
                 numeric = false;
@@ -669,7 +669,6 @@ namespace DataModel
 
                     std::vector<std::thread> threads;
                     size_t rows_per_task = thread_count == 0 ? 0 : m_merged_table.RowCount() / thread_count;
-                    size_t leftover_rows_count = m_merged_table.RowCount() - (rows_per_task * thread_count);
 
                     if (m_merged_table.SetupAggregation(m_last_group_str, thread_count + 1))
                     {
@@ -696,11 +695,11 @@ namespace DataModel
                 }
             }
 
-            auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "SORT"; });
-            if (it != commands.end())
+            auto cmd_it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "SORT"; });
+            if (cmd_it != commands.end())
             {
                 bool sort_order = m_sort_order;
-                std::string sort_column = ParseSortCommand(it->parameter, sort_order);
+                std::string sort_column = ParseSortCommand(cmd_it->parameter, sort_order);
                 if (sort_order != m_sort_order || sort_column != m_sort_column)
                 {
                     m_merged_table.SortAggregationByColumn(m_db, sort_column, sort_order);
@@ -709,8 +708,8 @@ namespace DataModel
                 }                
             }
 
-            it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "COUNT"; });
-            if (it != commands.end())
+            cmd_it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "COUNT"; });
+            if (cmd_it != commands.end())
             {
                 rocprofvis_dm_table_row_t row =
                     m_db->BindObject()->FuncAddTableRow(table);
@@ -745,11 +744,11 @@ namespace DataModel
         {
             InvalidateGrouping();
 
-            auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "SORT"; });
-            if (it != commands.end())
+            auto cmd_it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "SORT"; });
+            if (cmd_it != commands.end())
             {
                 bool sort_order = m_sort_order;
-                std::string sort_column = ParseSortCommand(it->parameter, sort_order);
+                std::string sort_column = ParseSortCommand(cmd_it->parameter, sort_order);
                 if (sort_order != m_sort_order || sort_column != m_sort_column)
                 {
                     m_merged_table.SortByColumn(m_db, sort_column, sort_order);
@@ -758,8 +757,8 @@ namespace DataModel
                 }
             }
 
-            it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "COUNT"; });
-            if (it != commands.end())
+            cmd_it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "COUNT"; });
+            if (cmd_it != commands.end())
             {
                 rocprofvis_dm_table_row_t row =
                     m_db->BindObject()->FuncAddTableRow(table);
@@ -841,9 +840,6 @@ namespace DataModel
 
             for (; column_index < argc; column_index++)
             {
-                uint8_t size = 0;
-                std::string column = azColName[column_index];
-
                 auto it = Builder::table_view_schema.find(azColName[column_index]);
 
                 if (it != Builder::table_view_schema.end())
@@ -961,7 +957,6 @@ namespace DataModel
         std::ofstream file(file_path);
         if (file.is_open())
         {
-            bool delim = false;
             bool aggregated = !m_last_group_str.empty();
             
             if (aggregated)

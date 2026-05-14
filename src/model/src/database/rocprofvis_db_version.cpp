@@ -224,7 +224,6 @@ namespace DataModel
                     {
                         uint32_t id = std::atol(table->GetCellByIndex(i, "id"));
                         std::string base_name = table->GetCellByIndex(i, "name");
-                        roc_optiq_table_type type = (roc_optiq_table_type)std::atol(table->GetCellByIndex(i, "type"));
                         uint64_t hash = std::atoll(table->GetCellByIndex(i, "hash"));
                         uint32_t version = std::atol(table->GetCellByIndex(i, "version"));
                         roc_optiq_metadata_t& data = m_roc_optiq_table_properties[id];

@@ -193,16 +193,7 @@ rocprofvis_result_t Sample::GetString(rocprofvis_property_t property, uint64_t i
                                 char* value, uint32_t* length) 
 {
     (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        default:
-        {
-            result = UnhandledProperty(property);
-            break;
-        }
-    }
-    return result;
+    return UnhandledProperty(property);
 }
 
 
@@ -210,16 +201,7 @@ rocprofvis_result_t Sample::SetUInt64(rocprofvis_property_t property, uint64_t i
                                 uint64_t value) 
 {
     (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        default:
-        {
-            result = UnhandledProperty(property);
-            break;
-        }
-    }
-    return result;
+    return UnhandledProperty(property);
 }
 
 rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t index,
@@ -258,14 +240,7 @@ Sample::SetObject(rocprofvis_property_t property, uint64_t index,
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
-        switch(property)
-        {
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
-        }
+        result = UnhandledProperty(property);
     }
     return result;
 }
@@ -278,14 +253,7 @@ Sample::SetString(rocprofvis_property_t property, uint64_t index,
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
-        switch(property)
-        {
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
-        }
+        result = UnhandledProperty(property);
     }
     return result;
 }

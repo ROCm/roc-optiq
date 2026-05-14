@@ -384,15 +384,15 @@ TrackTopology::UpdateTopology()
                                 const std::vector<StreamDeviceInfo>& stream_processors = stream_info->processors;
                                 stream->processors.resize(stream_processors.size());
                                     
-                                for (int j = 0; j < stream_processors.size(); j++)
+                                for (int processor_index = 0; processor_index < stream_processors.size(); processor_index++)
                                 {
-                                    stream->processor_lut[processor_ids[j]] = &stream->processors[j];
+                                    stream->processor_lut[processor_ids[processor_index]] = &stream->processors[processor_index];
                                     const DeviceInfo* processor_info =
-                                        topology_data.GetDevice(processor_ids[j]);
+                                        topology_data.GetDevice(processor_ids[processor_index]);
                                     if (processor_info)
                                     {
-                                        stream->processors[j].info       = processor_info;
-                                        stream->processors[j].info_table = InfoTable{
+                                        stream->processors[processor_index].info       = processor_info;
+                                        stream->processors[processor_index].info_table = InfoTable{
                                             { { InfoTable::Cell{ "Processor type", false },
                                             InfoTable::Cell{ DeviceTypeString(processor_info->type), false } },
                                             { InfoTable::Cell{ "Processor index", false },
@@ -400,28 +400,28 @@ TrackTopology::UpdateTopology()
                                             { InfoTable::Cell{ "Product name", false },
                                             InfoTable::Cell{ processor_info->product_name, false } } }
                                         };
-                                        stream->processors[j].header = stream_info->name + " >>> " + 
+                                        stream->processors[processor_index].header = stream_info->name + " >>> " + 
                                             DeviceTypeString(processor_info->type) +
                                             std::to_string(processor_info->type_index);
 
-                                        const std::vector<uint64_t>& queue_ids = stream_processors[j].queue_ids;
-                                        stream->processors[j].queues.resize(queue_ids.size());
-                                        for(int k = 0; k < queue_ids.size(); k++)
+                                        const std::vector<uint64_t>& queue_ids = stream_processors[processor_index].queue_ids;
+                                        stream->processors[processor_index].queues.resize(queue_ids.size());
+                                        for(int queue_index = 0; queue_index < queue_ids.size(); queue_index++)
                                         {
-                                            stream->processors[j].queue_lut[queue_ids[k]] =
-                                                &stream->processors[j].queues[k];
+                                            stream->processors[processor_index].queue_lut[queue_ids[queue_index]] =
+                                                &stream->processors[processor_index].queues[queue_index];
                                             const QueueInfo* queue_info =
-                                                topology_data.GetQueue(queue_ids[k]);
+                                                topology_data.GetQueue(queue_ids[queue_index]);
                                             if(queue_info)
                                             {
                                                 const DeviceInfo* device_info =
                                                     topology_data.GetDevice(queue_info->device_id);
-                                                stream->processors[j].queues[k].info =
+                                                stream->processors[processor_index].queues[queue_index].info =
                                                     queue_info;
                                                 if(device_info)
                                                 {
-                                                    stream->processors[j]
-                                                        .queues[k]
+                                                    stream->processors[processor_index]
+                                                        .queues[queue_index]
                                                         .info_table = InfoTable{
                                                             { { InfoTable::Cell{
                                                                 DeviceTypeString(device_info->type) +
@@ -443,7 +443,7 @@ TrackTopology::UpdateTopology()
                                                             track->topology.id.value == queue_info->id && 
                                                             track->topology.device_id == queue_info->device_id)
                                                         {
-                                                            stream->processors[j].queues[k].graph_index = track->index;
+                                                            stream->processors[processor_index].queues[queue_index].graph_index = track->index;
                                                             break;
                                                         }
                                                     }

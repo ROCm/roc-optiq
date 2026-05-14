@@ -51,8 +51,8 @@ SqliteDatabase::GetNullExceptionInt(void* func, char* column) {
             auto it = fcit->second.find(column);
             if(it != fcit->second.end())
             {
-                return it->second;
                 spdlog::debug("Column {} value is NULL, replace with {}", column, it->second);
+                return it->second;
             }
         }
     }
@@ -332,9 +332,9 @@ sqlite3* SqliteDatabase::GetConnection(uint32_t db_node_id)
            
            auto it = std::prev(m_db_nodes[db_node_id]->m_available_connections.end());
            m_db_nodes[db_node_id]->m_connections_inuse.insert(*it);
-           sqlite3* conn = *it;
+           sqlite3* available_conn = *it;
            m_db_nodes[db_node_id]->m_available_connections.erase(it);
-           return conn;
+           return available_conn;
         }
         else
         {
@@ -668,7 +668,6 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(DbInstance* db_instance,
     PROFILE;
     ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_result_t result  = kRocProfVisDmResultSuccess;
-    char *zErrMsg = 0;
     params->db_instance = db_instance;
     sqlite3* conn = GetConnection(db_instance->FileIndex());
     std::string query_str = query;

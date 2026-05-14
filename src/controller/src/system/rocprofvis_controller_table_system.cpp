@@ -122,7 +122,6 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
                                                 kRPVDMExtTableRowCellValueCharPtrIndexed, j);
                                         ROCPROFVIS_ASSERT(value);
 
-                                        auto& column    = m_columns[j];
                                         Data& row_value = row[j];
                                         row_value.SetType(m_columns[j].m_type);
                                         row_value.SetString(value);

@@ -282,17 +282,17 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                             &num_ext_data);
                                         for (uint32_t idx = 0; idx < num_ext_data; idx++)
                                         {
-                                            std::string category;
+                                            std::string ext_data_category;
                                             std::string name;
                                             std::string value;
                                             uint32_t    length = 0;
                                             track->GetString(
                                                 kRPVControllerTrackExtDataCategoryIndexed,
                                                 idx, nullptr, &length);
-                                            category.resize(length);
+                                            ext_data_category.resize(length);
                                             track->GetString(
                                                 kRPVControllerTrackExtDataCategoryIndexed,
-                                                idx, category.data(), &length);
+                                                idx, ext_data_category.data(), &length);
 
                                             length = 0;
                                             track->GetString(
@@ -312,21 +312,21 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                 kRPVControllerTrackExtDataValueIndexed,
                                                 idx, value.data(), &length);
                                                 
-                                            if (category == "Queue" && name == "id")
+                                            if (ext_data_category == "Queue" && name == "id")
                                             {
                                                 char*    end = nullptr;
                                                 uint64_t val = std::strtoull(
                                                     value.c_str(), &end, 10);
                                                 queue_to_track.insert({ val | instance_id, track });
                                             }
-                                            else if(category == "Stream" && name == "id")
+                                            else if(ext_data_category == "Stream" && name == "id")
                                             {
                                                 char*    end = nullptr;
                                                 uint64_t val = std::strtoull(
                                                     value.c_str(), &end, 10);
                                                 stream_to_track.insert({ val | instance_id, track });
                                             }
-                                            else if(category == "Thread" && name == "id")
+                                            else if(ext_data_category == "Thread" && name == "id")
                                             {
                                                 char*    end = nullptr;
                                                 uint64_t val = std::strtoull(
@@ -340,7 +340,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                     thread_to_track.insert({ val | instance_id, track });
                                                 }                                                
                                             }
-                                            else if(category == "PMC")
+                                            else if(ext_data_category == "PMC")
                                             {
                                                 if(name == "id")
                                                 {
@@ -351,7 +351,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                 }
                                             }
 
-                                            spdlog::debug("{} {} {}", category.c_str(),
+                                            spdlog::debug("{} {} {}", ext_data_category.c_str(),
                                                          name.c_str(), value.c_str());
                                         }
 

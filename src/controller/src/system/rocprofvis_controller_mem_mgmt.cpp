@@ -204,7 +204,7 @@ MemoryManager::CancelArrayOwnership(void* array_ptr, rocprofvis_owner_type_t typ
     {
         m_lru_inuse_lookup[type].erase(it);
         {
-            std::unique_lock lock(m_lru_cond_mutex);
+            std::unique_lock cond_lock(m_lru_cond_mutex);
             m_lru_configured = true;
         }
         m_lru_cv.notify_one();

@@ -279,8 +279,6 @@ TrackItem::RenderMetaArea()
         //         }
         //     }
         // }
-        ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kDefault);
-        ImGui::PushFont(large_font, m_settings.GetFontManager().GetFontSize(FontSize::kLarge));
 
         float available_for_text =
             content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +

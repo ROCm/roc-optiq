@@ -41,7 +41,10 @@ public:
     int         GetWidth() const;
     int         GetHeight() const;
 
-    void Render(ImVec2 top_left, float target_width) const;
+    void Render(ImVec2 top_left, float target_width,
+                ImU32 tint = IM_COL32(255, 255, 255, 255)) const;
+    void RenderCover(ImVec2 top_left, ImVec2 size,
+                     ImU32 tint = IM_COL32(255, 255, 255, 255)) const;
 
 private:
     // Renderer-provided callback used to allocate an RGBA8 texture for ImGui draw calls.
@@ -76,7 +79,10 @@ public:
     const unsigned char* GetPixel(int x, int y) const;
     unsigned char*       GetPixels();
 
-    void Render(ImVec2 top_left, float target_width) const;
+    void Render(ImVec2 top_left, float target_width,
+                ImU32 tint = IM_COL32(255, 255, 255, 255)) const;
+    void RenderCover(ImVec2 top_left, ImVec2 size,
+                     ImU32 tint = IM_COL32(255, 255, 255, 255)) const;
 
 private:
     // Lazy GPU upload on first Render(). Prevents repeated backend calls after failure.

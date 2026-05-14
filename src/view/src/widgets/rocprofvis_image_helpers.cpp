@@ -117,14 +117,44 @@ GuiTexture::GetHeight() const
 }
 
 void
-GuiTexture::Render(ImVec2 top_left, float target_width) const
+GuiTexture::Render(ImVec2 top_left, float target_width, ImU32 tint) const
 {
     if(!Valid()) return;
 
     const float target_height =
         target_width * static_cast<float>(m_height) / static_cast<float>(m_width);
     const ImVec2 bottom_right(top_left.x + target_width, top_left.y + target_height);
-    ImGui::GetWindowDrawList()->AddImage(m_texture_id, top_left, bottom_right);
+    ImGui::GetWindowDrawList()->AddImage(m_texture_id, top_left, bottom_right,
+                                         ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+                                         tint);
+}
+
+void
+GuiTexture::RenderCover(ImVec2 top_left, ImVec2 size, ImU32 tint) const
+{
+    if(!Valid() || size.x <= 0.0f || size.y <= 0.0f) return;
+
+    ImVec2 uv0(0.0f, 0.0f);
+    ImVec2 uv1(1.0f, 1.0f);
+    const float image_aspect  = static_cast<float>(m_width) / static_cast<float>(m_height);
+    const float target_aspect = size.x / size.y;
+    if(target_aspect > image_aspect)
+    {
+        const float visible_v = image_aspect / target_aspect;
+        uv0.y                 = (1.0f - visible_v) * 0.5f;
+        uv1.y                 = 1.0f - uv0.y;
+    }
+    else
+    {
+        const float visible_u = target_aspect / image_aspect;
+        uv0.x                 = (1.0f - visible_u) * 0.5f;
+        uv1.x                 = 1.0f - uv0.x;
+    }
+
+    ImGui::GetWindowDrawList()->AddImage(m_texture_id, top_left,
+                                         ImVec2(top_left.x + size.x,
+                                                top_left.y + size.y),
+                                         uv0, uv1, tint);
 }
 
 EmbeddedImage::EmbeddedImage(const unsigned char* data, int data_len)
@@ -232,12 +262,21 @@ EmbeddedImage::GetPixel(int x, int y) const
 }
 
 void
-EmbeddedImage::Render(ImVec2 top_left, float target_width) const
+EmbeddedImage::Render(ImVec2 top_left, float target_width, ImU32 tint) const
 {
     if(!Valid()) return;
 
     EnsureTextureCreated();
-    m_texture.Render(top_left, target_width);
+    m_texture.Render(top_left, target_width, tint);
+}
+
+void
+EmbeddedImage::RenderCover(ImVec2 top_left, ImVec2 size, ImU32 tint) const
+{
+    if(!Valid()) return;
+
+    EnsureTextureCreated();
+    m_texture.RenderCover(top_left, size, tint);
 }
 
 }  // namespace View

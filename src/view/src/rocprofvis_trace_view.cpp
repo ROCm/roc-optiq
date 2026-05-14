@@ -957,8 +957,6 @@ TraceView::RenderBookmarkControls()
                 }
                 else
                 {
-                    ImGui::PushFont(icon_font, 0.0f);
-                    ImGui::PushFont(icon_font, 0.0f);
                     if(ImGui::Button(ICON_ADD_NOTE))
                     {
                         m_bookmarks[i] = m_timeline_view->GetViewCoords();
@@ -966,8 +964,6 @@ TraceView::RenderBookmarkControls()
                             "Bookmark " + std::to_string(i) + " created.",
                             NotificationLevel::Info);
                     }
-                    ImGui::PopFont();
-                    ImGui::PopFont();
                 }
                 ImGui::PopFont();
                 ImGui::PopStyleColor(3);

@@ -134,8 +134,6 @@ private:
 
     std::shared_ptr<VFixedContainer> m_main_view;
     std::shared_ptr<TabContainer>    m_tab_container;
-    EmbeddedImage                    m_welcome_background_dark;
-    EmbeddedImage                    m_welcome_background_light;
 
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;

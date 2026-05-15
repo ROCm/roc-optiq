@@ -100,6 +100,12 @@ DataProvider::FreeRequests()
     CleanupDetachedResources(std::move(cleanup_work));
 }
 
+size_t
+DataProvider::GetPendingRequestCount() const
+{
+    return m_requests.size();
+}
+
 DataProviderCleanupWork
 DataProvider::DetachCleanupWork()
 {

@@ -103,6 +103,8 @@ private:
     void RenderFileDialog();
     void RenderAboutDialog();
     void RenderEmptyState();
+    void RenderStatusBar();
+    void UpdateStatusBar();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
@@ -182,6 +184,9 @@ private:
     bool                             m_restore_fullscreen_later;
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
+
+    std::string m_status_message;
+    bool        m_status_show_busy_indicator;
 };
 
 }  // namespace View

@@ -118,6 +118,7 @@ AppWindow::AppWindow()
 , m_exit_notification_sent(false)
 , m_restore_fullscreen_later(false)
 , m_next_provider_cleanup_id(0)
+, m_status_show_busy_indicator(false)
 {}
 
 AppWindow::~AppWindow()
@@ -161,7 +162,8 @@ AppWindow::Init()
     }
 
     LayoutItem status_bar_item(-1, STATUS_BAR_HEIGHT);
-    status_bar_item.m_item = std::make_shared<RocWidget>();
+    status_bar_item.m_item =
+        std::make_shared<RocCustomWidget>([this]() { RenderStatusBar(); });
     LayoutItem main_area_item(-1, -STATUS_BAR_HEIGHT);
     LayoutItem tool_bar_item(-1, 0);
     tool_bar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
@@ -565,6 +567,7 @@ AppWindow::Update()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
+    UpdateStatusBar();
 }
 
 void
@@ -1530,6 +1533,74 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
                                             filter_stream.str().c_str(), config);
 }
 
+void
+AppWindow::UpdateStatusBar()
+{
+    // Update status message every N frames
+    const int UPDATE_STEP = 4;
+    if(ImGui::GetFrameCount() % UPDATE_STEP == 0)
+    {
+        // Get number of pending requests from data provider
+        size_t pending_requests = 0;
+        for(const auto& [id, project] : m_projects)
+        {
+            auto root_view = dynamic_cast<RootView*>(project->GetView().get());
+            if(root_view)
+            {
+                auto data_provider = root_view->GetDataProvider();
+                if(data_provider)
+                {
+                    pending_requests += data_provider->GetPendingRequestCount();
+                }
+            }
+        }
+        // also check if there are any cleanup jobs pending
+        size_t clean_up_jobs = m_provider_cleanup_jobs.size();
+        if(pending_requests > 0 || clean_up_jobs > 0)
+        {
+            if(pending_requests > 0)
+            {
+                m_status_message = "Working... (" + std::to_string(pending_requests) +
+                                   " pending requests)";
+            }
+            if(clean_up_jobs > 0)
+            {
+                m_status_message += (pending_requests > 0 ? " | " : "") +
+                                    ("Cleaning up... (" + std::to_string(clean_up_jobs) +
+                                     " pending jobs)");
+            }
+            m_status_show_busy_indicator = true;
+        }
+        else
+        {
+            m_status_message             = "";
+            m_status_show_busy_indicator = false;
+        }
+    }
+}
+
+void
+AppWindow::RenderStatusBar()
+{
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Dummy(ImVec2(style.WindowPadding.x, ImGui::GetFrameHeight()));
+    ImGui::SameLine();
+    if(m_status_show_busy_indicator)
+    {
+        RenderLoadingIndicator(settings.GetColor(Colors::kTextDim), nullptr,
+                               kCenterVertical);
+        ImGui::SameLine(0.f, style.ItemSpacing.x);
+    }
+    ImGui::TextUnformatted(m_status_message.c_str());
+    ImGui::PopStyleVar(2);
+}
+
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void
 AppWindow::RenderDeveloperMenu()
@@ -1718,3 +1789,4 @@ AppWindow::RenderDebugOuput()
 
 }  // namespace View
 }  // namespace RocProfVis
+

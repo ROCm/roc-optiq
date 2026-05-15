@@ -3,8 +3,10 @@
 
 #pragma once
 #include "widgets/rocprofvis_split_containers.h"
-#include <string>
+#include <cstdint>
 #include <list>
+#include <string>
+#include <string_view>
 
 namespace RocProfVis
 {
@@ -42,6 +44,16 @@ private:
         }
     };
 
+    struct FlowHighlightState
+    {
+        uint64_t owner_event_id;
+        uint64_t flow_event_id;
+        uint64_t flow_track_id;
+
+        bool IsValid() const;
+        void Reset();
+    };
+
     bool RenderBasicData(const EventInfo* event_data);
     bool RenderEventExtData(const EventInfo* event_data);
     bool RenderEventFlowInfo(const EventInfo* event_data);
@@ -57,6 +69,8 @@ private:
     int                                      m_event_item_id;
     int                                      m_context_menu_flow_index;
     int                                      m_context_menu_flow_column;
+    FlowHighlightState                       m_flow_hover;
+    FlowHighlightState                       m_frame_flow_hover;
     const std::string_view DATA_COPIED_NOTIFICATION = "Data was copied";
 };
 

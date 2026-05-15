@@ -58,17 +58,20 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(145, 156, 174, 255),  // Colors::kTextDim
     IM_COL32(29, 30, 38, 255),     // Colors::kScrollBg
     IM_COL32(70, 82, 104, 255),    // Colors::kScrollGrab
-    IM_COL32(29, 30, 38, 255),     // Colors::kTableHeaderBg
+    IM_COL32(32, 34, 44, 255),     // Colors::kTableHeaderBg
     IM_COL32(50, 59, 76, 255),     // Colors::kTableBorderStrong
     IM_COL32(39, 43, 56, 255),     // Colors::kTableBorderLight
-    IM_COL32(34, 37, 48, 255),     // Colors::kTableRowBg
-    IM_COL32(39, 43, 56, 255),     // Colors::kTableRowBgAlt
+    IM_COL32(32, 36, 47, 255),     // Colors::kTableRowBg
+    IM_COL32(38, 42, 54, 255),     // Colors::kTableRowBgAlt
+    IM_COL32(34, 37, 48, 255),     // Colors::kTableBorderInner
+    IM_COL32(44, 50, 64, 255),     // Colors::kTableBorderOuter
+    IM_COL32(40, 45, 58, 255),     // Colors::kPanelBorderSubtle
     IM_COL32(106, 164, 232, 230),  // Colors::kEventHighlight
     IM_COL32(130, 210, 178, 230),  // Colors::kEventSearchHighlight
     IM_COL32(120, 162, 255, 120),  // Colors::kLineChartColor
-    IM_COL32(39, 43, 56, 255),     // Colors::kButton
-    IM_COL32(50, 59, 76, 255),     // Colors::kButtonHovered
-    IM_COL32(62, 76, 102, 255),    // Colors::kButtonActive
+    IM_COL32(44, 52, 70, 255),     // Colors::kButton
+    IM_COL32(56, 66, 88, 255),     // Colors::kButtonHovered
+    IM_COL32(66, 80, 108, 255),    // Colors::kButtonActive
     IM_COL32(180, 160, 60, 255),   // Colors::kBgWarning
     IM_COL32(160, 60, 60, 255),    // Colors::kBgError
     IM_COL32(60, 160, 60, 255),    // Colors::kBgSuccess
@@ -136,17 +139,20 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(106, 112, 128, 255),  // Colors::kTextDim
     IM_COL32(247, 248, 250, 255),  // Colors::kScrollBg
     IM_COL32(190, 196, 208, 255),  // Colors::kScrollGrab
-    IM_COL32(247, 248, 250, 255),  // Colors::kTableHeaderBg
+    IM_COL32(245, 246, 248, 255),  // Colors::kTableHeaderBg
     IM_COL32(214, 218, 226, 255),  // Colors::kTableBorderStrong
     IM_COL32(232, 235, 240, 255),  // Colors::kTableBorderLight
-    IM_COL32(255, 255, 255, 255),  // Colors::kTableRowBg
-    IM_COL32(250, 251, 253, 255),  // Colors::kTableRowBgAlt
+    IM_COL32(253, 254, 255, 255),  // Colors::kTableRowBg
+    IM_COL32(248, 250, 253, 255),  // Colors::kTableRowBgAlt
+    IM_COL32(244, 246, 250, 255),  // Colors::kTableBorderInner
+    IM_COL32(220, 224, 232, 255),  // Colors::kTableBorderOuter
+    IM_COL32(236, 239, 244, 255),  // Colors::kPanelBorderSubtle
     IM_COL32(54, 132, 214, 220),   // Colors::kEventHighlight
     IM_COL32(72, 174, 136, 220),   // Colors::kEventSearchHighlight
     IM_COL32(88, 132, 245, 105),   // Colors::kLineChartColor
-    IM_COL32(244, 246, 250, 255),  // Colors::kButton
-    IM_COL32(232, 236, 244, 255),  // Colors::kButtonHovered
-    IM_COL32(220, 226, 238, 255),  // Colors::kButtonActive
+    IM_COL32(232, 238, 248, 255),  // Colors::kButton
+    IM_COL32(222, 230, 242, 255),  // Colors::kButtonHovered
+    IM_COL32(212, 222, 238, 255),  // Colors::kButtonActive
     IM_COL32(250, 250, 100, 255),  // Colors::kBgWarning
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
@@ -256,9 +262,9 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);
 
     // Frame
-    style.Colors[ImGuiCol_FrameBg]        = bgFrame;
+    style.Colors[ImGuiCol_FrameBg]        = button;
     style.Colors[ImGuiCol_FrameBgHovered] = buttonHovered;
-    style.Colors[ImGuiCol_FrameBgActive]  = tabAccentHover;
+    style.Colors[ImGuiCol_FrameBgActive]  = buttonActive;
 
     // Title bar
     style.Colors[ImGuiCol_TitleBg]          = bgPanel;

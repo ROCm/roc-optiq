@@ -36,6 +36,20 @@ PushSectionHeaderStyle(SettingsManager& settings)
 
 }  // namespace
 
+bool
+EventsView::FlowHighlightState::IsValid() const
+{
+    return flow_event_id != TimelineSelection::INVALID_SELECTION_ID;
+}
+
+void
+EventsView::FlowHighlightState::Reset()
+{
+    owner_event_id = TimelineSelection::INVALID_SELECTION_ID;
+    flow_event_id  = TimelineSelection::INVALID_SELECTION_ID;
+    flow_track_id  = TimelineSelection::INVALID_SELECTION_ID;
+}
+
 EventsView::EventsView(DataProvider&                      dp,
                        std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
@@ -44,20 +58,17 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_event_item_id(0)
 , m_context_menu_flow_index(-1)
 , m_context_menu_flow_column(-1)
-, m_flow_hover_owner_event_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_flow_hover_flow_event_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_flow_hover_flow_track_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_frame_flow_hover_owner_event_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_frame_flow_hover_flow_event_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_frame_flow_hover_flow_track_id(TimelineSelection::INVALID_SELECTION_ID)
-{}
+{
+    m_flow_hover.Reset();
+    m_frame_flow_hover.Reset();
+}
 
 EventsView::~EventsView()
 {
-    if(m_flow_hover_flow_event_id != TimelineSelection::INVALID_SELECTION_ID)
+    if(m_flow_hover.IsValid())
     {
-        m_timeline_selection->UnhighlightTrackEvent(m_flow_hover_flow_track_id,
-                                                    m_flow_hover_flow_event_id);
+        m_timeline_selection->UnhighlightTrackEvent(m_flow_hover.flow_track_id,
+                                                    m_flow_hover.flow_event_id);
     }
 }
 
@@ -71,9 +82,7 @@ EventsView::Render()
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
     ImGui::BeginChild("events_view", ImVec2(0, 0),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-    m_frame_flow_hover_owner_event_id = TimelineSelection::INVALID_SELECTION_ID;
-    m_frame_flow_hover_flow_event_id  = TimelineSelection::INVALID_SELECTION_ID;
-    m_frame_flow_hover_flow_track_id  = TimelineSelection::INVALID_SELECTION_ID;
+    m_frame_flow_hover.Reset();
     if(m_event_items.empty())
     {
         ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
@@ -134,22 +143,20 @@ EventsView::Render()
             }
         }
     }
-    if(m_frame_flow_hover_flow_event_id != m_flow_hover_flow_event_id)
+    if(m_frame_flow_hover.flow_event_id != m_flow_hover.flow_event_id)
     {
-        if(m_flow_hover_flow_event_id != TimelineSelection::INVALID_SELECTION_ID)
+        if(m_flow_hover.IsValid())
         {
-            m_timeline_selection->UnhighlightTrackEvent(m_flow_hover_flow_track_id,
-                                                        m_flow_hover_flow_event_id);
+            m_timeline_selection->UnhighlightTrackEvent(m_flow_hover.flow_track_id,
+                                                        m_flow_hover.flow_event_id);
         }
-        if(m_frame_flow_hover_flow_event_id != TimelineSelection::INVALID_SELECTION_ID)
+        if(m_frame_flow_hover.IsValid())
         {
-            m_timeline_selection->HighlightTrackEvent(m_frame_flow_hover_flow_track_id,
-                                                      m_frame_flow_hover_flow_event_id);
+            m_timeline_selection->HighlightTrackEvent(m_frame_flow_hover.flow_track_id,
+                                                      m_frame_flow_hover.flow_event_id);
         }
     }
-    m_flow_hover_owner_event_id = m_frame_flow_hover_owner_event_id;
-    m_flow_hover_flow_event_id  = m_frame_flow_hover_flow_event_id;
-    m_flow_hover_flow_track_id  = m_frame_flow_hover_flow_track_id;
+    m_flow_hover = m_frame_flow_hover;
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
@@ -301,8 +308,8 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
 
                 const uint64_t this_owner_event_id = event_data->basic_info.id.uuid;
                 const uint64_t prev_hovered_flow_event_id =
-                    (m_flow_hover_owner_event_id == this_owner_event_id)
-                        ? m_flow_hover_flow_event_id
+                    (m_flow_hover.owner_event_id == this_owner_event_id)
+                        ? m_flow_hover.flow_event_id
                         : TimelineSelection::INVALID_SELECTION_ID;
 
                 auto flow_cell = [&](int col, const char* text, const char* id, int row)
@@ -339,9 +346,6 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         }
                         else if(flow.id.uuid == this_owner_event_id)
                         {
-                            // Tint the row that represents the event the user
-                            // opened, so it's identifiable amongst its flow
-                            // neighbors.
                             ImGui::TableSetBgColor(
                                 ImGuiTableBgTarget_RowBg0,
                                 m_settings.GetColor(Colors::kAreaOfInterest));
@@ -394,16 +398,13 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         }
                         if(row_hovered)
                         {
-                            m_frame_flow_hover_owner_event_id = this_owner_event_id;
-                            m_frame_flow_hover_flow_event_id  = flow.id.uuid;
-                            m_frame_flow_hover_flow_track_id  = flow.track_id;
+                            m_frame_flow_hover.owner_event_id = this_owner_event_id;
+                            m_frame_flow_hover.flow_event_id  = flow.id.uuid;
+                            m_frame_flow_hover.flow_track_id  = flow.track_id;
                             if(flow.id.uuid == this_owner_event_id)
                             {
-                                // Explain the tint on the owner row so the
-                                // user knows why this row looks different.
                                 SetTooltipStyled(
-                                    "This is the event you opened to view "
-                                    "this flow.");
+                                    "This is the selected event for this flow.");
                             }
                         }
                     }

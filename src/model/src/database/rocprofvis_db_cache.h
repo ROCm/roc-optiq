@@ -48,7 +48,7 @@ public:
 
     void* GetRow(uint64_t row_index);
 
-    uint32_t NumColumns() { return m_columns.size(); }
+    uint32_t NumColumns() { return static_cast<uint32_t>(m_columns.size()); }
     size_t NumRows() { return m_rows.size(); }
 
 private:

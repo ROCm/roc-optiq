@@ -317,7 +317,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
                 auto it = pmc_id_per_agent.find(m.agent_id);
                 if (it == pmc_id_per_agent.end())
                 {
-                    uint32_t num = pmc_table->NumRows();
+                    uint32_t num = static_cast<uint32_t>(pmc_table->NumRows());
                     uint64_t pmc_id = num ? std::atoll(pmc_table->GetCellByIndex(num - 1, "id")) : 0;
                     pmc_id++;
                     pmc_table->AddRow(pmc_id);
@@ -552,7 +552,7 @@ RocprofDatabase::CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stm
     size_t           pos                   = table_name.find(table_name_befor_guid);
     if(pos == 0)
     {
-        guid_list->push_back({ DbInstance(file_node, guid_list->size()), table_name.substr(table_name_befor_guid.length()) });
+        guid_list->push_back({ DbInstance(file_node, static_cast<uint32_t>(guid_list->size())), table_name.substr(table_name_befor_guid.length()) });
     }
     callback_params->future->CountThisRow();
     return 0;
@@ -883,7 +883,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 &CallbackNodeEnumeration);
         }
 
-        TraceProperties()->num_db_instances = DbInstances().size();
+        TraceProperties()->num_db_instances = static_cast<uint32_t>(DbInstances().size());
 
         ShowProgress(1, "Get version", kRPVDbBusy, future);
         std::string version;

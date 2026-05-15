@@ -732,7 +732,7 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
 {
     std::stringstream ss;
     DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(index)->track_indentifiers.db_instance;
-    int               size = TrackPropertiesAt(index)->query[type].size();
+    int               size = static_cast<int>(TrackPropertiesAt(index)->query[type].size());
     ROCPROFVIS_ASSERT_MSG_RETURN(size, "Error! SQL query cannot be empty!", kRocProfVisDmResultUnknownError);
     ss << query << " FROM (";
     for(int i = 0; i < size; i++)
@@ -837,7 +837,7 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
             {
                 total_event_count += TraceProperties()->events_count[j];
             }
-            split_count = (TrackPropertiesAt(i)->record_count * 10) / total_event_count;
+            split_count = static_cast<uint32_t>((TrackPropertiesAt(i)->record_count * 10) / total_event_count);
 
             if (split_count == 0)
             {
@@ -849,7 +849,7 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
 
         }
 
-        for (int j = 0; j < split_count; j++)
+        for (uint32_t j = 0; j < split_count; j++)
         {
             futures.push_back((Future*)rocprofvis_db_future_alloc(nullptr));
             std::string async_query = func_prepare(TrackPropertiesAt(i), prefix);
@@ -1234,7 +1234,7 @@ ProfileDatabase::BuildTableQuery(
         rocprofvis_dm_index_t track = tracks[i];
         track = TABLE_QUERY_UNPACK_TRACK_ID(track);
         
-        int divider = thread_count / num;
+        int divider = static_cast<int>(thread_count / num);
         if (divider == 0) divider = 1;
         for (auto it_query = slice_query_map_array[i].begin(); it_query != slice_query_map_array[i].end(); ++it_query) 
         {
@@ -1697,12 +1697,13 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
         int                         index = 0;
         if(level_it == db->m_event_levels_id_to_index[op][db_instance->GuidIndex()].end())
         {
-            db->m_event_levels_id_to_index[op][db_instance->GuidIndex()][id] = index = db->m_event_levels[op][db_instance->GuidIndex()].size();
+            index = static_cast<int>(db->m_event_levels[op][db_instance->GuidIndex()].size());
+            db->m_event_levels_id_to_index[op][db_instance->GuidIndex()][id] = index;
             db->m_event_levels[op][db_instance->GuidIndex()].push_back({id, parent_id,0,0});
         }
         else
         {
-            index = level_it->second;
+            index = static_cast<int>(level_it->second);
         }
         if(params->track_indentifiers.category == kRocProfVisDmStreamTrack)
         {

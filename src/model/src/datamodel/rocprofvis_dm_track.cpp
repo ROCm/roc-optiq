@@ -176,7 +176,7 @@ rocprofvis_dm_charptr_t  Track::CategoryString(){
 
 rocprofvis_dm_value_t Track::GetHistogramBucketValueAt(size_t index)
 { 
-    auto it = m_track_params->histogram.find(index);
+    auto it = m_track_params->histogram.find(static_cast<uint32_t>(index));
     if (it == m_track_params->histogram.end())
     {
         return 0;
@@ -188,7 +188,7 @@ rocprofvis_dm_value_t Track::GetHistogramBucketValueAt(size_t index)
 }
 
 uint64_t  Track::GetHistogramBucketNumEventsAt(size_t index) {
-    auto it = m_track_params->histogram.find(index);
+    auto it = m_track_params->histogram.find(static_cast<uint32_t>(index));
     if (it == m_track_params->histogram.end())
     {
         return 0;

@@ -486,7 +486,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		std::set<std::string> kernel_ids;
 		uint32_t workload_id = 0;
 		bool workload_detected = false;
-		for (int i = 0; i < num; i++)
+		for (uint32_t i = 0; i < num; i++)
 		{
 			if (params[i].param_type == kRPVComputeParamKernelId)
 			{				
@@ -547,7 +547,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		std::set<std::string> workload_ids;
 		uint32_t workload_id = 0;
 		bool workload_detected = false;
-		for (int i = 0; i < num; i++)
+		for (uint32_t i = 0; i < num; i++)
 		{
 			if (params[i].param_type == kRPVComputeParamWorkloadId && !workload_detected)
 			{				

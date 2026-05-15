@@ -16,7 +16,7 @@ namespace DataModel
         auto it = m_column_index.find(name);
         if (it == m_column_index.end())
         {
-            index = m_columns.size();
+            index = static_cast<uint32_t>(m_columns.size());
             m_column_index[name] = index;
             m_columns.push_back( std::make_pair(name,type) );
         }
@@ -32,7 +32,7 @@ namespace DataModel
         auto it = m_row_index.find(id);
         if (it == m_row_index.end())
         {
-            m_row_index[id] = m_rows.size();
+            m_row_index[id] = static_cast<uint32_t>(m_rows.size());
             m_rows.push_back({ id });
             m_rows.back().values.resize(m_columns.size());
         }
@@ -156,7 +156,7 @@ namespace DataModel
         TableCache& table = tables[table_name];
         uint32_t num_columns = table.NumColumns();
         std::string str_id = std::to_string(process_id);   
-        for (int i = 0; i < num_columns; i++)
+        for (uint32_t i = 0; i < num_columns; i++)
         { 
             rocprofvis_db_ext_data_t record;
             record.name = table.GetColumnName(i);
@@ -173,7 +173,7 @@ namespace DataModel
     rocprofvis_dm_result_t DatabaseCache::PopulateTrackTopologyData(Database * db, rocprofvis_dm_track_identifiers_t * track_indentifiers, uint32_t db_instance_id, const char* table_name, uint64_t process_id ){
         TableCache& table = tables[table_name];
         uint32_t num_columns = table.NumColumns();
-        for (int i = 0; i < num_columns; i++)
+        for (uint32_t i = 0; i < num_columns; i++)
         { 
             const char* name = table.GetColumnName(i);
             const rocprofvis_db_data_type_t type  = table.GetColumnType(i);
@@ -197,7 +197,7 @@ namespace DataModel
         if (it != m_str_to_id.end())
             return it->second;
 
-        uint32_t id = m_id_to_str.size();
+        uint32_t id = static_cast<uint32_t>(m_id_to_str.size());
         m_id_to_str.push_back(str);
         m_str_to_id[str] = id;
         return id;

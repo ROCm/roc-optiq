@@ -403,7 +403,7 @@ void Trace::BuildStringsOrderArray() {
         });
     m_sorted_strings_lookup_array.resize(m_strings.size());
     for (size_t sorted_pos = 0; sorted_pos < idx.size(); ++sorted_pos)
-        m_sorted_strings_lookup_array[idx[sorted_pos]] = sorted_pos;
+        m_sorted_strings_lookup_array[idx[sorted_pos]] = static_cast<rocprofvis_dm_index_t>(sorted_pos);
 }
 
 const size_t Trace::GetStringOrder(const rocprofvis_dm_trace_t object, uint32_t index) {
@@ -558,7 +558,7 @@ rocprofvis_dm_table_t Trace::AddInfoTable(const rocprofvis_dm_trace_t object, ro
     Trace* trace = (Trace*) object;
     TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
-        uint32_t id = trace->m_info_tables.size();
+        uint32_t id = static_cast<uint32_t>(trace->m_info_tables.size());
         trace->m_info_tables.push_back(std::make_unique<InfoTable>(trace, id, node, name, handle));
     }
     catch(const std::exception&)

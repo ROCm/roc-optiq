@@ -187,13 +187,13 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsUint64(rocprofvis_dm_property_
 			ROCPROFVIS_ASSERT_MSG_RETURN(index < m_properties.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultInvalidParameter);
 			auto it = m_properties.begin();
 			std::advance(it, index);
-			return GetPropertyType(it->second.index(), value);
+			return GetPropertyType(static_cast<int>(it->second.index()), value);
 		}
 		case kRPVControllerTopologyNodePropertyTypeKeyed:
 		{
 			auto it = m_properties.find(index);
 			ROCPROFVIS_ASSERT_MSG_RETURN(it!=m_properties.end(), ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultInvalidProperty);
-			return GetPropertyType(it->second.index(), value);
+			return GetPropertyType(static_cast<int>(it->second.index()), value);
 		}
 		case kRPVControllerTopologyNodePropertyValueIndexed:
 		{

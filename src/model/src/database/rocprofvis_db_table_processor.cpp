@@ -583,7 +583,7 @@ namespace DataModel
                     try {
                         filtered = true;
                         auto filter = FilterExpression::Parse(m_last_filter_str);
-                        int use_threads = (m_merged_table.RowCount()+10000) / 10000;
+                        int use_threads = static_cast<int>((m_merged_table.RowCount()+10000) / 10000);
                         size_t thread_count = std::thread::hardware_concurrency() - 1;
                         if (use_threads < thread_count)
                             thread_count = use_threads;
@@ -595,7 +595,7 @@ namespace DataModel
                             auto lfilter = filter;
                             for (size_t row_index = start_row; row_index < end_row; row_index++)
                             {
-                                GetRowMap(row_index, row_map);
+                                GetRowMap(static_cast<int>(row_index), row_map);
                                 bool valid = true;
                                 try {
                                     valid = lfilter.Evaluate(row_map);
@@ -609,7 +609,7 @@ namespace DataModel
                                 if (valid)
                                 {
                                     std::lock_guard<std::mutex> lock(mtx);
-                                    m_filter_lookup.insert(row_index);
+                                    m_filter_lookup.insert(static_cast<uint32_t>(row_index));
                                 }
 
                             }
@@ -662,7 +662,7 @@ namespace DataModel
                 if (!m_last_group_str.empty())
                 {
                     static int max_events_per_thread = 10000;
-                    int use_threads = (m_merged_table.RowCount()+max_events_per_thread) / max_events_per_thread;
+                    int use_threads = static_cast<int>((m_merged_table.RowCount()+max_events_per_thread) / max_events_per_thread);
                     size_t thread_count = std::thread::hardware_concurrency() - 1;
                     if (use_threads < thread_count)
                         thread_count = use_threads;
@@ -670,13 +670,13 @@ namespace DataModel
                     std::vector<std::thread> threads;
                     size_t rows_per_task = thread_count == 0 ? 0 : m_merged_table.RowCount() / thread_count;
 
-                    if (m_merged_table.SetupAggregation(m_last_group_str, thread_count + 1))
+                    if (m_merged_table.SetupAggregation(m_last_group_str, static_cast<int>(thread_count + 1)))
                     {
                         auto task = [&](size_t thread_index, size_t start_row, size_t end_row) {
                             for (size_t row_index = start_row; row_index < end_row; row_index++)
                             {
-                                if (!filtered || m_filter_lookup.count(row_index))
-                                    m_merged_table.AggregateRow(m_db, row_index, thread_index);
+                                if (!filtered || m_filter_lookup.count(static_cast<uint32_t>(row_index)))
+                                    m_merged_table.AggregateRow(m_db, static_cast<int>(row_index), static_cast<int>(thread_index));
                             }
                             };
 
@@ -713,7 +713,7 @@ namespace DataModel
             {
                 rocprofvis_dm_table_row_t row =
                     m_db->BindObject()->FuncAddTableRow(table);
-                result = AddNumRecordsColumn(row, m_merged_table.AggregationRowCount());
+                result = AddNumRecordsColumn(row, static_cast<int>(m_merged_table.AggregationRowCount()));
                 if (kRocProfVisDmResultSuccess == result)
                     result = AddAggregatedColumns(false, table);
                 if (kRocProfVisDmResultSuccess == result)
@@ -763,7 +763,7 @@ namespace DataModel
                 rocprofvis_dm_table_row_t row =
                     m_db->BindObject()->FuncAddTableRow(table);
 
-                result = AddNumRecordsColumn(row, table_size);
+                result = AddNumRecordsColumn(row, static_cast<int>(table_size));
                 if (kRocProfVisDmResultSuccess == result)
                     result = AddTableColumns(false, table);
                 if (kRocProfVisDmResultSuccess == result)
@@ -854,7 +854,7 @@ namespace DataModel
             if (!table_processor->m_tables[callback_params->track_id]->track_ids_indices.is_pmc_identifier)
             {
                 it = Builder::table_view_schema.find(Builder::STREAM_TRACK_ID_PUBLIC_NAME);
-                table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, column_index, Builder::table_view_schema.size());
+                table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, column_index, static_cast<uint8_t>(Builder::table_view_schema.size()));
             }
 
         }

@@ -1,8 +1,8 @@
 # Warnings & Code-Quality Audit
 
-Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13
+Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13  •  Last refreshed: 2026-05-15
 Build configuration: `x64-debug` (MSVC 19.50, `/W4 /EHsc`, Visual Studio 18 2026)
-Source log: [`build/x64-debug-build.log`](build/x64-debug-build.log)
+Source log: [`build/x64-debug-precommit.log`](build/x64-debug-precommit.log) (full rebuild after commit `9c7a4ca6`)
 
 This document combines:
 1. **Compile-time warnings** emitted by MSVC `/W4` during a clean Debug build.
@@ -25,6 +25,29 @@ This document combines:
 ## 0. Progress log
 
 > Reverse-chronological. Each entry: date • category • count fixed • short note.
+
+### 2026-05-15 — C4267 (79/79 fixed) ✓ category complete
+
+All 79 build-time emissions cleared via **30 source edits** across 10 files. Pattern is uniform: every fix is `static_cast<DestType>(<size_t expression>)`. Zero behavioral change — the truncation was already happening implicitly; we just made it explicit and visible to the reader. Distribution: header returns (`NumDbInstances`, `NumColumns`) — 2 edits → ate ~25 emissions; `.cpp` size-of-container assignments — 16 edits; size-to-int-param call sites — 12 edits. Biggest cluster is 10 edits in `rocprofvis_db_table_processor.cpp` covering the parallel filter / aggregation dispatch + `AddNumRecordsColumn` calls. **Latent bug parked in §8** — `Track::GetHistogramBucketValueAt(size_t)` and `GetHistogramBucketNumEventsAt(size_t)` accept `size_t` but the underlying `histogram` map is keyed by `uint32_t`; the cast silences the compiler but the type contract is internally inconsistent. Build: clean, 0 errors, 0 C4267, no other categories affected. Verified via `build/x64-debug-c4267.log`.
+
+### 2026-05-15 — C4018 (28/28 fixed) ✓ category complete
+
+All 28 build-time emissions cleared via **6 source edits**. The "28" was multi-TU re-emission of a small set of physical sites; one header line (`rocprofvis_db.h:68`) accounted for 23 of the 28 because that header is included by 23 `.cpp` files in `datamodel.vcxproj`. Per-site list:
+
+- `src/model/src/database/rocprofvis_db.h:68` — `OrderedMutex::init`: `for (int i = 0; i < num_instances; i++)` → `for (uint32_t i = ...)`. `num_instances` is `uint32_t`. Eliminates 23 emissions.
+- `src/model/src/database/rocprofvis_db_cache.cpp:159` — `PopulateTrackExtendedDataTemplate`: `for (int i = 0; i < num_columns; i++)` → `for (uint32_t i = ...)`. `num_columns` is `uint32_t`; body calls `table.GetColumnName(uint32_t)` / `GetColumnType(uint32_t)` so the promotion also kills a hidden silent narrowing at the call site.
+- `src/model/src/database/rocprofvis_db_cache.cpp:176` — `PopulateTrackTopologyData`: same loop pattern, same fix.
+- `src/model/src/database/rocprofvis_db_compute.cpp:489` — `GetComputeMetricValues`: `for (int i = 0; i < num; i++)` → `for (uint32_t i = ...)`. `num` has type `rocprofvis_db_num_of_params_t` which is `typedef uint32_t`.
+- `src/model/src/database/rocprofvis_db_compute.cpp:550` — `GetComputeMetricValuesByWorkload`: same pattern, same fix.
+- `src/model/src/database/rocprofvis_db_profile.cpp:852` — outer `BuildAsyncQueries`-style loop: `for (int j = 0; j < split_count; j++)` → `for (uint32_t j = ...)`. `split_count` is `uint32_t`; body passes `j` to `BuildTrackQuery(..., uint32_t split_index)` so this also closes a hidden int→uint32_t narrowing at the call site.
+
+**Pattern:** every site was the canonical `for (int X = 0; X < <unsigned-bound>; X++)`. Promoting the counter to `uint32_t` is the standard fix; semantics are unchanged because `int < uint32_t` was already implicitly promoting `i` to `uint32_t` for the comparison anyway. **Bonus reductions** (other categories also dropped from the same edits): C4100 −5, C4245 −1, C4244 −14, C4267 −4 → total first-party warnings 827 → **775**.
+
+Build: clean, 0 errors, 0 C4018, no new categories. Verified via `build/x64-debug-c4018.log`.
+
+### 2026-05-15 — pull live numbers, plan next pass
+
+Re-grouped post-commit numbers from yesterday's full build (`build/x64-debug-precommit.log`, last commit `9c7a4ca6` on `dhingora/warning-fixes`). Errors: 0. First-party warnings: **827** (down from 1083 baseline). Live categories collapsed from 16 → **5**: C4100 (422), C4245 (173), C4244 (121), C4267 (83), C4018 (28). 71 % of remaining noise lives in 5 headers (`rocprofvis_db.h`, `rocprofvis_db_packed_storage.h`, `rocprofvis_db_compute.h`, `rocprofvis_dm_topology.h`, `rocprofvis_db_profile.h`). See §1, §2, §3 for tables. Next category to pick is the user's call.
 
 ### 2026-05-14 — C4189 (18/18 fixed) ✓ category complete
 
@@ -133,44 +156,52 @@ All four sites are the canonical inner-`for(int i …)` shadowing an outer `for(
 
 ## 1. Build summary
 
-| Metric | Baseline | Fixed | Remaining |
+| Metric | Baseline (pre-cleanup) | Fixed since baseline | Remaining (live) |
 |---|---:|---:|---:|
-| Errors | 0 | — | 0 |
-| Total warnings (raw) | **1136** | 77 | 1059 |
-| First-party warnings | **1083** | 77 | 1006 |
-| _last clean rebuild 2026-05-14 (`build\x64-debug-clean-build.log`); incremental verifications afterward_ | | | |
-| Thirdparty warnings | 53 | 0 | 53 |
-| First-party files with warnings | 66 | — | (recompute on next build) |
-| Distinct warning codes (first-party) | 16 | — | 16 |
+| Errors | 0 | — | **0** |
+| First-party warnings | **1083** | 387 | **696** |
+| Thirdparty warnings | 53 | — | 0 _(now suppressed via `/external:I`)_ |
+| Distinct warning codes (first-party) | 16 | 13 | **3** |
 
-Build succeeded; nothing here blocks compilation. "Fixed" reflects code-level fixes recorded in §0; the next clean rebuild will reconcile the actual delta.
+_Latest reference build: 2026-05-15 → [`build/x64-debug-c4267.log`](build/x64-debug-c4267.log) (full rebuild after the C4267 sweep, uncommitted). Last pushed commit: `9c7a4ca6` on `dhingora/warning-fixes`._
+
+Build succeeded; nothing here blocks compilation. The 3 remaining categories are listed in §2 below in priority order.
 
 ---
 
 ## 2. Compile warnings — by code (first-party only)
 
-| Count | Fixed | Code | Description | Severity (suggested) |
-|---:|---:|---|---|---|
-| 481 | 0 | C4100 | unreferenced formal parameter | low (style/intent) |
-| 187 | 0 | C4244 | conversion, possible loss of data (e.g. `int64_t` → `int`/`float`) | **medium** — silent truncation |
-| 183 | 0 | C4245 | signed/unsigned conversion in initialization/return | **medium** |
-| 114 | 0 | C4267 | conversion from `size_t` to smaller type | **medium** |
-| 32 | 0 | C4018 | signed/unsigned mismatch in comparison | **medium** |
-| 28 | 0 | C4456 | declaration of local hides previous local | **medium** — this is the `for (T i …){ T i; }` pattern |
-| 24 | **2** | C4189 | local variable initialized but not referenced | low — dead code |
-| 15 | **2** | C4996 | deprecated CRT function (`strncpy`, `vsprintf`, `getenv`, `getch`) | **medium** — security-flagged |
-| 5 | 0 | C4065 | switch with `default` only, no `case` | low — usually intent issue |
-| ~~4~~ | **4 ✓** | ~~C4702~~ | ~~unreachable code~~ | ~~**medium**~~ — **complete** |
-| ~~3~~ | **3 ✓** | ~~C4457~~ | ~~declaration hides function parameter~~ | ~~**medium**~~ — **complete** |
-| ~~2~~ | **2 ✓** | ~~C4389~~ | ~~`==`/`!=` signed/unsigned mismatch~~ | ~~**medium**~~ — **complete** |
-| ~~2~~ | **2 ✓** | ~~C4505~~ | ~~unreferenced function with internal linkage removed~~ | ~~low~~ — **complete** |
-| ~~1~~ | **1 ✓** | ~~C4101~~ | ~~unreferenced local variable~~ | ~~low~~ — **complete** |
-| ~~1~~ | **1 ✓** | ~~C4458~~ | ~~declaration hides class member~~ | ~~**medium**~~ — **complete** |
-| ~~1~~ | **1 ✓** | ~~C4701~~ | ~~potentially uninitialized local used~~ | ~~**HIGH** — possible UB~~ — **complete** |
+### 2a. Live categories (post C4267 sweep, 2026-05-15)
+
+| Remaining | Code | Description | Severity | Notes for next pass |
+|---:|---|---|---|---|
+| **417** | C4100 | unreferenced formal parameter | low (style/intent) | Mostly mechanical: add `(void)param;` or rename param away. Biggest count, smallest behavioral risk. |
+| **172** | C4245 | signed/unsigned conversion in initialization/return | **medium** | 132 of 172 in **one header** (`rocprofvis_db_packed_storage.h`). Likely a single set of constants needing `u`/`U` suffixes or `static_cast<uint32_t>(...)`. |
+| **107** | C4244 | conversion, possible loss of data (e.g. `int64_t` → `int`/`float`) | **medium** — silent truncation | Spread across DB / topology / packed-storage `.cpp` files; needs per-site review. |
+
+**Total: 696** (down from 1083 baseline; cleanup so far has cleared 387 warnings + 13 categories).
+
+### 2b. Categories already cleared ✓
+
+| Was | Code | Description | Cleared in |
+|---:|---|---|---|
+| ~~26~~ | C4456 | declaration of local hides previous local (the `for (T i ...) { T i; }` pattern) | `9c7a4ca6` |
+| ~~18~~ | C4189 | local variable initialized but not referenced | `9c7a4ca6` |
+| ~~5~~ | C4065 | switch with `default` only, no `case` | `9c7a4ca6` |
+| ~~4~~ | C4702 | unreachable code | `9c7a4ca6` |
+| ~~3~~ | C4457 | declaration hides function parameter | `9c7a4ca6` |
+| ~~2~~ | C4505 | unreferenced function with internal linkage | `9c7a4ca6` |
+| ~~2~~ | C4389 | `==`/`!=` signed/unsigned mismatch | `9c7a4ca6` |
+| ~~2~~ | C4996 | deprecated CRT function — partial: 2 of 15 fixed last week, remaining 13 deferred to phase 2 sweep | `9c7a4ca6` |
+| ~~1~~ | C4458 | declaration hides class member | `9c7a4ca6` |
+| ~~1~~ | C4101 | unreferenced local variable | `9c7a4ca6` |
+| ~~1~~ | C4701 | potentially uninitialized local used (was the only **HIGH** severity item) | `9c7a4ca6` |
+| ~~28~~ | C4018 | signed/unsigned mismatch in comparison | `2026-05-15` (uncommitted) |
+| ~~79~~ | C4267 | conversion from `size_t` to smaller type | `2026-05-15` (uncommitted) |
 
 ---
 
-## 3. Compile warnings — by file (first-party hotspots, ≥10 warnings)
+## 3. Compile warnings — by file (first-party hotspots, live, ≥10 warnings)
 
 | Count | File |
 |---:|---|
@@ -179,25 +210,35 @@ Build succeeded; nothing here blocks compilation. "Fixed" reflects code-level fi
 | 88 | `src/model/src/database/rocprofvis_db_compute.h` |
 | 72 | `src/model/src/datamodel/rocprofvis_dm_topology.h` |
 | 70 | `src/model/src/database/rocprofvis_db_profile.h` |
-| 36 | `src/model/src/database/rocprofvis_db_profile.cpp` |
-| 34 | `src/model/src/database/rocprofvis_db_rocprof.cpp` |
-| 29 | `src/model/src/common/rocprofvis_common_types.h` |
-| 27 | `src/model/src/database/rocprofvis_db_packed_storage.cpp` |
-| 27 | `src/model/src/database/rocprofvis_db_table_processor.cpp` |
-| 25 | `src/controller/src/system/rocprofvis_controller_track.cpp` |
+| 29 | `src/model/src/database/rocprofvis_db_rocprof.cpp` |
+| 23 | `src/model/src/database/rocprofvis_db_profile.cpp` |
 | 23 | `src/model/src/database/rocprofvis_db_cache.h` |
+| 23 | `src/model/src/common/rocprofvis_common_types.h` |
+| 22 | `src/model/src/database/rocprofvis_db_packed_storage.cpp` |
 | 22 | `src/model/src/database/rocprofvis_db_compute.cpp` |
-| 21 | `src/model/src/datamodel/rocprofvis_dm_track_slice.cpp` |
-| 18 | `src/controller/src/system/rocprofvis_controller_table_system.cpp` |
-| 18 | `src/model/src/datamodel/rocprofvis_dm_trace.cpp` |
-| 17 | `src/controller/src/compute/rocprofvis_controller_trace_compute.cpp` |
+| 21 | `src/model/src/database/rocprofvis_db_table_processor.cpp` |
+| 17 | `src/controller/src/system/rocprofvis_controller_table_system.cpp` |
+| 17 | `src/model/src/datamodel/rocprofvis_dm_trace.cpp` |
 | 15 | `src/model/src/database/rocprofvis_db_rocprof.h` |
-| 15 | `src/model/src/datamodel/rocprofvis_dm_base.cpp` |
-| 15 | `src/view/src/compute/rocprofvis_compute_summary.cpp` |
-| 12 | `src/model/src/test/main.cpp` |
-| 10 | `src/controller/src/system/rocprofvis_controller_sample.cpp` |
 
-**Observation:** ~60% of first-party warnings live under `src/model/src/database/`. Cleaning those headers (`rocprofvis_db.h`, `rocprofvis_db_packed_storage.h`, `rocprofvis_db_compute.h`, `rocprofvis_db_profile.h`) will eliminate roughly **497 / 1083 ≈ 46 %** of the noise in one shot.
+**Observation:** ~71 % of first-party warnings live in **5 headers** (`rocprofvis_db.h` + `rocprofvis_db_packed_storage.h` + `rocprofvis_db_compute.h` + `rocprofvis_dm_topology.h` + `rocprofvis_db_profile.h` = 569 / 827). Cleaning those headers will eliminate the majority of remaining noise in one shot.
+
+### 3a. Per-category × per-file breakdown (live)
+
+**C4100 (422 unreferenced parameter):**
+- `rocprofvis_db.h`: 161 • `rocprofvis_db_compute.h`: 86 • `rocprofvis_db_profile.h`: 70 • `rocprofvis_dm_topology.h`: 63 • `rocprofvis_db_compute.cpp`: 8 • `rocprofvis_db_profile.cpp`: 7 • `rocprofvis_db_rocprof.cpp`: 6 • `rocprofvis_db_rocpd.cpp`: 5 • `rocprofvis_controller_sample.cpp`: 5 • others: ≤3 each.
+
+**C4245 (173 signed/unsigned init):**
+- `rocprofvis_db_packed_storage.h`: 132 • `rocprofvis_common_types.h`: 23 • `rocprofvis_dm_topology.h`: 9 • others: ≤2 each.
+
+**C4244 (121 lossy conversion):**
+- `rocprofvis_db_packed_storage.cpp`: 20 • `rocprofvis_db_rocprof.cpp`: 19 • `rocprofvis_db_rocprof.h`: 15 • `rocprofvis_controller_table_system.cpp`: 12 • `rocprofvis_db_compute.cpp`: 12 • `rocprofvis_dm_trace.cpp`: 10 • `rocprofvis_db_profile.cpp`: 8 • `rocprofvis_db_table_processor.cpp`: 7 • others: ≤4 each.
+
+**C4267 (83 size_t→smaller):**
+- `rocprofvis_db.h`: 23 • `rocprofvis_db_cache.h`: 23 • `rocprofvis_db_table_processor.cpp`: 11 • `rocprofvis_dm_trace.cpp`: 6 • `rocprofvis_db_profile.cpp`: 5 • `rocprofvis_controller_table_system.cpp`: 4 • others: ≤3 each.
+
+**C4018 (28 signed/unsigned compare):**
+- `rocprofvis_db.h`: 23 • `rocprofvis_db_compute.cpp`: 2 • `rocprofvis_db_cache.cpp`: 2 • `rocprofvis_db_profile.cpp`: 1.
 
 The full per-file listing is at the bottom of this document (Appendix A).
 
@@ -561,6 +602,10 @@ Manual-review findings (§6) are deferred until the build is warning-clean — s
 ## 8. Parked observations
 
 > Things noticed in passing while fixing other warnings. Not bugs we're tracking right now — out of mind, but here for later if/when someone wants to pick them up. Add new entries to the **top** of this list.
+
+### 2026-05-15 — `Track::GetHistogramBucketValueAt` / `GetHistogramBucketNumEventsAt` parameter / map key type mismatch
+
+`Track::GetHistogramBucketValueAt(size_t index)` and `Track::GetHistogramBucketNumEventsAt(size_t index)` (in `rocprofvis_dm_track.cpp:177` and `:190`) declare a `size_t index` parameter, but `m_track_params->histogram` is `std::map<uint32_t, ...>` (defined in `rocprofvis_common_types.h:140` and `:157`). The C4267 fix added `static_cast<uint32_t>(index)` at the `find()` call to silence the warning, matching what the compiler was implicitly doing already. **However:** if any caller ever passes a value > `UINT32_MAX` (e.g., a 64-bit timestamp used directly as a histogram bucket key), the lookup truncates and silently misses the bucket. Pick one of: (a) audit all callers, prove they stay in 32-bit range, narrow the parameter to `uint32_t`; (b) widen the underlying map key to `size_t` if 64-bit bucket indices are real; (c) leave as-is and document the contract. Same shape as the histogram-builder code in `rocprofvis_db_profile.cpp::BuildHistogram` — should be checked together.
 
 ### 2026-05-14 — `rocprofvis_controller_track.cpp:824` `sample_value` is fetched but never used
 

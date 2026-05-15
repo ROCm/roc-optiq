@@ -65,7 +65,7 @@ class Database;
 // Helper class to lock processes in order of database instances
 class OrderedMutex {
 public:
-    void init(uint32_t num_instances) { for (int i = 0; i < num_instances; i++) { m_instances.insert(i); } }
+    void init(uint32_t num_instances) { for (uint32_t i = 0; i < num_instances; i++) { m_instances.insert(i); } }
 
     void lock(uint32_t id) {
         std::unique_lock<std::mutex> lock(m_lock);
@@ -446,7 +446,7 @@ class Database
 
     protected:
         guid_list_t& DbInstances() { return m_db_instances; }
-        uint32_t NumDbInstances() { return m_db_instances.size(); }
+        uint32_t NumDbInstances() { return static_cast<uint32_t>(m_db_instances.size()); }
         std::string GuidAt(int index) { return index < m_db_instances.size() ? m_db_instances[index].second : std::string(); }
         std::string GuidSymAt(int index) { std::string s = GuidAt(index); std::replace(s.begin(), s.end(), '_', '-'); return s; }
         DbInstance* DbInstancePtrAt(int index) { return index < m_db_instances.size() ? &m_db_instances[index].first : nullptr; }

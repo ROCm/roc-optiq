@@ -396,7 +396,7 @@ size_t Database::GetInfoTableNumRows(rocprofvis_dm_table_t object){
 const char* Database::GetInfoTableColumnName(rocprofvis_dm_table_t object, size_t column_index){
     TableCache* table = (TableCache*)object;
     ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, 0);
-    return table->GetColumnName(column_index);
+    return table->GetColumnName(static_cast<uint32_t>(column_index));
 }
 rocprofvis_dm_table_row_t Database::GetInfoTableRowHandle(rocprofvis_dm_table_t object, size_t row_index){
     TableCache* table = (TableCache*)object;

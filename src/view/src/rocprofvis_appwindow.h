@@ -108,6 +108,7 @@ private:
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
+    void HandleFontChanged();
     void HandleOpenFile();
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
@@ -146,6 +147,7 @@ private:
 
     EventManager::SubscriptionToken m_tabclosed_event_token;
     EventManager::SubscriptionToken m_tabselected_event_token;
+    EventManager::SubscriptionToken m_font_changed_token;
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();

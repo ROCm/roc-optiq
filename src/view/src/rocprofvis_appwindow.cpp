@@ -52,8 +52,6 @@ const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
 const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
 constexpr const char* SUPPORTED_FILE_TYPES_HINT   = "Supported types: .db, .rpd, .yaml, .rpv";
 
-constexpr float STATUS_BAR_HEIGHT = 30.0f;
-
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
 constexpr const char* CLOSING_MESSAGE = "Closing...";
 
@@ -97,6 +95,7 @@ AppWindow::AppWindow()
 , m_open_about_dialog(false)
 , m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_font_changed_token(static_cast<EventManager::SubscriptionToken>(-1))
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 , m_show_debug_window(false)
 , m_show_provider_test_widow(false)
@@ -127,6 +126,9 @@ AppWindow::~AppWindow()
                                              m_tabclosed_event_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kFontSizeChanged),
+                                             m_font_changed_token);
+
     for(auto& job : m_provider_cleanup_jobs)
     {
         if(job.future.valid())
@@ -161,10 +163,11 @@ AppWindow::Init()
         spdlog::warn("Failed to initialize SettingsManager");
     }
 
-    LayoutItem status_bar_item(-1, STATUS_BAR_HEIGHT);
+    constexpr float initial_status_bar_height = 30.0f;
+    LayoutItem status_bar_item(-1, initial_status_bar_height);
     status_bar_item.m_item =
         std::make_shared<RocCustomWidget>([this]() { RenderStatusBar(); });
-    LayoutItem main_area_item(-1, -STATUS_BAR_HEIGHT);
+    LayoutItem main_area_item(-1, -initial_status_bar_height);
     LayoutItem tool_bar_item(-1, 0);
     tool_bar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
 
@@ -211,8 +214,16 @@ AppWindow::Init()
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 
-    ConfigureFileDialogBackend();
+    auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void)e;
+        HandleFontChanged();
+    };
 
+    m_font_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+
+    ConfigureFileDialogBackend();
+    HandleFontChanged();
     return result;
 }
 
@@ -1257,6 +1268,35 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
 }
 
 void
+AppWindow::HandleFontChanged()
+{
+    // Update status bar height based on new font size
+    int count = static_cast<int>(m_main_view->ItemCount());
+
+    // status bar (assume as the last item)
+    auto status_bar_item = m_main_view->GetMutableAt(count - 1);
+    if(!status_bar_item)
+    {
+        return;
+    }
+
+    // Calculate status bar height based on font size, with some padding.
+    ImGuiStyle& style     = ImGui::GetStyle();
+    float       line_pad  = style.CellPadding.y * 2.0f;
+    float       line_size = ImGui::GetTextLineHeight() + line_pad;
+
+    status_bar_item->m_height = line_size;
+
+    // adjust main view's size to account for new status bar height
+    auto main_view_item = m_main_view->GetMutableAt(count - 2);
+    if(!main_view_item)
+    {
+        return;
+    }
+    main_view_item->m_height = -status_bar_item->m_height;
+}
+
+void
 AppWindow::RenderAboutDialog()
 {
     static constexpr const char* NAME_LABEL = "ROCm (TM) Optiq";
@@ -1593,8 +1633,9 @@ AppWindow::RenderStatusBar()
     ImGui::SameLine();
     if(m_status_show_busy_indicator)
     {
+        float radius = ImGui::GetTextLineHeight() * 0.25f;
         RenderLoadingIndicator(settings.GetColor(Colors::kTextDim), nullptr,
-                               kCenterVertical);
+                               kCenterVertical, radius);
         ImGui::SameLine(0.f, style.ItemSpacing.x);
     }
     ImGui::TextUnformatted(m_status_message.c_str());

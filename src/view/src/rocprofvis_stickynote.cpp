@@ -152,8 +152,8 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
         ImGui::BeginChild(child_id.c_str(), m_size, false, ImGuiWindowFlags_None);
 
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(
+            FontType::kIcon);
         ImGui::PushFont(icon_font);
         ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
         ImVec2 padding   = ImGui::GetStyle().FramePadding;
@@ -273,8 +273,8 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PopStyleColor();
 
         // Edit button (left of close)
-        ImFont* action_icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
+        ImFont* action_icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(
+            FontType::kIcon);
         ImGui::PushFont(action_icon_font);
         ImVec2 edit_icon_size  = ImGui::CalcTextSize(ICON_EDIT);
         ImVec2 close_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
@@ -375,9 +375,8 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     {
         ImVec2 icon_pos = ImVec2(window_position.x + x, window_position.y + y);
 
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
-        ImGui::PushFont(icon_font);
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+        ImGui::PushFont(icon_font, 0.0f);
         ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
         ImGui::PopFont();
 

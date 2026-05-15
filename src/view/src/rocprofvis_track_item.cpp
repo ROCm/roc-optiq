@@ -257,7 +257,7 @@ TrackItem::RenderMetaArea()
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
 
         ImGui::TextUnformatted(ICON_GRID);
         float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
@@ -281,6 +281,7 @@ TrackItem::RenderMetaArea()
         //         }
         //     }
         // }
+
         float available_for_text =
             content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
             4.0f * m_metadata_padding.x + 2.0f);
@@ -326,7 +327,7 @@ TrackItem::RenderMetaArea()
                                        m_meta_area_scale_width - menu_button_width,
                                    m_metadata_padding.y));
         IconButton(ICON_GEAR,
-                   m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+                   m_settings.GetFontManager().GetFont(FontType::kIcon));
         if(ImGui::IsItemHovered())
             SetTooltipStyled("Track Options");
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
@@ -863,7 +864,8 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     {
         return;
     }
-    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kSmall));
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault),
+                    settings.GetFontManager().GetFontSize(FontSize::kSmall));
 
     ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
 

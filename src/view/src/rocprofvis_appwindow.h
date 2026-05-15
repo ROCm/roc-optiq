@@ -134,8 +134,6 @@ private:
 
     std::shared_ptr<VFixedContainer> m_main_view;
     std::shared_ptr<TabContainer>    m_tab_container;
-    EmbeddedImage                    m_amd_logo_light;
-    EmbeddedImage                    m_amd_logo_dark;
 
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;

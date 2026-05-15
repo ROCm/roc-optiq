@@ -4,6 +4,7 @@
 #pragma once
 #include "widgets/rocprofvis_split_containers.h"
 #include <cstdint>
+#include <limits>
 #include <list>
 #include <string>
 #include <string_view>
@@ -52,6 +53,14 @@ private:
 
     bool XButton();
 
+    struct CallStackHoverState
+    {
+        static constexpr uint64_t kInvalidId = std::numeric_limits<uint64_t>::max();
+        uint64_t owner_event_id = kInvalidId;
+        uint64_t frame_event_id = kInvalidId;
+        uint64_t frame_track_id = kInvalidId;
+    };
+
     DataProvider&                            m_data_provider;
     SettingsManager&                         m_settings;
     std::shared_ptr<TimelineSelection>       m_timeline_selection;
@@ -60,14 +69,8 @@ private:
     int                                      m_context_menu_flow_index;
     int                                      m_context_menu_flow_column;
     int                                      m_context_menu_callstack_index;
-    // Call stack row hovered last frame. Used to paint the row background
-    // (InfiniteScrollTable-style) and to drive the timeline event highlight.
-    uint64_t                                 m_callstack_hover_owner_event_id;
-    uint64_t                                 m_callstack_hover_frame_event_id;
-    uint64_t                                 m_callstack_hover_frame_track_id;
-    uint64_t                                 m_frame_callstack_hover_owner_event_id;
-    uint64_t                                 m_frame_callstack_hover_frame_event_id;
-    uint64_t                                 m_frame_callstack_hover_frame_track_id;
+    CallStackHoverState                      m_callstack_hover;
+    CallStackHoverState                      m_frame_callstack_hover;
     const std::string_view DATA_COPIED_NOTIFICATION = "Data was copied";
 };
 

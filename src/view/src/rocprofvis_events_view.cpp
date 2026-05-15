@@ -45,20 +45,19 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_context_menu_flow_index(-1)
 , m_context_menu_flow_column(-1)
 , m_context_menu_callstack_index(-1)
-, m_callstack_hover_owner_event_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_callstack_hover_frame_event_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_callstack_hover_frame_track_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_frame_callstack_hover_owner_event_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_frame_callstack_hover_frame_event_id(TimelineSelection::INVALID_SELECTION_ID)
-, m_frame_callstack_hover_frame_track_id(TimelineSelection::INVALID_SELECTION_ID)
-{}
+{
+    static_assert(CallStackHoverState::kInvalidId ==
+                      TimelineSelection::INVALID_SELECTION_ID,
+                  "CallStackHoverState invalid sentinel must match "
+                  "TimelineSelection::INVALID_SELECTION_ID");
+}
 
 EventsView::~EventsView()
 {
-    if(m_callstack_hover_frame_event_id != TimelineSelection::INVALID_SELECTION_ID)
+    if(m_callstack_hover.frame_event_id != TimelineSelection::INVALID_SELECTION_ID)
     {
-        m_timeline_selection->UnhighlightTrackEvent(m_callstack_hover_frame_track_id,
-                                                    m_callstack_hover_frame_event_id);
+        m_timeline_selection->UnhighlightTrackEvent(m_callstack_hover.frame_track_id,
+                                                    m_callstack_hover.frame_event_id);
     }
 }
 
@@ -72,9 +71,7 @@ EventsView::Render()
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
     ImGui::BeginChild("events_view", ImVec2(0, 0),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-    m_frame_callstack_hover_owner_event_id = TimelineSelection::INVALID_SELECTION_ID;
-    m_frame_callstack_hover_frame_event_id = TimelineSelection::INVALID_SELECTION_ID;
-    m_frame_callstack_hover_frame_track_id = TimelineSelection::INVALID_SELECTION_ID;
+    m_frame_callstack_hover = {};
     if(m_event_items.empty())
     {
         ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
@@ -135,22 +132,20 @@ EventsView::Render()
             }
         }
     }
-    if(m_frame_callstack_hover_frame_event_id != m_callstack_hover_frame_event_id)
+    if(m_frame_callstack_hover.frame_event_id != m_callstack_hover.frame_event_id)
     {
-        if(m_callstack_hover_frame_event_id != TimelineSelection::INVALID_SELECTION_ID)
+        if(m_callstack_hover.frame_event_id != TimelineSelection::INVALID_SELECTION_ID)
         {
-            m_timeline_selection->UnhighlightTrackEvent(m_callstack_hover_frame_track_id,
-                                                        m_callstack_hover_frame_event_id);
+            m_timeline_selection->UnhighlightTrackEvent(m_callstack_hover.frame_track_id,
+                                                        m_callstack_hover.frame_event_id);
         }
-        if(m_frame_callstack_hover_frame_event_id != TimelineSelection::INVALID_SELECTION_ID)
+        if(m_frame_callstack_hover.frame_event_id != TimelineSelection::INVALID_SELECTION_ID)
         {
-            m_timeline_selection->HighlightTrackEvent(m_frame_callstack_hover_frame_track_id,
-                                                      m_frame_callstack_hover_frame_event_id);
+            m_timeline_selection->HighlightTrackEvent(m_frame_callstack_hover.frame_track_id,
+                                                      m_frame_callstack_hover.frame_event_id);
         }
     }
-    m_callstack_hover_owner_event_id = m_frame_callstack_hover_owner_event_id;
-    m_callstack_hover_frame_event_id = m_frame_callstack_hover_frame_event_id;
-    m_callstack_hover_frame_track_id = m_frame_callstack_hover_frame_track_id;
+    m_callstack_hover = m_frame_callstack_hover;
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
@@ -494,20 +489,10 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                 };
 
                 const uint64_t this_owner_event_id = event_data->basic_info.id.uuid;
-                const uint64_t this_owner_region_id =
-                    event_data->basic_info.id.bitfield.event_id;
                 const uint64_t prev_hovered_frame_event_id =
-                    (m_callstack_hover_owner_event_id == this_owner_event_id)
-                        ? m_callstack_hover_frame_event_id
+                    (m_callstack_hover.owner_event_id == this_owner_event_id)
+                        ? m_callstack_hover.frame_event_id
                         : TimelineSelection::INVALID_SELECTION_ID;
-
-                auto frame_uuid = [&](uint64_t region_id) -> uint64_t {
-                    TraceEventId tid{};
-                    tid.bitfield.event_id   = region_id;
-                    tid.bitfield.event_op   = event_data->basic_info.id.bitfield.event_op;
-                    tid.bitfield.event_node = event_data->basic_info.id.bitfield.event_node;
-                    return tid.uuid;
-                };
 
                 auto navigate_to_frame = [&](uint64_t uuid) {
                     m_timeline_selection->NavigateToEvent(event_data->track_id, uuid,
@@ -521,8 +506,9 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
-                        const auto& frame   = event_data->call_stack_info[i];
-                        const uint64_t uuid = frame_uuid(frame.region_id);
+                        const auto& frame    = event_data->call_stack_info[i];
+                        const uint64_t uuid  = frame.id.uuid;
+                        const bool     is_owner_frame = (uuid == this_owner_event_id);
                         std::string row_str = std::to_string(i);
 
                         ImGui::PushID(i);
@@ -533,7 +519,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                                 ImGuiTableBgTarget_RowBg0,
                                 m_settings.GetColor(Colors::kHighlightChart));
                         }
-                        else if(frame.region_id == this_owner_region_id)
+                        else if(is_owner_frame)
                         {
                             ImGui::TableSetBgColor(
                                 ImGuiTableBgTarget_RowBg0,
@@ -561,7 +547,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                         }
                         ImGui::PopStyleColor(3);
 
-                        callstack_cell(0, std::to_string(frame.region_id),
+                        callstack_cell(0, std::to_string(frame.id.bitfield.event_id),
                                        "##cs_id", i);
                         callstack_cell(1, frame.address, "##cs_addr", i);
                         callstack_cell(2, frame.name, "##cs_name", i);
@@ -570,10 +556,10 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
 
                         if(row_hovered)
                         {
-                            m_frame_callstack_hover_owner_event_id = this_owner_event_id;
-                            m_frame_callstack_hover_frame_event_id = uuid;
-                            m_frame_callstack_hover_frame_track_id = event_data->track_id;
-                            if(frame.region_id == this_owner_region_id)
+                            m_frame_callstack_hover.owner_event_id = this_owner_event_id;
+                            m_frame_callstack_hover.frame_event_id = uuid;
+                            m_frame_callstack_hover.frame_track_id = event_data->track_id;
+                            if(is_owner_frame)
                             {
                                 SetTooltipStyled(
                                     "This is the event you opened to view "
@@ -605,11 +591,10 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                     {
                         const auto& ctx_frame =
                             event_data->call_stack_info[m_context_menu_callstack_index];
-                        const uint64_t ctx_uuid = frame_uuid(ctx_frame.region_id);
 
                         if(ImGui::MenuItem("Go To Event"))
                         {
-                            navigate_to_frame(ctx_uuid);
+                            navigate_to_frame(ctx_frame.id.uuid);
                         }
                     }
                     ImGui::EndPopup();

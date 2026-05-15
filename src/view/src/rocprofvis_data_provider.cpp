@@ -2259,6 +2259,11 @@ DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
             event_info->call_stack_info.clear();
             event_info->call_stack_info.resize(prop_count);
 
+            // TODO(vlad): have the controller emit the full TraceEventId per
+            // call stack frame (currently only the region_id is provided via
+            // kRPVControllerCallstackRegionId) so this synthesis can go away.
+            const TraceEventId owner_id = event_info->basic_info.id;
+
             for(uint64_t i = 0; i < prop_count; i++)
             {
                 rocprofvis_handle_t* callstack_handle = nullptr;
@@ -2271,13 +2276,14 @@ DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
                     continue;
                 }
 
-                event_info->call_stack_info[i].file =
+                CallStackData& frame = event_info->call_stack_info[i];
+                frame.file =
                     GetString(callstack_handle, kRPVControllerCallstackFile, i);
-                event_info->call_stack_info[i].pc =
+                frame.pc =
                     GetString(callstack_handle, kRPVControllerCallstackPc, i);
-                event_info->call_stack_info[i].name =
+                frame.name =
                     GetString(callstack_handle, kRPVControllerCallstackName, i);
-                event_info->call_stack_info[i].address =
+                frame.address =
                     GetString(callstack_handle, kRPVControllerCallstackLineAddress, i);
 
                 uint64_t region_id = 0;
@@ -2285,17 +2291,16 @@ DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
                                                     kRPVControllerCallstackRegionId, i,
                                                     &region_id) == kRocProfVisResultSuccess)
                 {
-                    event_info->call_stack_info[i].region_id = region_id;
+                    frame.id.bitfield.event_id   = region_id;
+                    frame.id.bitfield.event_op   = owner_id.bitfield.event_op;
+                    frame.id.bitfield.event_node = owner_id.bitfield.event_node;
                 }
 
                 spdlog::debug(
                     "Call stack entry {}: file: {}, pc: {}, name: {}, address: {}, "
-                    "region_id: {}",
-                    i, event_info->call_stack_info[i].file,
-                    event_info->call_stack_info[i].pc,
-                    event_info->call_stack_info[i].name,
-                    event_info->call_stack_info[i].address,
-                    event_info->call_stack_info[i].region_id);
+                    "region_id: {}, uuid: {}",
+                    i, frame.file, frame.pc, frame.name, frame.address,
+                    frame.id.bitfield.event_id, frame.id.uuid);
             }
         }
     }

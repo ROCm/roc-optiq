@@ -688,21 +688,21 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
                     m_dm_handle, kRPVDMTrackExtDataCategoryCharPtrIndexed, index);
-            result = GetStringImpl(value, length, str, strlen(str));
+            result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
             break;
         }
         case kRPVControllerTrackExtDataNameIndexed:
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
                     m_dm_handle, kRPVDMTrackExtDataNameCharPtrIndexed, index);
-            result = GetStringImpl(value, length, str, strlen(str));
+            result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
             break;
         }
         case kRPVControllerTrackExtDataValueIndexed:
         {
             char* str = rocprofvis_dm_get_property_as_charptr(
                 m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, index);
-            result = GetStringImpl(value, length, str, strlen(str));
+            result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
             break;
         }
         default:

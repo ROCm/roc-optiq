@@ -681,7 +681,8 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
         hovered_idx = PlotHoverIdx();
         ImPlot::PlotPieChart(
             m_kernel_pie.labels.data(), m_kernel_pie.exec_time_pct.data(),
-            m_kernel_pie.exec_time_pct.size(), 0.0, 0.0, PIE_CHART_RADIUS,
+            static_cast<int>(m_kernel_pie.exec_time_pct.size()),
+            0.0, 0.0, PIE_CHART_RADIUS,
             [](double value, char* buff, int size, void* user_data) -> int {
                 (void) user_data;
                 if(value * 100.0 > 10.0)
@@ -769,7 +770,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
             {
                 ImPlot::PushColormap(m_settings.GetContrastColormapName());
             }
-            ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(i));
+            ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(static_cast<int>(i)));
             ImPlot::PlotBars((*m_kernels)[i].name.c_str(), &(*m_kernels)[i].exec_time_sum,
                              1, BAR_CHART_THICKNESS, i);
             if(i == m_hovered_idx)
@@ -892,7 +893,7 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
             ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollWithMouse);
         for(size_t i = 0; i < m_kernels->size(); i++)
         {
-            ImGui::PushID(i);
+            ImGui::PushID(static_cast<int>(i));
             ImVec2 pos = ImGui::GetCursorPos();
             bool   row_clicked =
                 ImGui::Selectable("", m_selected_idx == i,
@@ -906,8 +907,9 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
                 ImGui::GetCursorScreenPos() +
                     ImVec2(icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK,
                            icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK),
-                ImGui::GetColorU32(ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
-                                   row_hovered ? 0.75f : 1.0f));
+                ImGui::GetColorU32(
+                    ImGui::GetColorU32(ImPlot::GetColormapColor(static_cast<int>(i))),
+                    row_hovered ? 0.75f : 1.0f));
             ImGui::BeginDisabled(i == m_padded_idx);
             ImGui::SameLine(icon_width);
             ElidedText((*m_kernels)[i].name.c_str(), ImGui::GetContentRegionAvail().x,
@@ -915,7 +917,7 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
             ImGui::EndDisabled();
             if(row_hovered)
             {
-                hovered_idx = i;
+                hovered_idx = static_cast<int>(i);
                 if(row_clicked && m_selection_callback)
                 {
                     ToggleSelectKernel(i);
@@ -953,7 +955,7 @@ TopKernels::PlotHoverIdx() const
                            angle < m_kernel_pie.slices[i].angle +
                                        m_kernel_pie.slices[i].size_angle)
                         {
-                            idx = i;
+                            idx = static_cast<int>(i);
                             break;
                         }
                     }
@@ -968,7 +970,7 @@ TopKernels::PlotHoverIdx() const
                        mouse_pos.x <= static_cast<double>(i) + BAR_CHART_THICKNESS / 2.0 &&
                        mouse_pos.y >= 0.0 && mouse_pos.y <= (*m_kernels)[i].exec_time_sum)
                     {
-                        idx = i;
+                        idx = static_cast<int>(i);
                         break;
                     }
                 }

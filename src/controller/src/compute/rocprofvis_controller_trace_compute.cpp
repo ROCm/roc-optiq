@@ -664,7 +664,10 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t db, r
         {
             query_args[i] = {argument_store[i].first, argument_store[i].second.c_str()};
         }
-        result = rocprofvis_db_build_compute_query(db, use_case, query_args.size(), query_args.data(), &query);
+        result = rocprofvis_db_build_compute_query(
+            db, use_case,
+            static_cast<rocprofvis_db_num_of_params_t>(query_args.size()),
+            query_args.data(), &query);
         if(result == kRocProfVisDmResultSuccess)
         {
             if(allocate_db_future)

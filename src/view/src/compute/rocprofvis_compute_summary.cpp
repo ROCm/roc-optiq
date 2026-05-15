@@ -559,8 +559,8 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::PlotPieChart(
             m_kernel_pie.labels.data(),
             m_kernel_pie.metric_sets[m_kernel_pie.selected_metric].pct_values.data(),
-            m_kernel_pie.metric_sets[m_kernel_pie.selected_metric].pct_values.size(), 0.0,
-            0.0, PIE_CHART_RADIUS,
+            static_cast<int>(m_kernel_pie.metric_sets[m_kernel_pie.selected_metric].pct_values.size()),
+            0.0, 0.0, PIE_CHART_RADIUS,
             [](double value, char* buff, int size, void* user_data) -> int {
                 (void) user_data;
                 if(value * 100.0 > 10.0)
@@ -660,8 +660,9 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::SetupAxisTicks(ImAxis_X1,
                                m_kernel_bar.metric_sets[m_kernel_bar.selected_metric]
                                    .axis_tick_label_positions.data(),
-                               m_kernel_bar.metric_sets[m_kernel_bar.selected_metric]
-                                   .axis_tick_label_positions.size());
+                               static_cast<int>(
+                                   m_kernel_bar.metric_sets[m_kernel_bar.selected_metric]
+                                       .axis_tick_label_positions.size()));
         PlotHoverIdx();
         for(size_t i = 0; i < m_kernels.size(); i++)
         {
@@ -669,7 +670,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                m_kernel_bar.selected_metric == KernelInfo::InvocationCount ||
                m_kernel_bar.selected_metric == KernelInfo::DurationTotal)
             {
-                ImGui::PushID(i);
+                ImGui::PushID(static_cast<int>(i));
                 ImGui::SetCursorScreenPos(ImVec2(
                     ImGui::GetWindowPos().x + plot_style.PlotPadding.x,
                     ImPlot::PlotToPixels(ImPlotPoint(0, i), IMPLOT_AUTO, IMPLOT_AUTO).y -
@@ -751,7 +752,7 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
         ImGui::TableHeadersRow();
         for(size_t i = 0; i < m_kernels.size(); i++)
         {
-            ImGui::PushID(i);
+            ImGui::PushID(static_cast<int>(i));
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::GetWindowDrawList()->AddRectFilled(
@@ -776,7 +777,7 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
                        ImGui::GetWindowWidth() * 0.5f);
             for(size_t j = 0; j < m_kernels[i]->dispatch_metrics.size(); j++)
             {
-                ImGui::TableSetColumnIndex(2 + j);
+                ImGui::TableSetColumnIndex(static_cast<int>(2 + j));
                 KernelInfo::DispatchMetric metric =
                     static_cast<KernelInfo::DispatchMetric>(j);
                 switch(metric)

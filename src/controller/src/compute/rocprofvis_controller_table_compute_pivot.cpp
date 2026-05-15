@@ -164,7 +164,8 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
     // Build query using model layer
     char*                  query     = nullptr;
     rocprofvis_dm_result_t dm_result = rocprofvis_db_build_compute_query(
-        db, kRPVComputeFetchKernelMetricsMatrix, params.size(), params.data(), &query);
+        db, kRPVComputeFetchKernelMetricsMatrix,
+        static_cast<rocprofvis_db_num_of_params_t>(params.size()), params.data(), &query);
 
     if(dm_result == kRocProfVisDmResultSuccess && query)
     {
@@ -360,7 +361,7 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
                 {
                     if(!value && length)
                     {
-                        *length = m_columns[index].m_name.size();
+                        *length = static_cast<uint32_t>(m_columns[index].m_name.size());
                         result  = kRocProfVisResultSuccess;
                     }
                     else if(value && length)
@@ -376,7 +377,7 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
                 std::string title = "Kernel Metrics Matrix";
                 if(!value && length)
                 {
-                    *length = title.size();
+                    *length = static_cast<uint32_t>(title.size());
                     result  = kRocProfVisResultSuccess;
                 }
                 else if(value && length)

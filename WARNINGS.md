@@ -1,8 +1,8 @@
 # Warnings & Code-Quality Audit
 
-Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13  •  Last refreshed: 2026-05-15 (clean build, post C4018/C4456/C4189/C4245 mop-up)
+Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13  •  Last refreshed: 2026-05-15 (clean build, post C4267 + trivial-C4996 sweep)
 Build configuration: `x64-debug` (MSVC 19.50, `/W4 /EHsc`, Visual Studio 18 2026)
-Source log: [`build/x64-debug-clean-build.log`](build/x64-debug-clean-build.log) (**full clean rebuild** after C4018/C4456/C4189/C4245 newly-surfaced site cleanup, all uncommitted)
+Source log: [`build/x64-debug-clean-build.log`](build/x64-debug-clean-build.log) (**full clean rebuild** after C4267 + trivial-C4996 cleanup, all uncommitted on top of `92c20103`)
 
 This document combines:
 1. **Compile-time warnings** emitted by MSVC `/W4` during a clean Debug build.
@@ -25,6 +25,27 @@ This document combines:
 ## 0. Progress log
 
 > Reverse-chronological. Each entry: date • category • count fixed • short note.
+
+### 2026-05-15 — C4267 (35/35) + trivial-C4996 (4/13) sweep ✓ C4267 category complete
+
+Cleared the **35 newly-surfaced C4267 sites** (all in view/widgets/compute + a controller cluster the original C4267 sweep didn't reach) and the **4 trivial C4996 sites** (`getch`→`_getch`, 3× `vsprintf`→`vsnprintf`) in **39 surgical edits across 13 files**. The remaining 9 C4996 sites — 4× `strncpy` and 5× `getenv` — are deliberately deferred (see §4.3); they need either an API-contract decision (the `rocprofvis_controller_data.cpp:282` `strncpy` hides a real null-termination bug) or a small portable wrapper (the `getenv` cluster). Sites:
+
+- **C4267 (35) — same template as the prior model-side sweep: explicit `static_cast<DestType>(...)`:**
+  - `controller_table_compute_pivot.cpp:167, :363, :379` — `params.size()` → `rocprofvis_db_num_of_params_t`, `m_columns[i].m_name.size()` and `title.size()` → `uint32_t` for `*length` writes.
+  - `controller_trace_compute.cpp:667` — `query_args.size()` → `rocprofvis_db_num_of_params_t`.
+  - `controller_future.cpp:187` — `m_progress_map.size()` → `uint16_t` for the `/=` against `m_progress_percentage`.
+  - `controller_mem_mgmt.cpp:132, :473, :698, :701, :715` — five sites: `exponent << 11` → `uint32_t` for `m_mem_block_size` write; `size` (size_t param) → `uint32_t` for `MemoryPool` ctor; three `BitSet::FindFirstZero/Count` returns where `bit_pos`/`Size()`/`total` (size_t) feed `uint32_t` returns.
+  - `controller_table_system.cpp:64-65, :268-269` — two pairs of `m_tracks.size()` and `m_string_table_filters_ptr.size()` → `rocprofvis_db_num_of_tracks_t` / `rocprofvis_dm_num_string_table_filters_t` for `rocprofvis_db_build_table_query` arguments.
+  - `controller_track.cpp:691, :698, :705` — three `strlen(str)` (size_t) → `uint32_t` for `GetStringImpl` calls in three adjacent `case kRPVControllerTrackExtData*` blocks.
+  - `compute_summary.cpp:562, :664, :673, :755, :780` — five sites: two ImPlot `.size()` arguments → `int`, two `ImGui::PushID(i)` (size_t loop counter) → `int`, one `TableSetColumnIndex(2 + j)` → `int`.
+  - `compute_workload_view.cpp:129, :173` — two `ImGui::PushID(i)` → `int`.
+  - `summary_view.cpp:684, :772, :895, :909, :918, :956, :971` — seven sites: `PlotPieChart` size argument → `int`, two `GetColormapColor(i)` → `int`, one `PushID(i)` → `int`, three `int = size_t` assignments (`hovered_idx = i`, two `idx = i`).
+  - `compute_widget.cpp:175, :180, :444, :448` — two `m_rows.size()` → `uint32_t` for `max_rows`, two `row.values[value_index + 3]` index conversions to `uint32_t` (the map's key type).
+- **C4996 (4 trivial sites):**
+  - `model/src/test/main.cpp:33` — `vsprintf(buffer, fmt, argptr)` → `vsnprintf(buffer, sizeof(buffer), fmt, argptr)`. Same fix in `tests/rocprofvis_dm_compute_tests.cpp:77` and `tests/rocprofvis_dm_system_tests.cpp:89`. All three are demo/test `PrintHeader` helpers writing into a fixed `char buffer[256]`; adding the size argument is a strict safety improvement at zero behavioral cost.
+  - `model/src/test/main.cpp:141` — `getch()` → `_getch()` (MSVC-conformant name; same conio function).
+
+Build: full clean rebuild, **0 errors, 0 C4267 emissions**, **C4996 down to 9** (the 4 deferred `strncpy` + 5 deferred `getenv` — exactly the count predicted by the deferral plan). Total first-party warnings: **716 → 677** (−39, 5.5 % drop). No new warning categories surfaced; only **C4100 (481), C4244 (187), C4996 (9)** remain. Verified via `build/x64-debug-clean-build.log`.
 
 ### 2026-05-15 — C4018 + C4456 + C4189 + C4245 newly-surfaced sites (12/12 fixed) ✓ all four categories now zero
 
@@ -222,32 +243,29 @@ All four sites are the canonical inner-`for(int i …)` shadowing an outer `for(
 | Metric | Baseline (pre-cleanup) | Fixed since baseline | Remaining (live, **clean build**) |
 |---|---:|---:|---:|
 | Errors | 0 | — | **0** |
-| First-party warnings | **1083** | 367 | **716** |
+| First-party warnings | **1083** | 406 | **677** |
 | Thirdparty warnings | 53 | — | ~56 _(jsoncpp/yaml-cpp; not first-party scope)_ |
-| Distinct warning codes (first-party) | 16 | 12 | **4** |
+| Distinct warning codes (first-party) | 16 | 13 | **3** |
 
-_Latest reference build: 2026-05-15 → [`build/x64-debug-clean-build.log`](build/x64-debug-clean-build.log) (**full clean rebuild** after C4018/C4456/C4189/C4245 mop-up of the newly-surfaced sites, all uncommitted). Last pushed commit: `9c7a4ca6` on `dhingora/warning-fixes`._
+_Latest reference build: 2026-05-15 → [`build/x64-debug-clean-build.log`](build/x64-debug-clean-build.log) (**full clean rebuild** after C4267 + trivial-C4996 sweep, all uncommitted on top of `92c20103`). Last pushed commit: `92c20103` on `dhingora/warning-fixes`._
 
 > **Calibration note (2026-05-15):** prior to today's clean build we had been measuring against incremental builds, which under-counted by ~29 first-party warnings (mostly C4244 in view/widgets/compute TUs that no header sweep had touched). Numbers above are now the true post-sweep state. See progress-log entry "Clean-build calibration" for details.
 
-Build succeeded; nothing here blocks compilation. **Only 4 categories remain live**: C4100, C4244, C4267, C4996 — listed in §2 below in priority order.
+Build succeeded; nothing here blocks compilation. **Only 3 categories remain live**: C4100, C4244, C4996 (with 9 of 13 C4996 sites deliberately deferred per §4.3) — listed in §2 below in priority order.
 
 ---
 
 ## 2. Compile warnings — by code (first-party only)
 
-### 2a. Live categories (post C4018/C4456/C4189/C4245 mop-up, 2026-05-15 clean build)
+### 2a. Live categories (post C4267 + trivial-C4996 sweep, 2026-05-15 clean build)
 
 | Remaining | Code | Description | Severity | Notes for next pass |
 |---:|---|---|---|---|
 | **481** | C4100 | unreferenced formal parameter | low (style/intent) | 380 / 481 (79 %) live in 4 database/datamodel headers. Mostly virtual base-class methods with default-empty bodies. Mechanical fix: drop the parameter name in the declaration, or `(void)param;` at top of body. Biggest count, smallest behavioral risk. |
 | **187** | C4244 | conversion, possible loss of data (e.g. `int64_t` → `int`/`float`) | **medium** — silent truncation | Spread across packed-storage / rocprof / controller `.cpp` files; per-site review needed (some are intentional truncations of timestamps/durations to display widths, some are real narrowing bugs). |
-| **35** | C4267 | conversion from `size_t` to smaller type (newly-surfaced view/widgets sites) | **medium** | All 35 are in **view/widgets/compute** TUs that the previous targeted C4267 sweep didn't reach (which focused on the model side). Same fix template as the original sweep: explicit `static_cast<DestType>(<size_t expr>)`. |
-| **13** | C4996 | deprecated/unsafe CRT (`strncpy`, `vsprintf`, `getch`, `getenv`) | **medium** (security-flagged) | See §4.3 — one site (`rocprofvis_controller_data.cpp:283`) hides a real null-termination contract bug; rest are mechanical. |
+| **9** | C4996 | deprecated/unsafe CRT (`strncpy`, `getenv`) — deferred subset | **medium** (security-flagged) | See §4.3 — 4× `strncpy` (one of which, `rocprofvis_controller_data.cpp:282`, hides a real null-termination contract bug needing maintainer review) + 5× `getenv` (need a small portable `_dupenv_s` wrapper). The 4 trivial `vsprintf`/`getch` sites were cleared 2026-05-15. |
 
-**Total: 716 first-party** (down from 1083 baseline; cleanup has cleared 367 warnings and **12 categories outright**; the live category set is now exactly **C4100, C4244, C4267, C4996** — every shadowing/dead-local/signed-unsigned category is at zero).
-
-> Note on the C4244 count: it's **187** in the post-mop-up clean build, marginally up from the 184 reported just before this batch. The +3 is **not a regression** introduced by these fixes — it is residual incremental-build noise from the previous reference log that the clean rebuild flushed (the same kind of stale-`.obj` underreporting the calibration note describes). All 187 sites pre-date this batch.
+**Total: 677 first-party** (down from 1083 baseline; cleanup has cleared 406 warnings and **13 categories outright**; the live category set is now exactly **C4100, C4244, C4996** — every shadowing/dead-local/signed-unsigned/size_t-narrowing category is at zero).
 
 ### 2b. Categories already cleared ✓
 
@@ -263,10 +281,10 @@ Build succeeded; nothing here blocks compilation. **Only 4 categories remain liv
 | ~~1~~ | C4701 | potentially uninitialized local used (was the only **HIGH** severity item) | `9c7a4ca6` | 0 ✓ |
 | ~~26~~+~~3~~+~~2~~ | C4456 | declaration of local hides previous local (the `for (T i ...) { T i; }` pattern) | `9c7a4ca6` + `2026-05-15` (uncommitted; test-file + view/test mop-up) | **0 ✓** |
 | ~~28~~+~~3~~+~~1~~ | C4018 | signed/unsigned mismatch in comparison | `2026-05-15` (uncommitted; model-side + test-file + widgets mop-up) | **0 ✓** |
-| ~~79~~ | C4267 | conversion from `size_t` to smaller type | `2026-05-15` (uncommitted) | **35 newly-surfaced** in view/widgets/compute (see §2a) |
+| ~~79~~+~~35~~ | C4267 | conversion from `size_t` to smaller type | `2026-05-15` (uncommitted; original model-side sweep + view/widgets/compute mop-up) | **0 ✓** |
 | ~~172~~+~~5~~ | C4245 | signed/unsigned conversion in initialization/return | `2026-05-15` (uncommitted; model-side sweep + view/test/controller mop-up) | **0 ✓** |
 | ~~18~~+~~4~~ | C4189 | local variable initialized but not referenced | `9c7a4ca6` + `2026-05-15` (uncommitted; view/test mop-up) | **0 ✓** |
-| ~~2~~ | C4996 | deprecated CRT function — partial: 2 of 15 fixed last week | `9c7a4ca6` | **13 remaining** (see §2a / §4.3) |
+| ~~2~~+~~4~~ | C4996 | deprecated CRT function — partial cleanup of trivial sites only | `9c7a4ca6` + `2026-05-15` (uncommitted; `getch` + 3× `vsprintf`) | **9 remaining** — 4× `strncpy` + 5× `getenv`, deferred per §4.3 |
 
 ---
 
@@ -280,29 +298,24 @@ Build succeeded; nothing here blocks compilation. **Only 4 categories remain liv
 | 63 | `src/model/src/datamodel/rocprofvis_dm_topology.h` |
 | 25 | `src/model/src/database/rocprofvis_db_rocprof.cpp` |
 | 22 | `src/model/src/database/rocprofvis_db_packed_storage.cpp` |
-| 22 | `src/controller/src/system/rocprofvis_controller_track.cpp` |
 | 21 | `src/model/src/datamodel/rocprofvis_dm_track_slice.cpp` |
 | 20 | `src/model/src/database/rocprofvis_db_compute.cpp` |
-| 16 | `src/controller/src/system/rocprofvis_controller_table_system.cpp` |
-| 16 | `src/controller/src/compute/rocprofvis_controller_trace_compute.cpp` |
-| 15 | `src/model/src/database/rocprofvis_db_profile.cpp` |
-| 15 | `src/model/src/database/rocprofvis_db_rocprof.h` |
-| 15 | `src/view/src/compute/rocprofvis_compute_summary.cpp` |
+| 19 | `src/controller/src/system/rocprofvis_controller_track.cpp` |
 | 15 | `src/model/src/datamodel/rocprofvis_dm_base.cpp` |
+| 15 | `src/model/src/database/rocprofvis_db_rocprof.h` |
+| 15 | `src/model/src/database/rocprofvis_db_profile.cpp` |
+| 15 | `src/controller/src/compute/rocprofvis_controller_trace_compute.cpp` |
+| 12 | `src/controller/src/system/rocprofvis_controller_table_system.cpp` |
 | 11 | `src/model/src/datamodel/rocprofvis_dm_trace.cpp` |
-| 8 | `src/view/src/rocprofvis_summary_view.cpp` |
+| 10 | `src/view/src/compute/rocprofvis_compute_summary.cpp` |
 | 8 | `src/model/src/database/rocprofvis_db_table_processor.cpp` |
-| 8 | `src/controller/src/system/rocprofvis_controller_mem_mgmt.cpp` |
-| 6 | `src/model/src/test/main.cpp` |
 | 6 | `src/controller/src/system/rocprofvis_controller_sample.cpp` |
-| 5 | `src/controller/src/compute/rocprofvis_controller_table_compute_pivot.cpp` |
-| 5 | `src/view/src/widgets/rocprofvis_compute_widget.cpp` |
 | 5 | `src/view/src/rocprofvis_utils.cpp` |
-| 5 | `src/model/src/database/rocprofvis_db_rocpd.cpp` |
 | 5 | `src/model/src/database/rocprofvis_db_sqlite.cpp` |
 | 5 | `src/model/src/database/rocprofvis_db_expression_filter.cpp` |
+| 5 | `src/model/src/database/rocprofvis_db_rocpd.cpp` |
 
-**Observation:** **53 % of remaining first-party warnings live in 4 model headers** (`rocprofvis_db.h` + `rocprofvis_db_compute.h` + `rocprofvis_db_profile.h` + `rocprofvis_dm_topology.h` = 380 / 716) — and **all 380 are C4100** (unreferenced virtual base-class parameters). Sweeping C4100 will collapse the report to ~336 warnings in one pass.
+**Observation:** **56 % of remaining first-party warnings live in 4 model headers** (`rocprofvis_db.h` + `rocprofvis_db_compute.h` + `rocprofvis_db_profile.h` + `rocprofvis_dm_topology.h` = 380 / 677) — and **all 380 are C4100** (unreferenced virtual base-class parameters). Sweeping C4100 will collapse the report to ~297 warnings in one pass.
 
 ### 3a. Per-category × per-file breakdown (live, clean build)
 
@@ -312,11 +325,8 @@ Build succeeded; nothing here blocks compilation. **Only 4 categories remain liv
 **C4244 (187 lossy conversion):**
 - `rocprofvis_db_packed_storage.cpp`: 20 • `rocprofvis_db_rocprof.cpp`: 19 • `rocprofvis_db_rocprof.h`: 15 • `rocprofvis_controller_trace_compute.cpp`: 14 • `rocprofvis_controller_track.cpp`: 13 • `rocprofvis_db_compute.cpp`: 12 • `rocprofvis_controller_table_system.cpp`: 12 • `rocprofvis_dm_trace.cpp`: 10 • `rocprofvis_db_profile.cpp`: 8 • `rocprofvis_db_table_processor.cpp`: 7 • `rocprofvis_compute_summary.cpp`: 7 • `rocprofvis_db_expression_filter.cpp`: 5 • others: ≤4 each.
 
-**C4267 (35 size_t→smaller, all in view/widgets/compute):**
-- `rocprofvis_summary_view.cpp`: 7 • `rocprofvis_controller_mem_mgmt.cpp`: 5 • `rocprofvis_compute_summary.cpp`: 5 • `rocprofvis_compute_widget.cpp`: 4 • `rocprofvis_controller_table_system.cpp`: 4 • `rocprofvis_controller_track.cpp`: 3 • `rocprofvis_controller_table_compute_pivot.cpp`: 3 • `rocprofvis_compute_workload_view.cpp`: 2 • others: ≤1 each.
-
-**C4996 (13 deprecated CRT):**
-- `rocprofvis_utils.cpp`: 5 (`getenv`) • `main.cpp`: 2 (`vsprintf`/`getch`) • `rocprofvis_controller_table_compute_pivot.cpp`: 2 (`strncpy`) • `rocprofvis_dm_system_tests.cpp`: 1 • `rocprofvis_dm_compute_tests.cpp`: 1 • `rocprofvis_controller_data.cpp`: 1 (latent bug — see §4.3) • `rocprofvis_controller_handle.cpp`: 1.
+**C4996 (9 deferred deprecated CRT):**
+- `rocprofvis_utils.cpp`: 5 (`getenv` — needs `_dupenv_s` wrapper) • `rocprofvis_controller_table_compute_pivot.cpp`: 2 (`strncpy`) • `rocprofvis_controller_data.cpp`: 1 (`strncpy` — **latent null-termination bug**, see §4.3) • `rocprofvis_controller_handle.cpp`: 1 (`strncpy`).
 
 The full per-file listing is at the bottom of this document (Appendix A) but is now stale (incremental-build numbers); regenerate from `build/x64-debug-clean-build.log` if needed.
 
@@ -345,22 +355,24 @@ These are the warnings most worth fixing first because each one is either a like
 
 > Either delete the dead branch or fix the control flow that made it unreachable.
 
-### 4.3 C4996 — deprecated/unsafe CRT (15) — **medium (security-flagged)** — 2/15 fixed (paused; remaining 13 deferred to Phase 2 auto-sweep)
+### 4.3 C4996 — deprecated/unsafe CRT (15) — **medium (security-flagged)** — 6/15 fixed; remaining 9 deferred (need API decisions or a portable wrapper)
 
-> **Note:** When Phase 2 picks this back up, **`rocprofvis_controller_data.cpp:283`** is *not* a simple deprecation cleanup — the `strncpy` there is hiding a real null-termination contract bug (the size-query branch returns `strlen(m_string)`, but the copy branch then fills the entire returned buffer with no room for `'\0'`). That site needs the API contract decided first (capacity-includes-null vs not) before any fix; flag it for the maintainer rather than auto-fixing.
+> **Maintainer-decision needed:** `rocprofvis_controller_data.cpp:282` is *not* a simple deprecation cleanup — the `strncpy` there is hiding a real null-termination contract bug (the size-query branch returns `strlen(m_string)`, but the copy branch then fills the entire returned buffer with no room for `'\0'`). That site needs the API contract decided first (capacity-includes-null vs not) before any fix.
+
+> **Portable wrapper needed:** the 5× `getenv` sites in `rocprofvis_utils.cpp` should be replaced via a single shared helper (e.g. `std::optional<std::string> GetEnv(const char*)` that uses `_dupenv_s` on MSVC and `std::getenv` elsewhere). Per-site `_dupenv_s` rewrites would scatter ownership-transfer code unnecessarily.
 
 `strncpy` (does not always null-terminate), `vsprintf` (no length check), `getenv` (no thread-safety on Windows in older CRT), `getch` (POSIX name deprecated by MS).
 
-| Status | File | Lines | Function |
-|:---:|---|---|---|
-| ✓✓ | `src/model/src/common/rocprofvis_c_interface.cpp` | ~~325~~, ~~350~~ | `strncpy` — fixed 2026-05-14 (`memcpy` + explicit `'\0'`) |
-| · | `src/controller/src/rocprofvis_controller_data.cpp` | 283 | `strncpy` |
-| · | `src/controller/src/rocprofvis_controller_handle.cpp` | 28 | `strncpy` |
-| · | `src/controller/src/compute/rocprofvis_controller_table_compute_pivot.cpp` | 368, 384 | `strncpy` |
-| · | `src/model/src/test/main.cpp` | 33, 141 | `vsprintf`, `getch` |
-| · | `src/model/src/tests/rocprofvis_dm_compute_tests.cpp` | 77 | `vsprintf` |
-| · | `src/model/src/tests/rocprofvis_dm_system_tests.cpp` | 89 | `vsprintf` |
-| · | `src/view/src/rocprofvis_utils.cpp` | 344, 441, 467, 468, 469 | `getenv` |
+| Status | File | Lines | Function | Fix |
+|:---:|---|---|---|---|
+| ✓✓ | `src/model/src/common/rocprofvis_c_interface.cpp` | ~~325~~, ~~350~~ | `strncpy` | `9c7a4ca6` (`memcpy` + explicit `'\0'`) |
+| · | `src/controller/src/rocprofvis_controller_data.cpp` | 282 | `strncpy` | **deferred** — latent contract bug, needs maintainer review |
+| · | `src/controller/src/rocprofvis_controller_handle.cpp` | 28 | `strncpy` | deferred — bundle with `controller_data.cpp` decision |
+| · | `src/controller/src/compute/rocprofvis_controller_table_compute_pivot.cpp` | 368, 384 | `strncpy` | deferred — bundle with `controller_data.cpp` decision |
+| ✓ | `src/model/src/test/main.cpp` | 33, ~~141~~ | `vsprintf`→`vsnprintf`, `getch`→`_getch` | 2026-05-15 (uncommitted) |
+| ✓ | `src/model/src/tests/rocprofvis_dm_compute_tests.cpp` | ~~77~~ | `vsprintf`→`vsnprintf` | 2026-05-15 (uncommitted) |
+| ✓ | `src/model/src/tests/rocprofvis_dm_system_tests.cpp` | ~~89~~ | `vsprintf`→`vsnprintf` | 2026-05-15 (uncommitted) |
+| · | `src/view/src/rocprofvis_utils.cpp` | 344, 441, 467, 468, 469 | `getenv` | **deferred** — needs portable `GetEnv` wrapper, not 5× per-site `_dupenv_s` |
 
 > Recommendation: prefer `std::string`/`std::vector<char>` and bounded copies (`strncpy_s` on MSVC; manual length-checked copy for portability). For env vars, write a small portable wrapper that uses `_dupenv_s` on MSVC and `std::getenv` elsewhere.
 

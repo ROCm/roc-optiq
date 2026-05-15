@@ -30,7 +30,7 @@ void PrintHeader(const char* fmt, ...) {
     va_list argptr;
     char buffer[256];
     va_start(argptr, fmt);
-    vsprintf(buffer, fmt, argptr);
+    vsnprintf(buffer, sizeof(buffer), fmt, argptr);
     va_end(argptr);
     size_t text_len = strlen(buffer);
     if (HEADER_LEN > text_len)
@@ -138,7 +138,7 @@ bool NextTest(const char* message)
         char ch;
         printf("\x1b[0m%s:", message);
         while (true) {
-            ch = getch();
+            ch = _getch();
             if (ch == 27 || ch == 13) break;
         }
         printf("\n");

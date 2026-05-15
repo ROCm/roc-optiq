@@ -74,7 +74,7 @@ PrintHeader(const char* fmt, ...)
     va_list     argptr;
     char        buffer[256];
     va_start(argptr, fmt);
-    vsprintf(buffer, fmt, argptr);
+    vsnprintf(buffer, sizeof(buffer), fmt, argptr);
     va_end(argptr);
     size_t text_len = strlen(buffer);
     if(HEADER_LEN > text_len) header.assign((HEADER_LEN - text_len) / 2, '*');

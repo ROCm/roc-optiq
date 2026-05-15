@@ -129,7 +129,7 @@ void MemoryManager::Init(size_t trace_size)
         num_gigabytes >>= 1;
         exponent <<= 1;
     }
-    m_mem_block_size = exponent << 11;
+    m_mem_block_size = static_cast<uint32_t>(exponent << 11);
 
     spdlog::debug("Physical memory = {}!", s_physical_memory_avail);
     spdlog::debug("Memory manager memory allocation block  size = {}!", m_mem_block_size);
@@ -470,7 +470,7 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
 
     if(current_pool == nullptr)
     {
-        current_pool = new MemoryPool(size, type, m_mem_block_size);
+        current_pool = new MemoryPool(static_cast<uint32_t>(size), type, m_mem_block_size);
         auto& inner_map = m_object_pools[pool_idetifier];
         auto [inner_it, inserted] = inner_map.emplace(current_pool->m_base, current_pool);
         if(inserted)
@@ -695,10 +695,10 @@ BitSet::FindFirstZero() const
             size_t bit_index = __builtin_ctzll(free_bits);
             size_t bit_pos   = i * WORD_SIZE + bit_index;
 #endif
-            if(bit_pos < Size()) return bit_pos;
+            if(bit_pos < Size()) return static_cast<uint32_t>(bit_pos);
         }
     }
-    return Size();
+    return static_cast<uint32_t>(Size());
 }
 
 uint32_t
@@ -712,7 +712,7 @@ BitSet::Count() const {
         total += __builtin_popcountll(word);
 #endif
     }
-    return total;
+    return static_cast<uint32_t>(total);
 }
 
 

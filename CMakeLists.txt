@@ -299,26 +299,15 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
         )
     endif()
 
-    # === macOS code signing (optional) ===
-    #
-    # ROCPROFVIS_MACOS_CODESIGN_IDENTITY may be:
-    #   ""           (default) -> no codesigning; suitable for local dev builds.
-    #   "-"          -> ad-hoc sign; satisfies Gatekeeper for local launching of
-    #                   re-written dylibs without a real Developer ID.
-    #   "Developer ID Application: ... (TEAMID)"
-    #                -> Full Developer ID signing with Hardened Runtime + the
-    #                   bundled entitlements plist, ready for notarization.
     set(ROCPROFVIS_MACOS_CODESIGN_IDENTITY "" CACHE STRING
-        "Identity passed to codesign --sign. Empty disables codesigning. \
-Use '-' for ad-hoc signing, or a full Developer ID for release builds.")
+        "codesign --sign identity. Empty=skip, '-'=ad-hoc, \
+'Developer ID Application: ... (TEAMID)' for notarization-ready release.")
     set(ROCPROFVIS_MACOS_ENTITLEMENTS
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.entitlements.plist"
         CACHE FILEPATH "Entitlements plist used when codesigning the .app")
 
     if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY)
-        # Developer ID needs hardened runtime + entitlements + secure timestamp
-        # for notarization. Ad-hoc signing ('-') cannot use those options, so
-        # build the codesign argument list dynamically.
+        # Ad-hoc signing can't use --options runtime / --timestamp / --entitlements.
         if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY STREQUAL "-")
             set(_rocprofvis_codesign_runtime_args "")
         else()
@@ -328,10 +317,6 @@ Use '-' for ad-hoc signing, or a full Developer ID for release builds.")
                 --entitlements "${ROCPROFVIS_MACOS_ENTITLEMENTS}")
         endif()
 
-        # --deep is technically deprecated but still accepted by notarization
-        # and is the only single-shot way to sign every nested dylib that
-        # happens to end up in Contents/Frameworks/ (Vulkan loader, GLFW when
-        # built shared, etc.) without having to enumerate them in CMake.
         add_custom_command(
             TARGET ${TARGET_NAME} POST_BUILD
             COMMAND codesign --force --deep

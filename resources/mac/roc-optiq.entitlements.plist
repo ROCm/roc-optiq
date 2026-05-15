@@ -3,20 +3,11 @@
     "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!--
-        Allow the Vulkan loader (libvulkan.1.dylib) bundled inside this app to
-        dlopen the system-installed libMoltenVK.dylib from the LunarG Vulkan
-        SDK. libMoltenVK is signed with the LunarG Team ID, not AMD's, so
-        Hardened Runtime would otherwise reject it via library validation.
-    -->
+    <!-- dlopen LunarG-signed libMoltenVK.dylib (different Team ID). -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
 
-    <!--
-        MoltenVK uses Apple's Metal API to compile SPIR-V into MSL at runtime,
-        which can require writable+executable memory pages under Hardened
-        Runtime.
-    -->
+    <!-- MoltenVK SPIR-V -> MSL translation may need W^X memory. -->
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
 </dict>

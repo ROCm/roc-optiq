@@ -8,15 +8,16 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_image_helpers.h"
+#include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
 
-#ifdef USE_NATIVE_FILE_DIALOG
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <thread>
-#include <chrono>
-#endif
+#include <vector>
 
 namespace RocProfVis
 {
@@ -72,11 +73,28 @@ public:
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;
 
+    void SetFileDialogPreference(rocprofvis_view_file_dialog_preference_t pref);
+
 private:
+    enum class ProviderCleanupReason
+    {
+        kTabClose,
+        kAppShutdown
+    };
+
+    struct ProviderCleanupJob
+    {
+        std::string                            label;
+        std::string                            notification_id;
+        ProviderCleanupReason                  reason;
+        std::future<DataProviderCleanupResult> future;
+    };
+
     AppWindow();
     ~AppWindow();
 
     void RenderDisableScreen();
+    void RenderShutdownState();
     void RenderFileMenu(Project* project);
     void RenderEditMenu(Project* project);
     void RenderViewMenu(Project* project);
@@ -91,25 +109,33 @@ private:
     void HandleOpenFile();
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
+    void ConfigureFileDialogBackend();
+    void BeginAppShutdown();
+    void DetachProjectProviderCleanup(Project& project, ProviderCleanupReason reason);
+    void StartProviderCleanup(DataProviderCleanupWork cleanup_work,
+                              const std::string&    label,
+                              ProviderCleanupReason reason);
+    void UpdateProviderCleanups();
+    void RequestExitIfProviderCleanupsComplete();
 
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
 
     void ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback,
                               bool                             save_dialog);
-#else
+#endif
     void ShowImGuiFileDialog(const std::string&             title,
                         const std::vector<FileFilter>& file_filters,
                         const std::string& initial_path, const bool& confirm_overwrite,
                         std::function<void(std::string)> callback);
-#endif
     static AppWindow* s_instance;
 
     std::shared_ptr<VFixedContainer> m_main_view;
     std::shared_ptr<TabContainer>    m_tab_container;
-    EmbeddedImage                    m_amd_logo;
+    EmbeddedImage                    m_amd_logo_light;
+    EmbeddedImage                    m_amd_logo_dark;
 
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;
@@ -130,10 +156,17 @@ private:
 #endif
     bool m_open_about_dialog;
     bool m_disable_app_interaction;
+    bool m_shutdown_requested;
+    bool m_exit_notification_sent;
 
-#ifndef USE_NATIVE_FILE_DIALOG
+    rocprofvis_view_file_dialog_preference_t m_file_dialog_preference;
+
+    // Decided at Init() time; can be downgraded to false if NFD_Init fails at
+    // runtime. Atomic because the async native-dialog lambda can flip it.
+    std::atomic<bool>                m_use_native_file_dialog;
+
     bool                             m_init_file_dialog;
-#else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     std::atomic<bool>                m_is_native_file_dialog_open;
     std::future<std::string>         m_file_dialog_future;
 #endif
@@ -147,6 +180,8 @@ private:
     std::function<void(int)>         m_notification_callback;
     bool                             m_is_fullscreen;
     bool                             m_restore_fullscreen_later;
+    std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
+    uint64_t                         m_next_provider_cleanup_id;
 };
 
 }  // namespace View

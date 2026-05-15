@@ -66,25 +66,17 @@ DataProvider::DataProvider()
 , m_model()
 {}
 
-DataProvider::~DataProvider() { CloseController(); }
+DataProvider::~DataProvider()
+{
+    DataProviderCleanupWork cleanup_work = DetachCleanupWork();
+    CleanupDetachedResources(std::move(cleanup_work));
+}
 
 void
 DataProvider::CloseController()
 {
-    if(m_trace_timeline)
-    {
-        m_trace_timeline = nullptr;
-    }
-
-    m_model.Clear();
-    FreeRequests();
-    m_state      = ProviderState::kInit;
-
-    if(m_trace_controller)
-    {
-        rocprofvis_controller_free(m_trace_controller);
-        m_trace_controller = nullptr;
-    }
+    DataProviderCleanupWork cleanup_work = DetachCleanupWork();
+    CleanupDetachedResources(std::move(cleanup_work));
 }
 
 void
@@ -100,13 +92,47 @@ DataProvider::SetSelectedState(const std::string& id)
 void
 DataProvider::FreeRequests()
 {
-    for(auto item : m_requests)
+    DataProviderCleanupWork cleanup_work;
+    cleanup_work.trace_file_path = m_model.GetTraceFilePath();
+    cleanup_work.requests        = std::move(m_requests);
+    m_requests.clear();
+
+    CleanupDetachedResources(std::move(cleanup_work));
+}
+
+DataProviderCleanupWork
+DataProvider::DetachCleanupWork()
+{
+    DataProviderCleanupWork cleanup_work;
+    cleanup_work.trace_file_path = m_model.GetTraceFilePath();
+    cleanup_work.requests        = std::move(m_requests);
+    cleanup_work.controller      = m_trace_controller;
+
+    m_requests.clear();
+    m_trace_controller = nullptr;
+    m_trace_timeline   = nullptr;
+    m_model.Clear();
+    m_progress_mesage.clear();
+    m_progress_percent = 0;
+    m_state            = ProviderState::kInit;
+
+    return cleanup_work;
+}
+
+DataProviderCleanupResult
+DataProvider::CleanupDetachedResources(DataProviderCleanupWork cleanup_work)
+{
+    DataProviderCleanupResult cleanup_result;
+    cleanup_result.trace_file_path = cleanup_work.trace_file_path;
+    cleanup_result.request_count   = cleanup_work.requests.size();
+
+    for(auto& item : cleanup_work.requests)
     {
         RequestInfo& req = item.second;
         if(req.request_future)
         {
-            spdlog::warn("FreeRequests: cancelling request {} of type {}", req.request_id,
-                         static_cast<int>(req.request_type));
+            spdlog::warn("DataProvider cleanup: cancelling request {} of type {}",
+                         req.request_id, static_cast<int>(req.request_type));
 
             rocprofvis_result_t result =
                 rocprofvis_controller_future_cancel(req.request_future);
@@ -117,7 +143,7 @@ DataProvider::FreeRequests()
             }
         }
     }
-    for(auto item : m_requests)
+    for(auto& item : cleanup_work.requests)
     {
         RequestInfo& req = item.second;
 
@@ -151,7 +177,15 @@ DataProvider::FreeRequests()
         }
     }
 
-    m_requests.clear();
+    cleanup_work.requests.clear();
+
+    if(cleanup_work.controller)
+    {
+        rocprofvis_controller_free(cleanup_work.controller);
+        cleanup_work.controller = nullptr;
+    }
+
+    return cleanup_result;
 }
 
 const std::string&

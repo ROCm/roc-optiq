@@ -1,0 +1,147 @@
+name: Windows Continuous Integration 
+run-name: roc-optiq-windows-ci
+
+on:
+  workflow_dispatch:
+    inputs:
+      os_version:
+        description: 'JSON array of OS versions to test'
+        type: string
+        default: '[ "2025" ]'
+      cmake_config_preset:
+        description: 'CMake Config Preset to Use'
+        type: string
+        default: 'x64-release'
+      cmake_build_preset:
+        description: 'CMake Build Preset to Use'
+        type: string
+        default: 'Windows Release Build'
+      enable_internal_banner:
+        description: 'Enable the internal banner?'
+        type: boolean
+        default: false
+      upload_to_github:
+        description: 'Upload build artifacts to GitHub Artifacts?'
+        type: boolean
+        default: false
+      upload_to_s3:
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      os_version:
+        description: 'JSON array of OS versions to test'
+        type: string
+        default: '[ "2025" ]'
+      cmake_config_preset:
+        description: 'CMake Config Preset to Use'
+        type: string
+        default: 'x64-release'
+      cmake_build_preset:
+        description: 'CMake Build Preset to Use'
+        type: string
+        default: 'Windows Release Build'
+      enable_internal_banner:
+        description: 'Enable the internal banner?'
+        type: boolean
+        default: false
+      upload_to_github:
+        description: 'Upload build artifacts to GitHub Artifacts?'
+        type: boolean
+        default: false
+      upload_to_s3:
+        description: 'Upload built artifacts to the roc-optiq S3 bucket?'
+        type: boolean
+        default: false
+
+env:
+  BUILD_DIR: "build"
+  DIST_DIR: "dist"
+  BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || 'Release' }}
+  BUILD_FILE_NAME: "roc-optiq"
+  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  
+
+jobs:
+  windows:
+    name: Windows ${{ matrix.os-version }} • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
+    runs-on: windows-${{ matrix.os-version }}
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: 
+        os-version: ${{ fromJson(inputs.os_version) }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+          submodules: true
+      
+      - name: Install Vulkan SDK
+        run: |
+          curl -O https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe?Human=true
+          ./vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
+
+      - name: Set Vulkan SDK environment variables
+        shell: pwsh
+        run: |
+          $vulkanRoot = Get-ChildItem -Directory "C:\VulkanSDK" | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $vulkanRoot) { Write-Host "Vulkan SDK not found!"; exit 1 }
+          echo "VULKAN_SDK=$($vulkanRoot.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "PATH=$($vulkanRoot.FullName)\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+      - name: Build, Make, and Verify Installation
+        run: |
+          mkdir build
+          cmake --preset "${{ inputs.cmake_config_preset }}" -G "Visual Studio 18 2026" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
+          if (Test-Path "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
+            Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"
+          } else {
+            Write-Host "❌ $env:BUILD_FILE_NAME was not built!"
+            exit 1
+          }
+
+      - name: Run Tests
+        run: |
+          cd ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
+          ctest `
+            -C ${{ env.BINARY_DIR }} `
+            --output-on-failure `
+            --no-tests=error
+
+      - name: Prepare Distribution Artifacts
+        run: |
+          mkdir ${{ env.DIST_DIR }}
+          cp ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
+          ls -l ${{ env.DIST_DIR }}/
+      
+      - name: Upload GitHub Artifacts
+        if: ${{ inputs.upload_to_github }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: roc-optiq-windows-${{ matrix.os-version }}-release
+          path: | 
+            ${{ env.DIST_DIR }}
+          retention-days: 2
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.upload_to_s3 }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload Build to S3
+        if: ${{ inputs.upload_to_s3 }}
+        shell: pwsh
+        run: |
+          $timestamp = Get-Date -Format "yyyy_MM_dd"
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$timeStamp/windows/ `
+            --no-progress

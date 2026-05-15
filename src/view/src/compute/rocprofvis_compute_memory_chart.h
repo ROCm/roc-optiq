@@ -20,8 +20,7 @@ struct MetricValue;
 class DataProvider;
 class ComputeSelection;
 
-// Simple rectangle used for block positioning.
-// Each block stores its local-space position (relative to the chart origin).
+// Local-space chart block.
 struct ChartBlock
 {
     float x = 0, y = 0, w = 0, h = 0;
@@ -40,7 +39,7 @@ enum MemChartMetric
     SALU,
     SMEM,
     VALU,
-    MFMA,
+    MATRIX_OPS,
     VMEM,
     LDS,
     GWS,
@@ -60,7 +59,6 @@ enum MemChartMetric
     VL1_WR,
     VL1_ATOMIC,
     VL1_HIT,
-    VL1_LAT,
     VL1_COALESCE,
     VL1_STALL,
     VL1_L2_RD,
@@ -80,8 +78,6 @@ enum MemChartMetric
     L2_WR,
     L2_ATOMIC,
     L2_HIT,
-    L2_RD_LAT,
-    L2_WR_LAT,
     FABRIC_L2_RD,
     FABRIC_L2_WR,
     FABRIC_L2_ATOMIC,
@@ -91,7 +87,10 @@ enum MemChartMetric
     HBM_RD,
     HBM_WR,
 
-    MEMCHART_METRIC_COUNT  // sentinel: total number of metrics (55)
+    // Chart-only placeholder for rows that intentionally display N/A instead
+    // of looking up a metric value.
+    MEMCHART_METRIC_NA,
+    MEMCHART_METRIC_COUNT = MEMCHART_METRIC_NA  // sentinel: total number of chart slots
 };
 
 class ComputeMemoryChartView
@@ -102,7 +101,7 @@ public:
 
     void Render();
 
-    // Fetch all 3.1.x metrics for the given workload and kernels
+    // Fetch all 3.1.x metrics for the selected workload and kernel.
     void FetchMemChartMetrics();
 
     void UpdateMetrics();
@@ -110,11 +109,10 @@ public:
     uint64_t GetClientId() const { return m_client_id; }
 
 private:
-    // Compute all block positions (called once at the start of Render)
+    // Compute block positions for the current frame.
     void ComputeLayout();
 
-    // Each Draw* method reads its stored block and renders via the draw list.
-    // No child windows — everything is flat draw list primitives.
+    // Draw methods render directly through the current draw list.
     void DrawInstrBuff(ImDrawList* draw_list, ImVec2 origin);
     void DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin);
     void DrawActiveCUs(ImDrawList* draw_list, ImVec2 origin);
@@ -144,7 +142,7 @@ private:
                              const char* text, MemChartMetric metric_id,
                              bool show_description, bool show_raw_value);
 
-    // Get the display string for a metric (returns "-" if not yet populated)
+    // Get the display string for a metric.
     const char* GetMetricText(MemChartMetric metric) const;
 
     DataProvider& m_data_provider;
@@ -154,11 +152,10 @@ private:
 
     uint64_t m_client_id;
 
-    // Cache pointers to MetricValue objects to avoid linear search every frame
+    // Cache metric pointers after each fetch.
     std::vector<const MetricValue*> m_metric_ptrs;
-    size_t                          m_last_metrics_count;
 
-    // Block positions computed at the start of Render(), used by all Draw* methods
+    // Block positions computed at the start of Render().
     ChartBlock m_instr_buff_block, m_instr_dispatch_block, m_active_cus_block;
     ChartBlock m_lds_block, m_vector_l1_block, m_scalar_l1d_block, m_instr_l1_block;
     ChartBlock m_l2_block;

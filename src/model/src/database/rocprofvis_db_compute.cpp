@@ -1367,15 +1367,30 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			default:
 			{
 				uint32_t metrics_column_index = sort_column_index - kRpvColumnMetrics;
-				if (metrics_column_index < a.metrics.size() && metrics_column_index < b.metrics.size())
+				const bool a_missing_metric =
+					metrics_column_index >= a.metrics.size() || std::isnan(a.metrics[metrics_column_index]);
+				const bool b_missing_metric =
+					metrics_column_index >= b.metrics.size() || std::isnan(b.metrics[metrics_column_index]);
+
+				// Keep rows with missing metric values at the end for both sort directions.
+				if (a_missing_metric || b_missing_metric)
 				{
-					return ascending ? a.metrics[metrics_column_index] < b.metrics[metrics_column_index] :
-						a.metrics[metrics_column_index] > b.metrics[metrics_column_index];
+					if (a_missing_metric != b_missing_metric)
+					{
+						return !a_missing_metric;
+					}
+					return a.kernel_uuid < b.kernel_uuid;
 				}
-				else
+
+				const double a_value = a.metrics[metrics_column_index];
+				const double b_value = b.metrics[metrics_column_index];
+
+				if (a_value == b_value)
 				{
-					return false;
+					return a.kernel_uuid < b.kernel_uuid;
 				}
+
+				return ascending ? a_value < b_value : a_value > b_value;
 			}
 			}
 			});

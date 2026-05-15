@@ -1,4 +1,4 @@
-## Optiq Beta 0.3.1
+## Optiq Beta 0.4.0
 
 ### Features and Improvements
 
@@ -9,6 +9,8 @@
 **Compute profiling**
 - Side-by-side baseline comparison of compute metrics (baseline kernel vs target kernel).
 - Pinned metric table with configurable rows and columns (including custom metrics).
+- Compute view presets. Save and recall pinned metric configurations.
+- New context menu shortcut to add metrics to kernel selection table from table view.
 - Interface support for metric values grouped by workload; compute database schema 1.3 and related performance improvements.
 - Roofline chart: legend can be repositioned; aspect ratio follows the window; multi-workload chart fixes and top-kernels presentation updates.
 - Added workload metric support in the compute data model, including dedicated workload metric getters.
@@ -34,6 +36,11 @@
 - Added a database cleanup feature across controller/model/view paths, including UI integration and loading feedback while cleanup runs.
 - Improved cleanup flow reliability and responsiveness (including hang/file-close related handling).
 
+**Misc UI**
+- New settings panel allowing keyboard shortcuts to be customized.
+- Recent file list can now be cleared.
+- Changed log file names to match application name.
+
 ### Fixes
 
 - Metric table cache crash when columns are empty.
@@ -44,12 +51,19 @@
 - Vulkan fallback and related application-window logging cleanup.
 - SQLite updated to 3.51.3.
 - Fixed incorrect axis labeling in compute summary bar charts.
-- Fixed compute metric table bar-cell clipping so bars render correctly with pinned columns.
-
-
-### Known Issues
-
-- Sidebar hide/show toggle does not work correctly for top level nodes (Processors, Process, Device Nodes)
+- Kernel selection table fixes:
+  - Do not allow duplicate metrics to be added.
+  - Filter out non-finite metric values when rendering bar charts.
+  - Fixed metric sorting when missing metrics are present with kernel UUID tiebreaker.
+  - Fixed compute metric table bar-cell clipping so bars render correctly with pinned columns.
+  - Fixed tooltip being shown over overlapping window.
+- Prevent accidental Roofline zoom while scrolling.
+- Fix race condition when compute analysis file loads before view is created.
+- Fix issue where file dialog does not work if D-Bus is mis-configured.
+- Fix for issues with Vulkan driver crashing when display is forwarded over ssh.
+- Fix mismatched sidebar header sizes.
+- Fix edge case where events overlap instead of stack in the flamechart.
+- Fix memory chart values. (Certain metrics were placed in the wrong places).
 
 ## Optiq Beta 0.3.0
 

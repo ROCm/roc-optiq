@@ -26,6 +26,30 @@ constexpr float  FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
 constexpr ImVec2 INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
 constexpr float  INITIAL_RELATIVE_SIZE           = 0.8f;
 
+namespace
+{
+
+void
+PushPlotChrome(SettingsManager& settings)
+{
+    ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
+                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextMain));
+    ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
+                           ThemeColor(settings, Colors::kBorderColor, 0.7f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisTick,
+                           ThemeColor(settings, Colors::kTextDim, 0.56f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBg,
+                           ThemeColor(settings, Colors::kBgPanel, 0.96f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
+                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_LegendText, ThemeColor(settings, Colors::kTextMain));
+}
+
+}  // namespace
+
 SummaryView::SummaryView(DataProvider& dp)
 : m_data_provider(dp)
 , m_settings(SettingsManager::GetInstance())
@@ -544,7 +568,7 @@ TopKernels::Render()
         ImGui::BeginGroup();
         if(IconButton(ICON_CHART_PIE,
                       m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                      ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Pie ? Colors::kButton
                                                                 : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -555,7 +579,7 @@ TopKernels::Render()
         ImGui::SameLine();
         if(IconButton(ICON_CHART_BAR,
                       m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                      ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Bar ? Colors::kButton
                                                                 : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -566,7 +590,7 @@ TopKernels::Render()
         ImGui::SameLine();
         if(IconButton(ICON_LIST,
                       m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                      ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Table ? Colors::kButton
                                                                   : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -580,18 +604,25 @@ TopKernels::Render()
                                        region.x / 2.0f - 4.0f * plot_style.PlotPadding.x,
                                    region.y - ImGui::GetFrameHeightWithSpacing() -
                                        plot_style.PlotPadding.y));
+        // Split container pushes (0,0); restore defaults so combos aren't squished.
+        const ImGuiStyle& base_style = m_settings.GetDefaultStyle();
+        ImGui::PushStyleVar(
+            ImGuiStyleVar_ItemSpacing,
+            ImVec2(plot_style.PlotPadding.x, base_style.ItemSpacing.y));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base_style.FramePadding);
         ImGui::AlignTextToFramePadding();
-        ImGui::PushStyleVarX(ImGuiStyleVar_ItemSpacing, plot_style.PlotPadding.x);
         ImGui::BeginDisabled(m_node_combo.info.size() < 2);
         ImGui::TextUnformatted("Node:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(region.x * 0.25f);
+        PushComboStyles();
         if(ImGui::Combo("##node_combo", &m_node_combo.selected_idx,
                         m_node_combo.labels.data(),
                         static_cast<int>(m_node_combo.labels.size())))
         {
             m_filter_dirty = true;
         }
+        PopComboStyles();
         ImGui::EndDisabled();
         ImGui::SameLine();
 
@@ -599,14 +630,16 @@ TopKernels::Render()
         ImGui::TextUnformatted("GPU:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(region.x * 0.25f);
+        PushComboStyles();
         if(ImGui::Combo("##gpu_combo", &m_gpu_combo.selected_idx,
                         m_gpu_combo.labels_ptr.data(),
                         static_cast<int>(m_gpu_combo.labels.size())))
         {
             m_filter_dirty = true;
         }
+        PopComboStyles();
         ImGui::EndDisabled();
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
         // Update size requirements...
         m_min_size.x =
             ImGui::GetFrameHeightWithSpacing() * FILTER_COMBO_RELATIVE_MIN_WIDTH;
@@ -633,8 +666,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
                            int& hovered_idx)
 {
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     if(ImPlot::BeginPlot("##Pie",
                          ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
                                         plot_style.PlotPadding.y),
@@ -687,9 +719,9 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
             ImPlot::PopColormap();
         }
         ImPlot::EndPlot();
-        ImPlot::PopStyleColor(2);
-        ImPlot::PopStyleVar();
     }
+    ImPlot::PopStyleColor(9);
+    ImPlot::PopStyleVar();
     PlotInputHandler();
 }
 
@@ -698,8 +730,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
                            TimeFormat time_format, int& hovered_idx)
 {
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     if(ImPlot::BeginPlot("##Bar",
                          ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
                                         plot_style.PlotPadding.y),
@@ -748,7 +779,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleColor(9);
     ImPlot::PopStyleVar();
     PlotInputHandler();
 }

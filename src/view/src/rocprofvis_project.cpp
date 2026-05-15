@@ -3,6 +3,7 @@
 
 #include "rocprofvis_project.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_presets.h"
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_version.h"
 #ifdef COMPUTE_UI_SUPPORT
@@ -68,11 +69,22 @@ Project::Open(std::string& file_path)
         {
             result = OpenTrace(file_path);
         }
+
+        if(result == Failed)
+        {
+            // show error dialog
+            AppWindow::GetInstance()->ShowMessageDialog(
+                "Error",
+                "The file could not be opened:\n\n" + file_path +
+                    "\n\nPlease make sure the file is a valid trace or project file.");
+            spdlog::error("Failed to open file: {}, invalid trace or project file", file_path);                    
+        }
     }
     else
     {
         AppWindow::GetInstance()->ShowMessageDialog("Error",
                                                     "File does not exist: " + file_path);
+        spdlog::error("Failed to open file: {}, file does not exist", file_path);                                                    
     }
     return result;
 }
@@ -103,7 +115,9 @@ Project::SaveAs(const std::string& file_path)
 
 void
 Project::Close()
-{}
+{
+    PresetManager::GetInstance().UnregisterComponents(m_trace_file_path);
+}
 
 Project::OpenResult
 Project::OpenProject(std::string& file_path)

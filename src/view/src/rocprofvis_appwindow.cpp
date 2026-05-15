@@ -4,13 +4,13 @@
 #include "rocprofvis_appwindow.h"
 #include "imgui.h"
 #include "implot.h"
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 #    include "nfd.h"
-#else
-#    include "ImGuiFileDialog.h"
 #endif
+#include "ImGuiFileDialog.h"
 
-#include "amd_rocm_optiq_logo_png.h"
+#include "amd_rocm_optiq_logo_png_light.h"
+#include "amd_rocm_optiq_logo_png_dark.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
@@ -29,6 +29,7 @@
 #include "widgets/rocprofvis_notification_manager.h"
 #include <filesystem>
 #include <sstream>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -39,6 +40,8 @@ constexpr ImVec2      FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
 constexpr const char* FILE_DIALOG_NAME       = "ChooseFileDlgKey";
 constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
+constexpr const char* APP_SHUTDOWN_NOTIFICATION_ID = "provider_cleanup_app_shutdown";
+constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
 constexpr float EMPTY_STATE_CONTENT_EM      = 32.0f;
 constexpr float EMPTY_STATE_BUTTON_EM       = 10.0f;
 constexpr float EMPTY_STATE_LOGO_EM         = 12.0f;
@@ -50,6 +53,9 @@ const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv"
 constexpr const char* SUPPORTED_FILE_TYPES_HINT   = "Supported types: .db, .rpd, .yaml, .rpv";
 
 constexpr float STATUS_BAR_HEIGHT = 30.0f;
+
+constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
+constexpr const char* CLOSING_MESSAGE = "Closing...";
 
 // For testing DataProvider
 void
@@ -82,7 +88,10 @@ AppWindow::AppWindow()
 : m_main_view(nullptr)
 , m_settings_panel(nullptr)
 , m_tab_container(nullptr)
-, m_amd_logo(amd_rocm_optiq_logo_png, static_cast<int>(sizeof(amd_rocm_optiq_logo_png)))
+, m_amd_logo_light(amd_rocm_optiq_logo_png_light,
+                   static_cast<int>(sizeof(amd_rocm_optiq_logo_png_light)))
+, m_amd_logo_dark(amd_rocm_optiq_logo_png_dark,
+                  static_cast<int>(sizeof(amd_rocm_optiq_logo_png_dark)))
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
@@ -98,13 +107,17 @@ AppWindow::AppWindow()
 , m_message_dialog(std::make_unique<MessageDialog>())
 , m_tool_bar_index(0)
 , m_is_fullscreen(false)
-#ifndef USE_NATIVE_FILE_DIALOG
+, m_file_dialog_preference(kRocProfVisViewFileDialog_Auto)
+, m_use_native_file_dialog(false)
 , m_init_file_dialog(false)
-#else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 , m_is_native_file_dialog_open(false)
 #endif
 , m_disable_app_interaction(false)
+, m_shutdown_requested(false)
+, m_exit_notification_sent(false)
 , m_restore_fullscreen_later(false)
+, m_next_provider_cleanup_id(0)
 {}
 
 AppWindow::~AppWindow()
@@ -113,6 +126,14 @@ AppWindow::~AppWindow()
                                              m_tabclosed_event_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
+    for(auto& job : m_provider_cleanup_jobs)
+    {
+        if(job.future.valid())
+        {
+            job.future.get();
+        }
+    }
+    m_provider_cleanup_jobs.clear();
     m_projects.clear();
 }
 
@@ -151,7 +172,11 @@ AppWindow::Init()
     m_tab_container->EnableSendChangeEvent(true);
 
     main_area_item.m_item = std::make_shared<RocCustomWidget>([this]() {
-        if(m_tab_container && !m_tab_container->GetTabs().empty())
+        if(m_shutdown_requested)
+        {
+            RenderShutdownState();
+        }
+        else if(m_tab_container && !m_tab_container->GetTabs().empty())
         {
             m_tab_container->Render();
         }
@@ -184,7 +209,69 @@ AppWindow::Init()
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 
+    ConfigureFileDialogBackend();
+
     return result;
+}
+
+void
+AppWindow::ConfigureFileDialogBackend()
+{
+    bool want_native = false;
+    switch(m_file_dialog_preference)
+    {
+        case kRocProfVisViewFileDialog_ImGui:
+            want_native = false;
+            break;
+        case kRocProfVisViewFileDialog_Native:
+            want_native = true;
+            break;
+        case kRocProfVisViewFileDialog_Auto:
+        default:
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+            want_native = !is_remote_display_session();
+#else
+            want_native = false;
+#endif
+            break;
+    }
+
+#ifndef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(want_native)
+    {
+        spdlog::warn("--file-dialog=native requested but native dialog was "
+                     "not compiled in; using ImGui.");
+        want_native = false;
+    }
+#else
+    if(want_native)
+    {
+        nfdresult_t nfd_result = NFD_Init();
+        if(nfd_result != NFD_OKAY)
+        {
+            const char* err = NFD_GetError();
+            spdlog::warn("NFD_Init failed ({}); falling back to in-process "
+                         "ImGui file dialog.",
+                         err ? err : "unknown");
+            NFD_ClearError();
+            want_native = false;
+        }
+        else
+        {
+            NFD_Quit();
+        }
+    }
+#endif
+
+    m_use_native_file_dialog.store(want_native);
+    spdlog::info("File dialog backend: {}",
+                 want_native ? "system file dialog" : "in-process ImGuiFileDialog");
+}
+
+void
+AppWindow::SetFileDialogPreference(rocprofvis_view_file_dialog_preference_t pref)
+{
+    m_file_dialog_preference = pref;
 }
 
 void
@@ -208,12 +295,16 @@ AppWindow::SetTabLabel(const std::string& label, const std::string& id)
 void
 AppWindow::ShowCloseConfirm()
 {
+    if(m_shutdown_requested)
+    {
+        RequestExitIfProviderCleanupsComplete();
+        return;
+    }
+
     if(m_tab_container->GetTabs().size() == 0 ||
        SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit)
     {
-        if(m_notification_callback)
-            m_notification_callback(
-                rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
+        BeginAppShutdown();
         return;
     }
 
@@ -222,11 +313,7 @@ AppWindow::ShowCloseConfirm()
         "Confirm Close",
         "Are you sure you want to close the application? Any "
         "unsaved data will be lost.",
-        [this]() {
-            if(m_notification_callback)
-                m_notification_callback(
-                    rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
-        });
+        [this]() { BeginAppShutdown(); });
 }
 
 void
@@ -259,12 +346,15 @@ AppWindow::ShowSaveFileDialog(const std::string& title, const std::vector<FileFi
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback)
 {
-    #ifdef USE_NATIVE_FILE_DIALOG
-    (void)title;
-    ShowNativeFileDialog(file_filters, initial_path, callback, true);
-    #else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_use_native_file_dialog.load())
+    {
+        (void)title;
+        ShowNativeFileDialog(file_filters, initial_path, callback, true);
+        return;
+    }
+#endif
     ShowImGuiFileDialog(title, file_filters, initial_path, true, callback);
-    #endif
 }
 
 void
@@ -272,12 +362,15 @@ AppWindow::ShowOpenFileDialog(const std::string& title, const std::vector<FileFi
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback)
 {
-    #ifdef USE_NATIVE_FILE_DIALOG
-    (void)title;
-    ShowNativeFileDialog(file_filters, initial_path, callback, false);
-    #else
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_use_native_file_dialog.load())
+    {
+        (void)title;
+        ShowNativeFileDialog(file_filters, initial_path, callback, false);
+        return;
+    }
+#endif
     ShowImGuiFileDialog(title, file_filters, initial_path, false, callback);
-    #endif
 }
 
 Project*
@@ -304,11 +397,167 @@ AppWindow::GetCurrentProject()
 }
 
 void
+AppWindow::BeginAppShutdown()
+{
+    if(m_shutdown_requested)
+    {
+        RequestExitIfProviderCleanupsComplete();
+        return;
+    }
+
+    m_shutdown_requested      = true;
+    m_disable_app_interaction = true;
+
+    NotificationManager::GetInstance().ShowPersistent(
+        APP_SHUTDOWN_NOTIFICATION_ID,
+        "Closing traces... " + std::to_string(m_provider_cleanup_jobs.size()) +
+            " cleanup job(s) remaining",
+        NotificationLevel::Info);
+
+    for(auto& item : m_projects)
+    {
+        if(item.second)
+        {
+            item.second->Close();
+            DetachProjectProviderCleanup(*item.second,
+                                         ProviderCleanupReason::kAppShutdown);
+        }
+    }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    StartProviderCleanup(m_test_data_provider.DetachCleanupWork(),
+                         "developer data provider",
+                         ProviderCleanupReason::kAppShutdown);
+#endif
+
+    m_projects.clear();
+    if(m_main_view)
+    {
+        m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
+    }
+
+    if(!m_provider_cleanup_jobs.empty())
+    {
+        NotificationManager::GetInstance().ShowPersistent(
+            APP_SHUTDOWN_NOTIFICATION_ID, "Closing traces...",
+            NotificationLevel::Info);
+    }
+
+    RequestExitIfProviderCleanupsComplete();
+}
+
+void
+AppWindow::DetachProjectProviderCleanup(Project& project, ProviderCleanupReason reason)
+{
+    std::shared_ptr<RootView> root_view =
+        std::dynamic_pointer_cast<RootView>(project.GetView());
+    if(!root_view)
+    {
+        return;
+    }
+
+    std::optional<DataProviderCleanupWork> cleanup_work =
+        root_view->DetachProviderCleanup();
+    if(cleanup_work)
+    {
+        StartProviderCleanup(std::move(*cleanup_work), project.GetName(), reason);
+    }
+}
+
+void
+AppWindow::StartProviderCleanup(DataProviderCleanupWork cleanup_work,
+                                const std::string&    label,
+                                ProviderCleanupReason reason)
+{
+    if(cleanup_work.requests.empty() && !cleanup_work.controller)
+    {
+        return;
+    }
+
+    const std::string cleanup_label =
+        label.empty() ? cleanup_work.trace_file_path : label;
+    ProviderCleanupJob job;
+    job.label           = cleanup_label;
+    job.reason          = reason;
+    job.notification_id = "provider_cleanup_" +
+                          std::to_string(++m_next_provider_cleanup_id);
+
+    const std::string message =
+        "Closing trace: " + cleanup_label + ", canceling " +
+        std::to_string(cleanup_work.requests.size()) + " request(s)";
+    NotificationManager::GetInstance().ShowPersistent(job.notification_id, message,
+                                                      NotificationLevel::Info);
+
+    job.future = std::async(
+        std::launch::async,
+        [cleanup_work = std::move(cleanup_work)]() mutable {
+            return DataProvider::CleanupDetachedResources(std::move(cleanup_work));
+        });
+    m_provider_cleanup_jobs.push_back(std::move(job));
+}
+
+void
+AppWindow::UpdateProviderCleanups()
+{
+    for(auto it = m_provider_cleanup_jobs.begin(); it != m_provider_cleanup_jobs.end();)
+    {
+        if(it->future.valid() &&
+           it->future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        {
+            DataProviderCleanupResult result = it->future.get();
+            spdlog::info("Provider cleanup completed for {} ({} request(s))",
+                         result.trace_file_path.empty() ? it->label
+                                                        : result.trace_file_path,
+                         result.request_count);
+            NotificationManager::GetInstance().Hide(it->notification_id);
+            it = m_provider_cleanup_jobs.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    if(m_shutdown_requested)
+    {
+        if(m_provider_cleanup_jobs.empty())
+        {
+            NotificationManager::GetInstance().Hide(APP_SHUTDOWN_NOTIFICATION_ID);
+        }
+        RequestExitIfProviderCleanupsComplete();
+    }
+}
+
+void
+AppWindow::RequestExitIfProviderCleanupsComplete()
+{
+    if(!m_shutdown_requested || m_exit_notification_sent ||
+       !m_provider_cleanup_jobs.empty())
+    {
+        return;
+    }
+
+    m_exit_notification_sent = true;
+    m_disable_app_interaction = false;
+    if(m_notification_callback)
+    {
+        m_notification_callback(
+            rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
+    }
+}
+
+void
 AppWindow::Update()
 {
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     UpdateNativeFileDialog();
 #endif
+    UpdateProviderCleanups();
+    if(m_shutdown_requested)
+    {
+        return;
+    }
+
     HotkeyManager::GetInstance().ProcessInput();
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
@@ -344,8 +593,9 @@ AppWindow::Render()
                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
                      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14, m_default_spacing.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 6));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
     if(ImGui::BeginMenuBar())
     {
         Project* project = GetCurrentProject();
@@ -358,7 +608,7 @@ AppWindow::Render()
 #endif
         ImGui::EndMenuBar();
     }
-    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
+    ImGui::PopStyleVar(3);  // ItemSpacing, WindowPadding, FramePadding
 
     if(m_main_view)
     {
@@ -380,9 +630,7 @@ AppWindow::Render()
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
-#ifndef USE_NATIVE_FILE_DIALOG    
-     RenderFileDialog();
-#endif
+    RenderFileDialog();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
@@ -412,25 +660,26 @@ AppWindow::RenderEmptyState()
     ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(card_padding, card_padding));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
     ImGui::BeginChild("welcome_dialog", ImVec2(card_width, 0.0f),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                       ImGuiWindowFlags_NoScrollbar);
 
     // --- Logo ---
-    if(m_amd_logo.Valid())
+    EmbeddedImage& logo = settings.GetUserSettings().display_settings.use_dark_mode
+                              ? m_amd_logo_dark
+                              : m_amd_logo_light;
+    if(logo.Valid())
     {
-        const float avail      = ImGui::GetContentRegionAvail().x;
-        const float logo_width = std::min(avail * 0.42f, font_size * EMPTY_STATE_LOGO_EM);
-        const float logo_height =
-            logo_width * static_cast<float>(m_amd_logo.GetHeight()) /
-            static_cast<float>(m_amd_logo.GetWidth());
-        const float offset = (avail - logo_width) * 0.5f;
-        ImVec2      logo_pos = ImGui::GetCursorScreenPos();
-        logo_pos.x += offset;
+        const float avail       = ImGui::GetContentRegionAvail().x;
+        const float logo_width  = std::min(avail * 0.42f, font_size * EMPTY_STATE_LOGO_EM);
+        const float logo_height = logo_width * static_cast<float>(logo.GetHeight()) /
+                                  static_cast<float>(logo.GetWidth());
+        ImVec2 logo_pos = ImGui::GetCursorScreenPos();
+        logo_pos.x += (avail - logo_width) * 0.5f;
         ImGui::Dummy(ImVec2(avail, logo_height));
-        bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
-        m_amd_logo.Render(logo_pos, logo_width, is_dark);
+        logo.Render(logo_pos, logo_width);
         ImGui::Dummy(ImVec2(0.0f, font_size));
     }
 
@@ -454,10 +703,21 @@ AppWindow::RenderEmptyState()
     // --- Open button ---
     const float button_width = font_size * EMPTY_STATE_BUTTON_EM;
     CenterNextItem(button_width);
+    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccentRed));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          settings.GetColor(Colors::kAccentRedHover));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          settings.GetColor(Colors::kAccentRedActive));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextOnAccent));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(ImGui::GetStyle().FramePadding.x,
+                               ImGui::GetStyle().FramePadding.y + 4.0f));
     if(ImGui::Button("Open File", ImVec2(button_width, 0.0f)))
     {
         HandleOpenFile();
     }
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
     if(ImGui::IsItemHovered())
     {
         SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
@@ -479,6 +739,11 @@ AppWindow::RenderEmptyState()
         const float rf_width =
             std::min(ImGui::GetContentRegionAvail().x * 0.78f,
                      font_size * EMPTY_STATE_RECENT_FILES_EM);
+
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              settings.GetColor(Colors::kSelection));
         int shown = 0;
         for(const std::string& file : recent_files)
         {
@@ -501,6 +766,7 @@ AppWindow::RenderEmptyState()
 
             ImGui::PopID();
         }
+        ImGui::PopStyleColor(2);
     }
 
     ImGui::EndChild();
@@ -512,7 +778,52 @@ AppWindow::RenderEmptyState()
     }
 }
 
-#ifndef USE_NATIVE_FILE_DIALOG
+void
+AppWindow::RenderShutdownState()
+{
+    ImGui::OpenPopup(SHUTDOWN_DIALOG_NAME);
+
+    const float dpi = SettingsManager::GetInstance().GetDPI();
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+               viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
+        ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(360.0f * dpi, 0.0f), ImGuiCond_Always);
+
+    PopUpStyle ps;
+    ps.PushPopupStyles();
+    ps.CenterPopup();
+    if(ImGui::BeginPopupModal(SHUTDOWN_DIALOG_NAME, nullptr,
+                              ImGuiWindowFlags_NoResize |
+                                  ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoCollapse))
+    {
+        if(m_provider_cleanup_jobs.empty())
+        {
+            CenterNextTextItem(CLOSING_MESSAGE);
+            ImGui::TextUnformatted(CLOSING_MESSAGE);
+        }
+        else
+        {
+            CenterNextTextItem(CLEANUP_MESSAGE);
+            ImGui::TextUnformatted(CLEANUP_MESSAGE);
+            ImGui::Spacing();
+            // Draw indicator dots to show that the app is still responsive
+            RenderLoadingIndicator(SettingsManager::GetInstance().GetColor(Colors::kTextMain),
+                                   nullptr, kCenterHorizontal);
+            ImGui::Spacing();
+            const std::string remaining_message =
+                "Cleanup jobs remaining: " +
+                std::to_string(m_provider_cleanup_jobs.size());
+            CenterNextTextItem(remaining_message.c_str());
+            ImGui::TextUnformatted(remaining_message.c_str());
+        }
+        ImGui::EndPopup();
+    }
+    ps.PopStyles();
+}
+
 void
 AppWindow::RenderFileDialog()
 {
@@ -551,7 +862,6 @@ AppWindow::RenderFileDialog()
     }
     ImGui::PopStyleVar(3);
 }
-#endif
 
 void
 AppWindow::OpenFile(std::string file_path)
@@ -601,6 +911,11 @@ AppWindow::HandleOpenRecentFile(const std::string& file_path)
 void
 AppWindow::RenderDisableScreen()
 {
+    if(m_shutdown_requested)
+    {
+        return;
+    }
+
     if(m_disable_app_interaction)
     {
         ImGui::OpenPopup("GhostModal");
@@ -629,10 +944,10 @@ AppWindow::RenderDisableScreen()
 void
 AppWindow::RenderFileMenu(Project* project)
 {
-    bool is_open_file_dialog_open = false;
-    #ifdef USE_NATIVE_FILE_DIALOG
-    is_open_file_dialog_open = m_is_native_file_dialog_open;
-    #endif
+    bool is_open_file_dialog_open = ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME);
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    is_open_file_dialog_open = is_open_file_dialog_open || m_is_native_file_dialog_open.load();
+#endif
 
     if(ImGui::BeginMenu("File"))
     {
@@ -709,6 +1024,11 @@ AppWindow::RenderFileMenu(Project* project)
                     HandleOpenRecentFile(file);
                     break;
                 }
+            }
+            ImGui::Separator();
+            if(ImGui::MenuItem("Clear Recent Files"))
+            {
+                SettingsManager::GetInstance().ClearRecentFiles();
             }
             ImGui::EndMenu();
         }
@@ -869,7 +1189,10 @@ void
 AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 {
     auto tab_closed_event = std::dynamic_pointer_cast<TabEvent>(e);
-    if(tab_closed_event && m_projects.count(tab_closed_event->GetTabId()) > 0)
+    auto project_it =
+        tab_closed_event ? m_projects.find(tab_closed_event->GetTabId())
+                         : m_projects.end();
+    if(tab_closed_event && project_it != m_projects.end())
     {
         auto activeProject = GetCurrentProject();
         if(!activeProject)
@@ -890,8 +1213,10 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
             }
         }
         spdlog::debug("Tab closed: {}", tab_closed_event->GetTabId());
-        m_projects[tab_closed_event->GetTabId()]->Close();
-        m_projects.erase(tab_closed_event->GetTabId());
+        project_it->second->Close();
+        DetachProjectProviderCleanup(*project_it->second,
+                                     ProviderCleanupReason::kTabClose);
+        m_projects.erase(project_it);
     }
 }
 
@@ -949,8 +1274,8 @@ AppWindow::RenderAboutDialog()
     popup_style.PushTitlebarColors();
     popup_style.CenterPopup();
 
-    // Set window size
-    ImGui::SetNextWindowSize(ImVec2(580, 0));
+    ImGui::SetNextWindowSize(
+        GetResponsiveWindowSize(ImVec2(580.0f, 0.0f), ImVec2(360.0f, 0.0f)));
 
     if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize |
@@ -1009,7 +1334,7 @@ AppWindow::RenderAboutDialog()
 
  }
 
-#ifdef USE_NATIVE_FILE_DIALOG
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 void
 AppWindow::UpdateNativeFileDialog()
 {
@@ -1068,8 +1393,17 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
     }
 
-    m_file_dialog_future = std::async(std::launch::async, [=]() -> std::string {
-        NFD_Init();
+    auto dialog_task = [=]() -> std::string {
+        nfdresult_t init_result = NFD_Init();
+        if(init_result != NFD_OKAY)
+        {
+            const char* err = NFD_GetError();
+            spdlog::error("NFD_Init failed at dialog open: {}",
+                          err ? err : "unknown");
+            NFD_ClearError();
+            m_use_native_file_dialog.store(false);
+            return std::string();
+        }
         nfdu8char_t* outPath = nullptr;
 
         nfdu8filteritem_t*       filters = new nfdu8filteritem_t[file_filters.size()];
@@ -1122,7 +1456,6 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
             file_path = outPath;
             if(outPath)
             {
-                // Append default extension if none provided (used to prevent linux from saving files with no extension).
                 std::filesystem::path p(file_path);
                 if(!p.has_extension())
                 {
@@ -1143,12 +1476,22 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
         NFD_Quit();
         return file_path;
-    });
+    };
+
+#if defined(__APPLE__)
+    // NSOpenPanel / NSSavePanel are AppKit objects and must be driven from the
+    // main thread. Run synchronously here and hand the result to the existing
+    // future-polling path via a ready promise.
+    std::promise<std::string> dialog_promise;
+    dialog_promise.set_value(dialog_task());
+    m_file_dialog_future = dialog_promise.get_future();
+#else
+    m_file_dialog_future = std::async(std::launch::async, std::move(dialog_task));
+#endif
 }
 
 #endif
 
-#ifndef USE_NATIVE_FILE_DIALOG
 void
 AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
                           const std::string& initial_path, const bool& confirm_overwrite,
@@ -1186,7 +1529,6 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
     ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title,
                                             filter_stream.str().c_str(), config);
 }
-#endif
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void

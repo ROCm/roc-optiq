@@ -327,7 +327,7 @@ FlameTrackItem::HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e)
 
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart_item,
-                        float duration, ImDrawList* draw_list)
+                        float duration, ImDrawList* draw_list, bool use_highlight_color)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -337,7 +337,12 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                             start_position.y + m_level_height + cursor_position.y);
 
     ImU32 rectColor;
-    if(m_event_color_mode == EventColorMode::kNone)
+    if(use_highlight_color)
+    {
+        const auto& highlight_wheel = m_settings.GetHighlightedEventColorWheel();
+        rectColor = highlight_wheel[color_index % highlight_wheel.size()];
+    }
+    else if(m_event_color_mode == EventColorMode::kNone)
     {
         rectColor = m_settings.GetColor(Colors::kFlameChartColor);
     }
@@ -619,7 +624,9 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         label =
             nanosecond_to_formatted_str(chart_item.event.m_duration, time_format, true);
         ImGui::Text("Duration: %s", label.c_str());
+#ifdef ROCPROFVIS_DEVELOPER_MODE
         ImGui::Text("UUID: %llu", chart_item.event.m_id.uuid);
+#endif
         ImGui::Text("ID: %llu", event_id.bitfield.event_id);
     }
 
@@ -649,6 +656,12 @@ FlameTrackItem::RenderChart(float graph_width)
 
     int color_index      = 0;
     m_has_drawn_tool_tip = false;
+
+    double     range_start_ns           = TimelineSelection::INVALID_SELECTION_TIME;
+    double     range_end_ns             = TimelineSelection::INVALID_SELECTION_TIME;
+    const bool has_time_range_selection =
+        m_timeline_selection->GetSelectedTimeRange(range_start_ns, range_end_ns);
+
     for(ChartItem& item : m_chart_items)
     {
         ImVec2 container_pos = ImGui::GetWindowPos();
@@ -688,8 +701,13 @@ FlameTrackItem::RenderChart(float graph_width)
             normalized_duration = std::numeric_limits<float>::max();
         }
 
+        const bool use_highlight_color =
+            has_time_range_selection &&
+            item.event.m_start_ts <= range_end_ns &&
+            item.event.m_start_ts + item.event.m_duration >= range_start_ns;
+
         DrawBox(start_position, color_index, item,
-                static_cast<float>(normalized_duration), draw_list);
+                static_cast<float>(normalized_duration), draw_list, use_highlight_color);
     }
 
     for(ChartItem& item : m_selected_chart_items)

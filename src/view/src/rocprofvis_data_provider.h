@@ -33,6 +33,19 @@ enum class ProviderState
     kError
 };
 
+struct DataProviderCleanupWork
+{
+    std::string                           trace_file_path;
+    std::unordered_map<int64_t, RequestInfo> requests;
+    rocprofvis_controller_t*              controller = nullptr;
+};
+
+struct DataProviderCleanupResult
+{
+    std::string trace_file_path;
+    size_t      request_count = 0;
+};
+
 class DataProvider
 {
 public:
@@ -76,9 +89,14 @@ public:
     void SetSelectedState(const std::string& id);
 
     /*
-     *   Free all requests. This does not cancel the requests on the controller end.
+     *   Cancel, wait for, and free outstanding requests on the calling thread.
+     *   Use DetachCleanupWork() when the caller needs asynchronous cleanup.
      */
     void FreeRequests();
+
+    DataProviderCleanupWork DetachCleanupWork();
+    static DataProviderCleanupResult CleanupDetachedResources(
+        DataProviderCleanupWork cleanup_work);
 
     /*
      * Loads the trace data into the controller.

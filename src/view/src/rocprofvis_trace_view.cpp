@@ -202,6 +202,13 @@ TraceView::~TraceView()
         m_progress_update_event_token);
 }
 
+std::optional<DataProviderCleanupWork>
+TraceView::DetachProviderCleanup()
+{
+    DataProviderCleanupWork cleanup_work = m_data_provider.DetachCleanupWork();
+    return cleanup_work;
+}
+
 void
 TraceView::Update()
 {
@@ -286,10 +293,13 @@ TraceView::CreateView()
     m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible = m_settings_manager.GetAppWindowSettings().show_sidebar;
     m_sidebar_item->m_window_flags = ImGuiWindowFlags_HorizontalScrollbar;
+    // No child border; the splitter handles separation.
+    m_sidebar_item->m_child_flags = ImGuiChildFlags_None;
 
     m_analysis_item = LayoutItem::CreateFromWidget(analysis);
     m_analysis_item->m_visible =
         m_settings_manager.GetAppWindowSettings().show_details_panel;
+    m_analysis_item->m_child_flags = ImGuiChildFlags_None;
 
     LayoutItem m_histogram_item(0, 80);
     m_histogram_item.m_item    = m_histogram_widget;
@@ -307,8 +317,9 @@ TraceView::CreateView()
         std::make_shared<VSplitContainer>(timeline_container_item, m_analysis_item);
     m_vertical_split_container->SetSplit(0.75);
 
-    auto trace_area    = std::make_shared<LayoutItem>();
-    trace_area->m_item = m_vertical_split_container;
+    auto trace_area          = std::make_shared<LayoutItem>();
+    trace_area->m_item        = m_vertical_split_container;
+    trace_area->m_child_flags = ImGuiChildFlags_None;
 
     m_horizontal_split_container =
         std::make_shared<HSplitContainer>(m_sidebar_item, trace_area);
@@ -380,13 +391,13 @@ TraceView::Render()
             ImGui::End();
             popup_style.PopStyles();
         }
+    }
 
-        if(m_popup_info.show_popup)
-        {
-            m_popup_info.show_popup = false;
-            AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
-                                                        m_popup_info.message);
-        }
+    if(m_popup_info.show_popup)
+    {
+        m_popup_info.show_popup = false;
+        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
+                                                    m_popup_info.message);
     }
 
     if(m_summary_view)
@@ -403,7 +414,6 @@ TraceView::HandleHotKeys()
 
     auto& hk = HotkeyManager::GetInstance();
 
-    // xDon’t process global hotkeys if ImGui wants the keyboard (e.g., typing in
     for(int i = 0; i <= 9; ++i)
     {
         std::string idx = std::to_string(i);
@@ -508,12 +518,30 @@ TraceView::SaveSelection(const std::string& file_path)
 bool
 TraceView::CleanupDatabase(bool rebuild, std::function<void()> on_complete)
 {
+    //show error lambda
+     auto show_error = [this](const std::string& message) {
+        m_popup_info.show_popup = true;
+        m_popup_info.title      = "Error";
+        m_popup_info.message    = message;
+    };
+
     if(m_data_provider.IsRequestPending(DataProvider::CLEANUP_DATABASE_REQUEST_ID))
     {
+        show_error("Database cleanup already in progress.");
         spdlog::debug("Database cleanup already in progress.");
         return false;
     }
 
+    //check if dataprovider is in a state that allows cleanup
+    auto state = m_data_provider.GetState();
+    if(state != ProviderState::kReady)
+    {
+        show_error("Cannot cleanup database while trace is loading");
+        spdlog::debug("Cannot cleanup database while trace is loading. Current state: {}", static_cast<int>(state));
+        return false;
+    }
+
+    //Todo: FreeRequests() will block the UI thread.
     m_data_provider.FreeRequests();
 
     m_data_provider.SetCleanupDatabaseCallback(
@@ -543,6 +571,10 @@ TraceView::CleanupDatabase(bool rebuild, std::function<void()> on_complete)
             rebuild ? "Cleaning and rebuilding database..." : "Cleaning database...",
             NotificationLevel::Info);
         return true;
+    }
+    else
+    {
+        show_error("Database cleanup request failed to start.");
     }
 
     return false;
@@ -655,13 +687,15 @@ TraceView::RenderToolbar()
     ImGui::PushStyleColor(ImGuiCol_Border,
                           ImGui::ColorConvertU32ToFloat4(
                               m_settings_manager.GetColor(Colors::kBorderColor)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x + 4.0f, style.WindowPadding.y + 2.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
 
     ImGui::BeginChild("Toolbar", ImVec2(-1, 0),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
@@ -706,13 +740,13 @@ TraceView::RenderToolbar()
     }
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kAccentRed)));
+        m_settings_manager.GetColor(Colors::kBgFrame)));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kAccentRedHover)));
+        m_settings_manager.GetColor(Colors::kButtonHovered)));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kAccentRedActive)));
+        m_settings_manager.GetColor(Colors::kButtonActive)));
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kTextOnAccent)));
+        m_settings_manager.GetColor(Colors::kTextMain)));
     if(ImGui::Button("Reset View"))
     {
         if(m_timeline_view)
@@ -742,7 +776,7 @@ TraceView::RenderToolbar()
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     draw_list->AddLine(ImVec2(child_min.x, child_max.y - 1.0f),
                        ImVec2(child_max.x, child_max.y - 1.0f),
-                       m_settings_manager.GetColor(Colors::kAccentRed), 2.0f);
+                       m_settings_manager.GetColor(Colors::kBorderColor), 1.0f);
 
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(2);
@@ -876,6 +910,7 @@ TraceView::RenderBookmarkControls()
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("BookMarks").x +
                             2 * ImGui::GetStyle().FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
+    PushComboStyles();
     if(ImGui::BeginCombo("", "Bookmarks"))
     {
         if(ImGui::BeginTable("BookmarkTable", 2, ImGuiTableFlags_SizingStretchProp))
@@ -957,6 +992,7 @@ TraceView::RenderBookmarkControls()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
 
     ImGui::PopID();
     ImGui::SameLine();
@@ -1073,10 +1109,10 @@ TraceView::RenderEventSearch()
             ImGui::SetKeyboardFocusHere();
         }
         std::pair<bool, bool> search_bar = InputTextWithClear(
-            "search_bar", "Search: hipLaunchKernel or \"hip\"\"kernel\"",
+            "search_bar", "Search events, kernels, tracks...",
             m_event_search->TextInput(), m_event_search->TextInputLimit(),
             settings.GetFontManager().GetIconFont(FontType::kDefault),
-            settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),
+            settings.GetColor(Colors::kBgFrame), settings.GetDefaultStyle(),
             m_event_search->Width());
         if(ImGui::IsItemClicked() && m_event_search->Searched())
         {

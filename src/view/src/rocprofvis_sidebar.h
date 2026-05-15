@@ -44,7 +44,6 @@ private:
     EyeButtonState     GetTreeState(const TreeNode& node) const;
     EyeButtonState     GetSubtreeEyeState(const TreeNode& node,
                                           bool cross_boundaries) const;
-    ImGuiTreeNodeFlags GetTreeNodeFlags(const TreeNode& node) const;
     void               ApplyVisibility(const TreeNode& node, bool visible);
     void               RenderLeafNode(const LeafNode& leaf);
     void               RenderBranchNode(const TreeNode& node,

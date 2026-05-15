@@ -6,14 +6,17 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_utils.h"
+#include "widgets/rocprofvis_image_helpers.h"
 #include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
 
 bool
-rocprofvis_view_init(std::function<void(int)> notification_callback)
+rocprofvis_view_init(std::function<void(int)>                 notification_callback,
+                     rocprofvis_view_file_dialog_preference_t file_dialog_pref)
 {
     auto app = AppWindow::GetInstance();
+    app->SetFileDialogPreference(file_dialog_pref);
     bool result = app->Init();
     if(!result)
     {
@@ -74,9 +77,24 @@ rocprofvis_view_set_fullscreen_state(bool is_fullscreen)
     AppWindow::GetInstance()->SetFullscreenState(is_fullscreen);
 }
 
+void
+rocprofvis_view_set_texture_backend(
+    rocprofvis_view_create_texture_rgba32_t create_texture,
+    rocprofvis_view_destroy_texture_t       destroy_texture,
+    void*                                  user_data)
+{
+    GuiTexture::SetBackend(create_texture, destroy_texture, user_data);
+}
+
 std::string
 rocprofvis_get_application_config_path()
 {
     // Get the application config path
     return get_application_config_path(true);
+}
+
+bool
+rocprofvis_view_is_remote_display_session()
+{
+    return is_remote_display_session();
 }

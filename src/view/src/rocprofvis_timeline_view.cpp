@@ -33,7 +33,7 @@ constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
 constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
-constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 16.0f;
+constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 
 TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -809,8 +809,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::SetNextWindowSize(m_tpt->GetGraphSize(), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    // overlayed windows need to have fully trasparent bg otherwise they will overlay
-    // (with no alpha) over their predecessors
+    // Overlay children need transparent bg so earlier layers stay visible.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
     ImGui::SetNextItemAllowOverlap();
@@ -827,7 +826,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImVec2 relative_mouse_pos = ImVec2(mouse_position.x - window_position.x,
                                        mouse_position.y - window_position.y);
 
-    // Render range selction box
+    // Render range selection box
     ImVec2 cursor_position = screen_pos;
 
     ImVec2      mouse_pos     = ImGui::GetMousePos();
@@ -971,28 +970,6 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
     }
 
-    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
-       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
-    {
-        float normalized_start_box_highlighted =
-            window_position.x + m_tpt->TimeToPixel(m_highlighted_region.first);
-
-        float normalized_start_box_highlighted_end =
-            window_position.x + m_tpt->TimeToPixel(m_highlighted_region.second);
-
-        // Clamp to not overlap scrollbar
-        float min_x         = window_position.x;
-        float max_x         = window_position.x + m_tpt->GetGraphSizeX();
-        float clamped_start = std::clamp(normalized_start_box_highlighted, min_x, max_x);
-        float clamped_end =
-            std::clamp(normalized_start_box_highlighted_end, min_x, max_x);
-
-        draw_list->AddRectFilled(
-            ImVec2(clamped_start, cursor_position.y),
-            ImVec2(clamped_end, cursor_position.y + container_size.y - m_ruler_height),
-            m_settings.GetColor(Colors::kSelection));
-    }
-
     // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(window_position,
                                   ImVec2(window_position.x + m_tpt->GetGraphSizeX(),
@@ -1078,7 +1055,8 @@ TimelineView::RenderGrid()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    if(ImGui::BeginChild("Grid"), content_size, true, window_flags)
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgFrame));
+    if(ImGui::BeginChild("Grid", content_size, true, window_flags))
     {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -1142,6 +1120,7 @@ TimelineView::RenderGrid()
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
 
 void
@@ -1153,8 +1132,7 @@ TimelineView::RenderGraphView()
     ImVec2 container_size = ImGui::GetWindowSize();
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    // overlayed windows need to have fully trasparent bg otherwise they will overlay
-    // (with no alpha) over their predecessors
+    // Overlay children need transparent bg so earlier layers stay visible.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("Graph View Main",
                       ImVec2(container_size.x, container_size.y - m_ruler_height), false,
@@ -1334,6 +1312,60 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         selection_color = m_settings.GetColor(Colors::kHighlightChart);
     }
 
+    ImVec2 lane_min = ImGui::GetCursorScreenPos();
+    ImVec2 lane_max(lane_min.x + ImGui::GetContentRegionAvail().x,
+                    lane_min.y + track_height - 1.0f);
+    ImU32       lane_color = m_settings.GetColor(Colors::kBgPanel);
+    ImDrawList* lane_dl    = ImGui::GetWindowDrawList();
+    lane_dl->AddRectFilled(lane_min, lane_max, lane_color);
+
+    if(m_grid_interval_ns > 0.0 && m_grid_interval_count > 0)
+    {
+        constexpr int   MINOR_GRID_DIVISIONS = 4;
+        const double    start_ns = m_tpt->GetViewTimeOffsetNs();
+        const double    first_major_ns =
+            std::floor(start_ns / m_grid_interval_ns) * m_grid_interval_ns;
+        const double minor_interval_ns = m_grid_interval_ns / MINOR_GRID_DIVISIONS;
+        const float  graph_min_x       = lane_min.x + m_sidebar_size;
+        const float  graph_max_x       = graph_min_x + m_tpt->GetGraphSizeX();
+        const ImU32  minor_grid_color =
+            ApplyAlpha(m_settings.GetColor(Colors::kGridColor), 0.10f);
+        const ImU32 major_grid_color =
+            ApplyAlpha(m_settings.GetColor(Colors::kBoundBox), 0.12f);
+
+        for(int i = 0; i < m_grid_interval_count; ++i)
+        {
+            const double major_ns = first_major_ns + i * m_grid_interval_ns;
+
+            for(int j = 1; j < MINOR_GRID_DIVISIONS; ++j)
+            {
+                const double minor_ns = major_ns + j * minor_interval_ns;
+                const float  x        = graph_min_x + m_tpt->TimeToPixel(minor_ns);
+                if(x <= graph_min_x || x >= graph_max_x) continue;
+
+                lane_dl->AddLine(ImVec2(x, lane_min.y), ImVec2(x, lane_max.y),
+                                 minor_grid_color, 1.0f);
+            }
+
+            const float x = graph_min_x + m_tpt->TimeToPixel(major_ns);
+            if(x <= graph_min_x || x >= graph_max_x) continue;
+
+            lane_dl->AddLine(ImVec2(x, lane_min.y), ImVec2(x, lane_max.y),
+                             major_grid_color, 1.0f);
+        }
+    }
+
+    RenderTimeRangeSelectionFill(lane_dl, lane_min, lane_max);
+
+    if(track_graph.selected)
+    {
+        // Mark the selected lane without covering the track contents.
+        lane_dl->AddRectFilled(
+            ImVec2(lane_min.x, lane_min.y),
+            ImVec2(lane_min.x + 2.0f, lane_max.y),
+            m_settings.GetColor(Colors::kAccentRed));
+    }
+
     ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
     ImGui::PushID(track_index);
     if(ImGui::BeginChild("", ImVec2(0, track_height), false,
@@ -1412,8 +1444,40 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     // This is done after the child window to ensure it is on top
     ImVec2 p_min = ImGui::GetItemRectMin();
     ImVec2 p_max = ImGui::GetItemRectMax();
-    ImGui::GetWindowDrawList()->AddRect(
-        p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
+    // Draw only the bottom rule; the lane fill supplies the row body.
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(p_min.x, p_max.y - 0.5f),
+        ImVec2(p_max.x, p_max.y - 0.5f),
+        m_settings.GetColor(Colors::kTableBorderLight), 1.0f);
+}
+
+void
+TimelineView::RenderTimeRangeSelectionFill(ImDrawList* draw_list, ImVec2 lane_min,
+                                           ImVec2 lane_max)
+{
+    if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME ||
+       m_highlighted_region.second == TimelineSelection::INVALID_SELECTION_TIME)
+    {
+        return;
+    }
+
+    const float  graph_min_x = lane_min.x + m_sidebar_size;
+    const float  graph_max_x = graph_min_x + m_tpt->GetGraphSizeX();
+    const double range_min_ns =
+        std::min(m_highlighted_region.first, m_highlighted_region.second);
+    const double range_max_ns =
+        std::max(m_highlighted_region.first, m_highlighted_region.second);
+
+    const float fill_start = std::clamp(graph_min_x + m_tpt->TimeToPixel(range_min_ns),
+                                        graph_min_x, graph_max_x);
+    const float fill_end   = std::clamp(graph_min_x + m_tpt->TimeToPixel(range_max_ns),
+                                        graph_min_x, graph_max_x);
+
+    if(fill_start >= fill_end) return;
+
+    draw_list->AddRectFilled(ImVec2(fill_start, lane_min.y),
+                             ImVec2(fill_end, lane_max.y),
+                             m_settings.GetColor(Colors::kSelection));
 }
 
 void
@@ -1613,7 +1677,7 @@ TimelineView::RenderHistogram()
     ImGui::SameLine();
 
     // Vertical splitter
-    float splitter_size = 5.0f;
+    float splitter_size = 1.0f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
     ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
                       false);
@@ -1710,8 +1774,9 @@ TimelineView::RenderHistogram()
             float y_bar      = y1 - bar_height;
             draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
                                      i % 2 == 0
-                                         ? m_settings.GetColor(Colors::kAccentRedActive)
-                                         : m_settings.GetColor(Colors::kAccentRed));
+                                         ? m_settings.GetColor(Colors::kLineChartColor)
+                                         : m_settings.GetColor(Colors::kLineChartColorAlt),
+                                     1.5f);
         }
     }
     // Draw view range overlays and labels
@@ -1767,19 +1832,33 @@ TimelineView::RenderHistogram()
         HandleHistogramTouch();
     }
 
-    if(ImGui::BeginPopupContextWindow("##HistogramOptions"))
     {
-        TimelineModel& tl = m_data_provider.DataModel().GetTimeline();
-        bool           is_global = tl.IsNormalizeGlobal();
-        if(ImGui::MenuItem("Normalize: All Tracks", nullptr, is_global))
+        const ImGuiStyle& popup_style = m_settings.GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, popup_style.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, popup_style.ItemSpacing);
+        if(ImGui::BeginPopupContextWindow("##HistogramOptions"))
         {
-            if(!is_global) { tl.ToggleNormalization(); tl.UpdateHistogram({}, false); }
+            TimelineModel& tl        = m_data_provider.DataModel().GetTimeline();
+            bool           is_global = tl.IsNormalizeGlobal();
+            if(ImGui::MenuItem("Normalize: All Tracks", nullptr, is_global))
+            {
+                if(!is_global)
+                {
+                    tl.ToggleNormalization();
+                    tl.UpdateHistogram({}, false);
+                }
+            }
+            if(ImGui::MenuItem("Normalize: Visible Tracks", nullptr, !is_global))
+            {
+                if(is_global)
+                {
+                    tl.ToggleNormalization();
+                    tl.UpdateHistogram({}, false);
+                }
+            }
+            ImGui::EndPopup();
         }
-        if(ImGui::MenuItem("Normalize: Visible Tracks", nullptr, !is_global))
-        {
-            if(is_global) { tl.ToggleNormalization(); tl.UpdateHistogram({}, false); }
-        }
-        ImGui::EndPopup();
+        ImGui::PopStyleVar(2);
     }
 
     ImGui::EndChild();  // Histogram Bars
@@ -1815,6 +1894,13 @@ TimelineView::RenderTraceView()
     m_loading_timer.Tick();
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
+
+    // Filled panel with a single hairline border.
+    ImDrawList* bg_draw_list = ImGui::GetWindowDrawList();
+    bg_draw_list->AddRectFilled(screen_pos,
+                                screen_pos + subcomponent_size_main,
+                                m_settings.GetColor(Colors::kBgPanel),
+                                m_settings.GetDefaultStyle().ChildRounding);
 
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
@@ -1863,52 +1949,63 @@ TimelineView::RenderTraceView()
 
     ImGui::BeginChild("scrollbar",
                       ImVec2(subcomponent_size_main.x, ARTIFICIAL_SCROLLBAR_HEIGHT),
-                      true, ImGuiWindowFlags_NoScrollbar);
+                      false, ImGuiWindowFlags_NoScrollbar);
+
+    const float scrollbar_frame_height = 8.0f;
+    ImGui::SetCursorPosY(std::max(
+        0.0f, (ARTIFICIAL_SCROLLBAR_HEIGHT - scrollbar_frame_height) * 0.5f));
 
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
     ImGui::SameLine();
 
     float  available_width = subcomponent_size_main.x - m_sidebar_size;
     double view_width      = std::min(m_tpt->GetVWidth(), m_tpt->GetRangeX());
-    double max_offset      = m_tpt->GetRangeX() - view_width;
+    double max_offset      = std::max(0.0, m_tpt->GetRangeX() - view_width);
     float  view_offset =
         static_cast<float>(std::clamp(m_tpt->GetViewTimeOffsetNs(), 0.0, max_offset));
 
-    float min_grab = 4.0f;
+    float min_grab = 12.0f;
     float max_grab = available_width;
     float grab_fraction =
         (m_tpt->GetRangeX() > 0.0)
             ? static_cast<float>(m_tpt->GetVWidth() / m_tpt->GetRangeX())
             : 1.0f;
-    float grab_min_size = std::clamp(available_width * grab_fraction, min_grab, max_grab);
+    float grab_width = std::clamp(available_width * grab_fraction, min_grab, max_grab);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, grab_min_size);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 8.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 2));
-    ImGui::PushStyleColor(ImGuiCol_SliderGrab,
-                          m_settings.GetColor(Colors::kScrollGrab));
-    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive,
-                          m_settings.GetColor(Colors::kScrollBarColor));
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, m_settings.GetColor(Colors::kScrollBg));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,
-                          m_settings.GetColor(Colors::kScrollBg));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,
-                          m_settings.GetColor(Colors::kScrollBg));
+    ImGui::InvisibleButton("##scrollbar", ImVec2(available_width, scrollbar_frame_height));
+    ImVec2 track_min = ImGui::GetItemRectMin();
+    ImVec2 track_max = ImGui::GetItemRectMax();
 
-    ImGui::PushItemWidth(available_width);
-
-    if(ImGui::SliderFloat("##scrollbar", &view_offset, 0.0f,
-                          static_cast<float>(max_offset), ""))
+    if((ImGui::IsItemActive() || ImGui::IsItemClicked()) && max_offset > 0.0)
     {
+        const float mouse_x = std::clamp(ImGui::GetIO().MousePos.x - track_min.x,
+                                         0.0f, available_width);
+        const float grab_center = std::clamp(mouse_x, grab_width * 0.5f,
+                                             available_width - grab_width * 0.5f);
+        const float t = (available_width > grab_width)
+                            ? (grab_center - grab_width * 0.5f) /
+                                  (available_width - grab_width)
+                            : 0.0f;
+        view_offset = static_cast<float>(t * max_offset);
         m_tpt->SetViewTimeOffsetNs(static_cast<double>(view_offset));
         m_loading_timer.Restart();
     }
 
-    ImGui::PopItemWidth();
-    ImGui::PopStyleColor(5);
-    ImGui::PopStyleVar(4);
-
+    const float grab_x = max_offset > 0.0 && available_width > grab_width
+                             ? static_cast<float>(view_offset / max_offset) *
+                                   (available_width - grab_width)
+                             : 0.0f;
+    ImDrawList* scrollbar_draw_list = ImGui::GetWindowDrawList();
+    const float scrollbar_rounding = scrollbar_frame_height * 0.5f;
+    scrollbar_draw_list->AddRectFilled(track_min, track_max,
+                                       m_settings.GetColor(Colors::kScrollBg),
+                                       scrollbar_rounding);
+    scrollbar_draw_list->AddRectFilled(
+        ImVec2(track_min.x + grab_x, track_min.y),
+        ImVec2(track_min.x + grab_x + grab_width, track_max.y),
+        ImGui::IsItemActive() ? m_settings.GetColor(Colors::kScrollBarColor)
+                              : m_settings.GetColor(Colors::kScrollGrab),
+        scrollbar_rounding);
     m_stop_user_interaction = false;
     m_tpt->ComputePixelMapping();
     ImGui::EndChild();

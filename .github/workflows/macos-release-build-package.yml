@@ -39,7 +39,7 @@ jobs:
           echo "ARTIFACT_NAME: ${{ env.ARTIFACT_NAME }}"
           echo "ENABLE_INTERNAL_BANNER: ${{ env.ENABLE_INTERNAL_BANNER }}"
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.client_payload.ref || github.ref }}
           submodules: true
@@ -79,7 +79,7 @@ jobs:
             --confirm-command \
             install \
             copy_only=1
-            
+
           if [ ! -d "${SDK_ROOT}" ]; then
             echo "❌ SDK root not created: ${SDK_ROOT}"
             exit 1
@@ -140,7 +140,7 @@ jobs:
           ls -la ${{ env.BUILD_DIR }}
 
       - name: Upload Visualizer Binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: |

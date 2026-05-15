@@ -68,6 +68,7 @@ public:
     std::shared_ptr<TimelineSelection> GetTimelineSelection() const;
     std::shared_ptr<RocWidget>         GetToolbar() override;
     void                               RenderEditMenuOptions() override;
+    std::optional<DataProviderCleanupWork> DetachProviderCleanup() override;
     void                               SetAnalysisViewVisibility(bool visibility); 
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);

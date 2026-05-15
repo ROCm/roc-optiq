@@ -89,7 +89,7 @@ private:
     void HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e);
 
     void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
-                 float duration, ImDrawList* draw_list);
+                 float duration, ImDrawList* draw_list, bool use_highlight_color);
 
     bool ExtractPointsFromData();
     bool ExtractChildInfo(ChartItem& item);

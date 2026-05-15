@@ -333,7 +333,7 @@ ProfileDatabase::CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt
 }
 
 int
-ProfileDatabase::CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
+ProfileDatabase::CallbackTrimTableQuery(void* data, int /*argc*/, sqlite3_stmt* stmt,
                                                 char** azColName)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
@@ -492,7 +492,7 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
     return 0;
 }
 
-int ProfileDatabase::CallbackAddArgumentsInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+int ProfileDatabase::CallbackAddArgumentsInfo(void* data, int /*argc*/, sqlite3_stmt* stmt, char** azColName) {
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallbackAddArgumentsInfo;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
@@ -634,7 +634,7 @@ ProfileDatabase::GetTrackSearchId(rocprofvis_dm_track_category_t category)
 
 void
 ProfileDatabase::GetTrackIdentifierIndices(
-    ProfileDatabase* db, int column_index, char** azColName,
+    ProfileDatabase* /*db*/, int column_index, char** azColName,
     rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices)
 {
     std::string column_name = azColName[column_index];
@@ -1039,7 +1039,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceRightNeighbourQuery(roc
 
 }
 
-rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_string_t& query, slice_array_t& slices) {
+rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t /*num*/, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_string_t& query, slice_array_t& slices) {
     slice_query_map_t slice_query_map;
     bool timed_query = false;
     bool pmc_query = false;
@@ -1724,7 +1724,7 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
 // statistics for each track (timestamps, values, process/node identifiers),
 // and uses the provided Future/database context to insert one row per track
 // into the track_properties table defined below.
-rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
+rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* /*future*/) {
     // Define the schema for the track_properties table that will receive the
     // per-track summary rows. The SQLInsertParams describes the column names
     // and their SQLite types; the order here must match the order used when
@@ -2055,7 +2055,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                 histogram_query_prefix.c_str(),
                 histogram_query_suffix.c_str(), &CallbackMakeHistogramPerTrack,
                 insert_start_time,
-                [](rocprofvis_dm_track_params_t* params) {},
+                [](rocprofvis_dm_track_params_t* /*params*/) {},
                 guids_per_file);
 
 
@@ -2070,7 +2070,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                     histogram_query.c_str(),
                     "GROUP BY bucket", &CallbackMakeHistogramPerTrack,
                     insert_start_time,
-                    [](rocprofvis_dm_track_params_t* params) {},
+                    [](rocprofvis_dm_track_params_t* /*params*/) {},
                     guids_per_file);
             }
 

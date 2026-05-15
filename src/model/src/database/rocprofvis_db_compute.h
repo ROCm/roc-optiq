@@ -106,8 +106,8 @@ namespace DataModel
         // @param object - future object providing asynchronous execution mechanism 
         // @return status of operation
         rocprofvis_dm_result_t  ReadFlowTraceInfo(
-            rocprofvis_dm_event_id_t event_id,
-            Future* object) override {
+            rocprofvis_dm_event_id_t /*event_id*/,
+            Future* /*object*/) override {
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support flow trace", kRocProfVisDmResultNotSupported);
         };
         // worker method to read stack trace info
@@ -115,8 +115,8 @@ namespace DataModel
         // @param object - future object providing asynchronous execution mechanism 
         // @return status of operation
         rocprofvis_dm_result_t  ReadStackTraceInfo(
-            rocprofvis_dm_event_id_t event_id,
-            Future* object) override {
+            rocprofvis_dm_event_id_t /*event_id*/,
+            Future* /*object*/) override {
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support stack trace", kRocProfVisDmResultNotSupported);
         };
         // worker method to read extended info
@@ -124,8 +124,8 @@ namespace DataModel
         // @param object - future object providing asynchronous execution mechanism 
         // @return status of operation
         rocprofvis_dm_result_t  ReadExtEventInfo(
-            rocprofvis_dm_event_id_t event_id,
-            Future* object) override {
+            rocprofvis_dm_event_id_t /*event_id*/,
+            Future* /*object*/) override {
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support extended data", kRocProfVisDmResultNotSupported);
         };
         // worker method to read time slice
@@ -136,11 +136,11 @@ namespace DataModel
         // @param object - future object providing asynchronous execution mechanism   
         // @return status of operation        
         rocprofvis_dm_result_t  ReadTraceSlice(
-            rocprofvis_dm_timestamp_t start,
-            rocprofvis_dm_timestamp_t end,
-            rocprofvis_db_num_of_tracks_t num,
-            rocprofvis_db_track_selection_t tracks,
-            Future* object) override {
+            rocprofvis_dm_timestamp_t /*start*/,
+            rocprofvis_dm_timestamp_t /*end*/,
+            rocprofvis_db_num_of_tracks_t /*num*/,
+            rocprofvis_db_track_selection_t /*tracks*/,
+            Future* /*object*/) override {
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support extended data", kRocProfVisDmResultNotSupported);
         };
         // worker method to execute database query
@@ -153,10 +153,10 @@ namespace DataModel
             rocprofvis_dm_charptr_t description,
             Future* future) override;
 
-        rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t start,
-            rocprofvis_dm_timestamp_t end,
-            rocprofvis_dm_charptr_t new_db_path,
-            Future* future) override {
+        rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t /*start*/,
+            rocprofvis_dm_timestamp_t /*end*/,
+            rocprofvis_dm_charptr_t /*new_db_path*/,
+            Future* /*future*/) override {
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support trimming", kRocProfVisDmResultNotSupported);
         };
 
@@ -179,11 +179,11 @@ namespace DataModel
         // @param query - reference to output query string  
         // @return status of operation
         rocprofvis_dm_result_t BuildTrackQuery(
-            rocprofvis_dm_index_t index,
-            rocprofvis_dm_index_t   type,
-            rocprofvis_dm_string_t& query,
-            uint32_t split_count,
-            uint32_t split_index) override{
+            rocprofvis_dm_index_t /*index*/,
+            rocprofvis_dm_index_t   /*type*/,
+            rocprofvis_dm_string_t& /*query*/,
+            uint32_t /*split_count*/,
+            uint32_t /*split_index*/) override{
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not build track query", kRocProfVisDmResultNotSupported);
         }
 
@@ -196,33 +196,33 @@ namespace DataModel
         // @param slices - reference map array for storing slice handlers for multi-track request   
         // @return status of operation  
         rocprofvis_dm_result_t BuildSliceQuery(
-            rocprofvis_dm_timestamp_t start,
-            rocprofvis_dm_timestamp_t end,
-            rocprofvis_db_num_of_tracks_t num,
-            rocprofvis_db_track_selection_t tracks,
-            rocprofvis_dm_string_t& query,
-            slice_array_t& slices) override{
+            rocprofvis_dm_timestamp_t /*start*/,
+            rocprofvis_dm_timestamp_t /*end*/,
+            rocprofvis_db_num_of_tracks_t /*num*/,
+            rocprofvis_db_track_selection_t /*tracks*/,
+            rocprofvis_dm_string_t& /*query*/,
+            slice_array_t& /*slices*/) override{
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not build slice query", kRocProfVisDmResultNotSupported);
         }
 
         rocprofvis_dm_result_t BuildTableQuery(
-            rocprofvis_dm_timestamp_t start,
-            rocprofvis_dm_timestamp_t end,
-            rocprofvis_db_num_of_tracks_t num,
-            rocprofvis_db_track_selection_t tracks,
-            rocprofvis_dm_charptr_t where,
-            rocprofvis_dm_charptr_t filter,
-            rocprofvis_dm_charptr_t group,
-            rocprofvis_dm_charptr_t group_cols,
-            rocprofvis_dm_charptr_t sort_column,
-            rocprofvis_dm_sort_order_t sort_order,
-            rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
-            rocprofvis_dm_string_table_filters_t string_table_filters,
-            uint64_t max_count,
-            uint64_t offset,
-            bool count_only,
-            bool summary,
-            rocprofvis_dm_string_t& query) override {
+            rocprofvis_dm_timestamp_t /*start*/,
+            rocprofvis_dm_timestamp_t /*end*/,
+            rocprofvis_db_num_of_tracks_t /*num*/,
+            rocprofvis_db_track_selection_t /*tracks*/,
+            rocprofvis_dm_charptr_t /*where*/,
+            rocprofvis_dm_charptr_t /*filter*/,
+            rocprofvis_dm_charptr_t /*group*/,
+            rocprofvis_dm_charptr_t /*group_cols*/,
+            rocprofvis_dm_charptr_t /*sort_column*/,
+            rocprofvis_dm_sort_order_t /*sort_order*/,
+            rocprofvis_dm_num_string_table_filters_t /*num_string_table_filters*/,
+            rocprofvis_dm_string_table_filters_t /*string_table_filters*/,
+            uint64_t /*max_count*/,
+            uint64_t /*offset*/,
+            bool /*count_only*/,
+            bool /*summary*/,
+            rocprofvis_dm_string_t& /*query*/) override {
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not build table query", kRocProfVisDmResultNotSupported);
         }
 

@@ -95,9 +95,9 @@ PrintHeader(const char* fmt, ...)
 }
 
 void
-db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_future_id_t id,
+db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_future_id_t /*id*/,
             rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status,
-            rocprofvis_db_status_message_t msg, void* user_data)
+            rocprofvis_db_status_message_t msg, void* /*user_data*/)
 {
     const char* str   = " ERROR ";
     const char* color = "\x1b[31m";

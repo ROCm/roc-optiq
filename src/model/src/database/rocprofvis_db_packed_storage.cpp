@@ -162,7 +162,7 @@ namespace DataModel
         return  m_rows[row]->Get<uint8_t>(0);
     }
 
-    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col, ProfileDatabase* requestor) const
+    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col, ProfileDatabase* /*requestor*/) const
     {
         if (row >= m_rows.size() || col >= m_merged_columns.size())
             throw std::out_of_range("Row/Column out of range");
@@ -369,7 +369,7 @@ namespace DataModel
         m_aggregation.m_string_data.Clear();
     }
 
-    void PackedTable::SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order) {
+    void PackedTable::SortAggregationByColumn(ProfileDatabase* /*db*/, std::string sort_column, bool sort_order) {
 
 
         if (m_aggregation.agg_params[0].public_name == sort_column)

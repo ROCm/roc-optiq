@@ -218,7 +218,7 @@ SqliteDatabase::DetectTable(sqlite3* conn, const char* table, bool is_view)
               << (is_view ? "'view'" : "'table'") << "AND name='" << table << "';";
         rc = sqlite3_exec(
             conn, query.str().c_str(),
-            [](void* data, int argc, char** argv, char** azColName) {
+            [](void* /*data*/, int /*argc*/, char** argv, char** /*azColName*/) {
                 uint32_t num = std::stol(argv[0]);
                 return num > 0 ? 0 : 1;
             },

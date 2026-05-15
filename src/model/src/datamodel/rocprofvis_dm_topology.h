@@ -61,21 +61,21 @@ public:
         rocprofvis_dm_property_index_t index, 
         rocprofvis_dm_handle_t* value) override;
 
-    virtual rocprofvis_dm_result_t  AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers) { return kRocProfVisDmResultSuccess; };
+    virtual rocprofvis_dm_result_t  AddNode(rocprofvis_dm_track_identifiers_t* /*track_identifiers*/) { return kRocProfVisDmResultSuccess; };
     virtual TopologyNode* FindNodeMatchingIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers);
     rocprofvis_dm_result_t  SetBasicProperty(const char* name, uint64_t db_instance, rocprofvis_db_topology_data_type_t type, const char* value);
-    virtual rocprofvis_dm_result_t  ProcessProperty(const char* name, rocprofvis_db_topology_data_type_t type, void* value) {return kRocProfVisDmResultSuccess;};
+    virtual rocprofvis_dm_result_t  ProcessProperty(const char* /*name*/, rocprofvis_db_topology_data_type_t /*type*/, void* /*value*/) {return kRocProfVisDmResultSuccess;};
     rocprofvis_controller_topology_node_type_t GetType() { return m_type; };
     virtual std::string GetNodeName() = 0;
     virtual bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers);
-    virtual rocprofvis_dm_result_t GetTrackId(uint64_t& id) { return kRocProfVisDmResultNotLoaded; }
+    virtual rocprofvis_dm_result_t GetTrackId(uint64_t& /*id*/) { return kRocProfVisDmResultNotLoaded; }
 
 protected:
     virtual TopologyNode* FindRelevantPropertyNode(rocprofvis_dm_track_identifiers_t* track_identifiers, std::string table_name);
     virtual TopologyNode* FindRelevantTopologyNode(rocprofvis_dm_track_identifiers_t* track_identifiers, std::string table_name);
     virtual const std::map<std::string, uint32_t>* GetPropertiesMap() { return nullptr; };
-    virtual const bool IsRelevantPropertyTableName(std::string table_name) { return false; };
-    virtual const bool IsRelevantTopologyTableName(std::string table_name) { return false; };
+    virtual const bool IsRelevantPropertyTableName(std::string /*table_name*/) { return false; };
+    virtual const bool IsRelevantTopologyTableName(std::string /*table_name*/) { return false; };
     virtual const uint32_t GetLevelId() const { return INVALID_BRANCH_LEVEL; };
     virtual const char* GetLevelTag() const { return ""; }
     TopologyNode* GetRootNode();

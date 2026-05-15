@@ -186,7 +186,7 @@ MetricTableBase::GetTableHeight() const
 }
 
 void
-MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
+MetricTableBase::ContextMenu(const char* /*value_to_copy*/, uint32_t column_index,
                              std::pair<const MetricId, Row>& row)
 {
     if(ImGui::BeginPopupContextItem())

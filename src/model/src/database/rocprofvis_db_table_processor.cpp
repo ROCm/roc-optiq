@@ -65,7 +65,7 @@ namespace DataModel
         std::set<uint32_t>& tracks,
         std::vector<rocprofvis_db_compound_query_command> commands, 
         rocprofvis_dm_handle_t handle, 
-        rocprofvis_db_compound_table_type type,
+        rocprofvis_db_compound_table_type /*type*/,
         bool query_updated) 
     {
         m_timer.pause();

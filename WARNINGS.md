@@ -1,8 +1,8 @@
 # Warnings & Code-Quality Audit
 
-Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13  •  Last refreshed: 2026-05-15 (clean build, post C4267 + trivial-C4996 sweep)
+Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13  •  Last refreshed: 2026-05-15 (clean build, post C4100 sweep)
 Build configuration: `x64-debug` (MSVC 19.50, `/W4 /EHsc`, Visual Studio 18 2026)
-Source log: [`build/x64-debug-clean-build.log`](build/x64-debug-clean-build.log) (**full clean rebuild** after C4267 + trivial-C4996 cleanup, all uncommitted on top of `92c20103`)
+Source log: [`build/x64-debug-c4100-build.log`](build/x64-debug-c4100-build.log) (**full clean rebuild** after C4100 cleanup, all uncommitted on top of `5ab57678`)
 
 This document combines:
 1. **Compile-time warnings** emitted by MSVC `/W4` during a clean Debug build.
@@ -25,6 +25,37 @@ This document combines:
 ## 0. Progress log
 
 > Reverse-chronological. Each entry: date • category • count fixed • short note.
+
+### 2026-05-15 — C4100 (165/165 unique sites; 481/481 raw emissions) ✓ category complete
+
+Cleared the entire C4100 category — **all 481 raw warnings collapsed to 165 unique source sites** (the headers are included by many translation units, so MSVC re-emits per-TU). Every site followed one of three near-identical patterns:
+
+- **Pattern A — virtual base no-op default** (~280 raw / ~95 unique): e.g. `virtual void InterruptQuery(void* connection) {};` and `virtual rocprofvis_dm_result_t Cleanup(Future* future, bool rebuild) { return kRocProfVisDmResultSuccess; };`. Lives in `rocprofvis_db.h`, `rocprofvis_db_compute.h`, `rocprofvis_db_profile.h`, `rocprofvis_dm_topology.h`. Base-class methods that intentionally do nothing; derived classes override and use the params.
+- **Pattern B — derived "not supported here" assert** (~150 raw / ~55 unique): e.g. `ReadFlowTraceInfo(rocprofvis_dm_event_id_t event_id, Future* object) override { ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support flow trace", …); }`. The override exists for interface conformance only; the params are documented on the base.
+- **Pattern C — out-of-line `.cpp` not-supported** (~50 raw / ~15 unique): same as B but the body lives in `rocprofvis_dm_track_slice.cpp` (21 sites) and `rocprofvis_dm_base.cpp` (15 sites).
+
+**Mechanism — comment out the parameter name** (`Type name` → `Type /*name*/`). Universal C++98+, position-independent, guaranteed to suppress C4100 in MSVC, and preserves the original name for readers and for derived-class implementers copying the signature. **Why not `[[maybe_unused]]`?** First-attempt found that MSVC treats `Type [[maybe_unused]] name` as the attribute appertaining to the type, not the parameter declaration — C4100 is still emitted. Placing the attribute at the start of the parameter declaration (`[[maybe_unused]] Type name`) requires robust detection of the type-token start across multi-line and template-laden signatures, which the `/*name*/` trick avoids entirely. The first attempt was fully reverted (`git checkout -- src/`) before the `/*name*/` approach was applied.
+
+**Mechanics — auto-fixer script** at [`build/fix_c4100.ps1`](build/fix_c4100.ps1):
+1. Parses MSVC warning lines from the build log into `(file, line, col, paramname)` tuples.
+2. Dedupes by tuple (cuts 481 → 165) and groups by file, processing bottom-up so column offsets stay valid.
+3. For each site, locates `\b<param>\b` on the reported line; if not found exactly once (lambdas / multi-line signatures), probes 1–4 lines above for a unique standalone occurrence.
+4. Wraps it as `/*<param>*/`. Skips idempotently if already commented.
+5. Writes the modified file via `[System.IO.File]::WriteAllLines`.
+
+**Result:** 164 of 165 sites auto-edited cleanly across **30 files** (model + controller + view + test). The 1 remaining site (`rocprofvis_timeline_view.cpp:130:5 param=e` — a lambda capturing `std::shared_ptr<RocEvent> e` whose declaration line had multiple `e` matches) was fixed manually with a single `StrReplace`. Full clean rebuild produces **0 errors, 0 C4100 warnings**, no other categories touched.
+
+**Distribution of edits** (30 files):
+- Headers (4 files, ~95 sites): `rocprofvis_db.h` (47 unique), `rocprofvis_db_compute.h` (43 unique — combines Pattern A bases + Pattern B overrides), `rocprofvis_db_profile.h` (15 unique), `rocprofvis_dm_topology.h` (10 unique).
+- Datamodel `.cpp` (3 files, ~38 sites): `rocprofvis_dm_track_slice.cpp` (21), `rocprofvis_dm_base.cpp` (15), `rocprofvis_dm_table_row.cpp` (2).
+- Database `.cpp` (8 files, ~22 sites): `rocprofvis_db_compute.cpp` (8), `rocprofvis_db_profile.cpp` (3), `rocprofvis_db_rocprof.cpp` (2), `rocprofvis_db_rocpd.cpp` (2), `rocprofvis_db_packed_storage.cpp` (2), `rocprofvis_db_sqlite.cpp` (1), `rocprofvis_db_cache.cpp` (1), `rocprofvis_db_table_processor.cpp` (1).
+- Controller (4 files, ~9 sites): `rocprofvis_controller_track.cpp` (6), `rocprofvis_controller_sample.cpp` (3, including the `(void)property;` from the C4065 cleanup that was technically also a C4100 emission), `rocprofvis_controller_trace_compute.cpp` (1), `rocprofvis_controller_mem_mgmt.cpp` (1).
+- View (5 files, ~5 sites): `rocprofvis_track_topology.cpp` (2), `rocprofvis_timeline_view.cpp` (1, manual), `rocprofvis_track_item.cpp` (1), `rocprofvis_compute_widget.cpp` (1), `rocprofvis_infinite_scroll_table.cpp` (1), `rocprofvis_compute_summary.cpp` (1).
+- Tests + entry (3 files, ~4 sites): `rocprofvis_dm_compute_tests.cpp` (1), `rocprofvis_dm_system_tests.cpp` (1), `model/src/test/main.cpp` (1), `rocprofvis_dm_trace.cpp` (1), `rocprofvis_dm_table.cpp` (1).
+
+**Behavioral guarantee:** zero possible runtime impact. Commenting out a parameter name does not change the compiled function — the parameter still appears in the signature, callers and the ABI are unaffected, and any code that *did* reference the parameter would have failed to compile (none did, since these are exactly the names the compiler told us are unreferenced).
+
+Build: full clean rebuild via `cmake --build --preset "Windows Debug Build" --clean-first`, **0 errors, 0 C4100 emissions** (down from 481), total first-party warnings **677 → 196** (−481, **71 % drop in one pass**). Only **C4244 (187)** and the deferred **C4996 (9)** categories remain. Verified via `build/x64-debug-c4100-build.log`.
 
 ### 2026-05-15 — C4267 (35/35) + trivial-C4996 (4/13) sweep ✓ C4267 category complete
 
@@ -243,29 +274,28 @@ All four sites are the canonical inner-`for(int i …)` shadowing an outer `for(
 | Metric | Baseline (pre-cleanup) | Fixed since baseline | Remaining (live, **clean build**) |
 |---|---:|---:|---:|
 | Errors | 0 | — | **0** |
-| First-party warnings | **1083** | 406 | **677** |
+| First-party warnings | **1083** | 887 | **196** |
 | Thirdparty warnings | 53 | — | ~56 _(jsoncpp/yaml-cpp; not first-party scope)_ |
-| Distinct warning codes (first-party) | 16 | 13 | **3** |
+| Distinct warning codes (first-party) | 16 | 14 | **2** |
 
-_Latest reference build: 2026-05-15 → [`build/x64-debug-clean-build.log`](build/x64-debug-clean-build.log) (**full clean rebuild** after C4267 + trivial-C4996 sweep, all uncommitted on top of `92c20103`). Last pushed commit: `92c20103` on `dhingora/warning-fixes`._
+_Latest reference build: 2026-05-15 → [`build/x64-debug-c4100-build.log`](build/x64-debug-c4100-build.log) (**full clean rebuild** after C4100 sweep, all uncommitted on top of `5ab57678`). Last pushed commit: `5ab57678` on `dhingora/warning-fixes`._
 
-> **Calibration note (2026-05-15):** prior to today's clean build we had been measuring against incremental builds, which under-counted by ~29 first-party warnings (mostly C4244 in view/widgets/compute TUs that no header sweep had touched). Numbers above are now the true post-sweep state. See progress-log entry "Clean-build calibration" for details.
+> **Calibration note (2026-05-15):** prior to the original clean rebuild we had been measuring against incremental builds, which under-counted by ~29 first-party warnings (mostly C4244 in view/widgets/compute TUs that no header sweep had touched). Numbers above are now the true post-sweep state. See progress-log entries "Clean-build calibration" and "C4100 sweep" for details.
 
-Build succeeded; nothing here blocks compilation. **Only 3 categories remain live**: C4100, C4244, C4996 (with 9 of 13 C4996 sites deliberately deferred per §4.3) — listed in §2 below in priority order.
+Build succeeded; nothing here blocks compilation. **Only 2 categories remain live**: C4244 and C4996 (with 9 of 13 C4996 sites deliberately deferred per §4.3) — listed in §2 below in priority order.
 
 ---
 
 ## 2. Compile warnings — by code (first-party only)
 
-### 2a. Live categories (post C4267 + trivial-C4996 sweep, 2026-05-15 clean build)
+### 2a. Live categories (post C4100 sweep, 2026-05-15 clean build)
 
 | Remaining | Code | Description | Severity | Notes for next pass |
 |---:|---|---|---|---|
-| **481** | C4100 | unreferenced formal parameter | low (style/intent) | 380 / 481 (79 %) live in 4 database/datamodel headers. Mostly virtual base-class methods with default-empty bodies. Mechanical fix: drop the parameter name in the declaration, or `(void)param;` at top of body. Biggest count, smallest behavioral risk. |
-| **187** | C4244 | conversion, possible loss of data (e.g. `int64_t` → `int`/`float`) | **medium** — silent truncation | Spread across packed-storage / rocprof / controller `.cpp` files; per-site review needed (some are intentional truncations of timestamps/durations to display widths, some are real narrowing bugs). |
+| **187** | C4244 | conversion, possible loss of data (e.g. `int64_t` → `int`/`float`) | **medium** — silent truncation | Spread across packed-storage / rocprof / controller `.cpp` files; per-site review needed (some are intentional truncations of timestamps/durations to display widths, some are real narrowing bugs). Now the largest live category. |
 | **9** | C4996 | deprecated/unsafe CRT (`strncpy`, `getenv`) — deferred subset | **medium** (security-flagged) | See §4.3 — 4× `strncpy` (one of which, `rocprofvis_controller_data.cpp:282`, hides a real null-termination contract bug needing maintainer review) + 5× `getenv` (need a small portable `_dupenv_s` wrapper). The 4 trivial `vsprintf`/`getch` sites were cleared 2026-05-15. |
 
-**Total: 677 first-party** (down from 1083 baseline; cleanup has cleared 406 warnings and **13 categories outright**; the live category set is now exactly **C4100, C4244, C4996** — every shadowing/dead-local/signed-unsigned/size_t-narrowing category is at zero).
+**Total: 196 first-party** (down from 1083 baseline; cleanup has cleared 887 warnings and **14 categories outright**; the live category set is now exactly **C4244, C4996** — every shadowing/dead-local/signed-unsigned/size_t-narrowing/unreferenced-parameter category is at zero).
 
 ### 2b. Categories already cleared ✓
 
@@ -284,6 +314,7 @@ Build succeeded; nothing here blocks compilation. **Only 3 categories remain liv
 | ~~79~~+~~35~~ | C4267 | conversion from `size_t` to smaller type | `2026-05-15` (uncommitted; original model-side sweep + view/widgets/compute mop-up) | **0 ✓** |
 | ~~172~~+~~5~~ | C4245 | signed/unsigned conversion in initialization/return | `2026-05-15` (uncommitted; model-side sweep + view/test/controller mop-up) | **0 ✓** |
 | ~~18~~+~~4~~ | C4189 | local variable initialized but not referenced | `9c7a4ca6` + `2026-05-15` (uncommitted; view/test mop-up) | **0 ✓** |
+| ~~481~~ | C4100 | unreferenced formal parameter | `2026-05-15` (uncommitted; scripted `Type name` → `Type /*name*/` across 30 files via `build/fix_c4100.ps1`) | **0 ✓** |
 | ~~2~~+~~4~~ | C4996 | deprecated CRT function — partial cleanup of trivial sites only | `9c7a4ca6` + `2026-05-15` (uncommitted; `getch` + 3× `vsprintf`) | **9 remaining** — 4× `strncpy` + 5× `getenv`, deferred per §4.3 |
 
 ---
@@ -292,35 +323,23 @@ Build succeeded; nothing here blocks compilation. **Only 3 categories remain liv
 
 | Count | File |
 |---:|---|
-| 161 | `src/model/src/database/rocprofvis_db.h` |
-| 86 | `src/model/src/database/rocprofvis_db_compute.h` |
-| 70 | `src/model/src/database/rocprofvis_db_profile.h` |
-| 63 | `src/model/src/datamodel/rocprofvis_dm_topology.h` |
-| 25 | `src/model/src/database/rocprofvis_db_rocprof.cpp` |
-| 22 | `src/model/src/database/rocprofvis_db_packed_storage.cpp` |
-| 21 | `src/model/src/datamodel/rocprofvis_dm_track_slice.cpp` |
-| 20 | `src/model/src/database/rocprofvis_db_compute.cpp` |
-| 19 | `src/controller/src/system/rocprofvis_controller_track.cpp` |
-| 15 | `src/model/src/datamodel/rocprofvis_dm_base.cpp` |
+| 20 | `src/model/src/database/rocprofvis_db_packed_storage.cpp` |
+| 19 | `src/model/src/database/rocprofvis_db_rocprof.cpp` |
 | 15 | `src/model/src/database/rocprofvis_db_rocprof.h` |
-| 15 | `src/model/src/database/rocprofvis_db_profile.cpp` |
-| 15 | `src/controller/src/compute/rocprofvis_controller_trace_compute.cpp` |
+| 14 | `src/controller/src/compute/rocprofvis_controller_trace_compute.cpp` |
+| 13 | `src/controller/src/system/rocprofvis_controller_track.cpp` |
 | 12 | `src/controller/src/system/rocprofvis_controller_table_system.cpp` |
-| 11 | `src/model/src/datamodel/rocprofvis_dm_trace.cpp` |
-| 10 | `src/view/src/compute/rocprofvis_compute_summary.cpp` |
-| 8 | `src/model/src/database/rocprofvis_db_table_processor.cpp` |
-| 6 | `src/controller/src/system/rocprofvis_controller_sample.cpp` |
-| 5 | `src/view/src/rocprofvis_utils.cpp` |
-| 5 | `src/model/src/database/rocprofvis_db_sqlite.cpp` |
+| 12 | `src/model/src/database/rocprofvis_db_compute.cpp` |
+| 10 | `src/model/src/datamodel/rocprofvis_dm_trace.cpp` |
+| 8 | `src/model/src/database/rocprofvis_db_profile.cpp` |
+| 7 | `src/view/src/compute/rocprofvis_compute_summary.cpp` |
+| 7 | `src/model/src/database/rocprofvis_db_table_processor.cpp` |
 | 5 | `src/model/src/database/rocprofvis_db_expression_filter.cpp` |
-| 5 | `src/model/src/database/rocprofvis_db_rocpd.cpp` |
+| 5 | `src/view/src/rocprofvis_utils.cpp` |
 
-**Observation:** **56 % of remaining first-party warnings live in 4 model headers** (`rocprofvis_db.h` + `rocprofvis_db_compute.h` + `rocprofvis_db_profile.h` + `rocprofvis_dm_topology.h` = 380 / 677) — and **all 380 are C4100** (unreferenced virtual base-class parameters). Sweeping C4100 will collapse the report to ~297 warnings in one pass.
+**Observation:** the C4100 sweep cleared the four model headers entirely (`rocprofvis_db.h`, `rocprofvis_db_compute.h`, `rocprofvis_db_profile.h`, `rocprofvis_dm_topology.h` all dropped from 161/86/70/63 → 0). Remaining noise is **187 C4244 narrowing-conversion warnings** spread across `.cpp` files (and one `rocprofvis_db_rocprof.h`), plus 9 deferred C4996 sites. Top 13 files account for 147 / 196 warnings (75 %).
 
 ### 3a. Per-category × per-file breakdown (live, clean build)
-
-**C4100 (481 unreferenced parameter):**
-- `rocprofvis_db.h`: 161 • `rocprofvis_db_compute.h`: 86 • `rocprofvis_db_profile.h`: 70 • `rocprofvis_dm_topology.h`: 63 • `rocprofvis_dm_track_slice.cpp`: 21 • `rocprofvis_dm_base.cpp`: 15 • `rocprofvis_db_compute.cpp`: 8 • `rocprofvis_db_profile.cpp`: 7 • `rocprofvis_db_rocprof.cpp`: 6 • `rocprofvis_controller_track.cpp`: 6 • `rocprofvis_db_rocpd.cpp`: 5 • `rocprofvis_controller_sample.cpp`: 5 • others: ≤3 each.
 
 **C4244 (187 lossy conversion):**
 - `rocprofvis_db_packed_storage.cpp`: 20 • `rocprofvis_db_rocprof.cpp`: 19 • `rocprofvis_db_rocprof.h`: 15 • `rocprofvis_controller_trace_compute.cpp`: 14 • `rocprofvis_controller_track.cpp`: 13 • `rocprofvis_db_compute.cpp`: 12 • `rocprofvis_controller_table_system.cpp`: 12 • `rocprofvis_dm_trace.cpp`: 10 • `rocprofvis_db_profile.cpp`: 8 • `rocprofvis_db_table_processor.cpp`: 7 • `rocprofvis_compute_summary.cpp`: 7 • `rocprofvis_db_expression_filter.cpp`: 5 • others: ≤4 each.
@@ -328,7 +347,7 @@ Build succeeded; nothing here blocks compilation. **Only 3 categories remain liv
 **C4996 (9 deferred deprecated CRT):**
 - `rocprofvis_utils.cpp`: 5 (`getenv` — needs `_dupenv_s` wrapper) • `rocprofvis_controller_table_compute_pivot.cpp`: 2 (`strncpy`) • `rocprofvis_controller_data.cpp`: 1 (`strncpy` — **latent null-termination bug**, see §4.3) • `rocprofvis_controller_handle.cpp`: 1 (`strncpy`).
 
-The full per-file listing is at the bottom of this document (Appendix A) but is now stale (incremental-build numbers); regenerate from `build/x64-debug-clean-build.log` if needed.
+The full per-file listing is at the bottom of this document (Appendix A) but is now stale (incremental-build numbers); regenerate from `build/x64-debug-c4100-build.log` if needed.
 
 ---
 

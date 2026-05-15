@@ -170,7 +170,7 @@ namespace DataModel
         return PopulateTrackTopologyData(db, &track_properties->track_indentifiers, db_instance_id, table_name, process_id);
     }
 
-    rocprofvis_dm_result_t DatabaseCache::PopulateTrackTopologyData(Database * db, rocprofvis_dm_track_identifiers_t * track_indentifiers, uint32_t db_instance_id, const char* table_name, uint64_t process_id ){
+    rocprofvis_dm_result_t DatabaseCache::PopulateTrackTopologyData(Database * db, rocprofvis_dm_track_identifiers_t * track_indentifiers, uint32_t /*db_instance_id*/, const char* table_name, uint64_t process_id ){
         TableCache& table = tables[table_name];
         uint32_t num_columns = table.NumColumns();
         for (uint32_t i = 0; i < num_columns; i++)

@@ -791,7 +791,7 @@ rocprofvis_dm_result_t Trace::GetStringIndicesWithSubstring(rocprofvis_dm_num_st
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t /*index*/, uint64_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {

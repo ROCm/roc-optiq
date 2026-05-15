@@ -8,37 +8,37 @@ namespace RocProfVis
 namespace DataModel
 {
 
-rocprofvis_dm_result_t TrackSlice::GetRecordTimestampAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_timestamp_t & timestamp){
+rocprofvis_dm_result_t TrackSlice::GetRecordTimestampAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_timestamp_t & /*timestamp*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordIdAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_id_t & id){
+rocprofvis_dm_result_t TrackSlice::GetRecordIdAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_id_t & /*id*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordOperationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_op_t & op){
+rocprofvis_dm_result_t TrackSlice::GetRecordOperationAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_op_t & /*op*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordOperationStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & op){
+rocprofvis_dm_result_t TrackSlice::GetRecordOperationStringAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_charptr_t & /*op*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value){
+rocprofvis_dm_result_t TrackSlice::GetRecordValueAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_value_t & /*value*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordDurationAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_duration_t & duration){
+rocprofvis_dm_result_t TrackSlice::GetRecordDurationAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_duration_t & /*duration*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordCategoryIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & category_index){
+rocprofvis_dm_result_t TrackSlice::GetRecordCategoryIndexAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_index_t & /*category_index*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordSymbolIndexAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_index_t & symbol_index){
+rocprofvis_dm_result_t TrackSlice::GetRecordSymbolIndexAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_index_t & /*symbol_index*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordCategoryStringAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_charptr_t & category_charptr){
+rocprofvis_dm_result_t TrackSlice::GetRecordCategoryStringAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_charptr_t & /*category_charptr*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t, rocprofvis_dm_charptr_t & symbol_charptr){
+rocprofvis_dm_result_t TrackSlice::GetRecordSymbolStringAt(const rocprofvis_dm_property_index_t, rocprofvis_dm_charptr_t & /*symbol_charptr*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
-rocprofvis_dm_result_t TrackSlice::GetRecordGraphLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t & level){
+rocprofvis_dm_result_t TrackSlice::GetRecordGraphLevelAt(const rocprofvis_dm_property_index_t /*index*/, rocprofvis_dm_event_level_t & /*level*/){
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_VIRTUAL_METHOD_CALL, kRocProfVisDmResultNotLoaded);
 }
 

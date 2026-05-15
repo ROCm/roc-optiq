@@ -85,7 +85,7 @@ rocprofvis_controller_object_type_t ComputeTrace::GetType(void)
     return kRPVControllerObjectTypeControllerCompute;
 }
 
-rocprofvis_result_t ComputeTrace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
+rocprofvis_result_t ComputeTrace::GetUInt64(rocprofvis_property_t property, uint64_t /*index*/, uint64_t* value) 
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)

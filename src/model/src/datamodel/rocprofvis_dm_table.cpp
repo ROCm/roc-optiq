@@ -157,7 +157,7 @@ InfoTable::InfoTable(Trace* ctx, uint32_t id,  rocprofvis_dm_node_id_t node, roc
     }
 };
 
-rocprofvis_dm_result_t InfoTable::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+rocprofvis_dm_result_t InfoTable::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t /*index*/, uint64_t* value){
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {

@@ -18,7 +18,7 @@ namespace
 TreeNode*
 AddBranchNode(TreeNode* parent, NodeType type, const std::string& label,
               bool collapsable = true, bool show_eye_button = true,
-              bool framed = false)
+              bool /*framed*/ = false)
 {
     auto node             = std::make_unique<TreeNode>(type, label, collapsable);
     node->show_eye_button = show_eye_button;
@@ -166,7 +166,7 @@ TrackTopology::TrackTopology(DataProvider& dp)
         metadata_changed_event_handler);
 
     //subscribe to time format changed event
-    auto format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+    auto format_changed_handler = [this](std::shared_ptr<RocEvent> /*e*/) {
         // Reformat time columns
         FormatCells();
     };

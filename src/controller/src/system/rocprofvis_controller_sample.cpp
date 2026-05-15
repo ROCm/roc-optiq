@@ -12,7 +12,7 @@ namespace Controller
 
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 
-Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
+Sample::Sample(rocprofvis_controller_primitive_type_t /*type*/, uint64_t /*id*/, double timestamp)
 : Handle(__kRPVControllerSamplePropertiesFirst, __kRPVControllerSamplePropertiesLast)
 , m_data(0)
 , m_end_timestamp(0)
@@ -190,7 +190,7 @@ rocprofvis_result_t Sample::GetObject(rocprofvis_property_t property, uint64_t i
 
 
 rocprofvis_result_t Sample::GetString(rocprofvis_property_t property, uint64_t index,
-                                char* value, uint32_t* length) 
+                                char* /*value*/, uint32_t* /*length*/) 
 {
     (void) index;
     return UnhandledProperty(property);
@@ -198,7 +198,7 @@ rocprofvis_result_t Sample::GetString(rocprofvis_property_t property, uint64_t i
 
 
 rocprofvis_result_t Sample::SetUInt64(rocprofvis_property_t property, uint64_t index,
-                                uint64_t value) 
+                                uint64_t /*value*/) 
 {
     (void) index;
     return UnhandledProperty(property);

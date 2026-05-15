@@ -273,7 +273,7 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
  * @return kRocProfVisDmResultSuccess on success, or an appropriate error code if table
  *         creation or population fails.
  */
-rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future)
+rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* /*future*/)
 {
 
     // Local structure mirroring the memory activity table schema; used while extracting
@@ -537,7 +537,7 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt,
 }
 
 int
-RocprofDatabase::CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stmt,
+RocprofDatabase::CallbackNodeEnumeration(void* data, int /*argc*/, sqlite3_stmt* stmt,
                                          char** azColName)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
@@ -566,7 +566,7 @@ RocprofDatabase::CreateIndexes()
     uint32_t file_node_id = static_cast<uint32_t>(-1);
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     std::vector<std::thread> threads;
-    auto task = [&](std::vector<std::string> queries, uint32_t db_node_id) {   
+    auto task = [&](std::vector<std::string> /*queries*/, uint32_t db_node_id) {   
         result = ExecuteTransaction( vec, db_node_id);
         };
     for (auto& guid_info : DbInstances())
@@ -1294,7 +1294,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 ExecuteQueryForAllTracksAsync(
                     kRocProfVisDmIncludeStreamTracks,
                     kRPVQueryLevel, "SELECT *, ", (std::string(" ORDER BY ") + Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
-                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
+                    [](rocprofvis_dm_track_params_t* /*params*/, rocprofvis_dm_charptr_t query) -> std::string {return query; },
                     [](rocprofvis_dm_track_params_t* params) {
                         params->m_active_events.clear();
                     }, calculate_level_for_guids))
@@ -1355,8 +1355,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ",
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
-                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
-                    [](rocprofvis_dm_track_params_t* params) {},
+                    [](rocprofvis_dm_track_params_t* /*params*/, rocprofvis_dm_charptr_t query) -> std::string {return query; },
+                    [](rocprofvis_dm_track_params_t* /*params*/) {},
                     DbInstances()))
             {
                 break;

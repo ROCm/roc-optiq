@@ -25,7 +25,7 @@ rocprofvis_dm_result_t RocpdDatabase::RemapStringIds(rocprofvis_db_flow_data_t &
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t RocpdDatabase::RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) {
+rocprofvis_dm_result_t RocpdDatabase::RemapStringId(uint64_t id, rocprofvis_db_string_type_t /*type*/, uint32_t /*node*/, uint64_t & result) {
     result = id;
     RemapStringIdHelper(result);
     return kRocProfVisDmResultSuccess;
@@ -313,7 +313,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                    0,
                    kRPVQueryLevel,
                    "SELECT *, ", (std::string(" ORDER BY ")+Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
-                   [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
+                   [](rocprofvis_dm_track_params_t* /*params*/, rocprofvis_dm_charptr_t query) -> std::string {return query; },
                    [](rocprofvis_dm_track_params_t* params) {
                        params->m_active_events.clear();
                    },
@@ -366,8 +366,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                     kRPVQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ", 
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
-                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
-                    [](rocprofvis_dm_track_params_t* params) {
+                    [](rocprofvis_dm_track_params_t* /*params*/, rocprofvis_dm_charptr_t query) -> std::string {return query; },
+                    [](rocprofvis_dm_track_params_t* /*params*/) {
                     },
                     { DbInstances() }))
             {

@@ -226,7 +226,7 @@ class Database
                                                     rocprofvis_dm_timestamp_t end, 
                                                     rocprofvis_dm_string_t new_db_path,
                                                     Future* object);
-       virtual void InterruptQuery(void* connection) {};
+       virtual void InterruptQuery(void* /*connection*/) {};
 
        // returns pointer to cached tables map array
        DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
@@ -428,7 +428,7 @@ class Database
                                                                 rocprofvis_dm_charptr_t file_path,
                                                                 Future* future);
 
-        virtual rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) { return kRocProfVisDmResultSuccess; };
+        virtual rocprofvis_dm_result_t  Cleanup(Future* /*future*/, bool /*rebuild*/) { return kRocProfVisDmResultSuccess; };
 
     private:
         // pointer to a binding information structure physically located in Trace object and passed to Database object during binding
@@ -488,11 +488,11 @@ class Database
         // @param record - event data record
         // @return status of operation
         virtual rocprofvis_dm_result_t  RemapStringIds(
-                                                                rocprofvis_db_record_data_t & record) {return kRocProfVisDmResultSuccess;};
+                                                                rocprofvis_db_record_data_t & /*record*/) {return kRocProfVisDmResultSuccess;};
         virtual rocprofvis_dm_result_t RemapStringIds(
-                                                                rocprofvis_db_flow_data_t& record) {return kRocProfVisDmResultSuccess;};
+                                                                rocprofvis_db_flow_data_t& /*record*/) {return kRocProfVisDmResultSuccess;};
         virtual rocprofvis_dm_result_t  StringIndexToId(        
-                                                                rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) {return kRocProfVisDmResultSuccess;};
+                                                                rocprofvis_dm_index_t /*index*/, std::vector<rocprofvis_db_string_id_t>& /*id*/) {return kRocProfVisDmResultSuccess;};
 
         // return suffix to process name for provided track category ('PID', 'Agent')
         // @param category - track category

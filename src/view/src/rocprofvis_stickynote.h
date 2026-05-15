@@ -21,7 +21,7 @@ public:
                const std::string& text, const std::string& title,
                const std::string& project_id, double v_min, double v_max, bool is_minimized = true);
 
-    void Render(ImDrawList* draw_list, const ImVec2& window_position,
+    bool Render(ImDrawList* draw_list, const ImVec2& window_position,
                 std::shared_ptr<TimePixelTransform> conversion_manager);
     bool HandleResize(const ImVec2&       window_position,
                       std::shared_ptr<TimePixelTransform> conversion_manager);

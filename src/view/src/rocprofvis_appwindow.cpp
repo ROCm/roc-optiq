@@ -1565,7 +1565,7 @@ AppWindow::UpdateStatusBar()
             }
             if(clean_up_jobs > 0)
             {
-                m_status_message += (pending_requests > 0 ? " | " : "") +
+                m_status_message = (pending_requests > 0 ? m_status_message + " | " : "") +
                                     ("Cleaning up... (" + std::to_string(clean_up_jobs) +
                                      " pending jobs)");
             }

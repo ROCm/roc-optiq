@@ -202,13 +202,13 @@ AppWindow::Init()
     m_default_spacing = ImGui::GetStyle().ItemSpacing;
 
     auto new_tab_closed_handler = [this](std::shared_ptr<RocEvent> e) {
-        this->HandleTabClosed(e);
+        HandleTabClosed(e);
     };
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
 
     auto new_tab_selected_handler = [this](std::shared_ptr<RocEvent> e) {
-        this->HandleTabSelectionChanged(e);
+        HandleTabSelectionChanged(e);
     };
 
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
@@ -1600,14 +1600,14 @@ AppWindow::UpdateStatusBar()
         {
             if(pending_requests > 0)
             {
-                m_status_message = "Working... (" + std::to_string(pending_requests) +
-                                   " pending requests)";
+                m_status_message = "Working: " + std::to_string(pending_requests) +
+                                   " pending request(s)";
             }
             if(clean_up_jobs > 0)
             {
                 m_status_message = (pending_requests > 0 ? m_status_message + " | " : "") +
-                                    ("Cleaning up... (" + std::to_string(clean_up_jobs) +
-                                     " pending jobs)");
+                                    ("Cleaning up: " + std::to_string(clean_up_jobs) +
+                                     " pending job(s)");
             }
             m_status_show_busy_indicator = true;
         }

@@ -79,6 +79,7 @@ private:
     void RenderFlowControls();
     void RenderAnnotationControls();
     void RenderEventSearch();
+    void RenderMeasurementControls();
 
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<TimelineSelection> m_timeline_selection;

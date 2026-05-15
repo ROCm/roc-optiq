@@ -17,7 +17,6 @@ TimelineSelection::TimelineSelection(DataProvider& dp)
 : m_selected_range_start(INVALID_SELECTION_TIME)
 , m_selected_range_end(INVALID_SELECTION_TIME)
 , m_data_provider(dp)
-, m_highlight_timer_active(false)
 , m_last_highlighted_event_id(INVALID_SELECTION_ID)
 {}
 
@@ -232,22 +231,29 @@ TimelineSelection::NavigateToEvent(uint64_t track_id, uint64_t event_uuid,
 void
 TimelineSelection::HighlightTrackEvent(uint64_t track_id, uint64_t event_id)
 {
-    if(m_highlighted_event_ids.count(event_id) == 0)
-    {
-        m_highlighted_event_ids.insert(event_id);
+    bool is_new = m_highlighted_events.count(event_id) == 0;
+    m_highlighted_events[event_id] = { std::chrono::steady_clock::now(), track_id, false };
+    if(is_new)
         SendEventHighlightChanged(event_id, track_id, true);
-    }
     m_last_highlighted_event_id = event_id;
-    m_highlight_timer_start     = std::chrono::steady_clock::now();
-    m_highlight_timer_active    = true;
+}
+
+void
+TimelineSelection::HighlightTrackEventPersistent(uint64_t track_id, uint64_t event_id)
+{
+    bool is_new = m_highlighted_events.count(event_id) == 0;
+    m_highlighted_events[event_id] = { std::chrono::steady_clock::now(), track_id, true };
+    if(is_new)
+        SendEventHighlightChanged(event_id, track_id, true);
+    m_last_highlighted_event_id = event_id;
 }
 
 void
 TimelineSelection::UnhighlightTrackEvent(uint64_t track_id, uint64_t event_id)
 {
-    if(m_highlighted_event_ids.count(event_id) > 0)
+    if(m_highlighted_events.count(event_id) > 0)
     {
-        m_highlighted_event_ids.erase(event_id);
+        m_highlighted_events.erase(event_id);
         SendEventHighlightChanged(event_id, track_id, false);
     }
 }
@@ -255,22 +261,38 @@ TimelineSelection::UnhighlightTrackEvent(uint64_t track_id, uint64_t event_id)
 bool
 TimelineSelection::EventHighlighted(uint64_t event_id) const
 {
-    return m_highlighted_event_ids.count(event_id) > 0;
+    return m_highlighted_events.count(event_id) > 0;
 }
 
 void
 TimelineSelection::UnhighlightAllEvents()
 {
-    m_highlighted_event_ids.clear();
-    m_highlight_timer_active        = false;
-    m_last_highlighted_event_id     = INVALID_SELECTION_ID;
+    m_highlighted_events.clear();
+    m_last_highlighted_event_id = INVALID_SELECTION_ID;
     SendEventHighlightChanged(INVALID_SELECTION_ID, INVALID_SELECTION_ID, false, true);
+}
+
+void
+TimelineSelection::UnhighlightPersistentEvents()
+{
+    for(auto it = m_highlighted_events.begin(); it != m_highlighted_events.end();)
+    {
+        if(it->second.persistent)
+        {
+            SendEventHighlightChanged(it->first, it->second.track_id, false);
+            it = m_highlighted_events.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
 }
 
 bool
 TimelineSelection::HasHighlightedEvents() const
 {
-    return !m_highlighted_event_ids.empty();
+    return !m_highlighted_events.empty();
 }
 
 uint64_t
@@ -282,23 +304,52 @@ TimelineSelection::GetLastHighlightedEventId() const
 double
 TimelineSelection::GetHighlightElapsedSeconds() const
 {
-    if(!m_highlight_timer_active)
+    auto it = m_highlighted_events.find(m_last_highlighted_event_id);
+    if(it == m_highlighted_events.end())
         return 0.0;
-    auto elapsed = std::chrono::steady_clock::now() - m_highlight_timer_start;
+    auto elapsed = std::chrono::steady_clock::now() - it->second.start_time;
     return std::chrono::duration<double>(elapsed).count();
+}
+
+double
+TimelineSelection::GetHighlightElapsedSeconds(uint64_t event_id) const
+{
+    auto it = m_highlighted_events.find(event_id);
+    if(it == m_highlighted_events.end())
+        return 0.0;
+    auto elapsed = std::chrono::steady_clock::now() - it->second.start_time;
+    return std::chrono::duration<double>(elapsed).count();
+}
+
+bool
+TimelineSelection::IsHighlightPersistent(uint64_t event_id) const
+{
+    auto it = m_highlighted_events.find(event_id);
+    if(it == m_highlighted_events.end())
+        return false;
+    return it->second.persistent;
 }
 
 void
 TimelineSelection::UpdateHighlightTimer()
 {
-    if(m_highlight_timer_active)
+    auto now = std::chrono::steady_clock::now();
+    for(auto it = m_highlighted_events.begin(); it != m_highlighted_events.end();)
     {
-        auto elapsed = std::chrono::steady_clock::now() - m_highlight_timer_start;
-        double elapsed_s =
-            std::chrono::duration<double>(elapsed).count();
+        if(it->second.persistent)
+        {
+            ++it;
+            continue;
+        }
+        double elapsed_s = std::chrono::duration<double>(now - it->second.start_time).count();
         if(elapsed_s >= HIGHLIGHT_TIMEOUT_S)
         {
-            UnhighlightAllEvents();
+            SendEventHighlightChanged(it->first, it->second.track_id, false);
+            it = m_highlighted_events.erase(it);
+        }
+        else
+        {
+            ++it;
         }
     }
 }

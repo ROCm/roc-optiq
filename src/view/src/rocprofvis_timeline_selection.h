@@ -14,6 +14,21 @@ namespace RocProfVis
 namespace View
 {
 
+struct HighlightInfo
+{
+    std::chrono::steady_clock::time_point start_time;
+    uint64_t                              track_id   = 0;
+    bool                                  persistent = false;
+};
+
+}  // namespace View
+}  // namespace RocProfVis
+
+namespace RocProfVis
+{
+namespace View
+{
+
 class DataProvider;
 struct TrackGraph;
 
@@ -46,13 +61,17 @@ public:
     void NavigateToEvent(uint64_t track_id, uint64_t event_uuid, double start_ns,
                          double duration_ns);
     void HighlightTrackEvent(uint64_t track_id, uint64_t event_id);
+    void HighlightTrackEventPersistent(uint64_t track_id, uint64_t event_id);
     void     UnhighlightTrackEvent(uint64_t track_id, uint64_t event_id);
     bool     EventHighlighted(uint64_t event_id) const;
     void     UnhighlightAllEvents();
+    void     UnhighlightPersistentEvents();
     bool     HasHighlightedEvents() const;
     void     UpdateHighlightTimer();
     uint64_t GetLastHighlightedEventId() const;
     double   GetHighlightElapsedSeconds() const;
+    double   GetHighlightElapsedSeconds(uint64_t event_id) const;
+    bool     IsHighlightPersistent(uint64_t event_id) const;
 
     static constexpr double INVALID_SELECTION_TIME =
         std::numeric_limits<double>::lowest();
@@ -74,13 +93,11 @@ private:
     double                       m_selected_range_start;
     double                       m_selected_range_end;
 
-    std::unordered_set<uint64_t> m_selected_event_ids;
-    std::unordered_set<uint64_t> m_highlighted_event_ids;
+    std::unordered_set<uint64_t>              m_selected_event_ids;
+    std::unordered_map<uint64_t, HighlightInfo> m_highlighted_events;
 
-    static constexpr double                          HIGHLIGHT_TIMEOUT_S = 10.0;
-    bool                                             m_highlight_timer_active;
-    std::chrono::steady_clock::time_point            m_highlight_timer_start;
-    uint64_t                                         m_last_highlighted_event_id;
+    static constexpr double HIGHLIGHT_TIMEOUT_S = 10.0;
+    uint64_t                m_last_highlighted_event_id;
 };
 
 }  // namespace View

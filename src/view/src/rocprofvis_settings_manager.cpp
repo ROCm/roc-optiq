@@ -92,6 +92,11 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(29, 30, 38, 255),     // Colors::kMinimapBg
     IM_COL32(10, 12, 18, 170),     // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 200, 255, 255),    // Colors::kMeasurementColor
+    IM_COL32(30, 30, 30, 240),     // Colors::kMeasurementLabelBg
+    IM_COL32(70, 70, 70, 200),     // Colors::kMeasurementLabelEdge
+    IM_COL32(255, 255, 255, 255),  // Colors::kMeasurementLabelText
+    IM_COL32(255, 255, 255, 120),  // Colors::kMeasurementNotch
     IM_COL32(42, 82, 118, 255),    // Colors::kComparisonBase
     IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
     IM_COL32(205, 170, 82, 255),   // Colors::kComparisonLesser
@@ -170,6 +175,11 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(247, 250, 254, 255),  // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 60),         // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 160, 220, 255),    // Colors::kMeasurementColor
+    IM_COL32(240, 240, 240, 240),  // Colors::kMeasurementLabelBg
+    IM_COL32(180, 180, 180, 200),  // Colors::kMeasurementLabelEdge
+    IM_COL32(20, 20, 20, 255),     // Colors::kMeasurementLabelText
+    IM_COL32(80, 80, 80, 120),     // Colors::kMeasurementNotch
     IM_COL32(203, 230, 252, 255),  // Colors::kComparisonBase
     IM_COL32(194, 235, 230, 255),  // Colors::kComparisonTarget
     IM_COL32(248, 224, 166, 255),  // Colors::kComparisonLesser

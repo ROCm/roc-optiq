@@ -158,7 +158,6 @@ private:
     void UpdateOutput();
     void UpdateState();
     std::string DetermineTracePath(ProfilerConfig const* config);
-    std::vector<std::string> BuildCommandArgs(ProfilerConfig const* config);
 
     std::unique_ptr<IProfilerExecutor> m_executor;
     std::unique_ptr<ProfilerConfig> m_config;

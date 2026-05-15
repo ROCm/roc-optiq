@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_profiler_process.h"
+#include "rocprofvis_controller_profiler_cmdline.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_job_system.h"
 #include "spdlog/spdlog.h"
-#include <sstream>
 #include <filesystem>
 #include <chrono>
 
@@ -210,46 +210,10 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         return false;
     }
 
-    // Build command line
-    std::ostringstream cmd_line;
-    cmd_line << "\"" << config.GetProfilerPath() << "\"";
-
-    // Explicit profiler argv entries first
-    for (auto const& arg : config.GetProfilerArgv())
-    {
-        cmd_line << " " << arg;
-    }
-
-    // Legacy whitespace-split profiler_args (backwards compatibility)
-    if (!config.GetProfilerArgs().empty())
-    {
-        std::istringstream iss(config.GetProfilerArgs());
-        std::string token;
-        while (iss >> token)
-        {
-            cmd_line << " " << token;
-        }
-    }
-
-    if (!config.GetOutputDirectory().empty())
-    {
-        cmd_line << " --output " << config.GetOutputDirectory();
-    }
-
-    if (!config.GetTargetExecutable().empty())
-    {
-        cmd_line << " -- " << config.GetTargetExecutable();
-    }
-
-    if (!config.GetTargetArgs().empty())
-    {
-        std::istringstream iss(config.GetTargetArgs());
-        std::string token;
-        while (iss >> token)
-        {
-            cmd_line << " " << token;
-        }
-    }
+    // Build command line via the shared helper. Tokens are quoted following
+    // the Windows CRT / CommandLineToArgvW reverse rules, so paths or
+    // arguments containing whitespace or quotes are preserved correctly.
+    std::string cmd_line_str = Cmdline::ToWindowsCommandLine(Cmdline::BuildArgv(config));
 
     // Create pipes for stdout and stderr
     SECURITY_ATTRIBUTES sa;
@@ -303,7 +267,6 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
 
     PROCESS_INFORMATION pi = {};
 
-    std::string cmd_line_str = cmd_line.str();
     std::vector<char> cmd_line_buffer(cmd_line_str.begin(), cmd_line_str.end());
     cmd_line_buffer.push_back('\0');
 
@@ -430,7 +393,30 @@ std::string LocalProfilerExecutor::ReadOutput()
 #else
 
 // ==================================================================================
-// LocalProfilerExecutor Implementation - Linux
+// LocalProfilerExecutor Implementation - POSIX (Linux, and macOS if ROCm gains
+// macOS support in the future).
+//
+// This implementation uses fork() + execvp() with pipes for stdout/stderr capture.
+// The pattern is correct and portable POSIX, but if/when macOS support is added
+// for the ROCm Systems Profiler, this code should be refactored to use
+// posix_spawnp() with posix_spawn_file_actions_* for the fd plumbing. Reasons:
+//
+//   - On macOS, the window between fork() and execvp() is unsafe with respect
+//     to most Apple frameworks (Cocoa, Core Foundation, libdispatch/GCD, Metal,
+//     Mach ports). Roc-optiq links these transitively via MoltenVK / GLFW /
+//     native file dialog, so the Objective-C runtime can abort the forked
+//     child before exec runs (look for OBJC_DISABLE_INITIALIZE_FORK_SAFETY).
+//   - The setenv() and std::string allocations in the child branch below are
+//     not async-signal-safe; they can deadlock on macOS if another roc-optiq
+//     thread held the malloc lock at fork time.
+//   - posix_spawn skips the address-space duplication entirely, which matters
+//     for a GUI/Vulkan process with many Mach VM regions.
+//   - posix_spawn with POSIX_SPAWN_CLOEXEC_DEFAULT / POSIX_SPAWN_SETSIGDEF
+//     gives cleaner fd and signal-handler hygiene than fork+exec.
+//
+// macOS does not provide execvpe(3), so any env-passing refactor on Linux
+// (e.g. switching from per-child setenv to passing envp directly) should
+// target posix_spawnp instead of execvpe for portability.
 // ==================================================================================
 
 LocalProfilerExecutor::LocalProfilerExecutor()
@@ -473,6 +459,19 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         return false;
     }
 
+    // Build argv tokens BEFORE fork() so we don't allocate in the child between
+    // fork and execvp. The string data is copy-on-written into the child by
+    // fork, and the c_str() pointers we capture in argv_cstr remain valid there.
+    std::vector<std::string> argv_tokens = Cmdline::BuildArgv(config);
+
+    std::vector<char*> argv_cstr;
+    argv_cstr.reserve(argv_tokens.size() + 1);
+    for (auto& tok : argv_tokens)
+    {
+        argv_cstr.push_back(const_cast<char*>(tok.c_str()));
+    }
+    argv_cstr.push_back(nullptr);
+
     int stdout_pipe[2];
     int stderr_pipe[2];
 
@@ -504,67 +503,15 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
 
-        // Set environment variables
+        // Set environment variables. setenv() takes the libc env lock, which
+        // is not async-signal-safe; see the section banner above for the
+        // posix_spawn-based refactor that will eliminate this risk.
         for (auto const& kv : config.GetEnvVars())
         {
             setenv(kv.first.c_str(), kv.second.c_str(), 1);
         }
 
-        // Build argv array
-        std::vector<std::string> arg_storage;
-        std::vector<char*> argv;
-
-        argv.push_back(const_cast<char*>(config.GetProfilerPath().c_str()));
-
-        // Explicit profiler argv entries first
-        for (auto const& arg : config.GetProfilerArgv())
-        {
-            arg_storage.push_back(arg);
-            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
-        }
-
-        // Legacy whitespace-split profiler_args (backwards compatibility)
-        if (!config.GetProfilerArgs().empty())
-        {
-            std::istringstream iss(config.GetProfilerArgs());
-            std::string token;
-            while (iss >> token)
-            {
-                arg_storage.push_back(token);
-                argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
-            }
-        }
-
-        if (!config.GetOutputDirectory().empty())
-        {
-            arg_storage.emplace_back("--output");
-            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
-            arg_storage.push_back(config.GetOutputDirectory());
-            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
-        }
-
-        if (!config.GetTargetExecutable().empty())
-        {
-            arg_storage.emplace_back("--");
-            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
-            arg_storage.push_back(config.GetTargetExecutable());
-            argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
-        }
-
-        if (!config.GetTargetArgs().empty())
-        {
-            std::istringstream iss(config.GetTargetArgs());
-            std::string token;
-            while (iss >> token)
-            {
-                arg_storage.push_back(token);
-                argv.push_back(const_cast<char*>(arg_storage.back().c_str()));
-            }
-        }
-
-        argv.push_back(nullptr);
-
-        execvp(config.GetProfilerPath().c_str(), argv.data());
+        execvp(argv_cstr[0], argv_cstr.data());
 
         int exec_errno = errno;
         char err_buf[256];
@@ -725,38 +672,12 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
 
     m_executor = std::make_unique<LocalProfilerExecutor>();
 
-    // Log env vars
     for (auto const& kv : config->GetEnvVars())
     {
         spdlog::info("Profiler env: {}={}", kv.first, kv.second);
     }
 
-    // Log command
-    {
-        std::ostringstream cmd_log;
-        cmd_log << config->GetProfilerPath();
-        for (auto const& arg : config->GetProfilerArgv())
-        {
-            cmd_log << " " << arg;
-        }
-        if (!config->GetProfilerArgs().empty())
-        {
-            cmd_log << " " << config->GetProfilerArgs();
-        }
-        if (!config->GetOutputDirectory().empty())
-        {
-            cmd_log << " --output " << config->GetOutputDirectory();
-        }
-        if (!config->GetTargetExecutable().empty())
-        {
-            cmd_log << " -- " << config->GetTargetExecutable();
-        }
-        if (!config->GetTargetArgs().empty())
-        {
-            cmd_log << " " << config->GetTargetArgs();
-        }
-        spdlog::info("Profiler launch: {}", cmd_log.str());
-    }
+    spdlog::info("Profiler launch: {}", Cmdline::ToDisplayString(Cmdline::BuildArgv(*config)));
 
     bool launched = m_executor->Start(*config);
 
@@ -868,6 +789,7 @@ std::string ProfilerProcessController::DetermineTracePath(ProfilerConfig const* 
 
     auto is_trace_extension = [&](std::string const& ext) -> bool
     {
+        //TODO: review extensions
         switch (config->GetProfilerType())
         {
             case kRPVProfilerTypeRocprofSysRun:
@@ -875,7 +797,7 @@ std::string ProfilerProcessController::DetermineTracePath(ProfilerConfig const* 
                 return (ext == ".db" || ext == ".rpd");
             case kRPVProfilerTypeRocprofCompute:
             case kRPVProfilerTypeRocprofV3:
-                return (ext == ".csv" || ext == ".json" || ext == ".db");
+                return (ext == ".db");
             default:
                 return (ext == ".db" || ext == ".rpd");
         }
@@ -907,55 +829,6 @@ std::string ProfilerProcessController::DetermineTracePath(ProfilerConfig const* 
     }
 
     return best_path.string();
-}
-
-std::vector<std::string> ProfilerProcessController::BuildCommandArgs(ProfilerConfig const* config)
-{
-    std::vector<std::string> args;
-
-    if (config == nullptr)
-    {
-        return args;
-    }
-
-    for (auto const& arg : config->GetProfilerArgv())
-    {
-        args.push_back(arg);
-    }
-
-    if (!config->GetProfilerArgs().empty())
-    {
-        std::istringstream iss(config->GetProfilerArgs());
-        std::string token;
-        while (iss >> token)
-        {
-            args.push_back(token);
-        }
-    }
-
-    if (!config->GetOutputDirectory().empty())
-    {
-        args.push_back("--output");
-        args.push_back(config->GetOutputDirectory());
-    }
-
-    if (!config->GetTargetExecutable().empty())
-    {
-        args.push_back("--");
-        args.push_back(config->GetTargetExecutable());
-    }
-
-    if (!config->GetTargetArgs().empty())
-    {
-        std::istringstream iss(config->GetTargetArgs());
-        std::string token;
-        while (iss >> token)
-        {
-            args.push_back(token);
-        }
-    }
-
-    return args;
 }
 
 void ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller, Future* future)

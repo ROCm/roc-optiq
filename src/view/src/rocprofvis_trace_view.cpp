@@ -1244,20 +1244,33 @@ TraceView::RenderMeasurementControls()
         return;
     }
 
-    // Exit
+    // Exit: same two-stage behavior as ESC.
+    //  - 1 point placed: clears the partial measurement, stays in mode
+    //  - 0 or 2 points: exits measurement mode (preserves complete measurement)
+    bool exit_clears = (fm.GetMeasurementState() == MeasurementState::kWaitingForSecond);
     ImGui::PushID("measure_exit");
     ImGui::PushStyleColor(ImGuiCol_Button, transparent);
     bool exit_clicked = ImGui::Button("Exit");
     ImGui::PopStyleColor();
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Exit measurement mode (keeps the current measurement)");
+        SetTooltipStyled(exit_clears
+                             ? "Clear the partial measurement"
+                             : "Exit measurement mode (keeps the current measurement)");
     }
     ImGui::PopID();
     if(exit_clicked)
     {
-        fm.ExitMeasurementMode();
-        return;
+        if(exit_clears)
+        {
+            fm.ClearMeasurement();
+            m_timeline_selection->UnhighlightPersistentEvents();
+        }
+        else
+        {
+            fm.ExitMeasurementMode();
+            return;
+        }
     }
     VerticalSeparator(&m_settings_manager);
 

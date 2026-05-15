@@ -2173,8 +2173,16 @@ TimelineView::HandleTopSurfaceTouch()
             if(fm_touch.IsFreehandMode() && dragging_ruler < 0 &&
                ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
                (state == MeasurementState::kWaitingForFirst ||
-                state == MeasurementState::kWaitingForSecond))
+                state == MeasurementState::kWaitingForSecond ||
+                state == MeasurementState::kComplete))
             {
+                // Clicking after a complete measurement resets and starts a new one,
+                // matching event-anchored behavior in FlameTrackItem::DrawBox.
+                if(state == MeasurementState::kComplete)
+                {
+                    m_timeline_selection->UnhighlightPersistentEvents();
+                    fm_touch.ClearMeasurement();
+                }
                 float  clamped_x  = std::clamp(mouse_x, 0.0f, m_tpt->GetGraphSizeX());
                 double click_time = m_tpt->PixelToTime(clamped_x) + m_tpt->GetMinX();
                 fm_touch.SetFreehandMeasurementPoint(click_time);
@@ -2337,7 +2345,26 @@ TimelineView::HandleTopSurfaceTouch()
 
         if(hk.WasActionTriggered(HotkeyActionId::kClearSelection))
         {
-            ClearTimeRangeSelection();
+            // In measurement mode, ESC has a two-stage behavior:
+            //  - 1 point placed: clear the partial measurement, stay in mode
+            //  - 0 or 2 points: exit measurement mode (preserves complete measurement)
+            TimelineFocusManager& fm_esc = TimelineFocusManager::GetInstance();
+            if(fm_esc.IsMeasurementMode())
+            {
+                if(fm_esc.GetMeasurementState() == MeasurementState::kWaitingForSecond)
+                {
+                    fm_esc.ClearMeasurement();
+                    m_timeline_selection->UnhighlightPersistentEvents();
+                }
+                else
+                {
+                    fm_esc.ExitMeasurementMode();
+                }
+            }
+            else
+            {
+                ClearTimeRangeSelection();
+            }
         }
 
         if(hk.WasActionTriggered(HotkeyActionId::kToggleMark))

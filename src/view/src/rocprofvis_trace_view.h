@@ -58,6 +58,8 @@ public:
     void CreateView();
     void DestroyView();
 
+    DataProvider* GetDataProvider() override { return &m_data_provider; }
+
     bool HasTrimActiveTrimSelection() const;
     bool IsTrimSaveAllowed() const;
 

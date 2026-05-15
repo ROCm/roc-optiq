@@ -28,6 +28,8 @@ public:
     void CreateView();
     void DestroyView();
 
+    DataProvider* GetDataProvider() override { return &m_data_provider; }
+
     std::shared_ptr<RocWidget> GetToolbar() override;
     std::optional<DataProviderCleanupWork> DetachProviderCleanup() override;
 

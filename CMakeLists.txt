@@ -229,7 +229,9 @@ target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(APPLE)
     set(ROCPROFVIS_BUNDLE_VULKAN ON CACHE BOOL
-        "Bundle Vulkan loader and MoltenVK runtime into the macOS app")
+        "Bundle the Vulkan loader into the macOS app. MoltenVK is resolved \
+from the user's LunarG Vulkan SDK install at runtime; the entitlements \
+plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
     if(ROCPROFVIS_BUNDLE_VULKAN)
         set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "")
         if(Vulkan_LIBRARY)
@@ -282,14 +284,63 @@ if(APPLE)
             TARGET ${TARGET_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}"
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/licenses/Vulkan-Loader-LICENSE.txt"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/Vulkan-Loader-LICENSE.txt"
             COMMAND ${CMAKE_COMMAND}
                 -DROCPROFVIS_APP_EXECUTABLE="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
                 -DROCPROFVIS_BUNDLED_VULKAN_LOADER="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/resources/cmake/rocprofvis_fix_macos_vulkan_bundle.cmake"
-            COMMENT "Staging Vulkan loader into the app bundle"
+            COMMENT "Staging Vulkan loader and license into the app bundle"
+        )
+    endif()
+
+    # === macOS code signing (optional) ===
+    #
+    # ROCPROFVIS_MACOS_CODESIGN_IDENTITY may be:
+    #   ""           (default) -> no codesigning; suitable for local dev builds.
+    #   "-"          -> ad-hoc sign; satisfies Gatekeeper for local launching of
+    #                   re-written dylibs without a real Developer ID.
+    #   "Developer ID Application: ... (TEAMID)"
+    #                -> Full Developer ID signing with Hardened Runtime + the
+    #                   bundled entitlements plist, ready for notarization.
+    set(ROCPROFVIS_MACOS_CODESIGN_IDENTITY "" CACHE STRING
+        "Identity passed to codesign --sign. Empty disables codesigning. \
+Use '-' for ad-hoc signing, or a full Developer ID for release builds.")
+    set(ROCPROFVIS_MACOS_ENTITLEMENTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.entitlements.plist"
+        CACHE FILEPATH "Entitlements plist used when codesigning the .app")
+
+    if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY)
+        # Developer ID needs hardened runtime + entitlements + secure timestamp
+        # for notarization. Ad-hoc signing ('-') cannot use those options, so
+        # build the codesign argument list dynamically.
+        if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY STREQUAL "-")
+            set(_rocprofvis_codesign_runtime_args "")
+        else()
+            set(_rocprofvis_codesign_runtime_args
+                --options runtime
+                --timestamp
+                --entitlements "${ROCPROFVIS_MACOS_ENTITLEMENTS}")
+        endif()
+
+        # --deep is technically deprecated but still accepted by notarization
+        # and is the only single-shot way to sign every nested dylib that
+        # happens to end up in Contents/Frameworks/ (Vulkan loader, GLFW when
+        # built shared, etc.) without having to enumerate them in CMake.
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND codesign --force --deep
+                --sign "${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}"
+                ${_rocprofvis_codesign_runtime_args}
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
+            COMMAND codesign --verify --verbose=2
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
+            COMMENT "Codesigning bundle with identity '${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}'"
         )
     endif()
 endif()

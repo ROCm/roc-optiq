@@ -41,9 +41,9 @@ constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
 constexpr const char* APP_SHUTDOWN_NOTIFICATION_ID = "provider_cleanup_app_shutdown";
 constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
-constexpr float WELCOME_SIDEBAR_EM       = 17.5f;
-constexpr float WELCOME_CONTENT_MAX_EM   = 76.0f;
-constexpr float WELCOME_ACTION_HEIGHT_EM = 3.75f;
+constexpr float WELCOME_CONTENT_MAX_EM   = 92.0f;
+constexpr float WELCOME_ACTION_HEIGHT_EM = 4.6f;
+constexpr float WELCOME_CARD_HEIGHT_EM   = 7.25f;
 
 const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml" };
 const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
@@ -69,33 +69,58 @@ struct WelcomeLink
     Colors      color;
 };
 
-void
-DrawWelcomeSectionLabel(SettingsManager& settings, const char* label)
+ImU32
+WelcomeColor(SettingsManager& settings, Colors color, float alpha)
 {
-    ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    if(ImFont* small_font = settings.GetFontManager().GetFont(FontType::kSmall))
-    {
-        ImGui::PushFont(small_font);
-        ImGui::TextUnformatted(label);
-        ImGui::PopFont();
-    }
-    else
-    {
-        ImGui::TextUnformatted(label);
-    }
-    ImGui::PopStyleColor();
+    return ApplyAlpha(settings.GetColor(color), alpha);
 }
 
 void
-DrawWelcomeRule(SettingsManager& settings)
+DrawWelcomeBackdrop(ImDrawList* draw_list, const ImVec2& page_pos, const ImVec2& page_size,
+                    bool is_dark_mode)
 {
-    const ImVec2 pos = ImGui::GetCursorScreenPos();
-    const float  width = ImGui::GetContentRegionAvail().x;
-    ImGui::GetWindowDrawList()->AddLine(
-        ImVec2(pos.x, pos.y), ImVec2(pos.x + width, pos.y),
-        ApplyAlpha(settings.GetColor(Colors::kBorderColor), 0.72f), 1.0f);
-    ImGui::Dummy(ImVec2(width, 1.0f));
+    const ImVec2 page_max(page_pos.x + page_size.x, page_pos.y + page_size.y);
+    draw_list->AddRectFilled(page_pos, page_max,
+                             is_dark_mode ? IM_COL32(3, 6, 14, 255)
+                                          : IM_COL32(243, 247, 252, 255));
+
+    if(is_dark_mode)
+    {
+        draw_list->AddRectFilledMultiColor(
+            page_pos, page_max, IM_COL32(18, 23, 38, 210), IM_COL32(4, 8, 18, 250),
+            IM_COL32(3, 7, 16, 255), IM_COL32(14, 20, 32, 238));
+        draw_list->AddCircleFilled(ImVec2(page_pos.x + page_size.x * 0.22f,
+                                          page_pos.y + page_size.y * 0.24f),
+                                   page_size.x * 0.26f, IM_COL32(74, 138, 220, 24), 72);
+        draw_list->AddCircleFilled(ImVec2(page_pos.x + page_size.x * 0.72f,
+                                          page_pos.y + page_size.y * 0.40f),
+                                   page_size.x * 0.23f, IM_COL32(34, 205, 198, 18), 72);
+    }
+    else
+    {
+        draw_list->AddRectFilledMultiColor(
+            page_pos, page_max, IM_COL32(255, 255, 255, 218),
+            IM_COL32(232, 241, 250, 245), IM_COL32(238, 247, 250, 250),
+            IM_COL32(255, 255, 255, 230));
+        draw_list->AddCircleFilled(ImVec2(page_pos.x + page_size.x * 0.24f,
+                                          page_pos.y + page_size.y * 0.22f),
+                                   page_size.x * 0.28f, IM_COL32(75, 146, 220, 28), 72);
+        draw_list->AddCircleFilled(ImVec2(page_pos.x + page_size.x * 0.74f,
+                                          page_pos.y + page_size.y * 0.42f),
+                                   page_size.x * 0.24f, IM_COL32(40, 190, 205, 24), 72);
+    }
+
+    const float grid_step = std::max(36.0f, ImGui::GetFontSize() * 3.4f);
+    const ImU32 grid_color = is_dark_mode ? IM_COL32(255, 255, 255, 7)
+                                          : IM_COL32(28, 58, 92, 10);
+    for(float x = page_pos.x; x < page_max.x; x += grid_step)
+    {
+        draw_list->AddLine(ImVec2(x, page_pos.y), ImVec2(x, page_max.y), grid_color);
+    }
+    for(float y = page_pos.y; y < page_max.y; y += grid_step)
+    {
+        draw_list->AddLine(ImVec2(page_pos.x, y), ImVec2(page_max.x, y), grid_color);
+    }
 }
 
 void
@@ -117,6 +142,47 @@ DrawWelcomePill(SettingsManager& settings, const char* label)
                        font_size * 0.45f);
     draw_list->AddText(ImVec2(pos.x + padding.x, pos.y + padding.y),
                        settings.GetColor(Colors::kAccentRed), label);
+    ImGui::Dummy(size);
+}
+
+void
+DrawWelcomeHeroFeature(SettingsManager& settings, const char* title,
+                       const char* description, Colors color, float width)
+{
+    const float  font_size = ImGui::GetFontSize();
+    const ImVec2 size(width, font_size * 4.4f);
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    const bool   is_dark =
+        settings.GetUserSettings().display_settings.use_dark_mode;
+    ImDrawList*  draw_list = ImGui::GetWindowDrawList();
+    const float  rounding = settings.GetDefaultStyle().FrameRounding + font_size * 0.22f;
+    const ImU32  accent   = settings.GetColor(color);
+
+    draw_list->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                             WelcomeColor(settings, Colors::kBgFrame,
+                                          is_dark ? 0.28f : 0.62f),
+                             rounding);
+    draw_list->AddRectFilledMultiColor(
+        pos, ImVec2(pos.x + size.x, pos.y + size.y),
+        ApplyAlpha(accent, is_dark ? 0.16f : 0.11f), IM_COL32(0, 0, 0, 0),
+        IM_COL32(0, 0, 0, 0), ApplyAlpha(accent, is_dark ? 0.09f : 0.06f));
+    draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                       WelcomeColor(settings, Colors::kBorderColor,
+                                    is_dark ? 0.42f : 0.72f),
+                       rounding);
+    draw_list->AddCircleFilled(ImVec2(pos.x + font_size * 1.05f,
+                                      pos.y + font_size * 1.12f),
+                               font_size * 0.23f, accent);
+
+    const ImVec2 text_pos(pos.x + font_size * 1.75f, pos.y + font_size * 0.64f);
+    draw_list->PushClipRect(text_pos,
+                            ImVec2(pos.x + size.x - font_size * 0.75f,
+                                   pos.y + size.y - font_size * 0.35f), true);
+    draw_list->AddText(text_pos, settings.GetColor(Colors::kTextMain), title);
+    draw_list->AddText(ImVec2(text_pos.x, text_pos.y + font_size * 1.35f),
+                       settings.GetColor(Colors::kTextDim), description);
+    draw_list->PopClipRect();
+
     ImGui::Dummy(size);
 }
 
@@ -144,12 +210,12 @@ DrawWelcomeBackgroundLogo(ImDrawList* draw_list, const ImVec2& page_pos,
     constexpr float kLogoW    = kLogoMaxX - kLogoMinX;
     constexpr float kLogoH    = kLogoMaxY - kLogoMinY;
 
-    const float scale = std::min(page_size.x * 0.58f / kLogoW,
-                                 page_size.y * 0.58f / kLogoH);
+    const float scale = std::min(page_size.x * 0.42f / kLogoW,
+                                 page_size.y * 0.56f / kLogoH);
     const ImVec2 logo_size(kLogoW * scale, kLogoH * scale);
-    const ImVec2 origin(page_pos.x + (page_size.x - logo_size.x) * 0.5f -
+    const ImVec2 origin(page_pos.x + page_size.x * 0.62f - logo_size.x * 0.48f -
                             (kLogoMinX * scale),
-                        page_pos.y + (page_size.y - logo_size.y) * 0.56f -
+                        page_pos.y + page_size.y * 0.58f - logo_size.y * 0.50f -
                             (kLogoMinY * scale));
 
     auto transform = [&](const ImVec2& p, const ImVec2& offset) {
@@ -204,7 +270,7 @@ DrawWelcomeBackgroundLogo(ImDrawList* draw_list, const ImVec2& page_pos,
 
 bool
 DrawWelcomeAction(SettingsManager& settings, const char* title, const char* description,
-                  const char* id, float width, bool enabled = true)
+                  const char* id, float width, bool enabled = true, bool primary = false)
 {
     const float font_size = ImGui::GetFontSize();
     const ImVec2 size(width, font_size * WELCOME_ACTION_HEIGHT_EM);
@@ -215,43 +281,65 @@ DrawWelcomeAction(SettingsManager& settings, const char* title, const char* desc
     const bool hovered = enabled && ImGui::IsItemHovered();
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    const float rounding = settings.GetDefaultStyle().ChildRounding;
+    const float rounding = settings.GetDefaultStyle().ChildRounding + font_size * 0.18f;
     const bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
-    const float bg_alpha_idle  = is_dark ? 0.22f : 0.65f;
-    const float bg_alpha_hover = is_dark ? 0.40f : 0.85f;
-    const ImU32 bg = hovered ? ApplyAlpha(settings.GetColor(Colors::kBgFrame),
-                                          bg_alpha_hover)
-                             : ApplyAlpha(settings.GetColor(Colors::kBgFrame),
-                                          bg_alpha_idle);
-    draw_list->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), bg, rounding);
-    // Subtle top rim-light for that frosted-glass-tile feel.
+    const ImVec2 draw_pos(pos.x, pos.y + (hovered ? -1.0f : 0.0f));
+    const ImVec2 draw_max(draw_pos.x + size.x, draw_pos.y + size.y);
+    const ImU32 accent = settings.GetColor(primary ? Colors::kAccentRed
+                                                   : Colors::kLineChartColor);
+    const float bg_alpha = primary ? (is_dark ? 0.35f : 0.90f)
+                                   : (is_dark ? 0.23f : 0.68f);
+
+    draw_list->AddRectFilled(ImVec2(draw_pos.x + 2.0f, draw_pos.y + 3.0f),
+                             ImVec2(draw_max.x + 2.0f, draw_max.y + 3.0f),
+                             is_dark ? IM_COL32(0, 0, 0, 72)
+                                     : IM_COL32(74, 98, 130, 18),
+                             rounding);
+    draw_list->AddRectFilled(draw_pos, draw_max,
+                             primary ? ApplyAlpha(accent, hovered ? 0.26f : 0.20f)
+                                     : WelcomeColor(settings, Colors::kBgFrame,
+                                                    hovered ? bg_alpha + 0.15f : bg_alpha),
+                             rounding);
+    if(primary)
+    {
+        draw_list->AddRectFilledMultiColor(
+            draw_pos, draw_max, ApplyAlpha(accent, hovered ? 0.36f : 0.26f),
+            WelcomeColor(settings, Colors::kBgFrame, is_dark ? 0.34f : 0.82f),
+            WelcomeColor(settings, Colors::kBgFrame, is_dark ? 0.30f : 0.78f),
+            ApplyAlpha(accent, hovered ? 0.22f : 0.15f));
+    }
     draw_list->AddLine(ImVec2(pos.x + rounding * 0.5f, pos.y + 1.0f),
                        ImVec2(pos.x + size.x - rounding * 0.5f, pos.y + 1.0f),
-                       IM_COL32(255, 255, 255, hovered ? 26 : 16), 1.0f);
-    draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
-                       hovered ? settings.GetColor(Colors::kAccentRed)
-                               : ApplyAlpha(settings.GetColor(Colors::kBorderColor),
-                                            is_dark ? 0.42f : 0.85f),
+                       IM_COL32(255, 255, 255, hovered ? 36 : 18), 1.0f);
+    draw_list->AddRect(draw_pos, draw_max,
+                       hovered || primary ? accent
+                                          : WelcomeColor(settings, Colors::kBorderColor,
+                                                         is_dark ? 0.45f : 0.82f),
                        rounding);
+    draw_list->AddRectFilled(draw_pos, ImVec2(draw_pos.x + 3.0f, draw_max.y),
+                             ApplyAlpha(accent, enabled ? 0.92f : 0.24f),
+                             rounding, ImDrawFlags_RoundCornersLeft);
 
-    const float icon_size = font_size * 1.45f;
-    const ImVec2 icon_pos(pos.x + font_size * 0.9f,
-                          pos.y + (size.y - icon_size) * 0.5f);
+    const float icon_size = font_size * 1.65f;
+    const ImVec2 icon_pos(draw_pos.x + font_size * 1.05f,
+                          draw_pos.y + (size.y - icon_size) * 0.5f);
     draw_list->AddRectFilled(icon_pos,
                              ImVec2(icon_pos.x + icon_size, icon_pos.y + icon_size),
-                             ApplyAlpha(settings.GetColor(Colors::kAccentRed),
-                                        enabled ? 0.18f : 0.08f),
-                             font_size * 0.25f);
+                             ApplyAlpha(accent, enabled ? 0.18f : 0.08f),
+                             font_size * 0.35f);
     draw_list->AddRect(icon_pos, ImVec2(icon_pos.x + icon_size, icon_pos.y + icon_size),
-                       ApplyAlpha(settings.GetColor(Colors::kAccentRed),
-                                  enabled ? 0.58f : 0.18f),
-                       font_size * 0.25f);
+                       ApplyAlpha(accent, enabled ? 0.64f : 0.18f),
+                       font_size * 0.35f);
+    draw_list->AddCircleFilled(ImVec2(icon_pos.x + icon_size * 0.5f,
+                                      icon_pos.y + icon_size * 0.5f),
+                               icon_size * 0.16f,
+                               ApplyAlpha(accent, enabled ? 0.82f : 0.20f));
 
     const ImVec2 text_pos(icon_pos.x + icon_size + font_size * 0.75f,
-                          pos.y + font_size * 0.75f);
-    const float text_clip_right = pos.x + size.x - font_size * 0.6f;
-    draw_list->PushClipRect(ImVec2(text_pos.x, pos.y),
-                            ImVec2(text_clip_right, pos.y + size.y), true);
+                          draw_pos.y + font_size * 0.85f);
+    const float text_clip_right = draw_pos.x + size.x - font_size * 0.8f;
+    draw_list->PushClipRect(ImVec2(text_pos.x, draw_pos.y),
+                            ImVec2(text_clip_right, draw_pos.y + size.y), true);
     draw_list->AddText(text_pos,
                        enabled ? settings.GetColor(Colors::kTextMain)
                                : settings.GetColor(Colors::kTextDim),
@@ -264,63 +352,116 @@ DrawWelcomeAction(SettingsManager& settings, const char* title, const char* desc
     return clicked;
 }
 
+bool
+DrawWelcomeRecentRow(SettingsManager& settings, const std::string& file, float width)
+{
+    const float font_size = ImGui::GetFontSize();
+    const ImVec2 size(width, font_size * 2.30f);
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImGui::PushID(file.c_str());
+    ImGui::InvisibleButton("recent_row", size);
+    const bool clicked = ImGui::IsItemClicked();
+    const bool hovered = ImGui::IsItemHovered();
+    const bool is_dark =
+        settings.GetUserSettings().display_settings.use_dark_mode;
+    const std::filesystem::path fpath(file);
+    const std::string fname =
+        fpath.filename().empty() ? file : fpath.filename().string();
+    const std::string parent =
+        fpath.parent_path().empty() ? "" : fpath.parent_path().filename().string();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const float rounding = settings.GetDefaultStyle().FrameRounding + font_size * 0.2f;
+
+    draw_list->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                             WelcomeColor(settings, Colors::kBgFrame,
+                                          hovered ? (is_dark ? 0.42f : 0.86f)
+                                                  : (is_dark ? 0.22f : 0.55f)),
+                             rounding);
+    draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                       hovered ? settings.GetColor(Colors::kLineChartColor)
+                               : WelcomeColor(settings, Colors::kBorderColor,
+                                              is_dark ? 0.34f : 0.62f),
+                       rounding);
+    draw_list->AddCircleFilled(ImVec2(pos.x + font_size * 0.95f,
+                                      pos.y + size.y * 0.50f),
+                               font_size * 0.27f,
+                               WelcomeColor(settings, Colors::kLineChartColor,
+                                            hovered ? 0.95f : 0.65f));
+
+    const ImVec2 text_pos(pos.x + font_size * 1.75f, pos.y + font_size * 0.34f);
+    draw_list->PushClipRect(text_pos,
+                            ImVec2(pos.x + size.x - font_size * 0.55f,
+                                   pos.y + size.y), true);
+    draw_list->AddText(text_pos, settings.GetColor(Colors::kTextMain), fname.c_str());
+    if(!parent.empty())
+    {
+        draw_list->AddText(ImVec2(text_pos.x, text_pos.y + font_size * 1.05f),
+                           settings.GetColor(Colors::kTextDim), parent.c_str());
+    }
+    draw_list->PopClipRect();
+    if(hovered) SetTooltipStyled("%s", file.c_str());
+    ImGui::PopID();
+    return clicked;
+}
+
 void
 DrawWelcomeLinkCard(SettingsManager& settings, const WelcomeLink& link, const char* id,
                     float width)
 {
-    const float font_size = ImGui::GetFontSize();
-    const bool  is_dark   = settings.GetUserSettings().display_settings.use_dark_mode;
+    const float  font_size = ImGui::GetFontSize();
+    const ImVec2 size(width, font_size * WELCOME_CARD_HEIGHT_EM);
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    const bool   is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
     ImGui::PushID(id);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                          ApplyAlpha(settings.GetColor(Colors::kBgFrame),
-                                     is_dark ? 0.30f : 0.55f));
-    ImGui::PushStyleColor(ImGuiCol_Border,
-                          ApplyAlpha(settings.GetColor(Colors::kBorderColor),
-                                     is_dark ? 0.45f : 0.75f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
-                        settings.GetDefaultStyle().ChildRounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(font_size * 1.0f, font_size * 0.85f));
-    ImGui::BeginChild("link_card", ImVec2(width, font_size * 6.6f),
-                      ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+    ImGui::InvisibleButton("resource_card", size);
+    const bool clicked = ImGui::IsItemClicked();
+    const bool hovered = ImGui::IsItemHovered();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const float rounding = settings.GetDefaultStyle().ChildRounding + font_size * 0.12f;
+    const ImU32 accent = settings.GetColor(link.color);
 
-    const float text_indent = font_size * 0.9f;
-    const ImVec2 dot_pos = ImGui::GetCursorScreenPos();
-    ImGui::GetWindowDrawList()->AddCircleFilled(
-        ImVec2(dot_pos.x + font_size * 0.35f, dot_pos.y + font_size * 0.60f),
-        font_size * 0.18f, settings.GetColor(link.color));
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + text_indent);
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
-    ImGui::TextUnformatted(link.title);
-    ImGui::PopStyleColor();
+    draw_list->AddRectFilled(ImVec2(pos.x + 2.0f, pos.y + 3.0f),
+                             ImVec2(pos.x + size.x + 2.0f, pos.y + size.y + 3.0f),
+                             is_dark ? IM_COL32(0, 0, 0, 62)
+                                     : IM_COL32(72, 98, 130, 16),
+                             rounding);
+    draw_list->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                             WelcomeColor(settings, Colors::kBgFrame,
+                                          hovered ? (is_dark ? 0.48f : 0.92f)
+                                                  : (is_dark ? 0.28f : 0.66f)),
+                             rounding);
+    draw_list->AddRectFilledMultiColor(
+        pos, ImVec2(pos.x + size.x, pos.y + size.y),
+        ApplyAlpha(accent, hovered ? 0.17f : 0.10f), IM_COL32(0, 0, 0, 0),
+        IM_COL32(0, 0, 0, 0), ApplyAlpha(accent, hovered ? 0.11f : 0.06f));
+    draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                       hovered ? accent
+                               : WelcomeColor(settings, Colors::kBorderColor,
+                                              is_dark ? 0.44f : 0.72f),
+                       rounding);
 
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + text_indent);
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted(link.description);
-    ImGui::PopStyleColor();
+    draw_list->AddCircleFilled(ImVec2(pos.x + font_size * 1.12f,
+                                      pos.y + font_size * 1.20f),
+                               font_size * 0.24f, accent);
+    const ImVec2 text_pos(pos.x + font_size * 1.85f, pos.y + font_size * 0.72f);
+    draw_list->PushClipRect(text_pos,
+                            ImVec2(pos.x + size.x - font_size * 0.75f,
+                                   pos.y + size.y - font_size * 0.45f), true);
+    draw_list->AddText(text_pos, settings.GetColor(Colors::kTextMain), link.title);
+    draw_list->AddText(ImVec2(text_pos.x, text_pos.y + font_size * 1.45f),
+                       settings.GetColor(Colors::kTextDim), link.description);
+    draw_list->AddText(ImVec2(text_pos.x, pos.y + size.y - font_size * 1.55f),
+                       settings.GetColor(Colors::kAccentRed), "Open resource");
+    draw_list->PopClipRect();
 
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + text_indent);
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccentRed));
-    ImGui::TextLink(link.url);
-    ImGui::PopStyleColor();
-    if(ImGui::IsItemClicked())
-    {
-        open_url(link.url);
-    }
-    if(ImGui::IsItemHovered())
-    {
-        SetTooltipStyled("%s", link.url);
-    }
-
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor(2);
+    if(clicked) open_url(link.url);
+    if(hovered) SetTooltipStyled("%s", link.url);
     ImGui::PopID();
 }
 
 void
 BeginWelcomeTile(SettingsManager& settings, const char* id, const char* title,
-                 bool is_dark_mode, float width = 0.0f)
+                 const char* subtitle, bool is_dark_mode, float width = 0.0f)
 {
     const float font_size = ImGui::GetFontSize();
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
@@ -331,7 +472,7 @@ BeginWelcomeTile(SettingsManager& settings, const char* id, const char* title,
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         settings.GetDefaultStyle().ChildRounding);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(font_size * 1.15f, font_size * 1.0f));
+                        ImVec2(font_size * 1.15f, font_size * 0.85f));
     ImGui::BeginChild(id, ImVec2(width, 0.0f),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -344,13 +485,21 @@ BeginWelcomeTile(SettingsManager& settings, const char* id, const char* title,
         ImGui::TextUnformatted(title);
         ImGui::PopStyleColor();
         if(tile_font) ImGui::PopFont();
+        if(subtitle && subtitle[0] != '\0')
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
+            ImGui::TextUnformatted(subtitle);
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+        }
 
         const ImVec2 sep_pos = ImGui::GetCursorScreenPos();
         const float  sep_w   = ImGui::GetContentRegionAvail().x;
         ImGui::GetWindowDrawList()->AddLine(
             sep_pos, ImVec2(sep_pos.x + sep_w, sep_pos.y),
             ApplyAlpha(settings.GetColor(Colors::kBorderColor), 0.55f), 1.0f);
-        ImGui::Dummy(ImVec2(sep_w, font_size * 0.5f));
+        ImGui::Dummy(ImVec2(sep_w, font_size * 0.38f));
     }
 }
 
@@ -946,10 +1095,8 @@ AppWindow::RenderEmptyState()
     const InternalSettings&       internal     = settings.GetInternalSettings();
     const std::list<std::string>& recent_files = internal.recent_files;
     const float                   font_size    = ImGui::GetFontSize();
-    const ImVec2                  avail        = ImGui::GetContentRegionAvail();
     const bool                    is_dark_mode =
         settings.GetUserSettings().display_settings.use_dark_mode;
-    (void)avail;
     std::string recent_file_to_open;
 
     static const WelcomeLink resource_links[] = {
@@ -970,95 +1117,154 @@ AppWindow::RenderEmptyState()
           "https://www.amd.com/en/products/software/rocm.html",
           Colors::kComparisonGreater },
     };
+
     ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::BeginChild("welcome_page", ImVec2(0.0f, 0.0f), false,
-                      ImGuiWindowFlags_NoScrollbar);
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     const ImVec2 page_pos  = ImGui::GetWindowPos();
     const ImVec2 page_size = ImGui::GetWindowSize();
     ImDrawList*  draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRectFilled(
-        page_pos, ImVec2(page_pos.x + page_size.x, page_pos.y + page_size.y),
-        is_dark_mode ? IM_COL32(2, 5, 10, 255) : IM_COL32(246, 249, 252, 255));
+    DrawWelcomeBackdrop(draw_list, page_pos, page_size, is_dark_mode);
     DrawWelcomeBackgroundLogo(draw_list, page_pos, page_size, is_dark_mode);
-    // Frosted veil: theme-specific wash + soft diagonal gradient for depth.
-    if(is_dark_mode)
-    {
-        draw_list->AddRectFilled(page_pos, ImVec2(page_pos.x + page_size.x,
-                                                  page_pos.y + page_size.y),
-                                 IM_COL32(8, 11, 18, 154));
-        draw_list->AddRectFilledMultiColor(
-            page_pos, ImVec2(page_pos.x + page_size.x, page_pos.y + page_size.y),
-            IM_COL32(14, 20, 32, 78), IM_COL32(8, 11, 18, 16),
-            IM_COL32(8, 11, 18, 28), IM_COL32(16, 22, 36, 108));
-    }
-    else
-    {
-        draw_list->AddRectFilled(page_pos, ImVec2(page_pos.x + page_size.x,
-                                                  page_pos.y + page_size.y),
-                                 IM_COL32(246, 249, 252, 86));
-        draw_list->AddRectFilledMultiColor(
-            page_pos, ImVec2(page_pos.x + page_size.x, page_pos.y + page_size.y),
-            IM_COL32(255, 255, 255, 56), IM_COL32(226, 238, 247, 16),
-            IM_COL32(226, 238, 247, 26), IM_COL32(255, 255, 255, 70));
-    }
 
-    // Full-bleed content area: edge-to-edge frost, no centered card.
-    const float  edge_margin   = font_size * 1.6f;
-    const float  max_content_w = font_size * 92.0f;
-    const float  content_w     = std::min(
+    const float edge_margin =
+        std::max(font_size * 1.35f, std::min(font_size * 2.4f, page_size.x * 0.035f));
+    const float max_content_w = font_size * WELCOME_CONTENT_MAX_EM;
+    const float content_w     = std::min(
         std::max(0.0f, page_size.x - edge_margin * 2.0f), max_content_w);
-    const float  content_h     = std::max(0.0f, page_size.y - edge_margin * 2.0f);
-    const ImVec2 content_origin(page_pos.x + (page_size.x - content_w) * 0.5f,
-                                page_pos.y + edge_margin);
-
-    ImGui::SetCursorScreenPos(content_origin);
-    ImGui::BeginChild("welcome_body",
-                      ImVec2(content_w, content_h),
-                      false,
-                      ImGuiWindowFlags_NoScrollbar);
+    const bool is_compact = content_w < font_size * 62.0f;
+    ImGui::SetCursorPos(ImVec2((page_size.x - content_w) * 0.5f, edge_margin));
+    ImGui::BeginChild("welcome_body", ImVec2(content_w, 0.0f), false,
+                      ImGuiWindowFlags_NoBackground);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                        ImVec2(font_size * 0.9f, font_size * 0.85f));
+                        ImVec2(font_size * 0.95f, font_size * 0.95f));
 
+    const ImVec2 hero_padding(font_size * 1.85f, font_size * 1.55f);
+    const float  hero_text_w =
+        is_compact ? content_w - hero_padding.x * 2.0f : content_w * 0.55f;
+    const float hero_feature_w =
+        is_compact ? hero_text_w
+                   : std::max(font_size * 18.0f,
+                              content_w - hero_text_w - hero_padding.x * 3.0f);
+
+    const ImVec2 hero_pos = ImGui::GetCursorScreenPos();
+
+    const float hero_h =
+        is_compact ? font_size * 17.0f : font_size * 12.4f;
+    const float hero_round = settings.GetDefaultStyle().ChildRounding + font_size * 0.35f;
+    draw_list->AddRectFilled(ImVec2(hero_pos.x + 3.0f, hero_pos.y + 4.0f),
+                             ImVec2(hero_pos.x + content_w + 3.0f,
+                                    hero_pos.y + hero_h + 4.0f),
+                             is_dark_mode ? IM_COL32(0, 0, 0, 90)
+                                          : IM_COL32(70, 98, 130, 18),
+                             hero_round);
+    draw_list->AddRectFilled(hero_pos, ImVec2(hero_pos.x + content_w,
+                                              hero_pos.y + hero_h),
+                             WelcomeColor(settings, Colors::kBgPanel,
+                                          is_dark_mode ? 0.50f : 0.70f),
+                             hero_round);
+    draw_list->AddRectFilledMultiColor(
+        hero_pos, ImVec2(hero_pos.x + content_w, hero_pos.y + hero_h),
+        WelcomeColor(settings, Colors::kAccentRed, is_dark_mode ? 0.18f : 0.11f),
+        WelcomeColor(settings, Colors::kLineChartColor, is_dark_mode ? 0.16f : 0.10f),
+        IM_COL32(0, 0, 0, 0), WelcomeColor(settings, Colors::kBgFrame,
+                                           is_dark_mode ? 0.28f : 0.42f));
+    draw_list->AddRect(hero_pos, ImVec2(hero_pos.x + content_w, hero_pos.y + hero_h),
+                       WelcomeColor(settings, Colors::kBorderColor,
+                                    is_dark_mode ? 0.54f : 0.82f),
+                       hero_round);
+
+    const ImVec2 hero_text_origin(hero_pos.x + hero_padding.x,
+                                  hero_pos.y + hero_padding.y);
+
+    ImGui::SetCursorScreenPos(hero_text_origin);
+    DrawWelcomePill(settings, "ROCm Optiq Beta");
+
+    ImGui::SetCursorScreenPos(
+        ImVec2(hero_text_origin.x, ImGui::GetCursorScreenPos().y + font_size * 0.35f));
     if(ImFont* title_font = settings.GetFontManager().GetFont(FontType::kLarge))
     {
         ImGui::PushFont(title_font);
-        ImGui::TextUnformatted("Welcome to ROCm Optiq");
+        ImGui::TextUnformatted("Visualize GPU performance with clarity");
         ImGui::PopFont();
     }
     else
     {
-        ImGui::TextUnformatted("Welcome to ROCm Optiq");
+        ImGui::TextUnformatted("Visualize GPU performance with clarity");
     }
+
+    ImGui::SetCursorScreenPos(
+        ImVec2(hero_text_origin.x, ImGui::GetCursorScreenPos().y + font_size * 0.25f));
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + content_w);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + hero_text_w);
     ImGui::TextUnformatted(
-        "Unified visualization and analysis for ROCm Systems Profiler traces and "
-        "ROCm Compute Profiler data. Identify bottlenecks, understand hardware "
-        "utilization, and optimize GPU workloads.");
+        "Open a ROCm Systems or Compute Profiler trace and move from first glance "
+        "to bottleneck insight with timelines, utilization views, annotations, and "
+        "project sessions.");
     ImGui::PopTextWrapPos();
     ImGui::PopStyleColor();
 
-    ImGui::Dummy(ImVec2(0.0f, font_size * 0.4f));
+    const float feature_card_h = font_size * 4.4f;
+    if(is_compact)
+    {
+        ImGui::SetCursorScreenPos(
+            ImVec2(hero_text_origin.x, ImGui::GetCursorScreenPos().y + font_size * 0.55f));
+        DrawWelcomeHeroFeature(settings, "ROCm Systems Profiler",
+                               "System-wide timelines, runtime activity, and GPU queues.",
+                               Colors::kLineChartColor, hero_text_w);
+        ImGui::SetCursorScreenPos(
+            ImVec2(hero_text_origin.x, ImGui::GetCursorScreenPos().y + font_size * 0.32f));
+        DrawWelcomeHeroFeature(settings, "ROCm Compute Profiler",
+                               "Kernel, memory, and hardware counter analysis.",
+                               Colors::kEventHighlight, hero_text_w);
+    }
+    else
+    {
+        const float feature_x =
+            hero_pos.x + content_w - hero_feature_w - hero_padding.x;
+        const float feature_total_h = feature_card_h * 2.0f + font_size * 0.5f;
+        const float feature_y =
+            hero_pos.y + (hero_h - feature_total_h) * 0.5f;
+        ImGui::SetCursorScreenPos(ImVec2(feature_x, feature_y));
+        DrawWelcomeHeroFeature(settings, "ROCm Systems Profiler",
+                               "System-wide timelines, runtime activity, and GPU queues.",
+                               Colors::kLineChartColor, hero_feature_w);
+        ImGui::SetCursorScreenPos(
+            ImVec2(feature_x, feature_y + feature_card_h + font_size * 0.5f));
+        DrawWelcomeHeroFeature(settings, "ROCm Compute Profiler",
+                               "Kernel, memory, and hardware counter analysis.",
+                               Colors::kEventHighlight, hero_feature_w);
+    }
 
-    // Two-column tile layout. Left column is fixed; right column grows.
-    const float column_gap = font_size * 1.0f;
-    const float left_col_w =
-        std::min(std::max(font_size * WELCOME_SIDEBAR_EM, 240.0f), content_w * 0.32f);
-    const float right_col_w = std::max(0.0f, content_w - left_col_w - column_gap);
+    ImGui::SetCursorScreenPos(ImVec2(hero_pos.x, hero_pos.y + hero_h));
+
+    ImGui::Dummy(ImVec2(0.0f, font_size * 0.45f));
+
+    const float column_gap = font_size * 0.72f;
+    const float main_col_w = is_compact ? content_w
+                                        : std::max(font_size * 30.0f,
+                                                   content_w * 0.38f);
+    const float side_col_w = is_compact ? content_w
+                                        : std::max(0.0f,
+                                                   content_w - main_col_w - column_gap);
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    ImGui::BeginChild("welcome_left_col", ImVec2(left_col_w, 0.0f),
+    ImGui::BeginChild("welcome_main_col", ImVec2(main_col_w, 0.0f),
                       ImGuiChildFlags_AutoResizeY,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-    BeginWelcomeTile(settings, "tile_start", "Start", is_dark_mode);
+    BeginWelcomeTile(settings, "tile_start", "Start",
+                     "Choose a workflow or drop a trace onto the app window.",
+                     is_dark_mode);
     {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                            ImVec2(0.0f, font_size * 0.25f));
         const float inner_w = ImGui::GetContentRegionAvail().x;
         if(DrawWelcomeAction(settings, "Open Trace File...",
                              "Open a .db, .rpd, or .yaml file.",
-                             "open_trace", inner_w))
+                             "open_trace", inner_w, true, true))
         {
             HandleOpenFile();
         }
@@ -1066,14 +1272,18 @@ AppWindow::RenderEmptyState()
         {
             SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
         }
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.4f));
         DrawWelcomeAction(settings, "Drag & Drop",
                           "Drop a trace file onto the window.",
                           "drag_drop", inner_w, false);
+        ImGui::PopStyleVar();
     }
     EndWelcomeTile();
 
-    BeginWelcomeTile(settings, "tile_recent", "Recent", is_dark_mode);
+    ImGui::Dummy(ImVec2(0.0f, font_size * 0.30f));
+
+    BeginWelcomeTile(settings, "tile_recent", "Recent",
+                     "Resume a previous trace or project.",
+                     is_dark_mode);
     {
         const float inner_w = ImGui::GetContentRegionAvail().x;
         if(recent_files.empty())
@@ -1087,73 +1297,67 @@ AppWindow::RenderEmptyState()
         }
         else
         {
-            ImGui::PushStyleColor(ImGuiCol_Header,
-                                  settings.GetColor(Colors::kTransparent));
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                                  settings.GetColor(Colors::kHighlightChart));
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                                  settings.GetColor(Colors::kSelection));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                                ImVec2(0.0f, font_size * 0.45f));
             int shown = 0;
             for(const std::string& file : recent_files)
             {
                 if(shown++ >= static_cast<int>(MAX_RECENT_FILES)) break;
 
-                const std::filesystem::path fpath(file);
-                const std::string fname =
-                    fpath.filename().empty() ? file : fpath.filename().string();
-
-                ImGui::PushID(file.c_str());
-                if(ImGui::Selectable(fname.c_str(), false, 0,
-                                     ImVec2(inner_w, 0.0f)))
+                if(DrawWelcomeRecentRow(settings, file, inner_w))
                 {
                     recent_file_to_open = file;
                 }
-                if(ImGui::IsItemHovered())
-                {
-                    SetTooltipStyled("%s", file.c_str());
-                }
-
-                ImGui::PopID();
             }
-            ImGui::PopStyleColor(3);
+            ImGui::PopStyleVar();
         }
     }
     EndWelcomeTile();
 
-    ImGui::EndChild();  // welcome_left_col
+    ImGui::EndChild();  // welcome_main_col
     ImGui::PopStyleColor();
 
-    ImGui::SameLine(0.0f, column_gap);
+    if(!is_compact)
+    {
+        ImGui::SameLine(0.0f, column_gap);
+    }
+    else
+    {
+        ImGui::Dummy(ImVec2(0.0f, font_size * 0.30f));
+    }
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    ImGui::BeginChild("welcome_right_col", ImVec2(right_col_w, 0.0f),
+    ImGui::BeginChild("welcome_side_col", ImVec2(side_col_w, 0.0f),
                       ImGuiChildFlags_AutoResizeY,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-    BeginWelcomeTile(settings, "tile_resources", "Resources", is_dark_mode);
+    BeginWelcomeTile(settings, "tile_resources", "Resources",
+                     "Jump into documentation, source, and ROCm ecosystem pages.",
+                     is_dark_mode);
     {
-        const float resource_gap = font_size * 0.9f;
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                            ImVec2(font_size * 0.55f, font_size * 0.30f));
+        const float resource_gap = font_size * 0.55f;
         const float inner_w      = ImGui::GetContentRegionAvail().x;
-        const float resource_width = (inner_w - resource_gap) * 0.5f;
+        const bool two_col_resources = inner_w > font_size * 38.0f;
+        const float resource_width =
+            two_col_resources ? (inner_w - resource_gap) * 0.5f : inner_w;
         constexpr size_t resource_count =
             sizeof(resource_links) / sizeof(resource_links[0]);
         for(size_t i = 0; i < resource_count; ++i)
         {
             DrawWelcomeLinkCard(settings, resource_links[i], resource_links[i].title,
                                 resource_width);
-            if(i % 2 == 0)
+            if(two_col_resources && i % 2 == 0 && i + 1 < resource_count)
             {
                 ImGui::SameLine(0.0f, resource_gap);
             }
-            else if(i + 1 < resource_count)
-            {
-                ImGui::Dummy(ImVec2(0.0f, resource_gap));
-            }
         }
+        ImGui::PopStyleVar();
     }
     EndWelcomeTile();
 
-    ImGui::EndChild();  // welcome_right_col
+    ImGui::EndChild();  // welcome_side_col
     ImGui::PopStyleColor();
 
     ImGui::PopStyleVar();   // ItemSpacing for welcome_body

@@ -39,8 +39,6 @@ TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotations)
 : m_data_provider(dp)
-, m_min_y(std::numeric_limits<double>::max())
-, m_max_y(std::numeric_limits<double>::lowest())
 , m_scroll_position_y(0.0f)
 , m_content_max_y_scroll(0.0f)
 , m_meta_map_made(false)
@@ -56,6 +54,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_font_changed_token(static_cast<uint64_t>(-1))
 , m_set_view_range_token(static_cast<uint64_t>(-1))
+, m_timeline_time_range_changed_token(static_cast<uint64_t>(-1))
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0.0)
 , m_last_data_req_view_time_offset_ns(0.0)
@@ -139,6 +138,18 @@ TimelineView::TimelineView(DataProvider&                       dp,
     };
     m_navigation_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
+
+    auto time_range_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<TimeRangeSelectionChangedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath() &&
+           m_timeline_selection->HasValidTimeRangeSelection())
+        {
+            m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(evt->GetStartNs(),
+                                                                       evt->GetEndNs());
+        }
+    };
+    m_timeline_time_range_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged), time_range_changed_handler);
 
     m_graphs = std::make_shared<std::vector<TrackGraph>>();
 
@@ -399,14 +410,15 @@ TimelineView::~TimelineView()
                                              m_set_view_range_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), m_navigation_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged),
+        m_timeline_time_range_changed_token);
 }
 
 void
 TimelineView::ResetView()
 {
     // Handles y positioning reset
-    m_min_y             = std::numeric_limits<double>::max();
-    m_max_y             = std::numeric_limits<double>::lowest();
     m_scroll_position_y = 0.0f;
 
     // Handles x positioning reset
@@ -1114,6 +1126,7 @@ TimelineView::RenderTrack(int track_index, bool request_data,
             if(is_visible || track_item->GetDistanceToView() <= m_unload_track_distance)
             {
                 RequestDataIfEmpty(track_item, request_data);
+                track_item->RequestAnalysis();
             }
         }
 
@@ -1867,6 +1880,11 @@ TimelineView::RenderTraceView()
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
     TimelineFocusManager::GetInstance().EvaluateFocusedLayer();
+    if(m_loading_timer.IsExpired() && !m_timeline_selection->HasValidTimeRangeSelection())
+    {
+        m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(m_tpt->GetVMinX(),
+                                                                   m_tpt->GetVMaxX());
+    }
 }
 void
 TimelineView::RenderGraphPoints()

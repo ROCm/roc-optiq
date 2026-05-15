@@ -657,10 +657,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             args, kRPVControllerTableArgsGroupColumns, 0, "");
         REQUIRE(result == kRocProfVisResultSuccess);
 
-        result =
-            rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSummary, 0, 0);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
         const uint64_t chunk_size  = 10000;
         uint64_t       num_columns = 0;
         uint64_t       num_rows    = 0;
@@ -959,10 +955,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_string(
             args, kRPVControllerTableArgsGroupColumns, 0, "");
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result =
-            rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSummary, 0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         const uint64_t chunk_size  = 10000;
@@ -3064,10 +3056,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_string(
             args, kRPVControllerTableArgsGroupColumns, 0, "");
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result =
-            rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSummary, 0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex,

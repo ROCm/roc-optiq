@@ -72,7 +72,7 @@ class ProfileDatabase : public SqliteDatabase
         // @param path - full path to database file
         ProfileDatabase( rocprofvis_db_filename_t path) : 
                         SqliteDatabase(path), 
-            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)} {};
+            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this), TableProcessor(this)} {};
         // ProfileDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~ProfileDatabase() {}
         // worker method to read time slice
@@ -145,11 +145,6 @@ class ProfileDatabase : public SqliteDatabase
             rocprofvis_dm_string_table_filters_t string_table_filters,
             table_string_id_filter_map_t& filter) = 0;
 
-        virtual rocprofvis_dm_result_t BuildTableSummaryClause(
-            bool sample_query,
-            rocprofvis_dm_string_t& select,
-            rocprofvis_dm_string_t& group_by) = 0;
-
         std::string GetHistogramQueryPrefix(uint64_t bucket_size);
         std::string GetHistogramQuerySuffix();
 
@@ -193,6 +188,7 @@ class ProfileDatabase : public SqliteDatabase
             rocprofvis_dm_index_t track_index, 
             rocprofvis_dm_string_t& query);
         rocprofvis_dm_result_t BuildTableQuery(
+                            rocprofvis_dm_table_use_case_enum_t use_case,
                             rocprofvis_dm_timestamp_t start, 
                             rocprofvis_dm_timestamp_t end,
                             rocprofvis_db_num_of_tracks_t num,
@@ -208,7 +204,6 @@ class ProfileDatabase : public SqliteDatabase
                             uint64_t max_count, 
                             uint64_t offset,
                             bool count_only,
-                            bool summary,
                             rocprofvis_dm_string_t& query) override;
 
         rocprofvis_dm_result_t ExecuteQueryForAllTracksAsync(

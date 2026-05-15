@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_reference.h"
-#include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_future.h"
@@ -13,7 +13,6 @@
 #include "rocprofvis_core_assert.h"
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_sample.h"
-#include "system/rocprofvis_controller_sample_lod.h"
 #include "system/rocprofvis_controller_track.h"
 #include "system/rocprofvis_controller_timeline.h"
 #include "system/rocprofvis_controller_trace_system.h"

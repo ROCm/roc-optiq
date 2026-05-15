@@ -12,3 +12,6 @@ src/view/src/icons/rocprofvis_icon_data.h
 sqlite3.c
 
 .DS_Store
+
+CLAUDE.md
+.claude/

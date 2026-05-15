@@ -23,12 +23,13 @@ namespace RocProfVis
 namespace View
 {
 
-inline constexpr float MIN_LABEL_WIDTH          = 40.0f;
-inline constexpr float HIGHLIGHT_THICKNESS      = 4.0f;
-inline constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
-inline constexpr float TOOLTIP_OFFSET           = 16.0f;
-inline constexpr int   MAX_CHARACTERS_PER_LINE  = 40;
-inline constexpr float MAX_TABLE_HEIGHT         = 300.0f;
+inline constexpr float MIN_LABEL_WIDTH           = 40.0f;
+inline constexpr float HIGHLIGHT_THICKNESS       = 4.0f;
+inline constexpr float HIGHLIGHT_THICKNESS_HALF  = HIGHLIGHT_THICKNESS / 2;
+inline constexpr float TOOLTIP_OFFSET            = 16.0f;
+inline constexpr int   MAX_CHARACTERS_PER_LINE   = 40;
+inline constexpr float MAX_TABLE_HEIGHT          = 300.0f;
+inline constexpr float SCALE_SEPERATOR_WIDTH     = 2.0f;
 
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
@@ -61,23 +62,27 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_tooltip_size(0.0f, 0.0f)
 , m_is_expanded(false)
 , m_compact_mode(false)
+, m_queue_utilization(nullptr)
 {
     if(!m_tpt)
     {
         spdlog::error("FlameTrackItem: m_tpt shared_ptr is null, cannot construct");
         return;
     }
-    const TrackInfo* track_info =
-        m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
 
-    if(!track_info)
+    if(m_track_metadata)
     {
-        spdlog::error("FlameTrackItem: TrackInfo is null for track_id {}", m_track_id);
-        return;
-    }
+        m_min_level = static_cast<float>(m_track_metadata->min_value);
+        m_max_level = static_cast<float>(m_track_metadata->max_value);
 
-    m_min_level = static_cast<float>(track_info->min_value);
-    m_max_level = static_cast<float>(track_info->max_value);
+        if(m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
+        {
+            m_meta_area_scale_width = CalculateNewMetaAreaSize();
+            m_queue_utilization =
+                m_data_provider.DataModel().GetAnalysis().GetPerTrackQueueUtilization(
+                    *m_track_metadata);
+        }
+    }
 
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
@@ -757,7 +762,42 @@ FlameTrackItem::RenderChart(float graph_width)
 
 void
 FlameTrackItem::RenderMetaAreaScale()
-{}
+{
+    if(m_track_metadata &&
+       m_track_metadata->topology.type == TrackInfo::TrackType::Queue &&
+       m_queue_utilization)
+    {
+        ImVec2 content_region = ImGui::GetContentRegionMax();
+        ImVec2 window_pos     = ImGui::GetWindowPos();
+        ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
+                                       m_metadata_padding.x + SCALE_SEPERATOR_WIDTH,
+                                   m_metadata_padding.y));
+        ImGui::BeginDisabled(m_queue_utilization->state !=
+                             AnalysisQueueUtilization::kReady);
+        ImGui::Text("%.1f%%", m_queue_utilization->util_pct);
+        ImGui::EndDisabled();
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
+                   window_pos.y),
+            ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
+                   window_pos.y + content_region.y),
+            m_settings.GetColor(Colors::kMetaDataSeparator), SCALE_SEPERATOR_WIDTH);
+    }
+}
+
+float
+FlameTrackItem::CalculateNewMetaAreaSize()
+{
+    if(m_track_metadata && m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
+    {
+        return ImGui::CalcTextSize("888.8%").x + 2.0f * m_metadata_padding.x +
+               SCALE_SEPERATOR_WIDTH;
+    }
+    else
+    {
+        return 0.0f;
+    }
+}
 
 void
 FlameTrackItem::RenderMetaAreaOptions()
@@ -792,6 +832,48 @@ FlameTrackItem::RenderMetaAreaOptions()
         {
             RecalculateTrackHeight();
         }
+    }
+}
+
+void
+FlameTrackItem::RequestAnalysis()
+{
+    if(m_track_metadata &&
+       m_track_metadata->topology.type == TrackInfo::TrackType::Queue &&
+       m_queue_utilization &&
+       (m_queue_utilization->state == AnalysisQueueUtilization::kStale ||
+        m_queue_utilization->state == AnalysisQueueUtilization::kPending))
+    {
+        uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
+            static_cast<uint32_t>(m_track_id), 0, 0,
+            RequestType::kFetchAnalysisQueueUtilization);
+        if(m_data_provider.IsRequestPending(request_id))
+        {
+            m_data_provider.CancelRequest(request_id);
+            m_queue_utilization->state = AnalysisQueueUtilization::kPending;
+        }
+        else
+        {
+            double start_ts;
+            double end_ts;
+            if(m_timeline_selection && m_timeline_selection->HasValidTimeRangeSelection())
+            {
+                m_timeline_selection->GetSelectedTimeRange(start_ts, end_ts);
+            }
+            else
+            {
+                start_ts = m_tpt->GetVMinX();
+                end_ts   = m_tpt->GetVMaxX();
+            }
+            m_queue_utilization->state =
+                (start_ts < end_ts &&
+                 m_data_provider.FetchAnalysisQueueUtilization(
+                     AnalysisQueueUtilizationRequestParams(m_track_id, start_ts, end_ts)))
+                    ? AnalysisQueueUtilization::kRequested
+                    : AnalysisQueueUtilization::kPending;
+        }
+        m_analysis_request_pending =
+            (m_queue_utilization->state == AnalysisQueueUtilization::kPending);
     }
 }
 

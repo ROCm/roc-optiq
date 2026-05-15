@@ -280,5 +280,19 @@ struct TableInfo
     uint64_t                              total_row_count;
 };
 
+struct AnalysisQueueUtilization
+{
+    enum State
+    {
+        kStale,      // Invalidated by user input
+        kPending,    // Pending fetch issue
+        kRequested,  // Pending fetch completion
+        kReady,
+    };
+    const TrackInfo* track;
+    double           util_pct;
+    mutable State    state;
+};
+
 }  // namespace View
 }  // namespace RocProfVis

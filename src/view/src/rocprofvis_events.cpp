@@ -233,6 +233,26 @@ TrackSelectionChangedEvent::TrackSelected() const
     return m_selected;
 }
 
+TimeRangeSelectionChangedEvent::TimeRangeSelectionChangedEvent(
+    double start_ns, double end_ns, const std::string& source_id)
+: RocEvent(static_cast<int>(RocEvents::kTimelineTimeRangeChanged), source_id)
+, m_start_ns(start_ns)
+, m_end_ns(end_ns)
+{
+    m_event_type = RocEventType::kTimelineTimeRangeChangedEvent;
+}
+
+double
+TimeRangeSelectionChangedEvent::GetStartNs() const
+{
+    return m_start_ns;
+}
+
+double
+TimeRangeSelectionChangedEvent::GetEndNs() const
+{
+    return m_end_ns;
+}
 
 ScrollToTrackEvent::ScrollToTrackEvent(int event_id, const uint64_t& track_id,
                                        const std::string& source_id)

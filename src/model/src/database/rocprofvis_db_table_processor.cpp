@@ -927,7 +927,7 @@ namespace DataModel
             callback_params->db_instance->GuidIndex(),
             track_id))
         {
-            track_id = -1;
+            track_id = static_cast<uint32_t>(-1);
         }
 
         table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index++, (uint64_t)track_id);
@@ -942,7 +942,7 @@ namespace DataModel
                 callback_params->db_instance->GuidIndex(),
                 track_id))
             {
-                track_id = -1;
+                track_id = static_cast<uint32_t>(-1);
             }
             table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index,(uint64_t) track_id);
         }

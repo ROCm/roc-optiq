@@ -183,9 +183,9 @@ Project::OpenTrace(std::string& file_path)
         {
             rocprofvis_controller_object_type_t type =
                 kRPVControllerObjectTypeControllerSystem;
-            rocprofvis_result_t result =
+            rocprofvis_result_t controller_result =
                 rocprofvis_controller_get_object_type(controller, &type);
-            if(result == kRocProfVisResultSuccess)
+            if(controller_result == kRocProfVisResultSuccess)
             {
                 if(type == kRPVControllerObjectTypeControllerSystem)
                 {

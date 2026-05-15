@@ -563,7 +563,7 @@ rocprofvis_dm_result_t
 RocprofDatabase::CreateIndexes()
 { 
     std::vector<std::string> vec;
-    uint32_t file_node_id = -1;
+    uint32_t file_node_id = static_cast<uint32_t>(-1);
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     std::vector<std::thread> threads;
     auto task = [&](std::vector<std::string> queries, uint32_t db_node_id) {   

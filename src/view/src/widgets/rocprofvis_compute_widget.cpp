@@ -127,7 +127,7 @@ MetricTableBase::Render()
                                        settings.GetColor(Colors::kHighlightChart));
             }
 
-            for(auto column_index = 0; column_index < m_last_column_index;
+            for(uint32_t column_index = 0; column_index < m_last_column_index;
                 column_index++)
             {
                 if(column_index == 0 && !CanBePinned())

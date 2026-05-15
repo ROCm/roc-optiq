@@ -495,7 +495,7 @@ SystemTable::UnpackArguments(Arguments& args, QueryArguments& out) const
     std::vector<const char*> string_table_filters_ptr;
     bool summary = false;
     rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeSamples;
-    uint64_t table_type = kRPVControllerTableTypeEvents;
+    uint64_t table_type = static_cast<uint64_t>(kRPVControllerTableTypeEvents);
 
     result = args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
     if (result == kRocProfVisResultSuccess)

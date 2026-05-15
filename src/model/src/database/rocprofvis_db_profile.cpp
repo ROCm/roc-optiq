@@ -540,7 +540,7 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
         callback_params->db_instance->GuidIndex(),
         track_id))
     {
-        track_id = -1;
+        track_id = static_cast<uint32_t>(-1);
     }
 
     if(track_id != -1)
@@ -576,7 +576,7 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
             callback_params->db_instance->GuidIndex(),
             track_id))
     {
-        track_id = -1;
+        track_id = static_cast<uint32_t>(-1);
     }
 
     if (track_id != -1)

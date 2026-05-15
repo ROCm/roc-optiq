@@ -40,11 +40,11 @@ namespace DataModel
 {
     typedef struct rocprofvis_db_sqlite_track_identifier_index_t
     {
-        uint32_t                        nid_index = -1;
-        uint32_t                        pid_index = -1;
-        uint32_t                        process_index = -1;
-        uint32_t                        sub_process_index = -1;
-        uint32_t                        stream_index = -1;
+        uint32_t                        nid_index = static_cast<uint32_t>(-1);
+        uint32_t                        pid_index = static_cast<uint32_t>(-1);
+        uint32_t                        process_index = static_cast<uint32_t>(-1);
+        uint32_t                        sub_process_index = static_cast<uint32_t>(-1);
+        uint32_t                        stream_index = static_cast<uint32_t>(-1);
         bool                            is_pmc_identifier = false;
         bool                            is_rocpd_pmc = false;
     } rocprofvis_db_sqlite_track_identifier_index_t;
@@ -205,7 +205,7 @@ namespace DataModel
         static const char* ConvertSqlStringReference(ProfileDatabase* db, uint32_t column_index, uint64_t index, uint32_t node_id, bool & numeric_string);
 
         void ResetTrackIdetifiers() { 
-            track_ids_indices.nid_index = track_ids_indices.process_index = track_ids_indices.sub_process_index = track_ids_indices.stream_index = track_ids_indices.pid_index = -1; 
+            track_ids_indices.nid_index = track_ids_indices.process_index = track_ids_indices.sub_process_index = track_ids_indices.stream_index = track_ids_indices.pid_index = static_cast<uint32_t>(-1); 
             track_ids_indices.is_pmc_identifier = track_ids_indices.is_rocpd_pmc = false;
         };
 

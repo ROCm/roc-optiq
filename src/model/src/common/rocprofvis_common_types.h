@@ -307,7 +307,7 @@ inline uint64_t hash_combine(uint64_t a, uint64_t b)
 class DbInstance
 {
 public:
-    static constexpr const int NoGuidId = -1;
+    static constexpr uint32_t NoGuidId = static_cast<uint32_t>(-1);
     DbInstance() : m_file_index(0), m_guid_index(NoGuidId) {}
     DbInstance(uint32_t file_index, uint32_t guid_index) : m_file_index(file_index), m_guid_index(guid_index) {}
     uint32_t FileIndex() { return m_file_index; };

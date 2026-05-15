@@ -77,7 +77,7 @@ namespace DataModel
         ComputeDatabase(rocprofvis_db_filename_t path) :
             SqliteDatabase(path),
             m_query_factory(this),
-            m_last_matrix_workload_id(-1)
+            m_last_matrix_workload_id(static_cast<uint32_t>(-1))
         {
             CreateDbNode(path);
         };

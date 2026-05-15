@@ -135,7 +135,7 @@ namespace DataModel
     {
         if (category & kRocProfVisDmStreamTrack)
         {
-            return MakeKey(id_stream, -1, db_instance);
+            return MakeKey(id_stream, static_cast<uint64_t>(-1), db_instance);
         }
         else
         {

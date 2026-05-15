@@ -892,7 +892,6 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
             ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollWithMouse);
         for(size_t i = 0; i < m_kernels->size(); i++)
         {
-            float text_width = ImGui::CalcTextSize((*m_kernels)[i].name.c_str()).x;
             ImGui::PushID(i);
             ImVec2 pos = ImGui::GetCursorPos();
             bool   row_clicked =

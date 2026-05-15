@@ -121,7 +121,6 @@ Minimap::SetData(const std::vector<std::vector<double>>& data)
         return;
     }
 
-    const size_t height = data.size();
     const size_t width  = data.front().size();
     for(const auto& row : data)
     {

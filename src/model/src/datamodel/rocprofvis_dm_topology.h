@@ -15,7 +15,7 @@ namespace RocProfVis
 namespace DataModel
 {
 
-#define INVALID_BRANCH_LEVEL -1;
+#define INVALID_BRANCH_LEVEL (static_cast<uint32_t>(-1))
 
 // ExtData is class of container object for extended data records (ExtDataRecord)
 // Can be used to store extended data records for event or for track

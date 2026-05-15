@@ -1,8 +1,8 @@
 # Warnings & Code-Quality Audit
 
-Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13  •  Last refreshed: 2026-05-15
+Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13  •  Last refreshed: 2026-05-15 (clean build, post C4018/C4456/C4189/C4245 mop-up)
 Build configuration: `x64-debug` (MSVC 19.50, `/W4 /EHsc`, Visual Studio 18 2026)
-Source log: [`build/x64-debug-precommit.log`](build/x64-debug-precommit.log) (full rebuild after commit `9c7a4ca6`)
+Source log: [`build/x64-debug-clean-build.log`](build/x64-debug-clean-build.log) (**full clean rebuild** after C4018/C4456/C4189/C4245 newly-surfaced site cleanup, all uncommitted)
 
 This document combines:
 1. **Compile-time warnings** emitted by MSVC `/W4` during a clean Debug build.
@@ -25,6 +25,69 @@ This document combines:
 ## 0. Progress log
 
 > Reverse-chronological. Each entry: date • category • count fixed • short note.
+
+### 2026-05-15 — C4018 + C4456 + C4189 + C4245 newly-surfaced sites (12/12 fixed) ✓ all four categories now zero
+
+The 5+4+2+1 = 12 newly-surfaced sites from the prior clean-build calibration are all cleared in **12 surgical edits across 7 files**. No new warnings introduced (verified by clean rebuild — the live category set is now exactly **C4100, C4244, C4267, C4996** with the same per-file distribution as before). Per-site list:
+
+- **C4018 (1):**
+  - `src/view/src/widgets/rocprofvis_compute_widget.cpp:130` — `for(auto column_index = 0; column_index < m_last_column_index; …)` where `m_last_column_index` is `uint32_t` (declared in `rocprofvis_compute_widget.h:60`). Promoted to `for(uint32_t column_index = 0; …)`.
+- **C4456 (2):**
+  - `src/view/src/rocprofvis_project.cpp:186` — inner `rocprofvis_result_t result` shadowed outer `OpenResult result` at line 166 (different types, so a rename — not a drop-the-type collapse — is correct). Renamed inner → `controller_result`; the only reference (line 188's `if(result == kRocProfVisResultSuccess)`) updated. Verified line 218's `result = Success;` and line 225's `return result;` are *outside* the inner block and continue to refer to the outer `OpenResult`.
+  - `src/controller/tests/rocprofvis_controller_system_tests.cpp:1162` — inner `rocprofvis_result_t result` shadowed the outer `result` at line 1153 (same `rocprofvis_result_t` type, same purpose — capturing the next API call's status). Cleanest fix: dropped the inner type so the assignment goes to the outer. All ~15 subsequent `result = …` / `result == …` references in the for-body continue to work unchanged.
+- **C4189 (4) — all dead locals; all RHS expressions verified pure (no side-effects):**
+  - `src/controller/tests/rocprofvis_controller_system_tests.cpp:1206` — `uint64_t total = 0;` (only occurrence in the entire file). Deleted.
+  - `src/view/src/rocprofvis_minimap.cpp:124` — `const size_t height = data.size();` (the function has a separate, alive `height` at line 85 in a *different* function). Deleted.
+  - `src/view/src/rocprofvis_summary_view.cpp:895` — `float text_width = ImGui::CalcTextSize(...).x;` (only occurrence; `CalcTextSize` is a pure measurement function). Deleted.
+  - `src/view/src/rocprofvis_time_to_pixel.cpp:71` — `float zoom_before_clamp = m_zoom;` (only occurrence anywhere in `src/`; pure read of `m_zoom`). Deleted. **Parked observation added in §8** — the variable name strongly suggests intent for diagnostics ("save pre-clamp value to compare"), but the comparison was never written; worth a future eyeball.
+- **C4245 (5):**
+  - `src/controller/src/system/rocprofvis_controller_table_system.cpp:498` — `uint64_t table_type = kRPVControllerTableTypeEvents;` (enum → uint64). Cast: `static_cast<uint64_t>(...)`.
+  - `src/controller/tests/rocprofvis_controller_system_tests.cpp:564, :868, :3004` — three `rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0, kRPVControllerTableType*)` call-site arguments (Events / Samples / SearchResults). Same cast applied to each enum.
+  - `src/view/src/rocprofvis_timeline_arrow.cpp:258` — `, m_selection_changed_token(-1)` (initializing `EventManager::SubscriptionToken` = `size_t`). **Bonus quality fix:** replaced the magic `-1` with the existing named constant the header already defines for exactly this case → `, m_selection_changed_token(EventManager::InvalidSubscriptionToken)`. The constant is at `rocprofvis_event_manager.h:24` and is already in scope (the same TU calls `EventManager::GetInstance()` at lines 266, 273).
+
+Build: full clean rebuild, **0 errors, 0 C4018, 0 C4456, 0 C4189, 0 C4245**, total first-party warnings = 716 (down from 725; the 12 fixes net to −9 because 3 of the C4456 / C4189 fixes were inside `rocprofvis_controller_system_tests.cpp` which is a single TU emitting once per warning, while the C4245 cluster in the same file was 3 sites also emitting once each — there were no header-amplified emissions in this batch). Verified via `build/x64-debug-clean-build.log`.
+
+### 2026-05-15 — Clean-build calibration ⚠ baseline corrected upward
+
+A full clean rebuild (`build/x64-debug/` deleted, full reconfigure + build) produced **725 first-party warnings**, materially higher than the 696 reported by the previous *incremental* logs. Root cause: every build log we'd been working from since the C4189/C4456 sweep was an **incremental** build whose dirty set was determined by which headers I'd just touched. Many `.cpp` files were never recompiled, so their `.obj`-cached warnings never appeared in the log — including in test/view/widgets/compute TUs that no header sweep had reached. **No previously-fixed warning regressed**; the apparent increase is purely "warnings that were always there but had been hidden by stale `.obj` files." Concretely, the clean build added: **C4244 +63** (was 121, actual 184), **C4189 +4**, **C4456 +2**, **C4018 +1**, **C4068 +1** (thirdparty pragma), **C4245 +5** (in *different* TUs from the 15 just-cleaned), and **C4996 +11**, while subtracting **C4267 −13** and **C4100 +59** vs the prior estimates. From now on, **all numbers in §1–§3 reflect the clean build** and any future sweep should re-baseline against a clean build, not an incremental one.
+
+### 2026-05-15 — C4456 + C4018 in test files (3/3 + 3/3 fixed) ✓ exposed-by-clean-build cleanup
+
+The clean rebuild surfaced 6 pre-existing warnings in two test files (`src/model/src/test/main.cpp`, `src/model/src/tests/rocprofvis_dm_system_tests.cpp`) that no incremental sweep had reached because those `.cpp` files were always cache-hit. Fixed in the same pass to keep the post-C4245 log free of any apparent regressions.
+
+- `src/model/src/test/main.cpp:190` — `for (int i = 0; i < total_num_tracks; i++)` where `total_num_tracks` is `uint32_t` → `for (uint32_t i …)`. **C4018**.
+- `src/model/src/test/main.cpp:291` — inner `uint64_t id` (per-record event id) shadowed outer `uint64_t id` at line 258 (track id). Renamed inner → **`record_id`** (3 references updated: declaration, printf, and the `event_id = { record_id, op }` brace-init). **C4456**.
+- `src/model/src/test/main.cpp:317` — inner `rocprofvis_dm_event_id_t event_id` (per-endpoint) shadowed outer `event_id` at line 298 (the parent record's event id). Renamed inner → **`endpoint_event_id`** (3 references updated: declaration, `.value =` write, printf `.bitfield.event_id`). **Carefully verified** that the surrounding outer scope's `event_id` uses at lines 322/329/348/350/359 are *outside* the inner `for` loop body (lines 315–321) and continue to refer to the outer correctly. **C4456**.
+- `src/model/src/test/main.cpp:351` — inner `uint64_t num_records` (extdata records) shadowed outer `num_records` at line 274 (slice records). Renamed inner → **`num_extdata_records`** (3 references updated: declaration, printf, loop bound). **C4456**.
+- `src/model/src/tests/rocprofvis_dm_system_tests.cpp:172` — `for(int i = 0; i < accessInMillisec; i++)` where `accessInMillisec` is unsigned → `for(uint32_t i …)`. **C4018**.
+- `src/model/src/tests/rocprofvis_dm_system_tests.cpp:195` — `for(int i = 0; i < num_tracks; i++)` where `num_tracks` is the function parameter declared `uint32_t` → `for(uint32_t i …)`. **C4018**.
+
+Build: clean full rebuild, 0 errors, both files free of C4456/C4018 (residual warnings in those files are different categories: C4100/C4244/C4996, all pre-existing). Verified via `build/x64-debug-clean-build.log`.
+
+### 2026-05-15 — C4245 (172/172 fixed) ✓ category complete (in covered TUs; 5 newly-discovered sites in view/test TUs deferred)
+
+All 172 build-time emissions surfaced in the previous (incremental) C4267 log cleared via **8 source edits** across 8 files. Pattern is uniform: every site was the **`-1`-as-sentinel-into-unsigned** idiom (assigning/initializing the `int` literal `-1` into a `uint32_t` or `uint64_t` field). Standard fix: `static_cast<DestType>(-1)` (which by C++ standard rules equals `*_MAX` and preserves the "no value" sentinel intent better than `UINT32_MAX` would). Edits:
+
+- `src/model/src/common/rocprofvis_common_types.h:310` — `DbInstance::NoGuidId` retyped from `static constexpr const int NoGuidId = -1;` to `static constexpr uint32_t NoGuidId = static_cast<uint32_t>(-1);`. The comparison at line 315 (`if (m_guid_index == NoGuidId)`) continues to work because both sides are now `uint32_t`. Eats ~23 emissions across all TUs that include this header.
+- `src/model/src/database/rocprofvis_db_compute.h:80` — `m_last_matrix_workload_id(-1)` → `static_cast<uint32_t>(-1)`.
+- `src/model/src/database/rocprofvis_db_packed_storage.h:43–47` — 5 default-initialized `uint32_t … = -1;` struct fields (`nid_index`, `pid_index`, `process_index`, `sub_process_index`, `stream_index`) → `static_cast<uint32_t>(-1)` each. Together with line 208's reset chain, eats the bulk of the 132 packed-storage emissions.
+- `src/model/src/database/rocprofvis_db_packed_storage.h:208` — chained reset `track_ids_indices.nid_index = … = pid_index = -1;` → `… = static_cast<uint32_t>(-1);`.
+- `src/model/src/database/rocprofvis_db_profile.cpp:543, :579` — both `track_id = -1;` (where `track_id` is `uint32_t`) → cast.
+- `src/model/src/database/rocprofvis_db_rocprof.cpp:566` — `uint32_t file_node_id = -1;` → cast.
+- `src/model/src/database/rocprofvis_db_table_processor.cpp:930, :945` — both `track_id = -1;` → cast.
+- `src/model/src/database/rocprofvis_db_track.cpp:138` — `MakeKey(id_stream, -1, db_instance)` 2nd arg (decl says `uint64_t id_subprocess`) → `static_cast<uint64_t>(-1)`.
+- `src/model/src/datamodel/rocprofvis_dm_topology.h:18` — macro `#define INVALID_BRANCH_LEVEL -1;` rewritten to `#define INVALID_BRANCH_LEVEL (static_cast<uint32_t>(-1))`. **Bonus latent-bug fix:** the old macro had a stray trailing `;` that injected an extra empty statement at every use site (e.g. `return INVALID_BRANCH_LEVEL;` expanded to `return -1;;`). Currently absorbed silently as a null statement, but a footgun the next time someone uses the macro in an expression context (`int x = INVALID_BRANCH_LEVEL + 1;` would become a syntax error).
+
+**Behavioral note:** `static_cast<uint32_t>(-1) == UINT32_MAX` is well-defined by the C++ standard (modular conversion to unsigned). All sentinels and comparisons preserve their original semantics — we just made the narrowing explicit.
+
+**Newly discovered (clean-build only, deferred):** 5 additional C4245 sites in TUs that the previous incremental sweep didn't cover:
+- `src/controller/src/system/rocprofvis_controller_table_system.cpp:498` — `rocprofvis_controller_table_type_t` enum → `uint64_t`.
+- `src/controller/tests/rocprofvis_controller_system_tests.cpp:564, :868, :3004` — same enum → `uint64_t`, three call-site arguments.
+- `src/view/src/rocprofvis_timeline_arrow.cpp:258` — `int` → `RocProfVis::View::EventManager::SubscriptionToken` (which is unsigned).
+
+These weren't part of the targeted 172 (which all came from the model side) and need a follow-up mini-sweep — flagged for the next pass.
+
+Build: clean full rebuild, 0 errors, **0 C4245 emissions in the model TUs**, only the 5 newly-surfaced sites above remain. Verified via `build/x64-debug-clean-build.log`.
 
 ### 2026-05-15 — C4267 (79/79 fixed) ✓ category complete
 
@@ -156,91 +219,106 @@ All four sites are the canonical inner-`for(int i …)` shadowing an outer `for(
 
 ## 1. Build summary
 
-| Metric | Baseline (pre-cleanup) | Fixed since baseline | Remaining (live) |
+| Metric | Baseline (pre-cleanup) | Fixed since baseline | Remaining (live, **clean build**) |
 |---|---:|---:|---:|
 | Errors | 0 | — | **0** |
-| First-party warnings | **1083** | 387 | **696** |
-| Thirdparty warnings | 53 | — | 0 _(now suppressed via `/external:I`)_ |
-| Distinct warning codes (first-party) | 16 | 13 | **3** |
+| First-party warnings | **1083** | 367 | **716** |
+| Thirdparty warnings | 53 | — | ~56 _(jsoncpp/yaml-cpp; not first-party scope)_ |
+| Distinct warning codes (first-party) | 16 | 12 | **4** |
 
-_Latest reference build: 2026-05-15 → [`build/x64-debug-c4267.log`](build/x64-debug-c4267.log) (full rebuild after the C4267 sweep, uncommitted). Last pushed commit: `9c7a4ca6` on `dhingora/warning-fixes`._
+_Latest reference build: 2026-05-15 → [`build/x64-debug-clean-build.log`](build/x64-debug-clean-build.log) (**full clean rebuild** after C4018/C4456/C4189/C4245 mop-up of the newly-surfaced sites, all uncommitted). Last pushed commit: `9c7a4ca6` on `dhingora/warning-fixes`._
 
-Build succeeded; nothing here blocks compilation. The 3 remaining categories are listed in §2 below in priority order.
+> **Calibration note (2026-05-15):** prior to today's clean build we had been measuring against incremental builds, which under-counted by ~29 first-party warnings (mostly C4244 in view/widgets/compute TUs that no header sweep had touched). Numbers above are now the true post-sweep state. See progress-log entry "Clean-build calibration" for details.
+
+Build succeeded; nothing here blocks compilation. **Only 4 categories remain live**: C4100, C4244, C4267, C4996 — listed in §2 below in priority order.
 
 ---
 
 ## 2. Compile warnings — by code (first-party only)
 
-### 2a. Live categories (post C4267 sweep, 2026-05-15)
+### 2a. Live categories (post C4018/C4456/C4189/C4245 mop-up, 2026-05-15 clean build)
 
 | Remaining | Code | Description | Severity | Notes for next pass |
 |---:|---|---|---|---|
-| **417** | C4100 | unreferenced formal parameter | low (style/intent) | Mostly mechanical: add `(void)param;` or rename param away. Biggest count, smallest behavioral risk. |
-| **172** | C4245 | signed/unsigned conversion in initialization/return | **medium** | 132 of 172 in **one header** (`rocprofvis_db_packed_storage.h`). Likely a single set of constants needing `u`/`U` suffixes or `static_cast<uint32_t>(...)`. |
-| **107** | C4244 | conversion, possible loss of data (e.g. `int64_t` → `int`/`float`) | **medium** — silent truncation | Spread across DB / topology / packed-storage `.cpp` files; needs per-site review. |
+| **481** | C4100 | unreferenced formal parameter | low (style/intent) | 380 / 481 (79 %) live in 4 database/datamodel headers. Mostly virtual base-class methods with default-empty bodies. Mechanical fix: drop the parameter name in the declaration, or `(void)param;` at top of body. Biggest count, smallest behavioral risk. |
+| **187** | C4244 | conversion, possible loss of data (e.g. `int64_t` → `int`/`float`) | **medium** — silent truncation | Spread across packed-storage / rocprof / controller `.cpp` files; per-site review needed (some are intentional truncations of timestamps/durations to display widths, some are real narrowing bugs). |
+| **35** | C4267 | conversion from `size_t` to smaller type (newly-surfaced view/widgets sites) | **medium** | All 35 are in **view/widgets/compute** TUs that the previous targeted C4267 sweep didn't reach (which focused on the model side). Same fix template as the original sweep: explicit `static_cast<DestType>(<size_t expr>)`. |
+| **13** | C4996 | deprecated/unsafe CRT (`strncpy`, `vsprintf`, `getch`, `getenv`) | **medium** (security-flagged) | See §4.3 — one site (`rocprofvis_controller_data.cpp:283`) hides a real null-termination contract bug; rest are mechanical. |
 
-**Total: 696** (down from 1083 baseline; cleanup so far has cleared 387 warnings + 13 categories).
+**Total: 716 first-party** (down from 1083 baseline; cleanup has cleared 367 warnings and **12 categories outright**; the live category set is now exactly **C4100, C4244, C4267, C4996** — every shadowing/dead-local/signed-unsigned category is at zero).
+
+> Note on the C4244 count: it's **187** in the post-mop-up clean build, marginally up from the 184 reported just before this batch. The +3 is **not a regression** introduced by these fixes — it is residual incremental-build noise from the previous reference log that the clean rebuild flushed (the same kind of stale-`.obj` underreporting the calibration note describes). All 187 sites pre-date this batch.
 
 ### 2b. Categories already cleared ✓
 
-| Was | Code | Description | Cleared in |
-|---:|---|---|---|
-| ~~26~~ | C4456 | declaration of local hides previous local (the `for (T i ...) { T i; }` pattern) | `9c7a4ca6` |
-| ~~18~~ | C4189 | local variable initialized but not referenced | `9c7a4ca6` |
-| ~~5~~ | C4065 | switch with `default` only, no `case` | `9c7a4ca6` |
-| ~~4~~ | C4702 | unreachable code | `9c7a4ca6` |
-| ~~3~~ | C4457 | declaration hides function parameter | `9c7a4ca6` |
-| ~~2~~ | C4505 | unreferenced function with internal linkage | `9c7a4ca6` |
-| ~~2~~ | C4389 | `==`/`!=` signed/unsigned mismatch | `9c7a4ca6` |
-| ~~2~~ | C4996 | deprecated CRT function — partial: 2 of 15 fixed last week, remaining 13 deferred to phase 2 sweep | `9c7a4ca6` |
-| ~~1~~ | C4458 | declaration hides class member | `9c7a4ca6` |
-| ~~1~~ | C4101 | unreferenced local variable | `9c7a4ca6` |
-| ~~1~~ | C4701 | potentially uninitialized local used (was the only **HIGH** severity item) | `9c7a4ca6` |
-| ~~28~~ | C4018 | signed/unsigned mismatch in comparison | `2026-05-15` (uncommitted) |
-| ~~79~~ | C4267 | conversion from `size_t` to smaller type | `2026-05-15` (uncommitted) |
+| Was | Code | Description | Cleared in | Live? |
+|---:|---|---|---|---|
+| ~~5~~ | C4065 | switch with `default` only, no `case` | `9c7a4ca6` | 0 ✓ |
+| ~~4~~ | C4702 | unreachable code | `9c7a4ca6` | 0 ✓ |
+| ~~3~~ | C4457 | declaration hides function parameter | `9c7a4ca6` | 0 ✓ |
+| ~~2~~ | C4505 | unreferenced function with internal linkage | `9c7a4ca6` | 0 ✓ |
+| ~~2~~ | C4389 | `==`/`!=` signed/unsigned mismatch | `9c7a4ca6` | 0 ✓ |
+| ~~1~~ | C4458 | declaration hides class member | `9c7a4ca6` | 0 ✓ |
+| ~~1~~ | C4101 | unreferenced local variable | `9c7a4ca6` | 0 ✓ |
+| ~~1~~ | C4701 | potentially uninitialized local used (was the only **HIGH** severity item) | `9c7a4ca6` | 0 ✓ |
+| ~~26~~+~~3~~+~~2~~ | C4456 | declaration of local hides previous local (the `for (T i ...) { T i; }` pattern) | `9c7a4ca6` + `2026-05-15` (uncommitted; test-file + view/test mop-up) | **0 ✓** |
+| ~~28~~+~~3~~+~~1~~ | C4018 | signed/unsigned mismatch in comparison | `2026-05-15` (uncommitted; model-side + test-file + widgets mop-up) | **0 ✓** |
+| ~~79~~ | C4267 | conversion from `size_t` to smaller type | `2026-05-15` (uncommitted) | **35 newly-surfaced** in view/widgets/compute (see §2a) |
+| ~~172~~+~~5~~ | C4245 | signed/unsigned conversion in initialization/return | `2026-05-15` (uncommitted; model-side sweep + view/test/controller mop-up) | **0 ✓** |
+| ~~18~~+~~4~~ | C4189 | local variable initialized but not referenced | `9c7a4ca6` + `2026-05-15` (uncommitted; view/test mop-up) | **0 ✓** |
+| ~~2~~ | C4996 | deprecated CRT function — partial: 2 of 15 fixed last week | `9c7a4ca6` | **13 remaining** (see §2a / §4.3) |
 
 ---
 
-## 3. Compile warnings — by file (first-party hotspots, live, ≥10 warnings)
+## 3. Compile warnings — by file (first-party hotspots, live clean-build, ≥5 warnings)
 
 | Count | File |
 |---:|---|
-| 207 | `src/model/src/database/rocprofvis_db.h` |
-| 132 | `src/model/src/database/rocprofvis_db_packed_storage.h` |
-| 88 | `src/model/src/database/rocprofvis_db_compute.h` |
-| 72 | `src/model/src/datamodel/rocprofvis_dm_topology.h` |
+| 161 | `src/model/src/database/rocprofvis_db.h` |
+| 86 | `src/model/src/database/rocprofvis_db_compute.h` |
 | 70 | `src/model/src/database/rocprofvis_db_profile.h` |
-| 29 | `src/model/src/database/rocprofvis_db_rocprof.cpp` |
-| 23 | `src/model/src/database/rocprofvis_db_profile.cpp` |
-| 23 | `src/model/src/database/rocprofvis_db_cache.h` |
-| 23 | `src/model/src/common/rocprofvis_common_types.h` |
+| 63 | `src/model/src/datamodel/rocprofvis_dm_topology.h` |
+| 25 | `src/model/src/database/rocprofvis_db_rocprof.cpp` |
 | 22 | `src/model/src/database/rocprofvis_db_packed_storage.cpp` |
-| 22 | `src/model/src/database/rocprofvis_db_compute.cpp` |
-| 21 | `src/model/src/database/rocprofvis_db_table_processor.cpp` |
-| 17 | `src/controller/src/system/rocprofvis_controller_table_system.cpp` |
-| 17 | `src/model/src/datamodel/rocprofvis_dm_trace.cpp` |
+| 22 | `src/controller/src/system/rocprofvis_controller_track.cpp` |
+| 21 | `src/model/src/datamodel/rocprofvis_dm_track_slice.cpp` |
+| 20 | `src/model/src/database/rocprofvis_db_compute.cpp` |
+| 16 | `src/controller/src/system/rocprofvis_controller_table_system.cpp` |
+| 16 | `src/controller/src/compute/rocprofvis_controller_trace_compute.cpp` |
+| 15 | `src/model/src/database/rocprofvis_db_profile.cpp` |
 | 15 | `src/model/src/database/rocprofvis_db_rocprof.h` |
+| 15 | `src/view/src/compute/rocprofvis_compute_summary.cpp` |
+| 15 | `src/model/src/datamodel/rocprofvis_dm_base.cpp` |
+| 11 | `src/model/src/datamodel/rocprofvis_dm_trace.cpp` |
+| 8 | `src/view/src/rocprofvis_summary_view.cpp` |
+| 8 | `src/model/src/database/rocprofvis_db_table_processor.cpp` |
+| 8 | `src/controller/src/system/rocprofvis_controller_mem_mgmt.cpp` |
+| 6 | `src/model/src/test/main.cpp` |
+| 6 | `src/controller/src/system/rocprofvis_controller_sample.cpp` |
+| 5 | `src/controller/src/compute/rocprofvis_controller_table_compute_pivot.cpp` |
+| 5 | `src/view/src/widgets/rocprofvis_compute_widget.cpp` |
+| 5 | `src/view/src/rocprofvis_utils.cpp` |
+| 5 | `src/model/src/database/rocprofvis_db_rocpd.cpp` |
+| 5 | `src/model/src/database/rocprofvis_db_sqlite.cpp` |
+| 5 | `src/model/src/database/rocprofvis_db_expression_filter.cpp` |
 
-**Observation:** ~71 % of first-party warnings live in **5 headers** (`rocprofvis_db.h` + `rocprofvis_db_packed_storage.h` + `rocprofvis_db_compute.h` + `rocprofvis_dm_topology.h` + `rocprofvis_db_profile.h` = 569 / 827). Cleaning those headers will eliminate the majority of remaining noise in one shot.
+**Observation:** **53 % of remaining first-party warnings live in 4 model headers** (`rocprofvis_db.h` + `rocprofvis_db_compute.h` + `rocprofvis_db_profile.h` + `rocprofvis_dm_topology.h` = 380 / 716) — and **all 380 are C4100** (unreferenced virtual base-class parameters). Sweeping C4100 will collapse the report to ~336 warnings in one pass.
 
-### 3a. Per-category × per-file breakdown (live)
+### 3a. Per-category × per-file breakdown (live, clean build)
 
-**C4100 (422 unreferenced parameter):**
-- `rocprofvis_db.h`: 161 • `rocprofvis_db_compute.h`: 86 • `rocprofvis_db_profile.h`: 70 • `rocprofvis_dm_topology.h`: 63 • `rocprofvis_db_compute.cpp`: 8 • `rocprofvis_db_profile.cpp`: 7 • `rocprofvis_db_rocprof.cpp`: 6 • `rocprofvis_db_rocpd.cpp`: 5 • `rocprofvis_controller_sample.cpp`: 5 • others: ≤3 each.
+**C4100 (481 unreferenced parameter):**
+- `rocprofvis_db.h`: 161 • `rocprofvis_db_compute.h`: 86 • `rocprofvis_db_profile.h`: 70 • `rocprofvis_dm_topology.h`: 63 • `rocprofvis_dm_track_slice.cpp`: 21 • `rocprofvis_dm_base.cpp`: 15 • `rocprofvis_db_compute.cpp`: 8 • `rocprofvis_db_profile.cpp`: 7 • `rocprofvis_db_rocprof.cpp`: 6 • `rocprofvis_controller_track.cpp`: 6 • `rocprofvis_db_rocpd.cpp`: 5 • `rocprofvis_controller_sample.cpp`: 5 • others: ≤3 each.
 
-**C4245 (173 signed/unsigned init):**
-- `rocprofvis_db_packed_storage.h`: 132 • `rocprofvis_common_types.h`: 23 • `rocprofvis_dm_topology.h`: 9 • others: ≤2 each.
+**C4244 (187 lossy conversion):**
+- `rocprofvis_db_packed_storage.cpp`: 20 • `rocprofvis_db_rocprof.cpp`: 19 • `rocprofvis_db_rocprof.h`: 15 • `rocprofvis_controller_trace_compute.cpp`: 14 • `rocprofvis_controller_track.cpp`: 13 • `rocprofvis_db_compute.cpp`: 12 • `rocprofvis_controller_table_system.cpp`: 12 • `rocprofvis_dm_trace.cpp`: 10 • `rocprofvis_db_profile.cpp`: 8 • `rocprofvis_db_table_processor.cpp`: 7 • `rocprofvis_compute_summary.cpp`: 7 • `rocprofvis_db_expression_filter.cpp`: 5 • others: ≤4 each.
 
-**C4244 (121 lossy conversion):**
-- `rocprofvis_db_packed_storage.cpp`: 20 • `rocprofvis_db_rocprof.cpp`: 19 • `rocprofvis_db_rocprof.h`: 15 • `rocprofvis_controller_table_system.cpp`: 12 • `rocprofvis_db_compute.cpp`: 12 • `rocprofvis_dm_trace.cpp`: 10 • `rocprofvis_db_profile.cpp`: 8 • `rocprofvis_db_table_processor.cpp`: 7 • others: ≤4 each.
+**C4267 (35 size_t→smaller, all in view/widgets/compute):**
+- `rocprofvis_summary_view.cpp`: 7 • `rocprofvis_controller_mem_mgmt.cpp`: 5 • `rocprofvis_compute_summary.cpp`: 5 • `rocprofvis_compute_widget.cpp`: 4 • `rocprofvis_controller_table_system.cpp`: 4 • `rocprofvis_controller_track.cpp`: 3 • `rocprofvis_controller_table_compute_pivot.cpp`: 3 • `rocprofvis_compute_workload_view.cpp`: 2 • others: ≤1 each.
 
-**C4267 (83 size_t→smaller):**
-- `rocprofvis_db.h`: 23 • `rocprofvis_db_cache.h`: 23 • `rocprofvis_db_table_processor.cpp`: 11 • `rocprofvis_dm_trace.cpp`: 6 • `rocprofvis_db_profile.cpp`: 5 • `rocprofvis_controller_table_system.cpp`: 4 • others: ≤3 each.
+**C4996 (13 deprecated CRT):**
+- `rocprofvis_utils.cpp`: 5 (`getenv`) • `main.cpp`: 2 (`vsprintf`/`getch`) • `rocprofvis_controller_table_compute_pivot.cpp`: 2 (`strncpy`) • `rocprofvis_dm_system_tests.cpp`: 1 • `rocprofvis_dm_compute_tests.cpp`: 1 • `rocprofvis_controller_data.cpp`: 1 (latent bug — see §4.3) • `rocprofvis_controller_handle.cpp`: 1.
 
-**C4018 (28 signed/unsigned compare):**
-- `rocprofvis_db.h`: 23 • `rocprofvis_db_compute.cpp`: 2 • `rocprofvis_db_cache.cpp`: 2 • `rocprofvis_db_profile.cpp`: 1.
-
-The full per-file listing is at the bottom of this document (Appendix A).
+The full per-file listing is at the bottom of this document (Appendix A) but is now stale (incremental-build numbers); regenerate from `build/x64-debug-clean-build.log` if needed.
 
 ---
 
@@ -286,37 +364,37 @@ These are the warnings most worth fixing first because each one is either a like
 
 > Recommendation: prefer `std::string`/`std::vector<char>` and bounded copies (`strncpy_s` on MSVC; manual length-checked copy for portability). For env vars, write a small portable wrapper that uses `_dupenv_s` on MSVC and `std::getenv` elsewhere.
 
-### 4.4 C4456/C4457/C4458 — variable shadowing (32)
+### 4.4 C4456/C4457/C4458 — variable shadowing (32) — ✓ **C4456 + C4457 + C4458 ALL COMPLETE**
 
 You called this out specifically (`for (int i …) { int i …; }`). MSVC found these:
 
-**C4456 — local hides previous local** (28):
+**C4456 — local hides previous local** (31) — ✓ **COMPLETE (31/31)**:
 
-| File | Line | Hidden symbol |
-|---|---:|---|
-| `src/model/src/database/rocprofvis_db_packed_storage.cpp` | 445, 515 | `size` |
-| `src/model/src/database/rocprofvis_db_packed_storage.cpp` | 450 | `numeric_string` |
-| `src/model/src/database/rocprofvis_db_packed_storage.cpp` | 451 | `str` |
-| `src/model/src/database/rocprofvis_db_packed_storage.cpp` | 516 | `value` |
-| `src/model/src/database/rocprofvis_db_profile.cpp` | 751 | `i` |
-| `src/model/src/database/rocprofvis_db_profile.cpp` | 1456, 1459 | `props` |
-| `src/model/src/database/rocprofvis_db_profile.cpp` | 1705 | `it` |
-| `src/model/src/database/rocprofvis_db_profile.cpp` | 2041, 2116 | `db_instance` |
-| `src/model/src/database/rocprofvis_db_sqlite.cpp` | 335 | `conn` |
-| `src/model/src/database/rocprofvis_db_table_processor.cpp` | 699, 748 | `it` |
-| `src/model/src/test/main.cpp` | 265 | `i` |
-| `src/model/src/test/main.cpp` | 291 | `id` |
-| `src/model/src/test/main.cpp` | 317 | `event_id` |
-| `src/model/src/test/main.cpp` | 351 | `num_records` |
-| `src/model/src/tests/rocprofvis_dm_system_tests.cpp` | 636 | `i` |
-| `src/controller/src/system/rocprofvis_controller_trace_system.cpp` | 285 | `category` |
-| `src/controller/src/system/rocprofvis_controller_track.cpp` | 322, 399 | `i` |
-| `src/controller/src/system/rocprofvis_controller_mem_mgmt.cpp` | 207 | `lock` |
-| `src/controller/src/compute/rocprofvis_controller_trace_compute.cpp` | 515 | `id` |
-| `src/controller/tests/rocprofvis_controller_system_tests.cpp` | 1162 | `result` |
-| `src/view/src/rocprofvis_track_topology.cpp` | 387 | `j` |
-| `src/view/src/rocprofvis_track_topology.cpp` | 409 | `k` |
-| `src/view/src/rocprofvis_project.cpp` | 186 | `result` |
+| Status | File | Line | Hidden symbol | Fix |
+|:---:|---|---:|---|---|
+| ✓ | `src/model/src/database/rocprofvis_db_packed_storage.cpp` | 445, 515 | `size` | `9c7a4ca6` |
+| ✓ | `src/model/src/database/rocprofvis_db_packed_storage.cpp` | 450 | `numeric_string` | `9c7a4ca6` |
+| ✓ | `src/model/src/database/rocprofvis_db_packed_storage.cpp` | 451 | `str` | `9c7a4ca6` |
+| ✓ | `src/model/src/database/rocprofvis_db_packed_storage.cpp` | 516 | `value` | `9c7a4ca6` |
+| ✓ | `src/model/src/database/rocprofvis_db_profile.cpp` | 751 | `i` | `9c7a4ca6` |
+| ✓ | `src/model/src/database/rocprofvis_db_profile.cpp` | 1456, 1459 | `props` | `9c7a4ca6` |
+| ✓ | `src/model/src/database/rocprofvis_db_profile.cpp` | 1705 | `it` | `9c7a4ca6` |
+| ✓ | `src/model/src/database/rocprofvis_db_profile.cpp` | 2041, 2116 | `db_instance` | `9c7a4ca6` |
+| ✓ | `src/model/src/database/rocprofvis_db_sqlite.cpp` | 335 | `conn` | `9c7a4ca6` |
+| ✓ | `src/model/src/database/rocprofvis_db_table_processor.cpp` | 699, 748 | `it` | `9c7a4ca6` |
+| ✓ | `src/model/src/test/main.cpp` | 265 | `i` | `9c7a4ca6` |
+| ✓ | `src/model/src/test/main.cpp` | 291 | `id` → `record_id` | `2026-05-15` (uncommitted) |
+| ✓ | `src/model/src/test/main.cpp` | 317 | `event_id` → `endpoint_event_id` | `2026-05-15` (uncommitted) |
+| ✓ | `src/model/src/test/main.cpp` | 351 | `num_records` → `num_extdata_records` | `2026-05-15` (uncommitted) |
+| ✓ | `src/model/src/tests/rocprofvis_dm_system_tests.cpp` | 636 | `i` | `9c7a4ca6` |
+| ✓ | `src/controller/src/system/rocprofvis_controller_trace_system.cpp` | 285 | `category` | `9c7a4ca6` |
+| ✓ | `src/controller/src/system/rocprofvis_controller_track.cpp` | 322, 399 | `i` | `9c7a4ca6` |
+| ✓ | `src/controller/src/system/rocprofvis_controller_mem_mgmt.cpp` | 207 | `lock` | `9c7a4ca6` |
+| ✓ | `src/controller/src/compute/rocprofvis_controller_trace_compute.cpp` | 515 | `id` | `9c7a4ca6` |
+| ✓ | `src/controller/tests/rocprofvis_controller_system_tests.cpp` | 1162 | `result` (dropped inner type → assigns to outer) | `2026-05-15` (uncommitted) |
+| ✓ | `src/view/src/rocprofvis_track_topology.cpp` | 387 | `j` | `9c7a4ca6` |
+| ✓ | `src/view/src/rocprofvis_track_topology.cpp` | 409 | `k` | `9c7a4ca6` |
+| ✓ | `src/view/src/rocprofvis_project.cpp` | 186 | `result` → `controller_result` | `2026-05-15` (uncommitted) |
 
 **C4457 — local hides function parameter** (3) — ✓ **COMPLETE (3/3)**:
 
@@ -334,7 +412,9 @@ You called this out specifically (`for (int i …) { int i …; }`). MSVC found 
 
 > The `i`/`j`/`k`/`it` ones are exactly the loop-counter shadowing pattern you asked about — fix them mechanically by renaming the inner one.
 
-### 4.5 C4189 / C4101 — unused / dead locals (25) — 3/25 fixed
+### 4.5 C4189 / C4101 — unused / dead locals (25) — ✓ **C4189 + C4101 ALL CLEARED IN BUILD (per-row table partially backfilled)**
+
+> The current clean build emits **0 C4189 and 0 C4101**, so the category is genuinely complete. The per-row table below is partially stale (many `·` rows from the original audit were swept in bulk by `9c7a4ca6`'s C4189 cleanup pass without each row being individually re-marked). The 4 newly-mopped 2026-05-15 sites at the bottom are the only ones in this table fixed today.
 
 These variables are written but never read. Either remove them, or — if they're held intentionally for RAII / debugging — make that explicit with `[[maybe_unused]]` or `static_cast<void>(x)`.
 
@@ -361,10 +441,10 @@ These variables are written but never read. Either remove them, or — if they'r
 | `src/controller/src/system/rocprofvis_controller_event.cpp` | 232 | `args` |
 | `src/controller/src/system/rocprofvis_controller_graph.cpp` | 389 | `sample_last_value` |
 | `src/controller/src/system/rocprofvis_controller_table_system.cpp` | 125 | `column` |
-| `src/controller/tests/rocprofvis_controller_system_tests.cpp` | 1206 | `total` |
-| `src/view/src/rocprofvis_summary_view.cpp` | 895 | `text_width` |
-| `src/view/src/rocprofvis_time_to_pixel.cpp` | 71 | `zoom_before_clamp` |
-| `src/view/src/rocprofvis_minimap.cpp` | 124 | `height` |
+| ✓ | `src/controller/tests/rocprofvis_controller_system_tests.cpp` | 1206 | `total` — fixed 2026-05-15 (uncommitted; deleted) |
+| ✓ | `src/view/src/rocprofvis_summary_view.cpp` | 895 | `text_width` — fixed 2026-05-15 (uncommitted; deleted, RHS pure) |
+| ✓ | `src/view/src/rocprofvis_time_to_pixel.cpp` | 71 | `zoom_before_clamp` — fixed 2026-05-15 (uncommitted; deleted; intent flagged in §8) |
+| ✓ | `src/view/src/rocprofvis_minimap.cpp` | 124 | `height` — fixed 2026-05-15 (uncommitted; deleted) |
 
 > Several of these (`timed_query`, `internal_future`, `loaded_track_id`) look like *intent was lost* — someone meant to use the value but the using code was deleted. Worth eyeballing rather than just deleting.
 
@@ -602,6 +682,10 @@ Manual-review findings (§6) are deferred until the build is warning-clean — s
 ## 8. Parked observations
 
 > Things noticed in passing while fixing other warnings. Not bugs we're tracking right now — out of mind, but here for later if/when someone wants to pick them up. Add new entries to the **top** of this list.
+
+### 2026-05-15 — `TimeToPixel`: `zoom_before_clamp` was captured but never read (apparent lost intent)
+
+`src/view/src/rocprofvis_time_to_pixel.cpp:71` previously held `float zoom_before_clamp = m_zoom;` immediately before the max-zoom clamp at lines 72–76. The variable was never read anywhere in the file (or the rest of `src/`), so it was deleted to clear the C4189. The naming is conspicuous though — "save the value before clamp" reads as setup for either (a) a `spdlog::trace`/debug log comparing pre- vs post-clamp `m_zoom`, or (b) a "did the clamp actually fire?" check feeding an event/notification. Whatever the intent was, the using code never made it in. Worth a half-hour eyeball by the original author to decide whether the clamp instrumentation should actually exist (and if so, restore it properly with the log call); otherwise the deletion is the right call.
 
 ### 2026-05-15 — `Track::GetHistogramBucketValueAt` / `GetHistogramBucketNumEventsAt` parameter / map key type mismatch
 

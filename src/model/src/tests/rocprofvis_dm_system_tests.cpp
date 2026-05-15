@@ -169,7 +169,7 @@ ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
     uint32_t num_rows = 0;
     if(object2wait != nullptr)
     {
-        for(int i = 0; i < accessInMillisec; i++)
+        for(uint32_t i = 0; i < accessInMillisec; i++)
         {
             num_rows =
                 ((RocProfVis::DataModel::Future*) object2wait)->GetProcessedRowsCount();
@@ -192,7 +192,7 @@ ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
                      accessInMillisec);
     }
 
-    for(int i = 0; i < num_tracks; i++)
+    for(uint32_t i = 0; i < num_tracks; i++)
     {
         rocprofvis_dm_track_t track =
             rocprofvis_dm_get_property_as_handle(trace, kRPVDMTrackHandleIndexed, i);

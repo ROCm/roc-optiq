@@ -291,10 +291,6 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_CURRENT_SOURCE_DIR}/resources/licenses/Vulkan-Loader-LICENSE.txt"
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/Vulkan-Loader-LICENSE.txt"
-            COMMAND ${CMAKE_COMMAND}
-                -DROCPROFVIS_APP_EXECUTABLE="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/MacOS/$<TARGET_FILE_NAME:${TARGET_NAME}>"
-                -DROCPROFVIS_BUNDLED_VULKAN_LOADER="$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/resources/cmake/rocprofvis_fix_macos_vulkan_bundle.cmake"
             COMMENT "Staging Vulkan loader and license into the app bundle"
         )
     endif()

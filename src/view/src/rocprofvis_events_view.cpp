@@ -44,9 +44,22 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_event_item_id(0)
 , m_context_menu_flow_index(-1)
 , m_context_menu_flow_column(-1)
-{}
+, m_context_menu_callstack_index(-1)
+{
+    static_assert(CallStackHoverState::kInvalidId ==
+                      TimelineSelection::INVALID_SELECTION_ID,
+                  "CallStackHoverState invalid sentinel must match "
+                  "TimelineSelection::INVALID_SELECTION_ID");
+}
 
-EventsView::~EventsView() {}
+EventsView::~EventsView()
+{
+    if(m_callstack_hover.frame_event_id != TimelineSelection::INVALID_SELECTION_ID)
+    {
+        m_timeline_selection->UnhighlightTrackEvent(m_callstack_hover.frame_track_id,
+                                                    m_callstack_hover.frame_event_id);
+    }
+}
 
 void
 EventsView::Render()
@@ -58,6 +71,7 @@ EventsView::Render()
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
     ImGui::BeginChild("events_view", ImVec2(0, 0),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+    m_frame_callstack_hover = {};
     if(m_event_items.empty())
     {
         ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
@@ -118,6 +132,20 @@ EventsView::Render()
             }
         }
     }
+    if(m_frame_callstack_hover.frame_event_id != m_callstack_hover.frame_event_id)
+    {
+        if(m_callstack_hover.frame_event_id != TimelineSelection::INVALID_SELECTION_ID)
+        {
+            m_timeline_selection->UnhighlightTrackEvent(m_callstack_hover.frame_track_id,
+                                                        m_callstack_hover.frame_event_id);
+        }
+        if(m_frame_callstack_hover.frame_event_id != TimelineSelection::INVALID_SELECTION_ID)
+        {
+            m_timeline_selection->HighlightTrackEvent(m_frame_callstack_hover.frame_track_id,
+                                                      m_frame_callstack_hover.frame_event_id);
+        }
+    }
+    m_callstack_hover = m_frame_callstack_hover;
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
@@ -420,13 +448,57 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("CallStackTable", 4, TABLE_FLAGS))
+            if(ImGui::BeginTable("CallStackTable", 5, TABLE_FLAGS))
             {
+                ImGui::TableSetupColumn("ID");
                 ImGui::TableSetupColumn("Address");
                 ImGui::TableSetupColumn("Name");
                 ImGui::TableSetupColumn("File");
                 ImGui::TableSetupColumn("PC");
                 ImGui::TableHeadersRow();
+
+                bool open_callstack_context_menu = false;
+
+                auto callstack_cell = [&](int col, const std::string& text,
+                                           std::string_view col_id, int row) {
+                    if(col > 0)
+                        ImGui::TableSetColumnIndex(col);
+                    else
+                        ImGui::SameLine();
+
+                    if(text.empty())
+                    {
+                        ImVec4 disabled_col =
+                            ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+                        ImGui::PushStyleColor(ImGuiCol_Text, disabled_col);
+                        CopyableTextUnformatted("N/A", col_id, COPY_DATA_NOTIFICATION,
+                                                false, false);
+                        ImGui::PopStyleColor();
+                    }
+                    else
+                    {
+                        CopyableTextUnformatted(text.c_str(), col_id,
+                                                COPY_DATA_NOTIFICATION, false, false);
+                    }
+
+                    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+                    {
+                        m_context_menu_callstack_index = row;
+                        open_callstack_context_menu    = true;
+                    }
+                };
+
+                const uint64_t this_owner_event_id = event_data->basic_info.id.uuid;
+                const uint64_t prev_hovered_frame_event_id =
+                    (m_callstack_hover.owner_event_id == this_owner_event_id)
+                        ? m_callstack_hover.frame_event_id
+                        : TimelineSelection::INVALID_SELECTION_ID;
+
+                auto navigate_to_frame = [&](uint64_t uuid) {
+                    m_timeline_selection->NavigateToEvent(event_data->track_id, uuid,
+                                                          event_data->basic_info.start_ts,
+                                                          event_data->basic_info.duration);
+                };
 
                 ImGuiListClipper clipper;
                 clipper.Begin(static_cast<int>(event_data->call_stack_info.size()));
@@ -434,26 +506,100 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
+                        const auto& frame    = event_data->call_stack_info[i];
+                        const uint64_t uuid  = frame.id.uuid;
+                        const bool     is_owner_frame = (uuid == this_owner_event_id);
+                        std::string row_str = std::to_string(i);
+
                         ImGui::PushID(i);
                         ImGui::TableNextRow();
+                        if(uuid == prev_hovered_frame_event_id)
+                        {
+                            ImGui::TableSetBgColor(
+                                ImGuiTableBgTarget_RowBg0,
+                                m_settings.GetColor(Colors::kHighlightChart));
+                        }
+                        else if(is_owner_frame)
+                        {
+                            ImGui::TableSetBgColor(
+                                ImGuiTableBgTarget_RowBg0,
+                                m_settings.GetColor(Colors::kAreaOfInterest));
+                        }
+
                         ImGui::TableSetColumnIndex(0);
-                        CopyableTextUnformatted(
-                            event_data->call_stack_info[i].address.c_str(), "",
-                            COPY_DATA_NOTIFICATION, false, true);
-                        ImGui::TableSetColumnIndex(1);
-                        CopyableTextUnformatted(
-                            event_data->call_stack_info[i].name.c_str(), "",
-                            COPY_DATA_NOTIFICATION, false, true);
-                        ImGui::TableSetColumnIndex(2);
-                        CopyableTextUnformatted(
-                            event_data->call_stack_info[i].file.c_str(), "",
-                            COPY_DATA_NOTIFICATION, false, true);
-                        ImGui::TableSetColumnIndex(3);
-                        CopyableTextUnformatted(event_data->call_stack_info[i].pc.c_str(),
-                                                "", COPY_DATA_NOTIFICATION, false, true);
+                        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+                        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+                        bool row_clicked = ImGui::Selectable(
+                            ("##cs_sel_" + row_str).c_str(), false,
+                            ImGuiSelectableFlags_SpanAllColumns |
+                                ImGuiSelectableFlags_AllowOverlap,
+                            ImVec2(0.0f, 0.0f));
+                        bool row_hovered =
+                            row_clicked ||
+                            ImGui::IsItemHovered(
+                                ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
+                                ImGuiHoveredFlags_AllowWhenOverlappedByItem);
+                        if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+                        {
+                            m_context_menu_callstack_index = i;
+                            open_callstack_context_menu    = true;
+                        }
+                        ImGui::PopStyleColor(3);
+
+                        callstack_cell(0, std::to_string(frame.id.bitfield.event_id),
+                                       "##cs_id", i);
+                        callstack_cell(1, frame.address, "##cs_addr", i);
+                        callstack_cell(2, frame.name, "##cs_name", i);
+                        callstack_cell(3, frame.file, "##cs_file", i);
+                        callstack_cell(4, frame.pc, "##cs_pc", i);
+
+                        if(row_hovered)
+                        {
+                            m_frame_callstack_hover.owner_event_id = this_owner_event_id;
+                            m_frame_callstack_hover.frame_event_id = uuid;
+                            m_frame_callstack_hover.frame_track_id = event_data->track_id;
+                            if(is_owner_frame)
+                            {
+                                SetTooltipStyled(
+                                    "This is the event you opened to view "
+                                    "this call stack.");
+                            }
+                        }
+                        if(row_hovered &&
+                           ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                        {
+                            navigate_to_frame(uuid);
+                        }
                         ImGui::PopID();
                     }
                 }
+
+                if(open_callstack_context_menu)
+                {
+                    ImGui::OpenPopup("##CallStackContextMenu");
+                }
+
+                auto style = m_settings.GetDefaultStyle();
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+                if(ImGui::BeginPopup("##CallStackContextMenu"))
+                {
+                    if(m_context_menu_callstack_index >= 0 &&
+                       m_context_menu_callstack_index <
+                           static_cast<int>(event_data->call_stack_info.size()))
+                    {
+                        const auto& ctx_frame =
+                            event_data->call_stack_info[m_context_menu_callstack_index];
+
+                        if(ImGui::MenuItem("Go To Event"))
+                        {
+                            navigate_to_frame(ctx_frame.id.uuid);
+                        }
+                    }
+                    ImGui::EndPopup();
+                }
+                ImGui::PopStyleVar(2);
                 ImGui::EndTable();
             }
         }

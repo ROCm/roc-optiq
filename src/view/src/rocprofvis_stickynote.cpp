@@ -18,6 +18,11 @@ namespace RocProfVis
 namespace View
 {
 
+namespace
+{
+constexpr float kExpandedHeaderHeight = 36.0f;
+}  // namespace
+
 static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
                        const std::string& text, const std::string& title,
@@ -136,7 +141,6 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 
     const float rounding      = settings.GetDefaultStyle().ChildRounding;
     const float margin        = 14.0f;
-    const float header_height = 36.0f;
     const float icon_btn_gap  = 8.0f;
 
     float  x           = tpt->TimeToPixel(m_time_ns);
@@ -256,7 +260,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         const ImVec2 note_min      = ImGui::GetWindowPos();
         const ImVec2 header_min    = note_min;
         const ImVec2 header_max    = ImVec2(note_min.x + sticky_size.x,
-                                            note_min.y + header_height);
+                                            note_min.y + kExpandedHeaderHeight);
         note_draw_list->AddRectFilled(header_min, header_max, header_color, rounding,
                                       ImDrawFlags_RoundCornersTop);
         note_draw_list->AddRectFilled(header_min,
@@ -269,7 +273,8 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 
         // Title (left)
         ImGui::SetCursorPos(
-            ImVec2(margin, (header_height - ImGui::GetTextLineHeight()) * 0.5f));
+            ImVec2(margin,
+                   (kExpandedHeaderHeight - ImGui::GetTextLineHeight()) * 0.5f));
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
         ImGui::TextUnformatted(m_title.c_str());
         ImGui::PopStyleColor();
@@ -282,7 +287,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImVec2 close_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
         const float action_btn_size =
             std::max({34.0f, edit_icon_size.x + 14.0f, close_icon_size.x + 14.0f});
-        const float action_btn_y = (header_height - action_btn_size) * 0.5f;
+        const float action_btn_y = (kExpandedHeaderHeight - action_btn_size) * 0.5f;
 
         ImGui::SetCursorPos(ImVec2(sticky_size.x - action_btn_size * 2.0f - margin -
                                        icon_btn_gap,
@@ -318,7 +323,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PopFont();
 
         // Scroll only the note body; the header/actions stay pinned.
-        const float body_y      = header_height + margin;
+        const float body_y      = kExpandedHeaderHeight + margin;
         const float body_height = std::max(0.0f, sticky_size.y - body_y - margin);
         ImGui::SetCursorPos(ImVec2(margin, body_y));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -406,8 +411,8 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         // Expanded notes drag by the header so the scrollable body can own
         // scrollbar/body interactions.
         drag_w   = m_size.x;
-        drag_h   = 36.0f;
-        drag_max = ImVec2(drag_pos.x + drag_w, drag_pos.y + drag_h);
+        drag_max = ImVec2(drag_pos.x + drag_w,
+                          drag_pos.y + kExpandedHeaderHeight);
     }
 
     ImVec2 mouse_pos      = ImGui::GetMousePos();
@@ -441,7 +446,9 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         float  new_y       = mouse_pos.y - window_position.y - m_drag_offset.y;
         ImVec2 window_size = ImGui::GetWindowSize();
         new_x = std::clamp(new_x, 0.0f, window_size.x - drag_w);
-        new_y = std::clamp(new_y, 0.0f, window_size.y - drag_h);
+        new_y = std::clamp(new_y, 0.0f,
+                           window_size.y -
+                               (m_is_minimized ? drag_h : kExpandedHeaderHeight));
 
         if(m_is_minimized)
         {

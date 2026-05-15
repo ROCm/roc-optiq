@@ -2296,11 +2296,12 @@ DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
                     frame.id.bitfield.event_node = owner_id.bitfield.event_node;
                 }
 
+                const uint64_t uuid = frame.id.uuid;
                 spdlog::debug(
                     "Call stack entry {}: file: {}, pc: {}, name: {}, address: {}, "
                     "region_id: {}, uuid: {}",
                     i, frame.file, frame.pc, frame.name, frame.address,
-                    frame.id.bitfield.event_id, frame.id.uuid);
+                    region_id, uuid);
             }
         }
     }

@@ -95,6 +95,7 @@ jobs:
       os_version: ${{ needs.setup.outputs.redhat-os-versions }}
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
 
   ci-ubuntu:
     name: Ubuntu CI
@@ -106,6 +107,7 @@ jobs:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
 
   ci-windows:
     name: Windows CI
@@ -117,6 +119,7 @@ jobs:
       os_version: ${{ needs.setup.outputs.windows-os-versions }}
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
 
   ci-mac:
     name: macOS CI
@@ -128,3 +131,4 @@ jobs:
       os_version: ${{ needs.setup.outputs.mac-os-versions }}
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -55,6 +56,84 @@ struct Point
     double y;
 };
 
+struct PcStallReason
+{
+    int32_t     type_id  = 0;
+    std::string type_name;
+    int32_t     count    = 0;
+};
+
+struct StallRecord
+{
+    uint32_t id                 = 0;
+    uint32_t isa_line_id        = 0;
+    uint64_t dispatch_id        = 0;
+    float    avg_active_lanes   = 0.0f;
+    uint32_t wave_issued_count  = 0;
+    uint32_t total_sample_count = 0;
+
+    std::vector<PcStallReason> stall_reasons;
+};
+
+struct IsaToIsaDep
+{
+    uint32_t dependent_isa_line_id  = 0;
+    uint32_t dependency_isa_line_id = 0;
+};
+
+struct IsaToSourceDep
+{
+    uint32_t isa_line_id    = 0;
+    uint32_t source_line_id = 0;
+    uint32_t depth          = 0;
+};
+
+struct IsaLine
+{
+    uint32_t    id                  = 0;
+    uint64_t    code_object_offset  = 0;
+    uint32_t    instruction_type_id = 0;
+    std::string instruction;
+    std::string comment;
+
+    StallRecord stall_record;
+    std::vector<uint32_t>
+        source_line_ids;
+};
+
+struct CodeObject
+{
+    uint32_t             id = 0;
+    std::string          uri;
+    std::string          content_checksum;
+    std::vector<IsaLine> isa_lines;
+};
+
+struct SourceLine
+{
+    uint32_t               id          = 0;
+    uint32_t               line_number = 0;
+    std::string            content;
+    std::vector<uint32_t*> isa_line_ids;
+};
+
+struct SourceFile
+{
+    uint32_t    id = 0;
+    std::string file_path;
+    std::string content_checksum;
+
+    std::vector<SourceLine> source_lines;
+};
+
+struct PcSamplingData
+{
+    std::vector<CodeObject>     code_objects;
+    std::vector<SourceFile>     source_files;
+    std::vector<IsaToIsaDep>    isa_to_isa_deps;
+    std::vector<IsaToSourceDep> isa_to_source_deps;
+};
+
 struct KernelInfo
 {
     enum DispatchMetric
@@ -82,6 +161,7 @@ struct KernelInfo
     std::string                      name;
     std::array<uint64_t, NumMetrics> dispatch_metrics;
     Roofline                         roofline;
+    PcSamplingData                   pc_sampling_data;
 };
 
 struct WorkloadInfo

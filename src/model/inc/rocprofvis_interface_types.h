@@ -517,6 +517,44 @@ typedef enum rocprofvis_db_compute_column_enum_t
 
     kRPVComputeColumnDynamicMetricValue,
     kRPVComputeColumnDynamicKernelUUID,
+
+    kRPVComputeColumnPcSamplingSourceFileId,
+    kRPVComputeColumnPcSamplingSourceFilePath,
+    kRPVComputeColumnPcSamplingSourceFileChecksum,
+
+    kRPVComputeColumnPcSamplingSourceLineId,
+    kRPVComputeColumnPcSamplingSourceLineFileId,
+    kRPVComputeColumnPcSamplingSourceLineNumber,
+    kRPVComputeColumnPcSamplingSourceLineContent,
+
+    kRPVComputeColumnPcSamplingCodeObjectId,
+    kRPVComputeColumnPcSamplingCodeObjectUri,
+    kRPVComputeColumnPcSamplingCodeObjectChecksum,
+
+    kRPVComputeColumnPcSamplingIsaLineId,
+    kRPVComputeColumnPcSamplingIsaLineCodeObjectId,
+    kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset,
+    kRPVComputeColumnPcSamplingIsaLineInstructionTypeId,
+    kRPVComputeColumnPcSamplingIsaLineInstruction,
+    kRPVComputeColumnPcSamplingIsaLineComment,
+
+    kRPVComputeColumnPcSamplingIsaToIsaDependentIsaLineId,
+    kRPVComputeColumnPcSamplingIsaToIsaDependencyIsaLineId,
+
+    kRPVComputeColumnPcSamplingIsaToSourceIsaLineId,
+    kRPVComputeColumnPcSamplingIsaToSourceSourceLineId,
+    kRPVComputeColumnPcSamplingIsaToSourceDepth,
+
+    kRPVComputeColumnPcSamplingStallRecordId,
+    kRPVComputeColumnPcSamplingStallRecordIsaLineId,
+    kRPVComputeColumnPcSamplingStallRecordDispatchId,
+    kRPVComputeColumnPcSamplingStallRecordAvgActiveLanes,
+    kRPVComputeColumnPcSamplingStallRecordWaveIssuedCount,
+    kRPVComputeColumnPcSamplingStallRecordTotalSampleCount,
+
+    kRPVComputeColumnPcSamplingStallReasonRecordId,
+    kRPVComputeColumnPcSamplingStallReasonTypeId,
+    kRPVComputeColumnPcSamplingStallReasonCount,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations
@@ -534,6 +572,14 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchKernelMetricsMatrix,
     kRPVComputeFetchWorkloadMetricValueNames,
     kRPVComputeFetchMetricValuesByWorkload,
+    kRPVComputeFetchKernelSourceFiles,
+    kRPVComputeFetchSourceFileSourceLines,
+    kRPVComputeFetchKernelCodeObjects,
+    kRPVComputeFetchCodeObjectIsaLines,
+    kRPVComputeFetchIsaLineIsaLineDeps,
+    kRPVComputeFetchIsaLineSourceLineDeps,
+    kRPVComputeFetchIsaLineStallRecord,
+    kRPVComputeFetchStallRecordReasonCounts,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration
@@ -541,6 +587,10 @@ typedef enum rocprofvis_db_compute_param_enum_t
 {
     kRPVComputeParamWorkloadId,
     kRPVComputeParamKernelId,
+    kRPVComputeParamSourceFileId,
+    kRPVComputeParamCodeObjectId,
+    kRPVComputeParamIsaLineId,
+    kRPVComputeParamStallRecordId,
     kRPVComputeParamMetricId,
     kRPVComputeParamMetricSelector,
     kRPVComputeParamSortColumnIndex,

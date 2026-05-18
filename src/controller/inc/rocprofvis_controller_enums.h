@@ -117,6 +117,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeMetricsContainer = 103,
     // Roofline object
     kRPVControllerObjectTypeRoofline = 104,
+    //PcSampling
+    kRPVControllerObjectTypePCSampling = 105,
 #endif
 
 } rocprofvis_controller_object_type_t;
@@ -898,8 +900,57 @@ typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
     kRPVControllerKernelDurationMax,
     kRPVControllerKernelDurationMedian,
     kRPVControllerKernelDurationMean,
+    kRPVControllerKernelPcSamplingIndexed,
     __kRPVControllerKernelPropertiesLast
 } rocprofvis_controller_kernel_properties_t;
+
+/*
+ * Pc Sampling data for kernels
+ */
+typedef enum rocprofvis_controller_pc_sampling_data_properties_t : uint32_t
+{
+    __kRPVControllerPCSamplingPropertiesFirst,
+    kRPVControllerPCSamplingNumSourceFiles = __kRPVControllerPCSamplingPropertiesFirst,
+    kRPVControllerPCSamplingSourceFileId,
+    kRPVControllerPCSamplingFilePath,
+    kRPVControllerPCSamplingSourceFileChecksum,
+    kRPVControllerPCSamplingNumSourceLines,
+    kRPVControllerPCSamplingSourceLineId,
+    kRPVControllerPCSamplingSourceLineSourceFileId,
+    kRPVControllerPCSamplingSourceLineNumber,
+    kRPVControllerPCSamplingSourceLineContent,
+    kRPVControllerPCSamplingNumCodeObjects,
+    kRPVControllerPCSamplingCodeObjectId,
+    kRPVControllerPCSamplingCodeObjectUri,
+    kRPVControllerPCSamplingCodeObjectChecksum,
+    kRPVControllerPCSamplingNumIsaLines,
+    kRPVControllerPCSamplingIsaLineId,
+    kRPVControllerPCSamplingIsaLineCodeObjectId,
+    kRPVControllerPCSamplingIsaLineCodeObjectOffset,
+    kRPVControllerPCSamplingIsaLineInstructionTypeId,
+    kRPVControllerPCSamplingIsaLineInstruction,
+    kRPVControllerPCSamplingIsaLineComment,
+    kRPVControllerPCSamplingNumIsaToIsaDeps,
+    kRPVControllerPCSamplingIsaToIsaDependentIsaLineId,
+    kRPVControllerPCSamplingIsaToIsaDependencyIsaLineId,
+    kRPVControllerPCSamplingNumIsaToSourceDeps,
+    kRPVControllerPCSamplingIsaToSourceIsaLineId,
+    kRPVControllerPCSamplingIsaToSourceSourceLineId,
+    kRPVControllerPCSamplingIsaToSourceDepth,
+    kRPVControllerPCSamplingNumStallRecords,
+    kRPVControllerPCSamplingStallRecordId,
+    kRPVControllerPCSamplingStallRecordIsaLineId,
+    kRPVControllerPCSamplingStallRecordDispatchId,
+    kRPVControllerPCSamplingStallRecordAvgActiveLanes,
+    kRPVControllerPCSamplingStallRecordWaveIssuedCount,
+    kRPVControllerPCSamplingStallRecordTotalSampleCount,
+    kRPVControllerPCSamplingNumStallReasonCounts,
+    kRPVControllerPCSamplingStallReasonRecordId,
+    kRPVControllerPCSamplingStallReasonTypeId,
+    kRPVControllerPCSamplingStallReasonCount,
+    __kRPVControllerPCSamplingPropertiesLast
+
+} rocprofvis_controller_pc_sampling_data_properties_t;
 
 /*
  * Arguments for fetching metric values.

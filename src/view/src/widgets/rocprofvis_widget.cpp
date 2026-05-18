@@ -104,7 +104,7 @@ WithPadding(float left, float right, float top, float bottom,
 bool
 IconMenuItem(const char* icon, const char* label)
 {
-    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(FontType::kDefault);
+    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
 
     ImGui::BeginGroup();
     ImGui::PushFont(icon_font);

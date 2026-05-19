@@ -4,6 +4,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 
@@ -66,25 +67,17 @@ DataProvider::DataProvider()
 , m_model()
 {}
 
-DataProvider::~DataProvider() { CloseController(); }
+DataProvider::~DataProvider()
+{
+    DataProviderCleanupWork cleanup_work = DetachCleanupWork();
+    CleanupDetachedResources(std::move(cleanup_work));
+}
 
 void
 DataProvider::CloseController()
 {
-    if(m_trace_timeline)
-    {
-        m_trace_timeline = nullptr;
-    }
-
-    m_model.Clear();
-    FreeRequests();
-    m_state      = ProviderState::kInit;
-
-    if(m_trace_controller)
-    {
-        rocprofvis_controller_free(m_trace_controller);
-        m_trace_controller = nullptr;
-    }
+    DataProviderCleanupWork cleanup_work = DetachCleanupWork();
+    CleanupDetachedResources(std::move(cleanup_work));
 }
 
 void
@@ -100,13 +93,53 @@ DataProvider::SetSelectedState(const std::string& id)
 void
 DataProvider::FreeRequests()
 {
-    for(auto item : m_requests)
+    DataProviderCleanupWork cleanup_work;
+    cleanup_work.trace_file_path = m_model.GetTraceFilePath();
+    cleanup_work.requests        = std::move(m_requests);
+    m_requests.clear();
+
+    CleanupDetachedResources(std::move(cleanup_work));
+}
+
+size_t
+DataProvider::GetPendingRequestCount() const
+{
+    return m_requests.size();
+}
+
+DataProviderCleanupWork
+DataProvider::DetachCleanupWork()
+{
+    DataProviderCleanupWork cleanup_work;
+    cleanup_work.trace_file_path = m_model.GetTraceFilePath();
+    cleanup_work.requests        = std::move(m_requests);
+    cleanup_work.controller      = m_trace_controller;
+
+    m_requests.clear();
+    m_trace_controller = nullptr;
+    m_trace_timeline   = nullptr;
+    m_model.Clear();
+    m_progress_mesage.clear();
+    m_progress_percent = 0;
+    m_state            = ProviderState::kInit;
+
+    return cleanup_work;
+}
+
+DataProviderCleanupResult
+DataProvider::CleanupDetachedResources(DataProviderCleanupWork cleanup_work)
+{
+    DataProviderCleanupResult cleanup_result;
+    cleanup_result.trace_file_path = cleanup_work.trace_file_path;
+    cleanup_result.request_count   = cleanup_work.requests.size();
+
+    for(auto& item : cleanup_work.requests)
     {
         RequestInfo& req = item.second;
         if(req.request_future)
         {
-            spdlog::warn("FreeRequests: cancelling request {} of type {}", req.request_id,
-                         static_cast<int>(req.request_type));
+            spdlog::warn("DataProvider cleanup: cancelling request {} of type {}",
+                         req.request_id, static_cast<int>(req.request_type));
 
             rocprofvis_result_t result =
                 rocprofvis_controller_future_cancel(req.request_future);
@@ -117,7 +150,7 @@ DataProvider::FreeRequests()
             }
         }
     }
-    for(auto item : m_requests)
+    for(auto& item : cleanup_work.requests)
     {
         RequestInfo& req = item.second;
 
@@ -151,7 +184,15 @@ DataProvider::FreeRequests()
         }
     }
 
-    m_requests.clear();
+    cleanup_work.requests.clear();
+
+    if(cleanup_work.controller)
+    {
+        rocprofvis_controller_free(cleanup_work.controller);
+        cleanup_work.controller = nullptr;
+    }
+
+    return cleanup_result;
 }
 
 const std::string&
@@ -1451,10 +1492,6 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                               0, table_params.m_group_columns.data());
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSummary, 0,
-                                              table_params.m_summary ? 1 : 0);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
     if(table_params.m_start_row != -1)
     {
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex,
@@ -2068,6 +2105,57 @@ DataProvider::FetchSummary()
 }
 
 bool
+DataProvider::FetchAnalysisQueueUtilization(
+    const AnalysisQueueUtilizationRequestParams& params)
+{
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
+                     static_cast<int>(m_state));
+        return false;
+    }
+    else
+    {
+        uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
+            static_cast<uint32_t>(params.m_track_id), 0, 0,
+            RequestType::kFetchAnalysisQueueUtilization);
+        auto it = m_requests.find(request_id);
+        if(it != m_requests.end())
+        {
+            spdlog::debug(
+                "Per-track queue utilization request for track {} is already pending",
+                params.m_track_id);
+            return false;
+        }
+        else
+        {
+            const TrackInfo* metadata = m_model.GetTimeline().GetTrack(params.m_track_id);
+            ROCPROFVIS_ASSERT(metadata);
+            rocprofvis_controller_track_t* track_handle = nullptr;
+            rocprofvis_result_t            result = rocprofvis_controller_get_object(
+                metadata->graph_handle, kRPVControllerGraphTrack, 0, &track_handle);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && track_handle);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            ROCPROFVIS_ASSERT(future);
+            std::shared_ptr<AnalysisQueueUtilizationRequestParams> stored_params =
+                std::make_shared<AnalysisQueueUtilizationRequestParams>(params);
+            m_requests.emplace(request_id,
+                               RequestInfo{ request_id, future, nullptr, nullptr, nullptr,
+                                            RequestState::kLoading,
+                                            RequestType::kFetchAnalysisQueueUtilization,
+                                            stored_params });
+            result = rocprofvis_controller_analysis_fetch_queue_utilization(
+                m_trace_controller, track_handle, stored_params->m_start_ts,
+                stored_params->m_end_ts, future, &stored_params->m_result);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            spdlog::debug("Fetching per-track queue utilization for track {}",
+                          stored_params->m_track_id);
+            return true;
+        }
+    }
+}
+
+bool
 DataProvider::IsRequestPending(uint64_t request_id) const
 {
     auto it = m_requests.find(request_id);
@@ -2658,6 +2746,11 @@ DataProvider::ProcessRequest(RequestInfo& req)
             ProcessSummaryRequest(req);
             break;
         }
+        case RequestType::kFetchAnalysisQueueUtilization:
+        {
+            ProcessAnalysisQueueUtilizationRequest(req);
+            break;
+        }
 #ifdef COMPUTE_UI_SUPPORT
         case RequestType::kFetchComputeTrace:
         {
@@ -2734,6 +2827,27 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
     if(m_summary_data_ready_callback)
     {
         m_summary_data_ready_callback();
+    }
+}
+
+void
+DataProvider::ProcessAnalysisQueueUtilizationRequest(RequestInfo& req)
+{
+    std::shared_ptr<AnalysisQueueUtilizationRequestParams> params =
+        std::dynamic_pointer_cast<AnalysisQueueUtilizationRequestParams>(req.custom_params);
+    if(!params)
+    {
+        spdlog::error("Queue utilization params missing or invalid");
+    }
+    else if(req.response_code != kRocProfVisResultSuccess)
+    {
+        spdlog::debug("Queue utilization request for track {} failed with code {}",
+                      params->m_track_id, req.response_code);
+    }
+    else
+    {
+        m_model.GetAnalysis().SetPerTrackQueueUtilizationValue(params->m_track_id,
+                                                               params->m_result);
     }
 }
 

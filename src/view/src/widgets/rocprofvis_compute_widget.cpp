@@ -121,7 +121,7 @@ MetricTableBase::Render()
             const ImVec2 row_max(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
                                  row_min.y + row_hover_height);
             if(ImGui::IsWindowHovered() &&
-               ImGui::IsMouseHoveringRect(row_min, row_max, true))
+               ImGui::IsMouseHoveringRect(row_min, row_max, false))
             {
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
                                        settings.GetColor(Colors::kHighlightChart));

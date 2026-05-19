@@ -89,6 +89,7 @@ set(VIEW_FILES
     src/view/src/model/rocprofvis_tables_model.cpp
     src/view/src/model/rocprofvis_summary_model.cpp
     src/view/src/model/rocprofvis_event_model.cpp
+    src/view/src/model/rocprofvis_analysis_model.cpp
     src/view/src/model/rocprofvis_trace_data_model.cpp
     src/view/src/rocprofvis_raw_track_data.cpp
     src/view/src/rocprofvis_events.cpp
@@ -111,6 +112,7 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_editable_textfield.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
+    src/view/src/widgets/rocprofvis_image_helpers.cpp
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
     src/view/src/widgets/rocprofvis_dialog.cpp
     src/view/src/widgets/rocprofvis_notification_manager.cpp
@@ -226,6 +228,34 @@ target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(APPLE)
+    set(ROCPROFVIS_BUNDLE_VULKAN ON CACHE BOOL
+        "Bundle the Vulkan loader into the macOS app. MoltenVK is resolved \
+from the user's LunarG Vulkan SDK install at runtime; the entitlements \
+plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
+    if(ROCPROFVIS_BUNDLE_VULKAN)
+        set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "")
+        if(Vulkan_LIBRARY)
+            set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "${Vulkan_LIBRARY}")
+        elseif(Vulkan_LIBRARIES)
+            list(GET Vulkan_LIBRARIES 0 ROCPROFVIS_VULKAN_LOADER_LIBRARY)
+        endif()
+        if(ROCPROFVIS_VULKAN_LOADER_LIBRARY)
+            get_filename_component(ROCPROFVIS_VULKAN_LOADER_DIR
+                "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}" DIRECTORY)
+            if(EXISTS "${ROCPROFVIS_VULKAN_LOADER_DIR}/libvulkan.1.dylib")
+                set(ROCPROFVIS_VULKAN_LOADER_LIBRARY
+                    "${ROCPROFVIS_VULKAN_LOADER_DIR}/libvulkan.1.dylib")
+            endif()
+        endif()
+        if(NOT ROCPROFVIS_VULKAN_LOADER_LIBRARY OR
+           NOT EXISTS "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}")
+            message(FATAL_ERROR
+                "ROCPROFVIS_BUNDLE_VULKAN is ON, but the Vulkan loader library "
+                "was not found. Set Vulkan_LIBRARY to the SDK libvulkan.dylib.")
+        endif()
+
+    endif()
+
     set_target_properties(${TARGET_NAME} PROPERTIES
         BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
         INSTALL_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
@@ -249,6 +279,51 @@ if(APPLE)
             "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
         COMMENT "Staging GLFW dylib into the app bundle"
     )
+    if(ROCPROFVIS_BUNDLE_VULKAN)
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/licenses/Vulkan-Loader-LICENSE.txt"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/Vulkan-Loader-LICENSE.txt"
+            COMMENT "Staging Vulkan loader and license into the app bundle"
+        )
+    endif()
+
+    set(ROCPROFVIS_MACOS_CODESIGN_IDENTITY "" CACHE STRING
+        "codesign --sign identity. Empty=skip, '-'=ad-hoc, \
+'Developer ID Application: ... (TEAMID)' for notarization-ready release.")
+    set(ROCPROFVIS_MACOS_ENTITLEMENTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.entitlements.plist"
+        CACHE FILEPATH "Entitlements plist used when codesigning the .app")
+
+    if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY)
+        # Ad-hoc signing can't use --options runtime / --timestamp / --entitlements.
+        if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY STREQUAL "-")
+            set(_rocprofvis_codesign_runtime_args "")
+        else()
+            set(_rocprofvis_codesign_runtime_args
+                --options runtime
+                --timestamp
+                --entitlements "${ROCPROFVIS_MACOS_ENTITLEMENTS}")
+        endif()
+
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND codesign --force --deep
+                --sign "${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}"
+                ${_rocprofvis_codesign_runtime_args}
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
+            COMMAND codesign --verify --verbose=2
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
+            COMMENT "Codesigning bundle with identity '${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}'"
+        )
+    endif()
 endif()
 
 # === NativeFileDialog Extended ===

@@ -200,6 +200,13 @@ TraceView::~TraceView()
         m_progress_update_event_token);
 }
 
+std::optional<DataProviderCleanupWork>
+TraceView::DetachProviderCleanup()
+{
+    DataProviderCleanupWork cleanup_work = m_data_provider.DetachCleanupWork();
+    return cleanup_work;
+}
+
 void
 TraceView::Update()
 {
@@ -382,13 +389,13 @@ TraceView::Render()
             ImGui::End();
             popup_style.PopStyles();
         }
+    }
 
-        if(m_popup_info.show_popup)
-        {
-            m_popup_info.show_popup = false;
-            AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
-                                                        m_popup_info.message);
-        }
+    if(m_popup_info.show_popup)
+    {
+        m_popup_info.show_popup = false;
+        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
+                                                    m_popup_info.message);
     }
 
     if(m_summary_view)
@@ -509,12 +516,30 @@ TraceView::SaveSelection(const std::string& file_path)
 bool
 TraceView::CleanupDatabase(bool rebuild, std::function<void()> on_complete)
 {
+    //show error lambda
+     auto show_error = [this](const std::string& message) {
+        m_popup_info.show_popup = true;
+        m_popup_info.title      = "Error";
+        m_popup_info.message    = message;
+    };
+
     if(m_data_provider.IsRequestPending(DataProvider::CLEANUP_DATABASE_REQUEST_ID))
     {
+        show_error("Database cleanup already in progress.");
         spdlog::debug("Database cleanup already in progress.");
         return false;
     }
 
+    //check if dataprovider is in a state that allows cleanup
+    auto state = m_data_provider.GetState();
+    if(state != ProviderState::kReady)
+    {
+        show_error("Cannot cleanup database while trace is loading");
+        spdlog::debug("Cannot cleanup database while trace is loading. Current state: {}", static_cast<int>(state));
+        return false;
+    }
+
+    //Todo: FreeRequests() will block the UI thread.
     m_data_provider.FreeRequests();
 
     m_data_provider.SetCleanupDatabaseCallback(
@@ -544,6 +569,10 @@ TraceView::CleanupDatabase(bool rebuild, std::function<void()> on_complete)
             rebuild ? "Cleaning and rebuilding database..." : "Cleaning database...",
             NotificationLevel::Info);
         return true;
+    }
+    else
+    {
+        show_error("Database cleanup request failed to start.");
     }
 
     return false;
@@ -680,9 +709,9 @@ TraceView::RenderToolbar()
     VerticalSeparator(&m_settings_manager);
 
     ImFont* icon_font =
-        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
+        m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushFont(icon_font);
+    ImGui::PushFont(icon_font, 0.0f);
     if(ImGui::Button(ICON_COMPASS))
     {
         m_show_minimap_popup = !m_show_minimap_popup;
@@ -754,8 +783,8 @@ TraceView::RenderAnnotationControls()
     ImGui::SameLine();
 
     ImFont* icon_font =
-        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
-    ImGui::PushFont(icon_font);
+        m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
+    ImGui::PushFont(icon_font, 0.0f);
     ImGui::BeginGroup();
 
     bool   is_sticky_visible = m_annotations->IsVisibile();
@@ -791,7 +820,7 @@ TraceView::RenderAnnotationControls()
     {
         ImGui::PopFont();
         SetTooltipStyled("Show Annotation Layer");
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, 0.0f);
     }
     ImGui::PopID();
     ImGui::SameLine();
@@ -820,7 +849,7 @@ TraceView::RenderAnnotationControls()
     {
         ImGui::PopFont();
         SetTooltipStyled("Hide Annotation Layer");
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, 0.0f);
     }
     ImGui::PopID();
     ImGui::SameLine();
@@ -848,7 +877,7 @@ TraceView::RenderAnnotationControls()
     {
         ImGui::PopFont();
         SetTooltipStyled("Add New Annotation");
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, 0.0f);
     }
     ImGui::PopID();
 
@@ -914,8 +943,8 @@ TraceView::RenderBookmarkControls()
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(0, 0, 0, 0));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(0, 0, 0, 0));
                 ImFont* icon_font =
-                    m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
-                ImGui::PushFont(icon_font);
+                    m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
+                ImGui::PushFont(icon_font, 0.0f);
                 if(used)
                 {
                     if(ImGui::Button(ICON_DELETE))
@@ -928,8 +957,6 @@ TraceView::RenderBookmarkControls()
                 }
                 else
                 {
-                    ImGui::PushFont(icon_font);
-                    ImGui::PushFont(icon_font);
                     if(ImGui::Button(ICON_ADD_NOTE))
                     {
                         m_bookmarks[i] = m_timeline_view->GetViewCoords();
@@ -937,8 +964,6 @@ TraceView::RenderBookmarkControls()
                             "Bookmark " + std::to_string(i) + " created.",
                             NotificationLevel::Info);
                     }
-                    ImGui::PopFont();
-                    ImGui::PopFont();
                 }
                 ImGui::PopFont();
                 ImGui::PopStyleColor(3);
@@ -986,8 +1011,8 @@ TraceView::RenderFlowControls()
     FlowDisplayMode mode = current_mode;
 
     ImFont* icon_font =
-        m_settings_manager.GetFontManager().GetIconFont(FontType::kDefault);
-    ImGui::PushFont(icon_font);
+        m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
+    ImGui::PushFont(icon_font, 0.0f);
 
     ImGui::BeginGroup();
     for(int i = 0; i <= static_cast<int>(FlowDisplayMode::__kLastMode); ++i)
@@ -1018,7 +1043,7 @@ TraceView::RenderFlowControls()
         {
             ImGui::PopFont();
             SetTooltipStyled("%s", flow_tool_tips[i]);
-            ImGui::PushFont(icon_font);
+            ImGui::PushFont(icon_font, 0.0f);
         }
 
         ImGui::PopID();
@@ -1045,7 +1070,7 @@ TraceView::RenderFlowControls()
     {
         ImGui::PopFont();
         SetTooltipStyled("Flow Render Style");
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, 0.0f);
     }
     ImGui::PopFont();
 
@@ -1068,8 +1093,8 @@ TraceView::RenderEventSearch()
         std::pair<bool, bool> search_bar = InputTextWithClear(
             "search_bar", "Search events, kernels, tracks...",
             m_event_search->TextInput(), m_event_search->TextInputLimit(),
-            settings.GetFontManager().GetIconFont(FontType::kDefault),
-            settings.GetColor(Colors::kBgFrame), settings.GetDefaultStyle(),
+            settings.GetFontManager().GetFont(FontType::kIcon),
+            settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),
             m_event_search->Width());
         if(ImGui::IsItemClicked() && m_event_search->Searched())
         {

@@ -100,6 +100,7 @@ TraceDataModel::Clear()
     m_tables.ClearAllTables();
     m_summary.Clear();
     m_events.ClearEvents();
+    m_analysis.Clear();
     m_trace_file_path.clear();
 }
 

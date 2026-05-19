@@ -94,6 +94,11 @@ public:
      */
     void FreeRequests();
 
+    /*
+     *   Get the number of pending requests.
+     */
+    size_t GetPendingRequestCount() const;
+
     DataProviderCleanupWork DetachCleanupWork();
     static DataProviderCleanupResult CleanupDetachedResources(
         DataProviderCleanupWork cleanup_work);

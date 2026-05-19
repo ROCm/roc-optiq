@@ -1613,7 +1613,7 @@ AppWindow::UpdateStatusBar()
         }
         else
         {
-            m_status_message             = "";
+            m_status_message             = "Ready";
             m_status_show_busy_indicator = false;
         }
     }
@@ -1629,7 +1629,7 @@ AppWindow::RenderStatusBar()
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
 
     ImGui::AlignTextToFramePadding();
-    ImGui::Dummy(ImVec2(style.WindowPadding.x, ImGui::GetFrameHeight()));
+    ImGui::Dummy(ImVec2(0.f, ImGui::GetFrameHeight()));
     ImGui::SameLine();
     if(m_status_show_busy_indicator)
     {

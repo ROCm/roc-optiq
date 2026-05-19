@@ -7,6 +7,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_hotkey_manager.h"
+#include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -46,14 +47,17 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
     s_max_event_label_width = ImGui::CalcTextSize("W").x * MAX_CHARACTERS_PER_LINE;
 }
 
-FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
-                               std::shared_ptr<TimelineSelection> timeline_selection,
-                               uint64_t track_id, std::shared_ptr<TimePixelTransform> tpt)
+FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
+                               std::shared_ptr<TimelineSelection>     timeline_selection,
+                               std::shared_ptr<MeasurementController> measurement,
+                               uint64_t                               track_id,
+                               std::shared_ptr<TimePixelTransform>    tpt)
 : TrackItem(dp, track_id, tpt)
 , m_event_color_mode(EventColorMode::kByEventName)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
 , m_timeline_selection(timeline_selection)
+, m_measurement(measurement)
 , m_deferred_click_handled(false)
 , m_has_drawn_tool_tip(false)
 , m_flame_track_project_settings(dp.GetTraceFilePath(), *this)
@@ -410,26 +414,26 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 TimelineFocusManager::GetInstance().GetFocusedLayer() ==
                     Layer::kGraphLayer)
         {
-            m_deferred_click_handled = true;
-            TimelineFocusManager& focus = TimelineFocusManager::GetInstance();
+            m_deferred_click_handled       = true;
+            MeasurementController& measure = *m_measurement;
 
-            if(focus.IsMeasurementMode() && !focus.IsFreehandMode())
+            if(measure.IsMeasurementMode() && !measure.IsFreehandMode())
             {
                 // Clicking after a complete measurement starts a new one.
-                if(focus.GetMeasurementState() == MeasurementState::kComplete)
+                if(measure.GetMeasurementState() == MeasurementState::kComplete)
                 {
                     m_timeline_selection->UnhighlightPersistentEvents();
-                    focus.ClearMeasurement();
+                    measure.ClearMeasurement();
                 }
-                focus.SetMeasurementPoint(chart_item.event.m_start_ts,
-                                          chart_item.event.m_duration, m_track_id,
-                                          chart_item.event.m_level,
-                                          chart_item.event.m_name,
-                                          chart_item.event.m_id.uuid);
+                measure.SetMeasurementPoint(chart_item.event.m_start_ts,
+                                            chart_item.event.m_duration, m_track_id,
+                                            chart_item.event.m_level,
+                                            chart_item.event.m_name,
+                                            chart_item.event.m_id.uuid);
                 m_timeline_selection->HighlightTrackEventPersistent(
                     m_track_id, chart_item.event.m_id.uuid);
             }
-            else if(!focus.IsMeasurementMode())
+            else if(!measure.IsMeasurementMode())
             {
                 chart_item.selected = !chart_item.selected;
 
@@ -442,7 +446,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                     ? m_timeline_selection->SelectTrackEvent(m_track_id, chart_item.event.m_id.uuid)
                     : m_timeline_selection->UnselectTrackEvent(m_track_id, chart_item.event.m_id.uuid);
             }
-            focus.RequestLayerFocus(Layer::kNone);
+            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }
 
         // only show one tooltip per render cycle and if no other layer has focus

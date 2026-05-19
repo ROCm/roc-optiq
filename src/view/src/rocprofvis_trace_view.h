@@ -27,6 +27,7 @@ class SettingsManager;
 class EventSearch;
 class SummaryView;
 class Minimap;
+class MeasurementController;
 
 class SystemTraceProjectSettings : public ProjectSetting
 {
@@ -83,6 +84,7 @@ private:
 
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
+    std::shared_ptr<MeasurementController> m_measurement;
     std::shared_ptr<TrackTopology>     m_track_topology;
     std::shared_ptr<RocCustomWidget>   m_tool_bar;
     std::shared_ptr<HSplitContainer>   m_horizontal_split_container;

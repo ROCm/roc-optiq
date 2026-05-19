@@ -28,6 +28,7 @@ namespace View
 
 class TimelineSelection;
 class TimelineView;
+class MeasurementController;
  
 typedef struct ViewCoords
 {
@@ -78,7 +79,8 @@ class TimelineView : public RocWidget
 
 public:
     TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
-                 std::shared_ptr<AnnotationsManager> annotations);
+                 std::shared_ptr<MeasurementController> measurement,
+                 std::shared_ptr<AnnotationsManager>   annotations);
     ~TimelineView();
     virtual void                                     Render() override;
     void                                             Update() override;
@@ -117,6 +119,13 @@ public:
     TimelineArrow& GetArrowLayer();
 
 private:
+    enum class MeasurementRulerDragTarget
+    {
+        kNone,
+        kStart,
+        kEnd
+    };
+
     void UpdateMaxMetaAreaSize(float new_size);
     void CalculateMaxMetaAreaSize();
     void UpdateAllMaxMetaAreaSizes();
@@ -169,6 +178,7 @@ private:
     std::unordered_map<uint64_t, float> m_track_position_y;  // Track index to height
     float                               m_track_height_sum;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
+    std::shared_ptr<MeasurementController> m_measurement;
     std::shared_ptr<AnnotationsManager> m_annotations;
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
@@ -185,6 +195,7 @@ private:
     bool m_dragging_selection_start;
     bool m_dragging_selection_end;
     bool m_is_selecting_region;
+    MeasurementRulerDragTarget m_dragging_measurement_ruler;
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;

@@ -11,6 +11,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_hotkey_manager.h"
+#include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_sidebar.h"
@@ -35,6 +36,7 @@ TraceView::TraceView()
 , m_view_created(false)
 , m_show_minimap_popup(false)
 , m_timeline_selection(nullptr)
+, m_measurement(std::make_shared<MeasurementController>())
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
@@ -274,10 +276,12 @@ TraceView::CreateView()
 {
     m_annotations =
         std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
+    m_measurement          = std::make_shared<MeasurementController>();
     m_timeline_selection    = std::make_shared<TimelineSelection>(m_data_provider);
     m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
-                                                             m_timeline_selection, m_annotations);
+                                                             m_timeline_selection,
+                                                             m_measurement, m_annotations);
     m_event_search          = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_summary_view          = std::make_shared<SummaryView>(m_data_provider);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
@@ -699,7 +703,7 @@ TraceView::RenderToolbar()
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
-    bool measurement_active = TimelineFocusManager::GetInstance().IsMeasurementMode();
+    bool measurement_active = m_measurement->IsMeasurementMode();
 
     // Toolbar Controls
     ImGui::BeginGroup();
@@ -1213,7 +1217,7 @@ SystemTraceProjectSettings::Bookmarks()
 void
 TraceView::RenderMeasurementControls()
 {
-    TimelineFocusManager& fm = TimelineFocusManager::GetInstance();
+    MeasurementController& fm = *m_measurement;
 
     bool active    = fm.IsMeasurementMode();
     bool freehand  = fm.IsFreehandMode();

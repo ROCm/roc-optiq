@@ -19,6 +19,7 @@ namespace View
 class TimelineSelection;
 class FlameTrackItem;
 class TimePixelTransform;
+class MeasurementController;
 
 enum class EventColorMode
 {
@@ -48,10 +49,11 @@ class FlameTrackItem : public TrackItem
     friend FlameTrackProjectSettings;
 
 public:
-    FlameTrackItem(DataProvider&                      dp,
-                   std::shared_ptr<TimelineSelection> timeline_selection,
-                   uint64_t track_id,
-                   std::shared_ptr<TimePixelTransform> time_to_pixel_manager);
+    FlameTrackItem(DataProvider&                          dp,
+                   std::shared_ptr<TimelineSelection>     timeline_selection,
+                   std::shared_ptr<MeasurementController> measurement,
+                   uint64_t                               track_id,
+                   std::shared_ptr<TimePixelTransform>    time_to_pixel_manager);
     ~FlameTrackItem();
 
     bool ReleaseData() override;
@@ -104,6 +106,7 @@ private:
     float                              m_level_height;
     std::vector<uint64_t>              m_selected_event_id;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
+    std::shared_ptr<MeasurementController> m_measurement;
     FlameTrackProjectSettings          m_flame_track_project_settings;
     float                              m_min_level;
     float                              m_max_level;

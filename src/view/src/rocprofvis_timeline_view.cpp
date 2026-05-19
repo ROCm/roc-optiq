@@ -11,6 +11,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_line_track_item.h"
+#include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -35,9 +36,10 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 
-TimelineView::TimelineView(DataProvider&                       dp,
-                           std::shared_ptr<TimelineSelection>  timeline_selection,
-                           std::shared_ptr<AnnotationsManager> annotations)
+TimelineView::TimelineView(DataProvider&                          dp,
+                           std::shared_ptr<TimelineSelection>     timeline_selection,
+                           std::shared_ptr<MeasurementController> measurement,
+                           std::shared_ptr<AnnotationsManager>    annotations)
 : m_data_provider(dp)
 , m_min_y(std::numeric_limits<double>::max())
 , m_max_y(std::numeric_limits<double>::lowest())
@@ -69,6 +71,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_arrow_layer(m_data_provider, timeline_selection)
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
+, m_measurement(measurement)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_annotations(annotations)
 , m_dragged_sticky_id(-1)
@@ -80,6 +83,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_dragging_selection_start(false)
 , m_dragging_selection_end(false)
 , m_is_selecting_region(false)
+, m_dragging_measurement_ruler(MeasurementRulerDragTarget::kNone)
 , m_loading_timer(DEFAULT_LOADING_TIMER)
 {
     // Subscribe to events
@@ -224,7 +228,7 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 void
 TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 {
-    auto& fm = TimelineFocusManager::GetInstance();
+    MeasurementController& fm = *m_measurement;
     const auto& p1 = fm.GetPoint(0);
     const auto& p2 = fm.GetPoint(1);
     if(!p1.valid && !p2.valid) return;
@@ -413,7 +417,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 
         ImGui::Separator();
 
-        TimelineFocusManager& fm = TimelineFocusManager::GetInstance();
+        MeasurementController& fm = *m_measurement;
         if(fm.IsMeasurementMode())
         {
             if(ImGui::MenuItem("Exit Measurement Mode"))
@@ -1622,7 +1626,8 @@ TimelineView::MakeGraphView()
             {
                 // Create FlameChart
                 graph.chart = new FlameTrackItem(
-                    m_data_provider, m_timeline_selection, track_info->id, m_tpt);
+                    m_data_provider, m_timeline_selection, m_measurement,
+                    track_info->id, m_tpt);
                 graph.graph_type = GraphType::TYPE_FLAMECHART;
                 break;
             }
@@ -2124,13 +2129,16 @@ TimelineView::HandleTopSurfaceTouch()
         }
 
         // Measurement mode: ruler hover cursor, drag, and freehand click-to-place
-        auto& fm_touch = TimelineFocusManager::GetInstance();
-        static int dragging_ruler = -1;
+        MeasurementController& fm_touch = *m_measurement;
         if(fm_touch.IsMeasurementMode())
         {
             constexpr float GRAB_RADIUS = 8.0f;
             ImVec2 mouse_pos = ImGui::GetMousePos();
             float  mouse_x   = mouse_pos.x - graph_area_min.x;
+
+            auto drag_target_to_index = [](MeasurementRulerDragTarget target) {
+                return (target == MeasurementRulerDragTarget::kStart) ? 0 : 1;
+            };
 
             if(fm_touch.IsFreehandMode() &&
                fm_touch.GetMeasurementState() == MeasurementState::kComplete)
@@ -2142,35 +2150,42 @@ TimelineView::HandleTopSurfaceTouch()
 
                 bool hovering = std::abs(mouse_x - rx[0]) < GRAB_RADIUS ||
                                 std::abs(mouse_x - rx[1]) < GRAB_RADIUS;
-                if(hovering || dragging_ruler >= 0)
+                if(hovering ||
+                   m_dragging_measurement_ruler != MeasurementRulerDragTarget::kNone)
                     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
 
                 if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
                 {
-                    if(std::abs(mouse_x - rx[0]) < GRAB_RADIUS)      dragging_ruler = 0;
-                    else if(std::abs(mouse_x - rx[1]) < GRAB_RADIUS) dragging_ruler = 1;
-                    else                                              dragging_ruler = -1;
+                    if(std::abs(mouse_x - rx[0]) < GRAB_RADIUS)
+                        m_dragging_measurement_ruler = MeasurementRulerDragTarget::kStart;
+                    else if(std::abs(mouse_x - rx[1]) < GRAB_RADIUS)
+                        m_dragging_measurement_ruler = MeasurementRulerDragTarget::kEnd;
+                    else
+                        m_dragging_measurement_ruler = MeasurementRulerDragTarget::kNone;
                 }
 
-                if(dragging_ruler >= 0 && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
+                if(m_dragging_measurement_ruler != MeasurementRulerDragTarget::kNone &&
+                   ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
                 {
                     double      mouse_time = m_tpt->PixelToTime(mouse_x) + m_tpt->GetMinX();
-                    const auto& pt   = fm_touch.GetPoint(dragging_ruler);
+                    int         target_index = drag_target_to_index(m_dragging_measurement_ruler);
+                    const auto& pt           = fm_touch.GetPoint(target_index);
                     double      base = pt.freehand
                                            ? pt.timestamp
-                                           : (fm_touch.GetEdge(dragging_ruler) == MeasureEdge::kStart)
+                                           : (fm_touch.GetEdge(target_index) == MeasureEdge::kStart)
                                                  ? pt.timestamp
                                                  : pt.timestamp + pt.duration;
-                    fm_touch.SetFreehandOffset(dragging_ruler, mouse_time - base);
-                    fm_touch.RequestLayerFocus(Layer::kInteractiveLayer);
+                    fm_touch.SetFreehandOffset(target_index, mouse_time - base);
+                    TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
                 }
             }
 
             if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                dragging_ruler = -1;
+                m_dragging_measurement_ruler = MeasurementRulerDragTarget::kNone;
 
             MeasurementState state = fm_touch.GetMeasurementState();
-            if(fm_touch.IsFreehandMode() && dragging_ruler < 0 &&
+            if(fm_touch.IsFreehandMode() &&
+               m_dragging_measurement_ruler == MeasurementRulerDragTarget::kNone &&
                ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
                (state == MeasurementState::kWaitingForFirst ||
                 state == MeasurementState::kWaitingForSecond ||
@@ -2186,12 +2201,13 @@ TimelineView::HandleTopSurfaceTouch()
                 float  clamped_x  = std::clamp(mouse_x, 0.0f, m_tpt->GetGraphSizeX());
                 double click_time = m_tpt->PixelToTime(clamped_x) + m_tpt->GetMinX();
                 fm_touch.SetFreehandMeasurementPoint(click_time);
-                fm_touch.RequestLayerFocus(Layer::kInteractiveLayer);
+                TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
             }
         }
 
         // Handle drag start — only suppress when actively dragging a measurement ruler
-        bool measurement_blocking = dragging_ruler >= 0;
+        bool measurement_blocking =
+            m_dragging_measurement_ruler != MeasurementRulerDragTarget::kNone;
         if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) &&
            !m_is_selecting_region && !m_can_drag_to_pan && !measurement_blocking)
         {
@@ -2348,7 +2364,7 @@ TimelineView::HandleTopSurfaceTouch()
             // In measurement mode, ESC has a two-stage behavior:
             //  - 1 point placed: clear the partial measurement, stay in mode
             //  - 0 or 2 points: exit measurement mode (preserves complete measurement)
-            TimelineFocusManager& fm_esc = TimelineFocusManager::GetInstance();
+            MeasurementController& fm_esc = *m_measurement;
             if(fm_esc.IsMeasurementMode())
             {
                 if(fm_esc.GetMeasurementState() == MeasurementState::kWaitingForSecond)

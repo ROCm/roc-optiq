@@ -10,7 +10,7 @@
 
 | Version | Release date |
 | ------- | ------------ |
-| [Beta 0.4.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.4.0/index.html) | May 6, 2026 |
+| [Beta 0.4.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.4.0/index.html) | May 19, 2026 |
 | [Beta 0.3.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.3.0/index.html) | March 26, 2026 |
 | [Beta 0.2.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.2.0/index.html) | February 11, 2026 |
 | [Beta 0.1.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.1.0/index.html) | December 10, 2025 |

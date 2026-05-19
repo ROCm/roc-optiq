@@ -238,10 +238,14 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     float            level_height = settings.GetEventLevelHeight();
     const auto&      time_format  = settings.GetUserSettings().unit_settings.time_format;
 
-    constexpr float CURVE_THICK = 2.5f;
-    constexpr float VLINE_THICK = 1.5f;
-    constexpr float LABEL_PAD   = 8.0f;
-    constexpr float LABEL_ROUND = 6.0f;
+    constexpr float CURVE_THICK         = 2.5f;
+    constexpr float VLINE_THICK         = 1.5f;
+    constexpr float LABEL_PAD           = 8.0f;
+    constexpr float LABEL_ROUND         = 6.0f;
+    constexpr float RULER_LABEL_PAD_X   = 4.0f;
+    constexpr float RULER_LABEL_PAD_Y   = 2.0f;
+    constexpr float RULER_LABEL_ROUND   = 3.0f;
+    constexpr float DELTA_LABEL_OFFSET  = 20.0f;
     ImU32 label_bg   = settings.GetColor(Colors::kMeasurementLabelBg);
     ImU32 label_edge = settings.GetColor(Colors::kMeasurementLabelEdge);
     ImU32 label_text = settings.GetColor(Colors::kMeasurementLabelText);
@@ -255,15 +259,16 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     float visible_center_y = m_scroll_position_y +
                              (m_tpt->GetGraphSizeY() - m_ruler_height -
                               ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
-    float label_y = visible_bot - ImGui::CalcTextSize("0").y - 8.0f;
+    float label_y = visible_bot - ImGui::CalcTextSize("0").y - LABEL_PAD;
 
     // Draws a small timestamp label centered on a ruler line
     auto draw_ruler_label = [&](float x, const char* text) {
         ImVec2 sz = ImGui::CalcTextSize(text);
         float  lx = x - sz.x * 0.5f;
-        draw_list->AddRectFilled(ImVec2(lx - 4.0f, label_y - 2.0f),
-                                 ImVec2(lx + sz.x + 4.0f, label_y + sz.y + 2.0f),
-                                 label_bg, 3.0f);
+        draw_list->AddRectFilled(
+            ImVec2(lx - RULER_LABEL_PAD_X, label_y - RULER_LABEL_PAD_Y),
+            ImVec2(lx + sz.x + RULER_LABEL_PAD_X, label_y + sz.y + RULER_LABEL_PAD_Y),
+            label_bg, RULER_LABEL_ROUND);
         draw_list->AddText(ImVec2(lx, label_y), label_text, text);
     };
 
@@ -337,7 +342,7 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     // Delta label at midpoint
     double      delta     = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
     std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
-    draw_label((px[0] + px[1]) * 0.5f, line_y + 20.0f, delta_str.c_str());
+    draw_label((px[0] + px[1]) * 0.5f, line_y + DELTA_LABEL_OFFSET, delta_str.c_str());
 }
 
 ImVec2

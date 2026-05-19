@@ -1283,7 +1283,7 @@ TraceView::RenderMeasurementControls()
     ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
     ImGui::TextUnformatted("Mode");
     ImGui::PopStyleColor();
-    ImGui::SameLine();
+    ImGui::SameLine(0.0f, m_settings_manager.GetDefaultStyle().ItemSpacing.x);
 
     const char* mode_label = freehand ? "Anywhere" : "Events";
     ImVec2      mode_size(ImGui::CalcTextSize(mode_label).x +

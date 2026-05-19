@@ -373,7 +373,7 @@ rocprofvis_dm_result_t   Database::FindCachedTableValue(
                                                         rocprofvis_dm_charptr_t* value){
     Database* db = (Database*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    *value = db->CachedTables(node)->GetTableCell(table, id, column); 
+    *value = db->CachedTables(static_cast<uint32_t>(node))->GetTableCell(table, id, column); 
     return kRocProfVisDmResultSuccess;
 }
 
@@ -381,7 +381,7 @@ rocprofvis_dm_result_t   Database::FindCachedTableValue(
 rocprofvis_dm_table_t Database::GetInfoTableHandle(const rocprofvis_dm_database_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t table_name){
     Database* db = (Database*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, nullptr);
-    return db->CachedTables(node)->GetTableHandle(table_name);
+    return db->CachedTables(static_cast<uint32_t>(node))->GetTableHandle(table_name);
 }
 size_t Database::GetInfoTableNumColumns(rocprofvis_dm_table_t object){
     TableCache* table = (TableCache*)object;

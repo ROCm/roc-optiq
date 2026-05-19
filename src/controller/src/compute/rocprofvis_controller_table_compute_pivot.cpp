@@ -10,7 +10,9 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
+#include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -364,9 +366,11 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
                         *length = static_cast<uint32_t>(m_columns[index].m_name.size());
                         result  = kRocProfVisResultSuccess;
                     }
-                    else if(value && length)
+                    else if(value && length && *length > 0)
                     {
-                        strncpy(value, m_columns[index].m_name.c_str(), *length);
+                        const std::string& name = m_columns[index].m_name;
+                        const size_t copy = std::min(name.size(), static_cast<size_t>(*length));
+                        if (copy > 0) std::memcpy(value, name.data(), copy);
                         result = kRocProfVisResultSuccess;
                     }
                 }
@@ -380,9 +384,10 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
                     *length = static_cast<uint32_t>(title.size());
                     result  = kRocProfVisResultSuccess;
                 }
-                else if(value && length)
+                else if(value && length && *length > 0)
                 {
-                    strncpy(value, title.c_str(), *length);
+                    const size_t copy = std::min(title.size(), static_cast<size_t>(*length));
+                    if (copy > 0) std::memcpy(value, title.data(), copy);
                     result = kRocProfVisResultSuccess;
                 }
                 break;

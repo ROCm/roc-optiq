@@ -21,7 +21,7 @@ rocprofvis_dm_result_t EventTrackSlice::AddRecord(rocprofvis_db_record_data_t & 
         void*        record_memory = Allocate(sizeof(EventRecord));
         EventRecord* record        = new(record_memory)
             EventRecord(data.event.id, data.event.timestamp, data.event.duration,
-                        data.event.category, data.event.symbol, data.event.level);
+                        static_cast<rocprofvis_dm_index_t>(data.event.category), static_cast<rocprofvis_dm_index_t>(data.event.symbol), data.event.level);
         m_samples.emplace_back(record);
     }
     catch(std::exception ex)
@@ -130,7 +130,7 @@ rocprofvis_dm_result_t EventTrackSlice::GetRecordGraphLevelAt(const rocprofvis_d
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     ROCPROFVIS_ASSERT_MSG_RETURN(Ctx(), ERROR_TRACK_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
     ROCPROFVIS_ASSERT_MSG_RETURN(Ctx()->Ctx(), ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
-    level = m_samples[index]->EventLevel();
+    level = static_cast<rocprofvis_dm_event_level_t>(m_samples[index]->EventLevel());
     return kRocProfVisDmResultSuccess;
 }
 

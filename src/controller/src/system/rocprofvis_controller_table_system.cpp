@@ -61,7 +61,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
 
         char* fetch_query = nullptr;
         rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
-            db, m_start_ts, m_end_ts,
+            db, static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts),
             static_cast<rocprofvis_db_num_of_tracks_t>(m_tracks.size()),
             m_tracks.data(), m_where.c_str(),  m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), sort_column,
             (rocprofvis_dm_sort_order_t)m_sort_order,
@@ -175,7 +175,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
 
 
 
-            for(uint32_t i = index;
+            for(uint64_t i = index;
                 (result == kRocProfVisResultSuccess) && i < index + num_records; i++)
             {
                 try
@@ -269,7 +269,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
 
             char*                  count_query = nullptr;
             rocprofvis_dm_result_t dm_result   = rocprofvis_db_build_table_query(
-                db, m_start_ts, m_end_ts,
+                db, static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts),
                 static_cast<rocprofvis_db_num_of_tracks_t>(m_tracks.size()),
                 m_tracks.data(), m_where.c_str(), m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), nullptr,
                 (rocprofvis_dm_sort_order_t) m_sort_order,
@@ -388,7 +388,7 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
 
             char* query = nullptr;
             rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
-                db, query_args.m_start_ts, query_args.m_end_ts, (rocprofvis_db_num_of_tracks_t)query_args.m_tracks.size(), query_args.m_tracks.data(), query_args.m_where.c_str(), 
+                db, static_cast<rocprofvis_dm_timestamp_t>(query_args.m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(query_args.m_end_ts), (rocprofvis_db_num_of_tracks_t)query_args.m_tracks.size(), query_args.m_tracks.data(), query_args.m_where.c_str(), 
                 query_args.m_filter.c_str(), query_args.m_group.c_str(), query_args.m_group_cols.c_str(), sort_column, (rocprofvis_dm_sort_order_t)query_args.m_sort_order, 
                 (rocprofvis_dm_num_string_table_filters_t)string_table_filters_ptr.size(), string_table_filters_ptr.data(), 0, 0, false, query_args.m_summary, &query);
             if(dm_result == kRocProfVisDmResultSuccess)
@@ -598,7 +598,7 @@ SystemTable::UnpackArguments(Arguments& args, QueryArguments& out) const
                 if(result == kRocProfVisResultSuccess)
                 {
                     ROCPROFVIS_ASSERT(op_type_uint64 < kRocProfVisDmNumOperation);
-                    tracks.push_back(TABLE_QUERY_PACK_OP_TYPE(op_type_uint64));
+                    tracks.push_back(static_cast<uint32_t>(TABLE_QUERY_PACK_OP_TYPE(op_type_uint64)));
                 }                
             }
         }

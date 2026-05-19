@@ -109,13 +109,13 @@ namespace DataModel
         auto track_column_it = find_if(columns.rbegin(), columns.rend(), [op](MergedColumnDef& cd) {return cd.m_schema_index[op] == Builder::SCHEMA_INDEX_TRACK_ID; });
         ROCPROFVIS_ASSERT_MSG_RETURN(track_column_it != columns.rend(), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
         uint8_t size = ColumnTypeSize(Builder::TRACK_ID_TYPE);
-        uint32_t track = row->Get<uint64_t>(track_column_it->m_offset[op], size);
+        uint32_t track = static_cast<uint32_t>(row->Get<uint64_t>(track_column_it->m_offset[op], size));
         if (!db->IsTrackIndexValid(track))
         {
             track_column_it = std::find_if(columns.rbegin(), columns.rend(),
                 [](MergedColumnDef& cdef) { return cdef.m_name == Builder::STREAM_TRACK_ID_PUBLIC_NAME; });
             ROCPROFVIS_ASSERT_MSG_RETURN(track_column_it != columns.rend(), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
-            track = row->Get<uint64_t>(track_column_it->m_offset[op], size);
+            track = static_cast<uint32_t>(row->Get<uint64_t>(track_column_it->m_offset[op], size));
         }
         ROCPROFVIS_ASSERT_MSG_RETURN(db->IsTrackIndexValid(track), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
         return (DbInstance*)db->TrackPropertiesAt(track)->track_indentifiers.db_instance;
@@ -193,19 +193,19 @@ namespace DataModel
         if (column_index == Builder::SCHEMA_INDEX_NODE_ID)
         {
             numeric_string = true;
-            return db->CachedTables(node_id)->GetTableCellByIndex("Node", value, "id");
+            return db->CachedTables(node_id)->GetTableCellByIndex("Node", static_cast<uint32_t>(value), "id");
         } else
         if (column_index == Builder::SCHEMA_INDEX_CATEGORY || column_index == Builder::SCHEMA_INDEX_CATEGORY_RPD || 
             column_index == Builder::SCHEMA_INDEX_EVENT_NAME || column_index == Builder::SCHEMA_INDEX_EVENT_NAME_RPD)
         {
             if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, node_id, string_index))
             {
-                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, string_index);
+                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, static_cast<uint32_t>(string_index));
             }
         } else
         if (column_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD)
         {
-            return db->StringTableReference().ToString(value);
+            return db->StringTableReference().ToString(static_cast<uint32_t>(value));
         } else
         if (column_index == Builder::SCHEMA_INDEX_STREAM_NAME)
         {
@@ -219,7 +219,7 @@ namespace DataModel
         {
             if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeKernelSymbol, node_id, string_index))
             {
-                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, string_index);
+                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, static_cast<uint32_t>(string_index));
             }
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_ABS_INDEX || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_ABS_INDEX )
@@ -246,11 +246,11 @@ namespace DataModel
         } else 
         if (column_index == Builder::SCHEMA_INDEX_MEM_TYPE)
         {
-            return Builder::IntToTypeEnum(value,Builder::mem_alloc_types);
+            return Builder::IntToTypeEnum(static_cast<int>(value),Builder::mem_alloc_types);
         }else
         if (column_index == Builder::SCHEMA_INDEX_LEVEL)
         {
-            return Builder::IntToTypeEnum(value,Builder::mem_alloc_types);
+            return Builder::IntToTypeEnum(static_cast<int>(value),Builder::mem_alloc_types);
         }
         return nullptr;
     }
@@ -419,7 +419,7 @@ namespace DataModel
             m_aggregation.aggregation_maps[map_index].insert({ value, {} });
             it = m_aggregation.aggregation_maps[map_index].find(value);
             bool numeric_string = false;
-            const char* str =  PackedTable::ConvertSqlStringReference(db, group_by_column_info.m_schema_index[op], value, db_instance->GuidIndex(), numeric_string);
+            const char* str =  PackedTable::ConvertSqlStringReference(db, group_by_column_info.m_schema_index[op], static_cast<uint64_t>(value), db_instance->GuidIndex(), numeric_string);
             if (str == nullptr){
                 if (group_by_column_info.m_type[op] == ColumnType::Double)
                 {
@@ -448,7 +448,7 @@ namespace DataModel
                         value = column_info.m_type[op] == ColumnType::Double ?  r->Get<double>(column_info.m_offset[op]) :  r->Get<uint64_t>(column_info.m_offset[op], agg_size);
                     }
                     bool agg_numeric_string = false;
-                    const char* agg_str =  PackedTable::ConvertSqlStringReference(db, column_info.m_schema_index[op], value, db_instance->GuidIndex(), agg_numeric_string);
+                    const char* agg_str =  PackedTable::ConvertSqlStringReference(db, column_info.m_schema_index[op], static_cast<uint64_t>(value), db_instance->GuidIndex(), agg_numeric_string);
                     if (agg_str == nullptr){
                         if (column_info.m_type[op] == ColumnType::Double)
                         {
@@ -457,7 +457,7 @@ namespace DataModel
                         }
                         else
                         {
-                            it->second.result[param.public_name].numeric.data.u64 = value;
+                            it->second.result[param.public_name].numeric.data.u64 = static_cast<uint64_t>(value);
                             it->second.result[param.public_name].type = NumericUInt64;
                         }
                     }
@@ -576,7 +576,7 @@ namespace DataModel
                         uint64_t string_index = 0;
                         if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, db_instance->GuidIndex(), string_index))
                         {
-                            value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, string_index);
+                            value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, static_cast<uint32_t>(string_index));
                         }
                         
                         sort_values.push_back(value);

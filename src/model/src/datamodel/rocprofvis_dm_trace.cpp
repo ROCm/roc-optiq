@@ -844,25 +844,25 @@ rocprofvis_dm_result_t    Trace::GetPropertyAsHandle(rocprofvis_dm_property_t pr
         case kRPVDMTableHandleByID:
             return GetTableHandle(*(rocprofvis_dm_table_id_t*) &index, *value);
         case kRPVDNodeInfoTableHandleIndexed:
-            return GetInfoTableHandle("Node",index, *value);
+            return GetInfoTableHandle("Node",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDAgentInfoTableHandleIndexed:
-            return GetInfoTableHandle("Agent",index, *value);
+            return GetInfoTableHandle("Agent",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDQueueInfoTableHandleIndexed:
-            return GetInfoTableHandle("Queue",index, *value);
+            return GetInfoTableHandle("Queue",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDProcessInfoTableHandleIndexed:
-            return GetInfoTableHandle("Process",index, *value);
+            return GetInfoTableHandle("Process",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDThreadInfoTableHandleIndexed:
-            return GetInfoTableHandle("Thread",index, *value);
+            return GetInfoTableHandle("Thread",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDStreamInfoTableHandleIndexed:
-            return GetInfoTableHandle("Stream",index, *value);
+            return GetInfoTableHandle("Stream",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDPmcInfoTableHandleIndexed:
-            return GetInfoTableHandle("PMC",index, *value);
+            return GetInfoTableHandle("PMC",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDAgentQueueMappingInfoTableHandleIndexed:
-            return GetInfoTableHandle("AgentToQueue",index, *value);
+            return GetInfoTableHandle("AgentToQueue",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDAgentStreamMappingInfoTableHandleIndexed:
-            return GetInfoTableHandle("AgentToStream",index, *value);
+            return GetInfoTableHandle("AgentToStream",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDStreamQueueMappingInfoTableHandleIndexed:
-            return GetInfoTableHandle("StreamToQueue",index, *value);
+            return GetInfoTableHandle("StreamToQueue",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDMTopologyHandle:
             *value = Topology();
             return kRocProfVisDmResultSuccess;

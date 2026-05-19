@@ -34,7 +34,7 @@ float
 TimePixelTransform::TimeToPixel(double time_ns)
 {
     // The following function uses UI time(normalized to 0)
-    return (time_ns - m_view_time_offset_ns) * m_pixels_per_ns;
+    return static_cast<float>((time_ns - m_view_time_offset_ns) * m_pixels_per_ns);
 }
 
 float

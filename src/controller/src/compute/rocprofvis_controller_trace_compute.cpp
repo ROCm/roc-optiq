@@ -500,7 +500,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 }
                                                 workload->SetObject(kRPVControllerWorkloadKernelIndexed, i, (rocprofvis_handle_t*)kernel);
                                                 uint64_t id = std::stoull(data_store.rows[i][data_store.columns.at(kRPVComputeColumnKernelUUID).value()]);
-                                                kernel_ids.push_back(id);
+                                                kernel_ids.push_back(static_cast<uint32_t>(id));
                                             }
                                         });
                                     }                                   
@@ -511,7 +511,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                         std::optional<double> min_intensity_x;
                                         std::optional<double> max_intensity_y;
                                         std::optional<double> min_intensity_y;
-                                        double uint_data = 0;
+                                        uint64_t uint_data = 0;
                                         for(const uint32_t& kernel_id : kernel_ids)
                                         {
                                             m_query_arguments = { {kRPVComputeParamKernelId, std::to_string(kernel_id)} };

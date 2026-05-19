@@ -209,8 +209,8 @@ namespace DataModel
                             auto s_guid_id = currentSql.substr(pos + 1);
                             if (Database::IsNumber(s_track) && Database::IsNumber(s_guid_id))
                             {
-                                uint32_t track = std::atol(s_track.c_str());
-                                uint32_t guid_id = std::atoll(s_guid_id.c_str());
+                                uint32_t track = static_cast<uint32_t>(std::atol(s_track.c_str()));
+                                uint32_t guid_id = static_cast<uint32_t>(std::atoll(s_guid_id.c_str()));
                                 tracks.insert(track);
                                 queries.push_back({ stmt,track,guid_id });
                             }
@@ -444,7 +444,7 @@ namespace DataModel
             std::string cell;
             if (data.type == NotNumeric)
             {
-                cell = m_merged_table.GetAggregationStringByIndex(data.numeric.data.u64);
+                cell = m_merged_table.GetAggregationStringByIndex(static_cast<uint32_t>(data.numeric.data.u64));
             } else
             if (data.type == NumericUInt64)
             {
@@ -726,13 +726,13 @@ namespace DataModel
                 result = AddAggregatedColumns(false, table);
                 if (kRocProfVisDmResultSuccess == result)
                 {
-                    for (uint32_t row_index = offset; row_index < offset + limit; row_index++)
+                    for (uint64_t row_index = offset; row_index < offset + limit; row_index++)
                     {
                         if (row_index >= m_merged_table.AggregationRowCount())
                             break;
                         rocprofvis_dm_table_row_t row =
                             m_db->BindObject()->FuncAddTableRow(table);
-                        result = AddAggregatedCells(false, row, row_index);
+                        result = AddAggregatedCells(false, row, static_cast<uint32_t>(row_index));
                         if (result != kRocProfVisDmResultSuccess)
                             break;
                     }
@@ -801,11 +801,11 @@ namespace DataModel
                     }
                     else
                     {
-                        for (uint32_t row_index = offset; row_index < offset + limit; row_index++)
+                        for (uint64_t row_index = offset; row_index < offset + limit; row_index++)
                         {
                             if (row_index >= m_merged_table.RowCount())
                                 break;
-                            uint32_t sorted_index = m_merged_table.SortedIndex(row_index);
+                            uint32_t sorted_index = m_merged_table.SortedIndex(static_cast<uint32_t>(row_index));
                             rocprofvis_dm_table_row_t row =
                                 m_db->BindObject()->FuncAddTableRow(table);
                             result = AddTableCells(false, row, sorted_index);
@@ -844,17 +844,17 @@ namespace DataModel
 
                 if (it != Builder::table_view_schema.end())
                 {
-                    table_processor->m_tables[callback_params->track_id]->AddColumn(it->second.public_name, it->second.type, column_index, it->second.index);
+                    table_processor->m_tables[callback_params->track_id]->AddColumn(it->second.public_name, it->second.type, static_cast<uint8_t>(column_index), it->second.index);
                 }
                 db->GetTrackIdentifierIndices(db, column_index, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices);
             }
 
             auto it = Builder::table_view_schema.find(Builder::TRACK_ID_PUBLIC_NAME);
-            table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, column_index, it->second.index); 
+            table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index), it->second.index); 
             if (!table_processor->m_tables[callback_params->track_id]->track_ids_indices.is_pmc_identifier)
             {
                 it = Builder::table_view_schema.find(Builder::STREAM_TRACK_ID_PUBLIC_NAME);
-                table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, column_index, static_cast<uint8_t>(Builder::table_view_schema.size()));
+                table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index), static_cast<uint8_t>(Builder::table_view_schema.size()));
             }
 
         }

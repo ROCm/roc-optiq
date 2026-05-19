@@ -772,7 +772,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
             }
             ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(static_cast<int>(i)));
             ImPlot::PlotBars((*m_kernels)[i].name.c_str(), &(*m_kernels)[i].exec_time_sum,
-                             1, BAR_CHART_THICKNESS, i);
+                             1, BAR_CHART_THICKNESS, static_cast<double>(i));
             if(i == m_hovered_idx)
             {
                 ImPlot::PopColormap();

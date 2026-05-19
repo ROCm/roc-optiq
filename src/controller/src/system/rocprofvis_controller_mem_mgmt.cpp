@@ -153,14 +153,14 @@ MemoryManager::UpdateSizeLimit()
 
     for(auto& instance : s_memory_manager_instances)
     {
-        total_weighted_size += instance->m_trace_weight * instance->m_trace_size;
+        total_weighted_size += static_cast<size_t>(instance->m_trace_weight * instance->m_trace_size);
     }
 
     for(auto& instance : s_memory_manager_instances)
     {
-        size_t size_limit =
+        size_t size_limit = static_cast<size_t>(
             ((instance->m_trace_weight * instance->m_trace_size) / total_weighted_size) *
-                            s_physical_memory_avail;
+                            s_physical_memory_avail);
         {
             std::unique_lock<std::mutex> lock(instance->m_lru_cond_mutex);
             instance->m_lru_size_limit = size_limit;

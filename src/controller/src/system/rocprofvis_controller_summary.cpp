@@ -386,7 +386,7 @@ rocprofvis_result_t Summary::FetchCounterAverage(rocprofvis_dm_trace_t dm_handle
                             rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
                             rocprofvis_dm_table_id_t table_id = 0;
                             char* query = nullptr;
-                            dm_result = rocprofvis_db_build_table_query(db, m_start_ts, m_end_ts, 1, (rocprofvis_db_track_selection_t)&track_id, nullptr, nullptr, 
+                            dm_result = rocprofvis_db_build_table_query(db, static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts), 1, (rocprofvis_db_track_selection_t)&track_id, nullptr, nullptr, 
                                                                         nullptr, nullptr, nullptr, kRPVDMSortOrderAsc, 0, nullptr,  0, 0, false, true, &query);
                             if(dm_result == kRocProfVisDmResultSuccess)
                             {
@@ -530,7 +530,7 @@ rocprofvis_result_t Summary::FetchTopKernels(rocprofvis_dm_trace_t dm_handle, No
             rocprofvis_dm_charptr_t where = where_str.empty() ? nullptr : where_str.c_str();
             std::string sort_column = "total_duration";
             char* query = nullptr;
-            dm_result = rocprofvis_db_build_table_query(db, m_start_ts, m_end_ts, 1, (rocprofvis_db_track_selection_t)op, where, nullptr, nullptr, 
+            dm_result = rocprofvis_db_build_table_query(db, static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts), 1, (rocprofvis_db_track_selection_t)op, where, nullptr, nullptr, 
                                                         nullptr, sort_column.c_str(), kRPVDMSortOrderDesc, 0, nullptr, 0, 0, false, true, &query);
             if(dm_result == kRocProfVisDmResultSuccess)
             {

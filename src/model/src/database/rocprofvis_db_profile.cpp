@@ -257,7 +257,7 @@ int ProfileDatabase::CallBackLoadTrack(void *data, int argc, sqlite3_stmt* stmt,
     track_params.load_id.insert(callback_params->track_id);
     track_params.track_indentifiers.track_id = (rocprofvis_dm_track_id_t)db->NumTracks();
     track_params.track_indentifiers.category = (rocprofvis_dm_track_category_t)db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadCategory);
-    track_params.op = track_params.record_count=db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadOp);
+    track_params.op = static_cast<rocprofvis_dm_op_t>(track_params.record_count=db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadOp));
     track_params.track_indentifiers.process_id = db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadPID);
     track_params.record_count=db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadRecordCount);
     if (track_params.op < kRocProfVisDmNumOperation)
@@ -402,7 +402,7 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
         record.event.timestamp-=db->TraceProperties()->db_inst_start_time[db_instance];
         record.event.category = db->Sqlite3ColumnInt64(func, stmt, azColName, 3);
         record.event.symbol = db->Sqlite3ColumnInt64(func, stmt, azColName, 4);
-        record.event.level   = db->Sqlite3ColumnInt64(func, stmt, azColName, 9);
+        record.event.level   = static_cast<rocprofvis_dm_event_level_t>(db->Sqlite3ColumnInt64(func, stmt, azColName, 9));
         if (kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
     }
     else {
@@ -445,7 +445,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
         record.time-=db->TraceProperties()->db_inst_start_time[db_instance];
         record.category_id = db->Sqlite3ColumnInt64(func, stmt, azColName, 7);
         record.symbol_id = db->Sqlite3ColumnInt64(func, stmt, azColName, 8);
-        record.level = db->Sqlite3ColumnInt64(func, stmt, azColName, 9);
+        record.level = static_cast<rocprofvis_dm_event_level_t>(db->Sqlite3ColumnInt64(func, stmt, azColName, 9));
         record.end_time = db->Sqlite3ColumnInt64(func, stmt, azColName, 10);  
         record.end_time-=db->TraceProperties()->db_inst_start_time[db_instance];
         if(kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
@@ -844,7 +844,7 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
                 split_count = 1;
             } else if ((TrackPropertiesAt(i)->record_count / split_count) < SINGLE_THREAD_RECORDS_COUNT_LIMIT)
             {
-                split_count = (TrackPropertiesAt(i)->record_count + SINGLE_THREAD_RECORDS_COUNT_LIMIT) / SINGLE_THREAD_RECORDS_COUNT_LIMIT;
+                split_count = static_cast<uint32_t>((TrackPropertiesAt(i)->record_count + SINGLE_THREAD_RECORDS_COUNT_LIMIT) / SINGLE_THREAD_RECORDS_COUNT_LIMIT);
             }
 
         }
@@ -1389,7 +1389,7 @@ bool ProfileDatabase::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end)
 
     if (TABLE_QUERY_UNPACK_OP_TYPE(track) != 0)
     {
-        auto it = TraceProperties()->histogram.lower_bound(start_bucket);
+        auto it = TraceProperties()->histogram.lower_bound(static_cast<uint32_t>(start_bucket));
         while (it != TraceProperties()->histogram.end() && it->first <= end_bucket) {
             if (it->second > 0) {
                 return false;
@@ -1399,7 +1399,7 @@ bool ProfileDatabase::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end)
     }
     else
     {
-        auto it = TrackPropertiesAt(TABLE_QUERY_UNPACK_TRACK_ID(track))->histogram.lower_bound(start_bucket);
+        auto it = TrackPropertiesAt(TABLE_QUERY_UNPACK_TRACK_ID(track))->histogram.lower_bound(static_cast<uint32_t>(start_bucket));
         while (it != TrackPropertiesAt(TABLE_QUERY_UNPACK_TRACK_ID(track))->histogram.end() && it->first <= end_bucket) {
             if (it->second.first > 0) {
                 return false;
@@ -1679,7 +1679,7 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
                 break;
             }
 
-            level = it->level + 1;
+            level = static_cast<uint8_t>(it->level + 1);
             parent_id = ((rocprofvis_dm_event_id_t*)&it->id)->bitfield.event_id;
         }
         it = next_it;
@@ -1833,7 +1833,7 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* /*future*/) 
                 sqlite3_bind_int(stmt, kRpvDbTrackLoadTrackId + 1, p.track_id);
                 sqlite3_bind_int(stmt, kRpvDbTrackLoadCategory + 1, p.category);
                 sqlite3_bind_int(stmt, kRpvDbTrackLoadOp + 1, p.op);
-                sqlite3_bind_int(stmt, kRpvDbTrackLoadRecordCount + 1, p.record_count);
+                sqlite3_bind_int(stmt, kRpvDbTrackLoadRecordCount + 1, static_cast<int>(p.record_count));
                 sqlite3_bind_int64(stmt, kRpvDbTrackLoadMinTs + 1, p.min_ts);
                 sqlite3_bind_int64(stmt, kRpvDbTrackLoadMaxTs + 1, p.max_ts);
                 sqlite3_bind_double(stmt, kRpvDbTrackLoadMinValue + 1, p.min_val);

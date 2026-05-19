@@ -259,7 +259,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                 kRPVDMTrackSubProcessIdUInt64, 0);
                                         if (type == kRPVControllerTrackTypeSamples)
                                         {
-                                            max_ts = end_time;
+                                            max_ts = static_cast<double>(end_time);
                                         }
                                         track->SetDouble(kRPVControllerTrackMinTimestamp,
                                                          0, min_ts);
@@ -516,7 +516,7 @@ rocprofvis_result_t SystemTrace::SaveTrimmedTrace(Future& future, double start, 
                                   rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
                                   if (object2wait)
                                   {
-                                    auto error = rocprofvis_db_trim_save_async(db, start, end, path_str.c_str(), object2wait);
+                                    auto error = rocprofvis_db_trim_save_async(db, static_cast<rocprofvis_dm_timestamp_t>(start), static_cast<rocprofvis_dm_timestamp_t>(end), path_str.c_str(), object2wait);
                                       result = (error == kRocProfVisDmResultSuccess)
                                                    ? kRocProfVisResultSuccess
                                                    : kRocProfVisResultUnknownError;

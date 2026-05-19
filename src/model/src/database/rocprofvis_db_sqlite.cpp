@@ -119,7 +119,7 @@ int
 SqliteDatabase::Sqlite3ColumnInt(void* func, sqlite3_stmt* stmt, char** azColName, int index) {
     if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
     {
-        return GetNullExceptionInt(func, azColName[index]);
+        return static_cast<int>(GetNullExceptionInt(func, azColName[index]));
     }
     else
     {
@@ -141,7 +141,7 @@ double
 SqliteDatabase::Sqlite3ColumnDouble(void* func, sqlite3_stmt* stmt, char** azColName, int index) {
     if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
     {
-        return GetNullExceptionInt(func, azColName[index]);
+        return static_cast<double>(GetNullExceptionInt(func, azColName[index]));
     }
     else
     {

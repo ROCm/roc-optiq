@@ -199,9 +199,9 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
     memact.size= db->Sqlite3ColumnInt64(func, stmt, azColName, 10);
     memact.id = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
     memact.pid = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
-    memact.stream_id = db->Sqlite3ColumnInt(func, stmt, azColName, 4);
-    memact.agent_id = db->Sqlite3ColumnInt(func, stmt, azColName, 2);
-    memact.queue_id = db->Sqlite3ColumnInt(func, stmt, azColName, 3);
+    memact.stream_id = static_cast<uint16_t>(db->Sqlite3ColumnInt(func, stmt, azColName, 4));
+    memact.agent_id = static_cast<uint8_t>(db->Sqlite3ColumnInt(func, stmt, azColName, 2));
+    memact.queue_id = static_cast<uint8_t>(db->Sqlite3ColumnInt(func, stmt, azColName, 3));
     memact.track_id = db->Sqlite3ColumnInt(func, stmt, azColName, 11);
     std::string type_str = db->Sqlite3ColumnText(func, stmt, azColName, 5);
     std::string level_str = db->Sqlite3ColumnText(func, stmt, azColName, 6);
@@ -243,8 +243,8 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
         }
         else
         {
-            memact.agent_id = callback_params->future->GetRuntimeStorageValue(kRPVFutureStorageEventId, (uint64_t)memact.agent_id);
-            memact.track_id = callback_params->future->GetRuntimeStorageValue(kRPVFutureStorageTrackId, (uint64_t)memact.track_id);
+            memact.agent_id = static_cast<uint8_t>(callback_params->future->GetRuntimeStorageValue(kRPVFutureStorageEventId, (uint64_t)memact.agent_id));
+            memact.track_id = static_cast<uint32_t>(callback_params->future->GetRuntimeStorageValue(kRPVFutureStorageTrackId, (uint64_t)memact.track_id));
             db->m_memfree_stream_to_agent[callback_params->db_instance->GuidIndex()][memact.stream_id] = memact.agent_id;
         }
     }
@@ -748,14 +748,14 @@ rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
 
 rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance ){
     TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle("StreamToHw");
-    uint32_t stream_id = TrackPropertiesAt(stream_track_index)->track_indentifiers.id[TRACK_ID_STREAM];
+    uint32_t stream_id = static_cast<uint32_t>(TrackPropertiesAt(stream_track_index)->track_indentifiers.id[TRACK_ID_STREAM]);
 
     for (int ind = 0; ind < table->NumRows(); ind++)
     {
         uint64_t id = std::atoll(table->GetCellByIndex(ind, Builder::STREAM_ID_SERVICE_NAME));
         if (id == stream_id)
         {
-            uint32_t op = std::atoll(table->GetCellByIndex(ind, Builder::OPERATION_SERVICE_NAME));
+            uint32_t op = static_cast<uint32_t>(std::atoll(table->GetCellByIndex(ind, Builder::OPERATION_SERVICE_NAME)));
             std::string agent = table->GetCellByIndex(ind, Builder::AGENT_ID_SERVICE_NAME);
             uint32_t agent_id = 0;
             if (agent.empty() && op == kRocProfVisDmOperationMemoryAllocate)
@@ -768,9 +768,9 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(u
             }
             else
             {
-                agent_id = std::atoll(table->GetCellByIndex(ind, Builder::AGENT_ID_SERVICE_NAME));
+                agent_id = static_cast<uint32_t>(std::atoll(table->GetCellByIndex(ind, Builder::AGENT_ID_SERVICE_NAME)));
             }
-            uint32_t queue_id = std::atoll(table->GetCellByIndex(ind, Builder::QUEUE_ID_SERVICE_NAME));
+            uint32_t queue_id = static_cast<uint32_t>(std::atoll(table->GetCellByIndex(ind, Builder::QUEUE_ID_SERVICE_NAME)));
             uint32_t track;
             if (TrackTracker()->FindTrack(
                 TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op), 
@@ -829,7 +829,7 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instanc
             track_indentifiers.category = kRocProfVisDmNotATrack;
             track_indentifiers.id[TRACK_ID_NODE] = node_id;
             track_indentifiers.id[TRACK_ID_AGENT] = agent_id;
-            track_indentifiers.process_id = pid;
+            track_indentifiers.process_id = static_cast<rocprofvis_dm_track_id_t>(pid);
             track_indentifiers.is_numeric[TRACK_ID_NODE] = true;
             track_indentifiers.is_numeric[TRACK_ID_QUEUE] = true;
             track_indentifiers.tag[TRACK_ID_NODE] = "nodeId";
@@ -1337,7 +1337,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                                 m_event_levels[prop.second][guid_info.first.GuidIndex()][index].level_for_stream);
                             sqlite3_bind_int(
                                 stmt, 4,
-                                m_event_levels[prop.second][guid_info.first.GuidIndex()][index].parent_id);
+                                static_cast<int>(m_event_levels[prop.second][guid_info.first.GuidIndex()][index].parent_id));
                         }, guid_info.first.FileIndex());
                     m_event_levels[prop.second][guid_info.first.GuidIndex()].clear();
                     m_event_levels_id_to_index[prop.second][guid_info.first.GuidIndex()].clear();

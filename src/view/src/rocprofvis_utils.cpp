@@ -10,12 +10,37 @@
 #include <filesystem>
 #include <iomanip>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <string>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
 #endif
+
+namespace
+{
+// Portable, deprecation-safe wrapper around getenv. Returns the value of `name`
+// or an empty string if unset. On MSVC, std::getenv is /W4-deprecated as C4996
+// in favor of _dupenv_s (which copies into a heap buffer the caller must free);
+// on POSIX the std::getenv pointer is used directly. The std::string return
+// hides the platform-specific lifetime so call sites stay simple.
+std::string
+safe_getenv(const char* name)
+{
+    if(name == nullptr) return {};
+#ifdef _WIN32
+    char*  buf      = nullptr;
+    size_t buf_size = 0;
+    if(_dupenv_s(&buf, &buf_size, name) != 0 || buf == nullptr) return {};
+    std::unique_ptr<char, decltype(&std::free)> owner(buf, &std::free);
+    return std::string(owner.get());
+#else
+    const char* value = std::getenv(name);
+    return value ? std::string(value) : std::string();
+#endif
+}
+}  // namespace
 
 std::string
 RocProfVis::View::nanosecond_to_str(double time_point_ns, bool include_units) {
@@ -341,15 +366,16 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
 {
 #ifdef _WIN32
     const char*           app_config_dir_name = "AMD\\ROCm-Optiq";
-    const char*           local_appdata       = std::getenv("LOCALAPPDATA");
-    std::filesystem::path config_dir =
-        local_appdata ? local_appdata : std::filesystem::current_path();
+    const std::string     local_appdata       = safe_getenv("LOCALAPPDATA");
+    std::filesystem::path config_dir          = !local_appdata.empty()
+                                                    ? std::filesystem::path(local_appdata)
+                                                    : std::filesystem::current_path();
 #else
     const char*           app_config_dir_name = "rocm-optiq";
-    const char*           xdg_config          = std::getenv("XDG_CONFIG_HOME");
-    std::filesystem::path config_dir =
-        xdg_config ? xdg_config
-                   : (std::filesystem::path(std::getenv("HOME")) / ".config");
+    const std::string     xdg_config          = safe_getenv("XDG_CONFIG_HOME");
+    std::filesystem::path config_dir          = !xdg_config.empty()
+                                                    ? std::filesystem::path(xdg_config)
+                                                    : (std::filesystem::path(safe_getenv("HOME")) / ".config");
 #endif
     config_dir /= app_config_dir_name;
     if(create_dirs)
@@ -438,18 +464,18 @@ namespace
 bool
 display_looks_forwarded()
 {
-    const char* disp = std::getenv("DISPLAY");
-    if(disp == nullptr || disp[0] == '\0')
+    const std::string disp = safe_getenv("DISPLAY");
+    if(disp.empty())
     {
         return false;
     }
     constexpr const char* kPrefix   = "localhost:";
     constexpr size_t      kPrefixSz = 10;
-    if(std::strncmp(disp, kPrefix, kPrefixSz) != 0)
+    if(disp.compare(0, kPrefixSz, kPrefix) != 0)
     {
         return false;
     }
-    const char* num_begin = disp + kPrefixSz;
+    const char* num_begin = disp.c_str() + kPrefixSz;
     if(!std::isdigit(static_cast<unsigned char>(*num_begin)))
     {
         return false;
@@ -464,9 +490,9 @@ bool
 RocProfVis::View::is_remote_display_session()
 {
     static const bool s_cached = []() {
-        const bool ssh_connection = std::getenv("SSH_CONNECTION") != nullptr;
-        const bool ssh_client     = std::getenv("SSH_CLIENT") != nullptr;
-        const bool ssh_tty        = std::getenv("SSH_TTY") != nullptr;
+        const bool ssh_connection = !safe_getenv("SSH_CONNECTION").empty();
+        const bool ssh_client     = !safe_getenv("SSH_CLIENT").empty();
+        const bool ssh_tty        = !safe_getenv("SSH_TTY").empty();
         const bool forwarded      = display_looks_forwarded();
         return ssh_connection || ssh_client || ssh_tty || forwarded;
     }();

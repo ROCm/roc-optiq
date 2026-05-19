@@ -673,7 +673,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                 ImGui::PushID(static_cast<int>(i));
                 ImGui::SetCursorScreenPos(ImVec2(
                     ImGui::GetWindowPos().x + plot_style.PlotPadding.x,
-                    ImPlot::PlotToPixels(ImPlotPoint(0, i), IMPLOT_AUTO, IMPLOT_AUTO).y -
+                    ImPlot::PlotToPixels(ImPlotPoint(0, static_cast<double>(i)), IMPLOT_AUTO, IMPLOT_AUTO).y -
                         ImGui::GetFontSize() * 0.5f));
                 ElidedText(m_kernels[i]->name.c_str(),
                            y_axis_width - plot_style.LabelPadding.x,
@@ -687,7 +687,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                 const ImU64 bar_value = static_cast<ImU64>(
                     m_kernels[i]->dispatch_metrics[m_kernel_bar.selected_metric]);
                 ImPlot::PlotBars(m_kernels[i]->name.c_str(), &bar_value, 1,
-                                 BAR_CHART_THICKNESS, i, ImPlotBarsFlags_Horizontal);
+                                 BAR_CHART_THICKNESS, static_cast<double>(i), ImPlotBarsFlags_Horizontal);
                 if(i == m_hovered_idx)
                 {
                     ImPlot::PopColormap();
@@ -851,7 +851,7 @@ ComputeTopKernels::RenderPlotTooltip(KernelInfo::DispatchMetric metric,
                     ImGui::Text(
                         "%s: %s", DISPLAY_STRING_METRICS[metric],
                         nanosecond_to_formatted_str(
-                            m_kernels[m_hovered_idx.value()]->dispatch_metrics[metric],
+                            static_cast<double>(m_kernels[m_hovered_idx.value()]->dispatch_metrics[metric]),
                             time_format, true)
                             .c_str());
                     break;

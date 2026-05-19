@@ -138,7 +138,7 @@ bool NextTest(const char* message)
         char ch;
         printf("\x1b[0m%s:", message);
         while (true) {
-            ch = _getch();
+            ch = static_cast<char>(_getch());
             if (ch == 27 || ch == 13) break;
         }
         printf("\n");
@@ -154,7 +154,7 @@ int main(int argc, char** argv)
 {
     if (ParseArguments(argc, argv))
     {
-        std::srand(std::time(nullptr));
+        std::srand(static_cast<unsigned int>(std::time(nullptr)));
         PrintHeader("Create trace");
         rocprofvis_dm_trace_t trace = rocprofvis_dm_create_trace();
         if (nullptr != trace) 

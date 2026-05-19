@@ -153,8 +153,8 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                         )
                                     {
                                         FlowControl* flow_control = new FlowControl(
-                                            id, start_timestamp, end_timestamp, track_id,
-                                            level,
+                                            id, start_timestamp, end_timestamp, static_cast<uint32_t>(track_id),
+                                            static_cast<uint32_t>(level),
                                             dm_event_id.bitfield.event_op ==
                                                         kRocProfVisDmOperationLaunch ||
                                             dm_event_id.bitfield.event_op ==

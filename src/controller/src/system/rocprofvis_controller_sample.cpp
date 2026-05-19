@@ -52,7 +52,7 @@ rocprofvis_result_t Sample::GetUInt64(rocprofvis_property_t property, uint64_t i
             }
             case kRPVControllerSampleId:
             {
-                *value = m_timestamp;
+                *value = static_cast<uint64_t>(m_timestamp);
                 result = kRocProfVisResultSuccess;
                 break;
             }

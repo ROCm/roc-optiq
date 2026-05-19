@@ -462,8 +462,8 @@ std::shared_mutex* SegmentTimeline::GetMutex() {
 
 rocprofvis_result_t SegmentTimeline::Remove(Segment* target)
 { 
-    int segment_index =
-        (target->GetStartTimestamp() - m_segment_start_time) / m_segment_duration;
+    int segment_index = static_cast<int>(
+        (target->GetStartTimestamp() - m_segment_start_time) / m_segment_duration);
     SetValid(segment_index, false);
     m_segments.erase(target->GetTimelineIterator());
 

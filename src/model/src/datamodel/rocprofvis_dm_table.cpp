@@ -148,7 +148,7 @@ rocprofvis_dm_result_t  Table::GetPropertyAsHandle(rocprofvis_dm_property_t prop
 
 
 InfoTable::InfoTable(Trace* ctx, uint32_t id,  rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t name, rocprofvis_dm_table_t handle) :
-    m_ctx(ctx), m_node(node), m_id(id), m_name(name), m_handle(handle) {
+    m_ctx(ctx), m_node(static_cast<uint32_t>(node)), m_id(id), m_name(name), m_handle(handle) {
     size_t num_rows = m_ctx->BindingInfo()->FuncGetInfoTableNumRows(m_handle);
     for (int i = 0; i < num_rows; i++)
     {

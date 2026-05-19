@@ -293,7 +293,7 @@ namespace DataModel
 		result.reserve(temp.length());
 		for (unsigned char c : temp) {
           if (std::isalnum(c)) {
-				result += std::tolower(c);
+				result += static_cast<char>(std::tolower(c));
 			} else {
 				result += '_';
 			}
@@ -337,7 +337,7 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 
 				std::transform(value_name.begin(), value_name.end(),
 					value_name.begin(),
-					[](unsigned char c){ return std::tolower(c); });
+					[](unsigned char c) -> char { return static_cast<char>(std::tolower(c)); });
 
 				metric_selectors.emplace_back(metric_id, value_name);
 			}
@@ -352,7 +352,7 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 
 			std::transform(order.begin(), order.end(),
 				order.begin(),
-				[](unsigned char c){ return std::toupper(c); });
+				[](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
 
 			sort_order = (order == "ASC") ? "ASC" : "DESC";
 		}
@@ -777,7 +777,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 					kernel_metrics_matrix_plan = plan;
 					rocprofvis_db_compute_param_t fetch_kernels_params;
 					fetch_kernels_params.param_type = kRPVComputeParamWorkloadId;
-					uint32_t workload_id = plan["workload_id"].getLong();
+					uint32_t workload_id = static_cast<uint32_t>(plan["workload_id"].getLong());
 					if (m_last_matrix_workload_id != workload_id)
 					{
 						std::string workload_id_str = std::to_string(workload_id);
@@ -1149,7 +1149,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				if (n % 2 == 0)
 					s.median = (s.durations[n / 2 - 1] + s.durations[n / 2]) / 2.0;
 				else
-					s.median = s.durations[n / 2];
+					s.median = static_cast<double>(s.durations[n / 2]);
 				rocprofvis_dm_table_row_t row = BindObject()->FuncAddTableRow(table);
 
 				result = BindObject()->FuncAddTableRowCell(row, std::to_string(kernel).c_str());
@@ -1211,7 +1211,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 
 		std::vector<column_data_t> columns;
 
-		uint32_t workload_id = plan["workload_id"].getLong();
+		uint32_t workload_id = static_cast<uint32_t>(plan["workload_id"].getLong());
 
 		if (plan.contains("column_names"))
 		{

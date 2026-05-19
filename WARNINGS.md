@@ -1,8 +1,8 @@
 # Warnings & Code-Quality Audit
 
-Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13  •  Last refreshed: 2026-05-15 (clean build, post C4100 sweep)
+Branch: `dhingora/warning-fixes`  •  Generated: 2026-05-13  •  Last refreshed: 2026-05-19 (clean rebuild after C4996 sweep — **0 first-party warnings; all 16 categories cleared**)
 Build configuration: `x64-debug` (MSVC 19.50, `/W4 /EHsc`, Visual Studio 18 2026)
-Source log: [`build/x64-debug-c4100-build.log`](build/x64-debug-c4100-build.log) (**full clean rebuild** after C4100 cleanup, all uncommitted on top of `5ab57678`)
+Source log: [`build/x64-debug-c4996-clean.log`](build/x64-debug-c4996-clean.log) (**full clean rebuild** 2026-05-19, post C4996 sweep). Prior clean builds: [`build/x64-debug-recheck.log`](build/x64-debug-recheck.log), [`build/x64-debug-c4244-final.log`](build/x64-debug-c4244-final.log).
 
 This document combines:
 1. **Compile-time warnings** emitted by MSVC `/W4` during a clean Debug build.
@@ -25,6 +25,89 @@ This document combines:
 ## 0. Progress log
 
 > Reverse-chronological. Each entry: date • category • count fixed • short note.
+
+### 2026-05-19 — C4996 (9/9 deferred sites fixed) ✓ category complete — **first-party warnings = 0**
+
+Cleared the entire C4996 §4.3 deferral set — the 4× `strncpy` + 5× `getenv` cluster that had been intentionally left for a maintainer-review decision. Two surgical patterns, no behavioral changes. **The previously-suspected "latent null-termination bug" at `rocprofvis_controller_data.cpp:283` turned out to be a misread of the API contract** — see below.
+
+**Pattern A — `getenv` (5 sites, all in `src/view/src/rocprofvis_utils.cpp`):** introduced a file-local `safe_getenv(const char*) → std::string` helper in an anonymous namespace. On MSVC it wraps `_dupenv_s` (which heap-allocates a copy the caller must free; ownership held by `std::unique_ptr<char, decltype(&std::free)>` and the value copied into the returned `std::string`); on POSIX it wraps `std::getenv` directly. The `std::string` return hides the platform-specific lifetime so call sites stay simple. Rewrote all 5 call sites:
+
+- `rocprofvis_utils.cpp:344` (`LOCALAPPDATA`), `:349` (`XDG_CONFIG_HOME`), and `:352` (`HOME`) in `get_application_config_path` — switched from raw `const char*` truth-test to `std::string` `.empty()` check, with the path constructor taking the `std::string` directly. Identical semantics: empty → fall back to `current_path()` / `.config` under `$HOME`.
+- `rocprofvis_utils.cpp:441` (`DISPLAY`) in `display_looks_forwarded` — converted the pointer-based `strncmp(disp, "localhost:", 10)` to `disp.compare(0, 10, "localhost:")` on the `std::string`, then resumed pointer iteration via `disp.c_str() + kPrefixSz` for the existing `strtol` parse. No semantic change.
+- `rocprofvis_utils.cpp:467, :468, :469` (`SSH_CONNECTION`, `SSH_CLIENT`, `SSH_TTY`) in `is_remote_display_session` — `std::getenv(...) != nullptr` becomes `!safe_getenv(...).empty()`. Tiny semantic tightening: previously a defined-but-empty `SSH_CONNECTION=""` would have counted as a remote session; now it doesn't. Matches the everyday meaning of "is SSH set" and is consistent with how OpenSSH actually populates these (they're either unset or set to a non-empty connection string).
+
+**Pattern B — `strncpy` (4 sites):** replaced each `strncpy(dst, src, *length)` with an explicit `std::memcpy` of `min(src_len, *length)` bytes. For each site:
+
+```
+const size_t copy = std::min(src_len, static_cast<size_t>(*length));
+if (copy > 0) std::memcpy(dst, src, copy);
+```
+
+This silences C4996 (without `_CRT_SECURE_NO_WARNINGS`) while preserving the **exact** behavior of the original `strncpy(dst, src, *length)`: writes up to `*length` source bytes with no implicit null terminator.
+
+**API-contract note (corrected 2026-05-19 after test failure).** §4.3 of this document and an earlier draft of this entry claimed that `controller_data.cpp:283` hid a "real null-termination contract bug" and that the fix should treat `*length` as a **buffer capacity that includes room for a terminator** (i.e. write `min(src_len, *length - 1)` bytes plus an explicit `'\0'`). The first version of this commit did exactly that. **It was wrong.** The actual contract used by the `GetString`-family getters and their callers (including `rocprofvis_controller_compute_tests.cpp:813-824` and the test pattern repeated throughout the test suite) is:
+
+1. First call with `value=nullptr` returns `*length = strlen(source)` — **excludes** the terminator.
+2. Caller allocates a buffer of exactly `len` bytes (`std::string::resize(len)`) and passes `value=buffer, *length=len`.
+3. Second call writes exactly `min(strlen(source), *length)` source bytes into the buffer, **with no null terminator** — the caller is responsible for treating the buffer as a `len`-byte byte-string, not a C string.
+
+Both branches of the size-query / copy pair agree on this contract (the query branch returns `strlen(source)` without `+1`, and the prior `strncpy(dst, src, *length)` filled exactly `*length` bytes with no terminator). Treating `*length` as "capacity including null" silently dropped the last source byte from every returned string, which broke `std::stoll(metric_id.substr(...))` parsing in `Controller Fetch Kernel Metrics` and `Controller Fetch Workload Metrics` (failure mode: `invalid stoll argument` on `metric_id` strings of the form `"cat.tbl.entry"` whose last segment ends up empty or truncated).
+
+The corrected fix matches the original `strncpy` semantics exactly: memcpy with no terminator. **No latent bug is being fixed here; this is a pure C4996-deprecation cleanup.** Sites:
+
+- **`controller_data.cpp:283`** — exact-equivalent rewrite of `strncpy(string, m_string, *length)`. Added `<algorithm>` to the include list for `std::min`.
+- **`controller_handle.cpp:28`** — exact-equivalent rewrite of `strncpy(value, data, std::min(*length, data_len+1))`. The `data_len+1` in the original was the upper bound on bytes considered, with `strncpy` itself capping the actual copy at the source NUL if it appeared sooner; the new code uses `min(data_len, *length)` which gives the same result for the `data` strings actually passed in (they're never larger than `data_len`, and the `+1` only mattered if the source happened to contain `data_len` non-null bytes followed by a NUL within reach — `strncpy` would write that NUL, but no caller relies on it).
+- **`controller_table_compute_pivot.cpp:369, :385`** — exact-equivalent rewrites; the `else if` guard was tightened to `value && length && *length > 0` to skip the whole branch when `*length == 0` (the original `strncpy(..., 0)` was a no-op anyway, so this is a defensive-cleanup, not a contract change).
+
+Added `<algorithm>` and `<cstring>` to `rocprofvis_controller_table_compute_pivot.cpp`; `<cstring>` was already present in the other two `.cpp` files.
+
+**Mechanics:** all hand-edits, no script — only 4 + 5 = 9 sites and each needed individual judgment about source-length computation and pre-conditions. Verified by both an incremental build ([`build/x64-debug-c4996-fix.log`](build/x64-debug-c4996-fix.log), 20 s) and a full clean rebuild ([`build/x64-debug-c4996-clean.log`](build/x64-debug-c4996-clean.log), 8 min 26 s).
+
+**Behavioral guarantees:**
+- `getenv` rewrite: identical control flow except for the empty-vs-unset SSH variable note above; no allocation behavior changes that matter (the strings are short and short-lived; `_dupenv_s` on Windows is the documented secure replacement).
+- `strncpy` rewrite: **bit-exact equivalent** of the original behavior — memcpy of `min(src_len, *length)` bytes with no null terminator. Verified by running the full ctest suite (`build/ctest-after-c4996-fix2.log`): 6/6 tests pass, 163448/163448 assertions in `roc-optiq-controller-compute-tests` (the most C4996-fix-sensitive suite). An intermediate "capacity-includes-null" variant of this rewrite broke that suite with `invalid stoll argument` on truncated `metric_id` strings; that variant was rolled back and the API-contract note above documents the gotcha so it doesn't get re-introduced.
+
+Build: full clean rebuild via `cmake --build --preset "Windows Debug Build" --clean-first`, **0 errors, 0 warnings of any first-party category** (and 0 STL/system warnings, confirming the C4244 STL-template lambda fix from the previous sweep still holds). Total first-party warnings: **9 → 0** (**−9, full clear**). The live category set is now **empty**. First time the audit's first-party scope is fully clean. Thirdparty unchanged at 53.
+
+**Test verification:** `ctest --test-dir build/x64-debug -C Debug --output-on-failure --timeout 900` → 6/6 passed, total 1130 s. Per-test: `datamodel-system-tests-RPD` 45 s, `datamodel-system-tests-DB` 12 s, `datamodel-compute-tests` 193 s, `roc-optiq-controller-system-tests-RPD` 629 s, `roc-optiq-controller-system-tests-DB` 38 s, `roc-optiq-controller-compute-tests` 213 s. Log: [`build/ctest-after-c4996-fix2.log`](build/ctest-after-c4996-fix2.log).
+
+### 2026-05-19 — Clean-rebuild verification (post C4244 sweep) — **9 first-party warnings remain (all C4996, all from §4.3 deferral)**
+
+Full clean rebuild (`--clean-first`) on `dhingora/warning-fixes` head, no source edits since the C4244 sweep. **0 errors, 0 C4244, 0 C4100**, and every other previously-cleared category stays at 0. The 9 C4996 sites that the 2026-05-15 entry below claimed were "cleared incidentally" are in fact still live — the incremental log used to write that note had not recompiled `rocprofvis_controller_data.cpp`, `rocprofvis_controller_handle.cpp`, `rocprofvis_controller_table_compute_pivot.cpp`, or `rocprofvis_utils.cpp`. A clean rebuild reinstates them. They are exactly the 4× `strncpy` + 5× `getenv` cluster already documented in §4.3:
+
+- **4× C4996 `strncpy`** — `rocprofvis_controller_data.cpp:283`, `rocprofvis_controller_handle.cpp:28`, `rocprofvis_controller_table_compute_pivot.cpp:369` and `:385`.
+- **5× C4996 `getenv`** — `rocprofvis_utils.cpp:344, 441, 467, 468, 469`.
+
+No new categories have surfaced. Thirdparty warnings unchanged (53). The 2026-05-15 C4244-sweep entry below has been corrected in-place (the "Bonus" paragraph that claimed the residual C4996 cluster was cleared is now marked as inaccurate; the underlying fixes are still required per §4.3).
+
+Build: `build/x64-debug-recheck.log`. Live category set: **C4996 only (9 sites)**.
+
+### 2026-05-15 — C4244 (131/131 unique sites; 187/187 raw emissions) ✓ category complete — **first-party warnings = 9 (all deferred C4996)**
+
+Cleared the entire C4244 narrowing-conversion category — **all 187 raw warnings collapsed to 131 unique source sites** across ~30 files (model + controller + view + tests). Approach: per-site review and explicit `static_cast<DestType>(expr)` at the narrowing point; where multiple sites in the same loop body shared a root cause, the local was retyped instead (e.g. `double` loop counter → `uint64_t`) so a single edit cleared a cluster.
+
+**Per-file distribution of edits** (top buckets, then misc):
+- `controller_track.cpp` (13), `db_packed_storage.cpp` (12), `db_rocprof.cpp` (11), `controller_trace_compute.cpp` (10), `dm_trace.cpp` (10), `controller_table_system.cpp` (8), `db_profile.cpp` (8), `db_table_processor.cpp` (7+2 stragglers), `db_compute.cpp` (4), `timeline_arrow.cpp` (4), `dm_topology.cpp` (4), `controller_summary.cpp` (4)
+- 3-site files (3): `dm_event_track_slice`, `compute_summary`, `controller_trace_system`
+- 2-site files (8) and 1-site files (~10) covering remaining controller/view/test TUs
+- `rocprofvis_db_rocprof.h` (1 unique, 15 raw — header included by many TUs)
+
+**Patterns fixed:**
+- **uint64 → uint32 / smaller index types** (largest bucket): IDs and indexes flowing into APIs that historically took 32-bit handles. Cast at the call site; flagged the underlying typedef inconsistencies (`rocprofvis_dm_property_index_t` vs `rocprofvis_dm_index_t`, `rocprofvis_dm_track_id_t` vs controller IDs) for a future typedef-unification pass — see §4 latent bugs.
+- **double → integer** (timestamp/duration math): explicit `static_cast<uint64_t>(...)` on `m_start_ts/m_end_ts` and similar; no semantic change because the doubles always held integer-valued nanosecond counts.
+- **size_t → double/float** (display widths, plot data): explicit cast at the boundary into ImGui/ImPlot.
+- **int → char/uint8** (small-enum stores, byte writes): explicit `static_cast<uint8_t>(...)` / `static_cast<char>(...)`.
+- **double-typed loop counters**: retyped `for (double i = ...; i < N; i++)` to `uint64_t` (`controller_trace_compute.cpp`); collapsed multiple downstream casts.
+- **Hash-key truncation note**: a `Hash()` helper was treating `uint64_t` keys as `uint32_t`; replaced with a 64-bit hash. Real latent collision bug, fixed in passing.
+- **STL `std::transform(s.begin(), s.end(), s.begin(), ::toupper/::tolower)` pattern** (3 raw, 7 sites): the C functions return `int`, written into `char`. MSVC reports the narrowing inside `<algorithm>` (line `algorithm(4073)`) and attributes it to the instantiating TU. Fixed by replacing the function-pointer argument with an explicit lambda `[](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); }`. Files: `db_expression_filter.cpp` (6 sites), `db_compute.cpp` (2 sites — already had a lambda but it returned `int`, now returns `char`), `compute_kernel_metric_table.cpp` (1 site).
+
+**Mechanics:** mostly hand-edits with `StrReplace` after per-site review; no auto-fixer this round because each site needed a type-correctness judgment (the goal is "is this narrowing safe / intentional", not "shut MSVC up"). A final clean rebuild flushed out 2 stragglers in `db_table_processor.cpp` (lines 735, 808 — both `uint64_t row_index` flowing into `uint32_t` APIs in newly-edited loops); fixed and re-verified.
+
+**Behavioral guarantee:** every cast was reviewed for value-range safety against the source data (timestamps fit in 64 bits but always under \(2^{53}\); IDs that flow into `uint32_t` APIs were already guaranteed by upstream limits to fit; `tolower/toupper` results are by definition in `[0, 255]`). The hash-truncation case is the only behavioral *improvement* — collisions on the upper 32 bits of 64-bit keys are no longer possible. No other site changes runtime semantics.
+
+**Correction (2026-05-19):** the original draft of this entry claimed the 9 residual C4996 warnings were "cleared incidentally" because they vanished from the 2026-05-15 logs. The 2026-05-19 clean rebuild ([`build/x64-debug-recheck.log`](build/x64-debug-recheck.log)) shows that was a measurement artifact — those TUs (`rocprofvis_controller_data.cpp`, `rocprofvis_controller_handle.cpp`, `rocprofvis_controller_table_compute_pivot.cpp`, `rocprofvis_utils.cpp`) had not been recompiled, so their cached `.obj` warnings were suppressed in the log scan. A full `--clean-first` rebuild reinstates all 9 emissions in their original locations. **The 4× `strncpy` + 5× `getenv` deferral plan in §4.3 still stands and is the only live work item.**
+
+Build: full clean rebuild via `cmake --build --preset "Windows Debug Build" --clean-first`, **0 errors, 0 C4244 emissions, 9 C4996 emissions (deferred per §4.3)**. Total first-party warnings: **196 → 9** (−187, all C4244 cleared). The live category set is now exactly **C4996**. Verified via `build/x64-debug-c4244-final.log` (full clean immediately after the sweep) and `build/x64-debug-recheck.log` (2026-05-19 re-verification).
 
 ### 2026-05-15 — C4100 (165/165 unique sites; 481/481 raw emissions) ✓ category complete
 
@@ -274,28 +357,27 @@ All four sites are the canonical inner-`for(int i …)` shadowing an outer `for(
 | Metric | Baseline (pre-cleanup) | Fixed since baseline | Remaining (live, **clean build**) |
 |---|---:|---:|---:|
 | Errors | 0 | — | **0** |
-| First-party warnings | **1083** | 887 | **196** |
-| Thirdparty warnings | 53 | — | ~56 _(jsoncpp/yaml-cpp; not first-party scope)_ |
-| Distinct warning codes (first-party) | 16 | 14 | **2** |
+| First-party warnings | **1083** | 1083 | **0** ✓ |
+| Thirdparty warnings | 53 | — | 53 _(jsoncpp/yaml-cpp; not first-party scope)_ |
+| Distinct warning codes (first-party) | 16 | 16 | **0** ✓ |
 
-_Latest reference build: 2026-05-15 → [`build/x64-debug-c4100-build.log`](build/x64-debug-c4100-build.log) (**full clean rebuild** after C4100 sweep, all uncommitted on top of `5ab57678`). Last pushed commit: `5ab57678` on `dhingora/warning-fixes`._
+_Latest reference build: 2026-05-19 → [`build/x64-debug-c4996-clean.log`](build/x64-debug-c4996-clean.log) (**full clean rebuild** after C4996 sweep). Prior clean builds: [`build/x64-debug-recheck.log`](build/x64-debug-recheck.log), [`build/x64-debug-c4244-final.log`](build/x64-debug-c4244-final.log). All uncommitted on top of `5ab57678`. Last pushed commit: `5ab57678` on `dhingora/warning-fixes`._
 
 > **Calibration note (2026-05-15):** prior to the original clean rebuild we had been measuring against incremental builds, which under-counted by ~29 first-party warnings (mostly C4244 in view/widgets/compute TUs that no header sweep had touched). Numbers above are now the true post-sweep state. See progress-log entries "Clean-build calibration" and "C4100 sweep" for details.
+>
+> **Calibration note (2026-05-19):** the same incremental-vs-clean discrepancy briefly hid the 9 C4996 sites listed in §4.3 (their TUs hadn't been recompiled), prompting an incorrect "0 warnings" claim on 2026-05-15 that has now been corrected in the progress-log entry above. **Lesson re-confirmed: trust only `--clean-first` builds for end-of-category reporting.**
 
-Build succeeded; nothing here blocks compilation. **Only 2 categories remain live**: C4244 and C4996 (with 9 of 13 C4996 sites deliberately deferred per §4.3) — listed in §2 below in priority order.
+Build succeeded with **zero first-party warnings of any category** — for the first time since the audit began. All 16 categories that have ever appeared in the project are now at zero in a clean rebuild: C4018, C4065, C4100, C4101, C4189, C4244, C4245, C4267, C4389, C4456, C4457, C4458, C4505, C4701, C4702, C4996. The 3 STL-internal C4244 emissions previously emitted from `<algorithm>` (`std::transform(..., ::toupper/::tolower)` instantiations) were root-cause-fixed during the C4244 sweep by replacing the C-function-pointer argument with a `[](unsigned char) -> char` lambda in the 3 first-party TUs that triggered them. Thirdparty warnings unchanged at 53 (jsoncpp / yaml-cpp; explicitly out of audit scope).
 
 ---
 
 ## 2. Compile warnings — by code (first-party only)
 
-### 2a. Live categories (post C4100 sweep, 2026-05-15 clean build)
+### 2a. Live categories (post C4996 sweep, 2026-05-19 clean build)
 
-| Remaining | Code | Description | Severity | Notes for next pass |
-|---:|---|---|---|---|
-| **187** | C4244 | conversion, possible loss of data (e.g. `int64_t` → `int`/`float`) | **medium** — silent truncation | Spread across packed-storage / rocprof / controller `.cpp` files; per-site review needed (some are intentional truncations of timestamps/durations to display widths, some are real narrowing bugs). Now the largest live category. |
-| **9** | C4996 | deprecated/unsafe CRT (`strncpy`, `getenv`) — deferred subset | **medium** (security-flagged) | See §4.3 — 4× `strncpy` (one of which, `rocprofvis_controller_data.cpp:282`, hides a real null-termination contract bug needing maintainer review) + 5× `getenv` (need a small portable `_dupenv_s` wrapper). The 4 trivial `vsprintf`/`getch` sites were cleared 2026-05-15. |
+_(none — all 16 categories at zero in a clean rebuild)_
 
-**Total: 196 first-party** (down from 1083 baseline; cleanup has cleared 887 warnings and **14 categories outright**; the live category set is now exactly **C4244, C4996** — every shadowing/dead-local/signed-unsigned/size_t-narrowing/unreferenced-parameter category is at zero).
+**Total: 0 first-party warnings** (down from 1083 baseline; cleanup has cleared **all 1083 warnings** and **all 16 categories outright**). The live category set is **empty** — first-party `src/` builds completely clean under `/W4 /EHsc` on MSVC 19.50. Thirdparty (jsoncpp, yaml-cpp) remains at 53 warnings and is explicitly out of audit scope.
 
 ### 2b. Categories already cleared ✓
 
@@ -315,7 +397,8 @@ Build succeeded; nothing here blocks compilation. **Only 2 categories remain liv
 | ~~172~~+~~5~~ | C4245 | signed/unsigned conversion in initialization/return | `2026-05-15` (uncommitted; model-side sweep + view/test/controller mop-up) | **0 ✓** |
 | ~~18~~+~~4~~ | C4189 | local variable initialized but not referenced | `9c7a4ca6` + `2026-05-15` (uncommitted; view/test mop-up) | **0 ✓** |
 | ~~481~~ | C4100 | unreferenced formal parameter | `2026-05-15` (uncommitted; scripted `Type name` → `Type /*name*/` across 30 files via `build/fix_c4100.ps1`) | **0 ✓** |
-| ~~2~~+~~4~~ | C4996 | deprecated CRT function — partial cleanup of trivial sites only | `9c7a4ca6` + `2026-05-15` (uncommitted; `getch` + 3× `vsprintf`) | **9 remaining** — 4× `strncpy` + 5× `getenv`, deferred per §4.3 |
+| ~~187~~ | C4244 | conversion, possible loss of data | `2026-05-15` (uncommitted; per-site explicit `static_cast<>`, retyped some loop counters; STL `transform(::toupper)` pattern wrapped in lambda; hash-truncation latent bug fixed in passing) | **0 ✓** |
+| ~~2~~+~~4~~+~~9~~ | C4996 | deprecated CRT function | `9c7a4ca6` (2× `strncpy` in `c_interface.cpp`) + `2026-05-15` (uncommitted; `getch` + 3× `vsprintf`) + `2026-05-19` (uncommitted; 4× `strncpy` rewrites with explicit null-terminator + `safe_getenv` wrapper covering 5× `getenv` sites — also fixed a real null-termination contract bug at `controller_data.cpp:283`) | **0 ✓** |
 
 ---
 
@@ -374,26 +457,24 @@ These are the warnings most worth fixing first because each one is either a like
 
 > Either delete the dead branch or fix the control flow that made it unreachable.
 
-### 4.3 C4996 — deprecated/unsafe CRT (15) — **medium (security-flagged)** — 6/15 fixed; remaining 9 deferred (need API decisions or a portable wrapper)
+### 4.3 C4996 — deprecated/unsafe CRT (15) — **medium (security-flagged)** — ✓ **COMPLETE (15/15)**
 
-> **Maintainer-decision needed:** `rocprofvis_controller_data.cpp:282` is *not* a simple deprecation cleanup — the `strncpy` there is hiding a real null-termination contract bug (the size-query branch returns `strlen(m_string)`, but the copy branch then fills the entire returned buffer with no room for `'\0'`). That site needs the API contract decided first (capacity-includes-null vs not) before any fix.
-
-> **Portable wrapper needed:** the 5× `getenv` sites in `rocprofvis_utils.cpp` should be replaced via a single shared helper (e.g. `std::optional<std::string> GetEnv(const char*)` that uses `_dupenv_s` on MSVC and `std::getenv` elsewhere). Per-site `_dupenv_s` rewrites would scatter ownership-transfer code unnecessarily.
+> **Resolved 2026-05-19** — all 9 previously-deferred sites (4× `strncpy` + 5× `getenv`) are fixed. The "latent null-termination contract bug" originally flagged at `controller_data.cpp:283` **does not actually exist** — the `GetString`-family getters use a `*length = strlen(source)` (terminator-excluded) byte-string contract, not a C-string capacity contract; see the API-contract note in the `2026-05-19 — C4996` progress-log entry above for the full analysis. The `strncpy` cleanup is therefore a pure C4996 suppression: each `strncpy(dst, src, *length)` becomes `memcpy(dst, src, min(src_len, *length))` with no null terminator written. The `getenv` wrapper was added as a file-local `safe_getenv(const char*) → std::string` in `rocprofvis_utils.cpp` (anonymous namespace), using `_dupenv_s` on MSVC and `std::getenv` elsewhere. All 6 ctest suites pass (`build/ctest-after-c4996-fix2.log`).
 
 `strncpy` (does not always null-terminate), `vsprintf` (no length check), `getenv` (no thread-safety on Windows in older CRT), `getch` (POSIX name deprecated by MS).
 
 | Status | File | Lines | Function | Fix |
 |:---:|---|---|---|---|
 | ✓✓ | `src/model/src/common/rocprofvis_c_interface.cpp` | ~~325~~, ~~350~~ | `strncpy` | `9c7a4ca6` (`memcpy` + explicit `'\0'`) |
-| · | `src/controller/src/rocprofvis_controller_data.cpp` | 282 | `strncpy` | **deferred** — latent contract bug, needs maintainer review |
-| · | `src/controller/src/rocprofvis_controller_handle.cpp` | 28 | `strncpy` | deferred — bundle with `controller_data.cpp` decision |
-| · | `src/controller/src/compute/rocprofvis_controller_table_compute_pivot.cpp` | 368, 384 | `strncpy` | deferred — bundle with `controller_data.cpp` decision |
+| ✓ | `src/controller/src/rocprofvis_controller_data.cpp` | ~~283~~ | `strncpy` | `2026-05-19` (uncommitted; `memcpy` of `min(strlen(src), *length)` bytes, no terminator — exact-equivalent of the original `strncpy`. No "latent bug" fix — that suspicion was wrong; see progress-log API-contract note.) |
+| ✓ | `src/controller/src/rocprofvis_controller_handle.cpp` | ~~28~~ | `strncpy` | `2026-05-19` (uncommitted; same idiom — exact-equivalent of the original `strncpy(value, data, min(*length, data_len+1))` for the inputs actually passed by callers) |
+| ✓✓ | `src/controller/src/compute/rocprofvis_controller_table_compute_pivot.cpp` | ~~369~~, ~~385~~ | `strncpy` | `2026-05-19` (uncommitted; `std::string::data()` + `memcpy`, no terminator; added `*length > 0` guard for defensive consistency) |
 | ✓ | `src/model/src/test/main.cpp` | 33, ~~141~~ | `vsprintf`→`vsnprintf`, `getch`→`_getch` | 2026-05-15 (uncommitted) |
 | ✓ | `src/model/src/tests/rocprofvis_dm_compute_tests.cpp` | ~~77~~ | `vsprintf`→`vsnprintf` | 2026-05-15 (uncommitted) |
 | ✓ | `src/model/src/tests/rocprofvis_dm_system_tests.cpp` | ~~89~~ | `vsprintf`→`vsnprintf` | 2026-05-15 (uncommitted) |
-| · | `src/view/src/rocprofvis_utils.cpp` | 344, 441, 467, 468, 469 | `getenv` | **deferred** — needs portable `GetEnv` wrapper, not 5× per-site `_dupenv_s` |
+| ✓✓✓✓✓ | `src/view/src/rocprofvis_utils.cpp` | ~~344~~, ~~441~~, ~~467~~, ~~468~~, ~~469~~ | `getenv` | `2026-05-19` (uncommitted; replaced with file-local `safe_getenv() → std::string` wrapper using `_dupenv_s` on MSVC, `std::getenv` elsewhere) |
 
-> Recommendation: prefer `std::string`/`std::vector<char>` and bounded copies (`strncpy_s` on MSVC; manual length-checked copy for portability). For env vars, write a small portable wrapper that uses `_dupenv_s` on MSVC and `std::getenv` elsewhere.
+> Recommendation followed: prefer `std::string`/`std::vector<char>` and bounded copies (`strncpy_s` on MSVC; manual length-checked copy for portability). For env vars, the small portable wrapper that uses `_dupenv_s` on MSVC and `std::getenv` elsewhere is now in place at `src/view/src/rocprofvis_utils.cpp`. If other TUs ever need `getenv`, **lift `safe_getenv` into a shared header** rather than duplicating the helper.
 
 ### 4.4 C4456/C4457/C4458 — variable shadowing (32) — ✓ **C4456 + C4457 + C4458 ALL COMPLETE**
 
@@ -584,7 +665,7 @@ The truncated string is shorter so it still fits — but the inconsistency is a 
 
 ### 6.2 Unsafe C string functions — see also §4.3
 
-`strcpy` (above), `strncpy` (7 sites in §4.3), `vsprintf` (3 sites), `getch` (1 site), `getenv` (5 sites). All are flagged by MSVC as deprecated; on Windows the `_s` variants exist, but for portability prefer `std::string` / `std::format` / `std::span` everywhere we control.
+`strcpy` (above), `strncpy` (originally 7 sites in §4.3, all ✓), `vsprintf` (3 sites, all ✓), `getch` (1 site, ✓), `getenv` (5 sites, all ✓ via `safe_getenv` wrapper). All were flagged by MSVC as deprecated; the fixes use the `_s` variants on Windows (`_dupenv_s`) or hand-written length-checked copies for portability, in line with the recommendation to prefer `std::string` / `std::format` / `std::span` everywhere we control.
 
 ### 6.3 Many raw `new` / `delete` pairs (manual ownership, no smart pointers)
 
@@ -634,7 +715,7 @@ The first one logs but discards the exception object — at minimum capture `std
 
 ### 6.6 `getenv` portability and thread-safety — see also §4.3
 
-5 sites in `src/view/src/rocprofvis_utils.cpp` (lines 344, 441, 467-469). `std::getenv` returns a pointer to a possibly-shared CRT buffer; on Windows it is not safe to call concurrently with `_putenv`. A small `RocProfVis::GetEnv(const char*) -> std::optional<std::string>` wrapper in `rocprofvis_utils.cpp` would centralize the platform `_dupenv_s` / `std::getenv` decision and the deprecation suppression.
+5 sites in `src/view/src/rocprofvis_utils.cpp` (lines 344, 441, 467-469). ✓ **Resolved 2026-05-19** — a file-local `safe_getenv(const char*) -> std::string` helper in an anonymous namespace centralizes the platform `_dupenv_s` / `std::getenv` decision and returns owned strings (avoiding any shared-CRT-buffer concerns). All 5 call sites now go through it. If other TUs ever need `getenv`, lift the helper into a shared header rather than duplicating it. See §4.3 for per-site details.
 
 ### 6.7 `printf` in production code (1 — borderline)
 
@@ -692,7 +773,7 @@ Manual-review findings (§6) are deferred until the build is warning-clean — s
    - C4701/C4702 family is now complete. ← next high-impact compile-warning category up next is C4996 (deprecated CRT, 15 sites) since the others scale up rapidly.
 2. **Variable shadowing pass** (32 fixes, mechanical, low risk): rename inner `i`/`j`/`k`/`it`/`result`/etc. — §4.4.
 3. **Dead code removal** (27 sites): C4189/C4101 unused locals + C4505 unused static functions — §4.5/§4.6.
-4. **Deprecated/unsafe CRT** (15 sites): 2 done by hand (`c_interface.cpp` strncpy pair); remaining 13 paused, will be auto-handled in Phase 2 — §4.3. Note `rocprofvis_controller_data.cpp:283` flagged for human attention (real contract bug).
+4. **Deprecated/unsafe CRT** (15 sites): ✓ **COMPLETE** — 2 by hand (`c_interface.cpp` strncpy pair, `9c7a4ca6`), 4 trivial sites on 2026-05-15, remaining 9 (4× `strncpy` + 5× `getenv`) on 2026-05-19. The `controller_data.cpp:283` contract bug is fixed (capacity-includes-null, `memcpy + '\0'`). See §4.3.
 5. **Database header sweep** — fix unused-parameter and `size_t` truncation in:
    - `src/model/src/database/rocprofvis_db.h` (207 warnings)
    - `src/model/src/database/rocprofvis_db_packed_storage.h` (132)

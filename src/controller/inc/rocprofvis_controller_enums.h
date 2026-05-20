@@ -38,6 +38,10 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultPending = 12,
     // Operation failed as a value is duplicated
     kRocProfVisResultDuplicate = 13,
+    // SSH authentication failed
+    kRocProfVisResultFailedSshCommunication = 14,
+    // SSH communication callback
+    kRocProfVisResultSshCommunicationCallback = 15,
 } rocprofvis_result_t;
 
 /*
@@ -117,6 +121,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeMetricsContainer = 103,
     // Roofline object
     kRPVControllerObjectTypeRoofline = 104,
+    // Roofline object
+    kRPVControllerObjectTypeRemoteConnection = 105,
 #endif
 
 } rocprofvis_controller_object_type_t;
@@ -648,6 +654,43 @@ typedef enum rocprofvis_controller_table_type_t
     kRPVControllerTableTypeSummaryKernelInstances = 0xF0000003,
 } rocprofvis_controller_table_type_t;
 
+
+typedef enum rocprofvis_controller_remote_param_type_t
+{
+    kRPVControllerRemoteTypeHost                 = 0xF1000000,
+    kRPVControllerRemoteTypeUser                 = 0xF1000001,
+    kRPVControllerRemoteTypePort                 = 0xF1000002,
+    kRPVControllerRemoteTypePassword             = 0xF1000003,
+    kRPVControllerRemoteTypeKeyPath              = 0xF1000004,
+    kRPVControllerRemoteTypeCommand              = 0xF1000005,
+    kRPVControllerRemoteTypeFilePathSrc          = 0xF1000006,
+    kRPVControllerRemoteTypeFilePathDst          = 0xF1000007,
+    kRPVControllerRemoteTypeDirection            = 0xF1000008,
+    kRPVControllerRemoteTypeKeyPassphrase        = 0xF1000009,
+
+} rocprofvis_controller_remote_param_type_t;
+
+typedef enum rocprofvis_controller_user_prompt_type_t
+{
+    kRPVControllerUserPromptTypeGeneric          = 0xF2000000,
+    kRPVControllerUserPromptTypeHostKey          = 0xF2000001,
+} rocprofvis_controller_user_prompt_type_t;
+
+typedef enum rocprofvis_controller_user_response_t
+{
+    kRPVControllerUserNumResponses               = 0xF3000000,
+    kRPVControllerUserResponseIndexed            = 0xF3000001,
+} rocprofvis_controller_user_response_t;
+
+typedef enum rocprofvis_controller_remote_callback_t
+{
+    kRPVControllerSshCallbackIdle,
+    kRPVControllerSshCallbackAuthRequest,
+    kRPVControllerSshCallbackExecuteStdOut,
+    kRPVControllerSshCallbackDownloadSarted,
+    kRPVControllerSshCallbackDownloadProgress
+} rocprofvis_controller_remote_callback_t;
+
 /*
  * Properties for a future object
  */
@@ -660,6 +703,42 @@ typedef enum rocprofvis_controller_future_properties_t : uint32_t
     kRPVControllerFutureProgressPercentage,
     // Progress message
     kRPVControllerFutureProgressMessage,
+    // Callback from remote back end to UI
+    kRPVControllerFutureRemoteCallbackType,
+    // User prompt type
+    kRPVControllerFutureUserPromptType,
+    // User generic prompt title
+    kRPVControllerFutureUserGenericPromptName,
+    // User generic prompt instruction
+    kRPVControllerFutureUserGenericPromptInstruction,
+    // User generic prompt instruction
+    kRPVControllerFutureUserGenericNumPrompts,
+    // User generic prompt text
+    kRPVControllerFutureUserGenericPromptTextIndexed,
+    // User generic prompt echo (hide prompt)
+    kRPVControllerFutureUserGenericPromptEchoIndexed,
+    // User host key prompt host
+    kRPVControllerFutureUserHostKeyPromptHost,
+    // User host key prompt port
+    kRPVControllerFutureUserHostKeyPromptPort,
+    // User host key prompt fingerprint
+    kRPVControllerFutureUserHostKeyPromptFinderprint,
+    // User host key prompt key encryption type
+    kRPVControllerFutureUserHostKeyPromptEncryptType,
+    // User host key prompt key state
+    kRPVControllerFutureUserHostKeyPromptState,
+    // Remote execute std out
+    kRPVControllerFutureRemoteExecuteStdOut,
+    // Remote file name
+    kRPVControllerFutureRemoteFileName,
+    // Remote file size
+    kRPVControllerFutureRemoteFileSize,
+    // Remote file time
+    kRPVControllerFutureRemoteFileTime,
+    // Remote downloaded file bytes
+    kRPVControllerFutureRemoteDownloaded,
+    // Remote last error
+    kRPVControllerFutureRemoteLastError,
     __kRPVControllerFuturePropertiesLast
 } rocprofvis_controller_future_properties_t;
 
@@ -828,6 +907,16 @@ typedef enum rocprofvis_event_data_category_enum_t
     kRocProfVisEventArgumentData,
 
 } rocprofvis_event_data_category_enum_t;
+
+/*
+* Properties for the controller which manages a compute trace.
+*/
+typedef enum rocprofvis_controller_ssh_connection_properties_t : uint32_t
+{
+    __kRPVControllerSshConnectionPropertiesFirst,
+    __kRPVControllerSshConnectionPropertiesLast
+} rocprofvis_controller_ssh_connection_properties_t;
+
 
 #ifdef COMPUTE_UI_SUPPORT
 /*

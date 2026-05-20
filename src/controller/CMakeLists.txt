@@ -23,7 +23,11 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_table.cpp    
     src/rocprofvis_controller.cpp    
     src/rocprofvis_controller_job_system.cpp	
-	src/rocprofvis_controller_analysis.cpp
+    src/remote/rocprofvis_controller_remote.cpp
+    src/remote/rocprofvis_controller_remote_future.cpp
+    src/remote/rocprofvis_controller_ssh_client.cpp
+    src/remote/rocprofvis_controller_ssh_auth_bridge.cpp
+    src/remote/rocprofvis_controller_ssh_known_hosts.cpp
     src/system/rocprofvis_controller_event.cpp
     src/system/rocprofvis_controller_graph.cpp
     src/system/rocprofvis_controller_sample.cpp
@@ -54,12 +58,19 @@ list(APPEND rocprofvis_controller_source_files
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCRYPTO_BACKEND=mbedTLS")
+
 add_library(${TARGET_NAME} ${rocprofvis_controller_source_files})
 
 file(GLOB COMMON_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/mbedtls)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/libssh2)
+target_link_libraries(${TARGET_NAME} PUBLIC libssh2)
+target_link_libraries(${TARGET_NAME} PUBLIC mbedtls)
 
 target_link_libraries(${TARGET_NAME} PUBLIC roc-optiq-core)
 target_link_libraries(${TARGET_NAME} PUBLIC datamodel)

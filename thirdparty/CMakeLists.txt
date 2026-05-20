@@ -11,6 +11,48 @@ set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Disable yaml-cpp tests")
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Disable yaml-cpp tools")
 add_subdirectory(yaml-cpp)
 
+set(BUILD_SHARED_LIBS OFF)
+set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(mbedtls EXCLUDE_FROM_ALL)
+
+
+set(ENABLE_ZLIB_COMPRESSION OFF)
+
+set(BUILD_TESTING OFF)
+set(BUILD_EXAMPLES OFF)
+
+set(CRYPTO_BACKEND mbedTLS CACHE STRING "" FORCE)
+
+set(CMAKE_SKIP_INSTALL_RULES ON)
+set(MBEDTLS_FOUND TRUE)
+set(MBEDTLS_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/mbedtls/include)
+
+set(MBEDCRYPTO_LIBRARY mbedcrypto)
+set(MBEDX509_LIBRARY mbedx509)
+set(MBEDTLS_LIBRARY mbedtls)
+
+set(LIBSSH2_INSTALL OFF CACHE BOOL "" FORCE)
+set(LIBSSH2_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+
+add_subdirectory(libssh2)
+
+
+target_include_directories(libssh2_static PRIVATE
+    ${CMAKE_SOURCE_DIR}/thirdparty/mbedtls/include
+)
+
+
+target_link_libraries(libssh2_static PRIVATE
+    mbedtls
+    mbedx509
+    mbedcrypto
+)
+
+
 add_library(imgui STATIC
     imgui/imgui.cpp
     imgui/imgui_draw.cpp

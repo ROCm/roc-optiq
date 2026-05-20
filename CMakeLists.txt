@@ -19,6 +19,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
+set(BUILD_SHARED_LIBS OFF)
 
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute" ON)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
@@ -105,6 +106,10 @@ set(VIEW_FILES
     src/view/src/rocprofvis_time_to_pixel.cpp
     src/view/src/rocprofvis_minimap.cpp
     src/view/src/rocprofvis_presets.cpp
+    src/view/src/remote/rocprofvis_ssh_uri.cpp
+    src/view/src/remote/rocprofvis_ssh_fetch.cpp
+    src/view/src/remote/rocprofvis_ssh_access.cpp
+    src/view/src/remote/rocprofvis_ssh_auth_modal.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
     src/view/src/widgets/rocprofvis_flex_container.cpp

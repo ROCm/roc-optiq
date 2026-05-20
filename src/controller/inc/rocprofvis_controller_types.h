@@ -38,3 +38,5 @@ typedef rocprofvis_handle_t rocprofvis_controller_workload_t;
 typedef rocprofvis_handle_t rocprofvis_controller_kernel_t;
 typedef rocprofvis_handle_t rocprofvis_controller_metrics_container_t;
 #endif
+typedef rocprofvis_handle_t rocprofvis_controller_connection_t;
+

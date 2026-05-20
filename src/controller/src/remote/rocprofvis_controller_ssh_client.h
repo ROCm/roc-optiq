@@ -108,11 +108,11 @@ namespace Controller
     private:
 
         static bool MethodListed(const char* methods, const char* needle);
-        static std::string SshClient::ExpandTilde(const std::string& p);
+        static std::string ExpandTilde(const std::string& p);
         static bool TryPublicKey(LIBSSH2_SESSION* session, const std::string& user,
             const std::string& priv_path_in, const std::string& passphrase);
-        static bool SshClient::TryAgent(LIBSSH2_SESSION* session, const std::string& user);
-        static std::vector<std::string> SshClient::DefaultKeyPaths();
+        static bool TryAgent(LIBSSH2_SESSION* session, const std::string& user);
+        static std::vector<std::string> DefaultKeyPaths();
         static void KbdIntCallback(const char* name, int name_len,
             const char* instruction, int instruction_len,
             int num_prompts,

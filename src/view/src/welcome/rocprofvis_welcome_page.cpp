@@ -241,12 +241,11 @@ BeginTile(SettingsManager& settings, const char* id, const char* title,
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-    ImFont* tile_font = settings.GetFontManager().GetFont(FontType::kMedLarge);
-    if(tile_font) ImGui::PushFont(tile_font);
+    ImGui::PushFont(NULL, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     ImGui::TextUnformatted(title);
     ImGui::PopStyleColor();
-    if(tile_font) ImGui::PopFont();
+    ImGui::PopFont();
 
     if(subtitle && subtitle[0])
     {
@@ -363,10 +362,9 @@ WelcomePage::RenderHeader(float content_width)
     SettingsManager& settings = SettingsManager::GetInstance();
     const float      font_size = ImGui::GetFontSize();
 
-    ImFont* title_font = settings.GetFontManager().GetFont(FontType::kLarge);
-    if(title_font) ImGui::PushFont(title_font);
+    ImGui::PushFont(NULL, settings.GetFontManager().GetFontSize(FontSize::kLarge));
     ImGui::TextUnformatted("Welcome to ROCm Optiq");
-    if(title_font) ImGui::PopFont();
+    ImGui::PopFont();
 
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + content_width);

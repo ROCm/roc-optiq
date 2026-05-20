@@ -24,23 +24,12 @@ constexpr std::array FONT_AVAILABLE_SIZES = { 9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
                                               19.0f, 20.0f, 21.0f, 22.0f, 23.0f,
                                               25.0f, 27.0f, 29.0f, 31.0f, 35.0f };
 
+// Size offsets applied to the base index to produce kSmall/kMedium/kMedLarge/kLarge.
+static constexpr int kSizeOffsets[FontManager::kNumSizes] = { -1, 0, 1, 2 };
+
 FontManager::FontManager() {}
 
 FontManager::~FontManager() {}
-
-ImFont*
-FontManager::GetIconFontByIndex(int idx)
-{
-    if(idx < 0 || idx >= static_cast<int>(m_all_icon_fonts.size())) return nullptr;
-    return m_all_icon_fonts[idx];
-}
-
-ImFont*
-FontManager::GetFontByIndex(int idx)
-{
-    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return nullptr;
-    return m_all_fonts[idx];
-}
 
 int
 FontManager::GetDPIScaledFontIndex()
@@ -50,43 +39,35 @@ FontManager::GetDPIScaledFontIndex()
     float scaled_size =
         BASE_FONT_SIZE * std::pow(SettingsManager::GetInstance().GetDPI(), DPI_EXPONENT);
 
-    // Find the loaded size closest to the DPI-scaled default.
+    // Find the index of the available size closest to scaled_size.
     int best_index = 0;
-    for(int i = 1; i < m_all_fonts.size(); i++)
+    for(int i = 1; i < static_cast<int>(m_available_sizes.size()); ++i)
     {
-        if(std::abs(m_all_fonts[i]->LegacySize - scaled_size) <
-           std::abs(m_all_fonts[i - 1]->LegacySize - scaled_size))
+        if(std::abs(m_available_sizes[i] - scaled_size) <
+           std::abs(m_available_sizes[i - 1] - scaled_size))
             best_index = i;
     }
-
     return best_index;
 }
 
 void
 FontManager::SetFontSize(int idx)
 {
-    constexpr int num_types = static_cast<int>(FontType::__kLastFont);
+    if(m_available_sizes.empty())
+        return;
+    idx = std::max(0, std::min(idx, static_cast<int>(m_available_sizes.size()) - 1));
 
-    if(num_types == 0 || m_all_fonts.empty()) return;
-    if(idx < 0 || idx >= static_cast<int>(m_all_fonts.size())) return;
-
-    static const int offsets[] = { -1, 0, 1, 2 };
-
-    m_fonts.resize(num_types);
-    m_icon_fonts.resize(num_types);
-
-    for(int i = 0; i < num_types; ++i)
+    for(int i = 0; i < kNumSizes; ++i)
     {
-        int font_idx = idx + offsets[i];
-        font_idx =
-            std::max(0, std::min(font_idx, static_cast<int>(m_all_fonts.size()) - 1));
-        m_fonts[i]      = m_all_fonts[font_idx];
-        m_icon_fonts[i] = m_all_icon_fonts[font_idx];
+        int size_idx = std::max(0, std::min(idx + kSizeOffsets[i],
+                                            static_cast<int>(m_available_sizes.size()) - 1));
+        m_sizes[i] = m_available_sizes[size_idx];
     }
 
-    ImFont* default_font       = m_fonts[static_cast<int>(FontType::kDefault)];
-    ImGui::GetIO().FontDefault = default_font;
-    ImGui::GetStyle()._NextFrameFontSizeBase = default_font->LegacySize;
+    // Set the default font and its base size for the next frame.
+    ImGui::GetIO().FontDefault                   = m_text_font;
+    ImGui::GetStyle()._NextFrameFontSizeBase     = m_sizes[static_cast<int>(FontType::kDefault)];
+
     EventManager::GetInstance()->AddEvent(
         std::make_shared<RocEvent>(static_cast<int>(RocEvents::kFontSizeChanged)));
 }
@@ -95,9 +76,6 @@ bool
 FontManager::Init()
 {
     ImGuiIO& io = ImGui::GetIO();
-    m_fonts.clear();
-
-    const int num_types = static_cast<int>(FontType::__kLastFont);
 
 #ifdef _WIN32
     const char* font_paths[] = {
@@ -148,72 +126,63 @@ FontManager::Init()
         }
     }
 
-    // Prepare storage
-    m_all_fonts.resize(FONT_AVAILABLE_SIZES.size(), nullptr);
-    m_fonts.resize(num_types);
-    m_icon_fonts.resize(num_types);
+    m_available_sizes.assign(FONT_AVAILABLE_SIZES.begin(), FONT_AVAILABLE_SIZES.end());
 
-    ImFontConfig config;
-    config.FontDataOwnedByAtlas = false;
-
-    // Load all font sizes once
-    for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)
+    if(font_path)
     {
-        ImFont* font = nullptr;
-        if(font_path)
-        {
-            font = io.Fonts->AddFontFromFileTTF(font_path, FONT_AVAILABLE_SIZES[sz]);
-        }
-        else
-        {
-            ImFontConfig fallback_config;
-            fallback_config.SizePixels = FONT_AVAILABLE_SIZES[sz];
-            font                       = io.Fonts->AddFontDefault(&fallback_config);
-        }
-        m_all_fonts[sz] = font;
+        m_text_font = io.Fonts->AddFontFromFileTTF(font_path, 0.0f);
+    }
+    else
+    {
+        ImFontConfig fallback_config;
+        fallback_config.SizePixels = BASE_FONT_SIZE;
+        m_text_font                = io.Fonts->AddFontDefault(&fallback_config);
     }
 
-    // Load all icon fonts
-    m_all_icon_fonts.resize(FONT_AVAILABLE_SIZES.size(), nullptr);
+    ImFontConfig icon_config;
+    icon_config.FontDataOwnedByAtlas = false;
+    m_icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
+        &icon_font_compressed_data, icon_font_compressed_size, 0.0f, &icon_config, icon_ranges);
 
-    for(int sz = 0; sz < FONT_AVAILABLE_SIZES.size(); ++sz)
-    {
-        ImFont* icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
-            &icon_font_compressed_data, icon_font_compressed_size,
-            FONT_AVAILABLE_SIZES[sz], &config, icon_ranges);
-        m_all_icon_fonts[sz] = icon_font;
-    }
+    int default_idx = static_cast<int>(std::distance(
+        FONT_AVAILABLE_SIZES.begin(),
+        std::find(FONT_AVAILABLE_SIZES.begin(), FONT_AVAILABLE_SIZES.end(), BASE_FONT_SIZE)));
 
-    // Don't call Build() - ImGui 1.92+ backend handles font atlas building automatically
+    if(default_idx >= static_cast<int>(m_available_sizes.size()))
+        default_idx = 6; // fallback to index of 13.0f
+    SetFontSize(default_idx);
+
+    // Don't call Build() - ImGui 1.92+ backend handles font atlas building automatically.
     return true;
 }
 
-const std::vector<ImFont*>
-FontManager::GetAvailableFonts() const
+const std::vector<float>
+FontManager::GetAvailableSizes() const
 {
-    return m_all_fonts;
+    return m_available_sizes;
 }
 
 ImFont*
 FontManager::GetFont(FontType font_type)
 {
-    if(static_cast<int>(font_type) < 0 ||
-       static_cast<int>(font_type) >= static_cast<int>(FontType::__kLastFont))
+    switch(font_type)
     {
-        return nullptr;  // Invalid font type
+        case FontType::kMainText:
+            return m_text_font;
+        case FontType::kIcon:
+            return m_icon_font;
+        default:
+            return m_text_font;
     }
-    return m_fonts[static_cast<int>(font_type)];
 }
 
-ImFont*
-FontManager::GetIconFont(FontType font_type)
+float
+FontManager::GetFontSize(FontSize font_size) const
 {
-    if(static_cast<int>(font_type) < 0 ||
-       static_cast<int>(font_type) >= static_cast<int>(FontType::__kLastFont))
-    {
-        return nullptr;  // Invalid font type
-    }
-    return m_icon_fonts[static_cast<int>(font_type)];
+    int idx = static_cast<int>(font_size);
+    if(idx < 0 || idx >= kNumSizes)
+        return BASE_FONT_SIZE;
+    return m_sizes[idx];
 }
 
 }  // namespace View

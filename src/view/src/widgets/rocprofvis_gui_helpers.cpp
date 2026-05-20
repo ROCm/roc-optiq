@@ -67,15 +67,17 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
                        LoadingIndicatorCentering centering, float dot_radius,
                        int num_dots, float dot_spacing, float anim_speed)
 {
-    ImVec2 orig_pos = ImGui::GetCursorPos();
-
     if(window_id)
     {
         // Create an overlay child window to display the loading indicator if requested
-        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImVec2 parent_pos = ImGui::GetWindowPos();
+        ImVec2 parent_size = ImGui::GetWindowSize();
+        ImGui::SetNextWindowPos(parent_pos);
+        ImGui::SetNextWindowSize(parent_size);
+
         // set transparent background for the overlay window
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-        ImGui::BeginChild(window_id, ImGui::GetWindowSize(), ImGuiChildFlags_None);
+        ImGui::BeginChild(window_id, parent_size, ImGuiChildFlags_None);
     }
 
     ImVec2 dot_size   = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
@@ -94,7 +96,8 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
 
     if(centering != kCenterNone)
     {
-        ImGui::SetCursorScreenPos(draw_pos);
+        //needed to position dummy in RenderLoadingIndicatorDots()
+        ImGui::SetCursorScreenPos(draw_pos); 
     }
     RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing, color, anim_speed);
 
@@ -102,10 +105,9 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
     {
         ImGui::EndChild();
         ImGui::PopStyleColor();
-        // Restore cursor position in the parent window
-        ImGui::SetCursorPos(orig_pos);
     }
 }
+ 
 
 ImU32
 ApplyAlpha(ImU32 color, float alpha)
@@ -201,7 +203,7 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size, const char* tooltip
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bg_color_hover);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, bg_color_active);
     }
-    ImGui::PushFont(icon_font);
+    ImGui::PushFont(icon_font, 0.0f);
     bool clicked = ImGui::Button(icon, size);
     ImGui::PopFont();
     if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
@@ -248,7 +250,7 @@ InputTextWithClear(const char* id, const char* hint, char* buf,
     ImGui::PopStyleColor();
     if(strlen(buf) > 0)
     {
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, 0.0f);
         if(width >= ImGui::CalcTextSize(ICON_X_CIRCLED).x + 2 * style.FramePadding.x)
         {
             ImGui::SameLine();
@@ -432,7 +434,7 @@ XButton(const char* id, const char * tool_tip_label, SettingsManager* settings)
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           settings->GetColor(Colors::kTransparent));
     ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
-    ImGui::PushFont(settings->GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kIcon), 0.0f);
     if(id && strlen(id) > 0)
     {
         ImGui::PushID(id);
@@ -461,8 +463,9 @@ SectionTitle(const char* text, bool large, SettingsManager* settings)
         settings = &SettingsManager::GetInstance();
     }
 
-    FontType font_type = large ? FontType::kLarge : FontType::kMedLarge;
-    ImGui::PushFont(settings->GetFontManager().GetFont(font_type));
+    FontSize font_size = large ? FontSize::kLarge : FontSize::kMedLarge;
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kDefault),
+                    settings->GetFontManager().GetFontSize(font_size));
     ImGui::SeparatorText(text);
     ImGui::PopFont();
 }

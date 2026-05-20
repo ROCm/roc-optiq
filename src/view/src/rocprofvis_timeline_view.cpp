@@ -39,8 +39,6 @@ TimelineView::TimelineView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotations)
 : m_data_provider(dp)
-, m_min_y(std::numeric_limits<double>::max())
-, m_max_y(std::numeric_limits<double>::lowest())
 , m_scroll_position_y(0.0f)
 , m_content_max_y_scroll(0.0f)
 , m_meta_map_made(false)
@@ -56,6 +54,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_font_changed_token(static_cast<uint64_t>(-1))
 , m_set_view_range_token(static_cast<uint64_t>(-1))
+, m_timeline_time_range_changed_token(static_cast<uint64_t>(-1))
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0.0)
 , m_last_data_req_view_time_offset_ns(0.0)
@@ -140,6 +139,18 @@ TimelineView::TimelineView(DataProvider&                       dp,
     m_navigation_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
 
+    auto time_range_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<TimeRangeSelectionChangedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath() &&
+           m_timeline_selection->HasValidTimeRangeSelection())
+        {
+            m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(evt->GetStartNs(),
+                                                                       evt->GetEndNs());
+        }
+    };
+    m_timeline_time_range_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged), time_range_changed_handler);
+
     m_graphs = std::make_shared<std::vector<TrackGraph>>();
 
     // force initial calculation of flame track label width
@@ -205,13 +216,18 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
                 m_annotations->GetStickyNotes()[i].HandleResize(window_position, m_tpt);
         }
 
+        bool annotation_blocks_timeline_input = false;
+
         // Rendering --> based on added order (old bottom new on top)
         for(size_t i = 0; i < m_annotations->GetStickyNotes().size(); ++i)
         {
             if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
 
-            m_annotations->GetStickyNotes()[i].Render(draw_list, window_position, m_tpt);
+            annotation_blocks_timeline_input |=
+                m_annotations->GetStickyNotes()[i].Render(draw_list, window_position,
+                                                          m_tpt);
         }
+        m_stop_user_interaction |= annotation_blocks_timeline_input;
     }
     m_stop_user_interaction |= movement_drag || movement_resize;
 
@@ -399,14 +415,15 @@ TimelineView::~TimelineView()
                                              m_set_view_range_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), m_navigation_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged),
+        m_timeline_time_range_changed_token);
 }
 
 void
 TimelineView::ResetView()
 {
     // Handles y positioning reset
-    m_min_y             = std::numeric_limits<double>::max();
-    m_max_y             = std::numeric_limits<double>::lowest();
     m_scroll_position_y = 0.0f;
 
     // Handles x positioning reset
@@ -1114,6 +1131,7 @@ TimelineView::RenderTrack(int track_index, bool request_data,
             if(is_visible || track_item->GetDistanceToView() <= m_unload_track_distance)
             {
                 RequestDataIfEmpty(track_item, request_data);
+                track_item->RequestAnalysis();
             }
         }
 
@@ -1555,8 +1573,8 @@ TimelineView::RenderHistogram()
     ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
     float       ruler_width     = m_tpt->GetGraphSizeX();
     float       tick_top        = ruler_pos.y + 2.0f;
-    ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
-    float       label_font_size = font->LegacySize;
+    ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kDefault);
+    float       label_font_size = m_settings.GetFontManager().GetFontSize(FontSize::kSmall);
 
     std::string label =
         nanosecond_to_formatted_str(m_tpt->GetRangeX(), time_format, true) + "gap";
@@ -1867,6 +1885,11 @@ TimelineView::RenderTraceView()
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
     TimelineFocusManager::GetInstance().EvaluateFocusedLayer();
+    if(m_loading_timer.IsExpired() && !m_timeline_selection->HasValidTimeRangeSelection())
+    {
+        m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(m_tpt->GetVMinX(),
+                                                                   m_tpt->GetVMaxX());
+    }
 }
 void
 TimelineView::RenderGraphPoints()

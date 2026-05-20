@@ -67,6 +67,7 @@ private:
     void SendEventHighlightChanged(uint64_t event_id, uint64_t track_id, bool highlighted,
                                    bool all = false);
     void SendTrackSelectionChanged(uint64_t track_id, bool selected);
+    void SendTimeRangeChanged(double start_ts, double end_ts);
 
     DataProvider& m_data_provider;
 

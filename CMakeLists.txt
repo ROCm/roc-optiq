@@ -231,6 +231,7 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static)
 
 if(APPLE)
     set_target_properties(${TARGET_NAME} PROPERTIES

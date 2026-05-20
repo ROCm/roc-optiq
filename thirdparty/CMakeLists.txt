@@ -44,6 +44,8 @@ add_subdirectory(libssh2)
 target_include_directories(libssh2_static PRIVATE
     ${CMAKE_SOURCE_DIR}/thirdparty/mbedtls/include
 )
+target_include_directories(libssh2_static PUBLIC 
+${CMAKE_SOURCE_DIR}/thirdparty/libssh2/include)
 
 
 target_link_libraries(libssh2_static PRIVATE

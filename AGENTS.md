@@ -1,12 +1,22 @@
 # AGENTS.md - ROCm Optiq
 
-The full AI/agent guide for this repo lives at:
+The AI/agent guides for this repo live in `.agents/`:
 
-> [`.agents/AGENTS.md`](./.agents/AGENTS.md)
+> - [`.agents/AGENTS.md`](./.agents/AGENTS.md) - whole-repo + View
+>   layer guide (start here)
+> - [`.agents/CONTROLLER.md`](./.agents/CONTROLLER.md) - deep dive on
+>   `src/controller/` (C ABI, async fetch, memory manager, segment
+>   timeline)
+> - [`.agents/DATABASE.md`](./.agents/DATABASE.md) - deep dive on
+>   `src/model/` (SQLite adapters, query pipeline, packed table,
+>   data model, topology, metadata versioning)
 
 **If you are an AI coding assistant** (Cursor, Codex, Claude Code,
 Copilot agent, etc.), read `.agents/AGENTS.md` in full before making
-non-trivial changes. It is the single source of truth for:
+non-trivial changes. If your change touches `src/controller/`, also
+read `.agents/CONTROLLER.md`. If your change touches `src/model/` (the
+database / data model layer), also read `.agents/DATABASE.md`.
+Together they are the single source of truth for:
 
 - Project identity, build, and repo layout
 - Module boundaries (`app` / `core` / `model` / `controller` / `view`)
@@ -26,7 +36,11 @@ non-trivial changes. It is the single source of truth for:
    (READ THIS FIRST before changing any C++)
 4. [`.agents/AGENTS.md`](./.agents/AGENTS.md) - architecture and reuse
    guide (this is also the agent guide above)
-5. [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md) -
+5. [`.agents/CONTROLLER.md`](./.agents/CONTROLLER.md) - controller
+   deep dive (read when working on `src/controller/`)
+6. [`.agents/DATABASE.md`](./.agents/DATABASE.md) - database / model
+   layer deep dive (read when working on `src/model/`)
+7. [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md) -
    contribution workflow
 
-When `CODING.md` and `.agents/AGENTS.md` disagree, `CODING.md` wins.
+When `CODING.md` and the `.agents/` guides disagree, `CODING.md` wins.

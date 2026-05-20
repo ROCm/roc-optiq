@@ -19,6 +19,20 @@ It pairs with the human-facing docs:
   before changing any C++).
 - `.github/CONTRIBUTING.md` - Contribution workflow.
 
+It also pairs with sibling agent guides under `.agents/`:
+
+- [`.agents/CONTROLLER.md`](./CONTROLLER.md) - controller-layer deep
+  dive (C ABI, async fetch, memory manager, segment timeline). Read
+  this when your change touches `src/controller/`. The brief
+  controller summary in section 5 of this file is the high-level
+  pass; `CONTROLLER.md` is the source of truth.
+- [`.agents/DATABASE.md`](./DATABASE.md) - database / model layer
+  deep dive (SQLite adapters, query pipeline, packed table, data
+  model, topology, metadata versioning, CFFI). Read this when your
+  change touches `src/model/`. The brief model summary in section
+  5 of this file is the high-level pass; `DATABASE.md` is the
+  source of truth.
+
 When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 
 ---
@@ -139,7 +153,11 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 +-- CODING.md             # Coding standards (HARD RULES)
 +-- BUILDING.md           # Per-platform build steps
 +-- README.md             # Public README + UI tour
-\-- AGENTS.md             # This file
++-- AGENTS.md             # Root pointer to .agents/ guides
+\-- .agents/              # AI/agent architecture guides
+    +-- AGENTS.md         # This file: whole-repo + View layer guide
+    +-- CONTROLLER.md     # Controller-layer deep dive
+    \-- DATABASE.md       # Model/database-layer deep dive
 ```
 
 ## 4. Architectural Pillars

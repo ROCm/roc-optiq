@@ -26,7 +26,7 @@ public:
     void Render();
 
 private:
-    void RenderHeader(float content_width);
+    void RenderHeader();
     void RenderStartTile();
     void RenderRecentTile(std::string& recent_file_to_open);
     void RenderResourcesTile();

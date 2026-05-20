@@ -2259,7 +2259,7 @@ DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
             event_info->call_stack_info.clear();
             event_info->call_stack_info.resize(prop_count);
 
-            // TODO(vlad): have the controller emit the full TraceEventId per
+            // TODO: have the controller emit the full TraceEventId per
             // call stack frame (currently only the region_id is provided via
             // kRPVControllerCallstackRegionId) so this synthesis can go away.
             const TraceEventId owner_id = event_info->basic_info.id;

@@ -28,6 +28,13 @@ struct TabDescriptor
     std::function<void()> render_fn;
 };
 
+struct WarningMessage
+{
+    enum Level { kInfo, kWarning, kError };
+    Level       level;
+    std::string text;
+};
+
 /**
  * Interface for profiler-specific backends.
  * Each profiler type (rocprof-sys, rocprof-compute, rocprofv3) implements this.
@@ -76,6 +83,16 @@ public:
      * Returns empty string if export is not supported by this backend.
      */
     virtual std::string ExportCfg() const = 0;
+
+    /**
+     * Return warnings and hints for the current config (soft conflicts,
+     * tool routing suggestions, deprecated aliases in extra_env, etc.).
+     */
+    virtual std::vector<WarningMessage> GetWarnings(LaunchConfig const& config) const
+    {
+        (void)config;
+        return {};
+    }
 };
 
 } // namespace View

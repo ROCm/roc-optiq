@@ -6,11 +6,28 @@
 #include "rocprofvis_profiler_backend.h"
 #include <string>
 #include <cstdint>
+#include <map>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+struct CheckboxEntry
+{
+    const char* id;
+    const char* display_name;
+    bool        default_on;
+};
+
+extern CheckboxEntry const kRocmDomains[];
+extern size_t const        kRocmDomainsCount;
+
+extern CheckboxEntry const kAmdSmiMetrics[];
+extern size_t const        kAmdSmiMetricsCount;
+
+extern CheckboxEntry const kPerfettoCategories[];
+extern size_t const        kPerfettoCategoriesCount;
 
 struct RocprofSysSettings
 {
@@ -21,8 +38,9 @@ struct RocprofSysSettings
     std::string trace_region;
 
     // Backends
-    bool trace_backend            = false;
+    bool trace_backend            = true;
     bool profile                  = false;
+    bool flat_profile             = false;
     bool use_rocpd                = true;
     bool use_sampling             = false;
     bool use_process_sampling     = true;
@@ -41,9 +59,10 @@ struct RocprofSysSettings
     bool        sampling_include_inlines   = false;
 
     // ROCm
-    std::string rocm_domains      = "hip_runtime_api,marker_api,kernel_dispatch,memory_copy,scratch_memory";
-    std::string rocm_events;
-    bool        rocm_group_by_queue = false;
+    std::map<std::string, bool> rocm_domains;
+    std::string                 rocm_domains_custom;
+    std::string                 rocm_events;
+    bool                        rocm_group_by_queue = false;
 
     // Perfetto
     std::string perfetto_backend         = "inprocess";
@@ -52,19 +71,20 @@ struct RocprofSysSettings
     std::string perfetto_fill_policy     = "discard";
     bool        perfetto_annotations     = true;
     bool        perfetto_combine_traces  = false;
-    std::string enable_categories;
-    std::string disable_categories;
+    std::map<std::string, bool> enable_categories;
+    std::map<std::string, bool> disable_categories;
     std::string perfetto_file            = "perfetto-trace.proto";
 
     // Process Sampling
-    bool        cpu_freq_enabled = false;
-    std::string amd_smi_metrics  = "busy,temp,power,mem_usage";
-    std::string sampling_cpus    = "none";
-    std::string sampling_gpus    = "all";
-    bool        use_ainic        = false;
+    bool                        cpu_freq_enabled = false;
+    std::map<std::string, bool> amd_smi_metrics;
+    std::string                 amd_smi_metrics_custom;
+    std::string                 sampling_cpus    = "none";
+    std::string                 sampling_gpus    = "all";
+    bool                        use_ainic        = false;
 
     // Parallelism
-    bool use_mpip    = true;
+    bool use_mpip    = false;
     bool use_ucx     = false;
     bool use_shmem   = false;
     bool use_rcclp   = false;
@@ -86,6 +106,9 @@ struct RocprofSysSettings
 
     jt::Json ToJson() const;
     static RocprofSysSettings FromJson(jt::Json const& json);
+
+    static std::map<std::string, bool> BuildDefaultMap(
+        CheckboxEntry const* entries, size_t count);
 };
 
 class RocprofSysBackend : public IProfilerBackend
@@ -112,6 +135,9 @@ public:
     void LoadSettings(jt::Json const& payload) override;
     std::string ExportCfg() const override;
 
+    std::vector<WarningMessage> GetWarnings(
+        LaunchConfig const& config) const override;
+
 private:
     void RenderGeneralTab();
     void RenderBackendsTab();
@@ -122,6 +148,13 @@ private:
     void RenderParallelismTab();
     void RenderInstrumentTab();
     void RenderAdvancedTab();
+
+    void ApplyModeDefaults(std::string const& new_mode);
+    bool IsCausalOrCoverage() const;
+
+    static std::string JoinEnabledKeys(
+        std::map<std::string, bool> const& m,
+        std::string const& custom);
 
     RocprofSysSettings m_settings;
 };

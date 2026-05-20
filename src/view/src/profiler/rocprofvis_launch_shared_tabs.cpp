@@ -38,14 +38,15 @@ bool RenderTargetSection(TargetSpec& target, AppWindow* app_window)
 {
     bool modified = false;
 
-    // Sync on first use or when target changes (by checking if buf is empty or different)
-    if (s_target_exe_buf[0] == '\0' && !target.executable.empty())
-    {
+    // Always sync buffers from target when target changed externally (e.g. preset load)
+    if (target.executable != s_target_exe_buf)
         SyncBufFromString(s_target_exe_buf, sizeof(s_target_exe_buf), target.executable);
+    if (target.arguments != s_target_args_buf)
         SyncBufFromString(s_target_args_buf, sizeof(s_target_args_buf), target.arguments);
+    if (target.working_directory != s_working_dir_buf)
         SyncBufFromString(s_working_dir_buf, sizeof(s_working_dir_buf), target.working_directory);
+    if (target.output_directory != s_output_dir_buf)
         SyncBufFromString(s_output_dir_buf, sizeof(s_output_dir_buf), target.output_directory);
-    }
 
     ImGui::Text("Target Executable:");
     if (ImGui::InputText("##TargetExe", s_target_exe_buf, sizeof(s_target_exe_buf)))

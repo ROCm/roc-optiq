@@ -121,6 +121,33 @@ void ProfilerLauncherDialog::Render()
         RenderRightPane();
         ImGui::EndChild();
 
+        // Warnings from backend
+        auto warnings = backend->GetWarnings(m_config);
+        if (!warnings.empty())
+        {
+            for (auto const& w : warnings)
+            {
+                ImVec4 color;
+                const char* prefix;
+                switch (w.level)
+                {
+                    case WarningMessage::kError:
+                        color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+                        prefix = "Error: ";
+                        break;
+                    case WarningMessage::kWarning:
+                        color = ImVec4(1.0f, 0.8f, 0.0f, 1.0f);
+                        prefix = "Warning: ";
+                        break;
+                    default:
+                        color = ImVec4(0.4f, 0.7f, 1.0f, 1.0f);
+                        prefix = "Hint: ";
+                        break;
+                }
+                ImGui::TextColored(color, "%s%s", prefix, w.text.c_str());
+            }
+        }
+
         // Command preview
         RenderCommandPreview(backend, m_config, GetProfilerPath());
 
@@ -374,7 +401,8 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
     // Determine profiler type enum for controller
     rocprofvis_profiler_type_t profiler_type = kRPVProfilerTypeRocprofSysRun;
-    if (m_config.tool_id == "run" || m_config.tool_id == "sample")
+    if (m_config.tool_id == "run" || m_config.tool_id == "sample" ||
+        m_config.tool_id == "causal")
     {
         profiler_type = kRPVProfilerTypeRocprofSysRun;
     }

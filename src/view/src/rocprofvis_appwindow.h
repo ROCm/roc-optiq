@@ -16,6 +16,7 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <memory>
 #include <thread>
 #include <vector>
 
@@ -27,6 +28,7 @@ namespace View
 class ConfirmationDialog;
 class MessageDialog;
 class Project;
+class WelcomePage;
 
 struct FileFilter
 {
@@ -102,7 +104,6 @@ private:
 
     void RenderFileDialog();
     void RenderAboutDialog();
-    void RenderEmptyState();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
@@ -173,6 +174,7 @@ private:
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
+    std::unique_ptr<WelcomePage>        m_welcome_page;
 
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;

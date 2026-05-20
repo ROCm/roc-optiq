@@ -13,6 +13,7 @@
 #include <cstring>
 #include <filesystem>
 #include <spdlog/spdlog.h>
+#include <algorithm>
 
 #ifdef _WIN32
 #include <ws2tcpip.h>

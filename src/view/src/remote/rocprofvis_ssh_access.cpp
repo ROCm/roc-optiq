@@ -4,6 +4,7 @@
 #include "rocprofvis_ssh_access.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
+#include <cfloat>
 
 namespace RocProfVis
 {

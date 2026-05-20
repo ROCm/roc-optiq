@@ -105,7 +105,11 @@ bool
 IconMenuItem(const char* icon, const char* label)
 {
     ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
-
+    bool clicked =
+        ImGui::Selectable(("##copy_row" + std::string(label)).c_str(), false, ImGuiSelectableFlags_SpanAllColumns,
+                          ImVec2(0, ImGui::GetTextLineHeightWithSpacing()));
+    ImGui::SameLine(0.0f, 0.0f);
+    
     ImGui::BeginGroup();
     ImGui::PushFont(icon_font);
     ImGui::TextUnformatted(icon);

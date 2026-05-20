@@ -310,6 +310,88 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_
 */
 
 /*
+* Connects to remote openssh system using host and port parameters stored in arguments.
+* @param args contains host name and port number
+* @param output contains connection handler
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_connect_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_arguments_t* args,
+    rocprofvis_controller_array_t* output);
+
+/*
+* Authenticates  connection to remote openssh system .
+* @param connection libssh2 connection to authenticate
+* @param args contains user name, password, path to public key
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_authenticate_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args);
+
+/*
+* Disconnects libssh2 connection.
+* @param connection libssh2 connection to disconnect
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_disconnect(
+    rocprofvis_controller_connection_t* connection);
+
+/*
+* Execute command remotely over ssh.
+* @param connection libssh2 connection for command execution
+* @param args contains command line
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_execute_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+);
+
+/*
+* Execute command remotely over ssh. Currently supports download only
+* @param connection libssh2 connection for file transfer
+* @param args contains source and destination path 
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_transfer_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+);
+
+/*
+* Reports host authentication decision 
+* @param connection libssh2 connection to report to
+* @param decision trust or reject connection
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_submit_hostkey_decision(
+    rocprofvis_controller_connection_t* connection,
+    uint64_t decision);
+
+/*
+* Reports responses requested by interractive authentication callback 
+* @param connection libssh2 connection to report to
+* @param args contains array of responses
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_submit_responses(
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args);
+
+/*
+* Cancels back end wait for prompt response
+* @param connection libssh2 to cancel prompt
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_cancel_prompt(
+    rocprofvis_controller_connection_t* connection);
+
+/*
 * Frees the provided summary metrics container object
 * @param object The object to free.
 */

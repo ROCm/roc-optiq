@@ -13,6 +13,7 @@
 #include <utility>
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <windows.h>
 #ifdef GetObject
 #undef GetObject

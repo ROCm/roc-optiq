@@ -11,6 +11,12 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
+#define TEST_SSH_CONNECTION
+
+#ifdef TEST_SSH_CONNECTION
+#include "remote/rocprofvis_ssh_uri.h"
+#include "remote/rocprofvis_ssh_access.h"
+#endif
 
 #include <atomic>
 #include <chrono>
@@ -122,6 +128,12 @@ private:
                               ProviderCleanupReason reason);
     void UpdateProviderCleanups();
     void RequestExitIfProviderCleanupsComplete();
+#ifdef TEST_SSH_CONNECTION
+    void RenderRemoteOpenDialog();
+    void HandleOpenRemote();
+    void RenderRemoteProgressDialog();
+    void RenderRemoteOutputDialog();
+#endif
 
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
@@ -188,6 +200,16 @@ private:
     bool                             m_restore_fullscreen_later;
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
+#ifdef TEST_SSH_CONNECTION
+    bool                             m_open_remote_dialog;
+    bool                             m_remote_show_password;
+    bool                             m_remote_show_passphrase;
+    bool                             m_thread_running;
+    bool                             m_should_close_popup;
+    std::string                      m_remote_status_msg;
+    RemoteUri                        m_remote_uri;
+    Ssh                              m_ssh_access;
+#endif
 };
 
 }  // namespace View

@@ -109,9 +109,12 @@ private:
     void RenderFileDialog();
     void RenderAboutDialog();
     void RenderEmptyState();
+    void RenderStatusBar();
+    void UpdateStatusBar();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
+    void HandleFontChanged();
     void HandleOpenFile();
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
@@ -156,6 +159,7 @@ private:
 
     EventManager::SubscriptionToken m_tabclosed_event_token;
     EventManager::SubscriptionToken m_tabselected_event_token;
+    EventManager::SubscriptionToken m_font_changed_token;
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();
@@ -194,6 +198,10 @@ private:
     bool                             m_restore_fullscreen_later;
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
+
+    std::string m_status_message;
+    bool        m_status_show_busy_indicator;
+    
 #ifdef TEST_SSH_CONNECTION
     bool                             m_open_remote_dialog;
     bool                             m_remote_show_password;

@@ -23,6 +23,7 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_table.cpp    
     src/rocprofvis_controller.cpp    
     src/rocprofvis_controller_job_system.cpp	
+    src/rocprofvis_controller_analysis.cpp
     src/remote/rocprofvis_controller_remote.cpp
     src/remote/rocprofvis_controller_remote_future.cpp
     src/remote/rocprofvis_controller_ssh_client.cpp

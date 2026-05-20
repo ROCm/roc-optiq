@@ -102,6 +102,7 @@ enum class Colors
     kPanelBorderSubtle,
     kEventHighlight,
     kEventSearchHighlight,
+    kAreaOfInterest,
     kLineChartColor,
     kButton,
     kButtonHovered,

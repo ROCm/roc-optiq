@@ -27,6 +27,8 @@ public:
 
     virtual std::optional<DataProviderCleanupWork> DetachProviderCleanup();
 
+    virtual DataProvider* GetDataProvider() { return nullptr; };
+
 protected:
     void RenderLoadingScreen(const char* progress_label);
 

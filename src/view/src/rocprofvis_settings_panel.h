@@ -5,7 +5,6 @@
 
 #include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
-#include <list>
 
 namespace RocProfVis
 {
@@ -51,9 +50,6 @@ private:
     bool                     m_settings_changed;
     bool                     m_settings_confirmed;
     Category                 m_category;
-    std::list<std::string>   m_font_sizes;
-    std::vector<const char*> m_font_sizes_ptr;
-
     SettingsManager& m_settings;
     FontManager&     m_fonts;
     UserSettings&    m_usersettings;

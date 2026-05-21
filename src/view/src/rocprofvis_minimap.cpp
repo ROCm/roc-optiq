@@ -523,17 +523,19 @@ Minimap::RenderLegend(float w, float h)
     dl->AddRect(ImVec2(bar_x2, bar_y), ImVec2(bar_x2 + bar_w, bar_y + bar_h),
                 !m_show_counters ? DimColor(border_col) : border_col);
 
-    ImFont* font = sm.GetFontManager().GetFont(FontType::kSmall);
+    ImFont* font = sm.GetFontManager().GetFont(FontType::kDefault);
     float   cx   = pos.x + w * 0.5f;
 
     const char* txt_max = "Max";
     ImVec2      sz_max  = ImGui::CalcTextSize(txt_max);
-    dl->AddText(font, font->LegacySize, ImVec2(cx - sz_max.x * 0.5f, pos.y),
-                sm.GetColor(Colors::kTextMain), txt_max);
+    dl->AddText(font, sm.GetFontManager().GetFontSize(FontSize::kSmall),
+                ImVec2(cx - sz_max.x * 0.5f, pos.y), sm.GetColor(Colors::kTextMain),
+                txt_max);
 
     const char* txt_min = "Min";
     ImVec2      sz_min  = ImGui::CalcTextSize(txt_min);
-    dl->AddText(font, font->LegacySize, ImVec2(cx - sz_min.x * 0.5f, bar_y + bar_h + gap),
+    dl->AddText(font, sm.GetFontManager().GetFontSize(FontSize::kSmall),
+                ImVec2(cx - sz_min.x * 0.5f, bar_y + bar_h + gap),
                 sm.GetColor(Colors::kTextMain), txt_min);
 
     // Checkboxes
@@ -556,7 +558,7 @@ Minimap::RenderLegend(float w, float h)
         ImVec2 draw_pos = ImVec2(center.x - tsz.x * 0.5f, center.y - tsz.y * 0.5f);
 
         int v_start = dl->VtxBuffer.Size;
-        dl->AddText(font, font->LegacySize, draw_pos, text_col, text);
+        dl->AddText(font, sm.GetFontManager().GetFontSize(FontSize::kSmall),draw_pos, text_col, text);
         int v_end = dl->VtxBuffer.Size;
 
         // Rotate 90� CCW: (x,y) -> (y, -x) relative to center

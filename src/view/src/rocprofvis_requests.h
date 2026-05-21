@@ -35,6 +35,7 @@ enum class RequestType
     kCleanupDatabase,
     kTableExport,
     kFetchSystemTrace,
+    kFetchAnalysisQueueUtilization,
 #ifdef COMPUTE_UI_SUPPORT
     kFetchComputeTrace,
     kFetchMetrics,
@@ -167,7 +168,6 @@ public:
     std::string m_group;
     std::string m_group_columns;
     std::string m_export_to_file_path;
-    bool        m_summary;
 
     TableRequestParams(const TableRequestParams& table_params)            = default;
     TableRequestParams& operator=(const TableRequestParams& table_params) = default;
@@ -181,7 +181,7 @@ public:
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string export_to_file_path = "", bool summary = false)
+        std::string export_to_file_path = "")
     : m_table_type(table_type)
     , m_track_ids(track_ids)
     , m_op_types(op_types)
@@ -197,7 +197,6 @@ public:
     , m_group_columns(group_cols)
     , m_string_table_filters(string_table_filters)
     , m_export_to_file_path(export_to_file_path)
-    , m_summary(summary)
     {}
 };
 
@@ -212,6 +211,26 @@ public:
 
     EventRequestParams(uint64_t event_id)
     : m_event_id(event_id)
+    {}
+};
+
+// Queue utilization analysis request parameters
+class AnalysisQueueUtilizationRequestParams : public RequestParamsBase
+{
+public:
+    uint64_t m_track_id;
+    double   m_start_ts;
+    double   m_end_ts;
+    double   m_result;
+
+    AnalysisQueueUtilizationRequestParams(const AnalysisQueueUtilizationRequestParams& other)            = default;
+    AnalysisQueueUtilizationRequestParams& operator=(const AnalysisQueueUtilizationRequestParams& other) = default;
+
+    AnalysisQueueUtilizationRequestParams(uint64_t track_id, double start, double end)
+    : m_track_id(track_id)
+    , m_start_ts(start)
+    , m_end_ts(end)
+    , m_result(0.0)
     {}
 };
 

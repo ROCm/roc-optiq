@@ -102,7 +102,7 @@ TimelineSelection::SelectTimeRange(double start_ts, double end_ts)
     {
         m_selected_range_start = start_ts;
         m_selected_range_end   = end_ts;
-        SendTrackSelectionChanged(INVALID_SELECTION_ID, false);
+        SendTimeRangeChanged(m_selected_range_start, m_selected_range_end);
     }
 }
 
@@ -124,7 +124,7 @@ TimelineSelection::ClearTimeRange()
 {
     m_selected_range_start = TimelineSelection::INVALID_SELECTION_TIME;
     m_selected_range_end   = TimelineSelection::INVALID_SELECTION_TIME;
-    SendTrackSelectionChanged(INVALID_SELECTION_ID, false);
+    SendTimeRangeChanged(m_selected_range_start, m_selected_range_end);
 }
 
 bool
@@ -201,6 +201,14 @@ TimelineSelection::SendTrackSelectionChanged(uint64_t track_id, bool selected)
 {
     EventManager::GetInstance()->AddEvent(std::make_shared<TrackSelectionChangedEvent>(
         track_id, selected, m_data_provider.GetTraceFilePath()));
+}
+
+void
+TimelineSelection::SendTimeRangeChanged(double start_ts, double end_ts)
+{
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<TimeRangeSelectionChangedEvent>(
+            start_ts, end_ts, m_data_provider.GetTraceFilePath()));
 }
 
 bool

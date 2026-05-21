@@ -56,7 +56,8 @@ AnnotationView::Render()
         for(auto& note : m_annotations->GetStickyNotes())
         {
             ImGui::PushID(note.GetID());
-            ImGui::TableNextRow();
+            const float row_height = ImGui::GetFrameHeight();
+            ImGui::TableNextRow(ImGuiTableRowFlags_None, row_height);
 
             // Title column with selection logic.
             ImGui::TableNextColumn();
@@ -81,8 +82,8 @@ AnnotationView::Render()
             }
             const std::string selectable_label =
                 display_title + "##sticky_note_" + std::to_string(note.GetID());
-            const float row_height = ImGui::GetFrameHeight();
 
+            ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
             if(ImGui::Selectable(selectable_label.c_str(), is_selected,
                                  ImGuiSelectableFlags_SpanAllColumns |
                                      ImGuiSelectableFlags_AllowOverlap,
@@ -93,6 +94,7 @@ AnnotationView::Render()
                     note.GetVMinX(), note.GetVMaxX(), note.GetYOffset(), true);
                 EventManager::GetInstance()->AddEvent(event);
             }
+            ImGui::PopStyleVar();
 
             if(is_selected)
             {
@@ -101,7 +103,8 @@ AnnotationView::Render()
 
             // Text column
             ImGui::TableNextColumn();
-            ImGui::AlignTextToFramePadding();
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
+                                 ImGui::GetStyle().FramePadding.y);
             ImGui::PushID("note_preview");
             ElidedText(note_preview.c_str(), ImGui::GetContentRegionAvail().x);
             ImGui::PopID();

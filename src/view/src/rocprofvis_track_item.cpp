@@ -28,6 +28,7 @@ inline constexpr uint64_t DEFAULT_CHUNK_DURATION   = TimeConstants::ns_per_s * 3
 TrackItem::TrackItem(DataProvider& dp, uint64_t id,
                      std::shared_ptr<TimePixelTransform> tpt)
 : m_data_provider(dp)
+, m_track_metadata(nullptr)
 , m_track_id(id)
 , m_track_height(DEFAULT_TRACK_HEIGHT)
 , m_track_content_height(0.0f)
@@ -49,6 +50,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 , m_meta_area_label("")
 , m_pill("", false, false)
 , m_distance_to_view_y(0.0f)
+, m_analysis_request_pending(false)
 {
     if(m_track_project_settings.Valid())
     {
@@ -63,7 +65,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
         spdlog::error("TrackItem: failed to get TrackInfo for track_id {}", m_track_id);
         return;
     }
-
+    m_track_metadata = track_info;
     m_name = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
     SetDefaultPillLabel(track_info);
@@ -255,7 +257,7 @@ TrackItem::RenderMetaArea()
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
 
         ImGui::TextUnformatted(ICON_GRID);
         float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
@@ -279,6 +281,7 @@ TrackItem::RenderMetaArea()
         //         }
         //     }
         // }
+
         float available_for_text =
             content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
             4.0f * m_metadata_padding.x + 2.0f);
@@ -324,7 +327,7 @@ TrackItem::RenderMetaArea()
                                        m_meta_area_scale_width - menu_button_width,
                                    m_metadata_padding.y));
         IconButton(ICON_GEAR,
-                   m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+                   m_settings.GetFontManager().GetFont(FontType::kIcon));
         if(ImGui::IsItemHovered())
             SetTooltipStyled("Track Options");
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
@@ -467,6 +470,10 @@ TrackItem::Update()
         {
             FetchHelper();
         }
+    }
+    if(m_analysis_request_pending)
+    {
+        RequestAnalysis();
     }
 }
 
@@ -752,6 +759,12 @@ TrackItem::HasPendingRequests() const
     return !m_pending_requests.empty();
 }
 
+void
+TrackItem::RequestAnalysis()
+{
+    // no op
+}
+
 TrackProjectSettings::TrackProjectSettings(const std::string& project_id,
                                            TrackItem&         track_item)
 : ProjectSetting(project_id)
@@ -851,7 +864,8 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     {
         return;
     }
-    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kSmall));
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault),
+                    settings.GetFontManager().GetFontSize(FontSize::kSmall));
 
     ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
 

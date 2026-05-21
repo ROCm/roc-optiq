@@ -85,7 +85,7 @@ constexpr float WELCOME_LOGO_ALPHA_TOP_DARK     = 0.12f;
 constexpr float WELCOME_LOGO_ALPHA_TOP_LIGHT    = 0.14f;
 constexpr float WELCOME_LOGO_ALPHA_BOTTOM_DARK  = 0.16f;
 constexpr float WELCOME_LOGO_ALPHA_BOTTOM_LIGHT = 0.18f;
-constexpr int   WELCOME_LOGO_POLYGON_VERTICES   = 7;
+constexpr int   WELCOME_LOGO_POLYGON_VERTICES   = 6;
 
 constexpr const char* SUPPORTED_FILE_TYPES_HINT =
     "Supported types: .db, .rpd, .yaml, .rpv";
@@ -147,11 +147,11 @@ DrawBackdrop(SettingsManager& settings, ImVec2 page_pos, ImVec2 page_size)
     // Two-wedge logo polygon coordinates (derived from the SVG asset).
     static constexpr ImVec2 kLogoTop[WELCOME_LOGO_POLYGON_VERTICES] = {
         { 197.2f, 13.7f }, { 174.7f, 13.7f }, { 161.0f, 0.0f }, { 210.9f, 0.0f },
-        { 210.9f, 49.9f }, { 197.2f, 36.2f }, { 197.2f, 13.7f },
+        { 210.9f, 49.9f }, { 197.2f, 36.2f },
     };
     static constexpr ImVec2 kLogoBottom[WELCOME_LOGO_POLYGON_VERTICES] = {
         { 174.7f, 36.2f }, { 174.7f, 16.4f }, { 160.6f, 30.6f }, { 160.6f, 50.3f },
-        { 180.3f, 50.3f }, { 194.4f, 36.2f }, { 174.7f, 36.2f },
+        { 180.3f, 50.3f }, { 194.4f, 36.2f },
     };
     constexpr float kMinX = 160.6f;
     constexpr float kMaxX = 210.9f;

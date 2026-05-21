@@ -32,7 +32,7 @@ namespace View
         FileStat* GetFileStat() { return &m_file_stat; };
     private:
         rocprofvis_result_t
-            Ssh::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
+            GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                 uint64_t index, std::string& out_string);
 
         rocprofvis_handle_t* m_connection_handle;

@@ -66,7 +66,7 @@ namespace View
 
         std::string GetRemoteCacheKey();
 
-        std::string RemoteUri::GetLocalResultPathString();
+        std::string GetLocalResultPathString();
 
     private:
         void SetDefaults();

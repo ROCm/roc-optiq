@@ -5,6 +5,8 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 
+#include <cfloat>
+
 namespace RocProfVis
 {
 namespace View

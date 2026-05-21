@@ -10,6 +10,7 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
+#include <cstdlib>
 
 namespace RocProfVis
 {
@@ -254,6 +255,7 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
                 future->RemoveDependentFuture(db_future);
             }
         }
+        free(query);
     }
 
     result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, m_rows.size());

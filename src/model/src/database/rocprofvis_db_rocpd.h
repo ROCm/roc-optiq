@@ -100,13 +100,6 @@ private:
     // @param azColName - pointer to column names
     // @return SQLITE_OK if successful
     static int CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
-    // sqlite3_exec callback to process stack trace information query and add stack trace object to StackTrace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to collect Agent/Queue/Process dependency
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
@@ -157,6 +150,8 @@ private:
     { 
         return &m_metadata_version_control; 
     };
+
+    rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) override { return m_metadata_version_control.CleanupDatabase(future, rebuild); };
 
     private:
         rocprofvis_dm_result_t CreateIndexes();
@@ -213,7 +208,7 @@ private:
 
             };
 
-        inline static SQLInsertParams s_level_schema_params = { { "eid", "INTEGER PRIMARY KEY" }, { "level", "INTEGER" } };
+        inline static SQLInsertParams s_level_schema_params = { { "eid", "INTEGER PRIMARY KEY" }, { "level", "INTEGER" }, { "parent_id", "INTEGER" } };
 
         friend class RocpdMetadataVersionControl;
 

@@ -12,6 +12,140 @@ namespace RocProfVis
 namespace View
 {
 
+namespace
+{
+
+TreeNode*
+AddBranchNode(TreeNode* parent, NodeType type, const std::string& label,
+              bool collapsable = true, bool show_eye_button = true,
+              bool framed = false)
+{
+    auto node             = std::make_unique<TreeNode>(type, label, collapsable);
+    node->show_eye_button = show_eye_button;
+    return parent->AddChild(std::move(node));
+}
+
+LeafNode*
+AddLeafNode(TreeNode* parent, const std::vector<const TrackInfo*>& track_list,
+            uint64_t graph_index, const std::string& fallback_label,
+            bool render_children_inline = false)
+{
+    uint64_t    track_id = graph_index;
+    std::string label    = fallback_label;
+
+    if(graph_index < track_list.size() && track_list[graph_index])
+    {
+        track_id = track_list[graph_index]->id;
+        if(label.empty())
+        {
+            label = track_list[graph_index]->main_name;
+        }
+    }
+
+    auto leaf                    = std::make_unique<LeafNode>(label, graph_index, track_id);
+    leaf->render_children_inline = render_children_inline;
+    LeafNode* raw = leaf.get();
+    parent->AddChild(std::move(leaf));
+    return raw;
+}
+
+template<typename Model>
+void
+BuildLeafList(TreeNode* parent, NodeType type, const std::string& label,
+              const std::vector<Model>& items,
+              const std::vector<const TrackInfo*>& track_list,
+              bool show_list_header = true)
+{
+    if(items.empty())
+    {
+        return;
+    }
+
+    TreeNode* target = parent;
+    if(show_list_header)
+    {
+        target = AddBranchNode(parent, type, label, true, true, true);
+    }
+    for(const auto& item : items)
+    {
+        if(item.info)
+        {
+            AddLeafNode(target, track_list,
+                        item.graph_index, item.info->name);
+        }
+    }
+}
+
+/*
+ * Builds a processor subtree.  When the processor appears inline beneath a
+ * stream leaf, show_controls is false: no eye buttons and no intermediate
+ * list headers are rendered, and breaks_visibility_chain isolates the
+ * subtree from ancestor bulk-visibility toggles.
+ */
+void
+BuildProcessorTree(TreeNode* parent, const ProcessorModel& processor,
+                   const std::vector<const TrackInfo*>& track_list,
+                   bool show_controls, bool breaks_chain = false)
+{
+    if(!processor.info)
+    {
+        return;
+    }
+
+    TreeNode* node = AddBranchNode(parent, NodeType::kProcessor,
+                                   processor.header, true, show_controls, false);
+    node->breaks_visibility_chain = breaks_chain;
+    BuildLeafList(node, NodeType::kQueueList, processor.queue_header,
+                  processor.queues, track_list, show_controls);
+    BuildLeafList(node, NodeType::kCounterList, processor.counter_header,
+                  processor.counters, track_list, show_controls);
+}
+
+void
+BuildProcessTree(TreeNode* parent, const ProcessModel& process,
+                 const std::vector<const TrackInfo*>& track_list)
+{
+    if(!process.info)
+    {
+        return;
+    }
+
+    TreeNode* process_node = AddBranchNode(parent, NodeType::kProcess,
+                                           process.header, true, true, false);
+
+    if(!process.streams.empty())
+    {
+        TreeNode* stream_list = AddBranchNode(process_node, NodeType::kStreamList,
+                                              process.stream_header, true, true, true);
+        for(const auto& stream : process.streams)
+        {
+            if(!stream.info)
+            {
+                continue;
+            }
+
+            bool      has_processors = !stream.processors.empty();
+            LeafNode* stream_leaf    = AddLeafNode(stream_list, track_list,
+                                                   stream.graph_index, stream.info->name,
+                                                   has_processors);
+            for(const auto& processor : stream.processors)
+            {
+                BuildProcessorTree(stream_leaf, processor, track_list,
+                                   false, true);
+            }
+        }
+    }
+
+    BuildLeafList(process_node, NodeType::kInstrumentedThreadList,
+                  process.instrumented_thread_header,
+                  process.instrumented_threads, track_list);
+    BuildLeafList(process_node, NodeType::kSampledThreadList,
+                  process.sampled_thread_header,
+                  process.sampled_threads, track_list);
+}
+
+}  // namespace
+
 TrackTopology::TrackTopology(DataProvider& dp)
 : m_data_provider(dp)
 , m_topology_dirty(true)
@@ -68,6 +202,12 @@ const TopologyModel&
 TrackTopology::GetTopology() const
 {
     return m_topology;
+}
+
+const SidebarTree&
+TrackTopology::GetSidebarTree() const
+{
+    return m_sidebar_tree;
 }
 
 void
@@ -235,31 +375,83 @@ TrackTopology::UpdateTopology()
                             "Streams (" + std::to_string(stream_ids.size()) + ")";
                         for(int k = 0; k < stream_ids.size(); k++)
                         {
-                            m_topology.nodes[i].processes[j].stream_lut[stream_ids[k]] =
-                                &m_topology.nodes[i].processes[j].streams[k];
-                            const StreamInfo* stream_info =
-                                topology_data.GetStream(stream_ids[k]);
+                            StreamModel* stream = &m_topology.nodes[i].processes[j].streams[k];
+                            m_topology.nodes[i].processes[j].stream_lut[stream_ids[k]] = stream;
+                            const StreamInfo* stream_info = topology_data.GetStream(stream_ids[k]);
                             if(stream_info)
                             {
-                                const DeviceInfo* device_info =
-                                    topology_data.GetDevice(stream_info->device_id);
-                                m_topology.nodes[i].processes[j].streams[k].info =
-                                    stream_info;
-                                if(device_info)
+                                m_topology.nodes[i].processes[j].streams[k].info = stream_info;
+                                const std::vector<StreamDeviceInfo>& stream_processors = stream_info->processors;
+                                stream->processors.resize(stream_processors.size());
+                                    
+                                for (int j = 0; j < stream_processors.size(); j++)
                                 {
-                                    m_topology.nodes[i]
-                                        .processes[j]
-                                        .streams[k]
-                                        .info_table = InfoTable{
-                                        { { InfoTable::Cell{
-                                                DeviceTypeString(device_info->type) +
-                                                    " " +
-                                                    std::to_string(
-                                                        device_info->type_index),
-                                                false },
-                                            InfoTable::Cell{ device_info->product_name,
-                                                             false } } }
-                                    };
+                                    stream->processor_lut[processor_ids[j]] = &stream->processors[j];
+                                    const DeviceInfo* processor_info =
+                                        topology_data.GetDevice(processor_ids[j]);
+                                    if (processor_info)
+                                    {
+                                        stream->processors[j].info       = processor_info;
+                                        stream->processors[j].info_table = InfoTable{
+                                            { { InfoTable::Cell{ "Processor type", false },
+                                            InfoTable::Cell{ DeviceTypeString(processor_info->type), false } },
+                                            { InfoTable::Cell{ "Processor index", false },
+                                            InfoTable::Cell{ std::to_string(processor_info->type_index), false } },
+                                            { InfoTable::Cell{ "Product name", false },
+                                            InfoTable::Cell{ processor_info->product_name, false } } }
+                                        };
+                                        stream->processors[j].header = stream_info->name + " >>> " + 
+                                            DeviceTypeString(processor_info->type) +
+                                            std::to_string(processor_info->type_index);
+
+                                        const std::vector<uint64_t>& queue_ids = stream_processors[j].queue_ids;
+                                        stream->processors[j].queues.resize(queue_ids.size());
+                                        for(int k = 0; k < queue_ids.size(); k++)
+                                        {
+                                            stream->processors[j].queue_lut[queue_ids[k]] =
+                                                &stream->processors[j].queues[k];
+                                            const QueueInfo* queue_info =
+                                                topology_data.GetQueue(queue_ids[k]);
+                                            if(queue_info)
+                                            {
+                                                const DeviceInfo* device_info =
+                                                    topology_data.GetDevice(queue_info->device_id);
+                                                stream->processors[j].queues[k].info =
+                                                    queue_info;
+                                                if(device_info)
+                                                {
+                                                    stream->processors[j]
+                                                        .queues[k]
+                                                        .info_table = InfoTable{
+                                                            { { InfoTable::Cell{
+                                                                DeviceTypeString(device_info->type) +
+                                                                " " +
+                                                        std::to_string(
+                                                            device_info->type_index),
+                                                        false },
+                                                        InfoTable::Cell{ device_info->product_name,
+                                                        false } } }
+                                                    };
+                                                }
+
+                                                const auto& track_list = m_data_provider.DataModel().GetTimeline().GetTrackList();
+                                                for (const TrackInfo* track : track_list)
+                                                {
+                                                    if (track)
+                                                    {
+                                                        if (track->topology.type == TrackInfo::TrackType::Queue && 
+                                                            track->topology.id.value == queue_info->id && 
+                                                            track->topology.device_id == queue_info->device_id)
+                                                        {
+                                                            stream->processors[j].queues[k].graph_index = track->index;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                       
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -478,6 +670,10 @@ TrackTopology::DeviceTypeString(
         {
             return "CPU";
         }
+        case kRPVControllerProcessorTypeNIC:
+        {
+            return "NIC";
+        }
         default:
         {
             return "Undefined";
@@ -551,8 +747,69 @@ TrackTopology::UpdateGraphs()
                 }
             }
         }
+        BuildSidebarTree();
         m_graphs_dirty = false;
     }
+}
+
+void
+TrackTopology::BuildSidebarTree()
+{
+    m_sidebar_tree = {};
+
+    auto root = std::make_unique<TreeNode>(NodeType::kRoot, "Project", true);
+    root->show_eye_button = false;
+
+    TreeNode* root_node = root.get();
+    const auto& track_list = m_data_provider.DataModel().GetTimeline().GetTrackList();
+
+    if(!m_topology.nodes.empty())
+    {
+        TreeNode* node_list = AddBranchNode(root_node, NodeType::kNodeList,
+            m_topology.node_header, true, true, false);
+        for(const auto& node : m_topology.nodes)
+        {
+            if(!node.info)
+            {
+                continue;
+            }
+
+            TreeNode* node_branch = AddBranchNode(node_list, NodeType::kNode,
+                node.info->host_name, true, true, false);
+
+            if(!node.processors.empty())
+            {
+                TreeNode* processor_list = AddBranchNode(node_branch,
+                    NodeType::kProcessorList, node.processor_header, true, true, false);
+                for(const auto& processor : node.processors)
+                {
+                    BuildProcessorTree(processor_list, processor, track_list, true);
+                }
+            }
+
+            if(!node.processes.empty())
+            {
+                TreeNode* process_list = AddBranchNode(node_branch, NodeType::kProcessList,
+                    node.process_header, true, true, false);
+                for(const auto& process : node.processes)
+                {
+                    BuildProcessTree(process_list, process, track_list);
+                }
+            }
+        }
+    }
+
+    if(!m_topology.uncategorized_graph_indices.empty())
+    {
+        TreeNode* uncategorized = AddBranchNode(root_node, NodeType::kUncategorizedList,
+            "Uncategorized", !m_topology.nodes.empty(), false, false);
+        for(const auto& graph_index : m_topology.uncategorized_graph_indices)
+        {
+            AddLeafNode(uncategorized, track_list, graph_index, "");
+        }
+    }
+
+    m_sidebar_tree.root = std::move(root);
 }
 
 }  // namespace View

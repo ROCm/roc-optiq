@@ -4,17 +4,15 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_root_view.h"
-#include "widgets/rocprofvis_query_builder.h"
 #include "widgets/rocprofvis_tab_container.h"
-#include "rocprofvis_compute_selection.h"
 
 namespace RocProfVis
 {
 namespace View
 {
 
-class SettingsManager;
-class Roofline;
+class ComputeSelection;
+class PresetBrowser;
 
 class ComputeView : public RootView
 {
@@ -35,10 +33,13 @@ public:
 private:
     void RenderToolbar();
     void RenderWorkloadSelection();
+    void RenderPresets();
 
-    bool m_view_created;
+    bool  m_view_created;
+    float m_toolbar_available_width;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
+    std::unique_ptr<PresetBrowser>    m_preset_browser;
 
     std::shared_ptr<TabContainer> m_tab_container;
 

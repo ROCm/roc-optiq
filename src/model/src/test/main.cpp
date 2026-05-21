@@ -38,7 +38,7 @@ void PrintHeader(const char* fmt, ...) {
     printf("\x1b[0m%s%s%s\n", header.c_str(), buffer, header.c_str());
 }
 
-void db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status, rocprofvis_db_status_message_t msg, void* user_data)
+void db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_future_id_t id, rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status, rocprofvis_db_status_message_t msg, void* user_data)
 {
     const char* str = " ERROR ";
     const char* color = "\x1b[31m";
@@ -63,28 +63,18 @@ void GenerateRandomSlice(   rocprofvis_dm_trace_t trace,
 {
     static std::vector<uint32_t> v;
     uint64_t num_tracks = rocprofvis_dm_get_property_as_uint64(trace, kRPVDMNumberOfTracksUInt64, 0);
-    if (g_all_tracks) {
-        for (int i = 0; i < num_tracks; i++) {
-            v.push_back(i);
-        }
-        count = (rocprofvis_db_num_of_tracks_t)num_tracks;
-    }
-    else
-    {
-        int rand_num_tracks = 0;
-        while (rand_num_tracks == 0) rand_num_tracks = std::rand() % num_tracks;
-        for (int i = 0; i < rand_num_tracks; i++) {
-            while (true) {
-                uint32_t track_id1 = std::rand() % num_tracks;
-                if (std::find_if(v.begin(), v.end(), [track_id1](uint32_t track_id2) {return track_id2 == track_id1; }) == v.end())
-                {
-                    v.push_back(track_id1);
-                    break;
-                }
+    int rand_num_tracks = 1;
+    for (int i = 0; i < rand_num_tracks; i++) {
+        while (true) {
+            uint32_t track_id1 = std::rand() % num_tracks;
+            if (std::find_if(v.begin(), v.end(), [track_id1](uint32_t track_id2) {return track_id2 == track_id1; }) == v.end())
+            {
+                v.push_back(track_id1);
+                break;
             }
         }
-        count = (rocprofvis_db_num_of_tracks_t)rand_num_tracks;
     }
+    count = (rocprofvis_db_num_of_tracks_t)rand_num_tracks;
     
     tracks = &v[0];
     rocprofvis_dm_timestamp_t tenth_time = (end_time - start_time) / 10;
@@ -226,7 +216,9 @@ int main(int argc, char** argv)
                                             whole_trace_readtime += diff.count();
                                             uint32_t num_rows = ((RocProfVis::DataModel::Future*)object2wait)->GetProcessedRowsCount();
                                             total_num_rows += num_rows;
-                                            rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(track, kRPVDMSliceHandleTimed, start_time);
+                                            uint64_t hash_time =
+                                                hash_combine(start_time, end_time);
+                                            rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(track, kRPVDMSliceHandleTimed, hash_time);
                                             uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
                                             printf(ANSI_COLOR_MAGENTA "Track %d has %lld records, read time - %13.9f, number of rows processed = %ld\n" ANSI_COLOR_RESET, i, num_records, diff.count(), num_rows);
                                             rocprofvis_dm_delete_all_time_slices(trace);
@@ -261,7 +253,8 @@ int main(int argc, char** argv)
                                             char* track_process_name = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackMainProcessNameCharPtr, 0);
                                             char* track_sub_process_name = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackSubProcessNameCharPtr, 0);
                                             rocprofvis_dm_track_category_t track_category = (rocprofvis_dm_track_category_t)rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackCategoryEnumUInt64, 0);
-                                            rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(track, kRPVDMSliceHandleTimed, start_time);
+                                            uint64_t hash_time = hash_combine(start_time, end_time);
+                                            rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(track, kRPVDMSliceHandleTimed, hash_time);
                                             uint64_t id = rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackIdUInt64, 0);
                                             uint64_t node_id = rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackNodeIdUInt64, 0);
                                             uint64_t memory_usage = rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackMemoryFootprintUInt64, 0);
@@ -276,8 +269,6 @@ int main(int argc, char** argv)
                                                 char* ext_data_value = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackExtDataValueCharPtrIndexed, i);
                                                 printf(ANSI_COLOR_CYAN "\t%s : %s : %s\n", ext_data_category, ext_data_name, ext_data_value);
                                             }
-                                            char* ext_data_json = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackInfoJsonCharPtr, 0);
-                                            printf(ANSI_COLOR_CYAN "Extended data as JSON:\n%s\n", ext_data_json);
                                             if (nullptr != slice)
                                             {
                                                 uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);                                                 

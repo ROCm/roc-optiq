@@ -433,7 +433,12 @@ namespace DataModel
             return node;
         }
 
-        return nullptr;
+
+        auto node = std::make_unique<ExprNode>();
+        node->m_type = ExprNode::Type::ConstantString;
+        node->m_data = tk.GetText();
+        return node;
+
     }
 
 

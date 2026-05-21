@@ -15,7 +15,7 @@ namespace Controller
 class CallStack : public Handle
 {
 public:
-    CallStack(const char* file, const char* pc, const char* name, const char* line_name, const char* line_address);
+    CallStack(uint64_t region_id, uint64_t depth, const char* file, const char* pc, const char* name, const char* line_name, const char* line_address);
 
     virtual ~CallStack();
 
@@ -33,6 +33,8 @@ private:
     Data m_name;
     Data m_line_name;
     Data m_line_address;
+    Data m_id;
+    Data m_depth;
 };
 
 }

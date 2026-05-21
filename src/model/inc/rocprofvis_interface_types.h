@@ -38,6 +38,7 @@ typedef     uint64_t                      rocprofvis_dm_table_id_t;             
 typedef     const char*                   rocprofvis_db_filename_t;                     // input file name
 typedef     const char*                   rocprofvis_db_status_message_t;               // status message for progress report callback
 typedef     uint16_t                      rocprofvis_db_progress_percent_t;             // percentage value of database request progress
+typedef     uint64_t                      rocprofvis_db_future_id_t;                    // unique identifier for a database future
 typedef     uint32_t*                     rocprofvis_db_track_selection_t;              // array of track IDs for time slice request
 typedef     uint16_t                      rocprofvis_db_num_of_tracks_t;                // number of tracks in time slice request
 typedef     void*                         rocprofvis_db_future_t;                       // future object for asynchronous communication
@@ -324,6 +325,8 @@ typedef enum rocprofvis_dm_flowtrace_property_t {
 typedef enum rocprofvis_dm_stacktrace_property_t {
     // Number of frames
 	kRPVDMNumberOfFramesUInt64,
+    // Stack frame region id by specified frame index
+    kRPVDMFrameRegionIdUInt64Indexed,
     // Stack frame depth by specified frame index
 	kRPVDMFrameDepthUInt64Indexed,
     // Stack frame symbol by specified frame index
@@ -428,6 +431,7 @@ typedef union {
 // Database request progress callback
 typedef void ( *rocprofvis_db_progress_callback_t)(
 		        rocprofvis_db_filename_t,
+                rocprofvis_db_future_id_t,
                 rocprofvis_db_progress_percent_t, 
                 rocprofvis_db_status_t, 
                 rocprofvis_db_status_message_t,
@@ -510,6 +514,7 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchMetricValues,
     kRPVComputeFetchKernelMetricsMatrix,
     kRPVComputeFetchWorkloadMetricValueNames,
+    kRPVComputeFetchMetricValuesByWorkload,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration

@@ -2,12 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_utils.h"
+#include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include <string>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
@@ -425,3 +429,47 @@ RocProfVis::View::get_executable_name(const std::string& fullPath)
         ? fullPath
         : fullPath.substr(pos + 1);
 }
+
+namespace
+{
+// Returns true if DISPLAY looks like an SSH X11-forwarded display, e.g.
+// "localhost:10.0". SSH always uses the "localhost:" prefix and allocates
+// display numbers starting at 10 by default (X11DisplayOffset in sshd_config).
+bool
+display_looks_forwarded()
+{
+    const char* disp = std::getenv("DISPLAY");
+    if(disp == nullptr || disp[0] == '\0')
+    {
+        return false;
+    }
+    constexpr const char* kPrefix   = "localhost:";
+    constexpr size_t      kPrefixSz = 10;
+    if(std::strncmp(disp, kPrefix, kPrefixSz) != 0)
+    {
+        return false;
+    }
+    const char* num_begin = disp + kPrefixSz;
+    if(!std::isdigit(static_cast<unsigned char>(*num_begin)))
+    {
+        return false;
+    }
+    char*    end  = nullptr;
+    long     port = std::strtol(num_begin, &end, 10);
+    return end != num_begin && port >= 10;
+}
+}  // namespace
+
+bool
+RocProfVis::View::is_remote_display_session()
+{
+    static const bool s_cached = []() {
+        const bool ssh_connection = std::getenv("SSH_CONNECTION") != nullptr;
+        const bool ssh_client     = std::getenv("SSH_CLIENT") != nullptr;
+        const bool ssh_tty        = std::getenv("SSH_TTY") != nullptr;
+        const bool forwarded      = display_looks_forwarded();
+        return ssh_connection || ssh_client || ssh_tty || forwarded;
+    }();
+    return s_cached;
+}
+

@@ -41,6 +41,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
 , m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_new_table_data_token(EventManager::InvalidSubscriptionToken)
 , m_metrics_fetched_token(EventManager::InvalidSubscriptionToken)
+, m_send_metric_to_kernel_details_token(EventManager::InvalidSubscriptionToken)
 {
     SubscribeToEvents();
 
@@ -73,6 +74,9 @@ ComputeKernelDetailsView::~ComputeKernelDetailsView()
         static_cast<int>(RocEvents::kComputeMetricsFetched), m_metrics_fetched_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kNewTableData), m_new_table_data_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeShowMetricInKernelDetails),
+        m_send_metric_to_kernel_details_token);
 }
 
 void ComputeKernelDetailsView::SubscribeToEvents()
@@ -92,7 +96,11 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             {
                 m_roofline->SetWorkload(evt->GetId());
             }
-            m_sol_table->Clear();
+            if(m_sol_table)
+            {
+                m_sol_table->Clear();
+            }
+            
         }
     };
 
@@ -109,6 +117,10 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             {
                 m_roofline->SetKernel(evt->GetId());
             }
+            if(m_sol_table)
+            {
+                m_sol_table->FetchMetrics();
+            }
         }
     };
 
@@ -123,7 +135,6 @@ void ComputeKernelDetailsView::SubscribeToEvents()
             if(m_memory_chart.GetClientId() == evt->GetClientId())
             {
                 m_memory_chart.UpdateMetrics();
-                m_sol_table->FetchMetrics();
             }
             if(m_sol_table->GetClientId() == evt->GetClientId())
             {
@@ -157,6 +168,25 @@ void ComputeKernelDetailsView::SubscribeToEvents()
 
     m_new_table_data_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kNewTableData), new_table_data_handler);
+
+    auto metric_navigation_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<ComputeAddMetricToKernelDetailsEvent>(e);
+        if(!evt || evt->GetSourceId() != m_data_provider.GetTraceFilePath())
+        {
+            return;
+        }
+
+        if(m_kernel_metric_table)
+        {
+            m_kernel_metric_table->SetExternalQuery(
+                MetricId{ evt->GetCategoryId(), evt->GetTableId(), evt->GetEntryId() },
+                evt->GetValueName());
+        }
+    };
+
+    m_send_metric_to_kernel_details_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kComputeShowMetricInKernelDetails),
+        metric_navigation_handler);
 }   
 
 void

@@ -28,6 +28,10 @@ struct Notification
     std::string       message;
     NotificationLevel level;
 
+    // Progress
+    uint64_t    progress_pct;
+    std::string progress_message;
+
     // Timing
     double start_time;
     float  duration;
@@ -64,6 +68,7 @@ public:
     void Show(const std::string& message, NotificationLevel level, double duration);
     void ShowPersistent(const std::string& id, const std::string& message,
                         NotificationLevel level = NotificationLevel::Info);
+    void UpdateProgress(const std::string& id, uint64_t pct, const std::string& message);
     void Hide(const std::string& id);
     void ClearAll();
     void Render();

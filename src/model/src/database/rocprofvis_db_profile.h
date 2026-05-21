@@ -48,6 +48,7 @@ typedef enum rocprofvis_track_load_params
 typedef struct rocprofvis_db_event_level_t
 {
     uint64_t id;
+    uint64_t parent_id;
     uint8_t  level_for_queue;
     uint8_t  level_for_stream;
 } rocprofvis_db_event_level_t;
@@ -239,6 +240,13 @@ class ProfileDatabase : public SqliteDatabase
         }
 
     protected:
+    // sqlite3_exec callback to process stack trace information query and add stack trace object to StackTrace container
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names
+    // @return SQLITE_OK if successful
+    static int CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to cache specified tables data
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query

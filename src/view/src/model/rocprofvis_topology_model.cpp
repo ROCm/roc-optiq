@@ -229,7 +229,7 @@ TopologyDataModel::GetDeviceIdByInfoId(uint64_t             info_id,
             const StreamInfo* stream_info = GetStream(info_id);
             if(stream_info)
             {
-                device_id = stream_info->device_id;
+                device_id = stream_info->processors[0].id;
             }
         }
         break;
@@ -293,6 +293,9 @@ TopologyDataModel::GetDeviceTypeLabel(const DeviceInfo& device_info,
             return true;
         case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeGPU:
             label_out = "GPU" + std::to_string(device_info.type_index);
+            return true;
+        case rocprofvis_controller_processor_type_t::kRPVControllerProcessorTypeNIC:
+            label_out = "NIC" + std::to_string(device_info.type_index);
             return true;
         default: return false;
     }
@@ -464,7 +467,10 @@ TopologyDataModel::StreamInfoToString(const StreamInfo* stream_info, int indent)
     {
         ss << indent_str << "Stream ID: " << stream_info->id << std::endl;
         ss << indent_str << "Name: " << stream_info->name << std::endl;
-        ss << indent_str << "Device ID: " << stream_info->device_id << std::endl;
+        ss << indent_str << "Device ID: ";
+        for (auto& processor : stream_info->processors)
+            ss << processor.id;
+        ss << std::endl;
     }
     else
     {

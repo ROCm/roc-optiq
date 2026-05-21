@@ -30,8 +30,7 @@ constexpr const char* FOUND_ENTRIES_TEXT = "Found %llu item(s) on %llu track(s)"
 MultiTrackTable::MultiTrackTable(DataProvider&                      dp,
                                  std::shared_ptr<TimelineSelection> timeline_selection,
                                  TableType                          table_type)
-: InfiniteScrollTable(dp, table_type, NO_DATA_TEXT)
-, m_timeline_selection(timeline_selection)
+: InfiniteScrollTable(dp, table_type, NO_DATA_TEXT, timeline_selection)
 , m_defer_track_selection_changed(false)
 , m_open_context_menu(false)
 , m_group_by_selection_index(0)

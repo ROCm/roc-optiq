@@ -18,6 +18,7 @@ struct NodeModel;
 struct ProcessModel;
 struct ProcessorModel;
 struct IterableModel;
+struct StreamModel;
 class TimelineSelection;
 struct InfoTable;
 
@@ -45,7 +46,7 @@ private:
         IterableModel*     instrumented_thread;
         IterableModel*     sampled_thread;
         IterableModel*     counter;
-        IterableModel*     stream;
+        StreamModel*       stream;
 
         bool operator==(const DetailItem& other) const
         {

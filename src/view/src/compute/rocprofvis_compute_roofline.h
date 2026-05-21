@@ -41,6 +41,14 @@ private:
         Legend,
         Options
     };
+    enum MenusPlacement
+    {
+        InsideTopLeft,
+        InsideTopRight,
+        InsideBottomLeft,
+        InsideBottomRight,
+        Outside
+    };
     struct ItemModel
     {
         enum Type
@@ -88,8 +96,9 @@ private:
         std::vector<size_t> item_indices;
     };
 
-    void RenderMenus(const ImVec2 region, const ImGuiStyle& style,
-                     const ImPlotStyle& plot_style, bool& item_hovered);
+    void RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
+                     const ImGuiStyle& style, const ImPlotStyle& plot_style,
+                     bool& item_hovered);
     void PlotHoverIdx();
     void ApplyPreset(PresetModel::Type type);
 
@@ -98,10 +107,10 @@ private:
     std::vector<PresetModel> m_presets;
 
     // User options...
-    bool      m_show_menus;
-    bool      m_menus_overlap;
-    MenusMode m_menus_mode;
-    bool      m_scale_intensity;
+    bool           m_show_menus;
+    MenusMode      m_menus_mode;
+    MenusPlacement m_menus_placement;
+    bool           m_scale_intensity;
 
     // Internal state...
     bool                  m_workload_changed;
@@ -112,8 +121,10 @@ private:
     const KernelInfo*     m_kernel;
     uint32_t              m_requested_kernel_id;
     bool                  m_options_changed;
+    bool                  m_plot_zoom_enabled;
     std::optional<size_t> m_hovered_item_idx;
     float                 m_hovered_item_distance;
+    float                 m_menus_rendered_height;
 
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;

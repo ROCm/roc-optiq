@@ -11,6 +11,7 @@
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_core_assert.h"
+#include <cstdlib>
 
 namespace RocProfVis
 {
@@ -475,6 +476,7 @@ rocprofvis_result_t Summary::FetchCounterAverage(rocprofvis_dm_trace_t dm_handle
                             {
                                 result = kRocProfVisResultUnknownError;
                             }
+                            free(query);
                         }
                         else
                         {
@@ -662,6 +664,7 @@ rocprofvis_result_t Summary::FetchTopKernels(rocprofvis_dm_trace_t dm_handle, No
             {
                 result = kRocProfVisResultUnknownError;
             }
+            free(query);
         }
         else
         {

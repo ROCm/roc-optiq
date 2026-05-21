@@ -12,6 +12,7 @@
 #include "rocprofvis_cli_parser.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -115,23 +116,30 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
 {
     cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
     bool result = true;
-    result &= cli_parser.AddOption("v", "version", "Print application version", false);
-    result &= cli_parser.AddOption("f", "file", "Open file", true);
-    result &= cli_parser.AddOption("h", "help", "Help the user with commands", false);
+    result &= cli_parser.AddOption("v", "version", "Print version and exit", false);
+    result &= cli_parser.AddOption("f", "file", "Open a trace or project file", true);
+    result &= cli_parser.AddOption(
+        "b", "backend",
+        "Set rendering backend: 'auto' (default), 'vulkan', or 'opengl'", true);
+    result &= cli_parser.AddOption(
+        "d", "file-dialog",
+        "Set file dialog backend: 'auto' (default), 'native' (system file "
+        "dialog), or 'imgui' (built-in). Use 'imgui' when running over SSH",
+        true);
+    result &= cli_parser.AddOption("h", "help",
+        "Show this help message and exit", false);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
 
     if(cli_parser.WasOptionFound("help"))
     {
-        RocProfVis::View::CLIParser::AttachToConsole();
         std::cout << cli_parser.GetHelp() << std::endl;
         exit_app = true;
     }
 
     if(!exit_app && cli_parser.WasOptionFound("version"))
     {
-        RocProfVis::View::CLIParser::AttachToConsole();
         print_version();
 
         if(cli_parser.GetOptionCount() == 1)
@@ -147,9 +155,7 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
         fflush(stdout);
         fflush(stderr);
     }
-    // Always detach from console if attached
-    // (don't want to spam log to console output on windows)
-    RocProfVis::View::CLIParser::DetachFromConsole();    
+ 
 }
 
 int
@@ -157,6 +163,7 @@ main(int argc, char** argv)
 {
     int app_result_code = 0;
 
+    RocProfVis::View::CLIParser::AttachToConsole();
     RocProfVis::View::CLIParser cli_parser;
     bool                        exit_app = false;
     parse_command_line_args(argc, argv, cli_parser, exit_app);
@@ -168,17 +175,73 @@ main(int argc, char** argv)
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "visualizer.debug.log";
+        std::filesystem::path(config_path) / "roc-optiq.debug.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::debug);
 #else
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "visualizer.log";
+        std::filesystem::path(config_path) / "roc-optiq.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
 
+    // Parse backend preference from command line
+    rocprofvis_imgui_backend_preference_t backend_pref = kRPVBackendAuto;
+    if(cli_parser.WasOptionFound("backend"))
+    {
+        std::string backend_str = cli_parser.GetOptionValue("backend");
+        if(backend_str == "auto")
+        {
+            backend_pref = kRPVBackendAuto;
+        }
+        else if(backend_str == "vulkan")
+        {
+            backend_pref = kRPVBackendForceVulkan;
+        }
+        else if(backend_str == "opengl")
+        {
+            backend_pref = kRPVBackendForceOpenGL;
+        }
+        else
+        {
+            spdlog::error("Invalid backend '{}'. Valid options: auto, vulkan, opengl", backend_str);
+            return 1;
+        }
+    }
+
+    rocprofvis_view_file_dialog_preference_t fd_pref = kRocProfVisViewFileDialog_Auto;
+    if(cli_parser.WasOptionFound("file-dialog"))
+    {
+        std::string fd_str = cli_parser.GetOptionValue("file-dialog");
+        if(fd_str == "auto")
+        {
+            fd_pref = kRocProfVisViewFileDialog_Auto;
+        }
+        else if(fd_str == "native")
+        {
+            fd_pref = kRocProfVisViewFileDialog_Native;
+        }
+        else if(fd_str == "imgui")
+        {
+            fd_pref = kRocProfVisViewFileDialog_ImGui;
+        }
+        else
+        {
+            spdlog::error("Invalid --file-dialog '{}'. Valid options: auto, "
+                          "native, imgui",
+                          fd_str);
+            return 1;
+        }
+    }
+
     glfwSetErrorCallback(glfw_error_callback);
+#ifdef __linux__
+    // Force X11 on Linux for multi-viewport and window positioning support
+    // Wayland does not support window positioning which is required for ImGui viewports
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+#endif    
     if(glfwInit())
     {
+        // Create initial window with Vulkan hint (GLFW_NO_API) by default
+        // The backend setup will recreate the window if OpenGL is needed
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 #if defined(GLFW_SCALE_TO_MONITOR)  // GLFW 3.3+
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
@@ -188,32 +251,33 @@ main(int argc, char** argv)
                                               APP_NAME, nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
-        // Initialize fullscreen state with actual window position and size
-        RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
-
-        // Drop file callback
-        glfwSetDropCallback(window, drop_callback);
-        // DPI scaling callback
-        glfwSetWindowContentScaleCallback(window, content_scale_callback);
-        // Initialize once (callback may not fire immediately on some platforms)
+        if(window && rocprofvis_imgui_backend_setup_with_fallback(&backend, &window,
+                                                                  RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
+                                                                  RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
+                                                                  APP_NAME,
+                                                                  backend_pref))
         {
-            float xs, ys;
-            glfwGetWindowContentScale(window, &xs, &ys);
-            content_scale_callback(window, xs, ys);
-        }
-        // Window close callback
-        glfwSetWindowCloseCallback(window, close_callback);
-        // Window size change callback
-        glfwSetWindowSizeCallback(window, window_size_change_callback);
-        // Keyboard callback for fullscreen toggle
-        glfwSetKeyCallback(window, key_callback);
+            RocProfVis::View::CLIParser::DetachFromConsole();
 
-        if(window && rocprofvis_imgui_backend_setup(&backend, window))
-        {
-            glfwShowWindow(window);
-
-            if(backend.m_init(&backend, window))
+            if(rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
+                   &backend, &window, RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
+                   RocProfVis::View::DEFAULT_WINDOWED_HEIGHT, APP_NAME, backend_pref))
             {
+                // After init: window may be recreated (e.g. Vulkan -> OpenGL fallback)
+                glfwSetDropCallback(window, drop_callback);
+                glfwSetWindowContentScaleCallback(window, content_scale_callback);
+                {
+                    float xs, ys;
+                    glfwGetWindowContentScale(window, &xs, &ys);
+                    content_scale_callback(window, xs, ys);
+                }
+                glfwSetWindowCloseCallback(window, close_callback);
+                glfwSetWindowSizeCallback(window, window_size_change_callback);
+                glfwSetKeyCallback(window, key_callback);
+
+                RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
+                glfwShowWindow(window);
+
                 IMGUI_CHECKVERSION();
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
@@ -224,7 +288,7 @@ main(int argc, char** argv)
 
                 rocprofvis_view_init([window](int notification) -> void {
                     app_notification_callback(window, notification);
-                });
+                }, fd_pref);
 
                 backend.m_config(&backend, window);
 
@@ -237,16 +301,13 @@ main(int argc, char** argv)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-                auto [image, pixels] =
-                    RocProfVis::View::create_icon(AMD_LOGO_png, AMD_LOGO_png_len);
-                if(image.pixels != nullptr)
+                RocProfVis::View::EmbeddedImage icon(AMD_LOGO_png,
+                                                     static_cast<int>(AMD_LOGO_png_len));
+                if(icon.Valid())
                 {
-                    // Set the window icon
-                    GLFWimage images[1] = { image };
-                    glfwSetWindowIcon(window, 1, images);
-
-                    // Free the image pixels after setting the icon
-                    RocProfVis::View::free_icon(pixels);
+                    GLFWimage glfw_icon = { icon.GetWidth(), icon.GetHeight(),
+                                            icon.GetPixels() };
+                    glfwSetWindowIcon(window, 1, &glfw_icon);
                 }
 
                 while(!glfwWindowShouldClose(window))
@@ -297,8 +358,17 @@ main(int argc, char** argv)
 
                 backend.m_destroy(&backend);
             }
+            else
+            {
+                spdlog::error(
+                    "GLFW: Failed to initialize graphics device (Vulkan and/or OpenGL)");
+                app_result_code = 1;
+            }
 
-            glfwDestroyWindow(window);
+            if(window)
+            {
+                glfwDestroyWindow(window);
+            }
         }
         else
         {

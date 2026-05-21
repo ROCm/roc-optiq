@@ -53,6 +53,7 @@ typedef enum rocprofvis_controller_processor_type_t
     kRPVControllerProcessorTypeUndefined = 0,
     kRPVControllerProcessorTypeGPU       = 1,
     kRPVControllerProcessorTypeCPU       = 2,
+    kRPVControllerProcessorTypeNIC       = 3,
 } rocprofvis_controller_processor_type_t;
 
 typedef enum rocprofvis_controller_thread_properties_t : uint32_t

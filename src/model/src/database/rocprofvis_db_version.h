@@ -57,13 +57,14 @@ namespace DataModel
         {
             kRocOptiqTableVersionMemoryActivity = 0x0002,
             kRocOptiqTableVersionMemoryAllocate = 0x0001,
-            kRocOptiqTableVersionKernelDispatchLevel = 0x0001,
-            kRocOptiqTableVersionRegionLevel = 0x0001,
-            kRocOptiqTableVersionRegionSampleLevel = 0x0001,
-            kRocOptiqTableVersionMemoryAllocLevel = 0x0001,
-            kRocOptiqTableVersionMemoryCopyLevel = 0x0001,
+            kRocOptiqTableVersionForLevelCalculation = 0x0002,
+            kRocOptiqTableVersionKernelDispatchLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionRegionLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionRegionSampleLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionMemoryAllocLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionMemoryCopyLevel = kRocOptiqTableVersionForLevelCalculation,
             kRocOptiqTableVersionHistogram = 0x0001,
-            kRocOptiqTableVersionTrackInfo = 0x0001,
+            kRocOptiqTableVersionTrackInfo = 0x0002,
         };
 
         struct roc_optiq_metadata_t
@@ -89,6 +90,8 @@ namespace DataModel
 
         MetadataVersionControl(ProfileDatabase* db): m_db(db), m_rebuild_all(false) {}
         rocprofvis_dm_result_t VerifyRocOptiqTablesVersions(Future* future);
+        rocprofvis_dm_result_t DropAllRocOtiqTables(Future* future, uint32_t file_node_id);
+        rocprofvis_dm_result_t CleanupDatabase(Future* future, bool rebuild);
         bool MustRebuild(uint32_t file_node_id, uint8_t id) { return m_rebuild_all || m_roc_optiq_table_properties[id].rebuild[file_node_id]; };
         const char* GetTableName(uint8_t id) { return m_roc_optiq_table_properties[id].name.c_str(); }
         bool DisposeTableWhenTrimming(std::string table_name);

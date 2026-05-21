@@ -231,16 +231,23 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                     char* symbol = nullptr;
                                     char* args     = nullptr;
                                     char* codeline    = nullptr;
+                                    uint64_t id = 0;
+                                    uint64_t depth = 0;
                                     if(kRocProfVisDmResultSuccess ==
+                                        rocprofvis_dm_get_property_as_uint64(
+                                            dm_stacktrace,
+                                            kRPVDMFrameRegionIdUInt64Indexed, index,
+                                            &id) && 
+                                        kRocProfVisDmResultSuccess == 
+                                        rocprofvis_dm_get_property_as_uint64(
+                                            dm_stacktrace,
+                                            kRPVDMFrameDepthUInt64Indexed, index,
+                                            &depth) && 
+                                        kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_stacktrace,
                                                kRPVDMFrameSymbolCharPtrIndexed, index,
                                                &symbol) &&
-                                       kRocProfVisDmResultSuccess ==
-                                           rocprofvis_dm_get_property_as_charptr(
-                                               dm_stacktrace,
-                                               kRPVDMFrameArgsCharPtrIndexed, index,
-                                               &args) &&
                                        kRocProfVisDmResultSuccess ==
                                            rocprofvis_dm_get_property_as_charptr(
                                                dm_stacktrace,
@@ -267,9 +274,9 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                             line_address = FromJson("line_address", parsed.second);
                                         }
                                         
-                                        if(!file.empty() || !pc.empty() || !name.empty() || !line_name.empty() || !line_address.empty())
+                                        if(!name.empty())
                                         {
-                                            CallStack* call_stack = new CallStack(file.c_str(), pc.c_str(), name.c_str(), line_name.c_str(), line_address.c_str());
+                                            CallStack* call_stack = new CallStack(id, depth, file.c_str(), pc.c_str(), name.c_str(), line_name.c_str(), line_address.c_str());
                                             result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, entry_counter + 1);
                                             if(result == kRocProfVisResultSuccess)
                                             {

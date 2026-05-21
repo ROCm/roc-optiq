@@ -242,5 +242,18 @@ open_url(const std::string& url);
 std::string
 get_executable_name(const std::string& fullPath);
 
+/**
+ * @brief Detects whether the current process appears to be running in a remote
+ *        session where xdg-desktop-portal file dialogs cannot reach the user.
+ *
+ * Returns true when any of `SSH_CONNECTION`, `SSH_CLIENT`, or `SSH_TTY` is set,
+ * or when `DISPLAY` matches the pattern `localhost:N[.S]` with `N >= 10` (the
+ * display-number range SSH uses for X11 forwarding; local X servers use :0/:1).
+ *
+ * The result is cached on first call.
+ */
+bool
+is_remote_display_session();
+
 }  // namespace View
 }  // namespace RocProfVis

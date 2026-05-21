@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_notification_manager.h"
-#include "rocprofvis_settings_manager.h"
 #include "imgui.h"
+#include "rocprofvis_gui_helpers.h"
+#include "rocprofvis_settings_manager.h"
 #include <algorithm>
 
 #include "spdlog/spdlog.h"
@@ -80,7 +81,7 @@ NotificationManager::Show(const std::string& message, NotificationLevel level,
                           double duration)
 {
     m_notifications.push_back({ "",  // No ID needed for timed notifications
-                                message, level, ImGui::GetTime(),
+                                message, level, 0, "", ImGui::GetTime(),
                                 static_cast<float>(duration), m_default_fade_duration,
                                 false,  // is_persistent
                                 false,  // is_hiding
@@ -107,7 +108,7 @@ NotificationManager::ShowPersistent(const std::string& id, const std::string& me
     else
     {
         // Add a new persistent notification
-        m_notifications.push_back({ id, message, level, ImGui::GetTime(),
+        m_notifications.push_back({ id, message, level, 0, "", ImGui::GetTime(),
                                     0.0f,  // duration is irrelevant for persistent
                                     m_default_fade_duration,
                                     true,   // is_persistent
@@ -115,7 +116,20 @@ NotificationManager::ShowPersistent(const std::string& id, const std::string& me
                                     0.0 });
         auto& n = m_notifications.back();
         n.uid = "##note_" + std::to_string(++m_next_uid);
+    }
+}
 
+void
+NotificationManager::UpdateProgress(const std::string& id, uint64_t pct,
+                                    const std::string& message)
+{
+    auto it = std::find_if(m_notifications.begin(), m_notifications.end(),
+                           [&](const Notification& n) { return n.id == id; });
+
+    if(it != m_notifications.end())
+    {
+        it->progress_pct     = pct;
+        it->progress_message = message;
     }
 }
 
@@ -143,12 +157,13 @@ void
 NotificationManager::Render()
 {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImGuiStyle&    style    = ImGui::GetStyle();
     ImVec2               base_pos = viewport->WorkPos;
     float                y_offset = 0.0f;
     const float          padding  = 10.0f;
 
-    // Use fixed height for notifications
-    float notification_height = ImGui::GetTextLineHeight() + ImGui::GetStyle().WindowPadding.y * 2.0f;
+    // Default height for notifications
+    float notification_height = ImGui::GetTextLineHeight() + style.WindowPadding.y * 2.0f;
 
     double current_time = ImGui::GetTime();
 
@@ -162,6 +177,12 @@ NotificationManager::Render()
             continue;  // Skip rendering if fully transparent
         }
 
+        bool display_progress =
+            notification.progress_pct > 0 || !notification.progress_message.empty();
+        if(display_progress)
+        {
+            notification_height += ImGui::GetFrameHeightWithSpacing();
+        }
         ImVec2 window_pos(base_pos.x + viewport->WorkSize.x - padding,
                           base_pos.y + viewport->WorkSize.y - padding - y_offset);
         ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always,
@@ -183,6 +204,20 @@ NotificationManager::Render()
         text_color.w      = opacity;
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
         ImGui::TextUnformatted(notification.message.c_str());
+        if(display_progress)
+        {
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
+                                  notification.progress_pct >= 100
+                                      ? GetBgColorForLevel(NotificationLevel::Success)
+                                      : style.Colors[ImGuiCol_PlotHistogram]);
+            ImGui::ProgressBar(notification.progress_pct / 100.0f, ImVec2(-1, 0), "");
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(style.FramePadding.x * 2.0f);
+            ElidedText(notification.progress_message.c_str(),
+                       ImGui::GetItemRectSize().x - style.FramePadding.x * 2.0f,
+                       ImGui::GetWindowWidth(), Alignment_Center, true);
+        }
         ImGui::PopStyleColor();
 
         y_offset += notification_height + m_notification_spacing;

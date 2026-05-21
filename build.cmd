@@ -36,7 +36,7 @@ REM if %ERRORLEVEL% NEQ 0 GOTO BUILDISSUE
 REM Copy the built executable to proper folder structure for release
 ECHO Build.cmd: Copying files to standard folder structure
 copy /y "%DEVROOT%\build\x64-release\Release\%VISUALIZER_FILE_NAME%.exe" "%DEVROOT%\ReleaseCommon\64Bit\All\"
-copy /y "%DEVROOT%\build\x64-release\Release\glfw3.dll" "%DEVROOT%\ReleaseCommon\64Bit\All\"
+REM copy /y "%DEVROOT%\build\x64-release\Release\glfw3.dll" "%DEVROOT%\ReleaseCommon\64Bit\All\"
 copy /y "%DEVROOT%\README.md" "%DEVROOT%\ReleaseCommon\64Bit\All\"
 md "%DEVROOT%\ReleaseCommon\64Bit\All\docs"
 md "%DEVROOT%\ReleaseCommon\64Bit\All\docs\images"

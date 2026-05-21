@@ -10,6 +10,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <algorithm>
 #include <cmath>
@@ -60,6 +61,12 @@ ComputeSummaryView::ComputeSummaryView(
             {
                 m_roofline->SetWorkload(selection_changed_event->GetId());
             }
+            if(m_sol_table)
+            {
+                m_sol_table->Clear();
+                m_sol_table->FetchMetrics();
+            }
+            
         }
     };
 
@@ -75,14 +82,22 @@ ComputeSummaryView::ComputeSummaryView(
             {
                 return;
             }
+
+            if(m_sol_table && m_sol_table->GetClientId() == metrics_fetched_event->GetClientId())
+            {
+                m_sol_table->UpdateTable();
+            }
         }
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
 
+        
     m_top_kernels = std::make_unique<ComputeTopKernels>(m_data_provider);
     m_roofline    = std::make_unique<Roofline>(m_data_provider, Roofline::AllKernels);
+    m_sol_table   = std::make_unique<WorkloadMetricTableWidget>(
+        data_provider, compute_selection, METRIC_CAT_SOL, METRIC_TABLE_SOL);
 
     m_widget_name = GenUniqueName("ComputeSummaryView");
 }
@@ -125,6 +140,10 @@ ComputeSummaryView::Render()
                                                             ImGui::GetWindowHeight())));
         m_roofline->Render();
         ImGui::EndChild();
+    }
+    if(m_sol_table)
+    {
+        m_sol_table->Render();
     }
     ImGui::EndChild();
 }
@@ -224,12 +243,8 @@ ComputeTopKernels::Update()
             m_kernels.clear();
             m_padded_info = nullptr;
             m_padded_idx  = std::nullopt;
-            const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
-                m_data_provider.ComputeModel().GetWorkloads();
-            if(workloads.count(m_requested_workload_id) > 0)
-            {
-                m_workload = &workloads.at(m_requested_workload_id);
-            }
+            m_workload =
+                m_data_provider.ComputeModel().GetWorkload(m_requested_workload_id);
             if(m_workload)
             {
                 std::vector<const KernelInfo*> all_kernels =
@@ -330,19 +345,19 @@ ComputeTopKernels::Update()
         {
             for(KernelBarModel::MetricSet& metric_set : m_kernel_bar.metric_sets)
             {
-                switch(m_kernel_bar.selected_metric)
+                switch(metric_set.metric)
                 {
                     case KernelInfo::InvocationCount:
                     {
                         metric_set.axis_title =
-                            DISPLAY_STRING_METRICS[m_kernel_bar.selected_metric];
+                            DISPLAY_STRING_METRICS[metric_set.metric];
                         break;
                     }
                     default:
                     {
                         metric_set.axis_title =
                             std::string(
-                                DISPLAY_STRING_METRICS[m_kernel_bar.selected_metric]) +
+                                DISPLAY_STRING_METRICS[metric_set.metric]) +
                             " (" +
                             timeformat_sufix(
                                 m_settings.GetUserSettings().unit_settings.time_format) +
@@ -372,7 +387,7 @@ ComputeTopKernels::Render()
     for(auto& item : m_flex_container.items)
         item.height = panel_h;
 
-    ImPlot::PushColormap("flame");
+    ImPlot::PushColormap(m_settings.GetFlameColormapName());
     m_flex_container.gap = plot_style.PlotPadding.x;
     m_flex_container.Render();
     ImPlot::PopColormap();
@@ -413,7 +428,7 @@ ComputeTopKernels::RenderChartContent()
     ImGui::BeginGroup();
     if(IconButton(ICON_CHART_PIE,
                   m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                  ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                  ImVec2(0, 0), nullptr, false, style.FramePadding,
                   m_settings.GetColor(m_display_mode == Pie ? Colors::kButton
                                                             : Colors::kTransparent),
                   m_settings.GetColor(Colors::kButtonHovered),
@@ -424,7 +439,7 @@ ComputeTopKernels::RenderChartContent()
     ImGui::SameLine();
     if(IconButton(ICON_CHART_BAR,
                   m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                  ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                  ImVec2(0, 0), nullptr, false, style.FramePadding,
                   m_settings.GetColor(m_display_mode == Bar ? Colors::kButton
                                                             : Colors::kTransparent),
                   m_settings.GetColor(Colors::kButtonHovered),
@@ -509,7 +524,7 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
             });
         if(m_hovered_idx)
         {
-            ImPlot::PushColormap("white");
+            ImPlot::PushColormap(m_settings.GetContrastColormapName());
             ImGui::PushID(1);
             ImPlot::PlotPieChart(
                 &m_kernel_pie.labels[m_hovered_idx.value()],
@@ -611,10 +626,10 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                         ImGui::GetFontSize() * 0.5f));
                 ElidedText(m_kernels[i]->name.c_str(),
                            y_axis_width - plot_style.LabelPadding.x,
-                           ImGui::GetContentRegionAvail().x * 0.5f, true);
+                           ImGui::GetContentRegionAvail().x * 0.5f, Alignment_Right);
                 if(i == m_hovered_idx)
                 {
-                    ImPlot::PushColormap("white");
+                    ImPlot::PushColormap(m_settings.GetContrastColormapName());
                 }
                 ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(static_cast<int>(i)));
                 // PlotBars(uint64_t) may be undefined on Linux, cast to ImU64.

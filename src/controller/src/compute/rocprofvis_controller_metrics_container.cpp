@@ -41,12 +41,44 @@ rocprofvis_result_t MetricsContainer::GetUInt64(rocprofvis_property_t property, 
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerMetricsContainerMetricSourceTypeIndexed:
+            {
+                if(index < m_container.size())
+                {
+                    *value = m_container[index].source_type;
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            case kRPVControllerMetricsContainerWorkloadIdIndexed:
+            {
+                if(index < m_container.size())
+                {
+                    if(m_container[index].source_type == kRPVControllerMetricSourceTypeWorkload)
+                    {
+                        *value = m_container[index].source_id;
+                        result = kRocProfVisResultSuccess;
+                    }
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
             case kRPVControllerMetricsContainerKernelIdIndexed:
             {
                 if(index < m_container.size())
                 {
-                    *value = m_container[index].kernel_id;
-                    result = kRocProfVisResultSuccess;
+                    if(m_container[index].source_type == kRPVControllerMetricSourceTypeKernel)
+                    {
+                        *value = m_container[index].source_id;
+                        result = kRocProfVisResultSuccess;
+                    }
                 }
                 else
                 {
@@ -161,10 +193,32 @@ rocprofvis_result_t MetricsContainer::SetUInt64(rocprofvis_property_t property, 
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerMetricsContainerWorkloadIdIndexed:
+        {
+            if(index < m_container.size())
+            {
+                m_container[index].source_type = kRPVControllerMetricSourceTypeWorkload;
+                m_container[index].source_id = (uint32_t) value;
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
+            break;
+        }
         case kRPVControllerMetricsContainerKernelIdIndexed:
         {
-            m_container[index].kernel_id = (uint32_t)value;
-            result = kRocProfVisResultSuccess;
+            if(index < m_container.size())
+            {
+                m_container[index].source_type = kRPVControllerMetricSourceTypeKernel;
+                m_container[index].source_id = (uint32_t) value;
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
             break;
         }
         default:
@@ -183,7 +237,15 @@ rocprofvis_result_t MetricsContainer::SetDouble(rocprofvis_property_t property, 
     {
         case kRPVControllerMetricsContainerMetricValueValueIndexed:
         {
-            m_container[index].value = value;
+            if(index < m_container.size())
+            {
+                m_container[index].value = value;
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
             break;
         }
         default:
@@ -201,20 +263,41 @@ rocprofvis_result_t MetricsContainer::SetString(rocprofvis_property_t property, 
     {
         case kRPVControllerMetricsContainerMetricIdIndexed:
         {
-            m_container[index].id_idx = StringTable::Get().AddString(value, true);
-            result = kRocProfVisResultSuccess;
+            if(index < m_container.size())
+            {
+                m_container[index].id_idx = StringTable::Get().AddString(value, true);
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
             break;
         }
         case kRPVControllerMetricsContainerMetricNameIndexed:
         {
-            m_container[index].name_idx = StringTable::Get().AddString(value, true);
-            result = kRocProfVisResultSuccess;
+            if(index < m_container.size())
+            {
+                m_container[index].name_idx = StringTable::Get().AddString(value, true);
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
             break;
         }
         case kRPVControllerMetricsContainerMetricValueNameIndexed:
         {
-            m_container[index].value_name_idx = StringTable::Get().AddString(value, true);
-            result = kRocProfVisResultSuccess;
+            if(index < m_container.size())
+            {
+                m_container[index].value_name_idx = StringTable::Get().AddString(value, true);
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
             break;
         }
         default:
@@ -241,6 +324,12 @@ bool MetricsContainer::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t i
         {
             property = kRPVControllerMetricsContainerMetricNameIndexed;
             type = kRPVControllerPrimitiveTypeString;
+            break;
+        }
+        case kRPVComputeColumnWorkloadId:
+        {
+            property = kRPVControllerMetricsContainerWorkloadIdIndexed;
+            type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
         case kRPVComputeColumnKernelUUID:

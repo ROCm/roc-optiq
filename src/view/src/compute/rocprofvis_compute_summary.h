@@ -21,6 +21,7 @@ class SettingsManager;
 class ComputeSelection;
 class Roofline;
 class ComputeTopKernels;
+class WorkloadMetricTableWidget;
 
 class ComputeSummaryView : public RocWidget
 {
@@ -35,9 +36,10 @@ public:
 private:
     DataProvider& m_data_provider;
 
-    std::shared_ptr<ComputeSelection>  m_compute_selection;
-    std::unique_ptr<Roofline>          m_roofline;
-    std::unique_ptr<ComputeTopKernels> m_top_kernels;
+    std::shared_ptr<ComputeSelection>          m_compute_selection;
+    std::unique_ptr<Roofline>                  m_roofline;
+    std::unique_ptr<ComputeTopKernels>         m_top_kernels;
+    std::unique_ptr<WorkloadMetricTableWidget> m_sol_table;
 
     uint64_t m_client_id;
 

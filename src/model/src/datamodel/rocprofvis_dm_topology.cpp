@@ -24,7 +24,11 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, uint64
 	auto it = props_map->find(name);
 	if (it != props_map->end())
 	{
-		bool is_topology_id = it->second == kRPVControllerQueueId || it->second == kRPVControllerCounterId || it->second == kRPVControllerProcessorId;
+		bool is_topology_id =
+			it->second == kRPVControllerQueueId ||
+			it->second == kRPVControllerCounterId ||
+			it->second == kRPVControllerProcessorId || 
+			it->second == kRPVControllerStreamId;
 		switch (type)
 		{
 			case kRPVTopologyDataTypeInt:
@@ -76,7 +80,7 @@ rocprofvis_dm_result_t   TopologyNodeRoot::AddProperty(rocprofvis_dm_track_ident
 	TopologyNode* node = FindRelevantPropertyNode(track_identifiers, table);
 	if (node)
 	{
-		node->SetBasicProperty(name, db_instance->GuidIndex(), type, (const char* )value);
+		node->SetBasicProperty(name, db_instance->GuidIndex(), type, (const char*)value);
 	}
 
 	node = FindRelevantTopologyNode(track_identifiers, table);
@@ -573,8 +577,9 @@ std::string TopologyNodeMemoryCopy::GetNodeName() {
 rocprofvis_dm_result_t TopologyNodeMemoryAllocation::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) {
 	if (kRPVControllerTopologyNodePropertyValueKeyed == property && kRPVControllerQueueId == index)
 	{
-		*value = kRocProfVisDmMemoryAllocationTrack;
-		return kRocProfVisDmResultSuccess;
+		rocprofvis_dm_result_t result = m_prev_node->GetPropertyAsUint64(property, kRPVControllerProcessorId, value);
+		*value += kRocProfVisDmMemoryAllocationTrack;
+		return result;
 	}
 	else
 	{
@@ -585,8 +590,9 @@ rocprofvis_dm_result_t TopologyNodeMemoryAllocation::GetPropertyAsUint64(rocprof
 rocprofvis_dm_result_t TopologyNodeMemoryCopy::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) {
 	if (kRPVControllerTopologyNodePropertyValueKeyed == property && kRPVControllerQueueId == index)
 	{
-		*value = kRocProfVisDmMemoryCopyTrack;
-		return kRocProfVisDmResultSuccess;
+		rocprofvis_dm_result_t result = m_prev_node->GetPropertyAsUint64(property, kRPVControllerProcessorId, value);
+		*value += kRocProfVisDmMemoryCopyTrack;
+		return result;
 	}
 	else
 	{

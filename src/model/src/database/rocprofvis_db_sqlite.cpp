@@ -754,6 +754,40 @@ SqliteDatabase::DropSQLIndex(const char* index_name, uint32_t db_node_id)
     return kRocProfVisDmResultSuccess;
 }
 
+std::vector<std::string> SqliteDatabase::GetRocpdIndexes(uint32_t db_node_id)
+{
+    std::vector<std::string> indexes;
+    sqlite3* conn = GetConnection(db_node_id);
+    sqlite3_mutex_enter(sqlite3_db_mutex(conn));
+    const char* query =
+        "SELECT name FROM sqlite_master "
+        "WHERE type = 'index' "
+        "AND name LIKE 'rocpd_%' "
+        "AND name NOT LIKE 'sqlite_%';";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (sqlite3_prepare_v2(conn, query, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        // handle error if needed
+        return indexes;
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        const unsigned char* text = sqlite3_column_text(stmt, 0);
+        if (text)
+        {
+            indexes.emplace_back(reinterpret_cast<const char*>(text));
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_mutex_leave(sqlite3_db_mutex(conn));
+    ReleaseConnection(conn, db_node_id);
+    return indexes;
+}
+
 rocprofvis_dm_result_t
 SqliteDatabase::ExecuteTransaction(std::vector<std::string> queries,  uint32_t db_node_id)
 {

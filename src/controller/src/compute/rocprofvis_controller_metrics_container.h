@@ -33,10 +33,12 @@ public:
     bool QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocprofvis_property_t& property, rocprofvis_controller_primitive_type_t& type) const;
 
 private:
-    struct Metric {
+    struct Metric 
+    {
         size_t id_idx;
         size_t name_idx;
-        uint32_t kernel_id;
+        rocprofvis_controller_metric_source_type_t source_type;
+        uint32_t source_id;
         size_t value_name_idx;
         double value;
     };

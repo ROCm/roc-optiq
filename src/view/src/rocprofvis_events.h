@@ -20,6 +20,7 @@ enum class RocEvents
     kTabSelected,
     kTimelineTrackSelectionChanged,
     kTimelineEventSelectionChanged,
+    kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
     kStickyNoteEdited,
@@ -28,15 +29,12 @@ enum class RocEvents
     kGoToTimelineSpot,
     kTimeFormatChanged,
     kTopologyChanged,
+    kRequestProgressUpdate,
 #ifdef COMPUTE_UI_SUPPORT
-    //legacy events
-    kComputeDataDirty,
-    kComputeBlockNavigationChanged,
-    kComputeTableSearchChanged,
-    //new events
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,
     kComputeMetricsFetched,
+    kComputeShowMetricInKernelDetails,
 #endif
 };
 
@@ -48,14 +46,17 @@ enum class RocEventType
     kTabEvent,
     kTimelineTrackSelectionChangedEvent,
     kTimelineEventSelectionChangedEvent,
+    kTimelineEventHighlightChangedEvent,
     kScrollToTrackEvent,
     kStickyNoteEvent,
     kRangeEvent,
     kNavigationEvent,
+    kRequestProgressUpdateEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
     kComputeSelectionChangedEvent,
     kComputeMetricsFetchedEvent,
+    kComputeAddMetricToKernelDetailsEvent,
 #endif
 };
 
@@ -195,16 +196,6 @@ private:
 };
 
 #ifdef COMPUTE_UI_SUPPORT
-class ComputeTableSearchEvent : public RocEvent
-{
-public:
-    ComputeTableSearchEvent(int event_id, std::string& term);
-    const std::string GetSearchTerm();
-
-private:
-    std::string m_search_term;
-};
-
 class ComputeSelectionChangedEvent : public RocEvent
 {
 public:
@@ -224,6 +215,23 @@ public:
 
 private:
     uint64_t m_client_id;
+};
+
+class ComputeAddMetricToKernelDetailsEvent : public RocEvent
+{
+public:
+    ComputeAddMetricToKernelDetailsEvent(uint32_t category_id, uint32_t table_id, uint32_t entry_id,
+                                         const std::string& value_name, const std::string& source_id);
+    uint32_t GetCategoryId() const;
+    uint32_t GetTableId() const;
+    uint32_t GetEntryId() const;
+    const std::string& GetValueName() const;
+
+private:
+    uint32_t m_category_id;
+    uint32_t m_table_id;
+    uint32_t m_entry_id;
+    std::string  m_value_name;
 };
 
 #endif
@@ -267,6 +275,23 @@ private:
     bool        m_is_batch;
 };
 
+class EventHighlightChangedEvent : public RocEvent
+{
+public:
+    EventHighlightChangedEvent(uint64_t event_id, uint64_t track_id, bool highlighted,
+                               const std::string& source_id, bool batch = false);
+    uint64_t GetEventID() const;
+    uint64_t GetEventTrackID() const;
+    bool     EventHighlighted() const;
+    bool     IsBatch() const;
+
+private:
+    uint64_t m_event_id;
+    uint64_t m_event_track_id;
+    bool     m_highlighted;
+    bool     m_is_batch;
+};
+
 class RangeEvent : public RocEvent
 {
 public:
@@ -278,6 +303,26 @@ public:
 private:
     double      m_start_ns;
     double      m_end_ns;
+};
+
+enum class RequestType;
+
+class RequestProgressUpdateEvent : public RocEvent
+{
+public:
+    RequestProgressUpdateEvent(uint64_t request_id, RequestType request_type,
+                               uint64_t progress_percent, const std::string& message,
+                               const std::string& source_id);
+    uint64_t           GetRequestID() const;
+    RequestType        GetRequestType() const;
+    uint64_t           GetProgressPercent() const;
+    const std::string  GetMessage() const;
+
+private:
+    uint64_t    m_request_id;
+    RequestType m_request_type;
+    uint64_t    m_progress_percent;
+    std::string m_message;
 };
 
 }  // namespace View

@@ -175,6 +175,7 @@ typedef struct {
     rocprofvis_dm_charptr_t args;                   // stacktrace call arguments
     rocprofvis_dm_charptr_t line;                   // stacktrace code line
     uint32_t depth;                                 // stacktrace depth
+    uint64_t id;                                    // region event id
 }rocprofvis_db_stack_data_t;
 
 // rocprofvis_db_ext_data_t is used to pass extended data record from database to data model. Used by database query callbacks

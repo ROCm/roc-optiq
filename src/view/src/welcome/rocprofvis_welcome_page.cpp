@@ -44,17 +44,12 @@ constexpr float WELCOME_TILE_DIVIDER_THICKNESS  = 1.0f;
 constexpr float WELCOME_TILE_BORDER_ALPHA_LIGHT = 0.82f;
 
 // Primary action button (Start tile).
-constexpr float WELCOME_ACTION_HEIGHT_EM            = 4.6f;
-constexpr float WELCOME_ACTION_ROUNDING_EM          = 0.18f;
-constexpr float WELCOME_ACTION_TEXT_X_EM            = 1.05f;
-constexpr float WELCOME_ACTION_TEXT_Y_EM            = 0.85f;
-constexpr float WELCOME_ACTION_RIGHT_PAD_EM         = 0.8f;
-constexpr float WELCOME_ACTION_LINE_GAP_EM          = 1.35f;
-constexpr float WELCOME_ACTION_SPACING_EM           = 0.25f;
-constexpr float WELCOME_ACTION_BG_ALPHA_DARK_HOVER  = 0.30f;
-constexpr float WELCOME_ACTION_BG_ALPHA_DARK_IDLE   = 0.22f;
-constexpr float WELCOME_ACTION_BG_ALPHA_LIGHT_HOVER = 0.45f;
-constexpr float WELCOME_ACTION_BG_ALPHA_LIGHT_IDLE  = 0.35f;
+constexpr float WELCOME_ACTION_HEIGHT_EM     = 4.6f;
+constexpr float WELCOME_ACTION_TEXT_X_EM     = 1.05f;
+constexpr float WELCOME_ACTION_TEXT_Y_EM     = 0.85f;
+constexpr float WELCOME_ACTION_RIGHT_PAD_EM  = 0.8f;
+constexpr float WELCOME_ACTION_LINE_GAP_EM   = 1.35f;
+constexpr float WELCOME_ACTION_SPACING_EM    = 0.25f;
 
 // Resource card.
 constexpr float WELCOME_CARD_HEIGHT_EM            = 6.2f;
@@ -289,7 +284,7 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
 // Primary action row used in the Start tile.
 bool
 DrawPrimaryAction(SettingsManager& settings, const char* id, const char* title,
-                  const char* subtitle, float width)
+                  const char* subtitle, const char* tooltip, float width)
 {
     const float  font_size = ImGui::GetFontSize();
     const ImVec2 size(width, font_size * WELCOME_ACTION_HEIGHT_EM);
@@ -300,23 +295,23 @@ DrawPrimaryAction(SettingsManager& settings, const char* id, const char* title,
     ImGui::InvisibleButton("action", size);
     const bool clicked = ImGui::IsItemClicked();
     const bool hovered = ImGui::IsItemHovered();
+    const bool active  = ImGui::IsItemActive();
+    if(hovered && tooltip)
+    {
+        SetTooltipStyled("%s", tooltip);
+    }
 
-    ImDrawList* draw_list  = ImGui::GetWindowDrawList();
-    const float rounding   = settings.GetDefaultStyle().ChildRounding +
-                             font_size * WELCOME_ACTION_ROUNDING_EM;
-    const ImU32 accent_col = settings.GetColor(Colors::kAccentRed);
-    const bool  is_dark =
-        settings.GetUserSettings().display_settings.use_dark_mode;
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const float rounding  = settings.GetDefaultStyle().FrameRounding;
+    const ImU32 bg_col = active   ? settings.GetColor(Colors::kAccentRedActive)
+                           : hovered ? settings.GetColor(Colors::kAccentRedHover)
+                                     : settings.GetColor(Colors::kAccentRed);
+    const ImU32 border_col =
+        hovered || active ? settings.GetColor(Colors::kAccentRedHover)
+                          : settings.GetColor(Colors::kAccentRed);
 
-    const float bg_alpha =
-        is_dark ? (hovered ? WELCOME_ACTION_BG_ALPHA_DARK_HOVER
-                           : WELCOME_ACTION_BG_ALPHA_DARK_IDLE)
-                : (hovered ? WELCOME_ACTION_BG_ALPHA_LIGHT_HOVER
-                           : WELCOME_ACTION_BG_ALPHA_LIGHT_IDLE);
-
-    draw_list->AddRectFilled(pos, bottom_right, ApplyAlpha(accent_col, bg_alpha),
-                             rounding);
-    draw_list->AddRect(pos, bottom_right, accent_col, rounding);
+    draw_list->AddRectFilled(pos, bottom_right, bg_col, rounding);
+    draw_list->AddRect(pos, bottom_right, border_col, rounding);
 
     const ImVec2 text_pos(pos.x + font_size * WELCOME_ACTION_TEXT_X_EM,
                           pos.y + font_size * WELCOME_ACTION_TEXT_Y_EM);
@@ -325,10 +320,10 @@ DrawPrimaryAction(SettingsManager& settings, const char* id, const char* title,
         ImVec2(bottom_right.x - font_size * WELCOME_ACTION_RIGHT_PAD_EM,
                bottom_right.y),
         true);
-    draw_list->AddText(text_pos, settings.GetColor(Colors::kTextMain), title);
+    draw_list->AddText(text_pos, settings.GetColor(Colors::kTextOnAccent), title);
     draw_list->AddText(
         ImVec2(text_pos.x, text_pos.y + font_size * WELCOME_ACTION_LINE_GAP_EM),
-        settings.GetColor(Colors::kTextDim), subtitle);
+        settings.GetColor(Colors::kTextOnAccent), subtitle);
     draw_list->PopClipRect();
 
     ImGui::PopID();
@@ -518,13 +513,10 @@ WelcomePage::RenderStartTile()
                             ImVec2(0.0f, font_size * WELCOME_ACTION_SPACING_EM));
         const float inner_w = ImGui::GetContentRegionAvail().x;
         if(DrawPrimaryAction(settings, "open_trace", "Open Trace File...",
-                             "Open a .db, .rpd, .rpv or .yaml file.", inner_w))
+                             "Open a .db, .rpd, .rpv or .yaml file.",
+                             SUPPORTED_FILE_TYPES_HINT, inner_w))
         {
             m_on_open_file();
-        }
-        if(ImGui::IsItemHovered())
-        {
-            SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
         }
 
         ImGui::Dummy(ImVec2(0.0f, font_size * WELCOME_SECTION_GAP_EM));

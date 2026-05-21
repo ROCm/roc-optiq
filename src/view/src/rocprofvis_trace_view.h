@@ -27,6 +27,7 @@ class SettingsManager;
 class EventSearch;
 class SummaryView;
 class Minimap;
+class MeasurementController;
 
 class SystemTraceProjectSettings : public ProjectSetting
 {
@@ -58,6 +59,8 @@ public:
     void CreateView();
     void DestroyView();
 
+    DataProvider* GetDataProvider() override { return &m_data_provider; }
+
     bool HasTrimActiveTrimSelection() const;
     bool IsTrimSaveAllowed() const;
 
@@ -79,9 +82,11 @@ private:
     void RenderFlowControls();
     void RenderAnnotationControls();
     void RenderEventSearch();
+    void RenderMeasurementControls();
 
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
+    std::shared_ptr<MeasurementController> m_measurement;
     std::shared_ptr<TrackTopology>     m_track_topology;
     std::shared_ptr<RocCustomWidget>   m_tool_bar;
     std::shared_ptr<HSplitContainer>   m_horizontal_split_container;

@@ -58,18 +58,21 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(145, 156, 174, 255),  // Colors::kTextDim
     IM_COL32(29, 30, 38, 255),     // Colors::kScrollBg
     IM_COL32(70, 82, 104, 255),    // Colors::kScrollGrab
-    IM_COL32(29, 30, 38, 255),     // Colors::kTableHeaderBg
+    IM_COL32(32, 34, 44, 255),     // Colors::kTableHeaderBg
     IM_COL32(50, 59, 76, 255),     // Colors::kTableBorderStrong
     IM_COL32(39, 43, 56, 255),     // Colors::kTableBorderLight
-    IM_COL32(34, 37, 48, 255),     // Colors::kTableRowBg
-    IM_COL32(39, 43, 56, 255),     // Colors::kTableRowBgAlt
+    IM_COL32(32, 36, 47, 255),     // Colors::kTableRowBg
+    IM_COL32(38, 42, 54, 255),     // Colors::kTableRowBgAlt
+    IM_COL32(34, 37, 48, 255),     // Colors::kTableBorderInner
+    IM_COL32(44, 50, 64, 255),     // Colors::kTableBorderOuter
+    IM_COL32(40, 45, 58, 255),     // Colors::kPanelBorderSubtle
     IM_COL32(106, 164, 232, 230),  // Colors::kEventHighlight
     IM_COL32(130, 210, 178, 230),  // Colors::kEventSearchHighlight
     IM_COL32(106, 164, 232, 85),   // Colors::kAreaOfInterest
     IM_COL32(120, 162, 255, 120),  // Colors::kLineChartColor
-    IM_COL32(39, 43, 56, 255),     // Colors::kButton
-    IM_COL32(50, 59, 76, 255),     // Colors::kButtonHovered
-    IM_COL32(62, 76, 102, 255),    // Colors::kButtonActive
+    IM_COL32(44, 52, 70, 255),     // Colors::kButton
+    IM_COL32(56, 66, 88, 255),     // Colors::kButtonHovered
+    IM_COL32(66, 80, 108, 255),    // Colors::kButtonActive
     IM_COL32(180, 160, 60, 255),   // Colors::kBgWarning
     IM_COL32(160, 60, 60, 255),    // Colors::kBgError
     IM_COL32(60, 160, 60, 255),    // Colors::kBgSuccess
@@ -93,6 +96,11 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(29, 30, 38, 255),     // Colors::kMinimapBg
     IM_COL32(10, 12, 18, 170),     // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 200, 255, 255),    // Colors::kMeasurementColor
+    IM_COL32(30, 30, 30, 240),     // Colors::kMeasurementLabelBg
+    IM_COL32(70, 70, 70, 200),     // Colors::kMeasurementLabelEdge
+    IM_COL32(255, 255, 255, 255),  // Colors::kMeasurementLabelText
+    IM_COL32(255, 255, 255, 120),  // Colors::kMeasurementNotch
     IM_COL32(42, 82, 118, 255),    // Colors::kComparisonBase
     IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
     IM_COL32(205, 170, 82, 255),   // Colors::kComparisonLesser
@@ -137,18 +145,21 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(106, 112, 128, 255),  // Colors::kTextDim
     IM_COL32(247, 248, 250, 255),  // Colors::kScrollBg
     IM_COL32(190, 196, 208, 255),  // Colors::kScrollGrab
-    IM_COL32(247, 248, 250, 255),  // Colors::kTableHeaderBg
+    IM_COL32(245, 246, 248, 255),  // Colors::kTableHeaderBg
     IM_COL32(214, 218, 226, 255),  // Colors::kTableBorderStrong
     IM_COL32(232, 235, 240, 255),  // Colors::kTableBorderLight
-    IM_COL32(255, 255, 255, 255),  // Colors::kTableRowBg
-    IM_COL32(250, 251, 253, 255),  // Colors::kTableRowBgAlt
+    IM_COL32(253, 254, 255, 255),  // Colors::kTableRowBg
+    IM_COL32(248, 250, 253, 255),  // Colors::kTableRowBgAlt
+    IM_COL32(244, 246, 250, 255),  // Colors::kTableBorderInner
+    IM_COL32(220, 224, 232, 255),  // Colors::kTableBorderOuter
+    IM_COL32(236, 239, 244, 255),  // Colors::kPanelBorderSubtle
     IM_COL32(54, 132, 214, 220),   // Colors::kEventHighlight
     IM_COL32(72, 174, 136, 220),   // Colors::kEventSearchHighlight
     IM_COL32(54, 132, 214, 35),    // Colors::kAreaOfInterest
     IM_COL32(88, 132, 245, 105),   // Colors::kLineChartColor
-    IM_COL32(244, 246, 250, 255),  // Colors::kButton
-    IM_COL32(232, 236, 244, 255),  // Colors::kButtonHovered
-    IM_COL32(220, 226, 238, 255),  // Colors::kButtonActive
+    IM_COL32(232, 238, 248, 255),  // Colors::kButton
+    IM_COL32(222, 230, 242, 255),  // Colors::kButtonHovered
+    IM_COL32(212, 222, 238, 255),  // Colors::kButtonActive
     IM_COL32(250, 250, 100, 255),  // Colors::kBgWarning
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
@@ -172,6 +183,11 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(247, 250, 254, 255),  // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 60),         // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 160, 220, 255),    // Colors::kMeasurementColor
+    IM_COL32(240, 240, 240, 240),  // Colors::kMeasurementLabelBg
+    IM_COL32(180, 180, 180, 200),  // Colors::kMeasurementLabelEdge
+    IM_COL32(20, 20, 20, 255),     // Colors::kMeasurementLabelText
+    IM_COL32(80, 80, 80, 120),     // Colors::kMeasurementNotch
     IM_COL32(203, 230, 252, 255),  // Colors::kComparisonBase
     IM_COL32(194, 235, 230, 255),  // Colors::kComparisonTarget
     IM_COL32(248, 224, 166, 255),  // Colors::kComparisonLesser
@@ -192,6 +208,20 @@ const std::vector<ImU32> LIGHT_FLAME_COLORS = {
     IM_COL32(118, 178, 218, 200), IM_COL32(214, 148, 102, 200),
     IM_COL32(94, 178, 138, 200),  IM_COL32(212, 168, 102, 200),
     IM_COL32(158, 160, 222, 200), IM_COL32(220, 156, 118, 200)
+};
+const std::vector<ImU32> DARK_HIGHLIGHTED_EVENT_COLORS = {
+    IM_COL32(50, 145, 210, 215),  IM_COL32(0, 158, 115, 215),
+    IM_COL32(240, 228, 66, 215),  IM_COL32(204, 121, 167, 215),
+    IM_COL32(86, 180, 233, 215),  IM_COL32(235, 130, 45, 215),
+    IM_COL32(0, 204, 102, 215),   IM_COL32(230, 159, 0, 215),
+    IM_COL32(153, 153, 255, 215), IM_COL32(255, 153, 51, 215)
+};
+const std::vector<ImU32> LIGHT_HIGHLIGHTED_EVENT_COLORS = {
+    IM_COL32(50, 145, 210, 220),  IM_COL32(0, 158, 115, 220),
+    IM_COL32(240, 228, 66, 220),  IM_COL32(204, 121, 167, 220),
+    IM_COL32(86, 180, 233, 220),  IM_COL32(235, 130, 45, 220),
+    IM_COL32(0, 204, 102, 220),   IM_COL32(230, 159, 0, 220),
+    IM_COL32(153, 153, 255, 220), IM_COL32(255, 153, 51, 220)
 };
 inline constexpr const char* FLAME_DARK_COLORMAP_NAME    = "flame_dark";
 inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
@@ -244,9 +274,9 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);
 
     // Frame
-    style.Colors[ImGuiCol_FrameBg]        = bgFrame;
+    style.Colors[ImGuiCol_FrameBg]        = button;
     style.Colors[ImGuiCol_FrameBgHovered] = buttonHovered;
-    style.Colors[ImGuiCol_FrameBgActive]  = tabAccentHover;
+    style.Colors[ImGuiCol_FrameBgActive]  = buttonActive;
 
     // Title bar
     style.Colors[ImGuiCol_TitleBg]          = bgPanel;
@@ -486,6 +516,13 @@ SettingsManager::GetColorWheel() const
 {
     return m_usersettings.display_settings.use_dark_mode ? DARK_FLAME_COLORS
                                                          : LIGHT_FLAME_COLORS;
+}
+
+const std::vector<ImU32>&
+SettingsManager::GetHighlightedEventColorWheel() const
+{
+    return m_usersettings.display_settings.use_dark_mode ? DARK_HIGHLIGHTED_EVENT_COLORS
+                                                         : LIGHT_HIGHLIGHTED_EVENT_COLORS;
 }
 
 const char*

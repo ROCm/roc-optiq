@@ -6,8 +6,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb-image/stb_image.h"
 #include <algorithm>
 #include <cmath>
 
@@ -16,121 +14,6 @@ namespace RocProfVis
 
 namespace View
 {
-
-EmbeddedImage::EmbeddedImage(const unsigned char* data, int data_len)
-{
-    int channels = 0;
-    m_pixels =
-        stbi_load_from_memory(data, data_len, &m_width, &m_height, &channels, STBI_rgb_alpha);
-    if(!Valid())
-    {
-        spdlog::warn("EmbeddedImage: failed to load image ({} bytes): {}", data_len,
-                     stbi_failure_reason());
-    }
-}
-
-EmbeddedImage::~EmbeddedImage()
-{
-    if(m_pixels)
-    {
-        stbi_image_free(m_pixels);
-    }
-}
-
-bool
-EmbeddedImage::Valid() const
-{
-    return m_pixels != nullptr && m_width > 0 && m_height > 0;
-}
-
-int
-EmbeddedImage::GetWidth() const
-{
-    return m_width;
-}
-
-int
-EmbeddedImage::GetHeight() const
-{
-    return m_height;
-}
-
-unsigned char*
-EmbeddedImage::GetPixels()
-{
-    return m_pixels;
-}
-
-const unsigned char*
-EmbeddedImage::GetPixel(int x, int y) const
-{
-    if(!Valid() || x < 0 || x >= m_width || y < 0 || y >= m_height)
-        return nullptr;
-    return m_pixels + 4 * (y * m_width + x);
-}
-
-void
-EmbeddedImage::Render(ImVec2 top_left, float target_width, bool invert_colors) const
-{
-    if(!Valid()) return;
-
-    constexpr unsigned char BG_THRESHOLD = 240;
-
-    const float scale = target_width / static_cast<float>(m_width);
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-    for(int y = 0; y < m_height; ++y)
-    {
-        int x = 0;
-        while(x < m_width)
-        {
-            const unsigned char* pixel = m_pixels + 4 * (y * m_width + x);
-
-            if(pixel[3] == 0 ||
-               (pixel[0] >= BG_THRESHOLD && pixel[1] >= BG_THRESHOLD &&
-                pixel[2] >= BG_THRESHOLD))
-            {
-                ++x;
-                continue;
-            }
-
-            unsigned char r = pixel[0], g = pixel[1], b = pixel[2];
-            if(invert_colors)
-            {
-                r = 255 - r;
-                g = 255 - g;
-                b = 255 - b;
-            }
-
-            const ImU32 color = IM_COL32(r, g, b, pixel[3]);
-            const int   run_start = x;
-            ++x;
-
-            while(x < m_width)
-            {
-                const unsigned char* next = m_pixels + 4 * (y * m_width + x);
-                if(next[3] == 0 ||
-                   (next[0] >= BG_THRESHOLD && next[1] >= BG_THRESHOLD &&
-                    next[2] >= BG_THRESHOLD))
-                    break;
-
-                unsigned char nr = next[0], ng = next[1], nb = next[2];
-                if(invert_colors)
-                {
-                    nr = 255 - nr;
-                    ng = 255 - ng;
-                    nb = 255 - nb;
-                }
-                if(IM_COL32(nr, ng, nb, next[3]) != color) break;
-                ++x;
-            }
-
-            draw_list->AddRectFilled(
-                ImVec2(top_left.x + run_start * scale, top_left.y + y * scale),
-                ImVec2(top_left.x + x * scale, top_left.y + (y + 1) * scale), color);
-        }
-    }
-}
 
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
@@ -184,15 +67,17 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
                        LoadingIndicatorCentering centering, float dot_radius,
                        int num_dots, float dot_spacing, float anim_speed)
 {
-    ImVec2 orig_pos = ImGui::GetCursorPos();
-
     if(window_id)
     {
         // Create an overlay child window to display the loading indicator if requested
-        ImGui::SetCursorPos(ImVec2(0, 0));
+        ImVec2 parent_pos = ImGui::GetWindowPos();
+        ImVec2 parent_size = ImGui::GetWindowSize();
+        ImGui::SetNextWindowPos(parent_pos);
+        ImGui::SetNextWindowSize(parent_size);
+
         // set transparent background for the overlay window
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-        ImGui::BeginChild(window_id, ImGui::GetWindowSize(), ImGuiChildFlags_None);
+        ImGui::BeginChild(window_id, parent_size, ImGuiChildFlags_None);
     }
 
     ImVec2 dot_size   = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
@@ -211,7 +96,8 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
 
     if(centering != kCenterNone)
     {
-        ImGui::SetCursorScreenPos(draw_pos);
+        //needed to position dummy in RenderLoadingIndicatorDots()
+        ImGui::SetCursorScreenPos(draw_pos); 
     }
     RenderLoadingIndicatorDots(dot_radius, num_dots, dot_spacing, color, anim_speed);
 
@@ -219,10 +105,9 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
     {
         ImGui::EndChild();
         ImGui::PopStyleColor();
-        // Restore cursor position in the parent window
-        ImGui::SetCursorPos(orig_pos);
     }
 }
+ 
 
 ImU32
 ApplyAlpha(ImU32 color, float alpha)
@@ -318,7 +203,7 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size, const char* tooltip
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bg_color_hover);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, bg_color_active);
     }
-    ImGui::PushFont(icon_font);
+    ImGui::PushFont(icon_font, 0.0f);
     bool clicked = ImGui::Button(icon, size);
     ImGui::PopFont();
     if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
@@ -365,7 +250,7 @@ InputTextWithClear(const char* id, const char* hint, char* buf,
     ImGui::PopStyleColor();
     if(strlen(buf) > 0)
     {
-        ImGui::PushFont(icon_font);
+        ImGui::PushFont(icon_font, 0.0f);
         if(width >= ImGui::CalcTextSize(ICON_X_CIRCLED).x + 2 * style.FramePadding.x)
         {
             ImGui::SameLine();
@@ -549,7 +434,7 @@ XButton(const char* id, const char * tool_tip_label, SettingsManager* settings)
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           settings->GetColor(Colors::kTransparent));
     ImGui::PushStyleVarX(ImGuiStyleVar_FramePadding, 0);
-    ImGui::PushFont(settings->GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kIcon), 0.0f);
     if(id && strlen(id) > 0)
     {
         ImGui::PushID(id);
@@ -578,8 +463,9 @@ SectionTitle(const char* text, bool large, SettingsManager* settings)
         settings = &SettingsManager::GetInstance();
     }
 
-    FontType font_type = large ? FontType::kLarge : FontType::kMedLarge;
-    ImGui::PushFont(settings->GetFontManager().GetFont(font_type));
+    FontSize font_size = large ? FontSize::kLarge : FontSize::kMedLarge;
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kDefault),
+                    settings->GetFontManager().GetFontSize(font_size));
     ImGui::SeparatorText(text);
     ImGui::PopFont();
 }

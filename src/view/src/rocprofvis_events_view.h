@@ -45,6 +45,16 @@ private:
         }
     };
 
+    struct FlowHighlightState
+    {
+        uint64_t owner_event_id;
+        uint64_t flow_event_id;
+        uint64_t flow_track_id;
+
+        bool IsValid() const;
+        void Reset();
+    };
+
     bool RenderBasicData(const EventInfo* event_data);
     bool RenderEventExtData(const EventInfo* event_data);
     bool RenderEventFlowInfo(const EventInfo* event_data);
@@ -69,6 +79,8 @@ private:
     int                                      m_context_menu_flow_index;
     int                                      m_context_menu_flow_column;
     int                                      m_context_menu_callstack_index;
+    FlowHighlightState                       m_flow_hover;
+    FlowHighlightState                       m_frame_flow_hover;
     CallStackHoverState                      m_callstack_hover;
     CallStackHoverState                      m_frame_callstack_hover;
     const std::string_view DATA_COPIED_NOTIFICATION = "Data was copied";

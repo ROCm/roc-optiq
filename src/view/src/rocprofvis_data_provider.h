@@ -94,6 +94,11 @@ public:
      */
     void FreeRequests();
 
+    /*
+     *   Get the number of pending requests.
+     */
+    size_t GetPendingRequestCount() const;
+
     DataProviderCleanupWork DetachCleanupWork();
     static DataProviderCleanupResult CleanupDetachedResources(
         DataProviderCleanupWork cleanup_work);
@@ -183,6 +188,9 @@ public:
     bool FetchTable(const TableRequestParams& table_params);
 
     bool FetchSummary();
+
+    bool FetchAnalysisQueueUtilization(
+        const AnalysisQueueUtilizationRequestParams& params);
 
     bool IsRequestPending(uint64_t request_id) const;
 
@@ -283,6 +291,7 @@ private:
     void ProcessSaveTrimmedTraceRequest(RequestInfo& req);
     void ProcessCleanupDatabaseRequest(RequestInfo& req);
     void ProcessSummaryRequest(RequestInfo& req);
+    void ProcessAnalysisQueueUtilizationRequest(RequestInfo& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);

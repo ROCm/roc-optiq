@@ -36,6 +36,20 @@ PushSectionHeaderStyle(SettingsManager& settings)
 
 }  // namespace
 
+bool
+EventsView::FlowHighlightState::IsValid() const
+{
+    return flow_event_id != TimelineSelection::INVALID_SELECTION_ID;
+}
+
+void
+EventsView::FlowHighlightState::Reset()
+{
+    owner_event_id = TimelineSelection::INVALID_SELECTION_ID;
+    flow_event_id  = TimelineSelection::INVALID_SELECTION_ID;
+    flow_track_id  = TimelineSelection::INVALID_SELECTION_ID;
+}
+
 EventsView::EventsView(DataProvider&                      dp,
                        std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
@@ -50,6 +64,8 @@ EventsView::EventsView(DataProvider&                      dp,
                       TimelineSelection::INVALID_SELECTION_ID,
                   "CallStackHoverState invalid sentinel must match "
                   "TimelineSelection::INVALID_SELECTION_ID");
+    m_flow_hover.Reset();
+    m_frame_flow_hover.Reset();
 }
 
 EventsView::~EventsView()
@@ -58,6 +74,11 @@ EventsView::~EventsView()
     {
         m_timeline_selection->UnhighlightTrackEvent(m_callstack_hover.frame_track_id,
                                                     m_callstack_hover.frame_event_id);
+    }
+    if(m_flow_hover.IsValid())
+    {
+        m_timeline_selection->UnhighlightTrackEvent(m_flow_hover.flow_track_id,
+                                                    m_flow_hover.flow_event_id);
     }
 }
 
@@ -72,6 +93,14 @@ EventsView::Render()
     ImGui::BeginChild("events_view", ImVec2(0, 0),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
     m_frame_callstack_hover = {};
+    m_frame_flow_hover.Reset();
+    // Use subtler borders for nested event panes.
+    ImGui::PushStyleColor(ImGuiCol_Border,
+                          m_settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::PushStyleColor(ImGuiCol_TableBorderStrong,
+                          m_settings.GetColor(Colors::kTableBorderOuter));
+    ImGui::PushStyleColor(ImGuiCol_TableBorderLight,
+                          m_settings.GetColor(Colors::kTableBorderInner));
     if(m_event_items.empty())
     {
         ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
@@ -146,6 +175,21 @@ EventsView::Render()
         }
     }
     m_callstack_hover = m_frame_callstack_hover;
+    if(m_frame_flow_hover.flow_event_id != m_flow_hover.flow_event_id)
+    {
+        if(m_flow_hover.IsValid())
+        {
+            m_timeline_selection->UnhighlightTrackEvent(m_flow_hover.flow_track_id,
+                                                        m_flow_hover.flow_event_id);
+        }
+        if(m_frame_flow_hover.IsValid())
+        {
+            m_timeline_selection->HighlightTrackEvent(m_frame_flow_hover.flow_track_id,
+                                                      m_frame_flow_hover.flow_event_id);
+        }
+    }
+    m_flow_hover = m_frame_flow_hover;
+    ImGui::PopStyleColor(3);
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
@@ -295,6 +339,12 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                 const auto& time_format =
                     m_settings.GetUserSettings().unit_settings.time_format;
 
+                const uint64_t this_owner_event_id = event_data->basic_info.id.uuid;
+                const uint64_t prev_hovered_flow_event_id =
+                    (m_flow_hover.owner_event_id == this_owner_event_id)
+                        ? m_flow_hover.flow_event_id
+                        : TimelineSelection::INVALID_SELECTION_ID;
+
                 auto flow_cell = [&](int col, const char* text, const char* id, int row)
                 {
                     if(col > 0)
@@ -321,6 +371,18 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         std::string row_str = std::to_string(i);
 
                         ImGui::TableNextRow();
+                        if(flow.id.uuid == prev_hovered_flow_event_id)
+                        {
+                            ImGui::TableSetBgColor(
+                                ImGuiTableBgTarget_RowBg0,
+                                m_settings.GetColor(Colors::kHighlightChart));
+                        }
+                        else if(flow.id.uuid == this_owner_event_id)
+                        {
+                            ImGui::TableSetBgColor(
+                                ImGuiTableBgTarget_RowBg0,
+                                m_settings.GetColor(Colors::kAreaOfInterest));
+                        }
                         ImGui::TableSetColumnIndex(0);
 
                         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
@@ -366,6 +428,17 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                                 static_cast<double>(flow.start_timestamp),
                                 static_cast<double>(flow.end_timestamp -
                                                     flow.start_timestamp));
+                        }
+                        if(row_hovered)
+                        {
+                            m_frame_flow_hover.owner_event_id = this_owner_event_id;
+                            m_frame_flow_hover.flow_event_id  = flow.id.uuid;
+                            m_frame_flow_hover.flow_track_id  = flow.track_id;
+                            if(flow.id.uuid == this_owner_event_id)
+                            {
+                                SetTooltipStyled(
+                                    "This is the selected event for this flow.");
+                            }
                         }
                     }
                 }
@@ -690,7 +763,7 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             });
             left->m_window_padding = default_style.WindowPadding;
             left->m_item_spacing   = default_style.ItemSpacing;
-            left->m_bg_color       = m_settings.GetColor(Colors::kBgPanel);
+            left->m_inherit_bg_color = true;
             left->m_child_flags =
                 ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
                 ImGuiChildFlags_AlwaysUseWindowPadding;
@@ -709,7 +782,7 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
             });
             right->m_window_padding = default_style.WindowPadding;
             right->m_item_spacing   = default_style.ItemSpacing;
-            right->m_bg_color       = m_settings.GetColor(Colors::kBgPanel);
+            right->m_inherit_bg_color = true;
             right->m_child_flags =
                 ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
                 ImGuiChildFlags_AlwaysUseWindowPadding;

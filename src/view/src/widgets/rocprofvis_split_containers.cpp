@@ -93,7 +93,10 @@ void SplitContainerBase::Render()
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_first->m_item_spacing);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_first->m_window_padding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_first->m_bg_color);
+        if(!m_first->m_inherit_bg_color)
+        {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, m_first->m_bg_color);
+        }
         ImGui::BeginChild(m_first_name.c_str(),
                           GetFirstChildSize(available_size),
                           m_first->m_child_flags, m_first->m_window_flags);
@@ -101,7 +104,10 @@ void SplitContainerBase::Render()
             m_first->m_item->Render();
         ImGui::EndChild();
         m_optimal_size = GetItemSize();
-        ImGui::PopStyleColor();
+        if(!m_first->m_inherit_bg_color)
+        {
+            ImGui::PopStyleColor();
+        }
         ImGui::PopStyleVar(2);
         AddSameLine();
     }
@@ -141,14 +147,20 @@ void SplitContainerBase::Render()
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_second->m_item_spacing);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_second->m_window_padding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_second->m_bg_color);
+        if(!m_second->m_inherit_bg_color)
+        {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, m_second->m_bg_color);
+        }
         ImGui::BeginChild(m_second_name.c_str(), GetSecondChildSize(),
                           m_second->m_child_flags, m_second->m_window_flags);
         if(m_second->m_item)
             m_second->m_item->Render();
         ImGui::EndChild();
         m_optimal_size = std::max(m_optimal_size, GetItemSize());
-        ImGui::PopStyleColor();
+        if(!m_second->m_inherit_bg_color)
+        {
+            ImGui::PopStyleColor();
+        }
         ImGui::PopStyleVar(2);
     }
 }

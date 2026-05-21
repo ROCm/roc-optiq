@@ -6,6 +6,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_utils.h"
+#include "widgets/rocprofvis_image_helpers.h"
 #include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
@@ -74,6 +75,15 @@ void
 rocprofvis_view_set_fullscreen_state(bool is_fullscreen)
 {
     AppWindow::GetInstance()->SetFullscreenState(is_fullscreen);
+}
+
+void
+rocprofvis_view_set_texture_backend(
+    rocprofvis_view_create_texture_rgba32_t create_texture,
+    rocprofvis_view_destroy_texture_t       destroy_texture,
+    void*                                  user_data)
+{
+    GuiTexture::SetBackend(create_texture, destroy_texture, user_data);
 }
 
 std::string

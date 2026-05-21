@@ -233,6 +233,24 @@ rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_controller_future_
     return kRocProfVisResultSuccess;
 }
 
+rocprofvis_result_t rocprofvis_profiler_clear_output(rocprofvis_controller_future_t* future)
+{
+    if (future == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::Future* fut = (RocProfVis::Controller::Future*)future;
+    auto* controller = static_cast<RocProfVis::Controller::ProfilerProcessController*>(fut->GetUserData());
+    if (controller == nullptr)
+    {
+        return kRocProfVisResultSuccess;
+    }
+
+    controller->ClearOutput();
+    return kRocProfVisResultSuccess;
+}
+
 rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_controller_future_t* future, char* buffer, uint32_t* length)
 {
     if (future == nullptr || length == nullptr)

@@ -4690,6 +4690,14 @@ std::string DataProvider::GetProfilerOutput()
     return std::string(buffer.data());
 }
 
+void DataProvider::ClearProfilerOutput()
+{
+    if (m_profiler_future != nullptr)
+    {
+        rocprofvis_profiler_clear_output(m_profiler_future);
+    }
+}
+
 std::string DataProvider::GetProfilerTracePath()
 {
     if (m_profiler_future == nullptr)

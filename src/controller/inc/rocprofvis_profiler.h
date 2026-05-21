@@ -136,6 +136,15 @@ rocprofvis_result_t rocprofvis_profiler_get_state(rocprofvis_controller_future_t
 rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_controller_future_t* future, char* buffer, uint32_t* length);
 
 /*
+* Clears the accumulated profiler output buffer.
+* After calling this, rocprofvis_profiler_get_output will only return output
+* produced after the clear.
+* @param future The future returned from rocprofvis_profiler_launch_async.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_clear_output(rocprofvis_controller_future_t* future);
+
+/*
 * Gets the path to the generated trace file after profiler completion.
 * @param future The future returned from rocprofvis_profiler_launch_async.
 * @param buffer Buffer to write the trace path to, or null to query the length.

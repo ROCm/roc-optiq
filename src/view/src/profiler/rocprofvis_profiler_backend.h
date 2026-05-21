@@ -28,6 +28,13 @@ struct TabDescriptor
     std::function<void()> render_fn;
 };
 
+struct WarningMessage
+{
+    enum Level { kInfo, kWarning, kError };
+    Level       level;
+    std::string text;
+};
+
 /**
  * Interface for profiler-specific backends.
  * Each profiler type (rocprof-sys, rocprof-compute, rocprofv3) implements this.
@@ -76,6 +83,35 @@ public:
      * Returns empty string if export is not supported by this backend.
      */
     virtual std::string ExportCfg() const = 0;
+
+    /**
+     * Return warnings and hints for the current config (soft conflicts,
+     * tool routing suggestions, deprecated aliases in extra_env, etc.).
+     */
+    virtual std::vector<WarningMessage> GetWarnings(LaunchConfig const& config) const
+    {
+        (void)config;
+        return {};
+    }
+
+    // TODO(launcher-phase4): Full CLI import/export API
+    //
+    // Future work beyond the current --preset integration:
+    //
+    // 1. ImportFromCommandLine(std::string const& cmdline)
+    //    Parse a pasted "rocprof-sys-run --preset=balanced ..." command string
+    //    into a LaunchConfig + backend settings (preset name, overrides, target).
+    //
+    // 2. ExportToCommandLine(LaunchConfig const&) -> std::string
+    //    Produce a copy-pasteable shell command including all CLI flags
+    //    (beyond just --preset and --output).
+    //
+    // 3. ExpandPresetIntoUI(std::string const& preset_name)
+    //    Run "rocprof-sys-{tool} --explain=<name>" or parse preset JSON to
+    //    populate RocprofSysSettings from the preset for power-user editing.
+    //
+    // 4. Full CLI flag mapping in command preview (e.g. --sampling-freq,
+    //    --rocm-domains, --perfetto-backend) for parity with env-var emission.
 };
 
 } // namespace View

@@ -81,8 +81,8 @@ void ProfilerLauncherDialog::Render()
         IProfilerBackend* backend = m_backends[m_backend_index].get();
         m_config.backend_payload = backend->SaveSettings();
 
-        // Top: Preset bar
-        std::string load_name = RenderPresetBar(
+        // Saved launch profiles (Optiq JSON presets)
+        std::string load_name = RenderSavedProfileBar(
             m_preset_manager, m_config.profiler_id,
             m_current_preset_name, m_config, backend, m_app_window);
 
@@ -121,12 +121,48 @@ void ProfilerLauncherDialog::Render()
         RenderRightPane();
         ImGui::EndChild();
 
+        // Warnings from backend
+        auto warnings = backend->GetWarnings(m_config);
+        if (!warnings.empty())
+        {
+            for (auto const& w : warnings)
+            {
+                ImVec4 color;
+                const char* prefix;
+                switch (w.level)
+                {
+                    case WarningMessage::kError:
+                        color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+                        prefix = "Error: ";
+                        break;
+                    case WarningMessage::kWarning:
+                        color = ImVec4(1.0f, 0.8f, 0.0f, 1.0f);
+                        prefix = "Warning: ";
+                        break;
+                    default:
+                        color = ImVec4(0.4f, 0.7f, 1.0f, 1.0f);
+                        prefix = "Hint: ";
+                        break;
+                }
+                ImGui::TextColored(color, "%s%s", prefix, w.text.c_str());
+            }
+        }
+
         // Command preview
         RenderCommandPreview(backend, m_config, GetProfilerPath());
 
         // Output console
-        RenderOutputConsole(m_output_text, m_error_message,
-                           static_cast<int>(m_profiler_state), m_auto_scroll_output);
+        if (RenderOutputConsole(m_output_text, m_error_message,
+                                static_cast<int>(m_profiler_state), m_auto_scroll_output))
+        {
+            m_data_provider.ClearProfilerOutput();
+            m_output_text.clear();
+            m_output_preamble.clear();
+            m_output_epilogue.clear();
+            m_process_output_raw.clear();
+            m_process_output_stripped.clear();
+            m_error_message.clear();
+        }
 
         // Button row
         RenderButtonRow();
@@ -237,16 +273,13 @@ void ProfilerLauncherDialog::RenderRightPane()
 {
     IProfilerBackend const* backend = m_backends[m_backend_index].get();
 
+    // Target is always visible at the top, not buried in a tab
+    RenderTargetSection(m_config.target, m_app_window);
+    ImGui::Separator();
+
     if (ImGui::BeginTabBar("LaunchTabs"))
     {
-        // Target tab (shared)
-        if (ImGui::BeginTabItem("Target"))
-        {
-            RenderTargetSection(m_config.target, m_app_window);
-            ImGui::EndTabItem();
-        }
-
-        // Backend-provided tabs
+        // Backend-provided tabs (Quick, Sampling, ROCm, ...)
         auto tabs = backend->GetTabs(m_config.tool_id);
         for (auto const& tab : tabs)
         {

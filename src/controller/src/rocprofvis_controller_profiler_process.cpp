@@ -716,6 +716,12 @@ std::string ProfilerProcessController::GetOutput()
     return m_output_text;
 }
 
+void ProfilerProcessController::ClearOutput()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_output_text.clear();
+}
+
 std::string ProfilerProcessController::GetTracePath() const
 {
     return m_trace_path;

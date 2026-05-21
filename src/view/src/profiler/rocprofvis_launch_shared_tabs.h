@@ -44,19 +44,21 @@ void RenderCommandPreview(
     std::string const& profiler_path);
 
 /**
- * Renders the Output Console panel with status badge, auto-scroll, and copy button.
+ * Renders the Output Console panel with status badge, auto-scroll, copy, and clear buttons.
+ * Returns true if the user clicked "Clear".
  */
-void RenderOutputConsole(
+bool RenderOutputConsole(
     std::string const& output_text,
     std::string const& error_message,
     int profiler_state,
     bool& auto_scroll);
 
 /**
- * Renders the Preset bar: dropdown, save, save-as, delete, import, export buttons.
- * Returns the name of a preset to load (empty if none selected).
+ * Renders the "Saved Profile" bar (Optiq JSON presets):
+ * dropdown, save, save-as, delete buttons.
+ * Returns the name of a profile to load (empty if none selected).
  */
-std::string RenderPresetBar(
+std::string RenderSavedProfileBar(
     LaunchPresetManager& preset_mgr,
     std::string const& profiler_id,
     std::string& current_preset_name,

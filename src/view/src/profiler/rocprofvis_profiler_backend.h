@@ -93,6 +93,25 @@ public:
         (void)config;
         return {};
     }
+
+    // TODO(launcher-phase4): Full CLI import/export API
+    //
+    // Future work beyond the current --preset integration:
+    //
+    // 1. ImportFromCommandLine(std::string const& cmdline)
+    //    Parse a pasted "rocprof-sys-run --preset=balanced ..." command string
+    //    into a LaunchConfig + backend settings (preset name, overrides, target).
+    //
+    // 2. ExportToCommandLine(LaunchConfig const&) -> std::string
+    //    Produce a copy-pasteable shell command including all CLI flags
+    //    (beyond just --preset and --output).
+    //
+    // 3. ExpandPresetIntoUI(std::string const& preset_name)
+    //    Run "rocprof-sys-{tool} --explain=<name>" or parse preset JSON to
+    //    populate RocprofSysSettings from the preset for power-user editing.
+    //
+    // 4. Full CLI flag mapping in command preview (e.g. --sampling-freq,
+    //    --rocm-domains, --perfetto-backend) for parity with env-var emission.
 };
 
 } // namespace View

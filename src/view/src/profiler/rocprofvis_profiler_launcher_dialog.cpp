@@ -81,8 +81,8 @@ void ProfilerLauncherDialog::Render()
         IProfilerBackend* backend = m_backends[m_backend_index].get();
         m_config.backend_payload = backend->SaveSettings();
 
-        // Top: Preset bar
-        std::string load_name = RenderPresetBar(
+        // Saved launch profiles (Optiq JSON presets)
+        std::string load_name = RenderSavedProfileBar(
             m_preset_manager, m_config.profiler_id,
             m_current_preset_name, m_config, backend, m_app_window);
 
@@ -152,8 +152,17 @@ void ProfilerLauncherDialog::Render()
         RenderCommandPreview(backend, m_config, GetProfilerPath());
 
         // Output console
-        RenderOutputConsole(m_output_text, m_error_message,
-                           static_cast<int>(m_profiler_state), m_auto_scroll_output);
+        if (RenderOutputConsole(m_output_text, m_error_message,
+                                static_cast<int>(m_profiler_state), m_auto_scroll_output))
+        {
+            m_data_provider.ClearProfilerOutput();
+            m_output_text.clear();
+            m_output_preamble.clear();
+            m_output_epilogue.clear();
+            m_process_output_raw.clear();
+            m_process_output_stripped.clear();
+            m_error_message.clear();
+        }
 
         // Button row
         RenderButtonRow();
@@ -264,16 +273,13 @@ void ProfilerLauncherDialog::RenderRightPane()
 {
     IProfilerBackend const* backend = m_backends[m_backend_index].get();
 
+    // Target is always visible at the top, not buried in a tab
+    RenderTargetSection(m_config.target, m_app_window);
+    ImGui::Separator();
+
     if (ImGui::BeginTabBar("LaunchTabs"))
     {
-        // Target tab (shared)
-        if (ImGui::BeginTabItem("Target"))
-        {
-            RenderTargetSection(m_config.target, m_app_window);
-            ImGui::EndTabItem();
-        }
-
-        // Backend-provided tabs
+        // Backend-provided tabs (Quick, Sampling, ROCm, ...)
         auto tabs = backend->GetTabs(m_config.tool_id);
         for (auto const& tab : tabs)
         {
@@ -401,8 +407,7 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
     // Determine profiler type enum for controller
     rocprofvis_profiler_type_t profiler_type = kRPVProfilerTypeRocprofSysRun;
-    if (m_config.tool_id == "run" || m_config.tool_id == "sample" ||
-        m_config.tool_id == "causal")
+    if (m_config.tool_id == "run" || m_config.tool_id == "sample")
     {
         profiler_type = kRPVProfilerTypeRocprofSysRun;
     }

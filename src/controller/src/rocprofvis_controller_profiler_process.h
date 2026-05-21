@@ -146,6 +146,8 @@ public:
 
     std::string GetOutput();
 
+    void ClearOutput();
+
     std::string GetTracePath() const;
 
     int GetExitCode() const;

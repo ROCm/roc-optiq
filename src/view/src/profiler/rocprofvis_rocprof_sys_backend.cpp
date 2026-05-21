@@ -97,6 +97,22 @@ CheckboxEntry const kPerfettoCategories[] = {
 size_t const kPerfettoCategoriesCount =
     sizeof(kPerfettoCategories) / sizeof(kPerfettoCategories[0]);
 
+RocprofPresetEntry const kRocprofSysPresets[] = {
+    {"balanced",          "Balanced profiling with moderate overhead"},
+    {"profile-only",      "Flat profile only, minimal overhead"},
+    {"detailed",          "Comprehensive profiling with full system metrics"},
+    {"trace-gpu",         "GPU workload analysis with host and device activity"},
+    {"workload-trace",    "Optimized for AI/ML/GPU workloads with RCCL"},
+    {"trace-hw-counters", "Hardware counter collection"},
+    {"trace-hpc",         "HPC/MPI/OpenMP with OMPT and MPIP"},
+    {"trace-openmp",      "OpenMP offload workloads with HSA domains"},
+    {"profile-mpi",       "MPI communication latency profiling"},
+    {"sys-trace",         "System-level tracing"},
+    {"runtime-trace",     "Runtime API tracing"},
+};
+size_t const kRocprofSysPresetsCount =
+    sizeof(kRocprofSysPresets) / sizeof(kRocprofSysPresets[0]);
+
 namespace
 {
 
@@ -320,8 +336,10 @@ RocprofSysSettings RocprofSysSettings::FromJson(jt::Json const& json)
     auto default_smi     = BuildDefaultMap(kAmdSmiMetrics, kAmdSmiMetricsCount);
     std::map<std::string, bool> empty_map;
 
-    // General
-    s.mode           = safe_string(j, "mode", "trace");
+    // Preset
+    s.rocprof_preset = safe_string(j, "rocprof_preset", "");
+
+    // General (ignore legacy "mode" field from old Optiq JSON presets)
     s.trace_delay    = safe_double(j, "trace_delay", 0.0);
     s.trace_duration = safe_double(j, "trace_duration", 0.0);
     s.trace_region   = safe_string(j, "trace_region", "");
@@ -334,8 +352,6 @@ RocprofSysSettings RocprofSysSettings::FromJson(jt::Json const& json)
     s.use_sampling         = safe_bool(j, "use_sampling", false);
     s.use_process_sampling = safe_bool(j, "use_process_sampling", true);
     s.use_amd_smi          = safe_bool(j, "use_amd_smi", true);
-    s.use_causal           = safe_bool(j, "use_causal", false);
-
     // Sampling
     s.sampling_freq            = safe_double(j, "sampling_freq", 300.0);
     s.sampling_cputime         = safe_bool(j, "sampling_cputime", false);
@@ -401,8 +417,11 @@ jt::Json RocprofSysSettings::ToJson() const
 {
     jt::Json p;
 
+    // Preset
+    if (!rocprof_preset.empty())
+        p["rocprof_preset"] = rocprof_preset;
+
     // General
-    p["mode"]           = mode;
     p["trace_delay"]    = trace_delay;
     p["trace_duration"] = trace_duration;
     p["trace_region"]   = trace_region;
@@ -415,7 +434,6 @@ jt::Json RocprofSysSettings::ToJson() const
     p["use_sampling"]         = use_sampling;
     p["use_process_sampling"] = use_process_sampling;
     p["use_amd_smi"]          = use_amd_smi;
-    p["use_causal"]           = use_causal;
 
     // Sampling
     p["sampling_freq"]            = sampling_freq;
@@ -501,7 +519,6 @@ std::vector<ToolOption> RocprofSysBackend::GetTools() const
         {"run",        "Run (LD_PRELOAD)"},
         {"sample",     "Sample"},
         {"instrument", "Instrument (Dyninst)"},
-        {"causal",     "Causal"},
     };
 }
 
@@ -522,16 +539,15 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(std::string const& tool_id
 {
     std::vector<TabDescriptor> tabs;
 
-    tabs.push_back({"general", "General", [this]() {
-        const_cast<RocprofSysBackend*>(this)->RenderGeneralTab(); }});
-    tabs.push_back({"backends", "Backends", [this]() {
-        const_cast<RocprofSysBackend*>(this)->RenderBackendsTab(); }});
+    tabs.push_back({"quick", "Quick", [this]() {
+        const_cast<RocprofSysBackend*>(this)->RenderBackendsTab();
+        ImGui::Separator();
+        const_cast<RocprofSysBackend*>(this)->RenderGeneralTab();
+    }});
     tabs.push_back({"sampling", "Sampling", [this]() {
         const_cast<RocprofSysBackend*>(this)->RenderSamplingTab(); }});
     tabs.push_back({"rocm", "ROCm", [this]() {
         const_cast<RocprofSysBackend*>(this)->RenderRocmTab(); }});
-    tabs.push_back({"perfetto", "Perfetto", [this]() {
-        const_cast<RocprofSysBackend*>(this)->RenderPerfettoTab(); }});
     tabs.push_back({"process_sampling", "Process Sampling", [this]() {
         const_cast<RocprofSysBackend*>(this)->RenderProcessSamplingTab(); }});
     tabs.push_back({"parallelism", "Parallelism", [this]() {
@@ -578,30 +594,6 @@ std::string RocprofSysBackend::Validate(LaunchConfig const& config) const
                "(they are mutually exclusive)";
     }
 
-    // Causal mode conflicts
-    if (m_settings.mode == "causal")
-    {
-        if (m_settings.trace_backend)
-            return "Causal mode is incompatible with Perfetto tracing";
-        if (m_settings.profile || m_settings.flat_profile)
-            return "Causal mode is incompatible with timemory profiling";
-        if (m_settings.use_sampling)
-            return "Causal mode is incompatible with statistical sampling";
-    }
-
-    // Coverage mode conflicts
-    if (m_settings.mode == "coverage")
-    {
-        if (m_settings.trace_backend)
-            return "Coverage mode is incompatible with Perfetto tracing";
-        if (m_settings.profile || m_settings.flat_profile)
-            return "Coverage mode is incompatible with timemory profiling";
-        if (m_settings.use_sampling)
-            return "Coverage mode is incompatible with statistical sampling";
-        if (m_settings.use_causal)
-            return "Coverage mode is incompatible with causal profiling";
-    }
-
     // Overflow event duplicate in extra_env
     auto it = config.extra_env.find("ROCPROFSYS_SAMPLING_OVERFLOW_EVENT");
     if (it != config.extra_env.end() &&
@@ -623,59 +615,6 @@ void RocprofSysBackend::LoadSettings(jt::Json const& payload)
 jt::Json RocprofSysBackend::SaveSettings() const
 {
     return m_settings.ToJson();
-}
-
-// ==================================================================================
-// Mode defaults
-// ==================================================================================
-
-void RocprofSysBackend::ApplyModeDefaults(std::string const& new_mode)
-{
-    if (new_mode == "trace")
-    {
-        m_settings.trace_backend = true;
-        m_settings.profile       = false;
-        m_settings.flat_profile  = false;
-        m_settings.use_causal    = false;
-    }
-    else if (new_mode == "sampling")
-    {
-        m_settings.trace_backend = false;
-        m_settings.profile       = false;
-        m_settings.flat_profile  = false;
-        m_settings.use_sampling  = true;
-        m_settings.use_causal    = false;
-    }
-    else if (new_mode == "causal")
-    {
-        m_settings.trace_backend      = false;
-        m_settings.profile            = false;
-        m_settings.flat_profile       = false;
-        m_settings.use_sampling       = false;
-        m_settings.use_process_sampling = false;
-        m_settings.use_causal         = true;
-    }
-    else if (new_mode == "coverage")
-    {
-        m_settings.trace_backend        = false;
-        m_settings.profile              = false;
-        m_settings.flat_profile         = false;
-        m_settings.use_sampling         = false;
-        m_settings.use_process_sampling = false;
-        m_settings.use_causal           = false;
-        m_settings.use_mpip             = false;
-        m_settings.use_ucx              = false;
-        m_settings.use_shmem            = false;
-        m_settings.use_rcclp            = false;
-        m_settings.use_ompt             = false;
-        m_settings.use_kokkosp          = false;
-        m_settings.use_amd_smi          = false;
-    }
-}
-
-bool RocprofSysBackend::IsCausalOrCoverage() const
-{
-    return m_settings.mode == "causal" || m_settings.mode == "coverage";
 }
 
 // ==================================================================================
@@ -702,21 +641,12 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
             "Consider binary rewrite mode or use the Sample tool"});
     }
 
-    // Tool routing: run + sampling mode
-    if (config.tool_id == "run" &&
-        m_settings.mode == "sampling" &&
-        m_settings.use_sampling)
+    // Tool routing: run + sampling
+    if (config.tool_id == "run" && m_settings.use_sampling &&
+        !m_settings.trace_backend)
     {
         warnings.push_back({WarningMessage::kInfo,
             "Consider using the Sample tool for uninstrumented sampling"});
-    }
-
-    // Tool routing: run + causal mode
-    if (config.tool_id == "run" && m_settings.mode == "causal")
-    {
-        warnings.push_back({WarningMessage::kWarning,
-            "Causal CLI options are not available via rocprof-sys-run. "
-            "Switch to the Causal tool"});
     }
 
     // Deprecated env aliases in raw env vars
@@ -777,30 +707,50 @@ void RocprofSysBackend::FlattenToExecution(
             env_out.emplace_back(env_name, std::to_string(val));
     };
 
+    // Emit --preset= in argv when a built-in preset is selected
+    if (!m_settings.rocprof_preset.empty())
+    {
+        argv_out.push_back("--preset=" + m_settings.rocprof_preset);
+    }
+
     // Output path (always emit if set)
     if (!config.target.output_directory.empty())
     {
         env_out.emplace_back("ROCPROFSYS_OUTPUT_PATH", config.target.output_directory);
     }
 
-    // General
-    emit_string("ROCPROFSYS_MODE", m_settings.mode, defaults.mode);
+    // General (skip ROCPROFSYS_MODE — use individual backend toggles instead)
+    // Legacy mode field is no longer emitted; behavior is driven by
+    // ROCPROFSYS_TRACE + ROCPROFSYS_USE_SAMPLING toggles.
     emit_double("ROCPROFSYS_TRACE_DELAY", m_settings.trace_delay, defaults.trace_delay);
     emit_double("ROCPROFSYS_TRACE_DURATION",
                 m_settings.trace_duration, defaults.trace_duration);
     emit_string("ROCPROFSYS_TRACE_REGION",
                 m_settings.trace_region, defaults.trace_region);
 
-    // Backends
-    emit_bool("ROCPROFSYS_TRACE", m_settings.trace_backend, defaults.trace_backend);
-    emit_bool("ROCPROFSYS_PROFILE", m_settings.profile, defaults.profile);
-    emit_bool("ROCPROFSYS_FLAT_PROFILE", m_settings.flat_profile, defaults.flat_profile);
-    emit_bool("ROCPROFSYS_USE_ROCPD", m_settings.use_rocpd, defaults.use_rocpd);
+    // Output format — always emit so presets don't override user intent
+    auto emit_bool_always = [&](char const* env_name, bool val)
+    {
+        env_out.emplace_back(env_name, val ? "true" : "false");
+    };
+
+    emit_bool_always("ROCPROFSYS_PROFILE", m_settings.profile);
+    emit_bool_always("ROCPROFSYS_FLAT_PROFILE", m_settings.flat_profile);
+    emit_bool_always("ROCPROFSYS_USE_ROCPD", m_settings.use_rocpd);
+
+    // Perfetto tracing — emit as CLI arg so it can override --preset precedence
+    bool has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset || m_settings.trace_backend != defaults.trace_backend)
+    {
+        argv_out.push_back(
+            std::string("--trace=") + (m_settings.trace_backend ? "true" : "false"));
+    }
+
+    // Collection — defer to preset when at default
     emit_bool("ROCPROFSYS_USE_SAMPLING", m_settings.use_sampling, defaults.use_sampling);
     emit_bool("ROCPROFSYS_USE_PROCESS_SAMPLING",
               m_settings.use_process_sampling, defaults.use_process_sampling);
     emit_bool("ROCPROFSYS_USE_AMD_SMI", m_settings.use_amd_smi, defaults.use_amd_smi);
-    emit_bool("ROCPROFSYS_USE_CAUSAL", m_settings.use_causal, defaults.use_causal);
 
     // Sampling
     emit_double("ROCPROFSYS_SAMPLING_FREQ",
@@ -950,7 +900,6 @@ std::string RocprofSysBackend::ExportCfg() const
         cfg << env_name << " = " << val << "\n";
     };
 
-    emit_string("ROCPROFSYS_MODE", m_settings.mode);
     emit_double("ROCPROFSYS_TRACE_DELAY", m_settings.trace_delay);
     emit_double("ROCPROFSYS_TRACE_DURATION", m_settings.trace_duration);
     emit_string("ROCPROFSYS_TRACE_REGION", m_settings.trace_region);
@@ -961,7 +910,6 @@ std::string RocprofSysBackend::ExportCfg() const
     emit_bool("ROCPROFSYS_USE_SAMPLING", m_settings.use_sampling);
     emit_bool("ROCPROFSYS_USE_PROCESS_SAMPLING", m_settings.use_process_sampling);
     emit_bool("ROCPROFSYS_USE_AMD_SMI", m_settings.use_amd_smi);
-    emit_bool("ROCPROFSYS_USE_CAUSAL", m_settings.use_causal);
     emit_double("ROCPROFSYS_SAMPLING_FREQ", m_settings.sampling_freq);
     emit_bool("ROCPROFSYS_SAMPLING_CPUTIME", m_settings.sampling_cputime);
     emit_bool("ROCPROFSYS_SAMPLING_REALTIME", m_settings.sampling_realtime);
@@ -1014,38 +962,6 @@ std::string RocprofSysBackend::ExportCfg() const
 
 void RocprofSysBackend::RenderGeneralTab()
 {
-    const char* modes[] = {"trace", "sampling", "causal", "coverage"};
-    int mode_idx = 0;
-    for (int i = 0; i < 4; i++)
-    {
-        if (m_settings.mode == modes[i])
-        {
-            mode_idx = i;
-            break;
-        }
-    }
-    ImGui::Text("Mode:");
-    ImGui::SameLine();
-    if (ImGui::Combo("##Mode", &mode_idx, modes, 4))
-    {
-        std::string new_mode = modes[mode_idx];
-        if (new_mode != m_settings.mode)
-        {
-            m_settings.mode = new_mode;
-            ApplyModeDefaults(new_mode);
-        }
-    }
-    HelpMarker("ROCPROFSYS_MODE", "Profiling mode: trace, sampling, causal, or coverage");
-
-    if (m_settings.mode == "causal")
-    {
-        WarningText("Causal mode disables trace, profile, and sampling backends");
-    }
-    else if (m_settings.mode == "coverage")
-    {
-        WarningText("Coverage mode disables most collection backends");
-    }
-
     ImGui::Text("Trace Delay (s):");
     ImGui::SameLine();
     ImGui::InputDouble("##TraceDelay", &m_settings.trace_delay, 0.0, 0.0, "%.2f");
@@ -1067,25 +983,63 @@ void RocprofSysBackend::RenderGeneralTab()
 
 void RocprofSysBackend::RenderBackendsTab()
 {
-    bool locked = IsCausalOrCoverage();
+    // Primary: rocprof-sys built-in preset selector
+    ImGui::Text("Profiling Preset:");
+    ImGui::SameLine();
 
-    auto toggle = [&](char const* label, bool& val, char const* env,
-                      char const* help, bool force_disabled = false)
+    const char* preset_label =
+        m_settings.rocprof_preset.empty()
+            ? "(none)" : m_settings.rocprof_preset.c_str();
+
+    ImGui::PushItemWidth(180);
+    if (ImGui::BeginCombo("##RocprofPresetCombo", preset_label))
     {
-        if (force_disabled)
-            ImGui::BeginDisabled();
+        if (ImGui::Selectable("(none)", m_settings.rocprof_preset.empty()))
+        {
+            m_settings.rocprof_preset.clear();
+        }
+        for (size_t i = 0; i < kRocprofSysPresetsCount; i++)
+        {
+            bool selected = (m_settings.rocprof_preset == kRocprofSysPresets[i].name);
+            if (ImGui::Selectable(kRocprofSysPresets[i].name, selected))
+            {
+                m_settings.rocprof_preset = kRocprofSysPresets[i].name;
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("%s", kRocprofSysPresets[i].description);
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
+        ImGui::TextUnformatted(
+            "Pick a built-in rocprof-sys preset to configure collection defaults. "
+            "Overrides below apply on top of the preset.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+
+    ImGui::Separator();
+
+    auto toggle = [](char const* label, bool& val, char const* env,
+                     char const* help)
+    {
         ImGui::Checkbox(label, &val);
-        if (force_disabled)
-            ImGui::EndDisabled();
         HelpMarker(env, help);
     };
 
     toggle("Perfetto Tracing", m_settings.trace_backend,
-           "ROCPROFSYS_TRACE", "Enable Perfetto trace backend", locked);
+           "ROCPROFSYS_TRACE", "Enable Perfetto trace backend");
     toggle("ROCpd Database", m_settings.use_rocpd,
            "ROCPROFSYS_USE_ROCPD", "Enable ROCpd SQLite output");
 
-    // Profile type: radio group (Off / Hierarchical / Flat)
     ImGui::Separator();
     ImGui::Text("Timemory Profile:");
     HelpMarker("ROCPROFSYS_PROFILE / ROCPROFSYS_FLAT_PROFILE",
@@ -1095,8 +1049,6 @@ void RocprofSysBackend::RenderBackendsTab()
     if (m_settings.profile)       profile_mode = 1;
     if (m_settings.flat_profile)  profile_mode = 2;
 
-    if (locked)
-        ImGui::BeginDisabled();
     if (ImGui::RadioButton("Off##Profile", profile_mode == 0))
     {
         m_settings.profile      = false;
@@ -1114,25 +1066,16 @@ void RocprofSysBackend::RenderBackendsTab()
         m_settings.profile      = false;
         m_settings.flat_profile = true;
     }
-    if (locked)
-        ImGui::EndDisabled();
 
     ImGui::Separator();
 
     toggle("Statistical Sampling", m_settings.use_sampling,
-           "ROCPROFSYS_USE_SAMPLING", "Enable call-stack sampling",
-           locked);
+           "ROCPROFSYS_USE_SAMPLING", "Enable call-stack sampling");
     toggle("Process Sampling", m_settings.use_process_sampling,
-           "ROCPROFSYS_USE_PROCESS_SAMPLING", "Background process/system metrics",
-           m_settings.mode == "coverage");
+           "ROCPROFSYS_USE_PROCESS_SAMPLING", "Background process/system metrics");
     toggle("AMD SMI", m_settings.use_amd_smi,
-           "ROCPROFSYS_USE_AMD_SMI", "GPU metrics via AMD SMI",
-           m_settings.mode == "coverage");
-    toggle("Causal Profiling", m_settings.use_causal,
-           "ROCPROFSYS_USE_CAUSAL", "Enable causal profiling mode",
-           m_settings.mode == "coverage");
+           "ROCPROFSYS_USE_AMD_SMI", "GPU metrics via AMD SMI");
 
-    // Soft warning: trace + profile both on
     if (m_settings.trace_backend &&
         (m_settings.profile || m_settings.flat_profile))
     {
@@ -1144,10 +1087,6 @@ void RocprofSysBackend::RenderBackendsTab()
 
 void RocprofSysBackend::RenderSamplingTab()
 {
-    bool locked = IsCausalOrCoverage();
-    if (locked)
-        ImGui::BeginDisabled();
-
     ImGui::Text("Sampling Frequency (Hz):");
     ImGui::SameLine();
     ImGui::InputDouble("##SampFreq", &m_settings.sampling_freq, 10.0, 100.0, "%.0f");
@@ -1201,9 +1140,6 @@ void RocprofSysBackend::RenderSamplingTab()
     ImGui::Checkbox("Include Inline Entries", &m_settings.sampling_include_inlines);
     HelpMarker("ROCPROFSYS_SAMPLING_INCLUDE_INLINES",
                "Include inline function entries in stacks");
-
-    if (locked)
-        ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderRocmTab()
@@ -1337,10 +1273,6 @@ void RocprofSysBackend::RenderPerfettoTab()
 
 void RocprofSysBackend::RenderProcessSamplingTab()
 {
-    bool coverage_locked = (m_settings.mode == "coverage");
-    if (coverage_locked)
-        ImGui::BeginDisabled();
-
     ImGui::Checkbox("CPU Frequency / Mem / Context Switches",
                     &m_settings.cpu_freq_enabled);
     HelpMarker("ROCPROFSYS_CPU_FREQ_ENABLED",
@@ -1378,19 +1310,12 @@ void RocprofSysBackend::RenderProcessSamplingTab()
 
     ImGui::Checkbox("AI NIC Metrics", &m_settings.use_ainic);
     HelpMarker("ROCPROFSYS_USE_AINIC", "Enable AI NIC metrics collection");
-
-    if (coverage_locked)
-        ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderParallelismTab()
 {
-    bool coverage_locked = (m_settings.mode == "coverage");
-    if (coverage_locked)
-        ImGui::BeginDisabled();
-
-    auto toggle = [&](char const* label, bool& val, char const* env,
-                      char const* help)
+    auto toggle = [](char const* label, bool& val, char const* env,
+                     char const* help)
     {
         ImGui::Checkbox(label, &val);
         HelpMarker(env, help);
@@ -1408,9 +1333,6 @@ void RocprofSysBackend::RenderParallelismTab()
            "ROCPROFSYS_USE_OMPT", "OpenMP Tools interface");
     toggle("Kokkos", m_settings.use_kokkosp,
            "ROCPROFSYS_USE_KOKKOSP", "Kokkos Tools callback interface");
-
-    if (coverage_locked)
-        ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderInstrumentTab()
@@ -1446,7 +1368,10 @@ void RocprofSysBackend::RenderAdvancedTab()
     ImGui::SameLine();
     InputTextString("##CfgFile", m_settings.config_file);
     HelpMarker("ROCPROFSYS_CONFIG_FILE",
-               "Path to rocprof-sys configuration file");
+               "Path to rocprof-sys configuration file (overrides individual settings)");
+    ImGui::TextDisabled("For full Perfetto control, point to a config file.");
+
+    ImGui::Separator();
 
     const char* levels[] = {"trace", "debug", "info", "warning", "error", "critical"};
     int level_idx = 2;
@@ -1486,6 +1411,13 @@ void RocprofSysBackend::RenderAdvancedTab()
     InputTextString("##TimComponents", m_settings.timemory_components);
     HelpMarker("ROCPROFSYS_TIMEMORY_COMPONENTS",
                "Comma-separated timemory component list");
+
+    ImGui::Separator();
+
+    if (ImGui::CollapsingHeader("Perfetto (advanced)"))
+    {
+        RenderPerfettoTab();
+    }
 }
 
 } // namespace View

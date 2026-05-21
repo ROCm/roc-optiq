@@ -29,10 +29,21 @@ extern size_t const        kAmdSmiMetricsCount;
 extern CheckboxEntry const kPerfettoCategories[];
 extern size_t const        kPerfettoCategoriesCount;
 
+struct RocprofPresetEntry
+{
+    const char* name;
+    const char* description;
+};
+
+extern RocprofPresetEntry const kRocprofSysPresets[];
+extern size_t const             kRocprofSysPresetsCount;
+
 struct RocprofSysSettings
 {
+    // rocprof-sys built-in preset (e.g. "balanced"), empty = none
+    std::string rocprof_preset;
+
     // General
-    std::string mode              = "trace";
     double      trace_delay       = 0.0;
     double      trace_duration    = 0.0;
     std::string trace_region;
@@ -45,8 +56,6 @@ struct RocprofSysSettings
     bool use_sampling             = false;
     bool use_process_sampling     = true;
     bool use_amd_smi              = true;
-    bool use_causal               = false;
-
     // Sampling
     double      sampling_freq              = 300.0;
     bool        sampling_cputime           = false;
@@ -148,9 +157,6 @@ private:
     void RenderParallelismTab();
     void RenderInstrumentTab();
     void RenderAdvancedTab();
-
-    void ApplyModeDefaults(std::string const& new_mode);
-    bool IsCausalOrCoverage() const;
 
     static std::string JoinEnabledKeys(
         std::map<std::string, bool> const& m,

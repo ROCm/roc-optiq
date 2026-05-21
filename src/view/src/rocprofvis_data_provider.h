@@ -289,6 +289,12 @@ public:
     std::string GetProfilerOutput();
 
     /*
+     * Clears the accumulated profiler output in the controller.
+     * Subsequent GetProfilerOutput() calls will only return new output.
+     */
+    void ClearProfilerOutput();
+
+    /*
      * Gets the path to the generated trace file (only valid when state = Completed).
      * @return: Path to trace file, or empty string if not available
      */

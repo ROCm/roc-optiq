@@ -299,12 +299,14 @@ void RenderCommandPreview(
     }
 }
 
-void RenderOutputConsole(
+bool RenderOutputConsole(
     std::string const& output_text,
     std::string const& error_message,
     int profiler_state,
     bool& auto_scroll)
 {
+    bool clear_requested = false;
+
     ImGui::Text("Output:");
 
     const char* state_text = "Idle";
@@ -350,6 +352,12 @@ void RenderOutputConsole(
         ImGui::SetClipboardText(clip.c_str());
     }
 
+    ImGui::SameLine();
+    if (ImGui::Button("Clear##OutputClear"))
+    {
+        clear_requested = true;
+    }
+
     ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
     float output_height = std::max(ImGui::GetContentRegionAvail().y - 30.0f, 60.0f);
     ImGui::BeginChild("OutputText", ImVec2(0, output_height), true, output_flags);
@@ -368,9 +376,11 @@ void RenderOutputConsole(
     }
 
     ImGui::EndChild();
+
+    return clear_requested;
 }
 
-std::string RenderPresetBar(
+std::string RenderSavedProfileBar(
     LaunchPresetManager& preset_mgr,
     std::string const& profiler_id,
     std::string& current_preset_name,
@@ -382,7 +392,7 @@ std::string RenderPresetBar(
 
     std::vector<PresetInfo> presets = preset_mgr.ListPresets(profiler_id);
 
-    ImGui::Text("Preset:");
+    ImGui::Text("Saved Profile:");
     ImGui::SameLine();
 
     // Combo for selecting preset
@@ -433,6 +443,25 @@ std::string RenderPresetBar(
             preset_mgr.DeletePreset(current_preset_name, profiler_id);
             current_preset_name.clear();
         }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Reset Overrides"))
+    {
+        if (backend)
+        {
+            // Reset backend settings to defaults while keeping the
+            // selected rocprof-sys preset and target intact.
+            const_cast<IProfilerBackend*>(backend)->LoadSettings(jt::Json());
+            config.backend_payload = backend->SaveSettings();
+            config.extra_env.clear();
+            config.extra_argv.clear();
+        }
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Clear all override settings to defaults. "
+                          "Keeps the selected preset and target.");
     }
 
     // Save-As popup

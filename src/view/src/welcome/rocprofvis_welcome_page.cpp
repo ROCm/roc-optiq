@@ -68,12 +68,9 @@ constexpr float WELCOME_CARD_TITLE_Y_EM           = 0.72f;
 constexpr float WELCOME_CARD_LINE_GAP_EM          = 1.30f;
 constexpr float WELCOME_CARD_FOOTER_GAP_EM        = 1.65f;
 constexpr float WELCOME_CARD_GITHUB_RIGHT_EM      = 1.10f;
-constexpr float WELCOME_CARD_GITHUB_TOP_EM        = 0.75f;
 constexpr float WELCOME_CARD_TITLE_CLIP_PAD_EM    = 0.6f;
-constexpr float WELCOME_CARD_BG_ALPHA_DARK_HOVER  = 0.75f;
-constexpr float WELCOME_CARD_BG_ALPHA_DARK_IDLE   = 0.55f;
-constexpr float WELCOME_CARD_BG_ALPHA_LIGHT_HOVER = 0.92f;
-constexpr float WELCOME_CARD_BG_ALPHA_LIGHT_IDLE  = 0.66f;
+constexpr float WELCOME_CARD_BG_ALPHA_DARK_IDLE  = 0.55f;
+constexpr float WELCOME_CARD_BG_ALPHA_LIGHT_IDLE = 0.66f;
 constexpr float WELCOME_CARD_BORDER_ALPHA_DARK    = 0.44f;
 constexpr float WELCOME_CARD_BORDER_ALPHA_LIGHT   = 0.72f;
 
@@ -83,6 +80,10 @@ constexpr float WELCOME_RECENT_SPACING_EM = 0.55f;
 // Backdrop logo.
 constexpr float WELCOME_LOGO_WIDTH_FRACTION     = 0.42f;
 constexpr float WELCOME_LOGO_HEIGHT_FRACTION    = 0.56f;
+constexpr float WELCOME_LOGO_OFFSET_X_FRACTION  = 0.62f;
+constexpr float WELCOME_LOGO_OFFSET_Y_FRACTION  = 0.58f;
+constexpr float WELCOME_LOGO_PIVOT_X            = 0.48f;
+constexpr float WELCOME_LOGO_PIVOT_Y            = 0.50f;
 constexpr float WELCOME_LOGO_ALPHA_TOP_DARK     = 0.10f;
 constexpr float WELCOME_LOGO_ALPHA_TOP_LIGHT    = 0.16f;
 constexpr float WELCOME_LOGO_ALPHA_BOTTOM_DARK  = 0.20f;
@@ -162,9 +163,10 @@ DrawBackdrop(SettingsManager& settings, ImVec2 page_pos, ImVec2 page_size)
         page_size.x * WELCOME_LOGO_WIDTH_FRACTION / (kMaxX - kMinX),
         page_size.y * WELCOME_LOGO_HEIGHT_FRACTION / kMaxY);
     const ImVec2    origin(
-        page_pos.x + (page_size.x - (kMaxX - kMinX) * scale) * 0.5f -
-            kMinX * scale,
-        page_pos.y + (page_size.y - kMaxY * scale) * 0.5f);
+        page_pos.x + page_size.x * WELCOME_LOGO_OFFSET_X_FRACTION -
+            (kMaxX - kMinX) * scale * WELCOME_LOGO_PIVOT_X - kMinX * scale,
+        page_pos.y + page_size.y * WELCOME_LOGO_OFFSET_Y_FRACTION -
+            kMaxY * scale * WELCOME_LOGO_PIVOT_Y);
 
     auto draw_polygon = [&](const ImVec2* src, ImU32 color)
     {
@@ -186,7 +188,8 @@ DrawBackdrop(SettingsManager& settings, ImVec2 page_pos, ImVec2 page_size)
                                     : WELCOME_LOGO_ALPHA_BOTTOM_LIGHT));
 }
 
-// Product card. Card click opens docs, GitHub link opens source.
+// Product card. Each text link routes to its own URL; the card body itself is
+// inert so a stray click on the panel does nothing.
 void
 DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float width)
 {
@@ -196,9 +199,8 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
     const ImVec2 bottom_right(pos.x + size.x, pos.y + size.y);
 
     ImGui::PushID(group.title);
-    ImGui::InvisibleButton("docs", size);
-    const bool docs_hovered = ImGui::IsItemHovered();
-    const bool docs_clicked = ImGui::IsItemClicked();
+    // Reserve the card's space; clicks are dispatched manually per link below.
+    ImGui::Dummy(size);
 
     ImDrawList* draw_list  = ImGui::GetWindowDrawList();
     const ImU32 accent_col = settings.GetColor(Colors::kLineChartColor);
@@ -206,21 +208,17 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
                              font_size * WELCOME_CARD_ROUNDING_EM;
     const bool  is_dark    = settings.GetUserSettings().display_settings.use_dark_mode;
 
-    const float bg_alpha =
-        is_dark ? (docs_hovered ? WELCOME_CARD_BG_ALPHA_DARK_HOVER
-                                : WELCOME_CARD_BG_ALPHA_DARK_IDLE)
-                : (docs_hovered ? WELCOME_CARD_BG_ALPHA_LIGHT_HOVER
-                                : WELCOME_CARD_BG_ALPHA_LIGHT_IDLE);
-    const float border_alpha =
-        is_dark ? WELCOME_CARD_BORDER_ALPHA_DARK : WELCOME_CARD_BORDER_ALPHA_LIGHT;
+    const float bg_alpha     = is_dark ? WELCOME_CARD_BG_ALPHA_DARK_IDLE
+                                       : WELCOME_CARD_BG_ALPHA_LIGHT_IDLE;
+    const float border_alpha = is_dark ? WELCOME_CARD_BORDER_ALPHA_DARK
+                                       : WELCOME_CARD_BORDER_ALPHA_LIGHT;
 
     draw_list->AddRectFilled(
         pos, bottom_right,
         ApplyAlpha(settings.GetColor(Colors::kBgFrame), bg_alpha), rounding);
     draw_list->AddRect(
         pos, bottom_right,
-        docs_hovered ? accent_col
-                     : ApplyAlpha(settings.GetColor(Colors::kBorderColor), border_alpha),
+        ApplyAlpha(settings.GetColor(Colors::kBorderColor), border_alpha),
         rounding);
 
     // Accent dot.
@@ -229,26 +227,12 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
                          pos.y + font_size * WELCOME_CARD_DOT_Y_EM);
     draw_list->AddCircleFilled(dot_pos, dot_r, accent_col);
 
-    // GitHub link in the top-right. Hit-tested manually so we don't nest a
-    // second InvisibleButton inside the card's hit region.
-    const char*  github_text = "GitHub";
-    const ImVec2 github_size = ImGui::CalcTextSize(github_text);
-    const ImVec2 github_pos(
-        bottom_right.x - github_size.x - font_size * WELCOME_CARD_GITHUB_RIGHT_EM,
-        pos.y + font_size * WELCOME_CARD_GITHUB_TOP_EM);
-    const ImVec2 github_max(github_pos.x + github_size.x,
-                            github_pos.y + github_size.y);
-    const bool github_hovered = ImGui::IsMouseHoveringRect(github_pos, github_max);
-    const bool github_clicked = github_hovered &&
-                                ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-    draw_list->AddText(github_pos, settings.GetColor(Colors::kAccentRed), github_text);
-
-    // Title and description on the left, clipped before the GitHub link.
+    // Title and description on the left.
     const ImVec2 title_pos(pos.x + font_size * WELCOME_CARD_TITLE_X_EM,
                            pos.y + font_size * WELCOME_CARD_TITLE_Y_EM);
     draw_list->PushClipRect(
         title_pos,
-        ImVec2(github_pos.x - font_size * WELCOME_CARD_TITLE_CLIP_PAD_EM,
+        ImVec2(bottom_right.x - font_size * WELCOME_CARD_TITLE_CLIP_PAD_EM,
                bottom_right.y),
         true);
     draw_list->AddText(title_pos, settings.GetColor(Colors::kTextMain), group.title);
@@ -257,12 +241,29 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
         settings.GetColor(Colors::kTextDim), group.description);
     draw_list->PopClipRect();
 
-    // Centered "Open documentation" link near the bottom.
+    // Bottom row: "Open documentation" on the left, "GitHub" on the right.
+    const float link_y = pos.y + size.y - font_size * WELCOME_CARD_FOOTER_GAP_EM;
+
     const char*  docs_text = "Open documentation";
     const ImVec2 docs_size = ImGui::CalcTextSize(docs_text);
-    const ImVec2 docs_pos(pos.x + (size.x - docs_size.x) * 0.5f,
-                          pos.y + size.y - font_size * WELCOME_CARD_FOOTER_GAP_EM);
+    const ImVec2 docs_pos(pos.x + font_size * WELCOME_CARD_TITLE_X_EM, link_y);
+    const ImVec2 docs_max(docs_pos.x + docs_size.x, docs_pos.y + docs_size.y);
+    const bool docs_hovered = ImGui::IsMouseHoveringRect(docs_pos, docs_max);
+    const bool docs_clicked = docs_hovered &&
+                              ImGui::IsMouseClicked(ImGuiMouseButton_Left);
     draw_list->AddText(docs_pos, settings.GetColor(Colors::kAccentRed), docs_text);
+
+    const char*  github_text = "GitHub";
+    const ImVec2 github_size = ImGui::CalcTextSize(github_text);
+    const ImVec2 github_pos(
+        bottom_right.x - github_size.x - font_size * WELCOME_CARD_GITHUB_RIGHT_EM,
+        link_y);
+    const ImVec2 github_max(github_pos.x + github_size.x,
+                            github_pos.y + github_size.y);
+    const bool github_hovered = ImGui::IsMouseHoveringRect(github_pos, github_max);
+    const bool github_clicked = github_hovered &&
+                                ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    draw_list->AddText(github_pos, settings.GetColor(Colors::kAccentRed), github_text);
 
     if(github_hovered)
     {

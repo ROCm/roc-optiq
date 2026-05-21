@@ -148,7 +148,7 @@ public:
         LaunchConfig const& config) const override;
 
 private:
-    void RenderGeneralTab();
+    void RenderGeneralTraceOptions();
     void RenderBackendsTab();
     void RenderSamplingTab();
     void RenderRocmTab();

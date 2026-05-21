@@ -541,8 +541,6 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(std::string const& tool_id
 
     tabs.push_back({"quick", "Quick", [this]() {
         const_cast<RocprofSysBackend*>(this)->RenderBackendsTab();
-        ImGui::Separator();
-        const_cast<RocprofSysBackend*>(this)->RenderGeneralTab();
     }});
     tabs.push_back({"sampling", "Sampling", [this]() {
         const_cast<RocprofSysBackend*>(this)->RenderSamplingTab(); }});
@@ -960,8 +958,10 @@ std::string RocprofSysBackend::ExportCfg() const
 // Tab render functions
 // ==================================================================================
 
-void RocprofSysBackend::RenderGeneralTab()
+void RocprofSysBackend::RenderGeneralTraceOptions()
 {
+    SectionTitle("General Options");
+
     ImGui::Text("Trace Delay (s):");
     ImGui::SameLine();
     ImGui::InputDouble("##TraceDelay", &m_settings.trace_delay, 0.0, 0.0, "%.2f");
@@ -1021,7 +1021,8 @@ void RocprofSysBackend::RenderBackendsTab()
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
         ImGui::TextUnformatted(
             "Pick a built-in rocprof-sys preset to configure collection defaults. "
-            "Overrides below apply on top of the preset.");
+            "When a preset is active, detailed settings are locked to preset values. "
+            "Use Raw Env Vars for manual overrides, or select (none) to unlock all controls.");
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
@@ -1035,12 +1036,19 @@ void RocprofSysBackend::RenderBackendsTab()
         HelpMarker(env, help);
     };
 
+    SectionTitle("Trace Output Format");
+
     toggle("Perfetto Tracing", m_settings.trace_backend,
            "ROCPROFSYS_TRACE", "Enable Perfetto trace backend");
     toggle("ROCpd Database", m_settings.use_rocpd,
            "ROCPROFSYS_USE_ROCPD", "Enable ROCpd SQLite output");
 
-    ImGui::Separator();
+    bool has_preset = !m_settings.rocprof_preset.empty();
+
+    ImGui::BeginDisabled(has_preset);
+
+    SectionTitle("Summary Output Format");
+
     ImGui::Text("Timemory Profile:");
     HelpMarker("ROCPROFSYS_PROFILE / ROCPROFSYS_FLAT_PROFILE",
                "Profiling backend mode (hierarchical or flat)");
@@ -1067,6 +1075,14 @@ void RocprofSysBackend::RenderBackendsTab()
         m_settings.flat_profile = true;
     }
 
+    ImGui::EndDisabled();
+
+    RenderGeneralTraceOptions();
+
+    ImGui::BeginDisabled(has_preset);
+    
+    SectionTitle("Collection Options");
+
     ImGui::Separator();
 
     toggle("Statistical Sampling", m_settings.use_sampling,
@@ -1083,10 +1099,23 @@ void RocprofSysBackend::RenderBackendsTab()
         WarningText("Both trace and profile backends are enabled -- "
                     "this increases overhead");
     }
+
+    ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderSamplingTab()
 {
+    bool has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset)
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
+            "Preset \"%s\" controls these settings.",
+            m_settings.rocprof_preset.c_str());
+        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::Spacing();
+    }
+    ImGui::BeginDisabled(has_preset);
+
     ImGui::Text("Sampling Frequency (Hz):");
     ImGui::SameLine();
     ImGui::InputDouble("##SampFreq", &m_settings.sampling_freq, 10.0, 100.0, "%.0f");
@@ -1140,10 +1169,23 @@ void RocprofSysBackend::RenderSamplingTab()
     ImGui::Checkbox("Include Inline Entries", &m_settings.sampling_include_inlines);
     HelpMarker("ROCPROFSYS_SAMPLING_INCLUDE_INLINES",
                "Include inline function entries in stacks");
+
+    ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderRocmTab()
 {
+    bool has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset)
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
+            "Preset \"%s\" controls these settings.",
+            m_settings.rocprof_preset.c_str());
+        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::Spacing();
+    }
+    ImGui::BeginDisabled(has_preset);
+
     ImGui::Text("ROCm Domains:");
     HelpMarker("ROCPROFSYS_ROCM_DOMAINS",
                "ROCm SDK domains to trace (checked = enabled)");
@@ -1168,6 +1210,8 @@ void RocprofSysBackend::RenderRocmTab()
     ImGui::Checkbox("Group by Queue", &m_settings.rocm_group_by_queue);
     HelpMarker("ROCPROFSYS_ROCM_GROUP_BY_QUEUE",
                "Group by HSA queue instead of HIP stream");
+
+    ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderPerfettoTab()
@@ -1273,6 +1317,17 @@ void RocprofSysBackend::RenderPerfettoTab()
 
 void RocprofSysBackend::RenderProcessSamplingTab()
 {
+    bool has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset)
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
+            "Preset \"%s\" controls these settings.",
+            m_settings.rocprof_preset.c_str());
+        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::Spacing();
+    }
+    ImGui::BeginDisabled(has_preset);
+
     ImGui::Checkbox("CPU Frequency / Mem / Context Switches",
                     &m_settings.cpu_freq_enabled);
     HelpMarker("ROCPROFSYS_CPU_FREQ_ENABLED",
@@ -1310,10 +1365,23 @@ void RocprofSysBackend::RenderProcessSamplingTab()
 
     ImGui::Checkbox("AI NIC Metrics", &m_settings.use_ainic);
     HelpMarker("ROCPROFSYS_USE_AINIC", "Enable AI NIC metrics collection");
+
+    ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderParallelismTab()
 {
+    bool has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset)
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
+            "Preset \"%s\" controls these settings.",
+            m_settings.rocprof_preset.c_str());
+        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::Spacing();
+    }
+    ImGui::BeginDisabled(has_preset);
+
     auto toggle = [](char const* label, bool& val, char const* env,
                      char const* help)
     {
@@ -1333,10 +1401,23 @@ void RocprofSysBackend::RenderParallelismTab()
            "ROCPROFSYS_USE_OMPT", "OpenMP Tools interface");
     toggle("Kokkos", m_settings.use_kokkosp,
            "ROCPROFSYS_USE_KOKKOSP", "Kokkos Tools callback interface");
+
+    ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderInstrumentTab()
 {
+    bool has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset)
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
+            "Preset \"%s\" controls these settings.",
+            m_settings.rocprof_preset.c_str());
+        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::Spacing();
+    }
+    ImGui::BeginDisabled(has_preset);
+
     ImGui::Text("Binary Instrumentation Options");
     ImGui::Separator();
 
@@ -1360,10 +1441,23 @@ void RocprofSysBackend::RenderInstrumentTab()
     }
     HelpMarker("--min-instructions",
                "Minimum instruction count for a function to be instrumented");
+
+    ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderAdvancedTab()
 {
+    bool has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset)
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
+            "Preset \"%s\" controls these settings.",
+            m_settings.rocprof_preset.c_str());
+        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::Spacing();
+    }
+    ImGui::BeginDisabled(has_preset);
+
     ImGui::Text("Config File:");
     ImGui::SameLine();
     InputTextString("##CfgFile", m_settings.config_file);
@@ -1418,6 +1512,8 @@ void RocprofSysBackend::RenderAdvancedTab()
     {
         RenderPerfettoTab();
     }
+
+    ImGui::EndDisabled();
 }
 
 } // namespace View

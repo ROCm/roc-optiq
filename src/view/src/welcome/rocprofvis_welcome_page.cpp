@@ -71,6 +71,8 @@ constexpr float WELCOME_CARD_BORDER_ALPHA_LIGHT   = 0.72f;
 
 // Recent files list.
 constexpr float WELCOME_RECENT_SPACING_EM = 0.55f;
+constexpr float WELCOME_RECENT_HOVER_ALPHA = 0.28f;
+constexpr float WELCOME_RECENT_ACTIVE_ALPHA = 0.40f;
 
 // Backdrop logo.
 constexpr float WELCOME_LOGO_WIDTH_FRACTION     = 0.42f;
@@ -79,10 +81,10 @@ constexpr float WELCOME_LOGO_OFFSET_X_FRACTION  = 0.62f;
 constexpr float WELCOME_LOGO_OFFSET_Y_FRACTION  = 0.58f;
 constexpr float WELCOME_LOGO_PIVOT_X            = 0.48f;
 constexpr float WELCOME_LOGO_PIVOT_Y            = 0.50f;
-constexpr float WELCOME_LOGO_ALPHA_TOP_DARK     = 0.10f;
-constexpr float WELCOME_LOGO_ALPHA_TOP_LIGHT    = 0.16f;
-constexpr float WELCOME_LOGO_ALPHA_BOTTOM_DARK  = 0.20f;
-constexpr float WELCOME_LOGO_ALPHA_BOTTOM_LIGHT = 0.25f;
+constexpr float WELCOME_LOGO_ALPHA_TOP_DARK     = 0.12f;
+constexpr float WELCOME_LOGO_ALPHA_TOP_LIGHT    = 0.14f;
+constexpr float WELCOME_LOGO_ALPHA_BOTTOM_DARK  = 0.16f;
+constexpr float WELCOME_LOGO_ALPHA_BOTTOM_LIGHT = 0.18f;
 constexpr int   WELCOME_LOGO_POLYGON_VERTICES   = 7;
 
 constexpr const char* SUPPORTED_FILE_TYPES_HINT =
@@ -174,11 +176,11 @@ DrawBackdrop(SettingsManager& settings, ImVec2 page_pos, ImVec2 page_size)
     };
 
     draw_polygon(kLogoTop,
-                 ApplyAlpha(settings.GetColor(Colors::kAccentRed),
+                 ApplyAlpha(settings.GetColor(Colors::kAccentRedHover),
                             is_dark ? WELCOME_LOGO_ALPHA_TOP_DARK
                                     : WELCOME_LOGO_ALPHA_TOP_LIGHT));
     draw_polygon(kLogoBottom,
-                 ApplyAlpha(settings.GetColor(Colors::kLineChartColorAlt),
+                 ApplyAlpha(settings.GetColor(Colors::kAccentRed),
                             is_dark ? WELCOME_LOGO_ALPHA_BOTTOM_DARK
                                     : WELCOME_LOGO_ALPHA_BOTTOM_LIGHT));
 }
@@ -198,7 +200,7 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
     ImGui::Dummy(size);
 
     ImDrawList* draw_list  = ImGui::GetWindowDrawList();
-    const ImU32 accent_col = settings.GetColor(Colors::kLineChartColor);
+    const ImU32 accent_col = settings.GetColor(Colors::kAccentRed);
     const float rounding   = settings.GetDefaultStyle().FrameRounding +
                              font_size * WELCOME_CARD_ROUNDING_EM;
     const bool  is_dark    = settings.GetUserSettings().display_settings.use_dark_mode;
@@ -549,6 +551,18 @@ WelcomePage::RenderRecentTile(std::string& recent_file_to_open)
         {
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                                 ImVec2(0.0f, font_size * WELCOME_RECENT_SPACING_EM));
+            ImGui::PushStyleColor(
+                ImGuiCol_Header,
+                ApplyAlpha(settings.GetColor(Colors::kAccentRed),
+                           WELCOME_RECENT_HOVER_ALPHA));
+            ImGui::PushStyleColor(
+                ImGuiCol_HeaderHovered,
+                ApplyAlpha(settings.GetColor(Colors::kAccentRedHover),
+                           WELCOME_RECENT_HOVER_ALPHA));
+            ImGui::PushStyleColor(
+                ImGuiCol_HeaderActive,
+                ApplyAlpha(settings.GetColor(Colors::kAccentRedActive),
+                           WELCOME_RECENT_ACTIVE_ALPHA));
             size_t shown = 0;
             for(const std::string& file : recent_files)
             {
@@ -575,6 +589,7 @@ WelcomePage::RenderRecentTile(std::string& recent_file_to_open)
                 }
                 ImGui::PopID();
             }
+            ImGui::PopStyleColor(3);
             ImGui::PopStyleVar();
         }
     }

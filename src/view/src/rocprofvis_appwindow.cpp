@@ -9,8 +9,6 @@
 #endif
 #include "ImGuiFileDialog.h"
 
-#include "amd_rocm_optiq_logo_png_light.h"
-#include "amd_rocm_optiq_logo_png_dark.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
@@ -27,6 +25,8 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "welcome/rocprofvis_welcome_page.h"
+#include <algorithm>
 #include <filesystem>
 #include <sstream>
 #include <utility>
@@ -42,15 +42,10 @@ constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
 constexpr const char* APP_SHUTDOWN_NOTIFICATION_ID = "provider_cleanup_app_shutdown";
 constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
-constexpr float EMPTY_STATE_CONTENT_EM      = 32.0f;
-constexpr float EMPTY_STATE_BUTTON_EM       = 10.0f;
-constexpr float EMPTY_STATE_LOGO_EM         = 12.0f;
-constexpr float EMPTY_STATE_RECENT_FILES_EM = 22.0f;
 
 const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml" };
 const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
 const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
-constexpr const char* SUPPORTED_FILE_TYPES_HINT   = "Supported types: .db, .rpd, .yaml, .rpv";
 
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
 constexpr const char* CLOSING_MESSAGE = "Closing...";
@@ -86,10 +81,6 @@ AppWindow::AppWindow()
 : m_main_view(nullptr)
 , m_settings_panel(nullptr)
 , m_tab_container(nullptr)
-, m_amd_logo_light(amd_rocm_optiq_logo_png_light,
-                   static_cast<int>(sizeof(amd_rocm_optiq_logo_png_light)))
-, m_amd_logo_dark(amd_rocm_optiq_logo_png_dark,
-                  static_cast<int>(sizeof(amd_rocm_optiq_logo_png_dark)))
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
@@ -163,6 +154,10 @@ AppWindow::Init()
         spdlog::warn("Failed to initialize SettingsManager");
     }
 
+    m_welcome_page = std::make_unique<WelcomePage>(
+        [this]() { HandleOpenFile(); },
+        [this](const std::string& file_path) { HandleOpenRecentFile(file_path); });
+
     constexpr float initial_status_bar_height = 30.0f;
     LayoutItem status_bar_item(-1, initial_status_bar_height);
     status_bar_item.m_item =
@@ -187,7 +182,7 @@ AppWindow::Init()
         }
         else
         {
-            RenderEmptyState();
+            m_welcome_page->Render();
         }
     });
 
@@ -653,143 +648,6 @@ AppWindow::Render()
     NotificationManager::GetInstance().Render();
 
     RenderDisableScreen();
-}
-
-void
-AppWindow::RenderEmptyState()
-{
-    SettingsManager&            settings     = SettingsManager::GetInstance();
-    const InternalSettings&     internal     = settings.GetInternalSettings();
-    const std::list<std::string>& recent_files = internal.recent_files;
-    const float font_size     = ImGui::GetFontSize();
-    const float window_width  = ImGui::GetContentRegionAvail().x;
-    const float window_height = ImGui::GetContentRegionAvail().y;
-    const float card_width    = std::min(window_width - font_size * 2.0f,
-                                         font_size * EMPTY_STATE_CONTENT_EM);
-    const float card_padding  = font_size * 1.8f;
-    std::string recent_file_to_open;
-
-    // Vertically center the dialog card
-    ImGui::SetCursorPosY(window_height * 0.18f);
-    ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(card_padding, card_padding));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
-                        settings.GetDefaultStyle().ChildRounding);
-    ImGui::BeginChild("welcome_dialog", ImVec2(card_width, 0.0f),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
-                      ImGuiWindowFlags_NoScrollbar);
-
-    // --- Logo ---
-    EmbeddedImage& logo = settings.GetUserSettings().display_settings.use_dark_mode
-                              ? m_amd_logo_dark
-                              : m_amd_logo_light;
-    if(logo.Valid())
-    {
-        const float avail       = ImGui::GetContentRegionAvail().x;
-        const float logo_width  = std::min(avail * 0.42f, font_size * EMPTY_STATE_LOGO_EM);
-        const float logo_height = logo_width * static_cast<float>(logo.GetHeight()) /
-                                  static_cast<float>(logo.GetWidth());
-        ImVec2 logo_pos = ImGui::GetCursorScreenPos();
-        logo_pos.x += (avail - logo_width) * 0.5f;
-        ImGui::Dummy(ImVec2(avail, logo_height));
-        logo.Render(logo_pos, logo_width);
-        ImGui::Dummy(ImVec2(0.0f, font_size));
-    }
-
-    // --- Title ---
-
-    ImGui::PushFont(NULL, settings.GetFontManager().GetFontSize(FontSize::kLarge));
-    CenterNextTextItem("Open a trace or project");
-    ImGui::TextUnformatted("Open a trace or project");
-    ImGui::PopFont();
-
-    ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
-
-    // --- Subtitle ---
-    CenterNextTextItem("Drag and drop files here, or open one from disk.");
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextUnformatted("Drag and drop files here, or open one from disk.");
-    ImGui::PopStyleColor();
-
-    ImGui::Dummy(ImVec2(0.0f, font_size * 0.9f));
-
-    // --- Open button ---
-    const float button_width = font_size * EMPTY_STATE_BUTTON_EM;
-    CenterNextItem(button_width);
-    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccentRed));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          settings.GetColor(Colors::kAccentRedHover));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          settings.GetColor(Colors::kAccentRedActive));
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextOnAccent));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                        ImVec2(ImGui::GetStyle().FramePadding.x,
-                               ImGui::GetStyle().FramePadding.y + 4.0f));
-    if(ImGui::Button("Open File", ImVec2(button_width, 0.0f)))
-    {
-        HandleOpenFile();
-    }
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(4);
-    if(ImGui::IsItemHovered())
-    {
-        SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
-    }
-
-    // --- Recent files ---
-    if(!recent_files.empty())
-    {
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
-        ImGui::Separator();
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
-
-        CenterNextTextItem("Recent Files");
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextUnformatted("Recent Files");
-        ImGui::PopStyleColor();
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
-
-        const float rf_width =
-            std::min(ImGui::GetContentRegionAvail().x * 0.78f,
-                     font_size * EMPTY_STATE_RECENT_FILES_EM);
-
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                              settings.GetColor(Colors::kHighlightChart));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                              settings.GetColor(Colors::kSelection));
-        int shown = 0;
-        for(const std::string& file : recent_files)
-        {
-            if(shown++ >= static_cast<int>(MAX_RECENT_FILES)) break;
-
-            const std::filesystem::path fpath(file);
-            const std::string fname = fpath.filename().empty() ? file : fpath.filename().string();
-
-            ImGui::PushID(file.c_str());
-            CenterNextItem(rf_width);
-
-            if(ImGui::Selectable(fname.c_str(), false, 0, ImVec2(rf_width, 0.0f)))
-            {
-                recent_file_to_open = file;
-            }
-            if(ImGui::IsItemHovered())
-            {
-                SetTooltipStyled("%s", file.c_str());
-            }
-
-            ImGui::PopID();
-        }
-        ImGui::PopStyleColor(2);
-    }
-
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-
-    if(!recent_file_to_open.empty())
-    {
-        HandleOpenRecentFile(recent_file_to_open);
-    }
 }
 
 void

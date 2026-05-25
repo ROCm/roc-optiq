@@ -18,6 +18,11 @@ namespace RocProfVis
 namespace View
 {
 
+namespace
+{
+constexpr float kExpandedHeaderHeight = 36.0f;
+}  // namespace
+
 static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
                        const std::string& text, const std::string& title,
@@ -103,7 +108,7 @@ StickyNote::SetTitle(std::string title)
 {
     m_title = title;
 }
-void
+bool
 StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
                    std::shared_ptr<TimePixelTransform> tpt)
 {
@@ -111,17 +116,32 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     {
         spdlog::error(
             "StickyNote::Render: conversion_manager shared_ptr is null, cannot render");
-        return;
+        return false;
     }
-    SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            bg_color     = settings.GetColor(Colors::kStickyNote);
-    ImU32            border_color = settings.GetColor(Colors::kBorderColor);
-    ImU32            accent_color = settings.GetColor(Colors::kStickyNote);
+    SettingsManager& settings      = SettingsManager::GetInstance();
+    const bool       use_dark_mode = settings.GetUserSettings().display_settings.use_dark_mode;
+    ImU32            bg_color          = use_dark_mode ? IM_COL32(58, 53, 36, 245)
+                                                       : IM_COL32(255, 252, 228, 248);
+    ImU32            border_color      = use_dark_mode ? IM_COL32(62, 116, 168, 220)
+                                                       : IM_COL32(91, 139, 184, 205);
+    ImU32            header_color      = use_dark_mode ? IM_COL32(70, 62, 40, 248)
+                                                       : IM_COL32(255, 247, 204, 248);
+    ImU32            shadow_color      = use_dark_mode ? IM_COL32(0, 0, 0, 85)
+                                                       : IM_COL32(76, 95, 128, 35);
+    ImU32            icon_hover_color =
+        ApplyAlpha(settings.GetColor(Colors::kButtonHovered), 0.74f);
+    ImU32 icon_active_color =
+        ApplyAlpha(settings.GetColor(Colors::kButtonActive), 0.86f);
+    ImU32            text_color        = use_dark_mode ? IM_COL32(238, 243, 255, 255)
+                                                       : IM_COL32(25, 38, 56, 255);
+    ImU32            muted_text_color  = use_dark_mode ? IM_COL32(145, 156, 174, 255)
+                                                       : IM_COL32(92, 106, 126, 255);
+    ImU32            accent_color      = use_dark_mode ? IM_COL32(225, 203, 78, 235)
+                                                       : IM_COL32(168, 128, 0, 235);
 
-    const float rounding      = 8.0f;
-    const float margin        = 12.0f;
-    const float header_height = 32.0f;
-    const float edit_btn_size = 30.0f;
+    const float rounding      = settings.GetDefaultStyle().ChildRounding;
+    const float margin        = 14.0f;
+    const float icon_btn_gap  = 8.0f;
 
     float  x           = tpt->TimeToPixel(m_time_ns);
     float  y           = m_y_offset;
@@ -136,27 +156,40 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
         ImGui::BeginChild(child_id.c_str(), m_size, false, ImGuiWindowFlags_None);
 
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(
+            FontType::kIcon);
         ImGui::PushFont(icon_font);
+        ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
+        ImVec2 padding   = ImGui::GetStyle().FramePadding;
+        const float minimized_btn_size =
+            std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
+        ImVec2 btn_max = ImVec2(sticky_pos.x + minimized_btn_size,
+                                sticky_pos.y + minimized_btn_size);
+        if(draw_list)
+        {
+            draw_list->AddRectFilled(ImVec2(sticky_pos.x + 2.0f, sticky_pos.y + 3.0f),
+                                     ImVec2(btn_max.x + 2.0f, btn_max.y + 3.0f),
+                                     shadow_color, rounding * 0.6f);
+            draw_list->AddRectFilled(sticky_pos, btn_max, bg_color, rounding * 0.6f);
+            draw_list->AddRect(sticky_pos, btn_max, border_color, rounding * 0.6f);
+        }
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
         ImGui::Button(
-            (std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str());
+            (std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str(),
+            ImVec2(minimized_btn_size, minimized_btn_size));
         if(ImGui::IsItemHovered() && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
         {
             m_expanded_screen_pos = ImVec2(-1, -1);
             m_is_minimized        = false;
         }
-        ImGui::PopStyleColor(3);
+        ImGui::PopStyleColor(4);
         ImGui::PopFont();
 
-        ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
-        ImVec2 padding   = ImGui::GetStyle().FramePadding;
-        ImVec2 btn_max   = ImVec2(sticky_pos.x + icon_size.x + padding.x * 2.0f,
-                                  sticky_pos.y + icon_size.y + padding.y * 2.0f);
-        if(ImGui::IsMouseHoveringRect(sticky_pos, btn_max))
+        bool blocks_timeline_input = ImGui::IsMouseHoveringRect(sticky_pos, btn_max);
+        if(blocks_timeline_input)
         {
             TimelineFocusManager::GetInstance().RequestLayerFocus(
                 Layer::kInteractiveLayer);
@@ -167,6 +200,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         }
 
         ImGui::EndChild();
+        return blocks_timeline_input;
     }
     else
     {
@@ -201,9 +235,19 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         sticky_pos = ImVec2(window_position.x + adjusted_x, window_position.y + adjusted_y);
         ImGui::SetCursorPos(ImVec2(adjusted_x, adjusted_y));
 
+        if(draw_list)
+        {
+            draw_list->AddRectFilled(
+                ImVec2(sticky_pos.x + 3.0f, sticky_pos.y + 4.0f),
+                ImVec2(sticky_pos.x + sticky_size.x + 3.0f,
+                       sticky_pos.y + sticky_size.y + 4.0f),
+                shadow_color, rounding);
+        }
+
         // Round corners
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, rounding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::PushStyleColor(ImGuiCol_ChildBg, bg_color);
         ImGui::PushStyleColor(ImGuiCol_Border, border_color);
 
@@ -212,76 +256,108 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
                 .c_str(),
             sticky_size, true);
 
-        // Header (accent bar)
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, accent_color);
-        ImGui::BeginChild("Header", ImVec2(sticky_size.x, header_height), false);
+        ImDrawList* note_draw_list = ImGui::GetWindowDrawList();
+        const ImVec2 note_min      = ImGui::GetWindowPos();
+        const ImVec2 header_min    = note_min;
+        const ImVec2 header_max    = ImVec2(note_min.x + sticky_size.x,
+                                            note_min.y + kExpandedHeaderHeight);
+        note_draw_list->AddRectFilled(header_min, header_max, header_color, rounding,
+                                      ImDrawFlags_RoundCornersTop);
+        note_draw_list->AddRectFilled(header_min,
+                                      ImVec2(note_min.x + 3.0f, note_min.y + sticky_size.y),
+                                      ApplyAlpha(accent_color, 0.78f), rounding,
+                                      ImDrawFlags_RoundCornersLeft);
+        note_draw_list->AddLine(ImVec2(note_min.x, header_max.y),
+                                ImVec2(note_min.x + sticky_size.x, header_max.y),
+                                ApplyAlpha(border_color, 0.42f));
 
         // Title (left)
-        ImGui::SetCursorPos(ImVec2(margin, 4.0f));
+        ImGui::SetCursorPos(
+            ImVec2(margin,
+                   (kExpandedHeaderHeight - ImGui::GetTextLineHeight()) * 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
         ImGui::TextUnformatted(m_title.c_str());
+        ImGui::PopStyleColor();
 
         // Edit button (left of close)
-        ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size * 2 - margin,
-                                   (header_height - edit_btn_size) / 2));
-        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault));
+        ImFont* action_icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(
+            FontType::kIcon);
+        ImGui::PushFont(action_icon_font);
+        ImVec2 edit_icon_size  = ImGui::CalcTextSize(ICON_EDIT);
+        ImVec2 close_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
+        const float action_btn_size =
+            std::max({34.0f, edit_icon_size.x + 14.0f, close_icon_size.x + 14.0f});
+        const float action_btn_y = (kExpandedHeaderHeight - action_btn_size) * 0.5f;
+
+        ImGui::SetCursorPos(ImVec2(sticky_size.x - action_btn_size * 2.0f - margin -
+                                       icon_btn_gap,
+                                   action_btn_y));
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
+        ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
         if(ImGui::Button((std::string(ICON_EDIT) + "##" +
                           std::to_string(reinterpret_cast<uintptr_t>(this)))
                              .c_str(),
-                         ImVec2(edit_btn_size, edit_btn_size)))
+                         ImVec2(action_btn_size, action_btn_size)))
         {
             EventManager::GetInstance()->AddEvent(
                 std::make_shared<StickyNoteEvent>(m_id, m_project_id));
         }
-        ImGui::PopStyleColor(3);
-        ImGui::PopFont();
+        ImGui::PopStyleColor(4);
 
-        ImGui::SetCursorPos(ImVec2(sticky_size.x - edit_btn_size - margin / 2,
-                                   (header_height - edit_btn_size) / 2));
-        ImGui::PushFont(SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault));
+        ImGui::SetCursorPos(ImVec2(sticky_size.x - action_btn_size - margin,
+                                   action_btn_y));
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
+        ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
         if(ImGui::Button(
                (std::string(ICON_X_CIRCLED) + "##icon_switch_" + std::to_string(m_id))
                    .c_str(),
-               ImVec2(edit_btn_size, edit_btn_size)))
+               ImVec2(action_btn_size, action_btn_size)))
         {
             m_is_minimized = true;
         }
-        ImGui::PopStyleColor(3);
+        ImGui::PopStyleColor(4);
         ImGui::PopFont();
 
-        ImGui::EndChild();
-
-        ImGui::PopStyleColor();
-
-        // Text area
-        ImGui::SetCursorPos(ImVec2(margin, header_height + margin));
-        ImGui::PushTextWrapPos(sticky_size.x - margin);
+        // Scroll only the note body; the header/actions stay pinned.
+        const float body_y      = kExpandedHeaderHeight + margin;
+        const float body_height = std::max(0.0f, sticky_size.y - body_y - margin);
+        ImGui::SetCursorPos(ImVec2(margin, body_y));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
+        ImGui::BeginChild("StickyNoteBody", ImVec2(sticky_size.x - margin * 2.0f,
+                                                   body_height), false);
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
         ImGui::TextUnformatted(m_text.c_str());
         ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
 
-    ImGui::EndChild();
-    // Cover hover case for input control
-    ImVec2 sticky_max =
-        ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
-    if(ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) && !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
-    {
-        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
-    }
-
+        ImGui::EndChild();
+        // Cover hover case for input control
+        ImVec2 sticky_max =
+            ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
+        bool blocks_timeline_input =
+            ImGui::IsMouseHoveringRect(sticky_pos, sticky_max) &&
+            !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect);
+        if(blocks_timeline_input)
+        {
+            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
+        }
         else
         {
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }
 
         ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(2);
+        ImGui::PopStyleVar(3);
+        return blocks_timeline_input;
     }
 }
 
@@ -309,9 +385,8 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     {
         ImVec2 icon_pos = ImVec2(window_position.x + x, window_position.y + y);
 
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetIconFont(
-            FontType::kDefault);
-        ImGui::PushFont(icon_font);
+        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+        ImGui::PushFont(icon_font, 0.0f);
         ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
         ImGui::PopFont();
 
@@ -332,9 +407,11 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         {
             drag_pos = ImVec2(window_position.x + x, window_position.y + y);
         }
+        // Expanded notes drag by the header so the scrollable body can own
+        // scrollbar/body interactions.
         drag_w   = m_size.x;
-        drag_h   = m_size.y;
-        drag_max = ImVec2(drag_pos.x + drag_w, drag_pos.y + drag_h);
+        drag_max = ImVec2(drag_pos.x + drag_w,
+                          drag_pos.y + kExpandedHeaderHeight);
     }
 
     ImVec2 mouse_pos      = ImGui::GetMousePos();
@@ -344,8 +421,10 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     if(!m_is_minimized)
     {
         const float handle_size = 12.0f;
-        ImVec2      handle_pos  = ImVec2(drag_max.x - handle_size, drag_max.y - handle_size);
-        if(ImGui::IsMouseHoveringRect(handle_pos, drag_max))
+        ImVec2      sticky_max  = ImVec2(drag_pos.x + m_size.x, drag_pos.y + m_size.y);
+        ImVec2      handle_pos  = ImVec2(sticky_max.x - handle_size,
+                                         sticky_max.y - handle_size);
+        if(ImGui::IsMouseHoveringRect(handle_pos, sticky_max))
             return false;
     }
 
@@ -366,7 +445,9 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         float  new_y       = mouse_pos.y - window_position.y - m_drag_offset.y;
         ImVec2 window_size = ImGui::GetWindowSize();
         new_x = std::clamp(new_x, 0.0f, window_size.x - drag_w);
-        new_y = std::clamp(new_y, 0.0f, window_size.y - drag_h);
+        new_y = std::clamp(new_y, 0.0f,
+                           window_size.y -
+                               (m_is_minimized ? drag_h : kExpandedHeaderHeight));
 
         if(m_is_minimized)
         {

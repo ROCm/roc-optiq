@@ -28,6 +28,7 @@ namespace View
 
 class TimelineSelection;
 class TimelineView;
+class MeasurementController;
  
 typedef struct ViewCoords
 {
@@ -78,7 +79,8 @@ class TimelineView : public RocWidget
 
 public:
     TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
-                 std::shared_ptr<AnnotationsManager> annotations);
+                 std::shared_ptr<MeasurementController> measurement,
+                 std::shared_ptr<AnnotationsManager>   annotations);
     ~TimelineView();
     virtual void                                     Render() override;
     void                                             Update() override;
@@ -107,6 +109,7 @@ public:
     void           CalculateGridInterval();
     ImVec2         GetGraphSize();
     void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
+    void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
     float          GetTotalTrackHeight() const;
@@ -116,6 +119,13 @@ public:
     TimelineArrow& GetArrowLayer();
 
 private:
+    enum class MeasurementRulerDragTarget
+    {
+        kNone,
+        kStart,
+        kEnd
+    };
+
     void UpdateMaxMetaAreaSize(float new_size);
     void CalculateMaxMetaAreaSize();
     void UpdateAllMaxMetaAreaSizes();
@@ -126,22 +136,23 @@ private:
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
     void RenderNormalTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
                    bool is_reordering);
+    void RenderTimeRangeSelectionFill(ImDrawList* draw_list, ImVec2 lane_min,
+                                      ImVec2 lane_max);
     void RenderEmptyTrack(TrackItem* track_item);
     void RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size);
 
     void                            ClearTimeRangeSelection();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
-
     EventManager::SubscriptionToken m_new_track_token;
     EventManager::SubscriptionToken m_font_changed_token;
     EventManager::SubscriptionToken m_set_view_range_token;
-    int                             m_dragged_sticky_id;
-    const std::vector<double>*      m_histogram;
-    float                           m_ruler_height;
-    float                           m_ruler_padding;
-    double                              m_min_y;
-    double                              m_max_y;
+    EventManager::SubscriptionToken m_timeline_time_range_changed_token;
+
+    int                                 m_dragged_sticky_id;
+    const std::vector<double>*          m_histogram;
+    float                               m_ruler_height;
+    float                               m_ruler_padding;
     float                               m_sidebar_size;
     float                               m_scroll_position_y;
     float                               m_content_max_y_scroll;
@@ -166,6 +177,7 @@ private:
     std::unordered_map<uint64_t, float> m_track_position_y;  // Track index to height
     float                               m_track_height_sum;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
+    std::shared_ptr<MeasurementController> m_measurement;
     std::shared_ptr<AnnotationsManager> m_annotations;
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
@@ -182,6 +194,7 @@ private:
     bool m_dragging_selection_start;
     bool m_dragging_selection_end;
     bool m_is_selecting_region;
+    MeasurementRulerDragTarget m_dragging_measurement_ruler;
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;

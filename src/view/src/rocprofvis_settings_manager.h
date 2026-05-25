@@ -80,6 +80,7 @@ enum class Colors
     kBgMain,
     kBgPanel,
     kBgFrame,
+    kComboFill,
     kAccentRed,
     kAccentRedHover,
     kAccentRedActive,
@@ -96,8 +97,12 @@ enum class Colors
     kTableBorderLight,
     kTableRowBg,
     kTableRowBgAlt,
+    kTableBorderInner,
+    kTableBorderOuter,
+    kPanelBorderSubtle,
     kEventHighlight,
     kEventSearchHighlight,
+    kAreaOfInterest,
     kLineChartColor,
     kButton,
     kButtonHovered,
@@ -128,6 +133,11 @@ enum class Colors
     kMinimapBg,
     kLoadingScreenColor,
     kTextOnAccent,
+    kMeasurementColor,
+    kMeasurementLabelBg,
+    kMeasurementLabelEdge,
+    kMeasurementLabelText,
+    kMeasurementNotch,
 
     kComparisonBase,
     kComparisonTarget,
@@ -177,6 +187,7 @@ public:
     // Styling
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel() const;
+    const std::vector<ImU32>& GetHighlightedEventColorWheel() const;
     const char*               GetFlameColormapName() const;
     const char*               GetContrastColormapName() const;
     /**
@@ -197,6 +208,7 @@ public:
     InternalSettings& GetInternalSettings();
     void              AddRecentFile(const std::string& file_path);
     void              RemoveRecentFile(const std::string& file_path);
+    void              ClearRecentFiles();
 
     AppWindowSettings& GetAppWindowSettings();
 

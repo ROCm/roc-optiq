@@ -3,6 +3,7 @@
 
 #include "rocprofvis_compute_tester.h"
 #include "rocprofvis_event_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "implot/implot.h"
 #include "spdlog/spdlog.h"
 
@@ -55,15 +56,14 @@ ComputeTester::Update()
 void
 ComputeTester::Render()
 {
-    const std::unordered_map<uint32_t, WorkloadInfo>& workloads =
-        m_data_provider.ComputeModel().GetWorkloads();
+    const std::vector<const WorkloadInfo*>& workloads =
+        m_data_provider.ComputeModel().GetWorkloadList();
 
     uint32_t global_workload_id = m_compute_selection
                                      ? m_compute_selection->GetSelectedWorkload()
                                      : ComputeSelection::INVALID_SELECTION_ID;
-    const WorkloadInfo* selected_wl = workloads.count(global_workload_id)
-                                         ? &workloads.at(global_workload_id)
-                                         : nullptr;
+    const WorkloadInfo* selected_wl =
+        m_data_provider.ComputeModel().GetWorkload(global_workload_id);
     m_query_builder.SetWorkload(selected_wl);
 
     if(ImGui::Button("Open Query Builder"))
@@ -82,34 +82,38 @@ ComputeTester::Render()
     m_query_builder.Render();
     ImGui::NewLine();
 
+    const WorkloadInfo* selected_workload =
+        m_data_provider.ComputeModel().GetWorkload(m_selections.workload_id);
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 15.0f);
+    PushComboStyles();
     if(ImGui::BeginCombo("Workloads",
-                         workloads.count(m_selections.workload_id) > 0
-                             ? workloads.at(m_selections.workload_id).name.c_str()
-                             : "-"))
+                         selected_workload ? selected_workload->name.c_str() : "-"))
     {
         if(ImGui::Selectable("-", m_selections.workload_id == 0))
         {
             m_selections.workload_id = 0;
         }
-        for(const std::pair<const uint32_t, WorkloadInfo>& workload : workloads)
+        for(const WorkloadInfo* workload : workloads)
         {
-            if(ImGui::Selectable(workload.second.name.c_str(),
-                                 m_selections.workload_id == workload.second.id))
+            if(ImGui::Selectable(workload->name.c_str(),
+                                 m_selections.workload_id == workload->id))
             {
-                m_selections.workload_id = workload.second.id;
+                m_selections.workload_id = workload->id;
                 m_selections.kernel_ids.clear();
                 m_selections.metric_ids.clear();
             }
         }
         ImGui::EndCombo();
     }
-    if(workloads.count(m_selections.workload_id) > 0)
+    PopComboStyles();
+    const WorkloadInfo* current_workload =
+        m_data_provider.ComputeModel().GetWorkload(m_selections.workload_id);
+    if(current_workload)
     {
         ImGui::BeginChild("sv");
         ImGui::BeginChild("info", ImVec2(0, 0),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-        const WorkloadInfo& workload = workloads.at(m_selections.workload_id);
+        const WorkloadInfo& workload = *current_workload;
         if(workload.system_info.size() == 2 &&
            workload.system_info[0].size() == workload.system_info[1].size())
         {
@@ -575,10 +579,10 @@ ComputeTester::Render()
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
         ImGui::Text("Speed of light (SOL)");
 
-        TableKey table_key = { 2, 1 }; // SOL
+        constexpr uint64_t table_key = MetricId::GetTableKey(2, 1); // SOL
         //assume client id 1 and kernel id 1 for test
         ComputeDataModel::MetricValuesByEntryId* sol_metrics =
-            m_data_provider.ComputeModel().GetKernelMetricValuesByTable(1, 1, table_key.id);
+            m_data_provider.ComputeModel().GetKernelMetricValuesByTable(1, 1, table_key);
         if(!sol_metrics || sol_metrics->empty())
         {
             ImGui::TextDisabled("No SOL metrics available for client 1.");
@@ -726,8 +730,11 @@ ComputeTester::Render()
             ImPlot::EndPlot();
         }
         int preset_idx = static_cast<int>(m_selections.roofline_preset);
-        if(m_selections.init ||
-           ImGui::Combo("Presets", &preset_idx, "FP32\0FP64\0Custom\0\0"))
+        PushComboStyles();
+        const bool preset_changed = ImGui::Combo("Presets", &preset_idx,
+                                                 "FP32\0FP64\0Custom\0\0");
+        PopComboStyles();
+        if(m_selections.init || preset_changed)
         {
             m_selections.roofline_preset =
                 static_cast<SelectionState::RooflinePreset>(preset_idx);
@@ -912,11 +919,10 @@ ComputeTester::Render()
         ImGui::InputText("Metric ID (e.g. 3.1.2)", m_value_names_input,
                          sizeof(m_value_names_input));
 
-        const WorkloadInfo& wl = workloads.at(m_selections.workload_id);
         ImGui::Text("Workload: %s (metrics: %zu, categories: %zu)",
-                    wl.name.c_str(),
-                    wl.available_metrics.list.size(),
-                    wl.available_metrics.tree.size());
+                    workload.name.c_str(),
+                    workload.available_metrics.list.size(),
+                    workload.available_metrics.tree.size());
 
         std::string input(m_value_names_input);
         auto        dot1 = input.find('.');
@@ -933,9 +939,9 @@ ComputeTester::Render()
 
             ImGui::Text("Looking up: cat=%u, table=%u, entry=%u", cat_id, tbl_id, entry_id);
 
-            if(wl.available_metrics.tree.count(cat_id))
+            if(workload.available_metrics.tree.count(cat_id))
             {
-                const auto& cat = wl.available_metrics.tree.at(cat_id);
+                const auto& cat = workload.available_metrics.tree.at(cat_id);
                 if(cat.tables.count(tbl_id))
                 {
                     const auto& tbl = cat.tables.at(tbl_id);

@@ -11,6 +11,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_line_track_item.h"
+#include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -33,14 +34,13 @@ constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
 constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
-constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 16.0f;
+constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 
-TimelineView::TimelineView(DataProvider&                       dp,
-                           std::shared_ptr<TimelineSelection>  timeline_selection,
-                           std::shared_ptr<AnnotationsManager> annotations)
+TimelineView::TimelineView(DataProvider&                          dp,
+                           std::shared_ptr<TimelineSelection>     timeline_selection,
+                           std::shared_ptr<MeasurementController> measurement,
+                           std::shared_ptr<AnnotationsManager>    annotations)
 : m_data_provider(dp)
-, m_min_y(std::numeric_limits<double>::max())
-, m_max_y(std::numeric_limits<double>::lowest())
 , m_scroll_position_y(0.0f)
 , m_content_max_y_scroll(0.0f)
 , m_meta_map_made(false)
@@ -56,6 +56,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_scroll_to_track_token(static_cast<uint64_t>(-1))
 , m_font_changed_token(static_cast<uint64_t>(-1))
 , m_set_view_range_token(static_cast<uint64_t>(-1))
+, m_timeline_time_range_changed_token(static_cast<uint64_t>(-1))
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0.0)
 , m_last_data_req_view_time_offset_ns(0.0)
@@ -69,6 +70,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_arrow_layer(m_data_provider, timeline_selection)
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
+, m_measurement(measurement)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_annotations(annotations)
 , m_dragged_sticky_id(-1)
@@ -80,6 +82,7 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_dragging_selection_start(false)
 , m_dragging_selection_end(false)
 , m_is_selecting_region(false)
+, m_dragging_measurement_ruler(MeasurementRulerDragTarget::kNone)
 , m_loading_timer(DEFAULT_LOADING_TIMER)
 {
     // Subscribe to events
@@ -140,6 +143,18 @@ TimelineView::TimelineView(DataProvider&                       dp,
     m_navigation_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
 
+    auto time_range_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        auto evt = std::dynamic_pointer_cast<TimeRangeSelectionChangedEvent>(e);
+        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath() &&
+           m_timeline_selection->HasValidTimeRangeSelection())
+        {
+            m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(evt->GetStartNs(),
+                                                                       evt->GetEndNs());
+        }
+    };
+    m_timeline_time_range_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged), time_range_changed_handler);
+
     m_graphs = std::make_shared<std::vector<TrackGraph>>();
 
     // force initial calculation of flame track label width
@@ -174,6 +189,8 @@ TimelineView::RenderInteractiveUI()
 
     m_arrow_layer.Render(draw_list, window_position, m_track_position_y, m_graphs, m_tpt);
 
+    RenderMeasurement(draw_list, window_position);
+
     RenderAnnotations(draw_list, window_position);
 
     ImGui::EndChild();
@@ -205,13 +222,18 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
                 m_annotations->GetStickyNotes()[i].HandleResize(window_position, m_tpt);
         }
 
+        bool annotation_blocks_timeline_input = false;
+
         // Rendering --> based on added order (old bottom new on top)
         for(size_t i = 0; i < m_annotations->GetStickyNotes().size(); ++i)
         {
             if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
 
-            m_annotations->GetStickyNotes()[i].Render(draw_list, window_position, m_tpt);
+            annotation_blocks_timeline_input |=
+                m_annotations->GetStickyNotes()[i].Render(draw_list, window_position,
+                                                          m_tpt);
         }
+        m_stop_user_interaction |= annotation_blocks_timeline_input;
     }
     m_stop_user_interaction |= movement_drag || movement_resize;
 
@@ -219,6 +241,126 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
     m_annotations->ShowStickyNotePopup();
     m_annotations->ShowStickyNoteEditPopup();
 }
+void
+TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
+{
+    MeasurementController& fm = *m_measurement;
+    const auto& p1 = fm.GetPoint(0);
+    const auto& p2 = fm.GetPoint(1);
+    if(!p1.valid && !p2.valid) return;
+
+    SettingsManager& settings     = SettingsManager::GetInstance();
+    ImU32            color        = settings.GetColor(Colors::kMeasurementColor);
+    float            level_height = settings.GetEventLevelHeight();
+    const auto&      time_format  = settings.GetUserSettings().unit_settings.time_format;
+
+    constexpr float CURVE_THICK         = 2.5f;
+    constexpr float VLINE_THICK         = 1.5f;
+    constexpr float LABEL_PAD           = 8.0f;
+    constexpr float LABEL_ROUND         = 6.0f;
+    constexpr float RULER_LABEL_PAD_X   = 4.0f;
+    constexpr float RULER_LABEL_PAD_Y   = 2.0f;
+    constexpr float RULER_LABEL_ROUND   = 3.0f;
+    constexpr float DELTA_LABEL_OFFSET  = 20.0f;
+    ImU32 label_bg   = settings.GetColor(Colors::kMeasurementLabelBg);
+    ImU32 label_edge = settings.GetColor(Colors::kMeasurementLabelEdge);
+    ImU32 label_text = settings.GetColor(Colors::kMeasurementLabelText);
+
+    float top = window_position.y;
+    float bot = window_position.y + m_track_height_sum;
+
+    float visible_bot = window_position.y + m_scroll_position_y +
+                        m_tpt->GetGraphSizeY() - m_ruler_height -
+                        ARTIFICIAL_SCROLLBAR_HEIGHT;
+    float visible_center_y = m_scroll_position_y +
+                             (m_tpt->GetGraphSizeY() - m_ruler_height -
+                              ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
+    float label_y = visible_bot - ImGui::CalcTextSize("0").y - LABEL_PAD;
+
+    // Draws a small timestamp label centered on a ruler line
+    auto draw_ruler_label = [&](float x, const char* text) {
+        ImVec2 sz = ImGui::CalcTextSize(text);
+        float  lx = x - sz.x * 0.5f;
+        draw_list->AddRectFilled(
+            ImVec2(lx - RULER_LABEL_PAD_X, label_y - RULER_LABEL_PAD_Y),
+            ImVec2(lx + sz.x + RULER_LABEL_PAD_X, label_y + sz.y + RULER_LABEL_PAD_Y),
+            label_bg, RULER_LABEL_ROUND);
+        draw_list->AddText(ImVec2(lx, label_y), label_text, text);
+    };
+
+    // Draws a boxed label, Y-clamped to stay within visible area
+    auto draw_label = [&](float cx, float cy, const char* text) {
+        ImVec2 sz     = ImGui::CalcTextSize(text);
+        float  half_h = sz.y * 0.5f + LABEL_PAD;
+        cy            = std::clamp(cy, top + half_h, visible_bot - half_h);
+        float  lx     = cx - sz.x * 0.5f;
+        float  ly     = cy - sz.y * 0.5f;
+        ImVec2 mn(lx - LABEL_PAD, ly - LABEL_PAD);
+        ImVec2 mx(lx + sz.x + LABEL_PAD, ly + sz.y + LABEL_PAD);
+        draw_list->AddRectFilled(mn, mx, label_bg, LABEL_ROUND);
+        draw_list->AddRect(mn, mx, label_edge, LABEL_ROUND, 0, 1.0f);
+        draw_list->AddText(ImVec2(lx, ly), label_text, text);
+    };
+
+    // Resolves Y position for a measurement point
+    auto point_y = [&](const MeasurementPoint& pt) -> float {
+        if(pt.freehand) return visible_center_y;
+        auto it = m_track_position_y.find(pt.track_id);
+        if(it != m_track_position_y.end())
+            return it->second + level_height * pt.level + level_height * 0.5f;
+        return visible_center_y;
+    };
+
+    // Draw ruler + label for each valid point
+    int valid_count = 0;
+    float px[2]     = {};
+    for(int i = 0; i < 2; ++i)
+    {
+        const auto& pt = fm.GetPoint(i);
+        if(!pt.valid) continue;
+        ++valid_count;
+
+        double eff     = fm.GetEffectiveTimestamp(i);
+        px[i]          = window_position.x + m_tpt->RawTimeToPixel(eff);
+        draw_list->AddLine(ImVec2(px[i], top), ImVec2(px[i], bot), color, VLINE_THICK);
+
+        std::string ts_str =
+            nanosecond_to_formatted_str(eff - m_tpt->GetMinX(), time_format, true);
+        draw_ruler_label(px[i], ts_str.c_str());
+    }
+
+    if(valid_count < 2) return;
+
+    // Freehand notch markers at original event edges
+    if(fm.IsFreehandMode())
+    {
+        constexpr float NOTCH_H   = 10.0f;
+        ImU32           notch_col = settings.GetColor(Colors::kMeasurementNotch);
+        float           mid_y     = window_position.y + visible_center_y;
+
+        for(int i = 0; i < 2; ++i)
+        {
+            const auto& pt = fm.GetPoint(i);
+            if(pt.freehand) continue;
+            for(double ts : { pt.timestamp, pt.timestamp + pt.duration })
+            {
+                float nx = window_position.x + m_tpt->RawTimeToPixel(ts);
+                draw_list->AddLine(ImVec2(nx, mid_y - NOTCH_H),
+                                   ImVec2(nx, mid_y + NOTCH_H), notch_col, 1.0f);
+            }
+        }
+    }
+
+    // Straight horizontal line connecting the two rulers
+    float line_y = window_position.y + visible_center_y;
+    draw_list->AddLine(ImVec2(px[0], line_y), ImVec2(px[1], line_y), color, CURVE_THICK);
+
+    // Delta label at midpoint
+    double      delta     = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
+    std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
+    draw_label((px[0] + px[1]) * 0.5f, line_y + DELTA_LABEL_OFFSET, delta_str.c_str());
+}
+
 ImVec2
 TimelineView::GetGraphSize()
 {
@@ -294,6 +436,34 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
             ImGui::CloseCurrentPopup();
         }
 
+        ImGui::Separator();
+
+        MeasurementController& fm = *m_measurement;
+        if(fm.IsMeasurementMode())
+        {
+            if(ImGui::MenuItem("Exit Measurement Mode"))
+            {
+                fm.ExitMeasurementMode();
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        else
+        {
+            if(ImGui::MenuItem("Enter Measurement Mode"))
+            {
+                fm.EnterMeasurementMode();
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
+        {
+            if(ImGui::MenuItem("Clear Measurement"))
+            {
+                fm.ClearMeasurement();
+                m_timeline_selection->UnhighlightPersistentEvents();
+                ImGui::CloseCurrentPopup();
+            }
+        }
 
         ImGui::EndPopup();
     }
@@ -399,14 +569,15 @@ TimelineView::~TimelineView()
                                              m_set_view_range_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), m_navigation_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged),
+        m_timeline_time_range_changed_token);
 }
 
 void
 TimelineView::ResetView()
 {
     // Handles y positioning reset
-    m_min_y             = std::numeric_limits<double>::max();
-    m_max_y             = std::numeric_limits<double>::lowest();
     m_scroll_position_y = 0.0f;
 
     // Handles x positioning reset
@@ -659,8 +830,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::SetNextWindowSize(m_tpt->GetGraphSize(), ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    // overlayed windows need to have fully trasparent bg otherwise they will overlay
-    // (with no alpha) over their predecessors
+    // Overlay children need transparent bg so earlier layers stay visible.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
 
     ImGui::SetNextItemAllowOverlap();
@@ -677,7 +847,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImVec2 relative_mouse_pos = ImVec2(mouse_position.x - window_position.x,
                                        mouse_position.y - window_position.y);
 
-    // Render range selction box
+    // Render range selection box
     ImVec2 cursor_position = screen_pos;
 
     ImVec2      mouse_pos     = ImGui::GetMousePos();
@@ -821,28 +991,6 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
     }
 
-    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
-       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
-    {
-        float normalized_start_box_highlighted =
-            window_position.x + m_tpt->TimeToPixel(m_highlighted_region.first);
-
-        float normalized_start_box_highlighted_end =
-            window_position.x + m_tpt->TimeToPixel(m_highlighted_region.second);
-
-        // Clamp to not overlap scrollbar
-        float min_x         = window_position.x;
-        float max_x         = window_position.x + m_tpt->GetGraphSizeX();
-        float clamped_start = std::clamp(normalized_start_box_highlighted, min_x, max_x);
-        float clamped_end =
-            std::clamp(normalized_start_box_highlighted_end, min_x, max_x);
-
-        draw_list->AddRectFilled(
-            ImVec2(clamped_start, cursor_position.y),
-            ImVec2(clamped_end, cursor_position.y + container_size.y - m_ruler_height),
-            m_settings.GetColor(Colors::kSelection));
-    }
-
     // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(window_position,
                                   ImVec2(window_position.x + m_tpt->GetGraphSizeX(),
@@ -928,7 +1076,8 @@ TimelineView::RenderGrid()
 
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    if(ImGui::BeginChild("Grid"), content_size, true, window_flags)
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgFrame));
+    if(ImGui::BeginChild("Grid", content_size, true, window_flags))
     {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -992,6 +1141,7 @@ TimelineView::RenderGrid()
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
 
 void
@@ -1003,8 +1153,7 @@ TimelineView::RenderGraphView()
     ImVec2 container_size = ImGui::GetWindowSize();
     ImGui::SetCursorPos(ImVec2(0, 0));
 
-    // overlayed windows need to have fully trasparent bg otherwise they will overlay
-    // (with no alpha) over their predecessors
+    // Overlay children need transparent bg so earlier layers stay visible.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("Graph View Main",
                       ImVec2(container_size.x, container_size.y - m_ruler_height), false,
@@ -1133,6 +1282,7 @@ TimelineView::RenderTrack(int track_index, bool request_data,
             if(is_visible || track_item->GetDistanceToView() <= m_unload_track_distance)
             {
                 RequestDataIfEmpty(track_item, request_data);
+                track_item->RequestAnalysis();
             }
         }
 
@@ -1184,6 +1334,60 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     if(track_graph.selected)
     {
         selection_color = m_settings.GetColor(Colors::kHighlightChart);
+    }
+
+    ImVec2 lane_min = ImGui::GetCursorScreenPos();
+    ImVec2 lane_max(lane_min.x + ImGui::GetContentRegionAvail().x,
+                    lane_min.y + track_height - 1.0f);
+    ImU32       lane_color = m_settings.GetColor(Colors::kBgPanel);
+    ImDrawList* lane_dl    = ImGui::GetWindowDrawList();
+    lane_dl->AddRectFilled(lane_min, lane_max, lane_color);
+
+    if(m_grid_interval_ns > 0.0 && m_grid_interval_count > 0)
+    {
+        constexpr int   MINOR_GRID_DIVISIONS = 4;
+        const double    start_ns = m_tpt->GetViewTimeOffsetNs();
+        const double    first_major_ns =
+            std::floor(start_ns / m_grid_interval_ns) * m_grid_interval_ns;
+        const double minor_interval_ns = m_grid_interval_ns / MINOR_GRID_DIVISIONS;
+        const float  graph_min_x       = lane_min.x + m_sidebar_size;
+        const float  graph_max_x       = graph_min_x + m_tpt->GetGraphSizeX();
+        const ImU32  minor_grid_color =
+            ApplyAlpha(m_settings.GetColor(Colors::kGridColor), 0.10f);
+        const ImU32 major_grid_color =
+            ApplyAlpha(m_settings.GetColor(Colors::kBoundBox), 0.12f);
+
+        for(int i = 0; i < m_grid_interval_count; ++i)
+        {
+            const double major_ns = first_major_ns + i * m_grid_interval_ns;
+
+            for(int j = 1; j < MINOR_GRID_DIVISIONS; ++j)
+            {
+                const double minor_ns = major_ns + j * minor_interval_ns;
+                const float  x        = graph_min_x + m_tpt->TimeToPixel(minor_ns);
+                if(x <= graph_min_x || x >= graph_max_x) continue;
+
+                lane_dl->AddLine(ImVec2(x, lane_min.y), ImVec2(x, lane_max.y),
+                                 minor_grid_color, 1.0f);
+            }
+
+            const float x = graph_min_x + m_tpt->TimeToPixel(major_ns);
+            if(x <= graph_min_x || x >= graph_max_x) continue;
+
+            lane_dl->AddLine(ImVec2(x, lane_min.y), ImVec2(x, lane_max.y),
+                             major_grid_color, 1.0f);
+        }
+    }
+
+    RenderTimeRangeSelectionFill(lane_dl, lane_min, lane_max);
+
+    if(track_graph.selected)
+    {
+        // Mark the selected lane without covering the track contents.
+        lane_dl->AddRectFilled(
+            ImVec2(lane_min.x, lane_min.y),
+            ImVec2(lane_min.x + 2.0f, lane_max.y),
+            m_settings.GetColor(Colors::kAccentRed));
     }
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
@@ -1264,8 +1468,40 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     // This is done after the child window to ensure it is on top
     ImVec2 p_min = ImGui::GetItemRectMin();
     ImVec2 p_max = ImGui::GetItemRectMax();
-    ImGui::GetWindowDrawList()->AddRect(
-        p_min, p_max, m_settings.GetColor(Colors::kBorderColor), 0.0f, 0, 1.0f);
+    // Draw only the bottom rule; the lane fill supplies the row body.
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(p_min.x, p_max.y - 0.5f),
+        ImVec2(p_max.x, p_max.y - 0.5f),
+        m_settings.GetColor(Colors::kTableBorderLight), 1.0f);
+}
+
+void
+TimelineView::RenderTimeRangeSelectionFill(ImDrawList* draw_list, ImVec2 lane_min,
+                                           ImVec2 lane_max)
+{
+    if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME ||
+       m_highlighted_region.second == TimelineSelection::INVALID_SELECTION_TIME)
+    {
+        return;
+    }
+
+    const float  graph_min_x = lane_min.x + m_sidebar_size;
+    const float  graph_max_x = graph_min_x + m_tpt->GetGraphSizeX();
+    const double range_min_ns =
+        std::min(m_highlighted_region.first, m_highlighted_region.second);
+    const double range_max_ns =
+        std::max(m_highlighted_region.first, m_highlighted_region.second);
+
+    const float fill_start = std::clamp(graph_min_x + m_tpt->TimeToPixel(range_min_ns),
+                                        graph_min_x, graph_max_x);
+    const float fill_end   = std::clamp(graph_min_x + m_tpt->TimeToPixel(range_max_ns),
+                                        graph_min_x, graph_max_x);
+
+    if(fill_start >= fill_end) return;
+
+    draw_list->AddRectFilled(ImVec2(fill_start, lane_min.y),
+                             ImVec2(fill_end, lane_max.y),
+                             m_settings.GetColor(Colors::kSelection));
 }
 
 void
@@ -1410,7 +1646,8 @@ TimelineView::MakeGraphView()
             {
                 // Create FlameChart
                 graph.chart = new FlameTrackItem(
-                    m_data_provider, m_timeline_selection, track_info->id, m_tpt);
+                    m_data_provider, m_timeline_selection, m_measurement,
+                    track_info->id, m_tpt);
                 graph.graph_type = GraphType::TYPE_FLAMECHART;
                 break;
             }
@@ -1465,7 +1702,7 @@ TimelineView::RenderHistogram()
     ImGui::SameLine();
 
     // Vertical splitter
-    float splitter_size = 5.0f;
+    float splitter_size = 1.0f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
     ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
                       false);
@@ -1488,8 +1725,8 @@ TimelineView::RenderHistogram()
     ImVec2      ruler_pos       = ImGui::GetCursorScreenPos();
     float       ruler_width     = m_tpt->GetGraphSizeX();
     float       tick_top        = ruler_pos.y + 2.0f;
-    ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kSmall);
-    float       label_font_size = font->LegacySize;
+    ImFont*     font            = m_settings.GetFontManager().GetFont(FontType::kDefault);
+    float       label_font_size = m_settings.GetFontManager().GetFontSize(FontSize::kSmall);
 
     std::string label =
         nanosecond_to_formatted_str(m_tpt->GetRangeX(), time_format, true) + "gap";
@@ -1562,8 +1799,9 @@ TimelineView::RenderHistogram()
             float y_bar      = y1 - bar_height;
             draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
                                      i % 2 == 0
-                                         ? m_settings.GetColor(Colors::kAccentRedActive)
-                                         : m_settings.GetColor(Colors::kAccentRed));
+                                         ? m_settings.GetColor(Colors::kLineChartColor)
+                                         : m_settings.GetColor(Colors::kLineChartColorAlt),
+                                     1.5f);
         }
     }
     // Draw view range overlays and labels
@@ -1619,19 +1857,33 @@ TimelineView::RenderHistogram()
         HandleHistogramTouch();
     }
 
-    if(ImGui::BeginPopupContextWindow("##HistogramOptions"))
     {
-        TimelineModel& tl = m_data_provider.DataModel().GetTimeline();
-        bool           is_global = tl.IsNormalizeGlobal();
-        if(ImGui::MenuItem("Normalize: All Tracks", nullptr, is_global))
+        const ImGuiStyle& popup_style = m_settings.GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, popup_style.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, popup_style.ItemSpacing);
+        if(ImGui::BeginPopupContextWindow("##HistogramOptions"))
         {
-            if(!is_global) { tl.ToggleNormalization(); tl.UpdateHistogram({}, false); }
+            TimelineModel& tl        = m_data_provider.DataModel().GetTimeline();
+            bool           is_global = tl.IsNormalizeGlobal();
+            if(ImGui::MenuItem("Normalize: All Tracks", nullptr, is_global))
+            {
+                if(!is_global)
+                {
+                    tl.ToggleNormalization();
+                    tl.UpdateHistogram({}, false);
+                }
+            }
+            if(ImGui::MenuItem("Normalize: Visible Tracks", nullptr, !is_global))
+            {
+                if(is_global)
+                {
+                    tl.ToggleNormalization();
+                    tl.UpdateHistogram({}, false);
+                }
+            }
+            ImGui::EndPopup();
         }
-        if(ImGui::MenuItem("Normalize: Visible Tracks", nullptr, !is_global))
-        {
-            if(is_global) { tl.ToggleNormalization(); tl.UpdateHistogram({}, false); }
-        }
-        ImGui::EndPopup();
+        ImGui::PopStyleVar(2);
     }
 
     ImGui::EndChild();  // Histogram Bars
@@ -1667,6 +1919,13 @@ TimelineView::RenderTraceView()
     m_loading_timer.Tick();
     ImVec2 screen_pos             = ImGui::GetCursorScreenPos();
     ImVec2 subcomponent_size_main = ImGui::GetWindowSize();
+
+    // Filled panel with a single hairline border.
+    ImDrawList* bg_draw_list = ImGui::GetWindowDrawList();
+    bg_draw_list->AddRectFilled(screen_pos,
+                                screen_pos + subcomponent_size_main,
+                                m_settings.GetColor(Colors::kBgPanel),
+                                m_settings.GetDefaultStyle().ChildRounding);
 
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
@@ -1715,58 +1974,74 @@ TimelineView::RenderTraceView()
 
     ImGui::BeginChild("scrollbar",
                       ImVec2(subcomponent_size_main.x, ARTIFICIAL_SCROLLBAR_HEIGHT),
-                      true, ImGuiWindowFlags_NoScrollbar);
+                      false, ImGuiWindowFlags_NoScrollbar);
+
+    const float scrollbar_frame_height = 8.0f;
+    ImGui::SetCursorPosY(std::max(
+        0.0f, (ARTIFICIAL_SCROLLBAR_HEIGHT - scrollbar_frame_height) * 0.5f));
 
     ImGui::Dummy(ImVec2(m_sidebar_size, 0));
     ImGui::SameLine();
 
     float  available_width = subcomponent_size_main.x - m_sidebar_size;
     double view_width      = std::min(m_tpt->GetVWidth(), m_tpt->GetRangeX());
-    double max_offset      = m_tpt->GetRangeX() - view_width;
+    double max_offset      = std::max(0.0, m_tpt->GetRangeX() - view_width);
     float  view_offset =
         static_cast<float>(std::clamp(m_tpt->GetViewTimeOffsetNs(), 0.0, max_offset));
 
-    float min_grab = 4.0f;
+    float min_grab = 12.0f;
     float max_grab = available_width;
     float grab_fraction =
         (m_tpt->GetRangeX() > 0.0)
             ? static_cast<float>(m_tpt->GetVWidth() / m_tpt->GetRangeX())
             : 1.0f;
-    float grab_min_size = std::clamp(available_width * grab_fraction, min_grab, max_grab);
+    float grab_width = std::clamp(available_width * grab_fraction, min_grab, max_grab);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, grab_min_size);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 8.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 2));
-    ImGui::PushStyleColor(ImGuiCol_SliderGrab,
-                          m_settings.GetColor(Colors::kScrollGrab));
-    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive,
-                          m_settings.GetColor(Colors::kScrollBarColor));
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, m_settings.GetColor(Colors::kScrollBg));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,
-                          m_settings.GetColor(Colors::kScrollBg));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,
-                          m_settings.GetColor(Colors::kScrollBg));
+    ImGui::InvisibleButton("##scrollbar", ImVec2(available_width, scrollbar_frame_height));
+    ImVec2 track_min = ImGui::GetItemRectMin();
+    ImVec2 track_max = ImGui::GetItemRectMax();
 
-    ImGui::PushItemWidth(available_width);
-
-    if(ImGui::SliderFloat("##scrollbar", &view_offset, 0.0f,
-                          static_cast<float>(max_offset), ""))
+    if((ImGui::IsItemActive() || ImGui::IsItemClicked()) && max_offset > 0.0)
     {
+        const float mouse_x = std::clamp(ImGui::GetIO().MousePos.x - track_min.x,
+                                         0.0f, available_width);
+        const float grab_center = std::clamp(mouse_x, grab_width * 0.5f,
+                                             available_width - grab_width * 0.5f);
+        const float t = (available_width > grab_width)
+                            ? (grab_center - grab_width * 0.5f) /
+                                  (available_width - grab_width)
+                            : 0.0f;
+        view_offset = static_cast<float>(t * max_offset);
         m_tpt->SetViewTimeOffsetNs(static_cast<double>(view_offset));
         m_loading_timer.Restart();
     }
 
-    ImGui::PopItemWidth();
-    ImGui::PopStyleColor(5);
-    ImGui::PopStyleVar(4);
-
+    const float grab_x = max_offset > 0.0 && available_width > grab_width
+                             ? static_cast<float>(view_offset / max_offset) *
+                                   (available_width - grab_width)
+                             : 0.0f;
+    ImDrawList* scrollbar_draw_list = ImGui::GetWindowDrawList();
+    const float scrollbar_rounding = scrollbar_frame_height * 0.5f;
+    scrollbar_draw_list->AddRectFilled(track_min, track_max,
+                                       m_settings.GetColor(Colors::kScrollBg),
+                                       scrollbar_rounding);
+    scrollbar_draw_list->AddRectFilled(
+        ImVec2(track_min.x + grab_x, track_min.y),
+        ImVec2(track_min.x + grab_x + grab_width, track_max.y),
+        ImGui::IsItemActive() ? m_settings.GetColor(Colors::kScrollBarColor)
+                              : m_settings.GetColor(Colors::kScrollGrab),
+        scrollbar_rounding);
     m_stop_user_interaction = false;
     m_tpt->ComputePixelMapping();
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
     TimelineFocusManager::GetInstance().EvaluateFocusedLayer();
+    if(m_loading_timer.IsExpired() && !m_timeline_selection->HasValidTimeRangeSelection())
+    {
+        m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(m_tpt->GetVMinX(),
+                                                                   m_tpt->GetVMaxX());
+    }
 }
 void
 TimelineView::RenderGraphPoints()
@@ -1878,9 +2153,88 @@ TimelineView::HandleTopSurfaceTouch()
             m_pseudo_focus = true;
         }
 
-        // Handle drag start
+        // Measurement mode: ruler hover cursor, drag, and freehand click-to-place
+        MeasurementController& fm_touch = *m_measurement;
+        if(fm_touch.IsMeasurementMode())
+        {
+            constexpr float GRAB_RADIUS = 8.0f;
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            float  mouse_x   = mouse_pos.x - graph_area_min.x;
+
+            auto drag_target_to_index = [](MeasurementRulerDragTarget target) {
+                return (target == MeasurementRulerDragTarget::kStart) ? 0 : 1;
+            };
+
+            if(fm_touch.IsFreehandMode() &&
+               fm_touch.GetMeasurementState() == MeasurementState::kComplete)
+            {
+                float rx[2] = {
+                    static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp(0))),
+                    static_cast<float>(m_tpt->RawTimeToPixel(fm_touch.GetEffectiveTimestamp(1)))
+                };
+
+                bool hovering = std::abs(mouse_x - rx[0]) < GRAB_RADIUS ||
+                                std::abs(mouse_x - rx[1]) < GRAB_RADIUS;
+                if(hovering ||
+                   m_dragging_measurement_ruler != MeasurementRulerDragTarget::kNone)
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+
+                if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                {
+                    if(std::abs(mouse_x - rx[0]) < GRAB_RADIUS)
+                        m_dragging_measurement_ruler = MeasurementRulerDragTarget::kStart;
+                    else if(std::abs(mouse_x - rx[1]) < GRAB_RADIUS)
+                        m_dragging_measurement_ruler = MeasurementRulerDragTarget::kEnd;
+                    else
+                        m_dragging_measurement_ruler = MeasurementRulerDragTarget::kNone;
+                }
+
+                if(m_dragging_measurement_ruler != MeasurementRulerDragTarget::kNone &&
+                   ImGui::IsMouseDragging(ImGuiMouseButton_Left, 1.0f))
+                {
+                    double      mouse_time = m_tpt->PixelToTime(mouse_x) + m_tpt->GetMinX();
+                    int         target_index = drag_target_to_index(m_dragging_measurement_ruler);
+                    const auto& pt           = fm_touch.GetPoint(target_index);
+                    double      base = pt.freehand
+                                           ? pt.timestamp
+                                           : (fm_touch.GetEdge(target_index) == MeasureEdge::kStart)
+                                                 ? pt.timestamp
+                                                 : pt.timestamp + pt.duration;
+                    fm_touch.SetFreehandOffset(target_index, mouse_time - base);
+                    TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
+                }
+            }
+
+            if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                m_dragging_measurement_ruler = MeasurementRulerDragTarget::kNone;
+
+            MeasurementState state = fm_touch.GetMeasurementState();
+            if(fm_touch.IsFreehandMode() &&
+               m_dragging_measurement_ruler == MeasurementRulerDragTarget::kNone &&
+               ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+               (state == MeasurementState::kWaitingForFirst ||
+                state == MeasurementState::kWaitingForSecond ||
+                state == MeasurementState::kComplete))
+            {
+                // Clicking after a complete measurement resets and starts a new one,
+                // matching event-anchored behavior in FlameTrackItem::DrawBox.
+                if(state == MeasurementState::kComplete)
+                {
+                    m_timeline_selection->UnhighlightPersistentEvents();
+                    fm_touch.ClearMeasurement();
+                }
+                float  clamped_x  = std::clamp(mouse_x, 0.0f, m_tpt->GetGraphSizeX());
+                double click_time = m_tpt->PixelToTime(clamped_x) + m_tpt->GetMinX();
+                fm_touch.SetFreehandMeasurementPoint(click_time);
+                TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
+            }
+        }
+
+        // Handle drag start — only suppress when actively dragging a measurement ruler
+        bool measurement_blocking =
+            m_dragging_measurement_ruler != MeasurementRulerDragTarget::kNone;
         if(ImGui::IsMouseDragging(ImGuiMouseButton_Left, 5.0f) &&
-           !m_is_selecting_region && !m_can_drag_to_pan)
+           !m_is_selecting_region && !m_can_drag_to_pan && !measurement_blocking)
         {
             if(HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect) &&
                TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
@@ -2032,7 +2386,26 @@ TimelineView::HandleTopSurfaceTouch()
 
         if(hk.WasActionTriggered(HotkeyActionId::kClearSelection))
         {
-            ClearTimeRangeSelection();
+            // In measurement mode, ESC has a two-stage behavior:
+            //  - 1 point placed: clear the partial measurement, stay in mode
+            //  - 0 or 2 points: exit measurement mode (preserves complete measurement)
+            MeasurementController& fm_esc = *m_measurement;
+            if(fm_esc.IsMeasurementMode())
+            {
+                if(fm_esc.GetMeasurementState() == MeasurementState::kWaitingForSecond)
+                {
+                    fm_esc.ClearMeasurement();
+                    m_timeline_selection->UnhighlightPersistentEvents();
+                }
+                else
+                {
+                    fm_esc.ExitMeasurementMode();
+                }
+            }
+            else
+            {
+                ClearTimeRangeSelection();
+            }
         }
 
         if(hk.WasActionTriggered(HotkeyActionId::kToggleMark))

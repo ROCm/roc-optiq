@@ -7,6 +7,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_hotkey_manager.h"
+#include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -47,14 +48,17 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
     s_max_event_label_width = ImGui::CalcTextSize("W").x * MAX_CHARACTERS_PER_LINE;
 }
 
-FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
-                               std::shared_ptr<TimelineSelection> timeline_selection,
-                               uint64_t track_id, std::shared_ptr<TimePixelTransform> tpt)
+FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
+                               std::shared_ptr<TimelineSelection>     timeline_selection,
+                               std::shared_ptr<MeasurementController> measurement,
+                               uint64_t                               track_id,
+                               std::shared_ptr<TimePixelTransform>    tpt)
 : TrackItem(dp, track_id, tpt)
 , m_event_color_mode(EventColorMode::kByEventName)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
 , m_timeline_selection(timeline_selection)
+, m_measurement(measurement)
 , m_deferred_click_handled(false)
 , m_has_drawn_tool_tip(false)
 , m_flame_track_project_settings(dp.GetTraceFilePath(), *this)
@@ -415,20 +419,38 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 TimelineFocusManager::GetInstance().GetFocusedLayer() ==
                     Layer::kGraphLayer)
         {
-            m_deferred_click_handled =
-                true;  // Ensure only one click is handled per render cycle
-            chart_item.selected = !chart_item.selected;
+            m_deferred_click_handled       = true;
+            MeasurementController& measure = *m_measurement;
 
-
-            if(!HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kMultiSelect))
+            if(measure.IsMeasurementMode() && !measure.IsFreehandMode())
             {
-                m_timeline_selection->UnselectAllEvents();
+                // Clicking after a complete measurement starts a new one.
+                if(measure.GetMeasurementState() == MeasurementState::kComplete)
+                {
+                    m_timeline_selection->UnhighlightPersistentEvents();
+                    measure.ClearMeasurement();
+                }
+                measure.SetMeasurementPoint(chart_item.event.m_start_ts,
+                                            chart_item.event.m_duration, m_track_id,
+                                            chart_item.event.m_level,
+                                            chart_item.event.m_name,
+                                            chart_item.event.m_id.uuid);
+                m_timeline_selection->HighlightTrackEventPersistent(
+                    m_track_id, chart_item.event.m_id.uuid);
             }
+            else if(!measure.IsMeasurementMode())
+            {
+                chart_item.selected = !chart_item.selected;
 
-            chart_item.selected
-                ? m_timeline_selection->SelectTrackEvent(m_track_id, chart_item.event.m_id.uuid)
-                : m_timeline_selection->UnselectTrackEvent(m_track_id, chart_item.event.m_id.uuid);
-            // Always reset layer clicked after handling
+                if(!HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kMultiSelect))
+                {
+                    m_timeline_selection->UnselectAllEvents();
+                }
+
+                chart_item.selected
+                    ? m_timeline_selection->SelectTrackEvent(m_track_id, chart_item.event.m_id.uuid)
+                    : m_timeline_selection->UnselectTrackEvent(m_track_id, chart_item.event.m_id.uuid);
+            }
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }
 
@@ -727,21 +749,22 @@ FlameTrackItem::RenderChart(float graph_width)
                                  ? m_settings.GetColor(Colors::kEventSearchHighlight)
                                  : m_settings.GetColor(Colors::kEventHighlight);
 
-        bool is_last_highlight =
-            item.highlighted &&
-            item.event.m_id.uuid ==
-                m_timeline_selection->GetLastHighlightedEventId();
         float thickness = HIGHLIGHT_THICKNESS;
-        if(is_last_highlight)
+        if(item.highlighted)
         {
-            double elapsed = m_timeline_selection->GetHighlightElapsedSeconds();
-            float  pulse   = 0.5f + 0.5f * std::sin(static_cast<float>(elapsed) * 6.0f);
-            thickness      = HIGHLIGHT_THICKNESS + pulse * 1.5f;
+            double elapsed = m_timeline_selection->GetHighlightElapsedSeconds(item.event.m_id.uuid);
+            bool   persistent = m_timeline_selection->IsHighlightPersistent(item.event.m_id.uuid);
+            if(!persistent)
+            {
+                float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(elapsed) * 6.0f);
+                thickness   = HIGHLIGHT_THICKNESS + pulse * 1.5f;
 
-            ImU32 a     = (border_color >> 24) & 0xFF;
-            ImU32 new_a = static_cast<ImU32>(a * (0.5f + 0.5f * pulse));
-            border_color = (border_color & 0x00FFFFFF) | (new_a << 24);
+                ImU32 a     = (border_color >> 24) & 0xFF;
+                ImU32 new_a = static_cast<ImU32>(a * (0.5f + 0.5f * pulse));
+                border_color = (border_color & 0x00FFFFFF) | (new_a << 24);
+            }
         }
+        bool is_last_highlight = item.highlighted;
 
         float half_t = thickness / 2.0f;
         ImVec2 pulseMin = ImVec2(start_position.x - half_t,

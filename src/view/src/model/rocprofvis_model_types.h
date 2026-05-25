@@ -121,10 +121,11 @@ struct EventFlowData
 
 struct CallStackData
 {
-    std::string file;
-    std::string pc;
-    std::string name;
-    std::string address;
+    std::string  file;
+    std::string  pc;
+    std::string  name;
+    std::string  address;
+    TraceEventId id{};
 };
 
 struct BasicEventData

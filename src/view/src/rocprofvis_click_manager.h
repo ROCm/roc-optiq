@@ -34,7 +34,7 @@ public:
 
 private:
     TimelineFocusManager();
-    ~TimelineFocusManager()                              = default;
+    ~TimelineFocusManager()                                      = default;
     TimelineFocusManager(const TimelineFocusManager&)            = delete;
     TimelineFocusManager& operator=(const TimelineFocusManager&) = delete;
 

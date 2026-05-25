@@ -63,8 +63,10 @@ find_package(Vulkan REQUIRED)
 
 # View related src files
 set(VIEW_FILES
-    src/view/src/rocprofvis_appwindow.cpp 
-    src/view/src/rocprofvis_appwindow.h 
+    src/view/src/rocprofvis_appwindow.cpp
+    src/view/src/rocprofvis_appwindow.h
+    src/view/src/welcome/rocprofvis_welcome_page.cpp
+    src/view/src/welcome/rocprofvis_welcome_page.h
     src/view/src/rocprofvis_annotation_view.cpp
     src/view/src/rocprofvis_track_item.cpp 
     src/view/src/rocprofvis_flame_track_item.cpp 
@@ -77,6 +79,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_hotkey_manager.cpp 
     src/view/src/rocprofvis_stickynote.cpp
     src/view/src/rocprofvis_click_manager.cpp
+    src/view/src/rocprofvis_measurement_controller.cpp
     src/view/src/rocprofvis_analysis_view.cpp 
     src/view/src/rocprofvis_trace_view.cpp 
     src/view/src/rocprofvis_line_track_item.cpp 

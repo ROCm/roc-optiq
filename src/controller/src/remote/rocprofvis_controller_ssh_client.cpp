@@ -732,6 +732,10 @@ namespace Controller
     }
  
     // Download a remote file via SCP/SFTP path handling and mirror it locally.
+    // This routine intentionally performs end-to-end transfer orchestration in one place:
+    // it validates local/remote state, executes the transfer, updates sidecar metadata,
+    // and reports status/progress through `future`.
+    //
     // Workflow:
     //  1) Read local file metadata (and sidecar .meta information when present).
     //  2) Query remote file metadata to determine transfer requirements.
@@ -746,7 +750,8 @@ namespace Controller
     {
         std::string err;
 
-        // Track local metadata used to validate cache freshness against remote state.
+        // Phase 1: prepare local metadata bookkeeping used for cache freshness checks.
+        // The `.meta` sidecar stores prior remote attributes so unchanged files can be skipped.
         auto meta_path = std::filesystem::path(local_path).concat(".meta");
         LIBSSH2_SESSION* session = connection->GetSession();
         libssh2_session_set_blocking(session, 1);

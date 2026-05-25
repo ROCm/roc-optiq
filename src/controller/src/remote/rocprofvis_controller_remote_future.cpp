@@ -65,7 +65,7 @@ void FutureRemote::SetFileStat(std::string name, uint64_t size, uint64_t time, u
     m_remote_file_stat.name = std::move(name);
     m_remote_file_stat.size = size;
     m_remote_file_stat.time = time;
-    m_remote_file_stat, downloaded = downloaded;
+    m_remote_file_stat.downloaded = downloaded;
 
     m_user_callback_type = kRPVControllerSshCallbackDownloadSarted;
 }

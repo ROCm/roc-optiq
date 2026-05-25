@@ -190,7 +190,7 @@ namespace Controller
         bool        have_pub = std::filesystem::exists(pub_path);
         const char* pub      = have_pub ? pub_path.string().c_str() : nullptr;
         spdlog::info("[ssh] trying publickey: priv={} pub={} have_passphrase={}",
-            priv_path, have_pub ? pub_path : std::string("(derived from priv)"),
+            priv_path, have_pub ? pub_path.string().c_str() : std::string("(derived from priv)"),
             !passphrase.empty());
         int rc = libssh2_userauth_publickey_fromfile(
             session, user.c_str(), pub, priv_path.c_str(),
@@ -709,7 +709,13 @@ namespace Controller
         return Result::Success;
     }
  
-
+    // Download a remote file via SCP/SFTP path handling and mirror it locally.
+    // Workflow:
+    //  1) Read local file metadata (and sidecar .meta information when present).
+    //  2) Query remote file metadata to determine transfer requirements.
+    //  3) Stream remote contents into the local destination file.
+    //  4) Persist updated metadata for future incremental checks.
+    //  5) Report progress/errors through `future`.
     SshClient::Result SshClient::DownloadFile(
         SshConnection* connection,
         const std::string& remote_path,
@@ -718,8 +724,7 @@ namespace Controller
     {
         std::string err;
 
-        uint64_t local_size = 0;
-        std::time_t local_mtime = 0;
+        // Track local metadata used to validate cache freshness against remote state.
         auto meta_path = std::filesystem::path(local_path).concat(".meta");
         LIBSSH2_SESSION* session = connection->GetSession();
         libssh2_session_set_blocking(session, 1);

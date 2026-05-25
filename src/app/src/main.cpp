@@ -13,6 +13,11 @@
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_image_helpers.h"
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+#include "imgui_te_engine.h"
+#include "imgui_te_ui.h"
+#include "rocprofvis_ui_test_registry.h"
+#endif
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -126,6 +131,14 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
         "Set file dialog backend: 'auto' (default), 'native' (system file "
         "dialog), or 'imgui' (built-in). Use 'imgui' when running over SSH",
         true);
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    result &= cli_parser.AddOption(
+        "u", "ui-tests",
+        "Show the Dear ImGui Test Engine panel and run view-layer UI tests", false);
+    result &= cli_parser.AddOption(
+        "U", "ui-tests-run",
+        "Queue UI tests matching this filter when the test panel opens", true);
+#endif
     result &= cli_parser.AddOption("h", "help",
         "Show this help message and exit", false);
     ROCPROFVIS_ASSERT(result);
@@ -295,6 +308,29 @@ main(int argc, char** argv)
                     rocprofvis_imgui_backend_create_gui_texture_rgba32,
                     rocprofvis_imgui_backend_destroy_gui_texture, &backend);
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+                ImGuiTestEngine* ui_test_engine = nullptr;
+                bool             show_ui_test_engine = cli_parser.WasOptionFound("ui-tests");
+                if(show_ui_test_engine)
+                {
+                    ui_test_engine = ImGuiTestEngine_CreateContext();
+                    ImGuiTestEngineIO& test_io = ImGuiTestEngine_GetIO(ui_test_engine);
+                    test_io.ConfigRunSpeed = ImGuiTestRunSpeed_Cinematic;
+                    test_io.ConfigVerboseLevel = ImGuiTestVerboseLevel_Info;
+                    test_io.ConfigVerboseLevelOnError = ImGuiTestVerboseLevel_Debug;
+
+                    RocProfVis::View::Test::RegisterRocOptiqUiTests(ui_test_engine, true);
+                    ImGuiTestEngine_Start(ui_test_engine, ImGui::GetCurrentContext());
+                    if(cli_parser.WasOptionFound("ui-tests-run") &&
+                       !cli_parser.GetOptionValue("ui-tests-run").empty())
+                    {
+                        ImGuiTestEngine_QueueTests(
+                            ui_test_engine, ImGuiTestGroup_Unknown,
+                            cli_parser.GetOptionValue("ui-tests-run").c_str());
+                    }
+                }
+#endif
+
                 if(cli_parser.WasOptionFound("file") &&
                    !cli_parser.GetOptionValue("file").empty())
                 {
@@ -315,6 +351,12 @@ main(int argc, char** argv)
 
                 while(!glfwWindowShouldClose(window))
                 {
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+                    if(ui_test_engine && show_ui_test_engine)
+                    {
+                        glfwSetWindowShouldClose(window, GLFW_FALSE);
+                    }
+#endif
                     // handle dropped file signal flag from callback
                     if(g_file_was_dropped)
                     {
@@ -341,6 +383,22 @@ main(int argc, char** argv)
                     rocprofvis_view_render(g_render_options);
                     g_render_options = rocprofvis_view_render_options_t::
                         kRocProfVisViewRenderOption_None;
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+                    if(ui_test_engine && show_ui_test_engine)
+                    {
+                        // Hide the Test Engine panel while a test is actively
+                        // running so the test can interact with the underlying
+                        // app UI without the panel covering it. The panel
+                        // reappears as soon as the run finishes.
+                        const ImGuiTestEngineIO& te_io =
+                            ImGuiTestEngine_GetIO(ui_test_engine);
+                        if(!te_io.IsRunningTests)
+                        {
+                            ImGuiTestEngine_ShowTestEngineWindows(
+                                ui_test_engine, &show_ui_test_engine);
+                        }
+                    }
+#endif
 
                     ImGui::Render();
                     ImDrawData* draw_data    = ImGui::GetDrawData();
@@ -351,14 +409,33 @@ main(int argc, char** argv)
                         backend.m_render(&backend, draw_data, &clear_color);
                         backend.m_present(&backend);
                     }
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+                    if(ui_test_engine)
+                    {
+                        ImGuiTestEngine_PostSwap(ui_test_engine);
+                    }
+#endif
                 }
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+                if(ui_test_engine)
+                {
+                    ImGuiTestEngine_Stop(ui_test_engine);
+                }
+#endif
                 rocprofvis_view_destroy();
                 rocprofvis_view_set_texture_backend(nullptr, nullptr, nullptr);
                 backend.m_shutdown(&backend);
 
                 ImGui_ImplGlfw_Shutdown();
                 ImGui::DestroyContext();
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+                if(ui_test_engine)
+                {
+                    ImGuiTestEngine_DestroyContext(ui_test_engine);
+                    ui_test_engine = nullptr;
+                }
+#endif
 
                 backend.m_destroy(&backend);
             }

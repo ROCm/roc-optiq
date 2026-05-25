@@ -669,5 +669,22 @@ EventsView::HandleEventSelectionChanged(const uint64_t event_id, const bool sele
     }
 }
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+bool
+EventsView::HasEventItemForTest(uint64_t event_id) const
+{
+    bool has_event_item = false;
+    for(const EventItem& item : m_event_items)
+    {
+        if(item.event_id == event_id)
+        {
+            has_event_item = true;
+            break;
+        }
+    }
+    return has_event_item;
+}
+#endif
+
 }  // namespace View
 }  // namespace RocProfVis

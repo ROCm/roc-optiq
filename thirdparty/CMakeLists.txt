@@ -21,6 +21,9 @@ add_library(imgui STATIC
     imgui/backends/imgui_impl_opengl3.cpp
 )
 target_compile_definitions(imgui PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+if(ROCPROFVIS_ENABLE_UI_TESTS)
+    target_compile_definitions(imgui PUBLIC IMGUI_ENABLE_TEST_ENGINE)
+endif()
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends)

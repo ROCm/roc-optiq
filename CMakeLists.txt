@@ -26,6 +26,7 @@ option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" O
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
+option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 
 if(COMPUTE_UI_SUPPORT) 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
@@ -227,6 +228,75 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+
+if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
+    target_compile_definitions(imgui PUBLIC IMGUI_ENABLE_TEST_ENGINE)
+
+    set(IMGUI_TEST_ENGINE_DIR
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui_test_engine/imgui_test_engine)
+    add_library(imgui_test_engine STATIC
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_capture_tool.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_context.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_coroutine.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_engine.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_exporters.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_perftool.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_ui.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_utils.cpp
+    )
+    target_compile_definitions(imgui_test_engine PUBLIC
+        IMGUI_ENABLE_TEST_ENGINE
+        IMGUI_TEST_ENGINE_ENABLE_STD_FUNCTION=1
+        IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1
+        IMGUI_TEST_ENGINE_ENABLE_CAPTURE=0
+    )
+    target_include_directories(imgui_test_engine PUBLIC
+        ${IMGUI_TEST_ENGINE_DIR}
+        ${IMGUI_TEST_ENGINE_DIR}/thirdparty/Str
+    )
+    target_link_libraries(imgui_test_engine PUBLIC imgui)
+    target_sources(${TARGET_NAME} PRIVATE
+        src/view/tests/rocprofvis_ui_fake_data_provider.h
+        src/view/tests/rocprofvis_ui_test_registry.h
+        src/view/tests/rocprofvis_ui_test_registry.cpp
+    )
+    target_compile_definitions(${TARGET_NAME} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
+    target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/tests)
+    target_link_libraries(${TARGET_NAME} PRIVATE imgui_test_engine)
+
+    add_executable(roc-optiq-ui-tests
+        src/view/tests/rocprofvis_ui_fake_data_provider.h
+        src/view/tests/rocprofvis_ui_test_registry.h
+        src/view/tests/rocprofvis_ui_test_registry.cpp
+        src/view/tests/rocprofvis_ui_tests.cpp
+        ${VIEW_FILES}
+    )
+    add_dependencies(roc-optiq-ui-tests generate_icon_header)
+    target_compile_definitions(roc-optiq-ui-tests PRIVATE IMGUI_ENABLE_TEST_ENGINE)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/resources)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/tests)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
+    target_include_directories(roc-optiq-ui-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/glfw/include)
+    target_link_libraries(roc-optiq-ui-tests PRIVATE
+        imgui_test_engine
+        implot
+        ${TARGET_NAME}-controller
+        datamodel
+        ${TARGET_NAME}-core
+        spdlog
+        sqlite3
+        json
+        ImGuiFileDialog
+    )
+    add_test(NAME roc-optiq-ui-tests COMMAND roc-optiq-ui-tests)
+endif()
 
 if(APPLE)
     set(ROCPROFVIS_BUNDLE_VULKAN ON CACHE BOOL

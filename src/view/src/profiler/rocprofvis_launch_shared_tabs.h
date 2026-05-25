@@ -18,10 +18,10 @@ namespace View
 class AppWindow;
 
 /**
- * Renders the Target section: executable, arguments, working dir, output dir.
+ * Renders the Target section: connection, executable, arguments, working dir, output dir.
  * Returns true if any field was modified.
  */
-bool RenderTargetSection(TargetSpec& target, AppWindow* app_window);
+bool RenderTargetSection(TargetSpec& target, ConnectionSpec& connection, AppWindow* app_window);
 
 /**
  * Renders the Connection section (local-only this phase; SSH fields disabled).

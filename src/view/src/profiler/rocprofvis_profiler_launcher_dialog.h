@@ -40,8 +40,8 @@ private:
     void UpdateOutput();
     void RebuildComposedOutput();
 
-    void RenderLeftPane();
-    void RenderRightPane();
+    void RenderToolbar();
+    void RenderMainContent();
     void RenderButtonRow();
 
     void SwitchBackend(int index);

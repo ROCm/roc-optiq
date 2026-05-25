@@ -5,6 +5,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_controller_enums.h"
+#include "rocprofvis_settings_manager.h"
 #include "imgui.h"
 #include <algorithm>
 #include <sstream>
@@ -34,19 +35,31 @@ void SyncBufFromString(char* buf, size_t buf_size, std::string const& str)
 
 } // namespace
 
-bool RenderTargetSection(TargetSpec& target, AppWindow* app_window)
+bool RenderTargetSection(TargetSpec& target, ConnectionSpec& connection, AppWindow* app_window)
 {
     bool modified = false;
 
     // Always sync buffers from target when target changed externally (e.g. preset load)
     if (target.executable != s_target_exe_buf)
+    {
         SyncBufFromString(s_target_exe_buf, sizeof(s_target_exe_buf), target.executable);
+    }
     if (target.arguments != s_target_args_buf)
+    {
         SyncBufFromString(s_target_args_buf, sizeof(s_target_args_buf), target.arguments);
+    }
     if (target.working_directory != s_working_dir_buf)
+    {
         SyncBufFromString(s_working_dir_buf, sizeof(s_working_dir_buf), target.working_directory);
+    }
     if (target.output_directory != s_output_dir_buf)
+    {
         SyncBufFromString(s_output_dir_buf, sizeof(s_output_dir_buf), target.output_directory);
+    }
+
+    RenderConnectionSection(connection);
+    // Future SSH target options can be appended here when remote launch is implemented.
+    ImGui::Separator();
 
     ImGui::Text("Target Executable:");
     if (ImGui::InputText("##TargetExe", s_target_exe_buf, sizeof(s_target_exe_buf)))
@@ -54,6 +67,7 @@ bool RenderTargetSection(TargetSpec& target, AppWindow* app_window)
         target.executable = s_target_exe_buf;
         modified = true;
     }
+
     ImGui::SameLine();
     if (ImGui::Button("Browse##TargetExe") && app_window)
     {
@@ -64,6 +78,43 @@ bool RenderTargetSection(TargetSpec& target, AppWindow* app_window)
                 target.executable = path;
                 SyncBufFromString(s_target_exe_buf, sizeof(s_target_exe_buf), path);
             });
+    }
+
+    SettingsManager& settings = SettingsManager::Get();
+    ProfilerSettings& prof_settings = settings.GetProfilerSettings();
+    if (!prof_settings.recent_targets.empty())
+    {
+        ImGui::SameLine();
+        if (ImGui::ArrowButton("##RecentTargetExe", ImGuiDir_Down))
+        {
+            ImGui::OpenPopup("RecentTargetsPopup");
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Choose a recent target executable");
+        }
+        if (ImGui::BeginPopup("RecentTargetsPopup"))
+        {
+            for (auto const& t : prof_settings.recent_targets)
+            {
+                std::string short_name = t;
+                if (short_name.size() > 25)
+                {
+                    short_name = "..." + short_name.substr(short_name.size() - 22);
+                }
+                if (ImGui::Selectable(short_name.c_str(), false))
+                {
+                    target.executable = t;
+                    SyncBufFromString(s_target_exe_buf, sizeof(s_target_exe_buf), t);
+                    modified = true;
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", t.c_str());
+                }
+            }
+            ImGui::EndPopup();
+        }
     }
 
     ImGui::Text("Target Arguments:");
@@ -105,6 +156,7 @@ bool RenderTargetSection(TargetSpec& target, AppWindow* app_window)
 
 void RenderConnectionSection(ConnectionSpec& connection)
 {
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("Connection:");
     ImGui::SameLine();
 

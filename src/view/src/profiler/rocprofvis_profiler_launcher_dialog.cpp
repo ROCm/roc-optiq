@@ -81,44 +81,14 @@ void ProfilerLauncherDialog::Render()
         IProfilerBackend* backend = m_backends[m_backend_index].get();
         m_config.backend_payload = backend->SaveSettings();
 
-        // Saved launch profiles (Optiq JSON presets)
-        std::string load_name = RenderSavedProfileBar(
-            m_preset_manager, m_config.profiler_id,
-            m_current_preset_name, m_config, backend, m_app_window);
-
-        if (!load_name.empty())
-        {
-            LaunchConfig loaded;
-            if (m_preset_manager.LoadPreset(load_name, m_config.profiler_id, loaded))
-            {
-                m_config = loaded;
-                m_backends[m_backend_index]->LoadSettings(m_config.backend_payload);
-                // Find matching tool index
-                auto tools = backend->GetTools();
-                for (size_t i = 0; i < tools.size(); i++)
-                {
-                    if (tools[i].id == m_config.tool_id)
-                    {
-                        m_tool_index = static_cast<int>(i);
-                        break;
-                    }
-                }
-            }
-        }
-
+        RenderToolbar();
+        backend = m_backends[m_backend_index].get();
         ImGui::Separator();
 
-        // Two-column layout: reserve bottom area for preview + output + buttons
+        // Reserve bottom area for preview + output + buttons.
         float bottom_reserve = 280.0f;
-        float left_width = 200.0f;
-        ImGui::BeginChild("LeftPane", ImVec2(left_width, -bottom_reserve), true);
-        RenderLeftPane();
-        ImGui::EndChild();
-
-        ImGui::SameLine();
-
-        ImGui::BeginChild("RightPane", ImVec2(0, -bottom_reserve), true);
-        RenderRightPane();
+        ImGui::BeginChild("MainPane", ImVec2(0, -bottom_reserve), true);
+        RenderMainContent();
         ImGui::EndChild();
 
         // Warnings from backend
@@ -176,11 +146,13 @@ void ProfilerLauncherDialog::Render()
     }
 }
 
-void ProfilerLauncherDialog::RenderLeftPane()
+void ProfilerLauncherDialog::RenderToolbar()
 {
     // Profiler selector
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("Profiler:");
-    ImGui::PushItemWidth(-1);
+    ImGui::SameLine();
+    ImGui::PushItemWidth(140);
     if (ImGui::BeginCombo("##ProfilerBackend",
                           m_backends[m_backend_index]->DisplayName()))
     {
@@ -196,13 +168,14 @@ void ProfilerLauncherDialog::RenderLeftPane()
     }
     ImGui::PopItemWidth();
 
-    ImGui::Spacing();
+    VerticalSeparator();
 
     // Tool selector
     IProfilerBackend const* backend = m_backends[m_backend_index].get();
     auto tools = backend->GetTools();
     ImGui::Text("Tool:");
-    ImGui::PushItemWidth(-1);
+    ImGui::SameLine();
+    ImGui::PushItemWidth(120);
     if (ImGui::BeginCombo("##ToolSelector",
                           tools[m_tool_index].display_name.c_str()))
     {
@@ -219,62 +192,58 @@ void ProfilerLauncherDialog::RenderLeftPane()
     }
     ImGui::PopItemWidth();
 
-    ImGui::Spacing();
-
-    // Connection
-    RenderConnectionSection(m_config.connection);
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    VerticalSeparator();
 
     // Profiler path override
     ImGui::Text("Profiler Path:");
-    ImGui::TextDisabled("(empty = use PATH)");
+    ImGui::SameLine();
     char path_buf[512];
     std::snprintf(path_buf, sizeof(path_buf), "%s", m_profiler_path_override.c_str());
-    ImGui::PushItemWidth(-1);
+    ImGui::PushItemWidth(220);
     if (ImGui::InputText("##ProfPath", path_buf, sizeof(path_buf)))
     {
         m_profiler_path_override = path_buf;
     }
     ImGui::PopItemWidth();
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // Recent targets
-    SettingsManager& settings = SettingsManager::Get();
-    ProfilerSettings& prof_settings = settings.GetProfilerSettings();
-    if (!prof_settings.recent_targets.empty())
+    if (ImGui::IsItemHovered())
     {
-        ImGui::Text("Recent:");
-        for (auto const& t : prof_settings.recent_targets)
+        ImGui::SetTooltip("Leave empty to use PATH");
+    }
+
+    VerticalSeparator();
+
+    // Saved launch profiles (Optiq JSON presets)
+    std::string load_name = RenderSavedProfileBar(
+        m_preset_manager, m_config.profiler_id,
+        m_current_preset_name, m_config, backend, m_app_window);
+
+    if (!load_name.empty())
+    {
+        LaunchConfig loaded;
+        if (m_preset_manager.LoadPreset(load_name, m_config.profiler_id, loaded))
         {
-            std::string short_name = t;
-            if (short_name.size() > 25)
+            m_config = loaded;
+            m_backends[m_backend_index]->LoadSettings(m_config.backend_payload);
+            backend = m_backends[m_backend_index].get();
+            tools = backend->GetTools();
+            for (size_t i = 0; i < tools.size(); i++)
             {
-                short_name = "..." + short_name.substr(short_name.size() - 22);
-            }
-            if (ImGui::Selectable(short_name.c_str(), false))
-            {
-                m_config.target.executable = t;
-            }
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("%s", t.c_str());
+                if (tools[i].id == m_config.tool_id)
+                {
+                    m_tool_index = static_cast<int>(i);
+                    break;
+                }
             }
         }
     }
 }
 
-void ProfilerLauncherDialog::RenderRightPane()
+void ProfilerLauncherDialog::RenderMainContent()
 {
     IProfilerBackend const* backend = m_backends[m_backend_index].get();
 
-    // Target is always visible at the top, not buried in a tab
-    RenderTargetSection(m_config.target, m_app_window);
+    // Target is always visible at the top, not buried in a tab.
+    RenderTargetSection(m_config.target, m_config.connection, m_app_window);
     ImGui::Separator();
 
     if (ImGui::BeginTabBar("LaunchTabs"))

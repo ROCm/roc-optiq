@@ -27,6 +27,8 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <unistd.h>
 #define CLOSE_SOCKET(s) ::close(s)
@@ -86,7 +88,7 @@ namespace Controller
 
         // libssh2 fires this callback for every kbdint round, including "info"
         // rounds (banner / status messages with no input). If there are no
-        // prompts, there is nothing to ask the user — just acknowledge and
+        // prompts, there is nothing to ask the user â€” just acknowledge and
         // continue without touching the UI.
         if(num_prompts == 0)
         {
@@ -208,7 +210,7 @@ namespace Controller
         case LIBSSH2_ERROR_FILE:
             hint = " [file unreadable or unsupported format]"; break;
         case LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED:
-            hint = " [server rejected the key — possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
+            hint = " [server rejected the key â€” possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
         case LIBSSH2_ERROR_AUTHENTICATION_FAILED:
             hint = " [auth rejected by server]"; break;
         case LIBSSH2_ERROR_METHOD_NOT_SUPPORTED:
@@ -430,7 +432,7 @@ namespace Controller
                 {
                     connection->Disconnect();
                     err = (m == KnownHostMatch::Mismatch)
-                        ? "Host key mismatch — connection rejected."
+                        ? "Host key mismatch â€” connection rejected."
                         : "Host key not trusted.";
                     return Result::AuthError;
                 }
@@ -471,7 +473,7 @@ namespace Controller
                 if(TryPublicKey(connection->GetSession(), user, identity_file, passphrase))
                     auth_rc = 0;
             }
-            // 1b) ssh-agent — handles encrypted keys without us needing a passphrase.
+            // 1b) ssh-agent â€” handles encrypted keys without us needing a passphrase.
             if(auth_rc != 0)
             {
                 spdlog::info("[ssh] trying ssh-agent");
@@ -765,10 +767,22 @@ namespace Controller
 
         future->SetFileStat(remote_path, fileinfo.st_size, fileinfo.st_mtime, 0);
 
-        FILE* file = fopen(local_path.c_str(), "wb");
-        if (!file)
+        int fd = open(local_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+        if (fd < 0)
         {
             err = "file open failed: " + local_path;
+            spdlog::error("[ssh] {}", err);
+            future->SaveError(err);
+
+            libssh2_channel_free(channel);
+            return Result::FileError;
+        }
+
+        FILE* file = fdopen(fd, "wb");
+        if (!file)
+        {
+            CLOSE_SOCKET(fd);
+            err = "fdopen failed: " + local_path;
             spdlog::error("[ssh] {}", err);
             future->SaveError(err);
 

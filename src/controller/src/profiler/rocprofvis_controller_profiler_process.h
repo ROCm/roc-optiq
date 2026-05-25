@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_profiler_executor.h"
 #include <string>
 #include <vector>
@@ -46,13 +47,15 @@ struct SshConnectionInfo
 
 /*
  * ProfilerConfig - Configuration for launching a profiler
- * Simple data container, not part of Handle/property system
+ * Derives from Handle so it participates in the Reference<> validation pattern.
  */
-class ProfilerConfig
+class ProfilerConfig : public Handle
 {
 public:
     ProfilerConfig();
-    ~ProfilerConfig();
+    ~ProfilerConfig() override;
+
+    rocprofvis_controller_object_type_t GetType(void) final;
 
     rocprofvis_result_t SetProfilerType(rocprofvis_profiler_type_t type);
     rocprofvis_result_t SetProfilerPath(char const* path);

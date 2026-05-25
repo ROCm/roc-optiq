@@ -23,9 +23,9 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_table.cpp    
     src/rocprofvis_controller.cpp
     src/rocprofvis_controller_job_system.cpp
-    src/rocprofvis_controller_profiler_process.cpp
-    src/rocprofvis_controller_profiler_cmdline.cpp
-    src/rocprofvis_profiler.cpp
+    src/profiler/rocprofvis_controller_profiler_process.cpp
+    src/profiler/rocprofvis_controller_profiler_cmdline.cpp
+    src/profiler/rocprofvis_profiler.cpp
     src/remote/rocprofvis_controller_remote.cpp
     src/remote/rocprofvis_controller_remote_future.cpp
     src/remote/rocprofvis_controller_ssh_client.cpp
@@ -75,6 +75,7 @@ target_link_libraries(${TARGET_NAME} PUBLIC libssh2_static)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../model/inc)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/profiler)
 
 if(BUILD_TESTING)
 	set(SYSTEM_TEST_NAME ${PROJECT_NAME}-system-tests)

@@ -30,7 +30,8 @@ namespace Controller
 // ==================================================================================
 
 ProfilerConfig::ProfilerConfig()
-    : m_profiler_type(kRPVProfilerTypeRocprofSysRun)
+    : Handle(0, 0)
+    , m_profiler_type(kRPVProfilerTypeRocprofSysRun)
     , m_profiler_path()
     , m_target_executable()
     , m_target_args()
@@ -45,6 +46,11 @@ ProfilerConfig::ProfilerConfig()
 
 ProfilerConfig::~ProfilerConfig()
 {
+}
+
+rocprofvis_controller_object_type_t ProfilerConfig::GetType(void)
+{
+    return kRPVProfilerConfig;
 }
 
 rocprofvis_result_t ProfilerConfig::SetProfilerType(rocprofvis_profiler_type_t type)

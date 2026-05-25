@@ -14,6 +14,8 @@ namespace RocProfVis
 namespace Controller
 {
 typedef Reference<rocprofvis_controller_future_t, Future, kRPVControllerObjectTypeFuture> FutureRef;
+typedef Reference<rocprofvis_profiler_config_t, ProfilerConfig, kRPVProfilerConfig> ProfilerConfigRef;
+
 }
 }
 
@@ -28,137 +30,136 @@ rocprofvis_profiler_config_t* rocprofvis_profiler_config_alloc(void)
 
 void rocprofvis_profiler_config_free(rocprofvis_profiler_config_t* config)
 {
-    if (config)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (config_ref.IsValid())
     {
-        RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-        delete cfg;
+        delete config_ref.Get();
     }
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_type(rocprofvis_profiler_config_t* config, rocprofvis_profiler_type_t profiler_type)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->SetProfilerType(profiler_type);
+    return config_ref->SetProfilerType(profiler_type);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_profiler_path(rocprofvis_profiler_config_t* config, char const* profiler_path)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->SetProfilerPath(profiler_path);
+    return config_ref->SetProfilerPath(profiler_path);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_target_executable(rocprofvis_profiler_config_t* config, char const* target_executable)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->SetTargetExecutable(target_executable);
+    return config_ref->SetTargetExecutable(target_executable);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_target_args(rocprofvis_profiler_config_t* config, char const* target_args)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->SetTargetArgs(target_args);
+    return config_ref->SetTargetArgs(target_args);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_profiler_args(rocprofvis_profiler_config_t* config, char const* profiler_args)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->SetProfilerArgs(profiler_args);
+    return config_ref->SetProfilerArgs(profiler_args);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_profiler_config_t* config, char const* output_directory)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->SetOutputDirectory(output_directory);
+    return config_ref->SetOutputDirectory(output_directory);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_add_env_var(rocprofvis_profiler_config_t* config, char const* name, char const* value)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->AddEnvVar(name, value);
+    return config_ref->AddEnvVar(name, value);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_add_profiler_arg(rocprofvis_profiler_config_t* config, char const* arg)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->AddProfilerArg(arg);
+    return config_ref->AddProfilerArg(arg);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_connection_local(rocprofvis_profiler_config_t* config)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->SetConnectionLocal();
+    return config_ref->SetConnectionLocal();
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_connection_ssh(rocprofvis_profiler_config_t* config,
     char const* host, char const* user, int port, char const* identity_file, char const* remote_stage_dir)
 {
-    if (config == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-    return cfg->SetConnectionSsh(host, user, port, identity_file, remote_stage_dir);
+    return config_ref->SetConnectionSsh(host, user, port, identity_file, remote_stage_dir);
 }
 
 rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_config_t* config, rocprofvis_controller_future_t* future)
 {
-    if (config == nullptr || future == nullptr)
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid() || future == nullptr)
     {
         return kRocProfVisResultInvalidArgument;
     }
 
-    RocProfVis::Controller::ProfilerConfig* cfg = (RocProfVis::Controller::ProfilerConfig*)config;
-
     RocProfVis::Controller::ProfilerProcessController* controller =
         new RocProfVis::Controller::ProfilerProcessController();
 
-    rocprofvis_result_t result = controller->LaunchAsync(cfg);
+    rocprofvis_result_t result = controller->LaunchAsync(config_ref.Get());
     if (result != kRocProfVisResultSuccess)
     {
         delete controller;

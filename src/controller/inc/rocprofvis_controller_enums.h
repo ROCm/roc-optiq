@@ -123,6 +123,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeRoofline = 104,
     // Roofline object
     kRPVControllerObjectTypeRemoteConnection = 105,
+    // Profiler configuration
+    kRPVProfilerConfig = 106
 #endif
 
 } rocprofvis_controller_object_type_t;

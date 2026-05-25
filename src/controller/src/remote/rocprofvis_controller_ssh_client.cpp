@@ -27,6 +27,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <pwd.h>
 #include <unistd.h>
 #define CLOSE_SOCKET(s) ::close(s)
 #endif

@@ -287,7 +287,6 @@ main(int argc, char** argv)
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-                io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
                 io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
                 // Keep undocked windows out of the OS taskbar.

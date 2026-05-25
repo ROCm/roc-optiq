@@ -44,7 +44,7 @@ namespace View
 
         if (result == kRocProfVisResultSuccess)
         {
-            rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+            result = rocprofvis_controller_get_uint64(
                 output, kRPVControllerArrayNumEntries, 0, &prop_count);
             if (prop_count != 1 ||
                 kRocProfVisResultSuccess != (result = rocprofvis_controller_get_object(output,
@@ -65,7 +65,6 @@ namespace View
     {
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
 
-        uint64_t prop_count = 0;
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future);
 

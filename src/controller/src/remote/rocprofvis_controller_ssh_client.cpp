@@ -181,9 +181,14 @@ namespace Controller
                 priv_path, priv_path_in);
             return false;
         }
-        std::string pub_path = priv_path + ".pub";
+        std::filesystem::path pub_path = std::filesystem::weakly_canonical(priv_path + ".pub");
+
+        if (pub_path.string().rfind(priv_path, 0) != 0) {
+            return false;
+        }
+
         bool        have_pub = std::filesystem::exists(pub_path);
-        const char* pub      = have_pub ? pub_path.c_str() : nullptr;
+        const char* pub      = have_pub ? pub_path.string().c_str() : nullptr;
         spdlog::info("[ssh] trying publickey: priv={} pub={} have_passphrase={}",
             priv_path, have_pub ? pub_path : std::string("(derived from priv)"),
             !passphrase.empty());

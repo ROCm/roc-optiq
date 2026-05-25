@@ -5,6 +5,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 
 namespace RocProfVis
 {
@@ -131,11 +132,30 @@ bool KnownHosts::Add(const std::string& host, int port)
                                   type_mask, nullptr) == 0;
 }
 
+
 bool KnownHosts::Save() const
 {
-    if(!m_kh || m_path.empty()) return false;
-    return libssh2_knownhost_writefile(m_kh, m_path.c_str(),
-                                       LIBSSH2_KNOWNHOST_FILE_OPENSSH) == 0;
+    if (!m_kh) return false;
+
+    const char* home = std::getenv("HOME");
+    if (!home) return false;
+
+    std::filesystem::path base = std::filesystem::path(home) / ".ssh";
+
+    // Treat m_path as a filename only
+    std::filesystem::path input = std::filesystem::path(m_path).filename();
+
+    std::filesystem::path full = std::filesystem::weakly_canonical(base / input);
+
+    // Ensure final path stays inside ~/.ssh
+    if (full.string().rfind(base.string(), 0) != 0)
+        return false;
+
+    return libssh2_knownhost_writefile(
+        m_kh,
+        full.string().c_str(),
+        LIBSSH2_KNOWNHOST_FILE_OPENSSH
+    ) == 0;
 }
 
 std::string FormatHostKeyFingerprint(LIBSSH2_SESSION* session)

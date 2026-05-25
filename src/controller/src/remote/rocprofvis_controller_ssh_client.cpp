@@ -14,8 +14,11 @@
 #include <filesystem>
 #include <spdlog/spdlog.h>
 #include <algorithm>
+#include <string>
+#include <cctype>
 
 #ifdef _WIN32
+#include <shlobj.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 #define CLOSE_SOCKET(s) closesocket(s)
@@ -143,21 +146,29 @@ namespace Controller
         return methods && std::strstr(methods, needle) != nullptr;
     }
 
-    std::string SshClient::ExpandTilde(const std::string& p)
+    std::string SshClient::ExpandTilde(const std::string& path)
     {
-        if(p.empty() || p[0] != '~') return p;
-        if(p.size() == 1 || p[1] == '/' || p[1] == '\\')
-        {
+        if (path.empty() || path[0] != '~')
+            return path;
+
 #ifdef _WIN32
-            const char* home = std::getenv("USERPROFILE");
-#else
-            const char* home = std::getenv("HOME");
-#endif
-            if(home) return std::string(home) + p.substr(1);
+        // Windows
+        char home[MAX_PATH];
+        if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, home)))
+        {
+            return std::string(home) + path.substr(1);
         }
-        // ~user/... is not expanded (would require getpwnam); pass through.
-        return p;
+        return path;
+
+#else
+        // POSIX (Linux/macOS)
+        struct passwd* pw = getpwuid(getuid());
+        if (!pw) return path;
+
+        return std::string(pw->pw_dir) + path.substr(1);
+#endif
     }
+
 
     bool SshClient::TryPublicKey(LIBSSH2_SESSION* session, const std::string& user,
         const std::string& priv_path_in, const std::string& passphrase)
@@ -203,7 +214,7 @@ namespace Controller
         return false;
     }
 
-    // Try every identity loaded into ssh-agent. Returns true on first success.
+
     bool SshClient::TryAgent(LIBSSH2_SESSION* session, const std::string& user)
     {
         LIBSSH2_AGENT* agent = libssh2_agent_init(session);
@@ -474,7 +485,7 @@ namespace Controller
                     if(TryPublicKey(connection->GetSession(), user, p, passphrase))
                     {
                         auth_rc = 0;
-                        break;
+                        return Result::Success;
                     }
                 }
             }
@@ -494,6 +505,7 @@ namespace Controller
             if(auth_rc == 0)
             {
                 spdlog::info("[ssh] password auth OK");
+                return Result::Success;
             }
             else
             {
@@ -530,6 +542,7 @@ namespace Controller
             if(auth_rc == 0)
             {
                 spdlog::info("[ssh] kbdint auth OK");
+                return Result::Success;
             }
             else
             {
@@ -540,7 +553,7 @@ namespace Controller
             }
         }
 
-        return Result::Success;
+        return Result::AuthError;
     }
 
     void SshClient::Disconnect(SshConnection* connection)
@@ -676,47 +689,6 @@ namespace Controller
             }
         }
 
-/*
-        while (true)
-        {
-            bool got_data = false;
-
-            ssize_t n1 =
-                libssh2_channel_read(
-                    channel,
-                    buffer,
-                    sizeof(buffer));
-
-            if (n1 > 0)
-            {
-                future->AddStdOut(buffer, n1);
-
-                got_data = true;
-            }
-
-            ssize_t n2 =
-                libssh2_channel_read_stderr(
-                    channel,
-                    buffer,
-                    sizeof(buffer));
-
-            if (n2 > 0)
-            {
-                future->AddStdOut(buffer, n2);
-
-                got_data = true;
-            }
-
-
-            if (!got_data)
-            {
-                if (libssh2_channel_eof(channel))
-                {
-                    break;
-                }
-            }
-        }
-*/
         libssh2_channel_close(channel);
 
         libssh2_channel_wait_closed(channel);
@@ -732,106 +704,124 @@ namespace Controller
     }
  
 
-    SshClient::Result SshClient::DownloadFile(SshConnection * connection, const std::string& remote_path, const std::string& local_path, Future* future)
+    SshClient::Result SshClient::DownloadFile(
+        SshConnection* connection,
+        const std::string& remote_path,
+        const std::string& local_path,
+        Future* future)
     {
         std::string err;
-        libssh2_session_set_blocking(connection->GetSession(), 1);
 
-        LIBSSH2_SFTP* sftp = libssh2_sftp_init(connection->GetSession());
-        if (!sftp)
-            return Result::SftpError;
+        uint64_t local_size = 0;
+        std::time_t local_mtime = 0;
+        auto meta_path = std::filesystem::path(local_path).concat(".meta");
+        LIBSSH2_SESSION* session = connection->GetSession();
+        libssh2_session_set_blocking(session, 1);
 
-        LIBSSH2_SFTP_ATTRIBUTES attrs{};
-        int rc = libssh2_sftp_stat(sftp, remote_path.c_str(), &attrs);
 
-        if(rc != 0)
+        libssh2_struct_stat fileinfo{};
+        LIBSSH2_CHANNEL* channel =
+            libssh2_scp_recv2(session, remote_path.c_str(), &fileinfo);
+
+        if (!channel)
         {
-            unsigned long sftp_err = libssh2_sftp_last_error(sftp);
-            char*         lib_msg  = nullptr;
-            int           lib_rc   = libssh2_session_last_error(connection->GetSession(), &lib_msg, nullptr, 0);
-            const char*   sftp_str = "unknown";
-            switch(sftp_err)
+            char* lib_msg = nullptr;
+            libssh2_session_last_error(session, &lib_msg, nullptr, 0);
+
+            err = "scp recv failed: " + remote_path +
+                " msg=" + (lib_msg ? lib_msg : "");
+            spdlog::error("[ssh] {}", err);
+            future->SaveError(err);
+            return Result::SftpError;
+        }
+
+        std::error_code ec;
+        if(std::filesystem::exists(local_path, ec) &&
+            std::filesystem::exists(meta_path, ec))
+        {
+            std::ifstream m(meta_path);
+            uint64_t      cached_size = 0, cached_mtime = 0;
+            if(m >> cached_size >> cached_mtime &&
+                cached_size == fileinfo.st_size && cached_mtime == fileinfo.st_mtime)
             {
-            case LIBSSH2_FX_OK:                  sftp_str = "OK"; break;
-            case LIBSSH2_FX_EOF:                 sftp_str = "EOF"; break;
-            case LIBSSH2_FX_NO_SUCH_FILE:        sftp_str = "NO_SUCH_FILE"; break;
-            case LIBSSH2_FX_PERMISSION_DENIED:   sftp_str = "PERMISSION_DENIED"; break;
-            case LIBSSH2_FX_FAILURE:             sftp_str = "FAILURE"; break;
-            case LIBSSH2_FX_BAD_MESSAGE:         sftp_str = "BAD_MESSAGE"; break;
-            case LIBSSH2_FX_NO_CONNECTION:       sftp_str = "NO_CONNECTION"; break;
-            case LIBSSH2_FX_CONNECTION_LOST:     sftp_str = "CONNECTION_LOST"; break;
-            case LIBSSH2_FX_OP_UNSUPPORTED:      sftp_str = "OP_UNSUPPORTED"; break;
-            case LIBSSH2_FX_INVALID_HANDLE:      sftp_str = "INVALID_HANDLE"; break;
-            case LIBSSH2_FX_NO_SUCH_PATH:        sftp_str = "NO_SUCH_PATH"; break;
-            case LIBSSH2_FX_FILE_ALREADY_EXISTS: sftp_str = "FILE_ALREADY_EXISTS"; break;
-            case LIBSSH2_FX_WRITE_PROTECT:       sftp_str = "WRITE_PROTECT"; break;
-            case LIBSSH2_FX_NO_MEDIA:            sftp_str = "NO_MEDIA"; break;
-            default: break;
+                spdlog::info("[ssh] already up-to-date: {}", local_path);
+
+                future->SetFileStat(remote_path, fileinfo.st_size, fileinfo.st_mtime, fileinfo.st_size);
+                libssh2_channel_free(channel);
+                return Result::Success;
             }
-            std::string err = "sftp stat failed for '" + remote_path + "': " + sftp_str +
-                " (sftp_err=" + std::to_string(sftp_err) +
-                ", libssh2_rc=" + std::to_string(lib_rc) +
-                ", msg=" + (lib_msg ? lib_msg : "") + ")";
-            spdlog::error("[ssh] {}", err);
-            future->SaveError(err);
-            return Result::FileError;
-        }
-        else
-        {
-            future->SetFileStat(remote_path, attrs.filesize, attrs.mtime);
         }
 
-        LIBSSH2_SFTP_HANDLE* remote = libssh2_sftp_open(
-            sftp,
-            remote_path.c_str(),
-            LIBSSH2_FXF_READ,
-            0);
+        future->SetFileStat(remote_path, fileinfo.st_size, fileinfo.st_mtime, 0);
 
-        if (!remote)
-        {
-            err = "sftp open failed: " + remote_path;
-            spdlog::error("[ssh] {}", err);
-            future->SaveError(err);
-            return Result::SftpError;
-        }
-
-        FILE* File = fopen(local_path.c_str(), "wb");
-        if (!File)
+        FILE* file = fopen(local_path.c_str(), "wb");
+        if (!file)
         {
             err = "file open failed: " + local_path;
             spdlog::error("[ssh] {}", err);
             future->SaveError(err);
+
+            libssh2_channel_free(channel);
             return Result::FileError;
         }
 
-        char Buffer[8192];
+        const size_t BUF_SIZE = 64 * 1024;
+        std::vector<char> buffer(BUF_SIZE);
 
-        while (true)
+        ssize_t got = 0;
+        uint64_t total_downloaded = 0;
+
+        while (!libssh2_channel_eof(channel) && total_downloaded < fileinfo.st_size)
         {
-            ssize_t bytes = libssh2_sftp_read(remote, Buffer, sizeof(Buffer));
-            if (bytes > 0)
+            got = libssh2_channel_read(channel, buffer.data(), buffer.size());
+
+            if (got > 0)
             {
-                fwrite(Buffer, 1, bytes, File);
-                future->SetDownloaded(bytes);
+                if (got > fileinfo.st_size - total_downloaded)
+                {
+                    got = fileinfo.st_size - total_downloaded;
+                }
+                fwrite(buffer.data(), 1, got, file);
+
+                total_downloaded += got;
+                future->SetDownloaded(got);
             }
-            else if (bytes == 0)
+            else if (got == LIBSSH2_ERROR_EAGAIN)
             {
-                break;
+                continue;
             }
-            else
+            else if (got < 0)
             {
-                libssh2_sftp_close(remote);
+
+                char* lib_msg = nullptr;
+                libssh2_session_last_error(session, &lib_msg, NULL, 0);
+
+                err = "scp read error: " + std::string(lib_msg ? lib_msg : "");
+                spdlog::error("[ssh] {}", err);
+                future->SaveError(err);
+
+                fclose(file);
+                libssh2_channel_free(channel);
                 return Result::ReadError;
+
             }
+
         }
 
-        libssh2_sftp_close(remote);
-        fclose(File);
-        libssh2_sftp_shutdown(sftp);
+        fclose(file);
+
+        {
+            std::ofstream m(meta_path, std::ios::trunc);
+            if (m) m << fileinfo.st_size << ' ' << fileinfo.st_mtime << '\n';
+        }
+
+        libssh2_channel_send_eof(channel);
+        libssh2_channel_wait_eof(channel);
+        libssh2_channel_wait_closed(channel);
+        libssh2_channel_free(channel);
 
         return Result::Success;
     }
-
 
     bool SshClient::IsAlive(SshConnection * connection)
     {
@@ -846,6 +836,5 @@ namespace Controller
     {
         libssh2_keepalive_config(connection->GetSession(), 1, intervalSeconds);
     }
-
 }
 }

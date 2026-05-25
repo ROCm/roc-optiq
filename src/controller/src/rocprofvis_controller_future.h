@@ -46,7 +46,7 @@ public:
 
     void AddStdOut(char* stdout_buffer, uint64_t stdout_count);
     void SaveError(std::string& err);
-    void SetFileStat(std::string name, uint64_t size, uint64_t time);
+    void SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t dowloaded);
     void SetDownloaded(uint64_t size);
 
 private:

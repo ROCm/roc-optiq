@@ -3,6 +3,7 @@
 
 #include "rocprofvis_ssh_uri.h"
 #include "rocprofvis_utils.h"
+#include "rocprofvis_core_string_utils.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -66,7 +67,13 @@ namespace View
         std::string filename = pos == std::string::npos ? remote : remote.substr(pos + 1);
         std::filesystem::path config_root = get_application_config_path(true);
         std::filesystem::path cache_root  = config_root / "remote_cache";
-        std::filesystem::path key_root =cache_root / GetRemoteCacheKey();
+        std::filesystem::path key_root = cache_root / GetRemoteCacheKey();
+
+        if (!std::filesystem::exists(key_root))
+        {
+            std::filesystem::create_directories(key_root);
+        }
+
         std::filesystem::path path = key_root / filename;
         return path.string();
     }
@@ -196,7 +203,7 @@ namespace View
 
     std::string RemoteUri::GetRemoteHostString() const
     {
-        return std::string(m_remote_host.data());
+        return util::string::trim_copy(std::string(m_remote_host.data()));
     }
 
     const std::array<char, 16>& RemoteUri::GetRemotePortArray() const
@@ -206,7 +213,7 @@ namespace View
 
     std::string RemoteUri::GetRemotePortString() const
     {
-        return std::string(m_remote_port.data());
+        return util::string::trim_copy(std::string(m_remote_port.data()));
     }
 
     int RemoteUri::GetRemotePortInt() const
@@ -221,7 +228,7 @@ namespace View
 
     std::string RemoteUri::GetRemoteUserString() const
     {
-        return std::string(m_remote_user.data());
+        return util::string::trim_copy(std::string(m_remote_user.data()));
     }
 
     const std::array<char, 256>& RemoteUri::GetRemotePasswordArray() const
@@ -231,7 +238,7 @@ namespace View
 
     std::string RemoteUri::GetRemotePasswordString() const
     {
-        return std::string(m_remote_password.data());
+        return util::string::trim_copy(std::string(m_remote_password.data()));
     }
 
     const std::array<char, 1024>& RemoteUri::GetRemoteCommandLineArray() const
@@ -241,7 +248,7 @@ namespace View
 
     std::string RemoteUri::GetRemoteCommandLineString() const
     {
-        return std::string(m_remote_command_line.data());
+        return util::string::trim_copy(std::string(m_remote_command_line.data()));
     }
 
     const std::array<char, 1024>& RemoteUri::GetRemoteResultPathArray() const
@@ -251,7 +258,7 @@ namespace View
 
     std::string RemoteUri::GetRemoteResultPathString() const
     {
-        return std::string(m_remote_result_path.data());
+        return util::string::trim_copy(std::string(m_remote_result_path.data()));
     }
 
     const std::array<char, 1024>& RemoteUri::GetRemoteIdentityFileArray() const
@@ -261,7 +268,7 @@ namespace View
 
     std::string RemoteUri::GetRemoteIdentityFileString() const
     {
-        return std::string(m_remote_identity_file.data());
+        return util::string::trim_copy(std::string(m_remote_identity_file.data()));
     }
 
     const std::array<char, 256>& RemoteUri::GetPassphraseArray() const
@@ -271,7 +278,7 @@ namespace View
 
     std::string RemoteUri::GetPassphraseString() const
     {
-        return std::string(m_passphrase.data());
+        return util::string::trim_copy(std::string(m_passphrase.data()));
     }
 
     char* RemoteUri::GetRemoteHostBuffer()

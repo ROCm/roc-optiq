@@ -222,9 +222,9 @@ void Future::SaveError(std::string& err)
     m_remote.SaveError(err);
 }
 
-void Future::SetFileStat(std::string name, uint64_t size, uint64_t time)
+void Future::SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded)
 {
-    m_remote.SetFileStat(std::move(name), size, time);
+    m_remote.SetFileStat(std::move(name), size, time, downloaded);
 }
 
 void Future::SetDownloaded(uint64_t size)

@@ -1704,6 +1704,7 @@ AppWindow::RenderRemoteOpenDialog()
                         "Failed to backup authentication parameters.";
                 }
                 m_thread_running = true;
+                m_should_close_popup = true;
                 std::thread([&]()
                     {
                         
@@ -1744,7 +1745,7 @@ AppWindow::RenderRemoteOpenDialog()
 
                                 if (result == kRocProfVisResultSuccess)
                                 {
-                                    m_should_close_popup = true;
+                                    
                                     OpenFile( m_remote_uri.GetLocalResultPathString());
                                 }
                                 else
@@ -1794,16 +1795,21 @@ AppWindow::RenderRemoteOpenDialog()
 }
 
 
-void
-AppWindow::RenderRemoteProgressDialog()
+void AppWindow::RenderRemoteProgressDialog()
 {
     if (auto fetch = m_ssh_access.GetFileStat()->consume_if_updated())
     {
-        if (!ImGui::IsPopupOpen("Remote Download"))
+        m_last_progress = *fetch;
+
+        if (!m_show_progress_popup)
         {
+            m_show_progress_popup = true;
             ImGui::OpenPopup("Remote Download");
         }
+    }
 
+    if (m_show_progress_popup)
+    {
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
@@ -1815,66 +1821,70 @@ AppWindow::RenderRemoteProgressDialog()
             ImGuiWindowFlags_NoMove |
             ImGuiWindowFlags_NoTitleBar))
         {
-            ImGui::Text("Downloading: %s", fetch->name.c_str());
-            uint64_t done = fetch->downloaded;
-            uint64_t total = fetch->size;
+            const auto& fetch = m_last_progress;
+
+            ImGui::Text("Downloading: %s", fetch.name.c_str());
+
+            uint64_t done = fetch.downloaded;
+            uint64_t total = fetch.size;
+
             if (total > 0)
             {
                 float frac = static_cast<float>(done) / static_cast<float>(total);
-                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0),
-                    (std::to_string(done / 1024) + " / " +
-                        std::to_string(total / 1024) + " KiB").c_str());
+
+                std::string label =
+                    std::to_string(done / 1024) + " / " +
+                    std::to_string(total / 1024) + " KiB";
+
+                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
             }
             else
             {
                 ImGui::Text("Connecting...");
             }
 
-            if (done == total) ImGui::CloseCurrentPopup();
+            if (total > 0 && done >= total)
+            {
+                ImGui::CloseCurrentPopup();
+                m_show_progress_popup = false;
+            }
+
             ImGui::EndPopup();
         }
+
         popup_style.PopStyles();
     }
 }
-
 
 void
 AppWindow::RenderRemoteOutputDialog()
 {
     if (auto fetch = m_ssh_access.GetExecutionOutput()->consume_if_updated())
     {
-        if (!ImGui::IsPopupOpen("Remote Execute"))
+        m_last_stdout = *fetch;
+        if (!m_show_remote_stdout_popup)
         {
+            m_show_remote_stdout_popup = true;
             ImGui::OpenPopup("Remote Execute");
         }
+    }
 
-        PopUpStyle popup_style;
-        popup_style.PushPopupStyles();
-        popup_style.PushTitlebarColors();
-        popup_style.CenterPopup();
-        ImGui::SetNextWindowSize(ImVec2(1280, 800));
-
-        if (ImGui::BeginPopupModal("Remote Execute", nullptr,
-            ImGuiWindowFlags_AlwaysAutoResize |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoTitleBar))
+    if (m_show_remote_stdout_popup)
+    {
+        if (ImGui::BeginPopupModal("Remote Execute", nullptr))
         {
+            ImGui::BeginChild("output", ImVec2(0, 0), true);
+            ImGui::TextUnformatted(m_last_stdout.text.c_str());
+            ImGui::EndChild();
 
-            ImVec2 text_box_size = ImVec2(ImGui::GetContentRegionAvail().x,
-                ImGui::GetContentRegionAvail().y);
-            ImGui::InputTextMultiline("##readonlytext", (char*)fetch->text.c_str(),
-                IM_ARRAYSIZE(fetch->text.c_str()), text_box_size,
-                ImGuiInputTextFlags_ReadOnly);
-
-
-            if (fetch->finished)
+            if (m_last_stdout.finished)
             {
                 ImGui::CloseCurrentPopup();
-                m_ssh_access.GetExecutionOutput()->clear_updated();
+                m_show_remote_stdout_popup = false;
             }
+
             ImGui::EndPopup();
         }
-        popup_style.PopStyles();
     }
 }
 

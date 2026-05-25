@@ -104,7 +104,10 @@ void RenderSshAuthModal(Ssh* ssh_access)
     if(auto req = ssh_access->GetHostKeyRequest()->consume_if_updated())
     {
         static bool opened = false;
-        if(!opened) { ImGui::OpenPopup("SSH Host Key"); opened = true; }
+        if(!opened) { 
+            ImGui::OpenPopup("SSH Host Key"); 
+            opened = true; 
+        }
 
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();

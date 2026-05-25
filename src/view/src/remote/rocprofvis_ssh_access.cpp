@@ -82,7 +82,7 @@ namespace View
         result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeKeyPath, 0, uri->GetRemoteIdentityFileString().c_str());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeKeyPassphrase, 0, uri->GetRemoteIdentityFileString().c_str());
+        result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeKeyPassphrase, 0, uri->GetPassphraseString().c_str());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         if (result == kRocProfVisResultSuccess)

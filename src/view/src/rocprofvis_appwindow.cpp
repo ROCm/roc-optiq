@@ -1614,16 +1614,27 @@ AppWindow::HandleOpenRemote()
     m_remote_status_msg.clear();
 }
 
+/**
+ * Render the modal dialog used to test opening a remote SSH target.
+ *
+ * This routine owns the complete immediate-mode UI flow for the SSH test popup:
+ * styling, input capture, triggering connection checks, and presenting status.
+ * Keeping these phases documented is important because this dialog coordinates
+ * several pieces of transient UI state in one large render function.
+ */
 void
 AppWindow::RenderRemoteOpenDialog()
 {
+    // Configure shared popup visuals and placement before creating modal content.
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
     popup_style.PushTitlebarColors();
     popup_style.CenterPopup();
 
+    // Keep the modal width stable while allowing height to auto-fit content.
     ImGui::SetNextWindowSize(ImVec2(560, 0));
 
+    // Render and process the SSH test modal while it is open.
     if (ImGui::BeginPopupModal("SSH Test", nullptr,
         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
     {
@@ -1791,6 +1802,7 @@ AppWindow::RenderRemoteOpenDialog()
 
         ImGui::EndPopup();
     }
+    // Always restore style state after modal rendering to avoid leaking UI styles.
     popup_style.PopStyles();
 }
 

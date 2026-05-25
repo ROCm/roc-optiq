@@ -22,6 +22,16 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 #define CLOSE_SOCKET(s) closesocket(s)
+
+#include <io.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#define OPEN    _open
+#define FDOPEN  _fdopen
+#define CLOSEFD _close
+#define FLAGS   (_O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY)
+#define MODE    (_S_IREAD | _S_IWRITE)
+
 #else
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -32,6 +42,13 @@
 #include <pwd.h>
 #include <unistd.h>
 #define CLOSE_SOCKET(s) ::close(s)
+
+#define OPEN    open
+#define FDOPEN  fdopen
+#define CLOSEFD close
+#define FLAGS   (O_WRONLY | O_CREAT | O_TRUNC)
+#define MODE    (S_IRUSR | S_IWUSR)
+
 #endif
 
 namespace RocProfVis
@@ -183,19 +200,22 @@ namespace Controller
                 priv_path, priv_path_in);
             return false;
         }
-        std::filesystem::path pub_path = std::filesystem::weakly_canonical(priv_path + ".pub");
 
-        if (pub_path.string().rfind(priv_path, 0) != 0) {
+        std::filesystem::path pub_path = std::filesystem::weakly_canonical(priv_path+".pub");
+        auto p = std::filesystem::path(priv_path+".pub").lexically_normal();
+        
+
+        if ( pub_path!=p) {
             return false;
         }
 
         bool        have_pub = std::filesystem::exists(pub_path);
-        const char* pub      = have_pub ? pub_path.string().c_str() : nullptr;
+        std::string pub      = pub_path.string();
         spdlog::info("[ssh] trying publickey: priv={} pub={} have_passphrase={}",
             priv_path, have_pub ? pub_path.string().c_str() : std::string("(derived from priv)"),
             !passphrase.empty());
         int rc = libssh2_userauth_publickey_fromfile(
-            session, user.c_str(), pub, priv_path.c_str(),
+            session, user.c_str(), have_pub?pub.c_str():nullptr, priv_path.c_str(),
             passphrase.empty() ? nullptr : passphrase.c_str());
         if(rc == 0)
         {
@@ -767,7 +787,8 @@ namespace Controller
 
         future->SetFileStat(remote_path, fileinfo.st_size, fileinfo.st_mtime, 0);
 
-        int fd = open(local_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+
+        int fd = OPEN(local_path.c_str(), FLAGS, MODE);
         if (fd < 0)
         {
             err = "file open failed: " + local_path;
@@ -778,10 +799,10 @@ namespace Controller
             return Result::FileError;
         }
 
-        FILE* file = fdopen(fd, "wb");
+        FILE* file = FDOPEN(fd, "wb");
         if (!file)
         {
-            CLOSE_SOCKET(fd);
+            CLOSEFD(fd); 
             err = "fdopen failed: " + local_path;
             spdlog::error("[ssh] {}", err);
             future->SaveError(err);
@@ -789,6 +810,7 @@ namespace Controller
             libssh2_channel_free(channel);
             return Result::FileError;
         }
+
 
         const size_t BUF_SIZE = 64 * 1024;
         std::vector<char> buffer(BUF_SIZE);

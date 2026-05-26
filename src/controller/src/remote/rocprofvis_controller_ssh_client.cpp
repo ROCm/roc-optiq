@@ -517,6 +517,10 @@ namespace Controller
                     }
                 }
             }
+            else
+            {
+                return Result::Success;
+            }
         }
         else
         {

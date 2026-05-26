@@ -95,7 +95,7 @@ namespace View
         obj["passphrase"] = ToString(m_passphrase);
 
 
-        auto full = std::filesystem::weakly_canonical(path);
+        auto full = std::filesystem::weakly_canonical(path+ "/remote.json");
 
         if (!std::filesystem::exists(full.parent_path())) {
             return false;

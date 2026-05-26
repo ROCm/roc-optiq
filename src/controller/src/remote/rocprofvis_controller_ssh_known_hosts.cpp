@@ -24,21 +24,27 @@ namespace Controller
 namespace
 {
 
-std::string DefaultKnownHostsPath()
+std::string DefaultHomePath()
 {
 #if defined(_WIN32)
     char path[MAX_PATH];
     if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_PROFILE, nullptr, 0, path))) {
-        return std::string(path) + "\\.ssh\\known_hosts";
+        return std::string(path);
     }  
 #else
     // POSIX secure source
     struct passwd* pw = getpwuid(getuid());
     if (pw && pw->pw_dir)
-        return std::string(pw->pw_dir) + "/.ssh/known_hosts";
+        return std::string(pw->pw_dir);
 
 #endif
     return "";
+}
+
+std::string DefaultKnownHostsPath()
+{
+    std::string path = DefaultHomePath();
+    return path.empty() ? path : path + "\\.ssh\\known_hosts";
 }
 
 std::string Base64Encode(const unsigned char* data, size_t n)
@@ -151,23 +157,9 @@ bool KnownHosts::Save() const
 {
     if (!m_kh) return false;
 
-    const char* home = std::getenv("HOME");
-    if (!home) return false;
-
-    std::filesystem::path base = std::filesystem::path(home) / ".ssh";
-
-    // Treat m_path as a filename only
-    std::filesystem::path input = std::filesystem::path(m_path).filename();
-
-    std::filesystem::path full = std::filesystem::weakly_canonical(base / input);
-
-    // Ensure final path stays inside ~/.ssh
-    if (full.string().rfind(base.string(), 0) != 0)
-        return false;
-
     return libssh2_knownhost_writefile(
         m_kh,
-        full.string().c_str(),
+        m_path.c_str(),
         LIBSSH2_KNOWNHOST_FILE_OPENSSH
     ) == 0;
 }

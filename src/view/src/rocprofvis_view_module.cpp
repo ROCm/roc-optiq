@@ -3,8 +3,6 @@
 
 #include "rocprofvis_view_module.h"
 #include "rocprofvis_appwindow.h"
-#include "rocprofvis_settings_manager.h"
-#include "rocprofvis_font_manager.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_image_helpers.h"
 #include "spdlog/spdlog.h"
@@ -45,21 +43,6 @@ void
 rocprofvis_view_destroy()
 {
     AppWindow::GetInstance()->DestroyInstance();
-}
-
-void
-rocprofvis_view_set_dpi(float dpi)
-{
-    SettingsManager& settings = SettingsManager::GetInstance();
-    if(settings.GetUserSettings().display_settings.dpi_based_scaling)
-    {
-        if(settings.GetDPI() != dpi)
-        {
-            settings.SetDPI(dpi);
-            FontManager& fonts = settings.GetFontManager();
-            fonts.SetFontSize(fonts.GetDPIScaledFontIndex());
-        }
-    }
 }
 
 void

@@ -642,10 +642,15 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
 
 typedef enum rocprofvis_controller_table_type_t
 {
-    kRPVControllerTableTypeEvents                 = 0xF0000000,
-    kRPVControllerTableTypeSamples                = 0xF0000001,
-    kRPVControllerTableTypeSearchResults          = 0xF0000002,
-    kRPVControllerTableTypeSummaryKernelInstances = 0xF0000003,
+    kRPVControllerTableTypeEvents                    = 0xF0000000,
+    kRPVControllerTableTypeSamples                   = 0xF0000001,
+    kRPVControllerTableTypeSearchResults             = 0xF0000002,
+    kRPVControllerTableTypeSummaryKernelInstances    = 0xF0000003,
+    kRPVControllerTableTypeInstrumentedEvents        = 0xF0000004,
+    kRPVControllerTableTypeDispatchEvents            = 0xF0000005,
+    kRPVControllerTableTypeMemoryAllocationEvents    = 0xF0000006,
+    kRPVControllerTableTypeMemoryCopyEvents          = 0xF0000007,
+    kRPVControllerTableTypeSampledEvents             = 0xF0000008,
 } rocprofvis_controller_table_type_t;
 
 /*

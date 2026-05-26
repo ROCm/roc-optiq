@@ -1,13 +1,11 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_common_defs.h"
 #include "rocprofvis_event_search.h"
-#include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_event_manager.h"
+#include "rocprofvis_common_defs.h"
 #include "rocprofvis_settings_manager.h"
-#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
 namespace RocProfVis
@@ -22,9 +20,13 @@ constexpr const char* ID_COLUMN_NAME        = "__uuid";
 constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 
-EventSearch::EventSearch(DataProvider& dp,
-                         std::shared_ptr<TimelineSelection> timeline_selection)
-: InfiniteScrollTable(dp, TableType::kEventSearchTable, "", timeline_selection)
+EventSearch::EventSearch(DataProvider& dp)
+: InfiniteScrollTable(
+      dp, TableType::kEventSearchTable, kRPVControllerTableTypeSearchResults,
+      DataProvider::EVENT_SEARCH_REQUEST_ID,
+      [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
+      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, nullptr, 1,
+      kRPVControllerSortOrderAscending, "Event Search Table", "")
 , m_should_open(false)
 , m_should_close(false)
 , m_open_context_menu(false)
@@ -33,14 +35,12 @@ EventSearch::EventSearch(DataProvider& dp,
 , m_searched(false)
 , m_width(1000.0f)
 , m_text_input("\0")
-{
-    m_widget_name = GenUniqueName("Event Search Table");
-}
+{}
 
 void
 EventSearch::Update()
 {
-    if(m_search_deferred && !m_data_provider.IsRequestPending(GetRequestID()))
+    if(m_search_deferred && !m_data_provider.IsRequestPending(m_request_id))
     {
         Search();
     }
@@ -48,10 +48,11 @@ EventSearch::Update()
     {
         m_hidden_column_indices.clear();
         const std::vector<std::string>& column_names =
-            m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
+            m_table_model().GetTableHeader(m_table_type);
         for(size_t i = 0; i < column_names.size(); i++)
         {
-            if(i != m_important_column_idxs[kDbEventId] && i != m_important_column_idxs[kName] &&
+            if(i != m_important_column_idxs[kDbEventId] &&
+               i != m_important_column_idxs[kName] &&
                i != m_time_column_indices[kTimeStartNs] &&
                i != m_time_column_indices[kDurationNs])
             {
@@ -74,37 +75,41 @@ EventSearch::Render()
 
     if(Open())
     {
-        const TablesModel& tm = m_data_provider.DataModel().GetTables();
-        ImGui::SetNextWindowSize(ImVec2(m_width, Height()));
+        const TablesModel& tm    = m_table_model();
+        const ImGuiStyle&  style = m_settings.GetDefaultStyle();
         ImGui::SetNextWindowPos(
             ImVec2(ImGui::GetItemRectMin().x,
-                   ImGui::GetItemRectMax().y + ImGui::GetStyle().FramePadding.y));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+                   ImGui::GetItemRectMax().y + ImGui::GetStyle().WindowPadding.y));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            ImVec2(style.WindowPadding.x, style.WindowPadding.y * 0.75f));
+        ImGui::SetNextWindowSize(ImVec2(m_width, Height()));
         if(ImGui::BeginPopup("event_search", ImGuiWindowFlags_NoFocusOnAppearing))
         {
-            if(m_data_provider.IsRequestPending(GetRequestID()) ||
+            if(m_data_provider.IsRequestPending(m_request_id) ||
                tm.GetTableTotalRowCount(m_table_type) > 0)
             {
                 ImGui::SetNextWindowSize(ImGui::GetContentRegionAvail() -
                                          ImVec2(0, ImGui::GetFrameHeightWithSpacing()));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
                 InfiniteScrollTable::Render();
+                ImGui::PopStyleVar();
                 RenderContextMenu();
             }
-            ImGui::AlignTextToFramePadding();
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-            auto table_params =
-                tm.GetTableParams(m_table_type);
+            auto table_params = tm.GetTableParams(m_table_type);
             if(table_params)
             {
+                ImGui::AlignTextToFramePadding();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
                 ImGui::Text("Showing %llu to %llu of %llu result(s)",
                             table_params->m_start_row,
                             table_params->m_start_row + table_params->m_req_row_count,
                             tm.GetTableTotalRowCount(m_table_type));
-            }
 #else
-            ImGui::Text("Showing %llu result(s)",
-                        tm.GetTableTotalRowCount(m_table_type));
+                ImGui::Text("Showing %llu result(s)",
+                            tm.GetTableTotalRowCount(m_table_type));
 #endif
+            }
             if(m_should_close)
             {
                 ImGui::CloseCurrentPopup();
@@ -112,7 +117,7 @@ EventSearch::Render()
             }
             ImGui::EndPopup();
         }
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
     }
 }
 
@@ -170,13 +175,13 @@ EventSearch::Search()
         if(valid)
         {
             const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
-            m_data_provider.CancelRequest(GetRequestID());
+            m_data_provider.CancelRequest(m_request_id);
             m_search_deferred = !m_data_provider.FetchTable(TableRequestParams(
-                m_req_table_type, {},
+                m_request_table_type, {},
                 { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
                   kRocProfVisDmOperationLaunchSample },
                 timeline.GetStartTime(), timeline.GetEndTime(), "", "", "", "", { terms },
-                0, m_fetch_chunk_size));
+                0, m_fetch_chunk_size, m_sort_column_index, m_sort_order));
             m_searched        = true;
             m_should_open     = true;
         }
@@ -191,8 +196,8 @@ EventSearch::Search()
 void
 EventSearch::Clear()
 {
-    m_data_provider.CancelRequest(GetRequestID());
-    m_data_provider.DataModel().GetTables().ClearTable(m_table_type);
+    m_data_provider.CancelRequest(m_request_id);
+    m_table_model_mutable().ClearTable(m_table_type);
     m_text_input[0] = '\0';
     m_searched      = false;
     m_should_close  = true;
@@ -255,7 +260,7 @@ EventSearch::Width() const
 void
 EventSearch::FormatData() const
 {
-    TablesModel& tm = m_data_provider.DataModel().GetTables();
+    TablesModel& tm = m_table_model_mutable();
 
     std::vector<FormattedColumnInfo>& formatted_column_data =
         tm.GetMutableFormattedTableData(m_table_type);
@@ -268,7 +273,7 @@ void
 EventSearch::IndexColumns()
 {
     const std::vector<std::string>& column_names =
-        m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type);
+        m_table_model().GetTableHeader(m_table_type);
     m_important_column_idxs =
         std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
     m_hidden_column_indices.clear();
@@ -358,22 +363,19 @@ EventSearch::RenderContextMenu()
 float
 EventSearch::Height() const
 {
-    float    height;
-    uint64_t results =
-        m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    float             height;
+    uint64_t          results = m_table_model().GetTableTotalRowCount(m_table_type);
     if(results > 0)
     {
-        height = (m_horizontal_scroll ? ImGui::GetStyle().ScrollbarSize : 0) +
-                 (2 + std::min(results, MAX_RESULTS_DISPLAYED)) *
-                     ImGui::GetFrameHeightWithSpacing();
+        height = (m_horizontal_scroll ? style.ScrollbarSize : 0.0f) +
+                 (1.0f + std::min(results, MAX_RESULTS_DISPLAYED)) * TableRowHeight();
     }
     else
     {
-        height = m_data_provider.IsRequestPending(GetRequestID())
-                     ? 2 * ImGui::GetFrameHeightWithSpacing()
-                     : ImGui::GetFrameHeightWithSpacing();
+        height = m_data_provider.IsRequestPending(m_request_id) ? TableRowHeight() : 0.0f;
     }
-    return height;
+    return height + ImGui::GetFrameHeightWithSpacing() + 2.0f * style.WindowPadding.y;
 }
 
 }  // namespace View

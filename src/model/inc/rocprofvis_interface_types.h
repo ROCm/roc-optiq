@@ -399,6 +399,7 @@ typedef enum rocprofvis_dm_table_use_case_enum_t {
     kRPVDMTableUseCaseSampleTrackTable,
     kRPVDMTableUseCaseEventSearch,
     kRPVDMTableUseCaseAnalysis,
+    kRPVDMTableNumUsecases,
 } rocprofvis_dm_table_use_case_enum_t;
 
 // Type of data can be requested per event

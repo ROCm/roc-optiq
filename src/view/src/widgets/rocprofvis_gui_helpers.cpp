@@ -69,15 +69,13 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
 {
     if(window_id)
     {
+        const ImGuiStyle& style = ImGui::GetStyle();
         // Create an overlay child window to display the loading indicator if requested
-        ImVec2 parent_pos = ImGui::GetWindowPos();
-        ImVec2 parent_size = ImGui::GetWindowSize();
-        ImGui::SetNextWindowPos(parent_pos);
-        ImGui::SetNextWindowSize(parent_size);
+        ImGui::SetNextWindowPos(ImGui::GetWindowPos() + style.WindowPadding);
 
         // set transparent background for the overlay window
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-        ImGui::BeginChild(window_id, parent_size, ImGuiChildFlags_None);
+        ImGui::BeginChild(window_id, ImGui::GetWindowSize() - style.WindowPadding * 2.0f, ImGuiChildFlags_None);
     }
 
     ImVec2 dot_size   = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);

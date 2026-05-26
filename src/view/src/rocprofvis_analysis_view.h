@@ -15,6 +15,9 @@ namespace View
 class DataProvider;
 class EventsView;
 class MultiTrackTable;
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+class TopEventsView;
+#endif
 class TrackTopology;
 class TrackDetails;
 class TimelineSelection;
@@ -41,6 +44,9 @@ private:
     std::shared_ptr<EventsView>     m_events_view;
     std::shared_ptr<TrackDetails>   m_track_details;
     std::shared_ptr<AnnotationView> m_annotation_view;
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    std::shared_ptr<TopEventsView>  m_top_events_view;
+#endif
 
     EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_range_selection_changed_token;

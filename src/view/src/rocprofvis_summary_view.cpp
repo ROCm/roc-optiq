@@ -1043,7 +1043,11 @@ TopKernels::ToggleSelectKernel(const size_t& idx)
 }
 
 KernelInstanceTable::KernelInstanceTable(DataProvider& dp)
-: InfiniteScrollTable(dp, TableType::kSummaryKernelTable)
+: InfiniteScrollTable(
+      dp, TableType::kSummaryKernelTable, kRPVControllerTableTypeSummaryKernelInstances,
+      DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID,
+      [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
+      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); })
 , m_fetched(false)
 , m_fetch_deferred(false)
 {
@@ -1053,7 +1057,7 @@ KernelInstanceTable::KernelInstanceTable(DataProvider& dp)
 void
 KernelInstanceTable::Update()
 {
-    if(m_fetch_deferred && !m_data_provider.IsRequestPending(GetRequestID()))
+    if(m_fetch_deferred && !m_data_provider.IsRequestPending(m_request_id))
     {
         Fetch();
     }
@@ -1070,7 +1074,7 @@ KernelInstanceTable::Render()
         InfiniteScrollTable::Render();
         ImGui::AlignTextToFramePadding();
         ImGui::Text("Showing %llu dispatch(es)",
-                    m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type));
+                    m_table_model().GetTableTotalRowCount(m_table_type));
     }
     else
     {
@@ -1102,8 +1106,8 @@ KernelInstanceTable::ToggleSelectKernel(const std::string& kernel_name,
 void
 KernelInstanceTable::Clear()
 {
-    m_data_provider.CancelRequest(GetRequestID());
-    m_data_provider.DataModel().GetTables().ClearTable(m_table_type);
+    m_data_provider.CancelRequest(m_request_id);
+    m_table_model_mutable().ClearTable(m_table_type);
     m_fetched = false;
 }
 
@@ -1117,22 +1121,22 @@ void
 KernelInstanceTable::FormatData() const
 {
     std::vector<FormattedColumnInfo>& formatted_column_data =
-        m_data_provider.DataModel().GetTables().GetMutableFormattedTableData(m_table_type);
+        m_table_model_mutable().GetMutableFormattedTableData(m_table_type);
     formatted_column_data.clear();
-    formatted_column_data.resize(m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type).size());
+    formatted_column_data.resize(m_table_model().GetTableHeader(m_table_type).size());
     InfiniteScrollTable::FormatTimeColumns();
 }
 
 void
 KernelInstanceTable::Fetch()
 {
-    m_data_provider.CancelRequest(GetRequestID());
+    m_data_provider.CancelRequest(m_request_id);
     const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
-    m_fetch_deferred         = !m_data_provider.FetchTable(
-        TableRequestParams(m_req_table_type, {}, { kRocProfVisDmOperationDispatch },
-                                   tlm.GetStartTime(), tlm.GetEndTime(), m_where.c_str(), "", "",
-                                   "", { m_kernel_name }, 0, m_fetch_chunk_size));
-    m_fetched = true;
+    m_fetch_deferred         = !m_data_provider.FetchTable(TableRequestParams(
+        m_request_table_type, {}, { kRocProfVisDmOperationDispatch }, tlm.GetStartTime(),
+        tlm.GetEndTime(), m_where.c_str(), "", "", "", { m_kernel_name }, 0,
+        m_fetch_chunk_size, m_sort_column_index, m_sort_order));
+    m_fetched                = true;
 }
 
 }  // namespace View

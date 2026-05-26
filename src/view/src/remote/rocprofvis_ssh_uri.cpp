@@ -123,7 +123,7 @@ namespace View
             return false;
         }
         
-        std::ifstream in(path, std::ios::binary);
+        std::ifstream in(full, std::ios::binary);
 
         if (!in)
         {

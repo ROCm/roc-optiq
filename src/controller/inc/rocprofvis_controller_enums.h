@@ -331,6 +331,8 @@ typedef enum rocprofvis_controller_track_properties_t : uint32_t
     kRPVControllerTrackNumberOfOperationTypes,
     // Event operation type at the given index, see rocprofvis_dm_event_operation_t
     kRPVControllerTrackOperationTypeIndexed,
+    // Source database instance index
+    kRPVControllerTrackInstanceId,
     __kRPVControllerTrackPropertiesLast
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack

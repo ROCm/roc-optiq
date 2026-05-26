@@ -30,6 +30,64 @@ constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 
 float TrackItem::s_metadata_width = 400.0f;
 
+static ImU32
+CompareSourceColor(const CompareSourceInfo& source, SettingsManager& settings)
+{
+    const std::vector<ImU32>& wheel = settings.GetColorWheel();
+    if(wheel.empty())
+    {
+        return settings.GetColor(Colors::kTabAccent);
+    }
+    size_t idx = (source.id == "A") ? 0 : 1;
+    return wheel[idx % wheel.size()];
+}
+
+float
+CompareSourceBadgeWidth(const TrackInfo* track_info)
+{
+    if(!track_info || track_info->compare_source.id.empty())
+    {
+        return 0.0f;
+    }
+    return ImGui::CalcTextSize(track_info->compare_source.id.c_str()).x +
+           2.0f * ImGui::GetStyle().FramePadding.x;
+}
+
+void
+RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
+{
+    if(!track_info || track_info->compare_source.id.empty())
+    {
+        return;
+    }
+
+    const CompareSourceInfo& source = track_info->compare_source;
+    ImU32                    color  = CompareSourceColor(source, settings);
+    float                    width  = CompareSourceBadgeWidth(track_info);
+
+    ImGui::PushID("compare_source_badge");
+    ImGui::PushStyleColor(ImGuiCol_Button, color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextOnAccent));
+    ImGui::Button(source.id.c_str(), ImVec2(width, 0.0f));
+    ImGui::PopStyleColor(4);
+    if(ImGui::IsItemHovered())
+    {
+        std::string tooltip = "Compare source " + source.id;
+        if(!source.name.empty())
+        {
+            tooltip += ": " + source.name;
+        }
+        if(!source.path.empty())
+        {
+            tooltip += "\n" + source.path;
+        }
+        SetTooltipStyled("%s", tooltip.c_str());
+    }
+    ImGui::PopID();
+}
+
 TrackItem::TrackItem(DataProvider& dp, uint64_t id,
                      std::shared_ptr<TimePixelTransform> tpt,
                      std::shared_ptr<TimelineSelection>  timeline_selection)
@@ -295,13 +353,26 @@ TrackItem::RenderMetaArea()
         // }
 
         UpdateMetaScaleAreaSize();
+
+        float compare_badge_width = CompareSourceBadgeWidth(m_track_metadata);
+        if(compare_badge_width > 0.0f)
+        {
+            compare_badge_width += ImGui::GetStyle().ItemSpacing.x;
+        }
         float available_for_text =
-            content_size.x - m_meta_area_scale_width - m_reorder_grip_width;
+            content_size.x - m_meta_area_scale_width - m_reorder_grip_width - compare_badge_width;
+
+        if(available_for_text < 0.0f) available_for_text = 0.0f;
 
         ImVec2 track_name_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
 
         ImGui::BeginGroup();
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
+        if(compare_badge_width > 0.0f)
+        {
+            RenderCompareSourceBadge(m_track_metadata, m_settings);
+            ImGui::SameLine();
+        }
         if(available_for_text > 0.0f)
         {
             const ImVec2 label_start = ImGui::GetCursorScreenPos();

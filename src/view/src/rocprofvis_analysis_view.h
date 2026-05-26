@@ -43,6 +43,7 @@ private:
     std::shared_ptr<AnnotationView> m_annotation_view;
 
     EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
+    EventManager::SubscriptionToken m_timeline_range_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
 };
 

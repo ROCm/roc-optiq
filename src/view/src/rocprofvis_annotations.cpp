@@ -6,6 +6,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_stickynote.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include <algorithm>
 #include <cstring>
@@ -199,9 +200,8 @@ AnnotationsManager::ShowStickyNoteEditPopup()
 {
     if(!m_show_sticky_edit_popup) return;
 
-    SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
-    ImU32            button_color = settings.GetColor(Colors::kHighlightChart);
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    ImU32            text_color = settings.GetColor(Colors::kTextMain);
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
@@ -212,46 +212,45 @@ AnnotationsManager::ShowStickyNoteEditPopup()
 
     ImGui::OpenPopup("Edit Annotation");
 
-    ImGui::SetNextWindowSize(ImVec2(390, 420),
-                             ImGuiCond_Once);  // Initial size, user can resize
+    ImGui::SetNextWindowSize(
+        GetResponsiveWindowSize(ImVec2(390.0f, 420.0f), ImVec2(320.0f, 320.0f)),
+        ImGuiCond_Once);  // Initial size, user can resize
     if(ImGui::BeginPopupModal("Edit Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
     {
-        ImGui::Text("Edit Annotation");
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        ImGui::Text("Title:");
+        ImGui::TextDisabled("Title");
         ImGui::SetNextItemWidth(-FLT_MIN);  // Full width
         ImGui::InputText("##StickyTitle", m_sticky_title, IM_ARRAYSIZE(m_sticky_title),
                          ImGuiInputTextFlags_AutoSelectAll);
 
         ImGui::Spacing();
 
-        ImGui::Text("Text:");
+        ImGui::TextDisabled("Note");
         ImVec2 text_box_size = ImVec2(ImGui::GetContentRegionAvail().x,
-                                      ImGui::GetContentRegionAvail().y - 60);
+                                      std::max(140.0f,
+                                               ImGui::GetContentRegionAvail().y -
+                                                   ImGui::GetFrameHeightWithSpacing() -
+                                                   ImGui::GetStyle().ItemSpacing.y * 2.0f));
         ImGui::InputTextMultiline("##StickyText", m_sticky_text,
                                   IM_ARRAYSIZE(m_sticky_text), text_box_size,
                                   ImGuiInputTextFlags_AllowTabInput);
 
         ImGui::Spacing();
 
-        float button_width       = 80.0f;
+        float button_width       = 88.0f;
         float spacing            = ImGui::GetStyle().ItemSpacing.x;
         float total_button_width = button_width * 3 + spacing * 2;
         float cursor_x           = ImGui::GetContentRegionAvail().x - total_button_width;
         if(cursor_x > 0) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cursor_x);
 
-        ImGui::PushStyleColor(ImGuiCol_Button, button_color);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              settings.GetColor(Colors::kHighlightChart));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              settings.GetColor(Colors::kHighlightChart));
-
         bool save_clicked = ImGui::Button("Save", ImVec2(button_width, 0));
         ImGui::SameLine();
         bool cancel_clicked = ImGui::Button("Cancel", ImVec2(button_width, 0));
         ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccentRed));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              settings.GetColor(Colors::kAccentRedHover));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                              settings.GetColor(Colors::kAccentRedActive));
         bool delete_clicked = ImGui::Button("Delete", ImVec2(button_width, 0));
 
         ImGui::PopStyleColor(3);
@@ -323,9 +322,8 @@ AnnotationsManager::ShowStickyNotePopup()
         count++;
     }
 
-    SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            text_color   = settings.GetColor(Colors::kRulerTextColor);
-    ImU32            button_color = settings.GetColor(Colors::kHighlightChart);
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    ImU32            text_color = settings.GetColor(Colors::kTextMain);
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
@@ -336,21 +334,24 @@ AnnotationsManager::ShowStickyNotePopup()
 
     ImGui::OpenPopup("Add Annotation");
 
-    ImGui::SetNextWindowSize(ImVec2(390, 420),
-                             ImGuiCond_Once);  // Initial size, user can resize
+    ImGui::SetNextWindowSize(
+        GetResponsiveWindowSize(ImVec2(390.0f, 420.0f), ImVec2(320.0f, 320.0f)),
+        ImGuiCond_Once);  // Initial size, user can resize
     if(ImGui::BeginPopupModal("Add Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
     {
-
-        ImGui::Text("Title:");
+        ImGui::TextDisabled("Title");
         ImGui::SetNextItemWidth(-FLT_MIN);  // Make the input take the full width
         ImGui::InputText("##StickyTitle", m_sticky_title, IM_ARRAYSIZE(m_sticky_title),
                          ImGuiInputTextFlags_AutoSelectAll);
 
         ImGui::Spacing();
 
-        ImGui::Text("Text:");
+        ImGui::TextDisabled("Note");
         ImVec2 text_box_size = ImVec2(ImGui::GetContentRegionAvail().x,
-                                      ImGui::GetContentRegionAvail().y - 60);
+                                      std::max(140.0f,
+                                               ImGui::GetContentRegionAvail().y -
+                                                   ImGui::GetFrameHeightWithSpacing() -
+                                                   ImGui::GetStyle().ItemSpacing.y * 2.0f));
         ImGui::InputTextMultiline("##StickyText", m_sticky_text,
                                   IM_ARRAYSIZE(m_sticky_text), text_box_size,
                                   ImGuiInputTextFlags_AllowTabInput);
@@ -364,17 +365,9 @@ AnnotationsManager::ShowStickyNotePopup()
         float cursor_x           = ImGui::GetContentRegionAvail().x - total_button_width;
         if(cursor_x > 0) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cursor_x);
 
-        ImGui::PushStyleColor(ImGuiCol_Button, button_color);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              settings.GetColor(Colors::kHighlightChart));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              settings.GetColor(Colors::kHighlightChart));
-
         bool save_clicked = ImGui::Button("Save", ImVec2(button_width, 0));
         ImGui::SameLine();
         bool cancel_clicked = ImGui::Button("Cancel", ImVec2(button_width, 0));
-
-        ImGui::PopStyleColor(3);
 
         if(save_clicked)
         {

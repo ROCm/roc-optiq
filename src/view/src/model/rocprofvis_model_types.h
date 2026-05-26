@@ -121,10 +121,11 @@ struct EventFlowData
 
 struct CallStackData
 {
-    std::string file;
-    std::string pc;
-    std::string name;
-    std::string address;
+    std::string  file;
+    std::string  pc;
+    std::string  name;
+    std::string  address;
+    TraceEventId id{};
 };
 
 struct BasicEventData
@@ -278,6 +279,20 @@ struct TableInfo
     std::vector<std::vector<std::string>> table_data;
     std::vector<FormattedColumnInfo>      formatted_column_data;
     uint64_t                              total_row_count;
+};
+
+struct AnalysisQueueUtilization
+{
+    enum State
+    {
+        kStale,      // Invalidated by user input
+        kPending,    // Pending fetch issue
+        kRequested,  // Pending fetch completion
+        kReady,
+    };
+    const TrackInfo* track;
+    double           util_pct;
+    mutable State    state;
 };
 
 }  // namespace View

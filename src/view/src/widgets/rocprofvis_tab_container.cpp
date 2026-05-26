@@ -92,12 +92,35 @@ TabContainer::Update()
 void
 TabContainer::Render()
 {
-    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollWithMouse);
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style = settings.GetDefaultStyle();
+
+    // Keep active tabs visually connected to the content panel.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x + 2.0f, style.WindowPadding.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(style.ItemSpacing.x * 0.6f, style.ItemSpacing.y * 0.5f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(style.FramePadding.x + 2.0f, style.FramePadding.y + 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, style.FrameRounding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_None,
+                      ImGuiWindowFlags_NoScrollWithMouse);
     int new_selected_tab = m_active_tab_index;
     if(!m_tabs.empty())
     {
         int index_to_remove = s_invalid_index;
-        if(ImGui::BeginTabBar("Tabs"))
+        ImGui::PushStyleColor(ImGuiCol_Tab, settings.GetColor(Colors::kBgFrame));
+        ImGui::PushStyleColor(ImGuiCol_TabHovered,
+                              settings.GetColor(Colors::kButtonHovered));
+        ImGui::PushStyleColor(ImGuiCol_TabActive,
+                              settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_TabUnfocused,
+                              settings.GetColor(Colors::kBgFrame));
+        ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive,
+                              settings.GetColor(Colors::kBgPanel));
+        if(ImGui::BeginTabBar("Tabs", ImGuiTabBarFlags_NoTabListScrollingButtons |
+                                          ImGuiTabBarFlags_FittingPolicyResizeDown))
         {
             for(size_t i = 0; i < m_tabs.size(); ++i)
             {
@@ -107,7 +130,7 @@ TabContainer::Render()
                         ? ImGuiTabItemFlags_SetSelected
                         : 0;
 
-                //This line prevents truncated tab names from showing tooltips
+                // Prevent truncated tab names from showing tooltips.
                 if(!m_allow_tool_tips)
                     flags |= ImGuiTabItemFlags_NoTooltip;
 
@@ -119,22 +142,15 @@ TabContainer::Render()
                 {
                     p_open = nullptr;
                 }
-                bool is_active_tab = (static_cast<int>(i) == m_active_tab_index);
-                if(is_active_tab)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text,
-                        ImGui::ColorConvertU32ToFloat4(
-                            SettingsManager::GetInstance().GetColor(Colors::kTextOnAccent)));
-                }
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                                      ImGui::ColorConvertU32ToFloat4(
+                                          settings.GetColor(Colors::kTextMain)));
 
                 bool tab_visible = false;
                 ImGui::PushID(tab.m_id.c_str());
                 bool tab_selected = ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags);
 
-                if(is_active_tab)
-                {
-                    ImGui::PopStyleColor();
-                }
+                ImGui::PopStyleColor();
 
                 if(tab_selected)
                 {
@@ -148,6 +164,9 @@ TabContainer::Render()
                     new_selected_tab = static_cast<int>(i);
                     if(tab.m_widget)
                     {
+                       
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() -
+                                             ImGui::GetStyle().ItemSpacing.y);
                         tab.m_widget->Render();
                     }
                     ImGui::EndTabItem();
@@ -177,6 +196,7 @@ TabContainer::Render()
             }
             ImGui::EndTabBar();
         }
+        ImGui::PopStyleColor(5);
 
         // Check if the active tab has changed
         if(m_active_tab_index != new_selected_tab)
@@ -207,6 +227,8 @@ TabContainer::Render()
         }
     }
     ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(4);
 }
 
 void

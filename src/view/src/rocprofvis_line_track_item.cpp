@@ -58,17 +58,16 @@ LineTrackItem::~LineTrackItem() {}
 void
 LineTrackItem::UpdateMetadata()
 {
-    const TrackInfo* track_info = m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
-    if(track_info)
+    if(m_track_metadata)
     {
-        const CounterInfo* counter =
-            m_data_provider.DataModel().GetTopology().GetCounter(track_info->topology.id.value);
+        const CounterInfo* counter = m_data_provider.DataModel().GetTopology().GetCounter(
+            m_track_metadata->topology.id.value);
         if(counter)
         {
             m_units = counter->units;
         }
         m_min_y.Init(0.0, m_units);  // Want to start at 0 by default.
-        m_max_y.Init(m_units == "%" ? 100.0 : track_info->max_value, m_units);
+        m_max_y.Init(m_units == "%" ? 100.0 : m_track_metadata->max_value, m_units);
     }
     else
     {

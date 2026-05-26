@@ -1111,20 +1111,18 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
 
 rocprofvis_dm_result_t
 ProfileDatabase::BuildTableQuery(
+    rocprofvis_dm_table_use_case_enum_t use_case,
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, 
     rocprofvis_dm_charptr_t where, rocprofvis_dm_charptr_t filter,
     rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, 
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order, 
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
-    uint64_t max_count, uint64_t offset, 
-    bool count_only, bool summary, 
+    uint64_t max_count, uint64_t offset, bool count_only, 
     rocprofvis_dm_string_t& query)
 {
     std::vector<slice_query_map_t> slice_query_map_array;
     table_string_id_filter_map_t string_id_filter_map;
-    std::string group_by_select;
-    std::string group_by;
     
     bool sample_query = false;
     if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
@@ -1134,22 +1132,6 @@ ProfileDatabase::BuildTableQuery(
     else
     {
         sample_query = (rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == kRocProfVisDmOperationNoOp;
-    }
-
-    if(summary)
-    {
-        BuildTableSummaryClause(sample_query, group_by_select, group_by);
-    }
-    else
-    {
-        if(group && strlen(group))
-        {
-            group_by = group;
-            if(group_cols && strlen(group_cols))
-            {
-                group_by_select = group_cols;
-            }
-        }
     }
     rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, string_id_filter_map);
     slice_query_map_array.resize(num);
@@ -1299,26 +1281,56 @@ ProfileDatabase::BuildTableQuery(
 
         }
     }
-
+    if(query.empty())
+    {
+        return kRocProfVisDmResultSuccess;
+    }
     query += "-- CMD: TYPE ";
-    query += string_filter_result == kRocProfVisDmResultSuccess ? "2" : event_table ? "0" : "1";
+    switch(use_case)
+    {
+        case kRPVDMTableUseCaseEventTrackTable:
+        {
+            query += std::to_string(kRPVTableDataTypeEvent);
+            break;
+        }
+        case kRPVDMTableUseCaseSampleTrackTable:
+        {
+            query += std::to_string(kRPVTableDataTypeSample);
+            break;
+        }
+        case kRPVDMTableUseCaseEventSearch:
+        {
+            query += std::to_string(kRPVTableDataTypeSearch);
+            break;
+        }
+        case kRPVDMTableUseCaseAnalysis:
+        {
+            query += std::to_string(kRPVTableDataTypeAnalysis);
+            break;
+        }
+        default:
+        {
+            return kRocProfVisDmResultInvalidParameter; 
+            break;
+        }
+    }
     query += "\n";
 
-    if (!group_by.empty())
+    if(group && strlen(group))
     {
         query += "-- CMD: GROUP ";
-        if (!group_by_select.empty())
+        if (group_cols && strlen(group_cols))
         {
-            if (!FilterExpression::StartsWithSubstring(group_by_select, group_by))
+            if (!FilterExpression::StartsWithSubstring(group, group_cols))
             {
-                query += group_by;
+                query += group_cols;
                 query += ", ";
             }
-            query += group_by_select;
+            query += group;
         }
         else
         {
-            query += group_by;
+            query += group;
             if(sample_query)
             {
                 query += ", COUNT(*) as count, AVG(value) as avg_value, MIN(value) as "
@@ -1326,8 +1338,8 @@ ProfileDatabase::BuildTableQuery(
             }
             else
             {
-            query += ", COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
-                "MIN(duration) as min_duration, MAX(duration) as max_duration";
+                query += ", COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+                         "MIN(duration) as min_duration, MAX(duration) as max_duration";
             }
         }
         query += "\n";

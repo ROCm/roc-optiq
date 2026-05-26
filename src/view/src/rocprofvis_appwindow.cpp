@@ -9,7 +9,6 @@
 #endif
 #include "ImGuiFileDialog.h"
 
-#include "amd_rocm_optiq_logo_png.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
@@ -26,8 +25,11 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "welcome/rocprofvis_welcome_page.h"
+#include <algorithm>
 #include <filesystem>
 #include <sstream>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -38,17 +40,15 @@ constexpr ImVec2      FILE_DIALOG_SIZE       = ImVec2(480.0f, 360.0f);
 constexpr const char* FILE_DIALOG_NAME       = "ChooseFileDlgKey";
 constexpr const char* TAB_CONTAINER_SRC_NAME = "MainTabContainer";
 constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
-constexpr float EMPTY_STATE_CONTENT_EM      = 32.0f;
-constexpr float EMPTY_STATE_BUTTON_EM       = 10.0f;
-constexpr float EMPTY_STATE_LOGO_EM         = 12.0f;
-constexpr float EMPTY_STATE_RECENT_FILES_EM = 22.0f;
+constexpr const char* APP_SHUTDOWN_NOTIFICATION_ID = "provider_cleanup_app_shutdown";
+constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
 
 const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml" };
 const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
 const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
-constexpr const char* SUPPORTED_FILE_TYPES_HINT   = "Supported types: .db, .rpd, .yaml, .rpv";
 
-constexpr float STATUS_BAR_HEIGHT = 30.0f;
+constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
+constexpr const char* CLOSING_MESSAGE = "Closing...";
 
 // For testing DataProvider
 void
@@ -81,12 +81,12 @@ AppWindow::AppWindow()
 : m_main_view(nullptr)
 , m_settings_panel(nullptr)
 , m_tab_container(nullptr)
-, m_amd_logo(amd_rocm_optiq_logo_png, static_cast<int>(sizeof(amd_rocm_optiq_logo_png)))
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
 , m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
 , m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_font_changed_token(static_cast<EventManager::SubscriptionToken>(-1))
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 , m_show_debug_window(false)
 , m_show_provider_test_widow(false)
@@ -104,7 +104,11 @@ AppWindow::AppWindow()
 , m_is_native_file_dialog_open(false)
 #endif
 , m_disable_app_interaction(false)
+, m_shutdown_requested(false)
+, m_exit_notification_sent(false)
 , m_restore_fullscreen_later(false)
+, m_next_provider_cleanup_id(0)
+, m_status_show_busy_indicator(false)
 {}
 
 AppWindow::~AppWindow()
@@ -113,6 +117,17 @@ AppWindow::~AppWindow()
                                              m_tabclosed_event_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kFontSizeChanged),
+                                             m_font_changed_token);
+
+    for(auto& job : m_provider_cleanup_jobs)
+    {
+        if(job.future.valid())
+        {
+            job.future.get();
+        }
+    }
+    m_provider_cleanup_jobs.clear();
     m_projects.clear();
 }
 
@@ -139,9 +154,15 @@ AppWindow::Init()
         spdlog::warn("Failed to initialize SettingsManager");
     }
 
-    LayoutItem status_bar_item(-1, STATUS_BAR_HEIGHT);
-    status_bar_item.m_item = std::make_shared<RocWidget>();
-    LayoutItem main_area_item(-1, -STATUS_BAR_HEIGHT);
+    m_welcome_page = std::make_unique<WelcomePage>(
+        [this]() { HandleOpenFile(); },
+        [this](const std::string& file_path) { HandleOpenRecentFile(file_path); });
+
+    constexpr float initial_status_bar_height = 30.0f;
+    LayoutItem status_bar_item(-1, initial_status_bar_height);
+    status_bar_item.m_item =
+        std::make_shared<RocCustomWidget>([this]() { RenderStatusBar(); });
+    LayoutItem main_area_item(-1, -initial_status_bar_height);
     LayoutItem tool_bar_item(-1, 0);
     tool_bar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
 
@@ -151,13 +172,17 @@ AppWindow::Init()
     m_tab_container->EnableSendChangeEvent(true);
 
     main_area_item.m_item = std::make_shared<RocCustomWidget>([this]() {
-        if(m_tab_container && !m_tab_container->GetTabs().empty())
+        if(m_shutdown_requested)
+        {
+            RenderShutdownState();
+        }
+        else if(m_tab_container && !m_tab_container->GetTabs().empty())
         {
             m_tab_container->Render();
         }
         else
         {
-            RenderEmptyState();
+            m_welcome_page->Render();
         }
     });
 
@@ -172,20 +197,28 @@ AppWindow::Init()
     m_default_spacing = ImGui::GetStyle().ItemSpacing;
 
     auto new_tab_closed_handler = [this](std::shared_ptr<RocEvent> e) {
-        this->HandleTabClosed(e);
+        HandleTabClosed(e);
     };
     m_tabclosed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabClosed), new_tab_closed_handler);
 
     auto new_tab_selected_handler = [this](std::shared_ptr<RocEvent> e) {
-        this->HandleTabSelectionChanged(e);
+        HandleTabSelectionChanged(e);
     };
 
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 
-    ConfigureFileDialogBackend();
+    auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void)e;
+        HandleFontChanged();
+    };
 
+    m_font_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
+
+    ConfigureFileDialogBackend();
+    HandleFontChanged();
     return result;
 }
 
@@ -270,12 +303,16 @@ AppWindow::SetTabLabel(const std::string& label, const std::string& id)
 void
 AppWindow::ShowCloseConfirm()
 {
+    if(m_shutdown_requested)
+    {
+        RequestExitIfProviderCleanupsComplete();
+        return;
+    }
+
     if(m_tab_container->GetTabs().size() == 0 ||
        SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit)
     {
-        if(m_notification_callback)
-            m_notification_callback(
-                rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
+        BeginAppShutdown();
         return;
     }
 
@@ -284,11 +321,7 @@ AppWindow::ShowCloseConfirm()
         "Confirm Close",
         "Are you sure you want to close the application? Any "
         "unsaved data will be lost.",
-        [this]() {
-            if(m_notification_callback)
-                m_notification_callback(
-                    rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
-        });
+        [this]() { BeginAppShutdown(); });
 }
 
 void
@@ -372,11 +405,167 @@ AppWindow::GetCurrentProject()
 }
 
 void
+AppWindow::BeginAppShutdown()
+{
+    if(m_shutdown_requested)
+    {
+        RequestExitIfProviderCleanupsComplete();
+        return;
+    }
+
+    m_shutdown_requested      = true;
+    m_disable_app_interaction = true;
+
+    NotificationManager::GetInstance().ShowPersistent(
+        APP_SHUTDOWN_NOTIFICATION_ID,
+        "Closing traces... " + std::to_string(m_provider_cleanup_jobs.size()) +
+            " cleanup job(s) remaining",
+        NotificationLevel::Info);
+
+    for(auto& item : m_projects)
+    {
+        if(item.second)
+        {
+            item.second->Close();
+            DetachProjectProviderCleanup(*item.second,
+                                         ProviderCleanupReason::kAppShutdown);
+        }
+    }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    StartProviderCleanup(m_test_data_provider.DetachCleanupWork(),
+                         "developer data provider",
+                         ProviderCleanupReason::kAppShutdown);
+#endif
+
+    m_projects.clear();
+    if(m_main_view)
+    {
+        m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
+    }
+
+    if(!m_provider_cleanup_jobs.empty())
+    {
+        NotificationManager::GetInstance().ShowPersistent(
+            APP_SHUTDOWN_NOTIFICATION_ID, "Closing traces...",
+            NotificationLevel::Info);
+    }
+
+    RequestExitIfProviderCleanupsComplete();
+}
+
+void
+AppWindow::DetachProjectProviderCleanup(Project& project, ProviderCleanupReason reason)
+{
+    std::shared_ptr<RootView> root_view =
+        std::dynamic_pointer_cast<RootView>(project.GetView());
+    if(!root_view)
+    {
+        return;
+    }
+
+    std::optional<DataProviderCleanupWork> cleanup_work =
+        root_view->DetachProviderCleanup();
+    if(cleanup_work)
+    {
+        StartProviderCleanup(std::move(*cleanup_work), project.GetName(), reason);
+    }
+}
+
+void
+AppWindow::StartProviderCleanup(DataProviderCleanupWork cleanup_work,
+                                const std::string&    label,
+                                ProviderCleanupReason reason)
+{
+    if(cleanup_work.requests.empty() && !cleanup_work.controller)
+    {
+        return;
+    }
+
+    const std::string cleanup_label =
+        label.empty() ? cleanup_work.trace_file_path : label;
+    ProviderCleanupJob job;
+    job.label           = cleanup_label;
+    job.reason          = reason;
+    job.notification_id = "provider_cleanup_" +
+                          std::to_string(++m_next_provider_cleanup_id);
+
+    const std::string message =
+        "Closing trace: " + cleanup_label + ", canceling " +
+        std::to_string(cleanup_work.requests.size()) + " request(s)";
+    NotificationManager::GetInstance().ShowPersistent(job.notification_id, message,
+                                                      NotificationLevel::Info);
+
+    job.future = std::async(
+        std::launch::async,
+        [cleanup_work = std::move(cleanup_work)]() mutable {
+            return DataProvider::CleanupDetachedResources(std::move(cleanup_work));
+        });
+    m_provider_cleanup_jobs.push_back(std::move(job));
+}
+
+void
+AppWindow::UpdateProviderCleanups()
+{
+    for(auto it = m_provider_cleanup_jobs.begin(); it != m_provider_cleanup_jobs.end();)
+    {
+        if(it->future.valid() &&
+           it->future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        {
+            DataProviderCleanupResult result = it->future.get();
+            spdlog::info("Provider cleanup completed for {} ({} request(s))",
+                         result.trace_file_path.empty() ? it->label
+                                                        : result.trace_file_path,
+                         result.request_count);
+            NotificationManager::GetInstance().Hide(it->notification_id);
+            it = m_provider_cleanup_jobs.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    if(m_shutdown_requested)
+    {
+        if(m_provider_cleanup_jobs.empty())
+        {
+            NotificationManager::GetInstance().Hide(APP_SHUTDOWN_NOTIFICATION_ID);
+        }
+        RequestExitIfProviderCleanupsComplete();
+    }
+}
+
+void
+AppWindow::RequestExitIfProviderCleanupsComplete()
+{
+    if(!m_shutdown_requested || m_exit_notification_sent ||
+       !m_provider_cleanup_jobs.empty())
+    {
+        return;
+    }
+
+    m_exit_notification_sent = true;
+    m_disable_app_interaction = false;
+    if(m_notification_callback)
+    {
+        m_notification_callback(
+            rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App);
+    }
+}
+
+void
 AppWindow::Update()
 {
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     UpdateNativeFileDialog();
 #endif
+    UpdateProviderCleanups();
+    if(m_shutdown_requested)
+    {
+        return;
+    }
+
     HotkeyManager::GetInstance().ProcessInput();
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
@@ -384,6 +573,7 @@ AppWindow::Update()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
+    UpdateStatusBar();
 }
 
 void
@@ -412,8 +602,9 @@ AppWindow::Render()
                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
                      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, m_default_spacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_default_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14, m_default_spacing.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 6));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
     if(ImGui::BeginMenuBar())
     {
         Project* project = GetCurrentProject();
@@ -426,7 +617,7 @@ AppWindow::Render()
 #endif
         ImGui::EndMenuBar();
     }
-    ImGui::PopStyleVar(2);  // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding
+    ImGui::PopStyleVar(3);  // ItemSpacing, WindowPadding, FramePadding
 
     if(m_main_view)
     {
@@ -460,122 +651,49 @@ AppWindow::Render()
 }
 
 void
-AppWindow::RenderEmptyState()
+AppWindow::RenderShutdownState()
 {
-    SettingsManager&            settings     = SettingsManager::GetInstance();
-    const InternalSettings&     internal     = settings.GetInternalSettings();
-    const std::list<std::string>& recent_files = internal.recent_files;
-    const float font_size     = ImGui::GetFontSize();
-    const float window_width  = ImGui::GetContentRegionAvail().x;
-    const float window_height = ImGui::GetContentRegionAvail().y;
-    const float card_width    = std::min(window_width - font_size * 2.0f,
-                                         font_size * EMPTY_STATE_CONTENT_EM);
-    const float card_padding  = font_size * 1.8f;
-    std::string recent_file_to_open;
+    ImGui::OpenPopup(SHUTDOWN_DIALOG_NAME);
 
-    // Vertically center the dialog card
-    ImGui::SetCursorPosY(window_height * 0.18f);
-    ImGui::SetCursorPosX((window_width - card_width) * 0.5f);
+    const float dpi = SettingsManager::GetInstance().GetDPI();
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+               viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
+        ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(360.0f * dpi, 0.0f), ImGuiCond_Always);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(card_padding, card_padding));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
-    ImGui::BeginChild("welcome_dialog", ImVec2(card_width, 0.0f),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
-                      ImGuiWindowFlags_NoScrollbar);
-
-    // --- Logo ---
-    if(m_amd_logo.Valid())
+    PopUpStyle ps;
+    ps.PushPopupStyles();
+    ps.CenterPopup();
+    if(ImGui::BeginPopupModal(SHUTDOWN_DIALOG_NAME, nullptr,
+                              ImGuiWindowFlags_NoResize |
+                                  ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoCollapse))
     {
-        const float avail      = ImGui::GetContentRegionAvail().x;
-        const float logo_width = std::min(avail * 0.42f, font_size * EMPTY_STATE_LOGO_EM);
-        const float logo_height =
-            logo_width * static_cast<float>(m_amd_logo.GetHeight()) /
-            static_cast<float>(m_amd_logo.GetWidth());
-        const float offset = (avail - logo_width) * 0.5f;
-        ImVec2      logo_pos = ImGui::GetCursorScreenPos();
-        logo_pos.x += offset;
-        ImGui::Dummy(ImVec2(avail, logo_height));
-        bool is_dark = settings.GetUserSettings().display_settings.use_dark_mode;
-        m_amd_logo.Render(logo_pos, logo_width, is_dark);
-        ImGui::Dummy(ImVec2(0.0f, font_size));
-    }
-
-    // --- Title ---
-
-    ImGui::PushFont(NULL, settings.GetFontManager().GetFontSize(FontSize::kLarge));
-    CenterNextTextItem("Open a trace or project");
-    ImGui::TextUnformatted("Open a trace or project");
-    ImGui::PopFont();
-
-    ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
-
-    // --- Subtitle ---
-    CenterNextTextItem("Drag and drop files here, or open one from disk.");
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::TextUnformatted("Drag and drop files here, or open one from disk.");
-    ImGui::PopStyleColor();
-
-    ImGui::Dummy(ImVec2(0.0f, font_size * 0.9f));
-
-    // --- Open button ---
-    const float button_width = font_size * EMPTY_STATE_BUTTON_EM;
-    CenterNextItem(button_width);
-    if(ImGui::Button("Open File", ImVec2(button_width, 0.0f)))
-    {
-        HandleOpenFile();
-    }
-    if(ImGui::IsItemHovered())
-    {
-        SetTooltipStyled("%s", SUPPORTED_FILE_TYPES_HINT);
-    }
-
-    // --- Recent files ---
-    if(!recent_files.empty())
-    {
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
-        ImGui::Separator();
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.6f));
-
-        CenterNextTextItem("Recent Files");
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextUnformatted("Recent Files");
-        ImGui::PopStyleColor();
-        ImGui::Dummy(ImVec2(0.0f, font_size * 0.25f));
-
-        const float rf_width =
-            std::min(ImGui::GetContentRegionAvail().x * 0.78f,
-                     font_size * EMPTY_STATE_RECENT_FILES_EM);
-        int shown = 0;
-        for(const std::string& file : recent_files)
+        if(m_provider_cleanup_jobs.empty())
         {
-            if(shown++ >= static_cast<int>(MAX_RECENT_FILES)) break;
-
-            const std::filesystem::path fpath(file);
-            const std::string fname = fpath.filename().empty() ? file : fpath.filename().string();
-
-            ImGui::PushID(file.c_str());
-            CenterNextItem(rf_width);
-
-            if(ImGui::Selectable(fname.c_str(), false, 0, ImVec2(rf_width, 0.0f)))
-            {
-                recent_file_to_open = file;
-            }
-            if(ImGui::IsItemHovered())
-            {
-                SetTooltipStyled("%s", file.c_str());
-            }
-
-            ImGui::PopID();
+            CenterNextTextItem(CLOSING_MESSAGE);
+            ImGui::TextUnformatted(CLOSING_MESSAGE);
         }
+        else
+        {
+            CenterNextTextItem(CLEANUP_MESSAGE);
+            ImGui::TextUnformatted(CLEANUP_MESSAGE);
+            ImGui::Spacing();
+            // Draw indicator dots to show that the app is still responsive
+            RenderLoadingIndicator(SettingsManager::GetInstance().GetColor(Colors::kTextMain),
+                                   nullptr, kCenterHorizontal);
+            ImGui::Spacing();
+            const std::string remaining_message =
+                "Cleanup jobs remaining: " +
+                std::to_string(m_provider_cleanup_jobs.size());
+            CenterNextTextItem(remaining_message.c_str());
+            ImGui::TextUnformatted(remaining_message.c_str());
+        }
+        ImGui::EndPopup();
     }
-
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-
-    if(!recent_file_to_open.empty())
-    {
-        HandleOpenRecentFile(recent_file_to_open);
-    }
+    ps.PopStyles();
 }
 
 void
@@ -665,6 +783,11 @@ AppWindow::HandleOpenRecentFile(const std::string& file_path)
 void
 AppWindow::RenderDisableScreen()
 {
+    if(m_shutdown_requested)
+    {
+        return;
+    }
+
     if(m_disable_app_interaction)
     {
         ImGui::OpenPopup("GhostModal");
@@ -938,7 +1061,10 @@ void
 AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
 {
     auto tab_closed_event = std::dynamic_pointer_cast<TabEvent>(e);
-    if(tab_closed_event && m_projects.count(tab_closed_event->GetTabId()) > 0)
+    auto project_it =
+        tab_closed_event ? m_projects.find(tab_closed_event->GetTabId())
+                         : m_projects.end();
+    if(tab_closed_event && project_it != m_projects.end())
     {
         auto activeProject = GetCurrentProject();
         if(!activeProject)
@@ -959,8 +1085,10 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
             }
         }
         spdlog::debug("Tab closed: {}", tab_closed_event->GetTabId());
-        m_projects[tab_closed_event->GetTabId()]->Close();
-        m_projects.erase(tab_closed_event->GetTabId());
+        project_it->second->Close();
+        DetachProjectProviderCleanup(*project_it->second,
+                                     ProviderCleanupReason::kTabClose);
+        m_projects.erase(project_it);
     }
 }
 
@@ -998,6 +1126,35 @@ AppWindow::HandleTabSelectionChanged(std::shared_ptr<RocEvent> e)
 }
 
 void
+AppWindow::HandleFontChanged()
+{
+    // Update status bar height based on new font size
+    int count = static_cast<int>(m_main_view->ItemCount());
+
+    // status bar (assume as the last item)
+    auto status_bar_item = m_main_view->GetMutableAt(count - 1);
+    if(!status_bar_item)
+    {
+        return;
+    }
+
+    // Calculate status bar height based on font size, with some padding.
+    ImGuiStyle& style     = ImGui::GetStyle();
+    float       line_pad  = style.CellPadding.y * 2.0f;
+    float       line_size = ImGui::GetTextLineHeight() + line_pad;
+
+    status_bar_item->m_height = line_size;
+
+    // adjust main view's size to account for new status bar height
+    auto main_view_item = m_main_view->GetMutableAt(count - 2);
+    if(!main_view_item)
+    {
+        return;
+    }
+    main_view_item->m_height = -status_bar_item->m_height;
+}
+
+void
 AppWindow::RenderAboutDialog()
 {
     static constexpr const char* NAME_LABEL = "ROCm (TM) Optiq";
@@ -1018,8 +1175,8 @@ AppWindow::RenderAboutDialog()
     popup_style.PushTitlebarColors();
     popup_style.CenterPopup();
 
-    // Set window size
-    ImGui::SetNextWindowSize(ImVec2(580, 0));
+    ImGui::SetNextWindowSize(
+        GetResponsiveWindowSize(ImVec2(580.0f, 0.0f), ImVec2(360.0f, 0.0f)));
 
     if(ImGui::BeginPopupModal(ABOUT_DIALOG_NAME, nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize |
@@ -1273,6 +1430,75 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
                                             filter_stream.str().c_str(), config);
 }
 
+void
+AppWindow::UpdateStatusBar()
+{
+    // Update status message every N frames
+    const int UPDATE_STEP = 4;
+    if(ImGui::GetFrameCount() % UPDATE_STEP == 0)
+    {
+        // Get number of pending requests from data provider
+        size_t pending_requests = 0;
+        for(const auto& [id, project] : m_projects)
+        {
+            auto root_view = dynamic_cast<RootView*>(project->GetView().get());
+            if(root_view)
+            {
+                auto data_provider = root_view->GetDataProvider();
+                if(data_provider)
+                {
+                    pending_requests += data_provider->GetPendingRequestCount();
+                }
+            }
+        }
+        // also check if there are any cleanup jobs pending
+        size_t clean_up_jobs = m_provider_cleanup_jobs.size();
+        if(pending_requests > 0 || clean_up_jobs > 0)
+        {
+            if(pending_requests > 0)
+            {
+                m_status_message = "Working: " + std::to_string(pending_requests) +
+                                   " pending request(s)";
+            }
+            if(clean_up_jobs > 0)
+            {
+                m_status_message = (pending_requests > 0 ? m_status_message + " | " : "") +
+                                    ("Cleaning up: " + std::to_string(clean_up_jobs) +
+                                     " pending job(s)");
+            }
+            m_status_show_busy_indicator = true;
+        }
+        else
+        {
+            m_status_message             = "Ready";
+            m_status_show_busy_indicator = false;
+        }
+    }
+}
+
+void
+AppWindow::RenderStatusBar()
+{
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Dummy(ImVec2(0.f, ImGui::GetFrameHeight()));
+    ImGui::SameLine();
+    if(m_status_show_busy_indicator)
+    {
+        float radius = ImGui::GetTextLineHeight() * 0.25f;
+        RenderLoadingIndicator(settings.GetColor(Colors::kTextDim), nullptr,
+                               kCenterVertical, radius);
+        ImGui::SameLine(0.f, style.ItemSpacing.x);
+    }
+    ImGui::TextUnformatted(m_status_message.c_str());
+    ImGui::PopStyleVar(2);
+}
+
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void
 AppWindow::RenderDeveloperMenu()
@@ -1461,3 +1687,4 @@ AppWindow::RenderDebugOuput()
 
 }  // namespace View
 }  // namespace RocProfVis
+

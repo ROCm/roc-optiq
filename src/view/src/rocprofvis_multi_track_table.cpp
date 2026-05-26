@@ -143,117 +143,190 @@ MultiTrackTable::Render()
 #endif
     }
 
-    ImGui::BeginGroup();
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        ImVec2(style.WindowPadding.x, style.WindowPadding.y * 0.75f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::BeginChild("##table_filter_panel", ImVec2(0.0f, 0.0f),
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                          ImGuiChildFlags_AlwaysUseWindowPadding);
 
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Aggregate by Column:");
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Group Columns");
-#endif
-
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Filter:");
-    ImGui::EndGroup();
-
-    ImGui::SameLine();
-
-    ImGui::BeginGroup();
-    ImGui::SetNextItemAllowOverlap();
-    if(ImGui::Combo("##group_by", &m_group_by_selection_index,
-                    m_group_by_choices_ptr.data(),
-                    static_cast<int>(m_group_by_choices_ptr.size())))
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
+                        ImVec2(style.FramePadding.x, style.ItemSpacing.y * 0.35f));
+    if(ImGui::BeginTable("##table_filter_controls", 3,
+                         ImGuiTableFlags_SizingStretchProp |
+                             ImGuiTableFlags_NoSavedSettings))
     {
-        if(m_group_by_selection_index == 0)
-        {
-            m_pending_filter_options.group_by = "";
-        }
-        else
-        {
-            m_pending_filter_options.group_by =
-                m_group_by_choices_ptr[m_group_by_selection_index];
-        }
-    }
+        ImFont* icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
+        const ImGuiStyle& base_style  = m_settings.GetDefaultStyle();
+        const ImU32       input_bg    = m_settings.GetColor(Colors::kBgFrame);
 
-    if(m_pending_filter_options.group_by != "")
-    {
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFrameHeightWithSpacing() -
-                             ImGui::GetFontSize());
-        if(XButton("clear_group"))
+        ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFontSize() * 10.0f);
+        ImGui::TableSetupColumn("control", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("submit", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFontSize() * 7.5f);
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Aggregate");
+
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::PushFont(icon_font);
+        const ImVec2 clear_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
+        ImGui::PopFont();
+        const float  clear_icon_hit_width =
+            clear_icon_size.x + base_style.FramePadding.x * 2.0f;
+        const float  combo_arrow_w = ImGui::GetFrameHeight();
+        const ImVec2 combo_min     = ImGui::GetCursorScreenPos();
+        const ImVec2 combo_max(combo_min.x + ImGui::CalcItemWidth(),
+                               combo_min.y + ImGui::GetFrameHeight());
+        const ImVec2 clear_min(combo_max.x - combo_arrow_w - clear_icon_hit_width,
+                               combo_min.y);
+        const ImVec2 clear_max(combo_max.x - combo_arrow_w, combo_max.y);
+        const bool has_group_by_selection = (m_group_by_selection_index != 0);
+        const bool clear_icon_hit_hovered =
+            has_group_by_selection &&
+            ImGui::IsMouseHoveringRect(clear_min, clear_max, false);
+
+        PushComboStyles();
+        ImGui::SetNextItemAllowOverlap();
+        // Prevent the combo from also handling clicks in the overlaid clear-icon hit
+        // area.
+        if(clear_icon_hit_hovered)
         {
-            m_pending_filter_options.group_by = "";
-            m_group_by_selection_index        = 0;
+            ImGui::BeginDisabled();
         }
-    }
-
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-    ImGui::SetNextItemAllowOverlap();
-    ImGui::BeginDisabled(m_filter_options.group_by == "");
-    ImGui::InputTextWithHint(
-        "##group_columns",
-        "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
-        "MIN(duration) as min_duration, MAX(duration) as max_duration",
-        m_pending_filter_options.group_columns,
-        IM_ARRAYSIZE(m_pending_filter_options.group_columns));
-    if(strlen(m_pending_filter_options.group_columns) > 0)
-    {
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
-        if(XButton("clear_group_columns"))
+        const bool group_by_changed =
+            ImGui::Combo("##group_by", &m_group_by_selection_index,
+                         m_group_by_choices_ptr.data(),
+                         static_cast<int>(m_group_by_choices_ptr.size()));
+        if(clear_icon_hit_hovered)
         {
-            m_pending_filter_options.group_columns[0] = '\0';
+            ImGui::EndDisabled();
         }
-    }
-    ImGui::EndDisabled();
-#endif
+        PopComboStyles();
 
-    ImGui::SetNextItemAllowOverlap();
-    // Filter disabled when "group by" is selected
-    ImGui::BeginDisabled(m_filter_options.group_by != "");
-    ImGui::InputTextWithHint("##filters", "SQL WHERE comparisons",
-                             m_pending_filter_options.filter,
-                             IM_ARRAYSIZE(m_pending_filter_options.filter));
-    if(strlen(m_pending_filter_options.filter) > 0)
-    {
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() - ImGui::GetFontSize());
-        if(XButton("clear_filters"))
+        if(has_group_by_selection)
         {
-            m_pending_filter_options.filter[0] = '\0';
-        }
-    }
-    ImGui::EndDisabled();
+            const ImVec2 clear_size(clear_max.x - clear_min.x, clear_max.y - clear_min.y);
 
-    ImGui::EndGroup();
-    ImGui::SameLine();
-    if(ImGui::Button("Submit", ImVec2(0, ImGui::GetItemRectSize().y)))
-    {
-        m_filter_requested = true;
+            ImGui::SetCursorScreenPos(clear_min);
+            ImGui::PushID("group_by_clear");
+            const bool clear_clicked = ImGui::InvisibleButton("##clear_icon_hit", clear_size);
+            const bool clear_icon_hovered = ImGui::IsItemHovered();
+            ImGui::PopID();
 
-        if(m_group_by_selection_index == 0)
-        {
-            if(m_filter_store[0] != '\0')
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            if(clear_icon_hovered)
             {
-                // restore previous filter
+                SetTooltipStyled("Clear");
+            }
+            const ImVec2 text_pos(
+                clear_min.x + (clear_icon_hit_width - clear_icon_size.x) * 0.5f,
+                clear_min.y + ((clear_max.y - clear_min.y) - clear_icon_size.y) * 0.5f);
+            draw_list->AddText(icon_font, icon_font->LegacySize, text_pos,
+                               m_settings.GetColor(Colors::kTextMain), ICON_X_CIRCLED);
+
+            if(clear_clicked)
+            {
+                m_pending_filter_options.group_by = "";
+                m_group_by_selection_index        = 0;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+
+        if(group_by_changed)
+        {
+            if(m_group_by_selection_index == 0)
+            {
+                m_pending_filter_options.group_by = "";
+            }
+            else
+            {
+                m_pending_filter_options.group_by =
+                    m_group_by_choices_ptr[m_group_by_selection_index];
+            }
+        }
+
+        ImGui::TableNextColumn();
+        if(ImGui::Button("Submit", ImVec2(-FLT_MIN, 0.0f)))
+        {
+            m_filter_requested = true;
+            const bool grouping = (m_group_by_selection_index != 0);
+            if(!grouping && m_filter_store[0] != '\0')
+            {
+                // Reinstate the filter that was stashed when grouping was enabled.
                 snprintf(m_pending_filter_options.filter,
                          IM_ARRAYSIZE(m_pending_filter_options.filter), "%s",
                          m_filter_store);
                 m_filter_store[0] = '\0';
             }
-        }
-        else
-        {
-            if(m_pending_filter_options.filter[0] != '\0')
+            else if(grouping && m_pending_filter_options.filter[0] != '\0')
             {
-                // backup current filter
+                // Stash and clear the filter so it cannot fight the group-by query.
                 snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s",
                          m_pending_filter_options.filter);
-                // clear filter when group by is selected
                 m_pending_filter_options.filter[0] = '\0';
             }
         }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Group columns");
+
+        ImGui::TableNextColumn();
+        ImGui::BeginDisabled(m_filter_options.group_by == "");
+        const float group_cols_width = ImGui::GetContentRegionAvail().x;
+        const std::pair<bool, bool> group_cols_input = InputTextWithClear(
+            "group_columns",
+            "name, COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
+            "MIN(duration) as min_duration, MAX(duration) as max_duration",
+            m_pending_filter_options.group_columns,
+            IM_ARRAYSIZE(m_pending_filter_options.group_columns), icon_font, input_bg,
+            base_style, group_cols_width);
+        if(group_cols_input.second)
+        {
+            m_pending_filter_options.group_columns[0] = '\0';
+        }
+        ImGui::EndDisabled();
+        ImGui::TableNextColumn();
+#endif
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Filter");
+
+        ImGui::TableNextColumn();
+        // Filter disabled when "group by" is selected
+        ImGui::BeginDisabled(m_filter_options.group_by != "");
+        const float filter_width = ImGui::GetContentRegionAvail().x;
+        const std::pair<bool, bool> filter_input = InputTextWithClear(
+            "filters", "SQL WHERE comparisons", m_pending_filter_options.filter,
+            IM_ARRAYSIZE(m_pending_filter_options.filter), icon_font, input_bg,
+            base_style, filter_width);
+        if(filter_input.second)
+        {
+            m_pending_filter_options.filter[0] = '\0';
+        }
+        ImGui::EndDisabled();
+        ImGui::TableNextColumn();
+
+        ImGui::EndTable();
     }
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+
     InfiniteScrollTable::Render();
     RenderContextMenu();
 }
@@ -266,7 +339,7 @@ MultiTrackTable::Update()
     {
         if(!m_data_provider.IsRequestPending(GetRequestID()))
         {
-            // try to repocess the deferred track selection event
+            // Try to reprocess the deferred track selection event.
             spdlog::debug(
                 "Reprocessing deferred track selection changed event for table type: {}",
                 m_table_type == TableType::kEventTable ? "Event Table" : "Sample Table");

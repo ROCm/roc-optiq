@@ -10,6 +10,7 @@
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
 
 namespace RocProfVis
 {
@@ -21,8 +22,7 @@ MetricTableBase::MetricTableBase(std::string event_source_id)
 , m_table_title("")
 , m_last_column_index(0)
 {
-    m_table_flags =
-        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg ;
+    m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
 }
 
 void
@@ -34,12 +34,38 @@ MetricTableBase::SetPinMetricCallback(std::function<void(MetricId)> callback)
 void
 MetricTableBase::Render()
 {
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style   = settings.GetDefaultStyle();
+
+    // Outer card; skipped when an embedding container already paints one.
+    const bool paint_panel = !m_no_panel;
+    if(paint_panel)
+    {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
+        const std::string panel_id = "##" + m_table_title + "_panel_";
+        ImGui::BeginChild(RocWidget::GenUniqueName(panel_id).c_str(), ImVec2(0, 0),
+                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                              ImGuiChildFlags_AlwaysUseWindowPadding);
+    }
+
+    auto pop_panel = [paint_panel]() {
+        if(paint_panel)
+        {
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(2);
+        }
+    };
+
     if(!m_table_title.empty())
         SectionTitle(m_table_title.c_str());
 
     if(m_rows.empty())
     {
         RenderEmptyTable();
+        pop_panel();
         return;
     }
 
@@ -51,70 +77,80 @@ MetricTableBase::Render()
         if(num_columns == 0)
         {
             RenderEmptyTable();
+            pop_panel();
             return;
         }
     }
 
-    const std::string child_id = "##" + m_table_title + "_layout_";
-    const std::string table_id = child_id + "_table";
+    const float row_hover_height =
+        ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
 
-    if(ImGui::BeginChild(RocWidget::GenUniqueName(child_id).c_str(),
-                         ImVec2(0, GetTableHight()), false,
-                         ImGuiWindowFlags_HorizontalScrollbar))
+    const std::string table_id   = "##" + m_table_title + "_table";
+    const ImVec2      table_size = { 0, GetTableHeight() };
+    if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
+                         m_table_flags, table_size))
     {
-        if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
-                             m_table_flags))
+        ImGui::TableSetupScrollFreeze(m_freezed_columns, m_freezed_rows);
+
+        for(const auto& column : m_columns)
         {
-            for (const auto& column : m_columns)
+            if(column.first == 0)
             {
-                if (column.first == 0)
+                if(CanBePinned())
                 {
-                    if (CanBePinned())
-                    {
-                        const float font_size = ImGui::GetFontSize();
-                        ImGui::TableSetupColumn(column.second.c_str(),
-                                                ImGuiTableColumnFlags_WidthFixed,
-                                                font_size);
-                    }
-                }
-                else
-                {
-                    ImGui::TableSetupColumn(column.second.c_str());
+                    const float font_size = ImGui::GetFontSize();
+                    ImGui::TableSetupColumn(column.second.c_str(),
+                                            ImGuiTableColumnFlags_WidthFixed,
+                                            font_size);
                 }
             }
-
-            ImGui::TableHeadersRow();
-
-            uint32_t row_idx = 0;
-            for(auto& row : m_rows)
+            else
             {
-                ImGui::PushID(row_idx++);
-                ImGui::TableNextRow();
-
-                for(auto column_index = 0; column_index < m_last_column_index;
-                    column_index++)
-                {
-                    if(column_index == 0 && !CanBePinned())
-                    {
-                        continue;
-                    }
-                    auto menu_func = [&](const char* value_to_copy) {
-                        ImU32 mainColor =
-                            SettingsManager::GetInstance().GetColor(Colors::kTextMain);
-                        ImGui::PushStyleColor(ImGuiCol_Text, mainColor);
-                        this->ContextMenu(value_to_copy, column_index, row);
-                        ImGui::PopStyleColor();
-                    };
-                    RenderRowValues(column_index, row, menu_func);
-                }
-
-                RenderUnitValue(row);
-                ImGui::PopID();
+                ImGui::TableSetupColumn(column.second.c_str());
             }
-            ImGui::EndTable();
         }
+
+        ImGui::TableHeadersRow();
+
+        uint32_t row_idx = 0;
+        for(auto& row : m_rows)
+        {
+            ImGui::PushID(row_idx++);
+            ImGui::TableNextRow();
+            const ImVec2 row_min(ImGui::GetWindowPos().x,
+                                 ImGui::GetCursorScreenPos().y);
+            const ImVec2 row_max(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
+                                 row_min.y + row_hover_height);
+            if(ImGui::IsWindowHovered() &&
+               ImGui::IsMouseHoveringRect(row_min, row_max, false))
+            {
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                       settings.GetColor(Colors::kHighlightChart));
+            }
+
+            for(auto column_index = 0; column_index < m_last_column_index;
+                column_index++)
+            {
+                if(column_index == 0 && !CanBePinned())
+                {
+                    continue;
+                }
+                auto menu_func = [&](const char* value_to_copy) {
+                    ImU32 mainColor = settings.GetColor(Colors::kTextMain);
+                    ImGui::PushStyleColor(ImGuiCol_Text, mainColor);
+                    this->ContextMenu(value_to_copy, column_index, row);
+                    ImGui::PopStyleColor();
+                };
+                RenderRowValues(column_index, row, menu_func);
+            }
+
+            RenderUnitValue(row);
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
     }
-    ImGui::EndChild();
+
+    pop_panel();
 }
 
 void
@@ -128,14 +164,14 @@ MetricTableBase::ChangePinState(const MetricId& metric_id)
 }
 
 float
-MetricTableBase::GetTableHight() const
+MetricTableBase::GetTableHeight() const
 {
     const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
     float             line_height =
-        ImGui::GetTextLineHeightWithSpacing() + style.CellPadding.y * 2.0f;
+        ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
 
     uint32_t max_rows = 0;
-    if (m_max_rows_in_table == 0)
+    if(m_max_rows_in_table == 0)
     {
         max_rows = m_rows.size();
     }
@@ -154,14 +190,14 @@ MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
 {
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem(" Pin metric"))
+        if(ImGui::MenuItem("Pin metric"))
         {
             row.second.pinned = !row.second.pinned;
             m_pin_metric_clicked(
                 { row.first.category_id, row.first.table_id, row.first.entry_id });
         }
         if(!m_event_source_id.empty() &&
-           ImGui::MenuItem(" Send Metric to kernel details"))
+           ImGui::MenuItem("Send metric to kernel details"))
         {
             AddMetricToKernelDetails(row.first, m_columns[column_index]);
         }
@@ -174,7 +210,7 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
                                  std::pair<const MetricId, Row>& row,
     std::function<void(const char* value_to_copy)> menu_func)
 {
-    if (column_index == 0)
+    if(column_index == 0)
     {
         RenderPinCheckBox(row);
     }
@@ -188,7 +224,7 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
                                    static_cast<int>(column_index));
             ImGui::TextDisabled("N/A");
         }
-        else if (row.second.values.at(column_index).value.empty())
+        else if(row.second.values.at(column_index).value.empty())
         {
             ImVec4 disabled_col = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
             ImGui::PushStyleColor(ImGuiCol_Text, disabled_col);
@@ -316,13 +352,22 @@ MetricTableBase::CanBePinned()
 
 //---------------------------------------------------------
 
+MetricTable::MetricTable(std::string event_source_id)
+: MetricTableBase(std::move(event_source_id))
+{
+    m_table_flags |= ImGuiTableFlags_ScrollY;
+    m_max_rows_in_table = 40;
+    m_freezed_columns   = 3;
+    m_freezed_rows      = 1;
+}
+
 void
 MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
                                  std::pair<const MetricId, Row>& row)
 {
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem(" Copy"))
+        if(IconMenuItem(ICON_COPY, "Copy"))
         {
             ImGui::SetClipboardText(value_to_copy);
             NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -332,7 +377,7 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         // not equal pin column, MetricId, Metric Name and Metric Unit
         {
             if(!m_event_source_id.empty() &&
-               ImGui::MenuItem(" Send Metric to kernel details"))
+               IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }
@@ -347,10 +392,6 @@ MetricTable::RenderEmptyTable()
     ImGui::TextDisabled("This table is empty for current selection");
 }
 
-MetricTable::MetricTable(std::string event_source_id)
-: MetricTableBase(std::move(event_source_id))
-{}
-
 void
 MetricTable::Populate(const AvailableMetrics::Table& table,
                            const MetricValueLookup&       get_value)
@@ -358,7 +399,7 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
     FillDefaultColumns(m_columns, m_last_column_index);
     m_table_title = table.name;
 
-    if (table.value_names.empty())
+    if(table.value_names.empty())
     {
         m_columns[m_last_column_index++] = "Value";
     }
@@ -435,9 +476,11 @@ PinnedMetricTable::PinnedMetricTable(DataProvider&                     data_prov
 , m_client_id(client_id)
 {
     FillDefaultColumns(m_columns, m_last_column_index);
-    m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollX;
-    m_table_title = "Pinned Metrics";
+    m_table_flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
+    m_table_title       = "Pinned Metrics";
     m_max_rows_in_table = 7;
+    m_freezed_columns = 3;
+    m_freezed_rows = 1;
 }
 
 void
@@ -481,7 +524,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
     {
         if(value_to_copy && std::string_view(value_to_copy) != "N/A")
         {
-            if(ImGui::MenuItem(" Copy"))
+            if(IconMenuItem(ICON_COPY, "Copy"))
             {
                 ImGui::SetClipboardText(value_to_copy);
                 NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -492,7 +535,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         if(IsValueColumn(column_index))
         {
             if(!m_event_source_id.empty() &&
-               ImGui::MenuItem(" Send Metric to kernel details"))
+               IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }

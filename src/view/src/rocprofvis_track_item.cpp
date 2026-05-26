@@ -28,12 +28,13 @@ inline constexpr uint64_t DEFAULT_CHUNK_DURATION   = TimeConstants::ns_per_s * 3
 TrackItem::TrackItem(DataProvider& dp, uint64_t id,
                      std::shared_ptr<TimePixelTransform> tpt)
 : m_data_provider(dp)
+, m_track_metadata(nullptr)
 , m_track_id(id)
 , m_track_height(DEFAULT_TRACK_HEIGHT)
 , m_track_content_height(0.0f)
 , m_min_track_height(DEFAULT_MIN_TRACK_HEIGHT)
 , m_is_in_view_vertical(false)
-, m_metadata_padding(ImVec2(4.0f, 4.0f))
+, m_metadata_padding(ImVec2(8.0f, 5.0f))
 , m_resize_grip_thickness(4.0f)
 , m_request_state(TrackDataRequestState::kIdle)
 , m_track_height_changed(false)
@@ -49,6 +50,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 , m_meta_area_label("")
 , m_pill("", false, false)
 , m_distance_to_view_y(0.0f)
+, m_analysis_request_pending(false)
 {
     if(m_track_project_settings.Valid())
     {
@@ -63,7 +65,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
         spdlog::error("TrackItem: failed to get TrackInfo for track_id {}", m_track_id);
         return;
     }
-
+    m_track_metadata = track_info;
     m_name = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
     SetDefaultPillLabel(track_info);
@@ -202,10 +204,12 @@ TrackItem::RenderMetaArea()
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
     m_track_content_height      = m_track_height - metadata_shrink_padding.y * 2.0f;
 
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(2, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 3));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 5));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_selected
@@ -263,7 +267,7 @@ TrackItem::RenderMetaArea()
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
         // Adjust content size to account for padding
         content_size.x -= m_metadata_padding.x * 2;
-        content_size.y -= m_metadata_padding.x * 2;
+        content_size.y = std::max(0.0f, content_size.y - m_metadata_padding.y * 2.0f);
 
         // TODO: For testing and debugging request cancellation on the backend
         // Remove once this feature is stable
@@ -277,8 +281,6 @@ TrackItem::RenderMetaArea()
         //         }
         //     }
         // }
-        ImFont* large_font = m_settings.GetFontManager().GetFont(FontType::kDefault);
-        ImGui::PushFont(large_font, m_settings.GetFontManager().GetFontSize(FontSize::kLarge));
 
         float available_for_text =
             content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
@@ -286,18 +288,23 @@ TrackItem::RenderMetaArea()
 
         if(available_for_text < 0.0f) available_for_text = 0.0f;
 
-        ImVec2 text_size = ImGui::CalcTextSize(
-            m_meta_area_label.c_str(), nullptr, false, available_for_text);
+        ImVec2 text_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
 
         if(content_size.y - text_size.y < m_pill.GetPillSize().y)
             m_pill.Hide();
         else
             m_pill.Show();
 
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + available_for_text);
-        ImGui::TextUnformatted(m_meta_area_label.c_str());
-        ImGui::PopTextWrapPos();
-        ImGui::PopFont();
+        ImGui::BeginGroup();
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
+        if(available_for_text > 0.0f)
+        {
+            ImGui::PushID("meta_area_label");
+            ElidedText(m_meta_area_label.c_str(), available_for_text);
+            ImGui::PopID();
+        }
+        ImGui::PopStyleColor();
+        ImGui::EndGroup();
 
         if(!m_meta_area_tooltip.empty() && ImGui::IsItemHovered())
         {
@@ -353,7 +360,7 @@ TrackItem::RenderMetaArea()
                 m_settings.GetColor(Colors::kMetaDataSeparator), 1.0f);
 
     ImGui::PopStyleColor();
-    ImGui::PopStyleVar(4);
+    ImGui::PopStyleVar(5);
     if(ImGui::IsItemClicked(ImGuiMouseButton_Left))
     {
         m_meta_area_clicked = true;
@@ -463,6 +470,10 @@ TrackItem::Update()
         {
             FetchHelper();
         }
+    }
+    if(m_analysis_request_pending)
+    {
+        RequestAnalysis();
     }
 }
 
@@ -746,6 +757,12 @@ bool
 TrackItem::HasPendingRequests() const
 {
     return !m_pending_requests.empty();
+}
+
+void
+TrackItem::RequestAnalysis()
+{
+    // no op
 }
 
 TrackProjectSettings::TrackProjectSettings(const std::string& project_id,

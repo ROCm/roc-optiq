@@ -7,6 +7,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_hotkey_manager.h"
+#include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -23,12 +24,13 @@ namespace RocProfVis
 namespace View
 {
 
-inline constexpr float MIN_LABEL_WIDTH          = 40.0f;
-inline constexpr float HIGHLIGHT_THICKNESS      = 4.0f;
-inline constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
-inline constexpr float TOOLTIP_OFFSET           = 16.0f;
-inline constexpr int   MAX_CHARACTERS_PER_LINE  = 40;
-inline constexpr float MAX_TABLE_HEIGHT         = 300.0f;
+inline constexpr float MIN_LABEL_WIDTH           = 40.0f;
+inline constexpr float HIGHLIGHT_THICKNESS       = 4.0f;
+inline constexpr float HIGHLIGHT_THICKNESS_HALF  = HIGHLIGHT_THICKNESS / 2;
+inline constexpr float TOOLTIP_OFFSET            = 16.0f;
+inline constexpr int   MAX_CHARACTERS_PER_LINE   = 40;
+inline constexpr float MAX_TABLE_HEIGHT          = 300.0f;
+inline constexpr float SCALE_SEPERATOR_WIDTH     = 2.0f;
 
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
@@ -46,14 +48,17 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
     s_max_event_label_width = ImGui::CalcTextSize("W").x * MAX_CHARACTERS_PER_LINE;
 }
 
-FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
-                               std::shared_ptr<TimelineSelection> timeline_selection,
-                               uint64_t track_id, std::shared_ptr<TimePixelTransform> tpt)
+FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
+                               std::shared_ptr<TimelineSelection>     timeline_selection,
+                               std::shared_ptr<MeasurementController> measurement,
+                               uint64_t                               track_id,
+                               std::shared_ptr<TimePixelTransform>    tpt)
 : TrackItem(dp, track_id, tpt)
 , m_event_color_mode(EventColorMode::kByEventName)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
 , m_timeline_selection(timeline_selection)
+, m_measurement(measurement)
 , m_deferred_click_handled(false)
 , m_has_drawn_tool_tip(false)
 , m_flame_track_project_settings(dp.GetTraceFilePath(), *this)
@@ -61,23 +66,27 @@ FlameTrackItem::FlameTrackItem(DataProvider&                      dp,
 , m_tooltip_size(0.0f, 0.0f)
 , m_is_expanded(false)
 , m_compact_mode(false)
+, m_queue_utilization(nullptr)
 {
     if(!m_tpt)
     {
         spdlog::error("FlameTrackItem: m_tpt shared_ptr is null, cannot construct");
         return;
     }
-    const TrackInfo* track_info =
-        m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
 
-    if(!track_info)
+    if(m_track_metadata)
     {
-        spdlog::error("FlameTrackItem: TrackInfo is null for track_id {}", m_track_id);
-        return;
-    }
+        m_min_level = static_cast<float>(m_track_metadata->min_value);
+        m_max_level = static_cast<float>(m_track_metadata->max_value);
 
-    m_min_level = static_cast<float>(track_info->min_value);
-    m_max_level = static_cast<float>(track_info->max_value);
+        if(m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
+        {
+            m_meta_area_scale_width = CalculateNewMetaAreaSize();
+            m_queue_utilization =
+                m_data_provider.DataModel().GetAnalysis().GetPerTrackQueueUtilization(
+                    *m_track_metadata);
+        }
+    }
 
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleTimelineSelectionChanged(e);
@@ -327,7 +336,7 @@ FlameTrackItem::HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e)
 
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart_item,
-                        float duration, ImDrawList* draw_list)
+                        float duration, ImDrawList* draw_list, bool use_highlight_color)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -337,7 +346,12 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                             start_position.y + m_level_height + cursor_position.y);
 
     ImU32 rectColor;
-    if(m_event_color_mode == EventColorMode::kNone)
+    if(use_highlight_color)
+    {
+        const auto& highlight_wheel = m_settings.GetHighlightedEventColorWheel();
+        rectColor = highlight_wheel[color_index % highlight_wheel.size()];
+    }
+    else if(m_event_color_mode == EventColorMode::kNone)
     {
         rectColor = m_settings.GetColor(Colors::kFlameChartColor);
     }
@@ -405,20 +419,38 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 TimelineFocusManager::GetInstance().GetFocusedLayer() ==
                     Layer::kGraphLayer)
         {
-            m_deferred_click_handled =
-                true;  // Ensure only one click is handled per render cycle
-            chart_item.selected = !chart_item.selected;
+            m_deferred_click_handled       = true;
+            MeasurementController& measure = *m_measurement;
 
-
-            if(!HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kMultiSelect))
+            if(measure.IsMeasurementMode() && !measure.IsFreehandMode())
             {
-                m_timeline_selection->UnselectAllEvents();
+                // Clicking after a complete measurement starts a new one.
+                if(measure.GetMeasurementState() == MeasurementState::kComplete)
+                {
+                    m_timeline_selection->UnhighlightPersistentEvents();
+                    measure.ClearMeasurement();
+                }
+                measure.SetMeasurementPoint(chart_item.event.m_start_ts,
+                                            chart_item.event.m_duration, m_track_id,
+                                            chart_item.event.m_level,
+                                            chart_item.event.m_name,
+                                            chart_item.event.m_id.uuid);
+                m_timeline_selection->HighlightTrackEventPersistent(
+                    m_track_id, chart_item.event.m_id.uuid);
             }
+            else if(!measure.IsMeasurementMode())
+            {
+                chart_item.selected = !chart_item.selected;
 
-            chart_item.selected
-                ? m_timeline_selection->SelectTrackEvent(m_track_id, chart_item.event.m_id.uuid)
-                : m_timeline_selection->UnselectTrackEvent(m_track_id, chart_item.event.m_id.uuid);
-            // Always reset layer clicked after handling
+                if(!HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kMultiSelect))
+                {
+                    m_timeline_selection->UnselectAllEvents();
+                }
+
+                chart_item.selected
+                    ? m_timeline_selection->SelectTrackEvent(m_track_id, chart_item.event.m_id.uuid)
+                    : m_timeline_selection->UnselectTrackEvent(m_track_id, chart_item.event.m_id.uuid);
+            }
             TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
         }
 
@@ -634,6 +666,12 @@ FlameTrackItem::RenderChart(float graph_width)
 
     int color_index      = 0;
     m_has_drawn_tool_tip = false;
+
+    double     range_start_ns           = TimelineSelection::INVALID_SELECTION_TIME;
+    double     range_end_ns             = TimelineSelection::INVALID_SELECTION_TIME;
+    const bool has_time_range_selection =
+        m_timeline_selection->GetSelectedTimeRange(range_start_ns, range_end_ns);
+
     for(ChartItem& item : m_chart_items)
     {
         ImVec2 container_pos = ImGui::GetWindowPos();
@@ -673,8 +711,13 @@ FlameTrackItem::RenderChart(float graph_width)
             normalized_duration = std::numeric_limits<float>::max();
         }
 
+        const bool use_highlight_color =
+            has_time_range_selection &&
+            item.event.m_start_ts <= range_end_ns &&
+            item.event.m_start_ts + item.event.m_duration >= range_start_ns;
+
         DrawBox(start_position, color_index, item,
-                static_cast<float>(normalized_duration), draw_list);
+                static_cast<float>(normalized_duration), draw_list, use_highlight_color);
     }
 
     for(ChartItem& item : m_selected_chart_items)
@@ -706,21 +749,22 @@ FlameTrackItem::RenderChart(float graph_width)
                                  ? m_settings.GetColor(Colors::kEventSearchHighlight)
                                  : m_settings.GetColor(Colors::kEventHighlight);
 
-        bool is_last_highlight =
-            item.highlighted &&
-            item.event.m_id.uuid ==
-                m_timeline_selection->GetLastHighlightedEventId();
         float thickness = HIGHLIGHT_THICKNESS;
-        if(is_last_highlight)
+        if(item.highlighted)
         {
-            double elapsed = m_timeline_selection->GetHighlightElapsedSeconds();
-            float  pulse   = 0.5f + 0.5f * std::sin(static_cast<float>(elapsed) * 6.0f);
-            thickness      = HIGHLIGHT_THICKNESS + pulse * 1.5f;
+            double elapsed = m_timeline_selection->GetHighlightElapsedSeconds(item.event.m_id.uuid);
+            bool   persistent = m_timeline_selection->IsHighlightPersistent(item.event.m_id.uuid);
+            if(!persistent)
+            {
+                float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(elapsed) * 6.0f);
+                thickness   = HIGHLIGHT_THICKNESS + pulse * 1.5f;
 
-            ImU32 a     = (border_color >> 24) & 0xFF;
-            ImU32 new_a = static_cast<ImU32>(a * (0.5f + 0.5f * pulse));
-            border_color = (border_color & 0x00FFFFFF) | (new_a << 24);
+                ImU32 a     = (border_color >> 24) & 0xFF;
+                ImU32 new_a = static_cast<ImU32>(a * (0.5f + 0.5f * pulse));
+                border_color = (border_color & 0x00FFFFFF) | (new_a << 24);
+            }
         }
+        bool is_last_highlight = item.highlighted;
 
         float half_t = thickness / 2.0f;
         ImVec2 pulseMin = ImVec2(start_position.x - half_t,
@@ -742,7 +786,42 @@ FlameTrackItem::RenderChart(float graph_width)
 
 void
 FlameTrackItem::RenderMetaAreaScale()
-{}
+{
+    if(m_track_metadata &&
+       m_track_metadata->topology.type == TrackInfo::TrackType::Queue &&
+       m_queue_utilization)
+    {
+        ImVec2 content_region = ImGui::GetContentRegionMax();
+        ImVec2 window_pos     = ImGui::GetWindowPos();
+        ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
+                                       m_metadata_padding.x + SCALE_SEPERATOR_WIDTH,
+                                   m_metadata_padding.y));
+        ImGui::BeginDisabled(m_queue_utilization->state !=
+                             AnalysisQueueUtilization::kReady);
+        ImGui::Text("%.1f%%", m_queue_utilization->util_pct);
+        ImGui::EndDisabled();
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
+                   window_pos.y),
+            ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
+                   window_pos.y + content_region.y),
+            m_settings.GetColor(Colors::kMetaDataSeparator), SCALE_SEPERATOR_WIDTH);
+    }
+}
+
+float
+FlameTrackItem::CalculateNewMetaAreaSize()
+{
+    if(m_track_metadata && m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
+    {
+        return ImGui::CalcTextSize("888.8%").x + 2.0f * m_metadata_padding.x +
+               SCALE_SEPERATOR_WIDTH;
+    }
+    else
+    {
+        return 0.0f;
+    }
+}
 
 void
 FlameTrackItem::RenderMetaAreaOptions()
@@ -777,6 +856,48 @@ FlameTrackItem::RenderMetaAreaOptions()
         {
             RecalculateTrackHeight();
         }
+    }
+}
+
+void
+FlameTrackItem::RequestAnalysis()
+{
+    if(m_track_metadata &&
+       m_track_metadata->topology.type == TrackInfo::TrackType::Queue &&
+       m_queue_utilization &&
+       (m_queue_utilization->state == AnalysisQueueUtilization::kStale ||
+        m_queue_utilization->state == AnalysisQueueUtilization::kPending))
+    {
+        uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
+            static_cast<uint32_t>(m_track_id), 0, 0,
+            RequestType::kFetchAnalysisQueueUtilization);
+        if(m_data_provider.IsRequestPending(request_id))
+        {
+            m_data_provider.CancelRequest(request_id);
+            m_queue_utilization->state = AnalysisQueueUtilization::kPending;
+        }
+        else
+        {
+            double start_ts;
+            double end_ts;
+            if(m_timeline_selection && m_timeline_selection->HasValidTimeRangeSelection())
+            {
+                m_timeline_selection->GetSelectedTimeRange(start_ts, end_ts);
+            }
+            else
+            {
+                start_ts = m_tpt->GetVMinX();
+                end_ts   = m_tpt->GetVMaxX();
+            }
+            m_queue_utilization->state =
+                (start_ts < end_ts &&
+                 m_data_provider.FetchAnalysisQueueUtilization(
+                     AnalysisQueueUtilizationRequestParams(m_track_id, start_ts, end_ts)))
+                    ? AnalysisQueueUtilization::kRequested
+                    : AnalysisQueueUtilization::kPending;
+        }
+        m_analysis_request_pending =
+            (m_queue_utilization->state == AnalysisQueueUtilization::kPending);
     }
 }
 

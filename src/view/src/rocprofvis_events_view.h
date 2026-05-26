@@ -3,8 +3,11 @@
 
 #pragma once
 #include "widgets/rocprofvis_split_containers.h"
-#include <string>
+#include <cstdint>
+#include <limits>
 #include <list>
+#include <string>
+#include <string_view>
 
 namespace RocProfVis
 {
@@ -42,6 +45,16 @@ private:
         }
     };
 
+    struct FlowHighlightState
+    {
+        uint64_t owner_event_id;
+        uint64_t flow_event_id;
+        uint64_t flow_track_id;
+
+        bool IsValid() const;
+        void Reset();
+    };
+
     bool RenderBasicData(const EventInfo* event_data);
     bool RenderEventExtData(const EventInfo* event_data);
     bool RenderEventFlowInfo(const EventInfo* event_data);
@@ -50,6 +63,14 @@ private:
 
     bool XButton();
 
+    struct CallStackHoverState
+    {
+        static constexpr uint64_t kInvalidId = std::numeric_limits<uint64_t>::max();
+        uint64_t owner_event_id = kInvalidId;
+        uint64_t frame_event_id = kInvalidId;
+        uint64_t frame_track_id = kInvalidId;
+    };
+
     DataProvider&                            m_data_provider;
     SettingsManager&                         m_settings;
     std::shared_ptr<TimelineSelection>       m_timeline_selection;
@@ -57,6 +78,11 @@ private:
     int                                      m_event_item_id;
     int                                      m_context_menu_flow_index;
     int                                      m_context_menu_flow_column;
+    int                                      m_context_menu_callstack_index;
+    FlowHighlightState                       m_flow_hover;
+    FlowHighlightState                       m_frame_flow_hover;
+    CallStackHoverState                      m_callstack_hover;
+    CallStackHoverState                      m_frame_callstack_hover;
     const std::string_view DATA_COPIED_NOTIFICATION = "Data was copied";
 };
 

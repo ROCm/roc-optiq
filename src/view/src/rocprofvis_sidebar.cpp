@@ -77,9 +77,10 @@ SideBar::Render()
             m_eye_state_dirty = false;
         }
 
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5, 3));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 2));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,
+                            m_settings.GetDefaultStyle().FrameRounding);
         ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 14.0f);
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,

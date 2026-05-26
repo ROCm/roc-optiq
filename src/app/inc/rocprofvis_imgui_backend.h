@@ -1,10 +1,9 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
+#include "imgui.h"
 #include <stdint.h>
 
 struct GLFWwindow;
-struct ImVec4;
-struct ImDrawData;
 
 typedef struct rocprofvis_imgui_backend_t rocprofvis_imgui_backend_t;
 
@@ -24,6 +23,14 @@ typedef void (*rocprofvis_imgui_backend_render_t)(rocprofvis_imgui_backend_t* ba
 typedef void (*rocprofvis_imgui_backend_present_t)(rocprofvis_imgui_backend_t* backend);
 typedef void (*rocprofvis_imgui_backend_shutdown_t)(rocprofvis_imgui_backend_t* backend);
 typedef void (*rocprofvis_imgui_backend_destroy_t)(rocprofvis_imgui_backend_t* backend);
+typedef ImTextureID (*rocprofvis_imgui_backend_create_texture_rgba32_t)(
+    rocprofvis_imgui_backend_t* backend,
+    const unsigned char* pixels,
+    int32_t width,
+    int32_t height);
+typedef void (*rocprofvis_imgui_backend_destroy_texture_t)(
+    rocprofvis_imgui_backend_t* backend,
+    ImTextureID texture_id);
 
 typedef struct rocprofvis_imgui_backend_t
 {
@@ -36,6 +43,8 @@ typedef struct rocprofvis_imgui_backend_t
     rocprofvis_imgui_backend_present_t m_present;
     rocprofvis_imgui_backend_shutdown_t m_shutdown;
     rocprofvis_imgui_backend_destroy_t m_destroy;
+    rocprofvis_imgui_backend_create_texture_rgba32_t m_create_texture_rgba32;
+    rocprofvis_imgui_backend_destroy_texture_t m_destroy_texture;
 } rocprofvis_imgui_backend_t;
 
 // Setup function with backend preference and window recreation support
@@ -57,3 +66,12 @@ bool rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
     int height,
     const char* title,
     rocprofvis_imgui_backend_preference_t preference);
+
+ImTextureID rocprofvis_imgui_backend_create_gui_texture_rgba32(
+    void* user_data,
+    const unsigned char* pixels,
+    int width,
+    int height);
+
+void rocprofvis_imgui_backend_destroy_gui_texture(void* user_data,
+                                                  ImTextureID texture_id);

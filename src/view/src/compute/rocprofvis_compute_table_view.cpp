@@ -91,6 +91,10 @@ ComputeTableView::~ComputeTableView()
 void
 ComputeTableView::RebuildTabs()
 {
+    // GetActiveTab() returns null until the container has rendered at least
+    // one frame, so guard against a workload change firing before then.
+    if(m_tabs && m_tabs->GetActiveTab())
+        m_active_tab_id = m_tabs->GetActiveTab()->m_id;
     m_tabs.reset();
     m_table_widgets.clear();
     m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
@@ -112,6 +116,7 @@ ComputeTableView::RebuildTabs()
             [this, cat]() { RenderCategory(*cat); });
         m_tabs->AddTab({ cat->name, cat->name, widget, false });
     }
+    m_tabs->SetActiveTab(m_active_tab_id);
 }
 
 void
@@ -277,7 +282,6 @@ ComputeTableView::RenderCategory(const AvailableMetrics::Category& category)
     {
         ImGui::TextDisabled("No data available for this category.");
     }
-
     ImGui::EndChild();
 }
 

@@ -55,6 +55,7 @@ private:
     uint64_t                                  m_client_id;
     bool                                      m_fetch_pending = false;
     std::shared_ptr<TabContainer>             m_tabs;
+    std::string                               m_active_tab_id;
     std::unordered_map<uint64_t, MetricTable> m_table_widgets;
     PinnedMetricTable                         m_pinned_metric_table;
     std::set<MetricId>                        m_pinned_metrics;

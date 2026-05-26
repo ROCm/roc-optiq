@@ -3,6 +3,7 @@
 
 #include "rocprofvis_compute_tester.h"
 #include "rocprofvis_event_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "implot/implot.h"
 #include "spdlog/spdlog.h"
 
@@ -84,6 +85,7 @@ ComputeTester::Render()
     const WorkloadInfo* selected_workload =
         m_data_provider.ComputeModel().GetWorkload(m_selections.workload_id);
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 15.0f);
+    PushComboStyles();
     if(ImGui::BeginCombo("Workloads",
                          selected_workload ? selected_workload->name.c_str() : "-"))
     {
@@ -103,6 +105,7 @@ ComputeTester::Render()
         }
         ImGui::EndCombo();
     }
+    PopComboStyles();
     const WorkloadInfo* current_workload =
         m_data_provider.ComputeModel().GetWorkload(m_selections.workload_id);
     if(current_workload)
@@ -727,8 +730,11 @@ ComputeTester::Render()
             ImPlot::EndPlot();
         }
         int preset_idx = static_cast<int>(m_selections.roofline_preset);
-        if(m_selections.init ||
-           ImGui::Combo("Presets", &preset_idx, "FP32\0FP64\0Custom\0\0"))
+        PushComboStyles();
+        const bool preset_changed = ImGui::Combo("Presets", &preset_idx,
+                                                 "FP32\0FP64\0Custom\0\0");
+        PopComboStyles();
+        if(m_selections.init || preset_changed)
         {
             m_selections.roofline_preset =
                 static_cast<SelectionState::RooflinePreset>(preset_idx);

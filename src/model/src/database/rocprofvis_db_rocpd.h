@@ -87,10 +87,6 @@ public:
 
     int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
     
-    rocprofvis_dm_result_t BuildTableSummaryClause(bool sample_query,
-                                             rocprofvis_dm_string_t& select,
-                                             rocprofvis_dm_string_t& group_by) override;
-    
 private:
 
     // sqlite3_exec callback to process string list query and add string object to Trace container

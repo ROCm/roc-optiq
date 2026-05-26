@@ -16,7 +16,6 @@ constexpr float kContentwidth             = 550.0f;
 constexpr float kContentHeight            = 450.0f;
 constexpr float kHotkeyCategoryColWidth   = 90.0f;
 constexpr float kHotkeyBindingColWidth    = 120.0f;
-constexpr float kHotkeyTableBottomMargin  = 60.0f;
 
 namespace RocProfVis
 {
@@ -214,11 +213,13 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::CalcTextSize("Light").x + 2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
+    PushComboStyles();
     if(ImGui::Combo("##theme", &theme_index, "Light\0Dark\0\0"))
     {
         m_usersettings.display_settings.use_dark_mode = (theme_index == 0) ? false : true;
         m_settings_changed                            = true;
     }
+    PopComboStyles();
     if(ImGui::IsItemHovered())
     {
         SetTooltipStyled("Switch between dark and light UI themes.");
@@ -318,6 +319,7 @@ SettingsPanel::RenderUnitOptions()
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
     // Options must match TimeFormat enum
+    PushComboStyles();
     if(ImGui::Combo("##time_format", &time_format_index,
                     "Timecode\0"
                     "Condensed Timecode\0"
@@ -330,6 +332,7 @@ SettingsPanel::RenderUnitOptions()
             static_cast<TimeFormat>(time_format_index);
         m_settings_changed = true;
     }
+    PopComboStyles();
 }
 
 void
@@ -399,10 +402,12 @@ SettingsPanel::RenderHotkeySettings()
     ImGui::Separator();
     ImGui::Spacing();
 
+    const float hotkey_table_height = std::max(ImGui::GetContentRegionAvail().y,
+                                               ImGui::GetFrameHeightWithSpacing());
     if(ImGui::BeginTable("##hotkeys_table", 4,
                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                              ImGuiTableFlags_ScrollY,
-                         ImVec2(0, kContentHeight - kHotkeyTableBottomMargin)))
+                         ImVec2(0, hotkey_table_height)))
     {
         ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, kHotkeyCategoryColWidth);
         ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);

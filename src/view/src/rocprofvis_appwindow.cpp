@@ -707,13 +707,12 @@ AppWindow::RenderShutdownState()
 {
     ImGui::OpenPopup(SHUTDOWN_DIALOG_NAME);
 
-    const float dpi = SettingsManager::GetInstance().GetDPI();
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(
         ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
                viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
         ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(360.0f * dpi, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_Always);
 
     PopUpStyle ps;
     ps.PushPopupStyles();

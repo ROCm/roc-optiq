@@ -550,18 +550,18 @@ namespace Controller
         }
 
         // 3) keyboard-interactive
-        KbdintCtx kbd_ctx{connection->GetAuthBridge(), future, false};
+        auto kbd_ctx = std::make_shared<KbdintCtx>(KbdintCtx{connection->GetAuthBridge(), future, false});
         if(auth_rc != 0 && MethodListed(methods, "keyboard-interactive"))
         {
             spdlog::info("[ssh] trying keyboard-interactive auth (will route prompts to UI)");
             tried_kbdint = true;
             // libssh2's session abstract slot: stash kbd_ctx so the C callback can find it.
             void** abstract = libssh2_session_abstract(connection->GetSession());
-            if(abstract) *abstract = &kbd_ctx;
+            if(abstract) *abstract = kbd_ctx.get();
             auth_rc = libssh2_userauth_keyboard_interactive(connection->GetSession(), user.c_str(),
                 &KbdIntCallback);
             if(abstract) *abstract = nullptr;
-            if(kbd_ctx.was_cancelled)
+            if(kbd_ctx->was_cancelled)
             {
                 spdlog::info("[ssh] kbdint cancelled by user");
                 connection->Disconnect();

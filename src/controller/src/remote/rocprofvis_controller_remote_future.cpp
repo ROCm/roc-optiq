@@ -58,14 +58,14 @@ void FutureRemote::SaveError(const std::string& err)
     m_error_str = err;
 }
 
-void FutureRemote::SetFileStat(std::string name, uint64_t size, uint64_t time)
+void FutureRemote::SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     m_remote_file_stat.name = std::move(name);
     m_remote_file_stat.size = size;
     m_remote_file_stat.time = time;
-    m_remote_file_stat.downloaded = 0;
+    m_remote_file_stat.downloaded = downloaded;
 
     m_user_callback_type = kRPVControllerSshCallbackDownloadSarted;
 }

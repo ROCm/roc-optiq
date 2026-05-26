@@ -70,7 +70,7 @@ namespace View
 
     private:
         void SetDefaults();
-        std::string GetConfigPath();
+        std::string GetConfigRoot();
 
         template <size_t N>
         static void CopyToArray(

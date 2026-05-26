@@ -4,7 +4,6 @@
 #include "rocprofvis_ssh_access.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
-
 #include <cfloat>
 
 namespace RocProfVis
@@ -45,7 +44,7 @@ namespace View
 
         if (result == kRocProfVisResultSuccess)
         {
-            rocprofvis_result_t result = rocprofvis_controller_get_uint64(
+            result = rocprofvis_controller_get_uint64(
                 output, kRPVControllerArrayNumEntries, 0, &prop_count);
             if (prop_count != 1 ||
                 kRocProfVisResultSuccess != (result = rocprofvis_controller_get_object(output,
@@ -62,18 +61,29 @@ namespace View
         return result;
 	}
 
+    // Authenticate an already established SSH connection using credentials from `uri`.
+    //
+    // Workflow:
+    // 1) Allocate controller-side future/argument structures.
+    // 2) Populate authentication inputs (user/password/key/key-passphrase and related fields).
+    // 3) Submit async authentication request and wait for completion.
+    // 4) Validate returned data and translate unexpected output to a communication/auth failure.
+    // 5) Free temporary controller resources before returning `result`.
     rocprofvis_result_t Ssh::Authenticate(RemoteUri * uri)
     {
+        // Default to unknown error until all required authentication steps succeed.
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
 
-        uint64_t prop_count = 0;
+        // Allocate async completion primitive used by the controller call.
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future);
 
+        // Allocate argument container that carries all authentication inputs.
         rocprofvis_controller_arguments_t* args =
             rocprofvis_controller_arguments_alloc();
         ROCPROFVIS_ASSERT(args != nullptr);
 
+        // Populate user/password and SSH key material used by remote authentication.
         result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeUser, 0, uri->GetRemoteUserString().c_str());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
@@ -83,7 +93,7 @@ namespace View
         result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeKeyPath, 0, uri->GetRemoteIdentityFileString().c_str());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeKeyPassphrase, 0, uri->GetRemoteIdentityFileString().c_str());
+        result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeKeyPassphrase, 0, uri->GetPassphraseString().c_str());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         if (result == kRocProfVisResultSuccess)

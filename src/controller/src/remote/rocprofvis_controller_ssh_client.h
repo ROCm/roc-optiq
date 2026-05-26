@@ -113,7 +113,9 @@ namespace Controller
             const std::string& priv_path_in, const std::string& passphrase);
         static bool TryAgent(LIBSSH2_SESSION* session, const std::string& user);
         static std::vector<std::string> DefaultKeyPaths();
-        static void KbdIntCallback(const char* name, int name_len,
+        static void KbdIntCallback(
+            const char* name, 
+            int name_len,
             const char* instruction, int instruction_len,
             int num_prompts,
             const LIBSSH2_USERAUTH_KBDINT_PROMPT* prompts,

@@ -122,7 +122,7 @@ namespace View
     {
         std::lock_guard<std::mutex> lock(m_);
 
-        if (!updated_)
+        if (!updated_ || finished_)
             return std::nullopt;
 
         return Snapshot{ text_, finished_ };

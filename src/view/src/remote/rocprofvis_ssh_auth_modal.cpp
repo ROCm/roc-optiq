@@ -104,7 +104,10 @@ void RenderSshAuthModal(Ssh* ssh_access)
     if(auto req = ssh_access->GetHostKeyRequest()->consume_if_updated())
     {
         static bool opened = false;
-        if(!opened) { ImGui::OpenPopup("SSH Host Key"); opened = true; }
+        if(!opened) { 
+            ImGui::OpenPopup("SSH Host Key"); 
+            opened = true; 
+        }
 
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
@@ -130,7 +133,7 @@ void RenderSshAuthModal(Ssh* ssh_access)
                                    "expects before continuing.");
             }
             ImGui::Spacing();
-            ImGui::Text("Host:        %s:%ld", req->host.c_str(), req->port);
+            ImGui::Text("Host:        %s:%lu", req->host.c_str(), req->port);
             ImGui::Text("Key type:    %s", req->key_type.c_str());
             ImGui::Text("Fingerprint: %s", req->fingerprint_sha256_b64.c_str());
             ImGui::Spacing();

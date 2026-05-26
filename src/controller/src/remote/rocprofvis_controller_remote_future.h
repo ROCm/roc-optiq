@@ -37,7 +37,7 @@ public:
     void AskPrompts(const rocprofvis_controller_user_prompt_t& req);
     void AddStdOut(const char* buffer, uint64_t count);
     void SaveError(const std::string& err);
-    void SetFileStat(std::string name, uint64_t size, uint64_t time);
+    void SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded);
     void SetDownloaded(uint64_t size);
 
 private:

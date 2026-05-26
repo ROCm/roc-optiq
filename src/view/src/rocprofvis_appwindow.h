@@ -209,6 +209,15 @@ private:
     std::string                      m_remote_status_msg;
     RemoteUri                        m_remote_uri;
     Ssh                              m_ssh_access;
+
+    bool                             m_show_remote_stdout_popup = false;
+    ExecutionOutput::Snapshot        m_last_stdout;
+
+
+    bool                             m_show_progress_popup = false;
+    FileStat::Snapshot               m_last_progress;
+    std::string                      m_popup_id;
+
 #endif
 };
 

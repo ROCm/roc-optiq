@@ -174,5 +174,36 @@ private:
     std::mutex m_mutex;
 };
 
+/*
+ * ProfilerSession - C-ABI handle that owns one ProfilerProcessController plus
+ * a weak reference to the Future bound at launch time.
+ *
+ * The session is what rocprofvis_profiler_t maps to. It exists for the
+ * lifetime the caller wants to query profiler state, independent of the
+ * Future lifetime: status queries (get_state/output/trace_path/exit_code)
+ * are routed through the session, not the future. Cancelling the session
+ * forwards to both the controller and the bound future.
+ */
+class ProfilerSession : public Handle
+{
+public:
+    ProfilerSession();
+    ~ProfilerSession() override;
+
+    rocprofvis_controller_object_type_t GetType(void) final;
+
+    ProfilerProcessController& GetController() { return m_controller; }
+    ProfilerProcessController const& GetController() const { return m_controller; }
+
+    // Bound at launch_async; non-owning. The caller frees the future via
+    // rocprofvis_controller_future_free independent of this session.
+    void SetBoundFuture(Future* future) { m_bound_future = future; }
+    Future* GetBoundFuture() const { return m_bound_future; }
+
+private:
+    ProfilerProcessController m_controller;
+    Future*                   m_bound_future;
+};
+
 } // namespace Controller
 } // namespace RocProfVis

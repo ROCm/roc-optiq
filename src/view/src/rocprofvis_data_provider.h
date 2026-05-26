@@ -416,7 +416,8 @@ private:
     uint64_t m_progress_percent;
 
     // Profiler launcher state
-    rocprofvis_profiler_config_t* m_profiler_config;
+    rocprofvis_profiler_config_t*   m_profiler_config;
+    rocprofvis_profiler_t*          m_profiler;
     rocprofvis_controller_future_t* m_profiler_future;
 
 #ifdef COMPUTE_UI_SUPPORT

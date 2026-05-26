@@ -17,16 +17,10 @@ Future::Future()
 , m_job(nullptr)
 , m_cancelled(false)
 , m_progress_percentage(0)
-, m_user_data(nullptr)
 {}
 
 Future::~Future()
 {
-    if (m_user_data && m_user_data_deleter)
-    {
-        m_user_data_deleter(m_user_data);
-        m_user_data = nullptr;
-    }
     delete m_job;
 }
 
@@ -236,21 +230,6 @@ void Future::SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_
 void Future::SetDownloaded(uint64_t size)
 {
     m_remote.SetDownloaded(size);
-}
-
-void Future::SetUserData(void* data, std::function<void(void*)> deleter)
-{
-    if (m_user_data && m_user_data_deleter)
-    {
-        m_user_data_deleter(m_user_data);
-    }
-    m_user_data = data;
-    m_user_data_deleter = std::move(deleter);
-}
-
-void* Future::GetUserData() const
-{
-    return m_user_data;
 }
 
 }

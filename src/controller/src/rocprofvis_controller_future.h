@@ -9,7 +9,6 @@
 #include "rocprofvis_controller_job_system.h"
 #include "remote/rocprofvis_controller_remote_future.h"
 #include "rocprofvis_c_interface.h"
-#include <functional>
 #include <string>
 #include <unordered_map>
 
@@ -49,9 +48,6 @@ public:
     void SaveError(std::string& err);
     void SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t dowloaded);
     void SetDownloaded(uint64_t size);
-    
-    void  SetUserData(void* data, std::function<void(void*)> deleter);
-    void* GetUserData() const;
 
 private:
     Job* m_job;
@@ -61,9 +57,14 @@ private:
     uint16_t m_progress_percentage;
     std::string m_progress_message;
     std::unordered_map<uint64_t, uint16_t> m_progress_map;
+    // TODO(remote-refactor): FutureRemote here parallels the ProfilerProcessController-via-
+    // SetUserData smuggling that was removed in the profiler refactor. Status that
+    // logically belongs on the SshConnection handle (stdout, prompts, file stats,
+    // last error) currently lives here so the view can query it via Future
+    // properties. The clean-up plan is to move remote state onto SshConnection,
+    // keep Future as job+cancel+progress only, and re-model Future::Wait returning
+    // kRocProfVisResultSshCommunicationCallback. Tracked as the SSH follow-up.
     FutureRemote m_remote;
-    void*                      m_user_data;
-    std::function<void(void*)> m_user_data_deleter;
 };
 
 }

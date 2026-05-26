@@ -133,7 +133,7 @@ void RenderSshAuthModal(Ssh* ssh_access)
                                    "expects before continuing.");
             }
             ImGui::Spacing();
-            ImGui::Text("Host:        %s:%d", req->host.c_str(), req->port);
+            ImGui::Text("Host:        %s:%lu", req->host.c_str(), req->port);
             ImGui::Text("Key type:    %s", req->key_type.c_str());
             ImGui::Text("Fingerprint: %s", req->fingerprint_sha256_b64.c_str());
             ImGui::Spacing();

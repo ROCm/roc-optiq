@@ -7,6 +7,15 @@
 #include <cstring>
 #include <filesystem>
 
+#if defined(_WIN32)
+#include <windows.h>
+#include <shlobj.h>   // SHGetFolderPath
+#else
+#include <pwd.h>
+#include <unistd.h>
+#endif
+
+
 namespace RocProfVis
 {
 namespace Controller
@@ -14,17 +23,22 @@ namespace Controller
 
 namespace
 {
+
 std::string DefaultKnownHostsPath()
 {
-#ifdef _WIN32
-    const char* home = std::getenv("USERPROFILE");
-    if(!home) return {};
-    return std::string(home) + "\\.ssh\\known_hosts";
+#if defined(_WIN32)
+    char path[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_PROFILE, nullptr, 0, path))) {
+        return std::string(path) + "\\.ssh\\known_hosts";
+    }  
 #else
-    const char* home = std::getenv("HOME");
-    if(!home) return {};
-    return std::string(home) + "/.ssh/known_hosts";
+    // POSIX secure source
+    struct passwd* pw = getpwuid(getuid());
+    if (pw && pw->pw_dir)
+        return std::string(pw->pw_dir) + "/.ssh/known_hosts";
+
 #endif
+    return "";
 }
 
 std::string Base64Encode(const unsigned char* data, size_t n)
@@ -62,7 +76,7 @@ bool KnownHosts::Load()
 {
     if(!m_kh || m_path.empty()) return false;
     int rc = libssh2_knownhost_readfile(m_kh, m_path.c_str(),
-                                        LIBSSH2_KNOWNHOST_FILE_OPENSSH);
+        LIBSSH2_KNOWNHOST_FILE_OPENSSH);
     return rc >= 0;
 }
 

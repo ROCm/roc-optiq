@@ -291,9 +291,10 @@ MemoryManager::CheckInUse(LRUMember* lru)
 //}
 
 void
-MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint32_t /*lod*/,
+MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint32_t lod,
                                void* array_ptr)
 {
+    (void) lod;
     std::unique_lock lock(m_lru_mutex);
     auto& member_ptr = m_lru_array[owner];
     if(!member_ptr)

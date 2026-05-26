@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_rocprof.h"
+#include "rocprofvis_shared_types.h"
 #include <sstream>
 #include <string.h>
 #include <filesystem>
@@ -273,8 +274,9 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
  * @return kRocProfVisDmResultSuccess on success, or an appropriate error code if table
  *         creation or population fails.
  */
-rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* /*future*/)
+rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future)
 {
+    (void) future;
 
     // Local structure mirroring the memory activity table schema; used while extracting
     // values from SQLite statements and inserting them into the database model.
@@ -537,9 +539,10 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt,
 }
 
 int
-RocprofDatabase::CallbackNodeEnumeration(void* data, int /*argc*/, sqlite3_stmt* stmt,
+RocprofDatabase::CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stmt,
                                          char** azColName)
 {
+    (void) argc;
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallbackNodeEnumeration;
     rocprofvis_db_sqlite_callback_parameters* callback_params =
@@ -563,10 +566,10 @@ rocprofvis_dm_result_t
 RocprofDatabase::CreateIndexes()
 { 
     std::vector<std::string> vec;
-    uint32_t file_node_id = static_cast<uint32_t>(-1);
+    uint32_t file_node_id = INVALID_INDEX;
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     std::vector<std::thread> threads;
-    auto task = [&](std::vector<std::string> /*queries*/, uint32_t db_node_id) {   
+    auto task = [&](uint32_t db_node_id) {
         result = ExecuteTransaction( vec, db_node_id);
         };
     for (auto& guid_info : DbInstances())
@@ -578,7 +581,7 @@ RocprofDatabase::CreateIndexes()
         else
         if (file_node_id != guid_info.first.FileIndex() && vec.size() > 0)
         {
-            threads.emplace_back(task, vec, file_node_id);            
+            threads.emplace_back(task, file_node_id);            
             vec.clear();
             if (result != kRocProfVisDmResultSuccess)
             {
@@ -628,7 +631,7 @@ RocprofDatabase::CreateIndexes()
     }
     if (vec.size() > 0 && file_node_id!=-1)
     {
-        threads.emplace_back(task, vec, file_node_id);            
+        threads.emplace_back(task, file_node_id);            
     }
     for (auto& t : threads)
         t.join();
@@ -1294,7 +1297,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 ExecuteQueryForAllTracksAsync(
                     kRocProfVisDmIncludeStreamTracks,
                     kRPVQueryLevel, "SELECT *, ", (std::string(" ORDER BY ") + Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
-                    [](rocprofvis_dm_track_params_t* /*params*/, rocprofvis_dm_charptr_t query) -> std::string {return query; },
+                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string { (void) params; return query; },
                     [](rocprofvis_dm_track_params_t* params) {
                         params->m_active_events.clear();
                     }, calculate_level_for_guids))
@@ -1355,8 +1358,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ",
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
-                    [](rocprofvis_dm_track_params_t* /*params*/, rocprofvis_dm_charptr_t query) -> std::string {return query; },
-                    [](rocprofvis_dm_track_params_t* /*params*/) {},
+                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string { (void) params; return query; },
+                    [](rocprofvis_dm_track_params_t* params) { (void) params; },
                     DbInstances()))
             {
                 break;

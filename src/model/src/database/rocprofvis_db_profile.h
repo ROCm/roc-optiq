@@ -227,15 +227,22 @@ class ProfileDatabase : public SqliteDatabase
                             RpvSqliteExecuteQueryCallback callback);
 
         rocprofvis_dm_result_t BuildComputeQuery(
-            rocprofvis_db_compute_use_case_enum_t /*use_case*/, rocprofvis_db_num_of_params_t /*num*/, rocprofvis_db_compute_params_t /*params*/,
-            rocprofvis_dm_string_t& /*query*/) override {
+            rocprofvis_db_compute_use_case_enum_t use_case, rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
+            rocprofvis_dm_string_t& query) override {
+            (void) use_case;
+            (void) num;
+            (void) params;
+            (void) query;
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not build compute query", kRocProfVisDmResultNotSupported);
         }
 
         rocprofvis_dm_result_t  ExecuteComputeQuery(
-                            rocprofvis_db_compute_use_case_enum_t /*use_case*/,
-                            rocprofvis_dm_charptr_t /*query*/,
-                            Future* /*future*/) override {
+                            rocprofvis_db_compute_use_case_enum_t use_case,
+                            rocprofvis_dm_charptr_t query,
+                            Future* future) override {
+            (void) use_case;
+            (void) query;
+            (void) future;
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not support compute query", kRocProfVisDmResultNotSupported);
         }
 

@@ -186,9 +186,10 @@ MetricTableBase::GetTableHeight() const
 }
 
 void
-MetricTableBase::ContextMenu(const char* /*value_to_copy*/, uint32_t column_index,
+MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
                              std::pair<const MetricId, Row>& row)
 {
+    (void) value_to_copy;
     if(ImGui::BeginPopupContextItem())
     {
         if(ImGui::MenuItem("Pin metric"))

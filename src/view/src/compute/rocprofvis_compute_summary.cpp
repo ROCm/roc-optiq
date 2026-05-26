@@ -214,7 +214,8 @@ ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
     m_kernel_bar.width               = 0.0f;
     m_kernel_bar.tick_interval_dirty = false;
     m_kernel_bar.axis_label_dirty    = false;
-    auto time_format_changed_handler = [this](std::shared_ptr<RocEvent> /*e*/) {
+    auto time_format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void) e;
         m_kernel_bar.tick_interval_dirty = true;
         m_kernel_bar.axis_label_dirty    = true;
     };
@@ -541,8 +542,9 @@ ComputeTopKernels::SetWorkload(uint32_t id)
 }
 
 void
-ComputeTopKernels::RenderPieChart(const ImPlotStyle& /*plot_style*/, TimeFormat time_format)
+ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time_format)
 {
+    (void) plot_style;
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
     PushPlotChrome(m_settings);
     ImGui::PushID(m_workload->id);
@@ -713,9 +715,10 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
 }
 
 void
-ComputeTopKernels::RenderTable(const ImPlotStyle& /*plot_style*/, TimeFormat time_format,
+ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format,
                                std::optional<size_t>& hovered_idx)
 {
+    (void) plot_style;
     if(ImGui::BeginTable(
            "Table", 2 + KernelInfo::NumMetrics,
            ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable))

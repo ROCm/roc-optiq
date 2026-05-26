@@ -39,7 +39,8 @@ rocprofvis_dm_result_t TableRow::GetValueAt(const rocprofvis_dm_property_index_t
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t TableRow::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t /*index*/, uint64_t* value){
+rocprofvis_dm_result_t TableRow::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+    (void) index;
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
@@ -63,7 +64,8 @@ rocprofvis_dm_result_t TableRow::GetPropertyAsUint64(rocprofvis_dm_property_t pr
 }
 
 
- rocprofvis_dm_result_t InfoTableRow::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t /*index*/, uint64_t* value){
+ rocprofvis_dm_result_t InfoTableRow::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+     (void) index;
      ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
      switch(property)
      {

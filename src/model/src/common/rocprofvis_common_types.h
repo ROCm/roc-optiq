@@ -9,6 +9,7 @@
 */
 
 #include "rocprofvis_c_interface_types.h"
+#include "rocprofvis_shared_types.h"
 #include "rocprofvis_error_handling.h"
 #include "rocprofvis_controller_enums.h"
 #include <algorithm>
@@ -307,7 +308,7 @@ inline uint64_t hash_combine(uint64_t a, uint64_t b)
 class DbInstance
 {
 public:
-    static constexpr uint32_t NoGuidId = static_cast<uint32_t>(-1);
+    static constexpr uint32_t NoGuidId = INVALID_INDEX;
     DbInstance() : m_file_index(0), m_guid_index(NoGuidId) {}
     DbInstance(uint32_t file_index, uint32_t guid_index) : m_file_index(file_index), m_guid_index(guid_index) {}
     uint32_t FileIndex() { return m_file_index; };

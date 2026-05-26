@@ -21,6 +21,7 @@
 #include "rocprofvis_db_table_processor.h"
 #include "rocprofvis_db_expression_filter.h"
 #include "rocprofvis_db_profile.h"
+#include "rocprofvis_shared_types.h"
 #include <sstream>
 #include <unordered_set>
 #include <fstream>
@@ -63,11 +64,12 @@ namespace DataModel
     rocprofvis_dm_result_t TableProcessor::ExecuteCompoundQuery(Future* future, 
         std::vector<rocprofvis_db_compound_query>& queries, 
         std::set<uint32_t>& tracks,
-        std::vector<rocprofvis_db_compound_query_command> commands, 
-        rocprofvis_dm_handle_t handle, 
-        rocprofvis_db_compound_table_type /*type*/,
-        bool query_updated) 
+        std::vector<rocprofvis_db_compound_query_command> commands,
+        rocprofvis_dm_handle_t handle,
+        rocprofvis_db_compound_table_type type,
+        bool query_updated)
     {
+        (void) type;
         m_timer.pause();
         rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
         if (queries.size() > 0)
@@ -927,7 +929,7 @@ namespace DataModel
             callback_params->db_instance->GuidIndex(),
             track_id))
         {
-            track_id = static_cast<uint32_t>(-1);
+            track_id = INVALID_INDEX;
         }
 
         table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index++, (uint64_t)track_id);
@@ -942,7 +944,7 @@ namespace DataModel
                 callback_params->db_instance->GuidIndex(),
                 track_id))
             {
-                track_id = static_cast<uint32_t>(-1);
+                track_id = INVALID_INDEX;
             }
             table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index,(uint64_t) track_id);
         }

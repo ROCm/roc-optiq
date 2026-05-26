@@ -20,6 +20,7 @@
 
 #include "rocprofvis_db_packed_storage.h"
 #include "rocprofvis_db_profile.h"
+#include "rocprofvis_shared_types.h"
 #include <numeric>
 #include <execution>
 #include <cfloat>
@@ -90,7 +91,7 @@ namespace DataModel
 
     void PackedTable::Validate(size_t col)
     {
-        if (m_currentRow == static_cast<size_t>(-1))
+        if (m_currentRow == static_cast<size_t>(INVALID_INDEX_64))
             throw std::runtime_error("AddRow() must be called before SetValue()");
         if (col >= m_columns.size())
             throw std::out_of_range("Column out of range");
@@ -162,8 +163,9 @@ namespace DataModel
         return  m_rows[row]->Get<uint8_t>(0);
     }
 
-    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col, ProfileDatabase* /*requestor*/) const
+    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col, ProfileDatabase* requestor) const
     {
+        (void) requestor;
         if (row >= m_rows.size() || col >= m_merged_columns.size())
             throw std::out_of_range("Row/Column out of range");
 
@@ -369,8 +371,8 @@ namespace DataModel
         m_aggregation.m_string_data.Clear();
     }
 
-    void PackedTable::SortAggregationByColumn(ProfileDatabase* /*db*/, std::string sort_column, bool sort_order) {
-
+    void PackedTable::SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order) {
+        (void) db;
 
         if (m_aggregation.agg_params[0].public_name == sort_column)
         {

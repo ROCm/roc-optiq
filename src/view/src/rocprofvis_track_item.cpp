@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_track_item.h"
+#include "rocprofvis_shared_types.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -789,11 +790,12 @@ Pill::Pill(const std::string& label, bool shown, bool active)
 : m_pill_label(label)
 , m_show_pill_label(shown)
 , m_active(active)
-, m_font_changed_token(static_cast<uint64_t>(-1))
+, m_font_changed_token(INVALID_INDEX_64)
 {
     CalculatePillSize();
 
-    auto font_changed_handler = [this](std::shared_ptr<RocEvent> /*e*/) {
+    auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void) e;
         CalculatePillSize();
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(

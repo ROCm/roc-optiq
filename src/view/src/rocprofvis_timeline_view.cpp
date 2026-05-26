@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_timeline_view.h"
+#include "rocprofvis_shared_types.h"
 #include "imgui.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_click_manager.h"
@@ -52,10 +53,10 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_resize_activity(false)
 , m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
                          TimelineSelection::INVALID_SELECTION_TIME })
-, m_new_track_token(static_cast<uint64_t>(-1))
-, m_scroll_to_track_token(static_cast<uint64_t>(-1))
-, m_font_changed_token(static_cast<uint64_t>(-1))
-, m_set_view_range_token(static_cast<uint64_t>(-1))
+, m_new_track_token(INVALID_INDEX_64)
+, m_scroll_to_track_token(INVALID_INDEX_64)
+, m_font_changed_token(INVALID_INDEX_64)
+, m_set_view_range_token(INVALID_INDEX_64)
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0.0)
 , m_last_data_req_view_time_offset_ns(0.0)
@@ -117,7 +118,8 @@ TimelineView::TimelineView(DataProvider&                       dp,
     m_set_view_range_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kSetViewRange), set_view_range_handle);
 
-    auto font_changed_handler = [this](std::shared_ptr<RocEvent> /*e*/) {
+    auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void) e;
         m_recalculate_grid_interval = true;
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
         CalculateMaxMetaAreaSize();

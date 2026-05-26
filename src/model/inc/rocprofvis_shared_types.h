@@ -4,6 +4,9 @@
 
 #include <stdint.h>
 
+#define INVALID_INDEX    0xFFFFFFFFu
+#define INVALID_INDEX_64 0xFFFFFFFFFFFFFFFFull
+
 typedef enum rocprofvis_controller_node_properties_t : uint32_t
 {
     __kRPVControllerNodePropertiesFirst = 0xC0000000,

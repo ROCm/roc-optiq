@@ -12,12 +12,15 @@ namespace Controller
 
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 
-Sample::Sample(rocprofvis_controller_primitive_type_t /*type*/, uint64_t /*id*/, double timestamp)
+Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
 : Handle(__kRPVControllerSamplePropertiesFirst, __kRPVControllerSamplePropertiesLast)
 , m_data(0)
 , m_end_timestamp(0)
 , m_timestamp(timestamp)
-{}
+{
+    (void) type;
+    (void) id;
+}
 
 Sample& Sample::operator=(Sample&& other)
 {
@@ -189,21 +192,6 @@ rocprofvis_result_t Sample::GetObject(rocprofvis_property_t property, uint64_t i
 }
 
 
-rocprofvis_result_t Sample::GetString(rocprofvis_property_t property, uint64_t index,
-                                char* /*value*/, uint32_t* /*length*/) 
-{
-    (void) index;
-    return UnhandledProperty(property);
-}
-
-
-rocprofvis_result_t Sample::SetUInt64(rocprofvis_property_t property, uint64_t index,
-                                uint64_t /*value*/) 
-{
-    (void) index;
-    return UnhandledProperty(property);
-}
-
 rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t index,
                                 double value) 
 {
@@ -228,32 +216,6 @@ rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t i
             result = UnhandledProperty(property);
             break;
         }
-    }
-    return result;
-}
-
-rocprofvis_result_t
-Sample::SetObject(rocprofvis_property_t property, uint64_t index,
-                  rocprofvis_handle_t* value)
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        result = UnhandledProperty(property);
-    }
-    return result;
-}
-
-rocprofvis_result_t 
-Sample::SetString(rocprofvis_property_t property, uint64_t index,
-                                char const* value) 
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        result = UnhandledProperty(property);
     }
     return result;
 }

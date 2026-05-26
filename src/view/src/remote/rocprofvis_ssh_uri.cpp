@@ -46,12 +46,11 @@ namespace View
         CopyToArray(m_remote_port, "22");
     }
 
-    std::string RemoteUri::GetConfigPath()
+    std::string RemoteUri::GetConfigRoot()
     {
         std::filesystem::path config_root = get_application_config_path(true);
         std::filesystem::path cache_root  = config_root / "remote_cache";
-        std::filesystem::path path = cache_root / "remote.json";
-        return path.string();
+        return cache_root.string();
     }
 
     std::string RemoteUri::GetRemoteCacheKey()
@@ -81,7 +80,7 @@ namespace View
     bool RemoteUri::SaveToJson()
     {
         jt::Json j;
-        std::string path = GetConfigPath();
+        std::string path = GetConfigRoot();
         j.setObject();
 
         auto& obj = j.getObject();
@@ -95,7 +94,15 @@ namespace View
         obj["remote_identity_file"] = ToString(m_remote_identity_file);
         obj["passphrase"] = ToString(m_passphrase);
 
-        std::ofstream out(GetConfigPath().c_str(), std::ios::binary);
+
+        auto full = std::filesystem::weakly_canonical(path);
+
+        if (!std::filesystem::exists(full.parent_path())) {
+            return false;
+        }
+
+        std::ofstream out(full, std::ios::binary);
+
 
         if (!out)
         {
@@ -109,7 +116,13 @@ namespace View
 
     bool RemoteUri::LoadFromJson()
     {
-        std::string path = GetConfigPath();
+        std::string path = GetConfigRoot() + "/remote.json";
+        auto full = std::filesystem::weakly_canonical(path);
+
+        if (!std::filesystem::exists(full.parent_path())) {
+            return false;
+        }
+        
         std::ifstream in(path, std::ios::binary);
 
         if (!in)

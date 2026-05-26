@@ -27,9 +27,6 @@ constexpr std::array FONT_AVAILABLE_SIZES = { 9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
 // Size offsets applied to the base index to produce kSmall/kMedium/kMedLarge/kLarge.
 static constexpr int kSizeOffsets[FontManager::kNumSizes] = { -1, 0, 1, 2 };
 
-// Size offsets applied to the base index to produce kSmall/kMedium/kMedLarge/kLarge.
-static constexpr int kSizeOffsets[FontManager::kNumSizes] = { -1, 0, 1, 2 };
-
 FontManager::FontManager() {}
 
 FontManager::~FontManager() {}

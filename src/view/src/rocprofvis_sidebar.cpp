@@ -138,6 +138,8 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     }
 
     TrackGraph& graph = (*m_graphs)[index];
+    const TrackInfo* track_info =
+        m_data_provider.DataModel().GetTimeline().GetTrack(graph.chart->GetID());
 
     ImGui::PushID(static_cast<int>(graph.chart->GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
@@ -176,6 +178,12 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     ImGui::PopStyleColor();
     if(show_eye_button)
     {
+        ImGui::SameLine();
+    }
+
+    if(track_info && !track_info->compare_source.id.empty())
+    {
+        RenderCompareSourceBadge(track_info, m_settings);
         ImGui::SameLine();
     }
 

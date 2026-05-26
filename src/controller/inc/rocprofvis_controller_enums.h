@@ -327,6 +327,8 @@ typedef enum rocprofvis_controller_track_properties_t : uint32_t
     kRPVControllerTrackAgentIdOrPid,
     // Get track queue id or TID
     kRPVControllerTrackQueueIdOrTid,
+    // Source database instance index
+    kRPVControllerTrackInstanceId,
     __kRPVControllerTrackPropertiesLast
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack

@@ -55,6 +55,10 @@ public:
     const std::string& GetTraceFilePath() const { return m_trace_file_path; }
     void SetTraceFilePath(const std::string& path) { m_trace_file_path = path; }
 
+    // Compare metadata is populated when the trace was opened from a combine YAML.
+    void                     LoadCompareMetadata(const std::string& path);
+    const CompareSourceInfo* GetCompareSource(size_t index) const;
+
     // Build display name for a track from topology/timeline data
     std::string BuildTrackName(uint64_t track_id) const;
 
@@ -70,6 +74,7 @@ private:
     AnalysisModel     m_analysis;
 
     std::string m_trace_file_path;
+    std::vector<CompareSourceInfo> m_compare_sources;
 };
 
 }  // namespace View

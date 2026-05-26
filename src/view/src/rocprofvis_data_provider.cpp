@@ -335,6 +335,7 @@ DataProvider::FetchTrace(rocprofvis_controller_t* controller, const std::string&
     // free any previously acquired resources
     CloseController();
     m_model.SetTraceFilePath(file_path);
+    m_model.LoadCompareMetadata(file_path);
     m_trace_controller = controller;
     if(m_trace_controller)
     {
@@ -990,7 +991,7 @@ DataProvider::HandleLoadTrackMetaData()
 
         if(result == kRocProfVisResultSuccess)
         {
-            TrackInfo track_info;
+            TrackInfo track_info = {};
 
             track_info.graph_handle = graph;
 
@@ -1030,6 +1031,10 @@ DataProvider::HandleLoadTrackMetaData()
 
             result = rocprofvis_controller_get_uint64(
                 track, kRPVControllerTrackNumberOfEntries, 0, &track_info.num_entries);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackInstanceId, 0, &track_info.instance_id);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             result = rocprofvis_controller_get_uint64(
@@ -1160,6 +1165,12 @@ DataProvider::HandleLoadTrackMetaData()
                     rocprofvis_controller_get_uint64(processor, kRPVControllerProcessorId,
                                                      0, &track_info.topology.device_id);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            }
+
+            if(const CompareSourceInfo* source =
+                   m_model.GetCompareSource(track_info.instance_id))
+            {
+                track_info.compare_source = *source;
             }
 
             // Todo:

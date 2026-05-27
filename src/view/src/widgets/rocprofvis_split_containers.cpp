@@ -132,10 +132,6 @@ void SplitContainerBase::Render()
             UpdateSplitRatio(mouse_pos, window_pos, available_size);
             fill_active = true;
         }
-        // Always show the splitter as a full-length bar with a very subtle
-        // color so it hints at being draggable without grid-lining the UI.
-        // While hovered or being dragged, fill it with the accent color
-        // for clear feedback (VS Code / Cursor style).
         const SettingsManager& settings = SettingsManager::GetInstance();
         ImU32 splitter_color = fill_active
                                    ? settings.GetColor(Colors::kAccent)

@@ -712,15 +712,11 @@ TimelineView::RenderSplitter()
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
-    // Match the visible bar width to the interactive Selectable so the
-    // hover highlight covers the whole hit area.
     const float splitter_width = 5.0f;
     ImGui::SetNextWindowSize(ImVec2(splitter_width, display_size.y),
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    // Use the at-rest splitter color initially; will be brightened to the
-    // accent color below if the user is hovering or dragging the handle.
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_settings.GetColor(Colors::kSplitterColor));
 
@@ -736,8 +732,6 @@ TimelineView::RenderSplitter()
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
     }
 
-    // Highlight the splitter when the cursor is over it or it is being
-    // dragged so the user gets clear feedback (VS Code / Cursor style).
     if(sidebar_splitter_hovered || ImGui::IsItemActive())
     {
         ImGui::GetWindowDrawList()->AddRectFilled(

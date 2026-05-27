@@ -110,8 +110,7 @@ TabContainer::Render()
     if(!m_tabs.empty())
     {
         int index_to_remove = s_invalid_index;
-        // Use a slightly darker background for unselected tabs so they
-        // are visually distinct from the surrounding panel/frame.
+        // Distinguish unselected tabs from the surrounding panel.
         ImGui::PushStyleColor(ImGuiCol_Tab, settings.GetColor(Colors::kButton));
         ImGui::PushStyleColor(ImGuiCol_TabHovered,
                               settings.GetColor(Colors::kButtonHovered));

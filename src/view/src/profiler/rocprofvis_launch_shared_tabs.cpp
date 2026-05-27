@@ -280,29 +280,12 @@ void RenderRawEnvVarsTab(std::map<std::string, std::string>& extra_env,
     }
 }
 
-void RenderCommandPreview(
-    IProfilerBackend const* backend,
+std::string BuildCommandPreviewString(
     LaunchConfig const& config,
-    std::string const& profiler_path)
+    std::string const& profiler_path,
+    std::vector<std::pair<std::string, std::string>> const& env_vars,
+    std::vector<std::string> const& argv)
 {
-    ImGui::Text("Command Preview:");
-    ImGui::Separator();
-
-    std::vector<std::pair<std::string, std::string>> env_vars;
-    std::vector<std::string> argv;
-
-    if (backend)
-    {
-        backend->FlattenToExecution(config, env_vars, argv);
-    }
-
-    // Merge extra_env
-    for (auto const& kv : config.extra_env)
-    {
-        env_vars.emplace_back(kv.first, kv.second);
-    }
-
-    // Build display string
     std::ostringstream preview;
 
     for (auto const& kv : env_vars)
@@ -338,16 +321,22 @@ void RenderCommandPreview(
         preview << " " << config.target.arguments;
     }
 
-    std::string preview_str = preview.str();
+    return preview.str();
+}
+
+void RenderCommandPreview(std::string const& preview_text)
+{
+    ImGui::Text("Command Preview:");
+    ImGui::Separator();
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_HorizontalScrollbar;
-    ImGui::BeginChild("CmdPreview", ImVec2(0, 80), true, flags);
-    ImGui::TextUnformatted(preview_str.c_str());
+    ImGui::BeginChild("CmdPreview", ImVec2(0, 80), ImGuiChildFlags_Borders, flags);
+    ImGui::TextUnformatted(preview_text.c_str());
     ImGui::EndChild();
 
     if (ImGui::Button("Copy Command##CmdPreview"))
     {
-        ImGui::SetClipboardText(preview_str.c_str());
+        ImGui::SetClipboardText(preview_text.c_str());
     }
 }
 

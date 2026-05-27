@@ -36,12 +36,18 @@ void RenderRawEnvVarsTab(std::map<std::string, std::string>& extra_env,
                          std::vector<std::pair<std::string, std::string>> const& curated_env);
 
 /**
+ * Builds the displayed command line from cached execution inputs.
+ */
+std::string BuildCommandPreviewString(
+    LaunchConfig const& config,
+    std::string const& profiler_path,
+    std::vector<std::pair<std::string, std::string>> const& env_vars,
+    std::vector<std::string> const& argv);
+
+/**
  * Renders the Command Preview panel showing the composed env block + full argv.
  */
-void RenderCommandPreview(
-    IProfilerBackend const* backend,
-    LaunchConfig const& config,
-    std::string const& profiler_path);
+void RenderCommandPreview(std::string const& preview_text);
 
 /**
  * Renders the Output Console panel with status badge, auto-scroll, copy, and clear buttons.

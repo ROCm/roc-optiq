@@ -132,13 +132,16 @@ void SplitContainerBase::Render()
             UpdateSplitRatio(mouse_pos, window_pos, available_size);
             fill_active = true;
         }
-        // Only paint on hover/drag.
-        if(fill_active)
-        {
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                splitter_min, splitter_max,
-                SettingsManager::GetInstance().GetColor(Colors::kBorderGray));
-        }
+        // Always show the splitter as a full-length bar with a very subtle
+        // color so it hints at being draggable without grid-lining the UI.
+        // While hovered or being dragged, fill it with the accent color
+        // for clear feedback (VS Code / Cursor style).
+        const SettingsManager& settings = SettingsManager::GetInstance();
+        ImU32 splitter_color = fill_active
+                                   ? settings.GetColor(Colors::kAccent)
+                                   : settings.GetColor(Colors::kSplitterColor);
+        ImGui::GetWindowDrawList()->AddRectFilled(splitter_min, splitter_max,
+                                                  splitter_color);
         AddSameLine();
     }
 

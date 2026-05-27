@@ -712,20 +712,37 @@ TimelineView::RenderSplitter()
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
-    ImGui::SetNextWindowSize(ImVec2(1.0f, display_size.y), ImGuiCond_Always);
+    // Match the visible bar width to the interactive Selectable so the
+    // hover highlight covers the whole hit area.
+    const float splitter_width = 5.0f;
+    ImGui::SetNextWindowSize(ImVec2(splitter_width, display_size.y),
+                             ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
+    // Use the at-rest splitter color initially; will be brightened to the
+    // accent color below if the user is hovering or dragging the handle.
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_settings.GetColor(Colors::kSplitterColor));
 
     ImGui::BeginChild("Splitter View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
 
     ImGui::Selectable("##MovePositionLineVert", false,
                       ImGuiSelectableFlags_AllowDoubleClick,
-                      ImVec2(5.0f, display_size.y));
+                      ImVec2(splitter_width, display_size.y));
 
-    if(ImGui::IsItemHovered())
+    const bool sidebar_splitter_hovered = ImGui::IsItemHovered();
+    if(sidebar_splitter_hovered)
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+
+    // Highlight the splitter when the cursor is over it or it is being
+    // dragged so the user gets clear feedback (VS Code / Cursor style).
+    if(sidebar_splitter_hovered || ImGui::IsItemActive())
+    {
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+            m_settings.GetColor(Colors::kAccent));
     }
 
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
@@ -1390,7 +1407,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         lane_dl->AddRectFilled(
             ImVec2(lane_min.x, lane_min.y),
             ImVec2(lane_min.x + 2.0f, lane_max.y),
-            m_settings.GetColor(Colors::kAccentRed));
+            m_settings.GetColor(Colors::kAccent));
     }
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);

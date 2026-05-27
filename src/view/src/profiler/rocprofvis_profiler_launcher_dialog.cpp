@@ -123,6 +123,9 @@ void ProfilerLauncherDialog::Render()
         // Command preview
         RenderCommandPreview(m_execution_cache.command_preview);
 
+        // Launch Button row
+        RenderButtonRow();
+
         // Output console
         if (RenderOutputConsole(m_output_text, m_error_message,
                                 static_cast<int>(m_profiler_state), m_auto_scroll_output))
@@ -136,8 +139,6 @@ void ProfilerLauncherDialog::Render()
             m_error_message.clear();
         }
 
-        // Button row
-        RenderButtonRow();
     }
     ImGui::End();
 

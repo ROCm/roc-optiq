@@ -326,18 +326,20 @@ std::string BuildCommandPreviewString(
 
 void RenderCommandPreview(std::string const& preview_text)
 {
-    ImGui::Text("Command Preview:");
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Command Preview");
+    VerticalSeparator();
+
+    if (ImGui::Button("Copy Command##CmdPreview"))
+    {
+        ImGui::SetClipboardText(preview_text.c_str());
+    }
     ImGui::Separator();
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_HorizontalScrollbar;
     ImGui::BeginChild("CmdPreview", ImVec2(0, 80), ImGuiChildFlags_Borders, flags);
     ImGui::TextUnformatted(preview_text.c_str());
     ImGui::EndChild();
-
-    if (ImGui::Button("Copy Command##CmdPreview"))
-    {
-        ImGui::SetClipboardText(preview_text.c_str());
-    }
 }
 
 bool RenderOutputConsole(
@@ -347,8 +349,8 @@ bool RenderOutputConsole(
     bool& auto_scroll)
 {
     bool clear_requested = false;
-
-    ImGui::Text("Output:");
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Output");
 
     const char* state_text = "Idle";
     ImVec4 state_color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
@@ -375,13 +377,12 @@ bool RenderOutputConsole(
             break;
     }
 
-    ImGui::SameLine();
+    float spacing = 4.0f;
+    ImGui::SameLine(0.0f, spacing);
     ImGui::TextColored(state_color, "[%s]", state_text);
 
-    ImGui::SameLine();
-    ImGui::Checkbox("Auto-scroll##Output", &auto_scroll);
+    VerticalSeparator();
 
-    ImGui::SameLine();
     if (ImGui::Button("Copy##OutputCopy"))
     {
         std::string clip;
@@ -398,6 +399,9 @@ bool RenderOutputConsole(
     {
         clear_requested = true;
     }
+
+    VerticalSeparator();
+    ImGui::Checkbox("Auto-scroll##Output", &auto_scroll);
 
     ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
     float output_height = std::max(ImGui::GetContentRegionAvail().y - 30.0f, 60.0f);

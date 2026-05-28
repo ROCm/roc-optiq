@@ -13,6 +13,7 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -33,12 +34,23 @@ public:
     void Update();
 
 private:
+    struct ExecutionCache
+    {
+        std::vector<std::pair<std::string, std::string>> curated_env_vars;
+        std::vector<std::pair<std::string, std::string>> env_vars;
+        std::vector<std::string>                         argv;
+        std::string                                      profiler_path;
+        std::string                                      profiler_args;
+        std::string                                      command_preview;
+    };
+
     void OnLaunchClicked();
     void OnCancelClicked();
     void OnCloseClicked();
     void PollProfilerState();
     void UpdateOutput();
     void RebuildComposedOutput();
+    void RefreshExecutionCache();
 
     void RenderToolbar();
     void RenderMainContent();
@@ -65,6 +77,7 @@ private:
     // Config
     LaunchConfig m_config;
     std::string m_profiler_path_override;
+    ExecutionCache m_execution_cache;
 
     // Presets
     LaunchPresetManager m_preset_manager;

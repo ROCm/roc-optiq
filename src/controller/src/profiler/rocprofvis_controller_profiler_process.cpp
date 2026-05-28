@@ -871,5 +871,28 @@ void ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller
     spdlog::info("Profiler monitor job finished (state={})", static_cast<int>(controller->m_state.load()));
 }
 
+// ==================================================================================
+// ProfilerSession Implementation
+// ==================================================================================
+
+ProfilerSession::ProfilerSession()
+    : Handle(0, 0)
+    , m_controller()
+    , m_bound_future(nullptr)
+{
+}
+
+ProfilerSession::~ProfilerSession()
+{
+    // Best-effort cancel so any in-flight job stops before the controller goes
+    // away. The bound Future is owned by the caller and is not freed here.
+    m_controller.Cancel();
+}
+
+rocprofvis_controller_object_type_t ProfilerSession::GetType(void)
+{
+    return kRPVProfiler;
+}
+
 } // namespace Controller
 } // namespace RocProfVis

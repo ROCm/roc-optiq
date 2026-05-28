@@ -66,6 +66,7 @@ DataProvider::DataProvider()
 , m_progress_percent(0)
 , m_model()
 , m_profiler_config(nullptr)
+, m_profiler(nullptr)
 , m_profiler_future(nullptr)
 {}
 
@@ -4623,23 +4624,37 @@ bool DataProvider::LaunchProfiler(rocprofvis_profiler_type_t profiler_type,
         rocprofvis_profiler_config_add_env_var(m_profiler_config, kv.first.c_str(), kv.second.c_str());
     }
 
+    // Allocate session handle (owns the in-process controller state).
+    m_profiler = rocprofvis_profiler_alloc();
+    if (m_profiler == nullptr)
+    {
+        spdlog::error("Failed to allocate profiler session");
+        rocprofvis_profiler_config_free(m_profiler_config);
+        m_profiler_config = nullptr;
+        return false;
+    }
+
     // Allocate future for async operation
     m_profiler_future = rocprofvis_controller_future_alloc();
     if (m_profiler_future == nullptr)
     {
         spdlog::error("Failed to allocate profiler future");
+        rocprofvis_profiler_free(m_profiler);
+        m_profiler = nullptr;
         rocprofvis_profiler_config_free(m_profiler_config);
         m_profiler_config = nullptr;
         return false;
     }
 
     // Launch profiler async
-    rocprofvis_result_t result = rocprofvis_profiler_launch_async(m_profiler_config, m_profiler_future);
+    rocprofvis_result_t result = rocprofvis_profiler_launch_async(m_profiler, m_profiler_config, m_profiler_future);
     if (result != kRocProfVisResultSuccess)
     {
         spdlog::error("Failed to launch profiler: error code {}", static_cast<int>(result));
         rocprofvis_controller_future_free(m_profiler_future);
         m_profiler_future = nullptr;
+        rocprofvis_profiler_free(m_profiler);
+        m_profiler = nullptr;
         rocprofvis_profiler_config_free(m_profiler_config);
         m_profiler_config = nullptr;
         return false;
@@ -4651,26 +4666,26 @@ bool DataProvider::LaunchProfiler(rocprofvis_profiler_type_t profiler_type,
 
 rocprofvis_profiler_state_t DataProvider::GetProfilerState() const
 {
-    if (m_profiler_future == nullptr)
+    if (m_profiler == nullptr)
     {
         return kRPVProfilerStateIdle;
     }
 
     rocprofvis_profiler_state_t state = kRPVProfilerStateIdle;
-    rocprofvis_profiler_get_state(m_profiler_future, &state);
+    rocprofvis_profiler_get_state(m_profiler, &state);
     return state;
 }
 
 std::string DataProvider::GetProfilerOutput()
 {
-    if (m_profiler_future == nullptr)
+    if (m_profiler == nullptr)
     {
         return "";
     }
 
     // Query output length
     uint32_t length = 0;
-    rocprofvis_profiler_get_output(m_profiler_future, nullptr, &length);
+    rocprofvis_profiler_get_output(m_profiler, nullptr, &length);
 
     if (length == 0)
     {
@@ -4679,7 +4694,7 @@ std::string DataProvider::GetProfilerOutput()
 
     // Allocate buffer and retrieve output
     std::vector<char> buffer(length + 1);
-    rocprofvis_result_t result = rocprofvis_profiler_get_output(m_profiler_future, buffer.data(), &length);
+    rocprofvis_result_t result = rocprofvis_profiler_get_output(m_profiler, buffer.data(), &length);
 
     if (result != kRocProfVisResultSuccess)
     {
@@ -4692,22 +4707,22 @@ std::string DataProvider::GetProfilerOutput()
 
 void DataProvider::ClearProfilerOutput()
 {
-    if (m_profiler_future != nullptr)
+    if (m_profiler != nullptr)
     {
-        rocprofvis_profiler_clear_output(m_profiler_future);
+        rocprofvis_profiler_clear_output(m_profiler);
     }
 }
 
 std::string DataProvider::GetProfilerTracePath()
 {
-    if (m_profiler_future == nullptr)
+    if (m_profiler == nullptr)
     {
         return "";
     }
 
     // Query trace path length
     uint32_t length = 0;
-    rocprofvis_profiler_get_trace_path(m_profiler_future, nullptr, &length);
+    rocprofvis_profiler_get_trace_path(m_profiler, nullptr, &length);
 
     if (length == 0)
     {
@@ -4716,7 +4731,7 @@ std::string DataProvider::GetProfilerTracePath()
 
     // Allocate buffer and retrieve trace path
     std::vector<char> buffer(length + 1);
-    rocprofvis_result_t result = rocprofvis_profiler_get_trace_path(m_profiler_future, buffer.data(), &length);
+    rocprofvis_result_t result = rocprofvis_profiler_get_trace_path(m_profiler, buffer.data(), &length);
 
     if (result != kRocProfVisResultSuccess)
     {
@@ -4729,35 +4744,49 @@ std::string DataProvider::GetProfilerTracePath()
 
 int32_t DataProvider::GetProfilerExitCode() const
 {
-    if (m_profiler_future == nullptr)
+    if (m_profiler == nullptr)
     {
         return -1;
     }
 
     int32_t exit_code = -1;
-    rocprofvis_profiler_get_exit_code(m_profiler_future, &exit_code);
+    rocprofvis_profiler_get_exit_code(m_profiler, &exit_code);
     return exit_code;
 }
 
 bool DataProvider::CancelProfiler()
 {
-    if (m_profiler_future == nullptr)
+    if (m_profiler == nullptr)
     {
         return false;
     }
 
-    rocprofvis_result_t result = rocprofvis_profiler_cancel(m_profiler_future);
+    rocprofvis_result_t result = rocprofvis_profiler_cancel(m_profiler);
     return (result == kRocProfVisResultSuccess);
 }
 
 void DataProvider::CloseProfiler()
 {
+    // Cancel via the session handle: this terminates the child process AND
+    // forwards Cancel() to the bound future so any waiter unblocks.
+    if (m_profiler != nullptr)
+    {
+        rocprofvis_profiler_cancel(m_profiler);
+    }
+
+    // Drain the job, then drop the future. The session still owns the
+    // controller and is queryable after this point.
     if (m_profiler_future != nullptr)
     {
-        rocprofvis_profiler_cancel(m_profiler_future);
         rocprofvis_controller_future_wait(m_profiler_future, 5.0f);
         rocprofvis_controller_future_free(m_profiler_future);
         m_profiler_future = nullptr;
+    }
+
+    if (m_profiler != nullptr)
+    {
+        rocprofvis_profiler_free(m_profiler);
+        m_profiler = nullptr;
     }
 
     if (m_profiler_config != nullptr)

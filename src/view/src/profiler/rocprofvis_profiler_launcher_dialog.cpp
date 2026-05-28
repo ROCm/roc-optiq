@@ -30,6 +30,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     , m_tool_index(0)
     , m_config()
     , m_profiler_path_override()
+    , m_execution_cache()
     , m_preset_manager()
     , m_current_preset_name()
     , m_profiler_state(kRPVProfilerStateIdle)
@@ -45,6 +46,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     m_config.backend_payload = m_backends[0]->SaveSettings();
 
     LoadFromSettings();
+    RefreshExecutionCache();
 }
 
 ProfilerLauncherDialog::~ProfilerLauncherDialog()
@@ -119,7 +121,10 @@ void ProfilerLauncherDialog::Render()
         }
 
         // Command preview
-        RenderCommandPreview(backend, m_config, GetProfilerPath());
+        RenderCommandPreview(m_execution_cache.command_preview);
+
+        // Launch Button row
+        RenderButtonRow();
 
         // Output console
         if (RenderOutputConsole(m_output_text, m_error_message,
@@ -134,8 +139,6 @@ void ProfilerLauncherDialog::Render()
             m_error_message.clear();
         }
 
-        // Button row
-        RenderButtonRow();
     }
     ImGui::End();
 
@@ -262,10 +265,7 @@ void ProfilerLauncherDialog::RenderMainContent()
         // Raw Env Vars tab (shared)
         if (ImGui::BeginTabItem("Raw Env Vars"))
         {
-            std::vector<std::pair<std::string, std::string>> curated_env;
-            std::vector<std::string> dummy_argv;
-            backend->FlattenToExecution(m_config, curated_env, dummy_argv);
-            RenderRawEnvVarsTab(m_config.extra_env, curated_env);
+            RenderRawEnvVarsTab(m_config.extra_env, m_execution_cache.curated_env_vars);
             ImGui::EndTabItem();
         }
 
@@ -325,6 +325,11 @@ void ProfilerLauncherDialog::RenderButtonRow()
 
 void ProfilerLauncherDialog::Update()
 {
+    if (m_show_window)
+    {
+        RefreshExecutionCache();
+    }
+
     if (m_is_running)
     {
         PollProfilerState();
@@ -363,16 +368,7 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     m_process_output_stripped.clear();
     m_output_text.clear();
 
-    // Build env vars and argv from backend
-    std::vector<std::pair<std::string, std::string>> env_vars;
-    std::vector<std::string> argv;
-    backend->FlattenToExecution(m_config, env_vars, argv);
-
-    // Merge extra_env (user raw env vars override curated)
-    for (auto const& kv : m_config.extra_env)
-    {
-        env_vars.emplace_back(kv.first, kv.second);
-    }
+    RefreshExecutionCache();
 
     // Determine profiler type enum for controller
     rocprofvis_profiler_type_t profiler_type = kRPVProfilerTypeRocprofSysRun;
@@ -385,16 +381,9 @@ void ProfilerLauncherDialog::OnLaunchClicked()
         profiler_type = kRPVProfilerTypeRocprofSysInstrument;
     }
 
-    std::string profiler_path = GetProfilerPath();
+    std::string const& profiler_path = m_execution_cache.profiler_path;
 
-    // Build profiler_args as empty (we pass argv individually via the new API)
-    // Join argv into a single string for the legacy API
-    std::string profiler_args_str;
-    for (size_t i = 0; i < argv.size(); i++)
-    {
-        if (i > 0) profiler_args_str += " ";
-        profiler_args_str += argv[i];
-    }
+    std::string const& profiler_args_str = m_execution_cache.profiler_args;
 
     // Launch via DataProvider (uses the existing C API path for now)
     bool success = m_data_provider.LaunchProfiler(
@@ -404,7 +393,7 @@ void ProfilerLauncherDialog::OnLaunchClicked()
         m_config.target.arguments,
         m_config.target.output_directory,
         profiler_args_str,
-        env_vars);
+        m_execution_cache.env_vars);
 
     if (success)
     {
@@ -413,28 +402,7 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
         // Build preamble
         std::ostringstream preamble;
-        for (auto const& kv : env_vars)
-        {
-            if (!kv.second.empty())
-            {
-                preamble << kv.first << "=" << kv.second << " \\\n";
-            }
-        }
-        preamble << "$ " << profiler_path;
-        if (!profiler_args_str.empty())
-        {
-            preamble << " " << profiler_args_str;
-        }
-        if (!m_config.target.output_directory.empty())
-        {
-            preamble << " --output " << m_config.target.output_directory;
-        }
-        preamble << " -- " << m_config.target.executable;
-        if (!m_config.target.arguments.empty())
-        {
-            preamble << " " << m_config.target.arguments;
-        }
-        preamble << "\n\n";
+        preamble << m_execution_cache.command_preview << "\n\n";
         m_output_preamble = preamble.str();
         RebuildComposedOutput();
 
@@ -542,6 +510,51 @@ void ProfilerLauncherDialog::UpdateOutput()
 void ProfilerLauncherDialog::RebuildComposedOutput()
 {
     m_output_text = m_output_preamble + m_process_output_stripped + m_output_epilogue;
+}
+
+void ProfilerLauncherDialog::RefreshExecutionCache()
+{
+    if (m_backends.empty())
+    {
+        m_execution_cache = ExecutionCache();
+        return;
+    }
+
+    IProfilerBackend* backend = m_backends[m_backend_index].get();
+    m_config.backend_payload = backend->SaveSettings();
+
+    ExecutionCache cache;
+    cache.profiler_path = GetProfilerPath();
+    backend->FlattenToExecution(m_config, cache.curated_env_vars, cache.argv);
+
+    cache.env_vars = cache.curated_env_vars;
+    for (auto const& kv : m_config.extra_env)
+    {
+        cache.env_vars.emplace_back(kv.first, kv.second);
+    }
+
+    for (size_t i = 0; i < cache.argv.size(); i++)
+    {
+        if (i > 0)
+        {
+            cache.profiler_args += " ";
+        }
+        cache.profiler_args += cache.argv[i];
+    }
+
+    for (auto const& arg : m_config.extra_argv)
+    {
+        if (!cache.profiler_args.empty())
+        {
+            cache.profiler_args += " ";
+        }
+        cache.profiler_args += arg;
+    }
+
+    cache.command_preview = BuildCommandPreviewString(
+        m_config, cache.profiler_path, cache.env_vars, cache.argv);
+
+    m_execution_cache = std::move(cache);
 }
 
 void ProfilerLauncherDialog::SwitchBackend(int index)

@@ -505,12 +505,16 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 {
     if(!text || !*text) return;
 
-    ImDrawList*   dl   = ImGui::GetForegroundDrawList();
-    const ImVec2& disp = ImGui::GetIO().DisplaySize;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImDrawList*    dl       = ImGui::GetForegroundDrawList(viewport);
+    const ImVec2&  vp_pos   = viewport->Pos;
+    const ImVec2&  vp_size  = viewport->Size;
 
     // Parameters
-    static constexpr float ribbon_thickness = 20.0f;
-    static constexpr float min_base_length  = 150.0f;
+    static constexpr float BASE_FONT_SIZE   = 15.0f;
+    const float            ui_scale         = ImGui::GetFontSize() / BASE_FONT_SIZE;
+    const float            ribbon_thickness = 20.0f * ui_scale;
+    const float            min_base_length  = 150.0f * ui_scale;
     static constexpr ImU32 col_fill         = IM_COL32(200, 16, 32, 150);
     static constexpr ImU32 col_border       = IM_COL32(255, 255, 255, 40);
     static constexpr ImU32 col_text         = IM_COL32(255, 255, 255, 255);
@@ -531,9 +535,10 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     const float half_thick = ribbon_thickness * 0.5f;
 
     // Center a rotated rectangle so it visually emerges from the top-right corner
-    ImVec2 center = ImVec2(disp.x - half_len * 0.5f, half_len * 0.5f);
+    ImVec2 center =
+        ImVec2(vp_pos.x + vp_size.x - half_len * 0.5f, vp_pos.y + half_len * 0.5f);
 
-    // Axis‑aligned rect (local space before rotation)
+    // Axis-aligned rect (local space before rotation)
     ImVec2 local[4] = { ImVec2(-half_len, -half_thick), ImVec2(half_len, -half_thick),
                         ImVec2(half_len, half_thick), ImVec2(-half_len, half_thick) };
 
@@ -558,10 +563,10 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 
     for(int i = v_start; i < v_end; ++i)
     {
-        ImDrawVert&   v = dl->VtxBuffer[i];
-        const ImVec2  p = v.pos - center;
-        v.pos.x         = center.x + p.x * c_45 - p.y * s_45;
-        v.pos.y         = center.y + p.x * s_45 + p.y * c_45;
+        ImDrawVert&  v = dl->VtxBuffer[i];
+        const ImVec2 p = v.pos - center;
+        v.pos.x        = center.x + p.x * c_45 - p.y * s_45;
+        v.pos.y        = center.y + p.x * s_45 + p.y * c_45;
     }
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER

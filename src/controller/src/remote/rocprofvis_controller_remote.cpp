@@ -42,6 +42,7 @@ namespace Controller
                 }
                 else
                 {
+                    future->FailRemote();
                     return kRocProfVisResultFailedSshCommunication;
                 }
             }
@@ -97,6 +98,7 @@ namespace Controller
                 }
                 else
                 {
+                    future->FailRemote();
                     return kRocProfVisResultFailedSshCommunication;
                 }
             }
@@ -190,6 +192,7 @@ namespace Controller
                 }
                 else
                 {
+                    future->FailRemote();
                     return kRocProfVisResultFailedSshCommunication;
                 }
             }
@@ -228,8 +231,15 @@ namespace Controller
             {
                 if (direction == 0)
                 {
-                    SshClient::Result result = s_ssh_client.DownloadFile(&connection, src_path.data(), dst_path.data(), future);
-                    return result == SshClient::Result::Success ? kRocProfVisResultSuccess : kRocProfVisResultFailedSshCommunication;
+                    if (SshClient::Result::Success == s_ssh_client.DownloadFile(&connection, src_path.data(), dst_path.data(), future))
+                    {
+                        return kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        future->FailRemote();
+                        return kRocProfVisResultFailedSshCommunication;
+                    }
                 }
                 else
                 {

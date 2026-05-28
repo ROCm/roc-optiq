@@ -49,6 +49,7 @@ public:
     void SaveError(std::string& err);
     void SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t dowloaded);
     void SetDownloaded(uint64_t size);
+    void FailRemote();
     
     void  SetUserData(void* data, std::function<void(void*)> deleter);
     void* GetUserData() const;

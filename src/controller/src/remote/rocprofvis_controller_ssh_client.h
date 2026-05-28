@@ -66,6 +66,14 @@ namespace Controller
             WriteError
         };
 
+        enum class KeyType {
+            KEY_UNKNOWN,
+            KEY_RSA,
+            KEY_ECDSA,
+            KEY_ED25519,
+            KEY_DSA
+        };
+
         // kbdint trampoline. The libssh2 callback signature gives us only an
         // `abstract` void**, which we set to the AuthBridge before kicking auth.
         struct KbdintCtx
@@ -109,9 +117,9 @@ namespace Controller
 
         static bool MethodListed(const char* methods, const char* needle);
         static std::string ExpandTilde(const std::string& p);
-        static bool TryPublicKey(LIBSSH2_SESSION* session, const std::string& user,
+        static bool TryPublicKey(SshConnection * connection, const std::string& user,
             const std::string& priv_path_in, const std::string& passphrase);
-        static bool TryAgent(LIBSSH2_SESSION* session, const std::string& user);
+        static bool TryAgent(SshConnection * connection, const std::string& user);
         static std::vector<std::string> DefaultKeyPaths();
         static void KbdIntCallback(
             const char* name, 
@@ -121,6 +129,10 @@ namespace Controller
             const LIBSSH2_USERAUTH_KBDINT_PROMPT* prompts,
             LIBSSH2_USERAUTH_KBDINT_RESPONSE* responses,
             void** abstract);
+        static KeyType DetectPubkeyType(const char* pubkey_path);
+
+        static bool ReconnectSession(SshConnection* connection);
+        static int CreateTcpConnection(const std::string& host, int port);
 
         std::vector<std::unique_ptr<SshConnection>> m_connections;
         std::mutex m_mutex;

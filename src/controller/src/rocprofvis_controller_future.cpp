@@ -55,7 +55,7 @@ rocprofvis_result_t Future::Wait(float timeout)
         if (result == kRocProfVisResultTimeout)
         {
             auto remote_result = m_remote.Wait();
-            if (remote_result == kRocProfVisResultSshCommunicationCallback)
+            if (remote_result == kRocProfVisResultSshCommunicationCallback || remote_result == kRocProfVisResultFailedSshCommunication)
             {
                 return remote_result;
             }
@@ -251,6 +251,11 @@ void Future::SetUserData(void* data, std::function<void(void*)> deleter)
 void* Future::GetUserData() const
 {
     return m_user_data;
+}
+
+void Future::FailRemote()
+{
+    m_remote.Fail();
 }
 
 }

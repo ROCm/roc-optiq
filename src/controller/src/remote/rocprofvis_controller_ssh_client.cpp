@@ -190,7 +190,7 @@ namespace Controller
     }
 
 
-    bool SshClient::TryPublicKey(LIBSSH2_SESSION* session, const std::string& user,
+    bool SshClient::TryPublicKey(SshConnection * connection, const std::string& user,
         const std::string& priv_path_in, const std::string& passphrase)
     {
         std::string priv_path = ExpandTilde(priv_path_in);
@@ -204,7 +204,6 @@ namespace Controller
         std::filesystem::path pub_path = std::filesystem::weakly_canonical(priv_path+".pub");
         auto p = std::filesystem::path(priv_path+".pub").lexically_normal();
         
-
         if ( pub_path!=p) {
             return false;
         }
@@ -215,15 +214,28 @@ namespace Controller
             priv_path, have_pub ? pub_path.string().c_str() : std::string("(derived from priv)"),
             !passphrase.empty());
         int rc = libssh2_userauth_publickey_fromfile(
-            session, user.c_str(), have_pub?pub.c_str():nullptr, priv_path.c_str(),
+            connection->GetSession(), user.c_str(), have_pub ? pub.c_str() : nullptr, priv_path.c_str(),
             passphrase.empty() ? nullptr : passphrase.c_str());
+        if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+        {
+            std::string u = user;
+
+            std::transform(u.begin(), u.end(), u.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+            if (u != user && ReconnectSession(connection))
+            {
+                rc = libssh2_userauth_publickey_fromfile(
+                    connection->GetSession(), u.c_str(), have_pub ? pub.c_str() : nullptr, priv_path.c_str(),
+                    passphrase.empty() ? nullptr : passphrase.c_str());
+            }
+        }
         if(rc == 0)
         {
             spdlog::info("[ssh] publickey auth OK ({})", priv_path);
             return true;
         }
         char* msg = nullptr;
-        libssh2_session_last_error(session, &msg, nullptr, 0);
+        libssh2_session_last_error(connection->GetSession(), &msg, nullptr, 0);
         const char* hint = "";
         switch(rc)
         {
@@ -243,9 +255,9 @@ namespace Controller
     }
 
 
-    bool SshClient::TryAgent(LIBSSH2_SESSION* session, const std::string& user)
+    bool SshClient::TryAgent(SshConnection * connection, const std::string& user)
     {
-        LIBSSH2_AGENT* agent = libssh2_agent_init(session);
+        LIBSSH2_AGENT* agent = libssh2_agent_init(connection->GetSession());
         if(!agent)
         {
             spdlog::info("[ssh] agent: init failed (libssh2 built without agent support?)");
@@ -281,7 +293,20 @@ namespace Controller
             identity_count++;
             spdlog::info("[ssh] agent: trying identity '{}'",
                 identity->comment ? identity->comment : "(no comment)");
-            if(libssh2_agent_userauth(agent, user.c_str(), identity) == 0)
+
+            rc = libssh2_agent_userauth(agent, user.c_str(), identity);
+            if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+            {
+                std::string u = user;
+                std::transform(u.begin(), u.end(), u.begin(),
+                    [](unsigned char c) { return std::tolower(c); });
+                if (u!=user && ReconnectSession(connection))
+                {
+                    rc = libssh2_agent_userauth(agent, u.c_str(), identity);
+                }
+            }
+
+            if(rc == 0)
             {
                 spdlog::info("[ssh] agent: auth OK with '{}'",
                     identity->comment ? identity->comment : "(no comment)");
@@ -289,7 +314,7 @@ namespace Controller
                 break;
             }
             char* msg = nullptr;
-            libssh2_session_last_error(session, &msg, nullptr, 0);
+            libssh2_session_last_error(connection->GetSession(), &msg, nullptr, 0);
             spdlog::info("[ssh] agent: identity rejected: {}", msg ? msg : "(no message)");
             prev = identity;
         }
@@ -317,10 +342,122 @@ namespace Controller
         std::string sub = "/.ssh/";
 #endif
         if(home.empty()) return {};
-        return {home + sub + "id_ed25519",
+        return {
+            home + sub + "id_ed25519",
+            home + sub + "id_dsa",
             home + sub + "id_rsa",
-            home + sub + "id_ecdsa",
-            home + sub + "id_dsa"};
+            home + sub + "id_ecdsa"};
+    }
+
+
+    SshClient::KeyType SshClient::DetectPubkeyType(const char *pubkey_path)
+    {
+        FILE *f = fopen(pubkey_path, "r");
+        if (!f) return SshClient::KeyType::KEY_UNKNOWN;
+
+        char type[64] = {0};
+        if (fscanf(f, "%63s", type) != 1) {
+            fclose(f);
+            return SshClient::KeyType::KEY_UNKNOWN;
+        }
+
+        fclose(f);
+
+        if (strcmp(type, "ssh-rsa") == 0)
+            return SshClient::KeyType::KEY_RSA;
+
+        if (strcmp(type, "ssh-ed25519") == 0)
+            return SshClient::KeyType::KEY_ED25519;
+
+        if (strcmp(type, "ssh-dss") == 0)
+            return SshClient::KeyType::KEY_DSA;
+
+        if (strncmp(type, "ecdsa-sha2-", 11) == 0)
+            return SshClient::KeyType::KEY_ECDSA;
+
+        return SshClient::KeyType::KEY_UNKNOWN;
+    }
+
+    int SshClient::CreateTcpConnection(const std::string& host, int port)
+    {
+        std::string err;
+        struct addrinfo hints{}, *res = nullptr;
+
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+
+        std::string portstr = std::to_string(port);
+
+        int rc = getaddrinfo(host.c_str(), portstr.c_str(), &hints, &res);
+        if (rc != 0)
+        {
+            err = std::string("DNS resolution failed: ") + gai_strerror(rc);
+            spdlog::error("[ssh] {}", err);
+            return kInvalidSocket;
+        }
+
+        int sock = kInvalidSocket;
+
+        for (addrinfo* p = res; p; p = p->ai_next)
+        {
+            sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+            if (sock < 0)
+                continue;
+
+            if (connect(sock, p->ai_addr, static_cast<socklen_t>(p->ai_addrlen)) == 0)
+            {
+                break;
+            }
+
+            CLOSE_SOCKET(sock);
+            sock = kInvalidSocket;
+        }
+
+        freeaddrinfo(res);
+
+        return sock;
+    }
+
+    bool SshClient::ReconnectSession(SshConnection * connection)
+    {
+        std::string err;
+        if (connection->GetSession())
+        {
+            libssh2_session_disconnect(connection->GetSession(), "Reconnect");
+            libssh2_session_free(connection->GetSession());
+            CLOSE_SOCKET(connection->GetSocket());
+            connection->SetSocket(CreateTcpConnection(connection->GetHost(), connection->GetPort()));
+        }
+
+        if (connection->GetSocket() == kInvalidSocket)
+        {
+            err = "TCP connect failed";
+            spdlog::error("[ssh] {}", err);
+            return false;
+        }
+
+        connection->SetSession(libssh2_session_init());
+        if (!connection->GetSession())
+        {
+            err = "libssh2_session_init failed durinf reconnection";
+            spdlog::error("[ssh] {}", err);
+            connection->Disconnect();
+            return false;
+        }
+
+        int rc = libssh2_session_handshake(connection->GetSession(), connection->GetSocket());
+        if (rc)
+        {
+            fprintf(stderr, "Handshake failed: %d\n", rc);
+            char* msg = nullptr;
+            libssh2_session_last_error(connection->GetSession(), &msg, nullptr, 0);
+            err = std::string("SSH handshake failed: ") + (msg ? msg : "");
+            spdlog::error("[ssh] {}", err);
+            connection->Disconnect();
+            return false;
+        }
+
+        return true;
     }
 
 //---------------------------------------------SSH CLIENT CONNECT----------------------------------------------//
@@ -331,39 +468,11 @@ namespace Controller
         Future* future)
     {
         std::string err;
-        struct addrinfo hints{}, *res = nullptr;
-
-        hints.ai_family = AF_INET;
-        hints.ai_socktype = SOCK_STREAM;
-        std::string portstr = std::to_string(port);
-        int rc = getaddrinfo(host.c_str(), portstr.c_str(), &hints, &res);
-        if (rc != 0)
-        {
-            err = std::string("DNS resolution failed: ") + gai_strerror(rc);
-            spdlog::error("[ssh] {}", err);
-            future->SaveError(err);
-            return nullptr;
-        }
-
-        sockaddr_in* addr = (sockaddr_in*)res->ai_addr;
-        addr->sin_port = htons(port);
 
         auto connection =
             std::make_unique<SshConnection>(host, port);
 
-        for(addrinfo* p = res; p; p = p->ai_next)
-        {
-            connection->SetSocket(socket(p->ai_family, p->ai_socktype, p->ai_protocol));
-            if(connection->GetSocket() == kInvalidSocket) continue;
-            if(connect(connection->GetSocket(), p->ai_addr, static_cast<socklen_t>(p->ai_addrlen)) == 0)
-            {
-                break;
-            }
-            CLOSE_SOCKET(connection->GetSocket());
-            connection->SetSocket(kInvalidSocket);
-        }
-
-        freeaddrinfo(res);   
+        connection->SetSocket(CreateTcpConnection(host, port));
 
         if (connection->GetSocket() == kInvalidSocket)
         {
@@ -407,6 +516,8 @@ namespace Controller
         return ptr;
     }
 
+    //---------------------------------------------SSH CLIENT AUTHENTICATE-------------------------------------------//
+
     SshClient::Result SshClient::Authenticate(
         SshConnection * connection,
         const std::string& user, 
@@ -445,12 +556,12 @@ namespace Controller
                     err = "Authentication bridge not initialized";
                     spdlog::error("[ssh] {}", err);
                     future->SaveError(err);
-                    connection->Disconnect();
+                    Disconnect(connection);
                     return Result::AuthError;
                 }
                 if(*decision == HostKeyDecision::Reject)
                 {
-                    connection->Disconnect();
+                    Disconnect(connection);
                     err = (m == KnownHostMatch::Mismatch)
                         ? "Host key mismatch — connection rejected."
                         : "Host key not trusted.";
@@ -470,7 +581,7 @@ namespace Controller
             {
                 err = "Host key check failed";
                 future->SaveError(err);
-                connection->Disconnect();
+                Disconnect(connection);
                 return Result::AuthError;
             }
         }
@@ -490,36 +601,30 @@ namespace Controller
             // 1a) explicit identity_file from the dialog
             if(!identity_file.empty())
             {
-                if(TryPublicKey(connection->GetSession(), user, identity_file, passphrase))
-                    auth_rc = 0;
-            }
-            // 1b) ssh-agent — handles encrypted keys without us needing a passphrase.
-            if(auth_rc != 0)
-            {
-                spdlog::info("[ssh] trying ssh-agent");
-                if(TryAgent(connection->GetSession(), user)) auth_rc = 0;
-            }
-            // 1c) default on-disk identity files
-            if(auth_rc != 0)
-            {
-                spdlog::info("[ssh] trying default identity files");
-                for(const auto& p : DefaultKeyPaths())
+                if (TryPublicKey(connection, user, identity_file, passphrase))
                 {
-                    if(!std::filesystem::exists(p))
-                    {
-                        spdlog::info("[ssh]   default key absent: {}", p);
-                        continue;
-                    }
-                    if(TryPublicKey(connection->GetSession(), user, p, passphrase))
-                    {
-                        auth_rc = 0;
-                        return Result::Success;
-                    }
+                    return Result::Success;
                 }
             }
-            else
+            // 1b) ssh-agent — handles encrypted keys without us needing a passphrase.
+            spdlog::info("[ssh] trying ssh-agent");
+            if (TryAgent(connection, user))
             {
                 return Result::Success;
+            }
+            // 1c) default on-disk identity files
+            spdlog::info("[ssh] trying default identity files");
+            for(const auto& p : DefaultKeyPaths())
+            {
+                if(!std::filesystem::exists(p))
+                {
+                    spdlog::info("[ssh]   default key absent: {}", p);
+                    continue;
+                }
+                if(TryPublicKey(connection, user, p, passphrase))
+                {
+                    return Result::Success;
+                }
             }
         }
         else
@@ -528,12 +633,25 @@ namespace Controller
         }
 
         // 2) password
-        if(auth_rc != 0 && MethodListed(methods, "password") && !password.empty())
+        if(MethodListed(methods, "password") && !password.empty())
         {
             spdlog::info("[ssh] trying password auth");
             tried_password = true;
             auth_rc = libssh2_userauth_password(connection->GetSession(), user.c_str(),
                 password.c_str());
+            if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+            {
+
+                std::string u = user;
+
+                std::transform(u.begin(), u.end(), u.begin(),
+                    [](unsigned char c) { return std::tolower(c); });
+                if (u != user && ReconnectSession(connection))
+                {
+                    auth_rc = libssh2_userauth_password(connection->GetSession(), u.c_str(),
+                        password.c_str());
+                }
+            }
             if(auth_rc == 0)
             {
                 spdlog::info("[ssh] password auth OK");
@@ -547,7 +665,7 @@ namespace Controller
                     msg ? msg : "(no message)");
             }
         }
-        else if(auth_rc != 0)
+        else
         {
             spdlog::info("[ssh] skipping password auth (server_lists={} have_password={})",
                 MethodListed(methods, "password"), !password.empty());
@@ -555,7 +673,7 @@ namespace Controller
 
         // 3) keyboard-interactive
         auto kbd_ctx = std::make_shared<KbdintCtx>(KbdintCtx{connection->GetAuthBridge(), future, false});
-        if(auth_rc != 0 && MethodListed(methods, "keyboard-interactive"))
+        if(MethodListed(methods, "keyboard-interactive"))
         {
             spdlog::info("[ssh] trying keyboard-interactive auth (will route prompts to UI)");
             tried_kbdint = true;
@@ -564,11 +682,23 @@ namespace Controller
             if(abstract) *abstract = kbd_ctx.get();
             auth_rc = libssh2_userauth_keyboard_interactive(connection->GetSession(), user.c_str(),
                 &KbdIntCallback);
+            if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+            {
+                std::string u = user;
+
+                std::transform(u.begin(), u.end(), u.begin(),
+                    [](unsigned char c) { return std::tolower(c); });
+                if (u != user && ReconnectSession(connection))
+                {
+                    auth_rc = libssh2_userauth_keyboard_interactive(connection->GetSession(), u.c_str(),
+                        &KbdIntCallback);
+                }
+            }
             if(abstract) *abstract = nullptr;
             if(kbd_ctx->was_cancelled)
             {
                 spdlog::info("[ssh] kbdint cancelled by user");
-                connection->Disconnect();
+                Disconnect(connection);
                 return Result::AuthError;
             }
             if(auth_rc == 0)
@@ -774,6 +904,7 @@ namespace Controller
                 " msg=" + (lib_msg ? lib_msg : "");
             spdlog::error("[ssh] {}", err);
             future->SaveError(err);
+            future->SetFileStat(remote_path, 0, 0, 0);
             return Result::SftpError;
         }
 

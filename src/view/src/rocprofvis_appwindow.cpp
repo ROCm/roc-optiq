@@ -162,6 +162,7 @@ AppWindow::Init()
     LayoutItem status_bar_item(-1, initial_status_bar_height);
     status_bar_item.m_item =
         std::make_shared<RocCustomWidget>([this]() { RenderStatusBar(); });
+    status_bar_item.m_window_flags = ImGuiWindowFlags_NoScrollbar;
     LayoutItem main_area_item(-1, -initial_status_bar_height);
     LayoutItem tool_bar_item(-1, 0);
     tool_bar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
@@ -1137,12 +1138,10 @@ AppWindow::HandleFontChanged()
         return;
     }
 
-    // Calculate status bar height based on font size, with some padding.
-    ImGuiStyle& style     = ImGui::GetStyle();
-    float       line_pad  = style.CellPadding.y * 2.0f;
-    float       line_size = ImGui::GetTextLineHeight() + line_pad;
-
-    status_bar_item->m_height = line_size;
+    // Match RenderStatusBar()'s content extent (AlignTextToFramePadding + Dummy).
+    const float frame_h      = ImGui::GetFrameHeight();
+    const float line_h       = ImGui::GetTextLineHeight();
+    status_bar_item->m_height = frame_h + (frame_h - line_h) * 0.5f;
 
     // adjust main view's size to account for new status bar height
     auto main_view_item = m_main_view->GetMutableAt(count - 2);
@@ -1432,6 +1431,7 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
 void
 AppWindow::UpdateStatusBar()
 {
+    HandleFontChanged();
     // Update status message every N frames
     const int UPDATE_STEP = 4;
     if(ImGui::GetFrameCount() % UPDATE_STEP == 0)

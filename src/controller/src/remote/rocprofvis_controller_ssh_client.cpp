@@ -665,7 +665,7 @@ namespace Controller
                     msg ? msg : "(no message)");
             }
         }
-        else if(auth_rc != 0)
+        else
         {
             spdlog::info("[ssh] skipping password auth (server_lists={} have_password={})",
                 MethodListed(methods, "password"), !password.empty());

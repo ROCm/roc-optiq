@@ -207,7 +207,11 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
             {
                 result = ExecuteQuery(trace, query, "Coarse queue utilization", *future, [start, end, &busy_duration, &event_count](const QueryDataStore& store) -> rocprofvis_result_t {
                     rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                    if(store.rows.size() == 1 && store.columns.count("total_duration") > 0 && store.columns.count("event_count") > 0)
+                    if(store.rows.empty())
+                    {
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else if(store.rows.size() == 1 && store.columns.count("total_duration") > 0 && store.columns.count("event_count") > 0)
                     {
                         const char* duration = store.rows[0][store.columns.at("total_duration")];
                         const char* count = store.rows[0][store.columns.at("event_count")];
@@ -271,17 +275,20 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
                 }
                 free(query);
             }
-            if(dm_result == kRocProfVisDmResultSuccess)
+            if(dm_result == kRocProfVisDmResultSuccess && result == kRocProfVisResultSuccess)
             {
-                if(result == kRocProfVisResultSuccess)
-                {
-                    *output = busy_duration / (end - start) * 100.0;
-                }
-                else if(result == kRocProfVisResultNotLoaded)
+                if(busy_duration == 0.0)
                 {
                     *output = 0.0;
-                    result = kRocProfVisResultSuccess;
                 }
+                else if(end == start)
+                {
+                    *output = 100.0;
+                }
+                else
+                {
+                    *output = busy_duration / (end - start) * 100.0;
+                }                
             }
         }
         return future->IsCancelled() ? kRocProfVisResultCancelled : result;
@@ -515,10 +522,6 @@ rocprofvis_result_t Analysis::ExecuteQuery(Trace* trace, const char* query, cons
                 {
                     result = kRocProfVisResultUnknownError;
                 }
-            }
-            else if(dm_result == kRocProfVisDmResultDbAccessFailed)
-            {
-                result = kRocProfVisResultNotLoaded;
             }
             else
             {

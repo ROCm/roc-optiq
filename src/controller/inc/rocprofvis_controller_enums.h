@@ -688,7 +688,8 @@ typedef enum rocprofvis_controller_remote_callback_t
     kRPVControllerSshCallbackAuthRequest,
     kRPVControllerSshCallbackExecuteStdOut,
     kRPVControllerSshCallbackDownloadSarted,
-    kRPVControllerSshCallbackDownloadProgress
+    kRPVControllerSshCallbackDownloadProgress,
+    kRPVControllerSshCallbackFail
 } rocprofvis_controller_remote_callback_t;
 
 /*

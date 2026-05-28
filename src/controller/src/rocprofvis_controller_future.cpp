@@ -49,7 +49,7 @@ rocprofvis_result_t Future::Wait(float timeout)
         if (result == kRocProfVisResultTimeout)
         {
             auto remote_result = m_remote.Wait();
-            if (remote_result == kRocProfVisResultSshCommunicationCallback)
+            if (remote_result == kRocProfVisResultSshCommunicationCallback || remote_result == kRocProfVisResultFailedSshCommunication)
             {
                 return remote_result;
             }
@@ -232,6 +232,10 @@ void Future::SetDownloaded(uint64_t size)
     m_remote.SetDownloaded(size);
 }
 
+void Future::FailRemote()
+{
+    m_remote.Fail();
+}
 
 }
 }

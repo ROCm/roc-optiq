@@ -28,7 +28,14 @@ rocprofvis_result_t FutureRemote::Wait()
 
     if (m_user_callback_type != kRPVControllerSshCallbackIdle)
     {
-        return kRocProfVisResultSshCommunicationCallback;
+        if (m_user_callback_type == kRPVControllerSshCallbackFail)
+        {
+            return kRocProfVisResultFailedSshCommunication;
+        }
+        else
+        {
+            return kRocProfVisResultSshCommunicationCallback;
+        }
     }
 
     return kRocProfVisResultSuccess;
@@ -76,6 +83,11 @@ void FutureRemote::SetDownloaded(uint64_t size)
 
     m_remote_file_stat.downloaded += size;
     m_user_callback_type = kRPVControllerSshCallbackDownloadProgress;
+}
+
+void FutureRemote::Fail() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_user_callback_type = kRPVControllerSshCallbackFail;
 }
 
 //----------------------------------------------------------

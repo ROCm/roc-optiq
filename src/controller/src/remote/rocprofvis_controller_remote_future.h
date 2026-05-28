@@ -39,6 +39,7 @@ public:
     void SaveError(const std::string& err);
     void SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded);
     void SetDownloaded(uint64_t size);
+    void Fail();
 
 private:
     std::atomic<rocprofvis_controller_remote_callback_t> m_user_callback_type;

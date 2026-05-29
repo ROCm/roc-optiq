@@ -105,6 +105,35 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
     IM_COL32(205, 170, 82, 255),   // Colors::kComparisonLesser
     IM_COL32(92, 62, 132, 255),    // Colors::kComparisonGreater
+
+    // Centralized from view widgets (kept in Colors enum order):
+    IM_COL32(29, 30, 38, 255),     // Colors::kMemChartBg
+    IM_COL32(34, 37, 48, 245),     // Colors::kMemChartPanel
+    IM_COL32(39, 43, 56, 245),     // Colors::kMemChartPanelAlt
+    IM_COL32(62, 116, 168, 220),   // Colors::kMemChartBorder
+    IM_COL32(78, 152, 220, 255),   // Colors::kMemChartBorderHot
+    IM_COL32(238, 243, 255, 255),  // Colors::kMemChartTextMain
+    IM_COL32(145, 156, 174, 255),  // Colors::kMemChartTextDim
+    IM_COL32(47, 214, 220, 235),   // Colors::kMemChartRead
+    IM_COL32(225, 203, 78, 235),   // Colors::kMemChartWrite
+    IM_COL32(184, 139, 226, 235),  // Colors::kMemChartAtomic
+    IM_COL32(129, 231, 79, 255),   // Colors::kMemChartUtil
+    IM_COL32(231, 196, 65, 255),   // Colors::kMemChartHit
+    IM_COL32(235, 82, 98, 255),    // Colors::kMemChartStall
+    IM_COL32(0, 0, 0, 85),         // Colors::kMemChartShadow
+    IM_COL32(58, 53, 36, 245),     // Colors::kStickyNoteBg
+    IM_COL32(62, 116, 168, 220),   // Colors::kStickyNoteBorder
+    IM_COL32(70, 62, 40, 248),     // Colors::kStickyNoteHeader
+    IM_COL32(0, 0, 0, 85),         // Colors::kStickyNoteShadow
+    IM_COL32(238, 243, 255, 255),  // Colors::kStickyNoteText
+    IM_COL32(145, 156, 174, 255),  // Colors::kStickyNoteTextMuted
+    IM_COL32(225, 203, 78, 235),   // Colors::kStickyNoteAccent
+    IM_COL32(200, 200, 80, 255),   // Colors::kStickyNoteResize
+    IM_COL32(200, 100, 100, 255),  // Colors::kStickyNoteResizeActive
+    IM_COL32(200, 16, 32, 150),    // Colors::kBannerFill
+    IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
+    IM_COL32(255, 255, 255, 255),  // Colors::kBannerText
+    IM_COL32(228, 228, 228, 255),  // Colors::kDebugNavBarBg
     // This must follow the ordering of Colors enum.
 };
 
@@ -192,6 +221,35 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(194, 235, 230, 255),  // Colors::kComparisonTarget
     IM_COL32(248, 224, 166, 255),  // Colors::kComparisonLesser
     IM_COL32(224, 206, 244, 255),  // Colors::kComparisonGreater
+
+    // Centralized from view widgets (kept in Colors enum order):
+    IM_COL32(248, 251, 255, 255),  // Colors::kMemChartBg
+    IM_COL32(255, 255, 255, 246),  // Colors::kMemChartPanel
+    IM_COL32(241, 247, 255, 246),  // Colors::kMemChartPanelAlt
+    IM_COL32(91, 139, 184, 205),   // Colors::kMemChartBorder
+    IM_COL32(38, 132, 214, 255),   // Colors::kMemChartBorderHot
+    IM_COL32(25, 38, 56, 255),     // Colors::kMemChartTextMain
+    IM_COL32(92, 106, 126, 255),   // Colors::kMemChartTextDim
+    IM_COL32(0, 132, 155, 235),    // Colors::kMemChartRead
+    IM_COL32(168, 128, 0, 235),    // Colors::kMemChartWrite
+    IM_COL32(124, 78, 190, 235),   // Colors::kMemChartAtomic
+    IM_COL32(58, 145, 26, 255),    // Colors::kMemChartUtil
+    IM_COL32(177, 130, 0, 255),    // Colors::kMemChartHit
+    IM_COL32(204, 55, 70, 255),    // Colors::kMemChartStall
+    IM_COL32(76, 95, 128, 35),     // Colors::kMemChartShadow
+    IM_COL32(255, 252, 228, 248),  // Colors::kStickyNoteBg
+    IM_COL32(91, 139, 184, 205),   // Colors::kStickyNoteBorder
+    IM_COL32(255, 247, 204, 248),  // Colors::kStickyNoteHeader
+    IM_COL32(76, 95, 128, 35),     // Colors::kStickyNoteShadow
+    IM_COL32(25, 38, 56, 255),     // Colors::kStickyNoteText
+    IM_COL32(92, 106, 126, 255),   // Colors::kStickyNoteTextMuted
+    IM_COL32(168, 128, 0, 235),    // Colors::kStickyNoteAccent
+    IM_COL32(200, 200, 80, 255),   // Colors::kStickyNoteResize
+    IM_COL32(200, 100, 100, 255),  // Colors::kStickyNoteResizeActive
+    IM_COL32(200, 16, 32, 150),    // Colors::kBannerFill
+    IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
+    IM_COL32(255, 255, 255, 255),  // Colors::kBannerText
+    IM_COL32(228, 228, 228, 255),  // Colors::kDebugNavBarBg
     // This must follow the ordering of Colors enum.
 };
 // Same hue order as origin/main, desaturated for the redesign.

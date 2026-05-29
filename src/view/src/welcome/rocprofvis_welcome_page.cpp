@@ -7,6 +7,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_widget.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -26,7 +27,6 @@ constexpr float WELCOME_HEADER_TITLE_SCALE   = 1.2f;
 
 // Page layout, all em units multiplied against ImGui::GetFontSize().
 constexpr float WELCOME_CONTENT_MAX_EM       = 92.0f;
-constexpr float WELCOME_COMPACT_LIMIT_EM     = 62.0f;
 constexpr float WELCOME_MAIN_COL_MIN_EM      = 30.0f;
 constexpr float WELCOME_MAIN_COL_FRACTION    = 0.38f;
 constexpr float WELCOME_COLUMN_GAP_EM        = 0.72f;
@@ -332,10 +332,10 @@ DrawPrimaryAction(SettingsManager& settings, const char* id, const char* title,
     return clicked;
 }
 
-// Styled section container with title, optional subtitle, and a divider.
+// Begins one outer card (box). The FlexContainer keeps each item transparent,
+// so the card paints its own panel background + border. Pair with EndCard.
 void
-BeginTile(SettingsManager& settings, const char* id, const char* title,
-          const char* subtitle = nullptr)
+BeginCard(SettingsManager& settings, const char* id)
 {
     const float font_size = ImGui::GetFontSize();
     const bool  is_dark =
@@ -355,6 +355,23 @@ BeginTile(SettingsManager& settings, const char* id, const char* title,
     ImGui::BeginChild(id, ImVec2(0.0f, 0.0f),
                       ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+}
+
+void
+EndCard()
+{
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+}
+
+// A section title (+ optional subtitle) and divider, drawn inside a card. A
+// single card can stack several sections (e.g. Start then Recent).
+void
+SectionHeader(SettingsManager& settings, const char* title,
+              const char* subtitle = nullptr)
+{
+    const float font_size = ImGui::GetFontSize();
 
     ImGui::PushFont(NULL, settings.GetFontManager().GetFontSize(FontSize::kLarge));
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
@@ -375,20 +392,21 @@ BeginTile(SettingsManager& settings, const char* id, const char* title,
         WELCOME_TILE_DIVIDER_THICKNESS);
     ImGui::Dummy(ImVec2(sep_width, font_size * WELCOME_SECTION_GAP_EM));
 }
-
-void
-EndTile()
-{
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor(2);
-}
 }  // namespace
 
 WelcomePage::WelcomePage(OpenFileFn on_open_file, OpenRecentFileFn on_open_recent)
     : m_on_open_file(std::move(on_open_file))
     , m_on_open_recent(std::move(on_open_recent))
 {
+    // Two flex cards: left = Start + Recent, right = Resources. The grow ratios
+    // keep Resources the wider panel; the min widths (set per-frame in Render)
+    // drive the wrap to a single stacked column when the window is narrow.
+    auto left  = std::make_shared<RocCustomWidget>([this]() { RenderLeftCard(); });
+    auto right = std::make_shared<RocCustomWidget>([this]() { RenderResourcesCard(); });
+    m_flex.items = {
+        { "welcome_left", left, 0.0f, 0.0f, WELCOME_MAIN_COL_FRACTION },
+        { "welcome_right", right, 0.0f, 0.0f, 1.0f - WELCOME_MAIN_COL_FRACTION },
+    };
 }
 
 void
@@ -406,7 +424,8 @@ WelcomePage::Render()
     const ImVec2 page_size = ImGui::GetWindowSize();
     DrawBackdrop(settings, page_pos, page_size);
 
-    // Center a max-width column; switch to compact (single-column) when narrow.
+    // Center a max-width column; the FlexContainer collapses to one stacked
+    // column on its own once the cards no longer fit side by side.
     const float edge_margin =
         std::max(font_size * WELCOME_EDGE_MARGIN_MIN_EM,
                  std::min(font_size * WELCOME_EDGE_MARGIN_MAX_EM,
@@ -414,7 +433,6 @@ WelcomePage::Render()
     const float content_width =
         std::min(std::max(0.0f, page_size.x - edge_margin * 2.0f),
                  font_size * WELCOME_CONTENT_MAX_EM);
-    const bool is_compact = content_width < font_size * WELCOME_COMPACT_LIMIT_EM;
 
     ImGui::SetCursorPos(ImVec2((page_size.x - content_width) * 0.5f, edge_margin));
     ImGui::BeginChild("welcome_body", ImVec2(content_width, 0.0f), false,
@@ -427,42 +445,12 @@ WelcomePage::Render()
 
     RenderHeader();
 
-    const float column_gap = font_size * WELCOME_COLUMN_GAP_EM;
-    const float main_col_w =
-        is_compact ? content_width
-                   : std::max(font_size * WELCOME_MAIN_COL_MIN_EM,
-                              content_width * WELCOME_MAIN_COL_FRACTION);
-    const float side_col_w =
-        is_compact ? content_width
-                   : std::max(0.0f, content_width - main_col_w - column_gap);
-
-    std::string recent_file_to_open;
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
-    ImGui::BeginChild("welcome_main_col", ImVec2(main_col_w, 0.0f),
-                      ImGuiChildFlags_AutoResizeY,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    RenderStartTile();
-    RenderRecentTile(recent_file_to_open);
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-
-    if(!is_compact)
-    {
-        ImGui::SameLine(0.0f, column_gap);
-    }
-    else
-    {
-        ImGui::Dummy(ImVec2(0.0f, font_size * WELCOME_SECTION_GAP_EM));
-    }
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
-    ImGui::BeginChild("welcome_side_col", ImVec2(side_col_w, 0.0f),
-                      ImGuiChildFlags_AutoResizeY,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    RenderResourcesTile();
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
+    // Drive the two-card body through the FlexContainer (font-relative sizing).
+    m_recent_file_to_open.clear();
+    m_flex.gap                = font_size * WELCOME_COLUMN_GAP_EM;
+    m_flex.items[0].min_width = font_size * WELCOME_MAIN_COL_MIN_EM;
+    m_flex.items[1].min_width = font_size * WELCOME_MAIN_COL_MIN_EM;
+    m_flex.Render();
 
     ImGui::PopStyleVar();  // welcome_body ItemSpacing
     ImGui::PopFont();      // welcome_body default font bump
@@ -473,9 +461,9 @@ WelcomePage::Render()
 
     // Defer the open until we've torn down the welcome children; opening a
     // file can immediately replace this view with a project tab.
-    if(!recent_file_to_open.empty())
+    if(!m_recent_file_to_open.empty())
     {
-        m_on_open_recent(recent_file_to_open);
+        m_on_open_recent(m_recent_file_to_open);
     }
 }
 
@@ -503,13 +491,16 @@ WelcomePage::RenderHeader()
 }
 
 void
-WelcomePage::RenderStartTile()
+WelcomePage::RenderLeftCard()
 {
     SettingsManager& settings  = SettingsManager::GetInstance();
     const float      font_size = ImGui::GetFontSize();
 
-    BeginTile(settings, "tile_start", "Start",
-              "Open a ROCm System or Compute Profiler data file to get started.");
+    BeginCard(settings, "welcome_card_left");
+
+    // Start section.
+    SectionHeader(settings, "Start",
+                  "Open a ROCm System or Compute Profiler data file to get started.");
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                             ImVec2(0.0f, font_size * WELCOME_ACTION_SPACING_EM));
@@ -526,19 +517,15 @@ WelcomePage::RenderStartTile()
                          "Or drag and drop a file into the window.", inner_w);
         ImGui::PopStyleVar();
     }
-    EndTile();
-}
 
-void
-WelcomePage::RenderRecentTile(std::string& recent_file_to_open)
-{
-    SettingsManager&              settings  = SettingsManager::GetInstance();
-    const float                   font_size = ImGui::GetFontSize();
-    const std::list<std::string>& recent_files =
-        settings.GetInternalSettings().recent_files;
+    // Space between the Start and Recent sections within the same card.
+    ImGui::Dummy(ImVec2(0.0f, font_size * WELCOME_BODY_SPACING_EM));
 
-    BeginTile(settings, "tile_recent", "Recent");
+    // Recent section.
+    SectionHeader(settings, "Recent");
     {
+        const std::list<std::string>& recent_files =
+            settings.GetInternalSettings().recent_files;
         const float inner_w = ImGui::GetContentRegionAvail().x;
         if(recent_files.empty())
         {
@@ -581,7 +568,7 @@ WelcomePage::RenderRecentTile(std::string& recent_file_to_open)
                                      ImGuiSelectableFlags_None,
                                      ImVec2(inner_w, 0.0f)))
                 {
-                    recent_file_to_open = file;
+                    m_recent_file_to_open = file;
                 }
                 if(ImGui::IsItemHovered())
                 {
@@ -593,17 +580,19 @@ WelcomePage::RenderRecentTile(std::string& recent_file_to_open)
             ImGui::PopStyleVar();
         }
     }
-    EndTile();
+
+    EndCard();
 }
 
 void
-WelcomePage::RenderResourcesTile()
+WelcomePage::RenderResourcesCard()
 {
     SettingsManager& settings  = SettingsManager::GetInstance();
     const float      font_size = ImGui::GetFontSize();
 
-    BeginTile(settings, "tile_resources", "Resources",
-              "Jump into documentation, source, and ROCm ecosystem pages.");
+    BeginCard(settings, "welcome_card_right");
+    SectionHeader(settings, "Resources",
+                  "Jump into documentation, source, and ROCm ecosystem pages.");
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                             ImVec2(0.0f, font_size * WELCOME_CARD_SPACING_EM));
@@ -614,7 +603,7 @@ WelcomePage::RenderResourcesTile()
         }
         ImGui::PopStyleVar();
     }
-    EndTile();
+    EndCard();
 }
 
 }  // namespace View

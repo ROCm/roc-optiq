@@ -227,6 +227,11 @@ class Trace : public DmBase{
         // @param description - pointer to table description string
         // @return status of operation           
         static rocprofvis_dm_table_t                    AddTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description);
+        // Static method to remove existing table. Used by database component via binding interface
+        // @param object - trace object handle to remove table object from.
+        // @param query - pointer to table query string
+        // @return status of operation        
+        static rocprofvis_dm_result_t                   RemoveTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query);
         // Static method to add new table. Used by database component via binding interface
         // @param object - trace object handle to add table object to.
         // @param node - node index

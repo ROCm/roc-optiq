@@ -103,7 +103,9 @@ EventsView::Render()
                           m_settings.GetColor(Colors::kTableBorderInner));
     if(m_event_items.empty())
     {
-        ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
+        CenterNextTextItem("No data available for the selected events.");
+        ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
+                             0.5f);
         ImGui::TextDisabled("No data available for the selected events.");
     }
     else

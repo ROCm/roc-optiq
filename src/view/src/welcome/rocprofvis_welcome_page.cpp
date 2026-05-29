@@ -176,11 +176,11 @@ DrawBackdrop(SettingsManager& settings, ImVec2 page_pos, ImVec2 page_size)
     };
 
     draw_polygon(kLogoTop,
-                 ApplyAlpha(settings.GetColor(Colors::kAccentRedHover),
+                 ApplyAlpha(settings.GetColor(Colors::kAccentHover),
                             is_dark ? WELCOME_LOGO_ALPHA_TOP_DARK
                                     : WELCOME_LOGO_ALPHA_TOP_LIGHT));
     draw_polygon(kLogoBottom,
-                 ApplyAlpha(settings.GetColor(Colors::kAccentRed),
+                 ApplyAlpha(settings.GetColor(Colors::kAccent),
                             is_dark ? WELCOME_LOGO_ALPHA_BOTTOM_DARK
                                     : WELCOME_LOGO_ALPHA_BOTTOM_LIGHT));
 }
@@ -200,7 +200,7 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
     ImGui::Dummy(size);
 
     ImDrawList* draw_list  = ImGui::GetWindowDrawList();
-    const ImU32 accent_col = settings.GetColor(Colors::kAccentRed);
+    const ImU32 accent_col = settings.GetColor(Colors::kAccent);
     const float rounding   = settings.GetDefaultStyle().FrameRounding +
                              font_size * WELCOME_CARD_ROUNDING_EM;
     const bool  is_dark    = settings.GetUserSettings().display_settings.use_dark_mode;
@@ -248,7 +248,7 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
     const bool docs_hovered = ImGui::IsMouseHoveringRect(docs_pos, docs_max);
     const bool docs_clicked = docs_hovered &&
                               ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-    draw_list->AddText(docs_pos, settings.GetColor(Colors::kAccentRed), docs_text);
+    draw_list->AddText(docs_pos, settings.GetColor(Colors::kAccent), docs_text);
 
     const char*  github_text = "GitHub";
     const ImVec2 github_size = ImGui::CalcTextSize(github_text);
@@ -260,7 +260,7 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
     const bool github_hovered = ImGui::IsMouseHoveringRect(github_pos, github_max);
     const bool github_clicked = github_hovered &&
                                 ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-    draw_list->AddText(github_pos, settings.GetColor(Colors::kAccentRed), github_text);
+    draw_list->AddText(github_pos, settings.GetColor(Colors::kAccent), github_text);
 
     if(github_hovered)
     {
@@ -305,12 +305,12 @@ DrawPrimaryAction(SettingsManager& settings, const char* id, const char* title,
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     const float rounding  = settings.GetDefaultStyle().FrameRounding;
-    const ImU32 bg_col = active   ? settings.GetColor(Colors::kAccentRedActive)
-                           : hovered ? settings.GetColor(Colors::kAccentRedHover)
-                                     : settings.GetColor(Colors::kAccentRed);
+    const ImU32 bg_col = active   ? settings.GetColor(Colors::kAccentActive)
+                           : hovered ? settings.GetColor(Colors::kAccentHover)
+                                     : settings.GetColor(Colors::kAccent);
     const ImU32 border_col =
-        hovered || active ? settings.GetColor(Colors::kAccentRedHover)
-                          : settings.GetColor(Colors::kAccentRed);
+        hovered || active ? settings.GetColor(Colors::kAccentHover)
+                          : settings.GetColor(Colors::kAccent);
 
     draw_list->AddRectFilled(pos, bottom_right, bg_col, rounding);
     draw_list->AddRect(pos, bottom_right, border_col, rounding);
@@ -553,15 +553,15 @@ WelcomePage::RenderRecentTile(std::string& recent_file_to_open)
                                 ImVec2(0.0f, font_size * WELCOME_RECENT_SPACING_EM));
             ImGui::PushStyleColor(
                 ImGuiCol_Header,
-                ApplyAlpha(settings.GetColor(Colors::kAccentRed),
+                ApplyAlpha(settings.GetColor(Colors::kAccent),
                            WELCOME_RECENT_HOVER_ALPHA));
             ImGui::PushStyleColor(
                 ImGuiCol_HeaderHovered,
-                ApplyAlpha(settings.GetColor(Colors::kAccentRedHover),
+                ApplyAlpha(settings.GetColor(Colors::kAccentHover),
                            WELCOME_RECENT_HOVER_ALPHA));
             ImGui::PushStyleColor(
                 ImGuiCol_HeaderActive,
-                ApplyAlpha(settings.GetColor(Colors::kAccentRedActive),
+                ApplyAlpha(settings.GetColor(Colors::kAccentActive),
                            WELCOME_RECENT_ACTIVE_ALPHA));
             size_t shown = 0;
             for(const std::string& file : recent_files)

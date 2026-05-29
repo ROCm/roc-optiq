@@ -35,6 +35,7 @@ constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
+constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
 
 TimelineView::TimelineView(DataProvider&                          dp,
                            std::shared_ptr<TimelineSelection>     timeline_selection,
@@ -712,20 +713,30 @@ TimelineView::RenderSplitter()
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
-    ImGui::SetNextWindowSize(ImVec2(1.0f, display_size.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(SIDEBAR_SPLITTER_WIDTH, display_size.y),
+                             ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_settings.GetColor(Colors::kSplitterColor));
 
     ImGui::BeginChild("Splitter View", ImVec2(0, 0), ImGuiChildFlags_None, window_flags);
 
     ImGui::Selectable("##MovePositionLineVert", false,
                       ImGuiSelectableFlags_AllowDoubleClick,
-                      ImVec2(5.0f, display_size.y));
+                      ImVec2(SIDEBAR_SPLITTER_WIDTH, display_size.y));
 
-    if(ImGui::IsItemHovered())
+    const bool sidebar_splitter_hovered = ImGui::IsItemHovered();
+    if(sidebar_splitter_hovered)
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+
+    if(sidebar_splitter_hovered || ImGui::IsItemActive())
+    {
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+            m_settings.GetColor(Colors::kAccent));
     }
 
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
@@ -1390,7 +1401,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         lane_dl->AddRectFilled(
             ImVec2(lane_min.x, lane_min.y),
             ImVec2(lane_min.x + 2.0f, lane_max.y),
-            m_settings.GetColor(Colors::kAccentRed));
+            m_settings.GetColor(Colors::kAccent));
     }
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);

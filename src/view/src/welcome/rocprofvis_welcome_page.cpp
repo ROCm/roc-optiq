@@ -400,7 +400,7 @@ WelcomePage::Render()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::BeginChild("welcome_page", ImVec2(0.0f, 0.0f), false,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+                      ImGuiWindowFlags_NoBackground);
 
     const ImVec2 page_pos  = ImGui::GetWindowPos();
     const ImVec2 page_size = ImGui::GetWindowSize();
@@ -417,7 +417,8 @@ WelcomePage::Render()
     const bool is_compact = content_width < font_size * WELCOME_COMPACT_LIMIT_EM;
 
     ImGui::SetCursorPos(ImVec2((page_size.x - content_width) * 0.5f, edge_margin));
-    ImGui::BeginChild("welcome_body", ImVec2(content_width, 0.0f), false,
+    ImGui::BeginChild("welcome_body", ImVec2(content_width, 0.0f),
+                      ImGuiChildFlags_AutoResizeY,
                       ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar |
                           ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PushFont(NULL, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
@@ -467,6 +468,7 @@ WelcomePage::Render()
     ImGui::PopStyleVar();  // welcome_body ItemSpacing
     ImGui::PopFont();      // welcome_body default font bump
     ImGui::EndChild();     // welcome_body
+    ImGui::Dummy(ImVec2(0.0f, edge_margin));
     ImGui::EndChild();     // welcome_page
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();

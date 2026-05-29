@@ -35,6 +35,7 @@ constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
+constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
 
 TimelineView::TimelineView(DataProvider&                          dp,
                            std::shared_ptr<TimelineSelection>     timeline_selection,
@@ -712,8 +713,7 @@ TimelineView::RenderSplitter()
 
     ImVec2 display_size = ImGui::GetWindowSize();
 
-    const float splitter_width = 5.0f;
-    ImGui::SetNextWindowSize(ImVec2(splitter_width, display_size.y),
+    ImGui::SetNextWindowSize(ImVec2(SIDEBAR_SPLITTER_WIDTH, display_size.y),
                              ImGuiCond_Always);
     ImGui::SetCursorPos(ImVec2(m_sidebar_size, 0));
 
@@ -724,7 +724,7 @@ TimelineView::RenderSplitter()
 
     ImGui::Selectable("##MovePositionLineVert", false,
                       ImGuiSelectableFlags_AllowDoubleClick,
-                      ImVec2(splitter_width, display_size.y));
+                      ImVec2(SIDEBAR_SPLITTER_WIDTH, display_size.y));
 
     const bool sidebar_splitter_hovered = ImGui::IsItemHovered();
     if(sidebar_splitter_hovered)

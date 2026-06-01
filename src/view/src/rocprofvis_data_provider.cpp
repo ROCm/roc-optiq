@@ -335,7 +335,6 @@ DataProvider::FetchTrace(rocprofvis_controller_t* controller, const std::string&
     // free any previously acquired resources
     CloseController();
     m_model.SetTraceFilePath(file_path);
-    m_model.LoadCompareMetadata(file_path);
     m_trace_controller = controller;
     if(m_trace_controller)
     {

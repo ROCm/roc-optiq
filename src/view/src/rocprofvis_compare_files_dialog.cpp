@@ -6,12 +6,9 @@
 #include "imgui.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
-#include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_widget.h"
-#include <yaml-cpp/yaml.h>
 
 #include <filesystem>
-#include <fstream>
 
 namespace RocProfVis
 {
@@ -64,6 +61,7 @@ CompareFilesDialog::Show()
     m_second_file.clear();
     m_error_message.clear();
     m_should_open = true;
+    m_is_open     = true;
 }
 
 void
@@ -72,6 +70,14 @@ CompareFilesDialog::SetFilePath(FileSlot slot, const std::string& file_path)
     (slot == FileSlot::kFirst ? m_first_file : m_second_file) = file_path;
     m_error_message.clear();
     m_should_open = true;
+    m_is_open     = true;
+}
+
+void
+CompareFilesDialog::AddDroppedFile(const std::string& file_path)
+{
+    FileSlot slot = m_first_file.empty() ? FileSlot::kFirst : FileSlot::kSecond;
+    SetFilePath(slot, file_path);
 }
 
 void
@@ -84,6 +90,7 @@ CompareFilesDialog::Render()
     }
     if(!ImGui::IsPopupOpen(COMPARE_DIALOG_NAME, ImGuiPopupFlags_None))
     {
+        m_is_open = false;
         return;
     }
 
@@ -100,7 +107,8 @@ CompareFilesDialog::Render()
                                   ImGuiWindowFlags_NoSavedSettings))
     {
         ImGui::TextWrapped(
-            "Select two trace databases to compare. An index.yaml manifest will be created next to the first file and opened.");
+            "Select two trace databases to compare. They are loaded together onto a "
+            "single timeline, with each track tagged by its source.");
         ImGui::Spacing();
 
         float side_width =
@@ -126,12 +134,10 @@ CompareFilesDialog::Render()
         ImGui::Separator();
         if(ImGui::Button("Compare and Open"))
         {
-            std::string yaml_path = WriteManifest();
-            if(!yaml_path.empty())
+            if(Validate())
             {
-                NotificationManager::GetInstance().Show("Created " + yaml_path + ".",
-                                                        NotificationLevel::Success);
-                m_open_callback(yaml_path);
+                m_open_callback(m_first_file, m_second_file);
+                m_is_open = false;
                 ImGui::CloseCurrentPopup();
             }
         }
@@ -139,6 +145,7 @@ CompareFilesDialog::Render()
         ImGui::SameLine();
         if(ImGui::Button("Cancel"))
         {
+            m_is_open = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -146,77 +153,24 @@ CompareFilesDialog::Render()
     popup_style.PopStyles();
 }
 
-std::string
-CompareFilesDialog::WriteManifest()
+bool
+CompareFilesDialog::Validate()
 {
     if(m_first_file.empty() || m_second_file.empty())
     {
         m_error_message = "Select both trace files before comparing.";
-        return "";
+        return false;
     }
 
-    namespace fs = std::filesystem;
     std::error_code ec;
-    if(fs::equivalent(m_first_file, m_second_file, ec))
+    if(std::filesystem::equivalent(m_first_file, m_second_file, ec))
     {
         m_error_message = "Please select two different trace files to compare.";
-        return "";
+        return false;
     }
 
-    fs::path first_path    = fs::absolute(m_first_file);
-    fs::path second_path   = fs::absolute(m_second_file);
-    fs::path manifest_path = first_path.parent_path() / "index.yaml";
-    fs::path manifest_dir  = manifest_path.parent_path();
-    fs::path first_rel     = fs::relative(first_path, manifest_dir, ec);
-    fs::path second_rel    = fs::relative(second_path, manifest_dir, ec);
-    if(first_rel.empty() || second_rel.empty())
-    {
-        m_error_message =
-            "Failed to resolve trace paths relative to:\n\n" + manifest_dir.string();
-        return "";
-    }
-
-    std::string first_rel_str  = first_rel.generic_string();
-    std::string second_rel_str = second_rel.generic_string();
-
-    YAML::Emitter out;
-    out << YAML::BeginMap
-        << YAML::Key << "rocprofiler-sdk" << YAML::Value
-        << YAML::BeginMap
-        << YAML::Key << "rocpd" << YAML::Value
-        << YAML::BeginMap
-        << YAML::Key << "files" << YAML::Value
-        << YAML::BeginSeq << first_rel_str << second_rel_str << YAML::EndSeq
-        << YAML::EndMap
-        << YAML::EndMap
-        << YAML::Key << "optiq" << YAML::Value
-        << YAML::BeginMap
-        << YAML::Key << "compare" << YAML::Value << true
-        << YAML::Key << "compare_files" << YAML::Value
-        << YAML::BeginSeq
-        << YAML::BeginMap
-        << YAML::Key << "id" << YAML::Value << "A"
-        << YAML::Key << "name" << YAML::Value << first_path.stem().string()
-        << YAML::Key << "path" << YAML::Value << first_rel_str
-        << YAML::EndMap
-        << YAML::BeginMap
-        << YAML::Key << "id" << YAML::Value << "B"
-        << YAML::Key << "name" << YAML::Value << second_path.stem().string()
-        << YAML::Key << "path" << YAML::Value << second_rel_str
-        << YAML::EndMap
-        << YAML::EndSeq
-        << YAML::EndMap
-        << YAML::EndMap;
-
-    std::ofstream yaml(manifest_path);
-    if(!yaml.is_open())
-    {
-        m_error_message =
-            "Failed to create compare manifest:\n\n" + manifest_path.string();
-        return "";
-    }
-    yaml << out.c_str() << "\n";
-    return manifest_path.string();
+    m_error_message.clear();
+    return true;
 }
 
 }  // namespace View

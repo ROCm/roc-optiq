@@ -137,17 +137,45 @@ Project::OpenProject(std::string& file_path)
         {
             m_project_file_path = file_path;
             m_settings_json     = json_parsed.second;
-            std::string trace_path =
-                std::filesystem::weakly_canonical(
-                    std::filesystem::path(m_project_file_path).parent_path() /
-                    std::filesystem::path(m_settings_json[JSON_KEY_GROUP_GENERAL]
-                                                         [JSON_KEY_GENERAL_TRACE_PATH]
-                                                             .getString()))
-                    .string();
-            result = OpenTrace(trace_path);
-            if(result == Duplicate)
+            std::filesystem::path project_dir =
+                std::filesystem::path(m_project_file_path).parent_path();
+            jt::Json& general = m_settings_json[JSON_KEY_GROUP_GENERAL];
+
+            if(general[JSON_KEY_GENERAL_COMPARE_FILES].isArray())
             {
-                file_path = trace_path;
+                std::vector<std::string> files;
+                for(jt::Json& entry : general[JSON_KEY_GENERAL_COMPARE_FILES].getArray())
+                {
+                    files.push_back(
+                        std::filesystem::weakly_canonical(
+                            project_dir / std::filesystem::path(entry.getString()))
+                            .string());
+                }
+                std::string compare_id = AppWindow::MakeCompareId(files);
+                if(AppWindow::GetInstance()->GetProject(compare_id))
+                {
+                    file_path = compare_id;
+                    result    = Duplicate;
+                    NotificationManager::GetInstance().Show(
+                        "This comparison is already open.", NotificationLevel::Warning);
+                }
+                else
+                {
+                    result = OpenCompare(compare_id, files);
+                }
+            }
+            else
+            {
+                std::string trace_path =
+                    std::filesystem::weakly_canonical(
+                        project_dir / std::filesystem::path(
+                                          general[JSON_KEY_GENERAL_TRACE_PATH].getString()))
+                        .string();
+                result = OpenTrace(trace_path);
+                if(result == Duplicate)
+                {
+                    file_path = trace_path;
+                }
             }
         }
         else
@@ -225,10 +253,85 @@ Project::OpenTrace(std::string& file_path)
     return result;
 }
 
+Project::OpenResult
+Project::OpenCompare(const std::string&              project_id,
+                     const std::vector<std::string>& file_paths)
+{
+    OpenResult result = Failed;
+    if(file_paths.size() < 2 || m_view)
+    {
+        return result;
+    }
+
+    for(const std::string& path : file_paths)
+    {
+        if(!std::filesystem::exists(path))
+        {
+            AppWindow::GetInstance()->ShowMessageDialog("Error",
+                                                        "File does not exist: " + path);
+            spdlog::error("Failed to open compare file: {}, file does not exist", path);
+            return result;
+        }
+    }
+
+    std::vector<const char*> file_ptrs;
+    file_ptrs.reserve(file_paths.size());
+    for(const std::string& path : file_paths)
+    {
+        file_ptrs.push_back(path.c_str());
+    }
+
+    rocprofvis_controller_t* controller =
+        rocprofvis_controller_alloc_compare(file_ptrs.data(), file_ptrs.size());
+    if(controller)
+    {
+        std::shared_ptr<TraceView> trace_view = std::make_shared<TraceView>();
+        if(trace_view->LoadTrace(controller, project_id))
+        {
+            // Tag each source A, B, ... in selection order so the timeline and sidebar
+            // badges can resolve a track's instance index back to its file.
+            std::vector<CompareSourceInfo> sources;
+            sources.reserve(file_paths.size());
+            for(size_t i = 0; i < file_paths.size(); i++)
+            {
+                CompareSourceInfo info;
+                info.id   = std::string(1, static_cast<char>('A' + i));
+                info.name = std::filesystem::path(file_paths[i]).stem().string();
+                info.path = file_paths[i];
+                sources.push_back(std::move(info));
+            }
+            if(DataProvider* provider = trace_view->GetDataProvider())
+            {
+                provider->DataModel().SetCompareSources(sources);
+            }
+
+            m_trace_file_path = project_id;
+            m_compare_files   = file_paths;
+            m_trace_type      = System;
+            m_view            = trace_view;
+            m_name = "Compare: " + sources[0].name + " vs " + sources[1].name;
+            result = Success;
+        }
+        else
+        {
+            rocprofvis_controller_free(controller);
+        }
+    }
+
+    if(result == Failed)
+    {
+        AppWindow::GetInstance()->ShowMessageDialog(
+            "Error", "The selected traces could not be opened for comparison.");
+    }
+    return result;
+}
+
 bool
 Project::JsonValidForLoad(jt::Json& json)
 {
-    return json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_TRACE_PATH].isString();
+    jt::Json& general = json[JSON_KEY_GROUP_GENERAL];
+    return general[JSON_KEY_GENERAL_TRACE_PATH].isString() ||
+           general[JSON_KEY_GENERAL_COMPARE_FILES].isArray();
 }
 
 void
@@ -252,10 +355,25 @@ Project::SaveSetttingsJson()
         std::to_string(ROCPROFVIS_VERSION_MAJOR) + "." +
         std::to_string(ROCPROFVIS_VERSION_MINOR) + "." +
         std::to_string(ROCPROFVIS_VERSION_PATCH);
-    m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_TRACE_PATH] =
-        std::filesystem::proximate(
-            m_trace_file_path, std::filesystem::path(m_project_file_path).parent_path())
-            .generic_string();
+    std::filesystem::path project_dir =
+        std::filesystem::path(m_project_file_path).parent_path();
+    if(!m_compare_files.empty())
+    {
+        // Compare project: persist the source files (relative to the .rpv) so it can be
+        // reopened as a combined trace without a separate manifest on disk.
+        jt::Json& compare_files =
+            m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_COMPARE_FILES];
+        for(size_t i = 0; i < m_compare_files.size(); i++)
+        {
+            compare_files[i] =
+                std::filesystem::proximate(m_compare_files[i], project_dir).generic_string();
+        }
+    }
+    else
+    {
+        m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_TRACE_PATH] =
+            std::filesystem::proximate(m_trace_file_path, project_dir).generic_string();
+    }
     for(ProjectSetting* setting : m_settings)
     {
         setting->ToJson();

@@ -6,6 +6,7 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -67,6 +68,15 @@ public:
      */
     OpenResult Open(std::string& file_path);
     /*
+     * Opens two or more trace files as a single combined compare project. The traces
+     * overlay on one timeline and each track is tagged with its source (A, B, ...).
+     * @param project_id: Synthetic, stable id/key for the project (it has no single
+     * file path on disk).
+     * @param file_paths: The trace files to combine, tagged A, B, ... in order.
+     */
+    OpenResult OpenCompare(const std::string&              project_id,
+                           const std::vector<std::string>& file_paths);
+    /*
      * Overwrites the project settings to the project file without further user input.
      */
     void Save();
@@ -118,6 +128,9 @@ private:
     std::string                m_name;
     std::string                m_project_file_path;
     std::string                m_trace_file_path;
+    // Source trace files when this is a compare project (empty otherwise). Persisted to
+    // the .rpv so the compare can be reopened.
+    std::vector<std::string>   m_compare_files;
     TraceType                  m_trace_type;
     std::shared_ptr<RocWidget> m_view;
     std::list<ProjectSetting*> m_settings;
@@ -129,6 +142,7 @@ constexpr const char* JSON_KEY_GROUP_TIMELINE = "timeline";
 
 constexpr const char* JSON_KEY_GENERAL_VERSION    = "version";
 constexpr const char* JSON_KEY_GENERAL_TRACE_PATH = "trace_path";
+constexpr const char* JSON_KEY_GENERAL_COMPARE_FILES = "compare_files";
 
 constexpr const char* JSON_KEY_TIMELINE_BOOKMARK         = "bookmarks";
 constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_KEY     = "key";

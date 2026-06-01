@@ -231,7 +231,6 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
-target_link_libraries(${TARGET_NAME} PRIVATE yaml-cpp)
 
 if(APPLE)
     set(ROCPROFVIS_BUNDLE_VULKAN ON CACHE BOOL

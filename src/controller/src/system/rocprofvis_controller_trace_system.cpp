@@ -43,6 +43,20 @@ SystemTrace::SystemTrace(const std::string& filename)
     
 }
 
+SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
+: Trace(__kRPVControllerSystemPropertiesFirst, __kRPVControllerSystemPropertiesLast,
+        filenames.empty() ? std::string() : filenames.front())
+, m_files(filenames)
+, m_timeline(nullptr)
+, m_event_table(nullptr)
+, m_sample_table(nullptr)
+, m_search_table(nullptr)
+, m_summary(nullptr)
+, m_mem_mgmt(nullptr)
+{
+
+}
+
 rocprofvis_result_t SystemTrace::Init()
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
@@ -129,8 +143,22 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
         m_dm_handle = rocprofvis_dm_create_trace();
         if(nullptr != m_dm_handle)
         {
-            rocprofvis_dm_database_t db =
-                rocprofvis_db_open_database(m_trace_file.c_str(), kAutodetect);
+            rocprofvis_dm_database_t db = nullptr;
+            if(m_files.size() > 1)
+            {
+                std::vector<const char*> file_ptrs;
+                file_ptrs.reserve(m_files.size());
+                for(const std::string& file : m_files)
+                {
+                    file_ptrs.push_back(file.c_str());
+                }
+                db = rocprofvis_db_open_database_multi(file_ptrs.data(),
+                                                       file_ptrs.size());
+            }
+            else
+            {
+                db = rocprofvis_db_open_database(m_trace_file.c_str(), kAutodetect);
+            }
             if(nullptr != db && kRocProfVisDmResultSuccess ==
                                     rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
             {

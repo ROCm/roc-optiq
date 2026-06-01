@@ -212,6 +212,49 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename)
     }    
     return controller;
 }
+rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames, uint64_t count)
+{
+    rocprofvis_controller_t* controller = nullptr;
+    if(filenames && count > 0)
+    {
+        try
+        {
+            std::vector<std::string> files;
+            files.reserve(count);
+            bool all_supported = true;
+            for(uint64_t i = 0; i < count; i++)
+            {
+                // Compare combines the inputs through the multinode rocprof engine, so
+                // every file must be a rocprof trace (reject legacy rocpd / compute / etc).
+                if(filenames[i] == nullptr ||
+                   rocprofvis_db_identify_type(filenames[i]) != kRocprofSqlite)
+                {
+                    spdlog::error("Compare: unsupported or missing trace '{}'",
+                                  filenames[i] ? filenames[i] : "(null)");
+                    all_supported = false;
+                    break;
+                }
+                files.emplace_back(filenames[i]);
+            }
+            // Compare always produces a combined system trace.
+            RocProfVis::Controller::Trace* trace =
+                all_supported ? new RocProfVis::Controller::SystemTrace(files) : nullptr;
+            if(trace && trace->Init() == kRocProfVisResultSuccess)
+            {
+                controller = (rocprofvis_controller_t*) trace;
+            }
+            else
+            {
+                delete trace;
+            }
+        }
+        catch(const std::exception& e)
+        {
+            spdlog::error("Failed to allocate compare controller: {}", e.what());
+        }
+    }
+    return controller;
+}
 rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, rocprofvis_controller_future_t* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;

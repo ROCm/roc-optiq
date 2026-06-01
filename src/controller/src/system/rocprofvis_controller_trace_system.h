@@ -37,6 +37,10 @@ class SystemTrace : public Trace
 public:
     SystemTrace(const std::string& filename);
 
+    // Compare/combine: open several files as one trace. Each file becomes a source
+    // instance whose index is exposed via kRPVControllerTrackInstanceId.
+    SystemTrace(const std::vector<std::string>& filenames);
+
     virtual ~SystemTrace();
 
     virtual rocprofvis_result_t Init() override;
@@ -83,6 +87,7 @@ public:
     MemoryManager* GetMemoryManager();
 
 private:
+    std::vector<std::string> m_files;  // >1 entry => combined/compare load
     std::vector<Track*>   m_tracks;
     std::vector<Node*>    m_nodes;
     Timeline*             m_timeline;

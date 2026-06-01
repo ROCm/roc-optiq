@@ -92,6 +92,11 @@ MemoryManager* SystemTrace::GetMemoryManager(){
     return m_mem_mgmt;
 }
 
+std::mutex& SystemTrace::GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case)
+{
+    return m_table_mutex[use_case];
+}
+
 void SystemTrace::DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int level)
 {
     std::string line;
@@ -701,51 +706,12 @@ rocprofvis_result_t SystemTrace::AsyncFetch(rocprofvis_property_t property, Futu
     return error;
 }
 
-rocprofvis_result_t SystemTrace::AsyncFetch(Table& table, Future& future, Array& array,
-    uint64_t index, uint64_t count)
-{
-    rocprofvis_result_t error = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
-
-    future.Set(JobSystem::Get().IssueJob([&table, &array, index, count, dm_handle](Future* future) -> rocprofvis_result_t {
-                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                              result = table.Fetch(dm_handle, index, count, array, future);
-                              return result;
-                          },&future));
-
-    if(future.IsValid())
-    {
-        error = kRocProfVisResultSuccess;
-    }
-
-    return error;
-}
-
 rocprofvis_result_t SystemTrace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
 {
     rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
-            rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            result = table.Setup(dm_handle, args, future);
-            if (result == kRocProfVisResultSuccess)
-            {
-                uint64_t start_index = 0;
-                uint64_t start_count = 0;
-                if(result == kRocProfVisResultSuccess)
-                {
-                    result = args.GetUInt64(kRPVControllerTableArgsStartIndex, 0,
-                                            &start_index);
-                }
-                if(result == kRocProfVisResultSuccess)
-                {
-                    result = args.GetUInt64(kRPVControllerTableArgsStartCount, 0,
-                                            &start_count);
-                }
-                result = table.Fetch(dm_handle, start_index, start_count, array, future);
-            }
-            return result;
+    future.Set(JobSystem::Get().IssueJob([this, &table, &args, &array](Future* future) -> rocprofvis_result_t {
+            return table.SetupAndFetch(*this, args, array, future);
         }, &future));
 
     if(future.IsValid())

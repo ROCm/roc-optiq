@@ -245,8 +245,6 @@ namespace DataModel
             ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
             for (int column_index = 0; column_index < m_merged_table.MergedColumnCount(); column_index++)
             {
-                if (columns[column_index].m_schema_index[op] == Builder::SCHEMA_INDEX_OPERATION)
-                    continue;
                 if (columns[column_index].m_schema_index[op] == Builder::SCHEMA_INDEX_STREAM_TRACK_ID)
                 {
                     if (to_file == false)
@@ -354,27 +352,24 @@ namespace DataModel
         int column_index = 0;
         for (auto column : m_merged_table.GetMergedColumns())
         {
-            if (column.m_max_schema_index != Builder::SCHEMA_INDEX_OPERATION)
+            if (to_file)
             {
-                if (to_file)
+                if (column.m_max_schema_index != Builder::SCHEMA_INDEX_TRACK_ID && column.m_max_schema_index != Builder::SCHEMA_INDEX_STREAM_TRACK_ID)
                 {
-                    if (column.m_max_schema_index != Builder::SCHEMA_INDEX_TRACK_ID && column.m_max_schema_index != Builder::SCHEMA_INDEX_STREAM_TRACK_ID)
+                    if (column_index > 0)
                     {
-                        if (column_index > 0)
-                        {
-                            *file << ", ";
-                        }
-                        *file << column.m_name;
-                        column_index++;
+                        *file << ", ";
                     }
-                }
-                else
-                {
-                    result = m_db->BindObject()->FuncAddTableColumn(table, column.m_name.c_str());
+                    *file << column.m_name;
                     column_index++;
-                    if (result != kRocProfVisDmResultSuccess)
-                        break;
-                }               
+                }
+            }
+            else
+            {
+                result = m_db->BindObject()->FuncAddTableColumn(table, column.m_name.c_str());
+                column_index++;
+                if (result != kRocProfVisDmResultSuccess)
+                    break;
             }
         }
         return result;
@@ -480,8 +475,6 @@ namespace DataModel
                     uint8_t op = m_merged_table.GetOperationValue(row_index);
                     for (int column_index = 0; column_index < m_merged_table.MergedColumnCount(); column_index++)
                     {
-                        if (columns[column_index].m_schema_index[op] == Builder::SCHEMA_INDEX_OPERATION)
-                            continue;
                         if (columns[column_index].m_schema_index[op] == Builder::SCHEMA_INDEX_NULL)
                         {
                             map[columns[column_index].m_name] = "";
@@ -694,6 +687,7 @@ namespace DataModel
                         m_merged_table.ClearAggregation();
                     }                    
                 }
+                InvalidateSorting();
             }
 
             auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "SORT"; });

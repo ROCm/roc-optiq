@@ -132,13 +132,12 @@ void SplitContainerBase::Render()
             UpdateSplitRatio(mouse_pos, window_pos, available_size);
             fill_active = true;
         }
-        // Only paint on hover/drag.
-        if(fill_active)
-        {
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                splitter_min, splitter_max,
-                SettingsManager::GetInstance().GetColor(Colors::kBorderGray));
-        }
+        const SettingsManager& settings = SettingsManager::GetInstance();
+        ImU32 splitter_color = fill_active
+                                   ? settings.GetColor(Colors::kAccent)
+                                   : settings.GetColor(Colors::kSplitterColor);
+        ImGui::GetWindowDrawList()->AddRectFilled(splitter_min, splitter_max,
+                                                  splitter_color);
         AddSameLine();
     }
 

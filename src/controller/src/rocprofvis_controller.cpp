@@ -337,12 +337,6 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(
                                           *future, *array, property);
                 break;
             }
-            case kRPVControllerObjectTypeTable:
-            {
-                error = trace->AsyncFetch(*((RocProfVis::Controller::Table*) handle),
-                                          *future, *array, index, count);
-                break;
-            }
             case kRPVControllerObjectTypeControllerSystem:
             {
                 error = trace->AsyncFetch(property, *future, *array, index, count);

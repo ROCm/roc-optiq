@@ -4,8 +4,10 @@
 #include "rocprofvis_track_details.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_track_topology.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -18,39 +20,39 @@ TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topo
 : m_data_provider(dp)
 , m_track_topology(topology)
 , m_timeline_selection(timeline_selection)
-    , m_selection_dirty(false)
-    , m_detail_item_id(0)
-    , m_topology_changed_event_token(EventManager::InvalidSubscriptionToken)
-    , m_track_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
-    , m_data_valid(false)
-    {
-        auto topology_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
-            if(event)
+, m_selection_dirty(false)
+, m_detail_item_id(0)
+, m_topology_changed_event_token(EventManager::InvalidSubscriptionToken)
+, m_track_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
+, m_data_valid(false)
+{
+    auto topology_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
+        if(event)
+        {
+            if(m_data_provider.GetTraceFilePath() == event->GetSourceId())
             {
-                if(m_data_provider.GetTraceFilePath() == event->GetSourceId())
-                {
-                    m_selection_dirty = true;
-                }
+                m_selection_dirty = true;
             }
-        };
+        }
+    };
 
-        m_topology_changed_event_token = EventManager::GetInstance()->Subscribe(
-            static_cast<int>(RocEvents::kTopologyChanged), topology_changed_event_handler);
+    m_topology_changed_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTopologyChanged), topology_changed_event_handler);
 
-        auto metadata_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
-            if(event)
+    auto metadata_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
+        if(event)
+        {
+            if(m_data_provider.GetTraceFilePath() == event->GetSourceId())
             {
-                if(m_data_provider.GetTraceFilePath() == event->GetSourceId())
-                {
-                    m_data_valid = false;
-                }
+                m_data_valid = false;
             }
-        };
+        }
+    };
 
-        m_track_metadata_changed_event_token = EventManager::GetInstance()->Subscribe(
-            static_cast<int>(RocEvents::kTrackMetadataChanged),
-            metadata_changed_event_handler);
-    }
+    m_track_metadata_changed_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTrackMetadataChanged),
+        metadata_changed_event_handler);
+}
 
 TrackDetails::~TrackDetails() {
     EventManager::GetInstance()->Unsubscribe(
@@ -67,10 +69,21 @@ TrackDetails::Render()
 {
     if(m_data_valid && !m_selection_dirty && !m_track_topology->Dirty())
     {
-        ImGui::BeginChild("track_details", ImVec2(0, 0), ImGuiChildFlags_Borders);
+        const SettingsManager& settings = SettingsManager::GetInstance();
+        const ImGuiStyle&      style    = settings.GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+        ImGui::BeginChild("track_details", ImVec2(0, 0),
+                          ImGuiChildFlags_Borders |
+                              ImGuiChildFlags_AlwaysUseWindowPadding);
         if(m_track_details.empty())
         {
-            ImGui::TextUnformatted("No data available for the selected tracks.");
+            CenterNextTextItem("No data available for the selected tracks.");
+            ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
+                                 0.5f);
+            ImGui::TextDisabled("No data available for the selected tracks.");
         }
         else
         {
@@ -129,6 +142,8 @@ TrackDetails::Render()
             }
         }
         ImGui::EndChild();
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(2);
     }
 }
 

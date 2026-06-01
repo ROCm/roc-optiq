@@ -58,6 +58,18 @@ AnalysisModel::SetPerTrackQueueUtilizationValue(uint64_t track_id, double util_p
     }
 }
 
+const TablesModel&
+AnalysisModel::GetTables() const
+{
+    return m_tables;
+}
+
+TablesModel&
+AnalysisModel::GetTables()
+{
+    return m_tables;
+}
+
 void
 AnalysisModel::ClearPerTrackQueueUtilization()
 {
@@ -67,6 +79,7 @@ AnalysisModel::ClearPerTrackQueueUtilization()
 void
 AnalysisModel::Clear()
 {
+    m_tables.ClearAllTables();
     ClearPerTrackQueueUtilization();
 }
 

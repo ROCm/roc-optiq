@@ -1626,34 +1626,43 @@ rocprofvis_dm_result_t ProfileDatabase::ExportTableCSV(rocprofvis_dm_charptr_t q
                                                        rocprofvis_dm_charptr_t file_path,
                                                        Future* future)
 {
-    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Output path cannot be NULL.",
-                                 kRocProfVisDmResultInvalidParameter);
-    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
-                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Output path cannot be NULL.", kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(BindObject()->trace_object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
-    std::string query_without_commands = TableProcessor::QueryWithoutCommands(query);
 
-    Future* internal_future = new Future(nullptr);
-
-
-    for (int i = 0; i < kRPVTableDataTypesNum; i++)
+    rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
+    std::vector<rocprofvis_db_compound_query> queries;
+    std::vector<rocprofvis_db_compound_query_command> commands;
+    std::set<uint32_t> tracks;
+    if (TableProcessor::IsCompoundQuery(query, queries, tracks,  commands))
     {
-        if (m_table_processor[i].IsCurrentQuery(query_without_commands.c_str()))
+        auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
+        if (it != commands.end())
         {
-            result = m_table_processor[i].ExportToCSV(file_path);
-            break;
-        }
+            data_type = (rocprofvis_db_compound_table_type)std::atol(it->parameter.c_str());
+            result = kRocProfVisDmResultSuccess;
+        }            
     }
-
     if (result == kRocProfVisDmResultSuccess)
     {
-        ShowProgress(100, "CSV export success", kRPVDbSuccess, future);        
+        Future* internal_future = future->AddSubFuture();
+        result = ExecuteQuery(query, "ExportTableCSV", internal_future);
+        future->WaitAndDeleteSubFuture(internal_future);
+        if (result == kRocProfVisDmResultSuccess)
+        {
+            result = m_table_processor[data_type].ExportToCSV(file_path);
+            if (result == kRocProfVisDmResultSuccess)
+            {
+                ShowProgress(100, "CSV export success", kRPVDbSuccess, future);        
+            }
+        }
     }
-    else
+    BindObject()->FuncRemoveTable(BindObject()->trace_object, query);
+    if (result != kRocProfVisDmResultSuccess)
     {
         ShowProgress(0, "CSV export failed", kRPVDbError, future);
     }
-
     return future->SetPromise(result);
 }
 
@@ -1909,7 +1918,9 @@ std::string ProfileDatabase::GetHistogramQueryPrefix(uint64_t bucket_size)
     histogram_query_prefix += " AS bucket_size, ";
     histogram_query_prefix += histogram_content_version;
     histogram_query_prefix += " AS version ), ";
-    histogram_query_prefix += "events_src AS ( SELECT (id + op << 60) as event_id, ";
+    histogram_query_prefix += "events_src AS ( SELECT (id + ";
+    histogram_query_prefix += Builder::OPERATION_SERVICE_NAME;
+    histogram_query_prefix += " << 60) as event_id, ";
     histogram_query_prefix += Builder::START_SERVICE_NAME;
     histogram_query_prefix += " as start_ts, ";
     histogram_query_prefix += Builder::END_SERVICE_NAME;

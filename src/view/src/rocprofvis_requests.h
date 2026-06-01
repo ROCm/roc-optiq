@@ -36,6 +36,11 @@ enum class RequestType
     kTableExport,
     kFetchSystemTrace,
     kFetchAnalysisQueueUtilization,
+    kFetchAnalysisTopEventsTable,
+    kFetchAnalysisTopDispatchEventsTable,
+    kFetchAnalysisTopMemoryAllocationEventsTable,
+    kFetchAnalysisTopMemoryCopyEventsTable,
+    kFetchAnalysisTopLaunchSampleEventsTable,
 #ifdef COMPUTE_UI_SUPPORT
     kFetchComputeTrace,
     kFetchMetrics,

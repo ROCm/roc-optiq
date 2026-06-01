@@ -42,14 +42,14 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(145, 156, 174, 255),  // Colors::kScrubberNumberColor
     IM_COL32(78, 152, 220, 210),   // Colors::kArrowColor
     IM_COL32(50, 59, 76, 255),     // Colors::kBorderColor
-    IM_COL32(39, 43, 56, 255),     // Colors::kSplitterColor
+    IM_COL32(50, 56, 72, 255),     // Colors::kSplitterColor
     IM_COL32(29, 30, 38, 255),     // Colors::kBgMain
     IM_COL32(34, 37, 48, 255),     // Colors::kBgPanel
     IM_COL32(39, 43, 56, 255),     // Colors::kBgFrame
     IM_COL32(48, 56, 76, 255),     // Colors::kComboFill
-    IM_COL32(106, 164, 232, 255),  // Colors::kAccentRed
-    IM_COL32(140, 190, 245, 255),  // Colors::kAccentRedHover
-    IM_COL32(78, 132, 202, 255),   // Colors::kAccentRedActive
+    IM_COL32(106, 164, 232, 255),  // Colors::kAccent
+    IM_COL32(140, 190, 245, 255),  // Colors::kAccentHover
+    IM_COL32(78, 132, 202, 255),   // Colors::kAccentActive
     IM_COL32(34, 37, 48, 255),     // Colors::kTabAccent
     IM_COL32(44, 50, 66, 255),     // Colors::kTabAccentHover
     IM_COL32(39, 43, 56, 255),     // Colors::kTabAccentActive
@@ -129,14 +129,14 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(86, 92, 108, 255),    // Colors::kScrubberNumberColor
     IM_COL32(56, 124, 244, 200),   // Colors::kArrowColor
     IM_COL32(228, 231, 236, 255),  // Colors::kBorderColor
-    IM_COL32(238, 240, 244, 255),  // Colors::kSplitterColor
+    IM_COL32(228, 232, 240, 255),  // Colors::kSplitterColor
     IM_COL32(247, 248, 250, 255),  // Colors::kBgMain
     IM_COL32(255, 255, 255, 255),  // Colors::kBgPanel
     IM_COL32(244, 246, 250, 255),  // Colors::kBgFrame
     IM_COL32(232, 240, 251, 255),  // Colors::kComboFill
-    IM_COL32(54, 132, 214, 255),   // Colors::kAccentRed
-    IM_COL32(88, 164, 232, 255),   // Colors::kAccentRedHover
-    IM_COL32(32, 102, 180, 255),   // Colors::kAccentRedActive
+    IM_COL32(54, 132, 214, 255),   // Colors::kAccent
+    IM_COL32(88, 164, 232, 255),   // Colors::kAccentHover
+    IM_COL32(32, 102, 180, 255),   // Colors::kAccentActive
     IM_COL32(238, 240, 244, 255),  // Colors::kTabAccent
     IM_COL32(244, 246, 250, 255),  // Colors::kTabAccentHover
     IM_COL32(228, 231, 236, 255),  // Colors::kTabAccentActive
@@ -246,11 +246,11 @@ SettingsManager::ApplyColorStyling()
     ImVec4 bgMain    = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgMain));
     ImVec4 bgPanel   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgPanel));
     ImVec4 bgFrame   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgFrame));
-    ImVec4 accentRed = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRed));
-    ImVec4 accentRedHover =
-        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedHover));
-    ImVec4 accentRedActive =
-        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedActive));
+    ImVec4 accent = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccent));
+    ImVec4 accentHover =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentHover));
+    ImVec4 accentActive =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentActive));
     ImVec4 tabAccent = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccent));
     ImVec4 tabAccentHover =
         ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccentHover));
@@ -280,7 +280,7 @@ SettingsManager::ApplyColorStyling()
 
     // Title bar
     style.Colors[ImGuiCol_TitleBg]          = bgPanel;
-    style.Colors[ImGuiCol_TitleBgActive]    = accentRed;
+    style.Colors[ImGuiCol_TitleBgActive]    = accent;
     style.Colors[ImGuiCol_TitleBgCollapsed] = borderGray;
 
     // Menu bar
@@ -310,11 +310,11 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_ScrollbarGrabActive]  = buttonActive;
 
     // Checkboxes, radio buttons
-    style.Colors[ImGuiCol_CheckMark] = accentRed;
+    style.Colors[ImGuiCol_CheckMark] = accent;
 
     // Slider
-    style.Colors[ImGuiCol_SliderGrab]       = accentRed;
-    style.Colors[ImGuiCol_SliderGrabActive] = accentRedActive;
+    style.Colors[ImGuiCol_SliderGrab]       = accent;
+    style.Colors[ImGuiCol_SliderGrabActive] = accentActive;
 
     // Buttons
     style.Colors[ImGuiCol_Button]        = button;
@@ -327,37 +327,37 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_TabActive]          = tabAccent;
     style.Colors[ImGuiCol_TabUnfocused]       = bgFrame;
     style.Colors[ImGuiCol_TabUnfocusedActive] = tabAccentActive;
-    style.Colors[ImGuiCol_TabSelectedOverline] = accentRed;
-    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = accentRedActive;
+    style.Colors[ImGuiCol_TabSelectedOverline] = accent;
+    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = accentActive;
 
     // Headers (collapsing, selectable, etc)
     style.Colors[ImGuiCol_Header]        = tabAccent;
     style.Colors[ImGuiCol_HeaderHovered] = tabAccentHover;
-    style.Colors[ImGuiCol_HeaderActive]  = accentRed;
+    style.Colors[ImGuiCol_HeaderActive]  = accent;
 
     // Separator, resize grip
     style.Colors[ImGuiCol_Separator]         = borderGray;
-    style.Colors[ImGuiCol_SeparatorHovered]  = accentRedHover;
-    style.Colors[ImGuiCol_SeparatorActive]   = accentRedActive;
+    style.Colors[ImGuiCol_SeparatorHovered]  = accentHover;
+    style.Colors[ImGuiCol_SeparatorActive]   = accentActive;
     style.Colors[ImGuiCol_ResizeGrip]        = tabAccent;
     style.Colors[ImGuiCol_ResizeGripHovered] = tabAccentHover;
-    style.Colors[ImGuiCol_ResizeGripActive]  = accentRedActive;
+    style.Colors[ImGuiCol_ResizeGripActive]  = accentActive;
 
     // Text
     style.Colors[ImGuiCol_Text]         = textMain;
     style.Colors[ImGuiCol_TextDisabled] = textDim;
 
     // Drag and drop
-    style.Colors[ImGuiCol_DragDropTarget] = accentRed;
+    style.Colors[ImGuiCol_DragDropTarget] = accent;
 
     // Navigation highlight
-    style.Colors[ImGuiCol_NavHighlight] = accentRedHover;
+    style.Colors[ImGuiCol_NavHighlight] = accentHover;
 
     // Plot colors
-    style.Colors[ImGuiCol_PlotLines]            = accentRed;
-    style.Colors[ImGuiCol_PlotLinesHovered]     = accentRedHover;
-    style.Colors[ImGuiCol_PlotHistogram]        = accentRed;
-    style.Colors[ImGuiCol_PlotHistogramHovered] = accentRedHover;
+    style.Colors[ImGuiCol_PlotLines]            = accent;
+    style.Colors[ImGuiCol_PlotLinesHovered]     = accentHover;
+    style.Colors[ImGuiCol_PlotHistogram]        = accent;
+    style.Colors[ImGuiCol_PlotHistogramHovered] = accentHover;
 
     // Modal window dim
     style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0, 0, 0, 0.7f);

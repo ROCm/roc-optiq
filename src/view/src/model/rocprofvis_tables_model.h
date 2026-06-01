@@ -19,6 +19,11 @@ enum class TableType
     kEventTable,
     kEventSearchTable,
     kSummaryKernelTable,
+    kAnalysisTopInstrumentedEventsTable,
+    kAnalysisTopDispatchEventsTable,
+    kAnalysisTopMemoryAllocationEventsTable,
+    kAnalysisTopMemoryCopyEventsTable,
+    kAnalysisTopSampledEventsTable,
     __kTableTypeCount
 };
 

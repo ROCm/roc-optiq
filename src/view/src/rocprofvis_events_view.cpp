@@ -21,6 +21,9 @@ constexpr ImGuiTableFlags TABLE_FLAGS = ImGuiTableFlags_BordersOuter |
                                         ImGuiTableFlags_Resizable |
                                         ImGuiTableFlags_SizingStretchProp;
 
+constexpr int kFlowColumnCount      = 6;
+constexpr int kCallStackColumnCount = 5;
+
 namespace
 {
 
@@ -327,7 +330,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("FlowInfoTable", 6, TABLE_FLAGS))
+            if(ImGui::BeginTable("FlowInfoTable", kFlowColumnCount, TABLE_FLAGS))
             {
                 ImGui::TableSetupColumn("ID");
                 ImGui::TableSetupColumn("Name");
@@ -406,7 +409,9 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                             m_context_menu_flow_index = i;
                             int hovered_col           = ImGui::TableGetHoveredColumn();
                             m_context_menu_flow_column =
-                                (hovered_col >= 0 && hovered_col < 6) ? hovered_col : 0;
+                                (hovered_col >= 0 && hovered_col < kFlowColumnCount)
+                                    ? hovered_col
+                                    : 0;
                             ImGui::OpenPopup("##FlowContextMenu");
                         }
                         ImGui::PopStyleColor(3);
@@ -482,7 +487,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         if(ImGui::MenuItem("Copy Row Data"))
                         {
                             std::string row_text;
-                            for(int c = 0; c < 6; c++)
+                            for(int c = 0; c < kFlowColumnCount; c++)
                             {
                                 if(c > 0) row_text += '\t';
                                 row_text += cells[c];
@@ -492,7 +497,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         if(ImGui::MenuItem("Copy Cell Data"))
                         {
                             int col = m_context_menu_flow_column;
-                            if(col >= 0 && col < 6)
+                            if(col >= 0 && col < kFlowColumnCount)
                                 ImGui::SetClipboardText(cells[col].c_str());
                         }
                     }
@@ -526,7 +531,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("CallStackTable", 5, TABLE_FLAGS))
+            if(ImGui::BeginTable("CallStackTable", kCallStackColumnCount, TABLE_FLAGS))
             {
                 ImGui::TableSetupColumn("ID");
                 ImGui::TableSetupColumn("Address");
@@ -624,7 +629,9 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                             m_context_menu_callstack_index = i;
                             int hovered_col                = ImGui::TableGetHoveredColumn();
                             m_context_menu_callstack_column =
-                                (hovered_col >= 0 && hovered_col < 5) ? hovered_col : 0;
+                                (hovered_col >= 0 && hovered_col < kCallStackColumnCount)
+                                    ? hovered_col
+                                    : 0;
                             open_callstack_context_menu = true;
                         }
                         ImGui::PopStyleColor(3);
@@ -687,7 +694,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                         if(ImGui::MenuItem("Copy Row Data"))
                         {
                             std::string row_text;
-                            for(int c = 0; c < 5; c++)
+                            for(int c = 0; c < kCallStackColumnCount; c++)
                             {
                                 if(c > 0) row_text += '\t';
                                 row_text += cells[c];
@@ -697,7 +704,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                         if(ImGui::MenuItem("Copy Cell Data"))
                         {
                             int col = m_context_menu_callstack_column;
-                            if(col >= 0 && col < 5)
+                            if(col >= 0 && col < kCallStackColumnCount)
                                 ImGui::SetClipboardText(cells[col].c_str());
                         }
                     }

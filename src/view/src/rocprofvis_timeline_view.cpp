@@ -21,6 +21,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
+#include <sstream>
 
 namespace RocProfVis
 {
@@ -36,6 +37,89 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
+
+// Builds a readable, tab-separated text block for one event's popout details,
+// mirroring the sections the user sees in EventsView. Sections without data are
+// omitted so the clipboard output matches the visible detail panel. Tabs match
+// the row-copy format used elsewhere (event flow/call-stack context menus).
+static std::string
+FormatEventDetails(const EventInfo& info, double trace_start_time,
+                   TimeFormat time_format)
+{
+    std::ostringstream    out;
+    const BasicEventData& basic = info.basic_info;
+
+    out << "Event ID: " << basic.id.bitfield.event_id << "\n";
+    out << "Name: " << basic.name << "\n";
+    out << "Start: "
+        << nanosecond_to_formatted_str(basic.start_ts - trace_start_time, time_format,
+                                       true)
+        << "\n";
+    out << "Duration: "
+        << nanosecond_to_formatted_str(basic.duration, time_format, true) << "\n";
+
+    if(!info.ext_info.empty())
+    {
+        out << "\nExtended Data:\n";
+        for(const EventExtData& ext : info.ext_info)
+        {
+            double      offset_ns = 0.0;
+            std::string value;
+            switch(ext.category_enum)
+            {
+                case kRocProfVisEventEssentialDataStart:
+                case kRocProfVisEventEssentialDataEnd:
+                    // Start/end are absolute timestamps; rebase them onto the
+                    // trace start before formatting, like the detail panel does.
+                    offset_ns = trace_start_time;
+                    [[fallthrough]];
+                case kRocProfVisEventEssentialDataDuration:
+                    value = nanosecond_str_to_formatted_str(ext.value, offset_ns,
+                                                            time_format, true);
+                    break;
+                default:
+                    value = ext.value;
+                    break;
+            }
+            out << ext.name << ": " << value << "\n";
+        }
+    }
+
+    if(!info.args.empty())
+    {
+        out << "\nArguments:\nPos\tType\tName\tValue\n";
+        for(const EventArg& arg : info.args)
+        {
+            out << arg.position << "\t" << arg.data_type << "\t" << arg.name << "\t"
+                << arg.value << "\n";
+        }
+    }
+
+    if(!info.flow_info.empty())
+    {
+        out << "\nFlow Data:\nID\tName\tTimestamp\tTrack ID\tLevel\tDirection\n";
+        for(const EventFlowData& flow : info.flow_info)
+        {
+            out << flow.id.bitfield.event_id << "\t" << flow.name << "\t"
+                << nanosecond_to_formatted_str(flow.start_timestamp - trace_start_time,
+                                               time_format, true)
+                << "\t" << flow.track_id << "\t" << flow.level << "\t" << flow.direction
+                << "\n";
+        }
+    }
+
+    if(!info.call_stack_info.empty())
+    {
+        out << "\nCall Stack Data:\nID\tAddress\tName\tFile\tPC\n";
+        for(const CallStackData& frame : info.call_stack_info)
+        {
+            out << frame.id.bitfield.event_id << "\t" << frame.address << "\t"
+                << frame.name << "\t" << frame.file << "\t" << frame.pc << "\n";
+        }
+    }
+
+    return out.str();
+}
 
 TimelineView::TimelineView(DataProvider&                          dp,
                            std::shared_ptr<TimelineSelection>     timeline_selection,
@@ -400,7 +484,8 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup("TimelineContextMenu"))
     {
-        // Show "Make Time Range Selection" when there are selected events
+        // Show event-centric actions when there are selected events and the
+        // right-click landed on an event lane.
         if(m_timeline_selection->HasSelectedEvents() &&
            TimelineFocusManager::GetInstance().GetRightClickLayer() == Layer::kGraphLayer)
         {
@@ -415,6 +500,21 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                                              m_tpt->NormalizeTime(end_ts) };
                     m_timeline_selection->SelectTimeRange(start_ts, end_ts);
                 }
+                ImGui::CloseCurrentPopup();
+            }
+
+            std::vector<uint64_t> selected_event_ids;
+            m_timeline_selection->GetSelectedEvents(selected_event_ids);
+            const bool multiple_events = selected_event_ids.size() > 1;
+            if(ImGui::MenuItem(multiple_events ? "Copy Event Names" : "Copy Event Name"))
+            {
+                CopySelectedEventNames();
+                ImGui::CloseCurrentPopup();
+            }
+            if(ImGui::MenuItem(multiple_events ? "Copy Event Details (All)"
+                                               : "Copy Event Details"))
+            {
+                CopySelectedEventDetails();
                 ImGui::CloseCurrentPopup();
             }
         }
@@ -495,6 +595,84 @@ TimelineView::ClearTimeRangeSelection()
         m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
         m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
     }
+}
+
+void
+TimelineView::CopySelectedEventNames()
+{
+    std::vector<uint64_t> event_ids;
+    if(!m_timeline_selection->GetSelectedEvents(event_ids))
+    {
+        return;
+    }
+
+    const EventModel&  events = m_data_provider.DataModel().GetEvents();
+    std::ostringstream out;
+    size_t             count = 0;
+    for(uint64_t event_id : event_ids)
+    {
+        const EventInfo* info = events.GetEvent(event_id);
+        if(info)
+        {
+            if(count > 0)
+            {
+                out << "\n";
+            }
+            out << info->basic_info.name;
+            ++count;
+        }
+    }
+
+    if(count == 0)
+    {
+        return;
+    }
+
+    ImGui::SetClipboardText(out.str().c_str());
+    NotificationManager::GetInstance().Show(
+        count > 1 ? "Event names were copied" : "Event name was copied",
+        NotificationLevel::Info);
+}
+
+void
+TimelineView::CopySelectedEventDetails()
+{
+    std::vector<uint64_t> event_ids;
+    if(!m_timeline_selection->GetSelectedEvents(event_ids))
+    {
+        return;
+    }
+
+    const EventModel& events = m_data_provider.DataModel().GetEvents();
+    const double      trace_start_time =
+        m_data_provider.DataModel().GetTimeline().GetStartTime();
+    const TimeFormat time_format =
+        m_settings.GetUserSettings().unit_settings.time_format;
+
+    std::ostringstream out;
+    size_t             count = 0;
+    for(uint64_t event_id : event_ids)
+    {
+        const EventInfo* info = events.GetEvent(event_id);
+        if(info)
+        {
+            if(count > 0)
+            {
+                out << "\n----------------------------------------\n\n";
+            }
+            out << FormatEventDetails(*info, trace_start_time, time_format);
+            ++count;
+        }
+    }
+
+    if(count == 0)
+    {
+        return;
+    }
+
+    ImGui::SetClipboardText(out.str().c_str());
+    NotificationManager::GetInstance().Show("Event details were copied",
+                                            NotificationLevel::Info);
 }
 
 float

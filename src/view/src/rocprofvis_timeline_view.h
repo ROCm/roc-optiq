@@ -142,6 +142,8 @@ private:
     void RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size);
 
     void                            ClearTimeRangeSelection();
+    void                            CopySelectedEventNames();
+    void                            CopySelectedEventDetails();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
     EventManager::SubscriptionToken m_new_track_token;

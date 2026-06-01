@@ -352,7 +352,12 @@ main(int argc, char** argv)
                 while(!glfwWindowShouldClose(window))
                 {
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-                    if(ui_test_engine && show_ui_test_engine)
+                    // Keep the window alive only while a UI test is mid-flight
+                    // so tearing the app down underneath the test runner can't
+                    // crash it. When no test is running the window closes
+                    // normally, so passing -u never traps the user.
+                    if(ui_test_engine &&
+                       ImGuiTestEngine_GetIO(ui_test_engine).IsRunningTests)
                     {
                         glfwSetWindowShouldClose(window, GLFW_FALSE);
                     }

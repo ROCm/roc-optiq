@@ -80,10 +80,13 @@ protected:
                                                        size_t stream_id_column_index) const;
     std::pair<uint64_t, uint64_t> SelectedRowToTimeRange() const;
     void                          SelectedRowToClipboard() const;
-    void                          FormatTimeColumns() const;
+    void                          SelectedCellToClipboard(bool use_formatted_data) const;
     void                          SelectedRowNavigateEvent(size_t track_id_column_index,
                                                            size_t stream_id_column_index) const;
-    void                          ExportToFile() const;
+    void                          SelectedRowContextMenu();
+
+    void FormatTimeColumns() const;
+    void ExportToFile() const;
 
     FilterOptions                      m_filter_options;
     FilterOptions                      m_pending_filter_options;
@@ -119,13 +122,15 @@ protected:
 
 private:
     void RenderCell(const std::string* cell_text, int row, int column);
+    void RenderContextMenu();
     void ProcessSortOrFilterRequest(rocprofvis_controller_sort_order_t sort_order,
-                            uint64_t sort_column_index, uint64_t frame_count);
+                                    uint64_t sort_column_index, uint64_t frame_count);
 
     int m_fetch_pad_items;
     int m_fetch_threshold_items;
 
     // Internal state flags below
+    bool     m_open_context_menu;
     bool     m_skip_data_fetch;
     uint64_t m_last_total_row_count;
     ImVec2   m_last_table_size;

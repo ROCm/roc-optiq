@@ -7,16 +7,13 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
-#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-#include "widgets/rocprofvis_notification_manager.h"
 
 namespace RocProfVis
 {
 namespace View
 {
 
-constexpr const char* ROWCONTEXTMENU_POPUP_NAME = "RowContextMenu";
 constexpr const char* NO_DATA_TEXT =
     "No data available for the selected tracks or filters.";
 constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
@@ -40,9 +37,8 @@ MultiTrackTable::MultiTrackTable(DataProvider& dp, TableType table_type,
 : InfiniteScrollTable(dp, table_type, request_table_type, request_id, table_model,
                       table_model_mutable, timeline_selection, default_sort_column_index,
                       default_sort_order, friendly_name, NO_DATA_TEXT)
-, m_defer_track_selection_changed(false)
+, m_retry_selection_fetch(false)
 , m_display_filters(display_filters)
-, m_open_context_menu(false)
 , m_group_by_selection_index(0)
 {
     m_filter_store[0] = '\0';
@@ -51,68 +47,21 @@ MultiTrackTable::MultiTrackTable(DataProvider& dp, TableType table_type,
 MultiTrackTable::~MultiTrackTable() {}
 
 void
-MultiTrackTable::HandleTrackSelectionChanged()
+MultiTrackTable::HandleTrackSelectionChanged(uint64_t track_id, bool selected)
 {
-    std::vector<uint64_t> tracks;
-    double                start_ns;
-    double                end_ns;
-    m_timeline_selection->GetSelectedTracks(tracks);
+    if(IncludeTrack(track_id) ||
+       (track_id == TimelineSelection::INVALID_SELECTION_ID && !selected))
+    {
+        FetchSelectionData();
+    }
+}
 
-    const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
-    // If no valid time range is provided, use the full trace range
-    if(m_timeline_selection->HasValidTimeRangeSelection())
-    {
-        m_timeline_selection->GetSelectedTimeRange(start_ns, end_ns);
-    }
-    else
-    {
-        start_ns = tlm.GetStartTime();
-        end_ns   = tlm.GetEndTime();
-    }
-
-    std::vector<uint64_t> filtered_tracks;
-    FilterSelectedTracksForTableType(tracks, filtered_tracks);
-
-    bool fetch_result = false;
-
-    // Cancel pending requests.
-    if(m_data_provider.IsRequestPending(m_request_id))
-    {
-        m_data_provider.CancelRequest(m_request_id);
-    }
-    // if no tracks match the table type, clear the table
-    if(filtered_tracks.empty())
-    {
-        m_table_model_mutable().ClearTable(m_table_type);
-        fetch_result = true;
-    }
-    else
-    {
-        // Fetch table data for the selected tracks
-        TableRequestParams table_params(
-            m_request_table_type, filtered_tracks, {}, start_ns, end_ns,
-            m_filter_options.where, m_filter_options.filter,
-            m_filter_options.group_by.c_str(), m_filter_options.group_columns, {}, 0,
-            m_fetch_chunk_size, m_sort_column_index, m_sort_order);
-
-        fetch_result = m_data_provider.FetchTable(table_params);
-    }
-
-    if(!fetch_result)
-    {
-        spdlog::error("Failed to queue table request for tracks: {}",
-                      filtered_tracks.size());
-        // save this selection event to reprocess it later (it's ok to replace the
-        // previous one as the new one reflects the current selection)
-        m_defer_track_selection_changed = true;
-    }
-    else
-    {
-        // clear any pending track selection event
-        m_defer_track_selection_changed = false;
-    }
-    // Update the selected tracks for this table type
-    m_selected_tracks = std::move(filtered_tracks);
+void
+MultiTrackTable::HandleTimeRangeSelectionChanged(double start_ns, double end_ns)
+{
+    (void) start_ns;
+    (void) end_ns;
+    FetchSelectionData();
 }
 
 void
@@ -331,7 +280,6 @@ MultiTrackTable::Render()
     }
 
     InfiniteScrollTable::Render();
-    RenderContextMenu();
 
     ImGui::EndChild();
 }
@@ -340,7 +288,7 @@ void
 MultiTrackTable::Update()
 {
     // Handle track selection changed event
-    if(m_defer_track_selection_changed)
+    if(m_retry_selection_fetch)
     {
         if(!m_data_provider.IsRequestPending(m_request_id))
         {
@@ -348,7 +296,7 @@ MultiTrackTable::Update()
             spdlog::debug(
                 "Reprocessing deferred track selection changed event for table: {}",
                 m_widget_name);
-            HandleTrackSelectionChanged();
+            FetchSelectionData();
         }
     }
 
@@ -400,6 +348,22 @@ MultiTrackTable::Update()
     }
 
     InfiniteScrollTable::Update();
+}
+
+bool
+MultiTrackTable::IncludeTrack(uint64_t track_id) const
+{
+    bool             include = false;
+    const TrackInfo* track_info =
+        m_data_provider.DataModel().GetTimeline().GetTrack(track_id);
+    if(track_info)
+    {
+        include = (track_info->track_type == kRPVControllerTrackTypeSamples &&
+                   m_table_type == TableType::kSampleTable) ||
+                  (track_info->track_type == kRPVControllerTrackTypeEvents &&
+                   m_table_type == TableType::kEventTable);
+    }
+    return include;
 }
 
 void
@@ -457,31 +421,80 @@ MultiTrackTable::RowSelected(const ImGuiMouseButton mouse_button)
 {
     if(mouse_button == ImGuiMouseButton_Right)
     {
-        m_open_context_menu = true;
+        InfiniteScrollTable::SelectedRowContextMenu();
     }
     InfiniteScrollTable::RowSelected(mouse_button);
 }
 
 void
-MultiTrackTable::FilterSelectedTracksForTableType(
-    const std::vector<uint64_t>& selected_track_ids,
-    std::vector<uint64_t>&       filtered_track_ids) const
+MultiTrackTable::FetchSelectionData()
 {
+    std::vector<uint64_t> tracks;
+    double                start_ns;
+    double                end_ns;
+    m_timeline_selection->GetSelectedTracks(tracks);
+
     const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
-    for(uint64_t track_id : selected_track_ids)
+    // If no valid time range is provided, use the full trace range
+    if(m_timeline_selection->HasValidTimeRangeSelection())
     {
-        const TrackInfo* track_info = tlm.GetTrack(track_id);
-        if(track_info)
+        m_timeline_selection->GetSelectedTimeRange(start_ns, end_ns);
+    }
+    else
+    {
+        start_ns = tlm.GetStartTime();
+        end_ns   = tlm.GetEndTime();
+    }
+
+    std::vector<uint64_t> included_tracks;
+    for(uint64_t& track_id : tracks)
+    {
+        if(IncludeTrack(track_id))
         {
-            if((track_info->track_type == kRPVControllerTrackTypeSamples &&
-                m_table_type == TableType::kSampleTable) ||
-               (track_info->track_type == kRPVControllerTrackTypeEvents &&
-                m_table_type == TableType::kEventTable))
-            {
-                filtered_track_ids.push_back(track_id);
-            }
+            included_tracks.push_back(track_id);
         }
     }
+
+    bool fetch_result = false;
+
+    // Cancel pending requests.
+    if(m_data_provider.IsRequestPending(m_request_id))
+    {
+        m_data_provider.CancelRequest(m_request_id);
+    }
+    // if no tracks match the table type, clear the table
+    if(included_tracks.empty())
+    {
+        m_table_model_mutable().ClearTable(m_table_type);
+        fetch_result = true;
+    }
+    else
+    {
+        // Fetch table data for the selected tracks
+        TableRequestParams table_params(
+            m_request_table_type, included_tracks, {}, start_ns, end_ns,
+            m_filter_options.where, m_filter_options.filter,
+            m_filter_options.group_by.c_str(), m_filter_options.group_columns, {}, 0,
+            m_fetch_chunk_size, m_sort_column_index, m_sort_order);
+
+        fetch_result = m_data_provider.FetchTable(table_params);
+    }
+
+    if(!fetch_result)
+    {
+        spdlog::error("Failed to queue table request for tracks: {}",
+                      included_tracks.size());
+        // save this selection event to reprocess it later (it's ok to replace the
+        // previous one as the new one reflects the current selection)
+        m_retry_selection_fetch = true;
+    }
+    else
+    {
+        // clear any pending selection fetch
+        m_retry_selection_fetch = false;
+    }
+    // Update the included tracks for this table type
+    m_included_tracks = std::move(included_tracks);
 }
 
 bool
@@ -489,126 +502,6 @@ MultiTrackTable::XButton(const char* id) const
 {
     bool clicked = RocProfVis::View::XButton(id, "Clear", &m_settings);
     return clicked;
-}
-
-void
-MultiTrackTable::RenderContextMenu()
-{
-    if(m_open_context_menu)
-    {
-        ImGui::OpenPopup(ROWCONTEXTMENU_POPUP_NAME);
-        m_open_context_menu = false;
-    }
-
-    auto style = m_settings.GetDefaultStyle();
-
-    // Render context menu for row actions
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-    if(ImGui::BeginPopup(ROWCONTEXTMENU_POPUP_NAME))
-    {
-        uint64_t target_track_id = SelectedRowToTrackID(
-            m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
-        if(ImGui::MenuItem(m_table_type == TableType::kSampleTable ? "Go To Sample"
-                                                                        : "Go To Event",
-                                nullptr, false, target_track_id != INVALID_UINT64_INDEX))
-        {
-            SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
-                                     m_important_column_idxs[kStreamId]);
-        } 
-        ImGui::Separator();
-        if(ImGui::MenuItem("Copy Row Data", nullptr, false))
-        {
-            SelectedRowToClipboard();
-        }
-        else if(ImGui::MenuItem("Copy Cell Data", nullptr, false))
-        {
-            CopyCellToClipboard(true);
-        }
-
-        // Only show option to copy unformatted cell data if 
-        // column has formatting applied to it. 
-        bool show_copy_unformatted = false;
-        if(m_selected_column >= 0 &&
-           m_selected_column < (int) m_table_model().GetTableHeader(m_table_type).size())
-        {
-            const auto&                             table_model = m_table_model();
-            const std::vector<FormattedColumnInfo>& formatted_table_data =
-                table_model.GetFormattedTableData(m_table_type);
-            const auto& col_format_info = formatted_table_data[m_selected_column];
-            show_copy_unformatted = col_format_info.needs_formatting;
-        }
-        if(show_copy_unformatted) 
-        {         
-            if(ImGui::MenuItem("Copy Unformatted Cell Data", nullptr, false))
-            {
-                CopyCellToClipboard(false);
-            }
-        }
-        ImGui::Separator();
-        if(ImGui::MenuItem("Export To File", nullptr, false,
-                                !m_data_provider.IsRequestPending(
-                                    DataProvider::TABLE_EXPORT_REQUEST_ID)))
-        {
-            ExportToFile();
-        }        
-        // TODO handle event selection
-        // else if(ImGui::MenuItem("Select event", nullptr, false))
-        // {
-        //     uint64_t event_id = INVALID_UINT64_INDEX;
-
-        //     if(m_important_columns[kUUId] != INVALID_COLUMN_INDEX &&
-        //        m_important_columns[kUUId] < table_data[m_selected_row].size())
-        //     {
-        //         event_id =
-        //             std::stoull(table_data[m_selected_row][m_important_columns[kUUId]]);
-        //     }
-        // }
-
-        ImGui::EndPopup();
-    }
-    // Pop the style vars for window padding and item spacing
-    ImGui::PopStyleVar(2);
-}
-
-void
-MultiTrackTable::CopyCellToClipboard(bool use_formatted_data)
-{
-    const std::vector<std::vector<std::string>>& table_data =
-        m_table_model().GetTableData(m_table_type);
-
-    if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
-    {
-        spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
-        return;
-    }
-
-    if(m_selected_column < 0 ||
-       m_selected_column >= (int) table_data[m_selected_row].size())
-    {
-        spdlog::warn("Selected column index out of bounds: {}", m_selected_column);
-        return;
-    }
-
-    std::string cell_text = table_data[m_selected_row][m_selected_column];
-
-    if(use_formatted_data)
-    {
-        const auto&                             table_model = m_table_model();
-        const std::vector<FormattedColumnInfo>& formatted_table_data =
-            table_model.GetFormattedTableData(m_table_type);
-
-        const auto& col_format_info = formatted_table_data[m_selected_column];
-        if(col_format_info.needs_formatting &&
-           m_selected_row < col_format_info.formatted_row_value.size())
-        {
-            cell_text = col_format_info.formatted_row_value[m_selected_row];
-        }
-    }
-
-    ImGui::SetClipboardText(cell_text.c_str());
-    NotificationManager::GetInstance().Show("Cell data was copied",
-                                            NotificationLevel::Info);
 }
 
 }  // namespace View

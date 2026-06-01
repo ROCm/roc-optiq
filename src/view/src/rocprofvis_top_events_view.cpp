@@ -19,45 +19,40 @@ constexpr const char* TOP_EVENTS_DURATION_TOTAL_COLUMN = "DurationTotal";
 constexpr const char* TOP_EVENTS_DURATION_AVG_COLUMN   = "DurationAvg";
 constexpr const char* TOP_EVENTS_DURATION_MIN_COLUMN   = "DurationMin";
 constexpr const char* TOP_EVENTS_DURATION_MAX_COLUMN   = "DurationMax";
-constexpr uint8_t     TABLE_MAX_ROWS                   = 6;
 
 TopEventsView::TopEventsView(DataProvider&                      data_provider,
                              std::shared_ptr<TimelineSelection> timeline_selection)
-: m_data_provider(data_provider)
+: m_tables(
+      { std::make_unique<TopEventsTable>(
+            data_provider, TableType::kAnalysisTopInstrumentedEventsTable,
+            kRPVControllerTableTypeInstrumentedEvents,
+            DataProvider::ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID,
+            timeline_selection, kRocProfVisDmOperationLaunch,
+            "Top Instrumented Thread Events"),
+        std::make_unique<TopEventsTable>(
+            data_provider, TableType::kAnalysisTopDispatchEventsTable,
+            kRPVControllerTableTypeDispatchEvents,
+            DataProvider::ANALYSIS_TOP_DISPATCH_EVENTS_TABLE_REQUEST_ID,
+            timeline_selection, kRocProfVisDmOperationDispatch, "Top Dispatch Events"),
+        std::make_unique<TopEventsTable>(
+            data_provider, TableType::kAnalysisTopMemoryAllocationEventsTable,
+            kRPVControllerTableTypeMemoryAllocationEvents,
+            DataProvider::ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID,
+            timeline_selection, kRocProfVisDmOperationMemoryAllocate,
+            "Top Memory Allocation Events"),
+        std::make_unique<TopEventsTable>(
+            data_provider, TableType::kAnalysisTopMemoryCopyEventsTable,
+            kRPVControllerTableTypeMemoryCopyEvents,
+            DataProvider::ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID,
+            timeline_selection, kRocProfVisDmOperationMemoryCopy,
+            "Top Memory Copy Events"),
+        std::make_unique<TopEventsTable>(
+            data_provider, TableType::kAnalysisTopSampledEventsTable,
+            kRPVControllerTableTypeSampledEvents,
+            DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID,
+            timeline_selection, kRocProfVisDmOperationLaunchSample,
+            "Top Sampled Thread Events") })
 {
-    m_sections[0].heading = "Top Instrumented Thread Events";
-    m_sections[0].table   = std::make_unique<TopEventsTable>(
-        m_data_provider, TableType::kAnalysisTopInstrumentedEventsTable,
-        kRPVControllerTableTypeInstrumentedEvents,
-        DataProvider::ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID,
-        timeline_selection);
-
-    m_sections[1].heading = "Top Dispatch Events";
-    m_sections[1].table   = std::make_unique<TopEventsTable>(
-        m_data_provider, TableType::kAnalysisTopDispatchEventsTable,
-        kRPVControllerTableTypeDispatchEvents,
-        DataProvider::ANALYSIS_TOP_DISPATCH_EVENTS_TABLE_REQUEST_ID, timeline_selection);
-
-    m_sections[2].heading = "Top Memory Allocation Events";
-    m_sections[2].table   = std::make_unique<TopEventsTable>(
-        m_data_provider, TableType::kAnalysisTopMemoryAllocationEventsTable,
-        kRPVControllerTableTypeMemoryAllocationEvents,
-        DataProvider::ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID,
-        timeline_selection);
-
-    m_sections[3].heading = "Top Memory Copy Events";
-    m_sections[3].table   = std::make_unique<TopEventsTable>(
-        m_data_provider, TableType::kAnalysisTopMemoryCopyEventsTable,
-        kRPVControllerTableTypeMemoryCopyEvents,
-        DataProvider::ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID,
-        timeline_selection);
-
-    m_sections[4].heading = "Top Launch Sample Events";
-    m_sections[4].table   = std::make_unique<TopEventsTable>(
-        m_data_provider, TableType::kAnalysisTopSampledEventsTable,
-        kRPVControllerTableTypeSampledEvents,
-        DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID, timeline_selection);
-
     m_widget_name = GenUniqueName("Top Events View");
 }
 
@@ -66,23 +61,11 @@ TopEventsView::~TopEventsView() {}
 void
 TopEventsView::Update()
 {
-    for(Section& section : m_sections)
+    for(std::unique_ptr<TopEventsTable>& op : m_tables)
     {
-        if(section.table)
+        if(op)
         {
-            section.table->Update();
-        }
-    }
-}
-
-void
-TopEventsView::HandleTrackSelectionChanged()
-{
-    for(Section& section : m_sections)
-    {
-        if(section.table)
-        {
-            section.table->HandleTrackSelectionChanged();
+            op->Update();
         }
     }
 }
@@ -90,31 +73,63 @@ TopEventsView::HandleTrackSelectionChanged()
 void
 TopEventsView::Render()
 {
+    const SettingsManager& settings = SettingsManager::GetInstance();
+    const ImGuiStyle&      style    = settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
     ImGui::BeginChild("top_events", ImVec2(0, 0), ImGuiChildFlags_Borders);
-    for(size_t i = 0; i < m_sections.size(); i++)
+    bool no_data = true;
+    for(std::unique_ptr<TopEventsTable>& table : m_tables)
     {
-        Section& section = m_sections[i];
-        ImGui::TextUnformatted(section.heading);
-        ImGui::Separator();
-        if(section.table)
+        if(table)
         {
-            ImGui::PushID(static_cast<int>(i));
-            ImGui::BeginChild("section",
-                              ImVec2(0, (TABLE_MAX_ROWS + 1) * TableRowHeight()),
-                              ImGuiChildFlags_None);
-            section.table->Render();
-            ImGui::EndChild();
-            ImGui::PopID();
+            table->Render();
+            no_data &= !table->Visible();
         }
-        ImGui::Spacing();
+    }
+    if(no_data)
+    {
+        CenterNextTextItem("No data available for the selected tracks.");
+        ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
+                             0.5f);
+        ImGui::TextDisabled("No data available for the selected tracks.");
     }
     ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+}
+
+void
+TopEventsView::HandleTrackSelectionChanged(uint64_t track_id, bool selected)
+{
+    for(std::unique_ptr<TopEventsTable>& table : m_tables)
+    {
+        if(table)
+        {
+            table->HandleTrackSelectionChanged(track_id, selected);
+        }
+    }
+}
+
+void
+TopEventsView::HandleTimeRangeSelectionChanged(double start_ns, double end_ns)
+{
+    for(std::unique_ptr<TopEventsTable>& table : m_tables)
+    {
+        if(table)
+        {
+            table->HandleTimeRangeSelectionChanged(start_ns, end_ns);
+        }
+    }
 }
 
 TopEventsView::TopEventsTable::TopEventsTable(
     DataProvider& dp, TableType table_type,
     rocprofvis_controller_table_type_t request_table_type, uint64_t request_id,
-    std::shared_ptr<TimelineSelection> timeline_selection)
+    std::shared_ptr<TimelineSelection> timeline_selection,
+    rocprofvis_dm_event_operation_t op, const char* header)
 : MultiTrackTable(
       dp, table_type, request_table_type, request_id,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetAnalysis().GetTables(); },
@@ -122,6 +137,9 @@ TopEventsView::TopEventsTable::TopEventsTable(
       timeline_selection, 2, kRPVControllerSortOrderDescending)
 , m_duration_column_indices({ INVALID_UINT64_INDEX, INVALID_UINT64_INDEX,
                               INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
+, m_op(op)
+, m_header(header)
+, m_visible(false)
 {
     m_widget_name = GenUniqueName("Top Events Table");
 }
@@ -129,19 +147,55 @@ TopEventsView::TopEventsTable::TopEventsTable(
 TopEventsView::TopEventsTable::~TopEventsTable() {}
 
 void
-TopEventsView::TopEventsTable::FilterSelectedTracksForTableType(
-    const std::vector<uint64_t>& selected_track_ids,
-    std::vector<uint64_t>&       filtered_track_ids) const
+TopEventsView::TopEventsTable::Render()
 {
-    const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
-    for(uint64_t track_id : selected_track_ids)
+    if(m_visible)
     {
-        const TrackInfo* track_info = tlm.GetTrack(track_id);
-        if(track_info && track_info->track_type == kRPVControllerTrackTypeEvents)
+        const ImGuiStyle& style = ImGui::GetStyle();
+        ImGui::PushID(static_cast<int>(m_op));
+        ImVec2 region_avail =
+            ImVec2(ImGui::GetContentRegionAvail().x,
+                   ImGui::GetWindowHeight() - 2.0f * style.WindowPadding.y);
+        if(ImGui::CollapsingHeader(m_header, ImGuiTreeNodeFlags_DefaultOpen))
         {
-            filtered_track_ids.push_back(track_id);
+            ImGui::SetNextWindowSize(
+                ImVec2(region_avail.x,
+                       std::min(region_avail.y - ImGui::GetFrameHeightWithSpacing(),
+                                (Rows() ? (Rows() + 1) * TableRowHeight() +
+                                              ImGui::GetFrameHeightWithSpacing() +
+                                              2.0f * style.WindowPadding.y
+                                        : TableRowHeight()))));
+            MultiTrackTable::Render();
         }
+        ImGui::PopID();
     }
+}
+
+void
+TopEventsView::TopEventsTable::HandleTrackSelectionChanged(uint64_t track_id,
+                                                           bool     selected)
+{
+    MultiTrackTable::HandleTrackSelectionChanged(track_id, selected);
+    m_visible = !m_included_tracks.empty();
+}
+
+bool
+TopEventsView::TopEventsTable::Visible() const
+{
+    return m_visible;
+}
+
+bool
+TopEventsView::TopEventsTable::IncludeTrack(uint64_t track_id) const
+{
+    bool             include = false;
+    const TrackInfo* track_info =
+        m_data_provider.DataModel().GetTimeline().GetTrack(track_id);
+    if(track_info)
+    {
+        include = track_info->operation_types.count(m_op) > 0;
+    }
+    return include;
 }
 
 void
@@ -207,6 +261,12 @@ TopEventsView::TopEventsTable::FormatData() const
             }
         }
     }
+}
+
+size_t
+TopEventsView::TopEventsTable::Rows() const
+{
+    return m_table_model().GetTableTotalRowCount(m_table_type);
 }
 
 }  // namespace View

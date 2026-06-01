@@ -79,57 +79,55 @@ namespace Controller
 
     rocprofvis_result_t Remote::AsyncAuthenticate(
         Future& future,
-        SshConnection& connection, 
+        SshConnection& connection,
         Arguments& args)
     {
-        rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
+        rocprofvis_result_t   error = kRocProfVisResultUnknownError;
 
-        future.Set(JobSystem::Get().IssueJob([&connection, &args](Future* future) -> rocprofvis_result_t {
-            std::string error;
-            std::array<char, 128> password{};
-            uint32_t password_length = password.size();
-            std::array<char, 128> user{};
-            uint32_t user_length = user.size();
-            std::array<char, 128> key_path{};
-            uint32_t key_path_length = key_path.size();
-            std::array<char, 128> key_passphrase{};
-            uint32_t key_passphrase_length = key_passphrase.size();
+        std::array<char, 128> password{};
+        uint32_t password_length = password.size();
+        std::array<char, 128> user{};
+        uint32_t user_length = user.size();
+        std::array<char, 1024> key_path{};
+        uint32_t key_path_length = key_path.size();
+        std::array<char, 128> key_passphrase{};
+        uint32_t key_passphrase_length = key_passphrase.size();
 
-            if (kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeUser, 0, user.data(), &user_length) &&
-                kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypePassword, 0, password.data(), &password_length) &&
-                kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeKeyPath, 0, key_path.data(), &key_path_length) &&
-                kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeKeyPassphrase, 0, key_passphrase.data(), &key_passphrase_length))
+        if (kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeUser, 0, user.data(), &user_length) &&
+            kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypePassword, 0, password.data(), &password_length) &&
+            kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeKeyPath, 0, key_path.data(), &key_path_length) &&
+            kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeKeyPassphrase, 0, key_passphrase.data(), &key_passphrase_length))
+        {
+
+            future.Set(JobSystem::Get().IssueJob([&connection, user, password, key_path, key_passphrase](Future* future) -> rocprofvis_result_t {
+                std::string error;
+
+            SshClient::Result result = s_ssh_client.Authenticate(
+                &connection,
+                user.data(),
+                password.data(),
+                key_path.data(),
+                key_passphrase.data(),
+                future);
+
+            if (result == SshClient::Result::Success)
             {
-                SshClient::Result result  = s_ssh_client.Authenticate(
-                    &connection,
-                    user.data(), 
-                    password.data(), 
-                    key_path.data(), 
-                    key_passphrase.data(), 
-                    future);
-
-                if (result == SshClient::Result::Success)
-                {
-                    connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
-                    return kRocProfVisResultSuccess;
-                }
-                else
-                {
-                    connection.GetSshBridge()->SetStatus(kRPVControllerSshFailed);
-                    return kRocProfVisResultFailedSshCommunication;
-                }
+                connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
+                return kRocProfVisResultSuccess;
             }
             else
             {
-                return kRocProfVisResultInvalidArgument;
+                connection.GetSshBridge()->SetStatus(kRPVControllerSshFailed);
+                return kRocProfVisResultFailedSshCommunication;
             }
 
-            }, &future));
+        }, & future));
 
-        if(future.IsValid())
+        if (future.IsValid())
         {
             error = kRocProfVisResultSuccess;
         }
+    }
 
         return error;
     }
@@ -191,14 +189,54 @@ namespace Controller
         Arguments& args)
 	{
         rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
+        std::array<char, 4096> command{};
+        uint32_t command_length = command.size();
 
-        future.Set(JobSystem::Get().IssueJob([&connection, &args](Future* future) -> rocprofvis_result_t {
-            std::array<char, 1024> command{};
-            uint32_t command_length = command.size();
-
-            if (args.GetString(kRPVControllerRemoteTypeCommand, 0, command.data(), &command_length) == kRocProfVisResultSuccess)
-            {
+        if (args.GetString(kRPVControllerRemoteTypeCommand, 0, command.data(), &command_length) == kRocProfVisResultSuccess)
+        {
+            future.Set(JobSystem::Get().IssueJob([&connection, command](Future* future) -> rocprofvis_result_t {
                 if (SshClient::Result::Success == s_ssh_client.ExecuteCommand(&connection, command.data(), future))
+                {
+                    connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
+                    return kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    connection.GetSshBridge()->SetStatus(kRPVControllerSshFailed);
+                    return kRocProfVisResultFailedSshCommunication;
+                }
+
+                }, &future));
+
+            if (future.IsValid())
+            {
+                error = kRocProfVisResultSuccess;
+            }
+        }
+
+        return error;
+	}
+
+    rocprofvis_result_t Remote::AsyncTransfer(
+        Future& future,
+        SshConnection& connection,
+        Arguments& args)
+    {
+        rocprofvis_result_t   error = kRocProfVisResultUnknownError;
+        std::array<char, 128> src_path{};
+        uint32_t src_path_length = src_path.size();
+        std::array<char, 128> dst_path{};
+        uint32_t dst_path_length = dst_path.size();
+        uint64_t direction = 0;
+        if (args.GetString(kRPVControllerRemoteTypeFilePathSrc, 0, src_path.data(), &src_path_length) == kRocProfVisResultSuccess &&
+            args.GetString(kRPVControllerRemoteTypeFilePathDst, 0, dst_path.data(), &dst_path_length) == kRocProfVisResultSuccess &&
+            args.GetUInt64(kRPVControllerRemoteTypeDirection, 0, &direction) == kRocProfVisResultSuccess)
+        {
+
+            future.Set(JobSystem::Get().IssueJob([&connection, src_path, dst_path, direction](Future* future) -> rocprofvis_result_t {
+            if (direction == 0)
+            {
+                if (SshClient::Result::Success == s_ssh_client.DownloadFile(&connection, src_path.data(), dst_path.data(), future))
                 {
                     connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
                     return kRocProfVisResultSuccess;
@@ -211,60 +249,11 @@ namespace Controller
             }
             else
             {
-                return kRocProfVisResultInvalidArgument;
+                return kRocProfVisResultNotSupported;
             }
-            
-        }, &future));
 
-        if(future.IsValid())
-        {
-            error = kRocProfVisResultSuccess;
-        }
-
-        return error;
-	}
-
-    rocprofvis_result_t Remote::AsyncTransfer(
-        Future& future,
-        SshConnection& connection,
-        Arguments& args)
-    {
-        rocprofvis_result_t   error = kRocProfVisResultUnknownError;
-
-        future.Set(JobSystem::Get().IssueJob([&connection, &args](Future* future) -> rocprofvis_result_t {
-            std::array<char, 128> src_path{};
-            uint32_t src_path_length = src_path.size();
-            std::array<char, 128> dst_path{};
-            uint32_t dst_path_length = dst_path.size();
-            uint64_t direction = 0;
-
-            if (args.GetString(kRPVControllerRemoteTypeFilePathSrc, 0, src_path.data(), &src_path_length) == kRocProfVisResultSuccess &&
-                args.GetString(kRPVControllerRemoteTypeFilePathDst, 0, dst_path.data(), &dst_path_length) == kRocProfVisResultSuccess &&
-                args.GetUInt64(kRPVControllerRemoteTypeDirection, 0, &direction) == kRocProfVisResultSuccess)
-            {
-                if (direction == 0)
-                {
-                    if (SshClient::Result::Success == s_ssh_client.DownloadFile(&connection, src_path.data(), dst_path.data(), future))
-                    {
-                        connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
-                        return kRocProfVisResultSuccess;
-                    }
-                    else
-                    {
-                        connection.GetSshBridge()->SetStatus(kRPVControllerSshFailed);
-                        return kRocProfVisResultFailedSshCommunication;
-                    }
-                }
-                else
-                {
-                   return kRocProfVisResultNotSupported;
-                }
-            }
-            else
-            {
-                return kRocProfVisResultInvalidArgument;
-            }
             }, &future));
+        }
 
         if (future.IsValid())
         {

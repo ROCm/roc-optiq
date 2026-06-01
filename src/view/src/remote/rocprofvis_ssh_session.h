@@ -53,7 +53,6 @@ namespace View
         HostKeyRequest m_host_key_request;
         ExecutionOutput m_stdout;
         FileStat m_file_stat;
-        rocprofvis_controller_arguments_t* m_args;
     };
 
 

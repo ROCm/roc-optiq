@@ -11,7 +11,7 @@ namespace RocProfVis
 namespace View
 {
 
-    SshSession::SshSession(RemoteUri* uri) : m_connection(nullptr), m_uri(uri), m_args(nullptr)
+    SshSession::SshSession(RemoteUri* uri) : m_connection(nullptr), m_uri(uri)
     {
         if (uri)
         {
@@ -58,8 +58,6 @@ namespace View
             // Allocate async completion primitive used by the controller call.
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
             ROCPROFVIS_ASSERT(future);
-            m_args = rocprofvis_controller_arguments_alloc();
-            ROCPROFVIS_ASSERT(m_args != nullptr);
 
             result = StartAuthentication(future);
 
@@ -71,7 +69,6 @@ namespace View
                 }
                 result = CheckAuthentication();
             }
-            rocprofvis_controller_arguments_free(m_args);
             rocprofvis_controller_future_free(future);
         }
         return result;
@@ -85,8 +82,6 @@ namespace View
         {
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
             ROCPROFVIS_ASSERT(future);
-            m_args = rocprofvis_controller_arguments_alloc();
-            ROCPROFVIS_ASSERT(m_args != nullptr);
             result = command_line ? StartExecution(command_line, future) : StartExecution(future);
             if (result == kRocProfVisResultSuccess)
             {
@@ -97,7 +92,6 @@ namespace View
                 result = CheckExecution();
             }
             FinalizeExecution();   
-            rocprofvis_controller_arguments_free(m_args);
             rocprofvis_controller_future_free(future);
 
         }
@@ -112,8 +106,6 @@ namespace View
         {
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
             ROCPROFVIS_ASSERT(future);
-            m_args = rocprofvis_controller_arguments_alloc();
-            ROCPROFVIS_ASSERT(m_args != nullptr);
 
             result = remote_path && local_path ? StartDownload(remote_path, local_path, future) : StartDownload(future);
             if (result == kRocProfVisResultSuccess)
@@ -124,7 +116,6 @@ namespace View
                 }
                 result = CheckDownload();
             }
-            rocprofvis_controller_arguments_free(m_args);
             rocprofvis_controller_future_free(future);
         }
         return result;
@@ -136,11 +127,9 @@ namespace View
         if (host && port > 0 && port < 65536)
         {
             uint64_t prop_count = 0;
-            rocprofvis_controller_arguments_t* args =
-                rocprofvis_controller_arguments_alloc();
+            rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
             ROCPROFVIS_ASSERT(args != nullptr);
-            rocprofvis_controller_array_t* output =
-                rocprofvis_controller_array_alloc(1);
+            rocprofvis_controller_array_t* output = rocprofvis_controller_array_alloc(1);
             ROCPROFVIS_ASSERT(output != nullptr);
 
             result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeHost, 0, host);
@@ -221,24 +210,27 @@ namespace View
     rocprofvis_result_t SshSession::StartAuthentication(const char* user, const char* password, const char* identity_file, const char* passphrase, rocprofvis_controller_future_t* future)
     {
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
+        rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+        ROCPROFVIS_ASSERT(args != nullptr);
 
         // Populate user/password and SSH key material used by remote authentication.
-        result = rocprofvis_controller_set_string(m_args, kRPVControllerRemoteTypeUser, 0, user);
+        result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeUser, 0, user);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        result = rocprofvis_controller_set_string(m_args, kRPVControllerRemoteTypePassword, 0, password);
+        result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypePassword, 0, password);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        result = rocprofvis_controller_set_string(m_args, kRPVControllerRemoteTypeKeyPath, 0, identity_file);
+        result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeKeyPath, 0, identity_file);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        result = rocprofvis_controller_set_string(m_args, kRPVControllerRemoteTypeKeyPassphrase, 0, passphrase);
+        result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeKeyPassphrase, 0, passphrase);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         if (result == kRocProfVisResultSuccess)
         {
-            result = rocprofvis_controller_remote_authenticate_async(future, m_connection, m_args);
+            result = rocprofvis_controller_remote_authenticate_async(future, m_connection, args);
         }
+        rocprofvis_controller_arguments_free(args);
         return result;
     }
 
@@ -371,13 +363,18 @@ namespace View
         if (m_connection && command_line && future)
         {
             m_stdout.clear_updated();
-            result = rocprofvis_controller_set_string(m_args, kRPVControllerRemoteTypeCommand, 0, command_line);
+
+            rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+            ROCPROFVIS_ASSERT(args != nullptr);
+
+            result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeCommand, 0, command_line);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             if (result == kRocProfVisResultSuccess)
             {
-                result = rocprofvis_controller_remote_execute_async(future, m_connection, m_args);
+                result = rocprofvis_controller_remote_execute_async(future, m_connection, args);
             }
+            rocprofvis_controller_arguments_free(args);
         }
         return result;
     }
@@ -441,24 +438,25 @@ namespace View
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (m_connection)
         {
+            rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+            ROCPROFVIS_ASSERT(args != nullptr);
 
-            result = rocprofvis_controller_set_string(m_args, kRPVControllerRemoteTypeFilePathSrc, 0, remote_path);
+            result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeFilePathSrc, 0, remote_path);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-
-
-            result = rocprofvis_controller_set_string(m_args, kRPVControllerRemoteTypeFilePathDst, 0, local_path);
+            result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeFilePathDst, 0, local_path);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             uint64_t direction = 0; //download
 
-            result = rocprofvis_controller_set_uint64(m_args, kRPVControllerRemoteTypeDirection, 0, direction);
+            result = rocprofvis_controller_set_uint64(args, kRPVControllerRemoteTypeDirection, 0, direction);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             if (result == kRocProfVisResultSuccess)
             {
-                result = rocprofvis_controller_remote_transfer_async(future, m_connection, m_args);
+                result = rocprofvis_controller_remote_transfer_async(future, m_connection, args);
             }
+            rocprofvis_controller_arguments_free(args);
         }
         return result;
     }
@@ -534,8 +532,7 @@ namespace View
     rocprofvis_result_t SshSession::SubmitPromptResponses(std::vector<std::string>& responses)
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        rocprofvis_controller_arguments_t* args =
-            rocprofvis_controller_arguments_alloc();
+        rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         ROCPROFVIS_ASSERT(args != nullptr);
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerUserNumResponses, 0, responses.size());
@@ -551,6 +548,9 @@ namespace View
 
             result = rocprofvis_controller_remote_submit_responses(m_connection, args);
         }
+
+        rocprofvis_controller_arguments_free(args);
+
         return result;
     }
 

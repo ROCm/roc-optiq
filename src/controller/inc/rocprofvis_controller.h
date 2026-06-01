@@ -310,15 +310,31 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_
 */
 
 /*
-* Connects to remote openssh system using host and port parameters stored in arguments.
+* Allocates ssh connection object using host and port parameters stored in arguments.
 * @param args contains host name and port number
 * @param output contains connection handler
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_controller_remote_connect_async(
-    rocprofvis_controller_future_t* future,
+rocprofvis_result_t rocprofvis_controller_ssh_connection_alloc(
     rocprofvis_controller_arguments_t* args,
     rocprofvis_controller_array_t* output);
+
+/*
+* Free libssh2 connection.
+* @param connection libssh2 connection to disconnect
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_ssh_connection_free(
+    rocprofvis_controller_connection_t* connection);
+
+/*
+* Connects to remote openssh system using connection object.
+* @param connection libssh2 connection to authenticate
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_connect_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection);
 
 /*
 * Authenticates  connection to remote openssh system .
@@ -330,14 +346,6 @@ rocprofvis_result_t rocprofvis_controller_remote_authenticate_async(
     rocprofvis_controller_future_t* future,
     rocprofvis_controller_connection_t* connection,
     rocprofvis_controller_arguments_t* args);
-
-/*
-* Disconnects libssh2 connection.
-* @param connection libssh2 connection to disconnect
-* @returns kRocProfVisResultSuccess or an error code.
-*/
-rocprofvis_result_t rocprofvis_controller_remote_disconnect(
-    rocprofvis_controller_connection_t* connection);
 
 /*
 * Execute command remotely over ssh.

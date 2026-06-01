@@ -28,8 +28,6 @@
 #include "widgets/rocprofvis_notification_manager.h"
 #include "rocprofvis_profiler_launcher_dialog.h"
 #ifdef TEST_SSH_CONNECTION
-#include "remote/rocprofvis_ssh_uri.h"
-#include "remote/rocprofvis_ssh_access.h"
 #include "remote/rocprofvis_ssh_auth_modal.h"
 #endif
 #include <filesystem>
@@ -121,6 +119,7 @@ AppWindow::AppWindow()
 , m_restore_fullscreen_later(false)
 , m_next_provider_cleanup_id(0)
 #ifdef TEST_SSH_CONNECTION
+, m_ssh_session(nullptr)
 , m_remote_show_password(false)
 , m_remote_show_passphrase(false)
 , m_open_remote_dialog(false)
@@ -665,7 +664,7 @@ AppWindow::Render()
         m_open_remote_dialog = false;
     }
     RenderRemoteOpenDialog();
-    RenderSshAuthModal(&m_ssh_access);
+    RenderSshAuthModal(m_ssh_session);
     RenderRemoteProgressDialog();
     RenderRemoteOutputDialog();
 #endif
@@ -1742,20 +1741,26 @@ AppWindow::RenderRemoteOpenDialog()
                 }
                 m_thread_running = true;
                 m_should_close_popup = true;
+                m_show_remote_stdout_popup = false;
+                m_show_progress_popup = false;
                 std::thread([&]()
                     {
                         
+                        m_remote_status_msg = "Creating session...";
+                        m_ssh_session = new SshSession(&m_remote_uri);
+
                         while (true)
                         {
                             m_remote_status_msg = "Connecting...";
-                            rocprofvis_result_t result = m_ssh_access.Connect(&m_remote_uri);
+                            rocprofvis_result_t result = m_ssh_session->Connect();
                             if (result != kRocProfVisResultSuccess)
                             {
+                                
                                 m_remote_status_msg = "SSH connection failed.";
                                 break;
                             }
 
-                            result = m_ssh_access.Authenticate(&m_remote_uri);
+                            result = m_ssh_session->Authenticate();
                             if (result != kRocProfVisResultSuccess)
                             {
                                 m_remote_status_msg = "SSH authentication failed.";
@@ -1765,20 +1770,21 @@ AppWindow::RenderRemoteOpenDialog()
                             if (!m_remote_uri.GetRemoteCommandLineString().empty())
                             {
                                 m_remote_status_msg = std::string("Executing command (") + m_remote_uri.GetRemoteCommandLineString() + ")";
-                                result = m_ssh_access.Execute(&m_remote_uri);
+                                result = m_ssh_session->Execute();
+                                if (result != kRocProfVisResultSuccess)
+                                {
+                                    m_remote_status_msg = "CLI execution failed. Check remote command syntax and try again.";
+                                    break;
+                                }
                             }
 
-                            if (result != kRocProfVisResultSuccess)
-                            {
-                                m_remote_status_msg = "CLI execution failed. Check remote command syntax and try again.";
-                                break;
-                            }
+
 
                             if (!m_remote_uri.GetRemoteResultPathString().empty())
                             {
 
                                 m_remote_status_msg = std::string("Downloading (") + m_remote_uri.GetRemoteResultPathString() + ")";
-                                result = m_ssh_access.Download(&m_remote_uri);
+                                result = m_ssh_session->Download();
 
                                 if (result == kRocProfVisResultSuccess)
                                 {
@@ -1795,10 +1801,8 @@ AppWindow::RenderRemoteOpenDialog()
                             break;
                         }
 
-                        if (m_ssh_access.IsConnected())
-                        {
-                            m_ssh_access.Disconnect();
-                        }
+                        delete m_ssh_session;
+                        m_ssh_session = nullptr;
 
                         m_thread_running = false;
                     }).detach();
@@ -1835,7 +1839,9 @@ AppWindow::RenderRemoteOpenDialog()
 
 void AppWindow::RenderRemoteProgressDialog()
 {
-    if (auto fetch = m_ssh_access.GetFileStat()->consume_if_updated())
+    if (!m_ssh_session) return;
+
+    if (auto fetch = m_ssh_session->GetFileStat()->consume_if_updated())
     {
         m_last_progress = *fetch;
 
@@ -1897,7 +1903,9 @@ void AppWindow::RenderRemoteProgressDialog()
 void
 AppWindow::RenderRemoteOutputDialog()
 {
-    if (auto fetch = m_ssh_access.GetExecutionOutput()->consume_if_updated())
+    if (!m_ssh_session) return;
+
+    if (auto fetch = m_ssh_session->GetExecutionOutput()->consume_if_updated())
     {
         m_last_stdout = *fetch;
         if (!m_show_remote_stdout_popup)

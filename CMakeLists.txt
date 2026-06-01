@@ -107,7 +107,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_presets.cpp
     src/view/src/remote/rocprofvis_ssh_uri.cpp
     src/view/src/remote/rocprofvis_ssh_fetch.cpp
-    src/view/src/remote/rocprofvis_ssh_access.cpp
+    src/view/src/remote/rocprofvis_ssh_session.cpp
     src/view/src/remote/rocprofvis_ssh_auth_modal.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
@@ -242,7 +242,14 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+
+if (CRYPTO_BACKEND STREQUAL "mbedTLS")
 target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static)
+endif()
+
+if (CRYPTO_BACKEND STREQUAL "OpenSSL")
+target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static OpenSSL::SSL OpenSSL::Crypto)
+endif()
 
 if(APPLE)
     set_target_properties(${TARGET_NAME} PROPERTIES

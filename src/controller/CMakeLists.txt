@@ -27,9 +27,8 @@ list(APPEND rocprofvis_controller_source_files
     src/profiler/rocprofvis_controller_profiler_cmdline.cpp
     src/profiler/rocprofvis_profiler.cpp
     src/remote/rocprofvis_controller_remote.cpp
-    src/remote/rocprofvis_controller_remote_future.cpp
+    src/remote/rocprofvis_controller_ssh_bridge.cpp
     src/remote/rocprofvis_controller_ssh_client.cpp
-    src/remote/rocprofvis_controller_ssh_auth_bridge.cpp
     src/remote/rocprofvis_controller_ssh_known_hosts.cpp
     src/system/rocprofvis_controller_event.cpp
     src/system/rocprofvis_controller_graph.cpp

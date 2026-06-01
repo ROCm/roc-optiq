@@ -486,18 +486,30 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(
 }
 #endif
 
-rocprofvis_result_t rocprofvis_controller_remote_connect_async(
-    rocprofvis_controller_future_t* future,
+rocprofvis_result_t rocprofvis_controller_ssh_connection_alloc(
     rocprofvis_controller_arguments_t* args,    
     rocprofvis_controller_array_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::FutureRef future_ref(future);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::ArrayRef array(output);
-    if (future_ref.IsValid() && args_ref.IsValid() && array.IsValid())
+    if (args_ref.IsValid() && array.IsValid())
     {
-        error = RocProfVis::Controller::Remote::AsyncConnect(*future_ref, *args_ref, *array);
+        error = RocProfVis::Controller::Remote::AllocateConnection( *args_ref, *array);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_connect_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::FutureRef future_ref(future);
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (future_ref.IsValid() && connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::AsyncConnect(*future_ref, *connection_ref);
     }
     return error;
 }
@@ -518,14 +530,14 @@ rocprofvis_result_t rocprofvis_controller_remote_authenticate_async(
     return error;
 }
 
-rocprofvis_result_t rocprofvis_controller_remote_disconnect(
+rocprofvis_result_t rocprofvis_controller_ssh_connection_free(
     rocprofvis_controller_connection_t* connection)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
     RocProfVis::Controller::ConnectionRef connection_ref(connection);
     if (connection_ref.IsValid())
     {
-        error = RocProfVis::Controller::Remote::Disconnect(*connection_ref);
+        error = RocProfVis::Controller::Remote::DeleteConnection(*connection_ref);
     }
     return error;
 }

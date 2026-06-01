@@ -46,14 +46,6 @@ rocprofvis_result_t Future::Wait(float timeout)
     if (m_job)
     {
         result = m_job->Wait(timeout);
-        if (result == kRocProfVisResultTimeout)
-        {
-            auto remote_result = m_remote.Wait();
-            if (remote_result == kRocProfVisResultSshCommunicationCallback || remote_result == kRocProfVisResultFailedSshCommunication)
-            {
-                return remote_result;
-            }
-        }
     }
     return result;
 }
@@ -141,11 +133,6 @@ rocprofvis_result_t Future::GetUInt64(rocprofvis_property_t property, uint64_t i
             }
             default:
             {
-
-                auto r = m_remote.GetUInt64(property, index, value);
-                if (r != kRocProfVisResultInvalidArgument)
-                    return r;
-
                 result = UnhandledProperty(property);
                 break;
             }
@@ -168,11 +155,6 @@ rocprofvis_result_t Future::GetString(rocprofvis_property_t property, uint64_t i
         }
         default:
         {
-
-            auto r = m_remote.GetString(property, index, value, length);
-            if (r != kRocProfVisResultInvalidArgument)
-                return r;
-
             result = UnhandledProperty(property);
             break;
         }
@@ -205,36 +187,6 @@ void Future::ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_d
         future->m_progress_percentage /= future->m_progress_map.size();
         future->m_progress_message = message ? message : "";
     }
-}
-
-void Future::AskPrompts(const rocprofvis_controller_user_prompt_t& req)
-{
-    m_remote.AskPrompts(req);
-}
-
-void Future::AddStdOut(char* stdout_buffer, uint64_t stdout_count)
-{
-    m_remote.AddStdOut(stdout_buffer, stdout_count);
-}
-
-void Future::SaveError(std::string& err)
-{
-    m_remote.SaveError(err);
-}
-
-void Future::SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded)
-{
-    m_remote.SetFileStat(std::move(name), size, time, downloaded);
-}
-
-void Future::SetDownloaded(uint64_t size)
-{
-    m_remote.SetDownloaded(size);
-}
-
-void Future::FailRemote()
-{
-    m_remote.Fail();
 }
 
 }

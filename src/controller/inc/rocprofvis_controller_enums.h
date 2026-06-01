@@ -40,8 +40,6 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultDuplicate = 13,
     // SSH authentication failed
     kRocProfVisResultFailedSshCommunication = 14,
-    // SSH communication callback
-    kRocProfVisResultSshCommunicationCallback = 15,
 } rocprofvis_result_t;
 
 /*
@@ -126,7 +124,9 @@ typedef enum rocprofvis_controller_object_type_t
     // Profiler configuration
     kRPVProfilerConfig = 106,
     // Profiler session (owns ProfilerProcessController)
-    kRPVProfiler = 107
+    kRPVProfiler = 107,
+    // Ssh intercomponent bridge
+    kRPVSshBridge = 108,
 #endif
 
 } rocprofvis_controller_object_type_t;
@@ -660,7 +660,7 @@ typedef enum rocprofvis_controller_table_type_t
 } rocprofvis_controller_table_type_t;
 
 
-typedef enum rocprofvis_controller_remote_param_type_t
+typedef enum rocprofvis_controller_remote_param_type_t : uint32_t
 {
     kRPVControllerRemoteTypeHost                 = 0xF1000000,
     kRPVControllerRemoteTypeUser                 = 0xF1000001,
@@ -675,27 +675,74 @@ typedef enum rocprofvis_controller_remote_param_type_t
 
 } rocprofvis_controller_remote_param_type_t;
 
-typedef enum rocprofvis_controller_user_prompt_type_t
+typedef enum rocprofvis_controller_user_prompt_type_t : uint32_t
 {
     kRPVControllerUserPromptTypeGeneric          = 0xF2000000,
     kRPVControllerUserPromptTypeHostKey          = 0xF2000001,
 } rocprofvis_controller_user_prompt_type_t;
 
-typedef enum rocprofvis_controller_user_response_t
+typedef enum rocprofvis_controller_user_response_t : uint32_t
 {
     kRPVControllerUserNumResponses               = 0xF3000000,
     kRPVControllerUserResponseIndexed            = 0xF3000001,
 } rocprofvis_controller_user_response_t;
 
-typedef enum rocprofvis_controller_remote_callback_t
+typedef enum rocprofvis_controller_remote_status_t : uint32_t
 {
-    kRPVControllerSshCallbackIdle,
-    kRPVControllerSshCallbackAuthRequest,
-    kRPVControllerSshCallbackExecuteStdOut,
-    kRPVControllerSshCallbackDownloadSarted,
-    kRPVControllerSshCallbackDownloadProgress,
-    kRPVControllerSshCallbackFail
-} rocprofvis_controller_remote_callback_t;
+    kRPVControllerSshIdle                        = 0xF4000000,
+    kRPVControllerSshConnecting,
+    kRPVControllerSshAuthenticating,
+    kRPVControllerSshDownloading,
+    kRPVControllerSshExecuting,
+    kRPVControllerSshAuthRequest,
+    kRPVControllerSshExecuteStdOut,
+    kRPVControllerSshDownloadStarted,
+    kRPVControllerSshDownloadProgress,
+    kRPVControllerSshFailed,
+    kRPVControllerSshCompleted
+} rocprofvis_controller_remote_status_t;
+
+typedef enum rocprofvis_controller_remote_properties_t : uint32_t
+{
+    __kRPVControllerRemotePropertiesFirst        = 0xF5000000,
+    // Callback from remote back end to UI
+    kRPVControllerRemoteStatus = __kRPVControllerRemotePropertiesFirst,
+    // User prompt type
+    kRPVControllerRemoteUserPromptType,
+    // User generic prompt title
+    kRPVControllerRemoteUserGenericPromptName,
+    // User generic prompt instruction
+    kRPVControllerRemoteUserGenericPromptInstruction,
+    // User generic prompt instruction
+    kRPVControllerRemoteUserGenericNumPrompts,
+    // User generic prompt text
+    kRPVControllerRemoteUserGenericPromptTextIndexed,
+    // User generic prompt echo (hide prompt)
+    kRPVControllerRemoteUserGenericPromptEchoIndexed,
+    // User host key prompt host
+    kRPVControllerRemoteUserHostKeyPromptHost,
+    // User host key prompt port
+    kRPVControllerRemoteUserHostKeyPromptPort,
+    // User host key prompt fingerprint
+    kRPVControllerRemoteUserHostKeyPromptFinderprint,
+    // User host key prompt key encryption type
+    kRPVControllerRemoteUserHostKeyPromptEncryptType,
+    // User host key prompt key state
+    kRPVControllerRemoteUserHostKeyPromptState,
+    // Remote execute std out
+    kRPVControllerRemoteExecuteStdOut,
+    // Remote file name
+    kRPVControllerRemoteFileName,
+    // Remote file size
+    kRPVControllerRemoteFileSize,
+    // Remote file time
+    kRPVControllerRemoteFileTime,
+    // Remote downloaded file bytes
+    kRPVControllerRemoteDownloaded,
+    // Remote last error
+    kRPVControllerRemoteLastError,
+    __kRPVControllerRemotePropertiesLast
+}rocprofvis_controller_remote_properties_t;
 
 /*
  * Properties for a future object
@@ -709,43 +756,8 @@ typedef enum rocprofvis_controller_future_properties_t : uint32_t
     kRPVControllerFutureProgressPercentage,
     // Progress message
     kRPVControllerFutureProgressMessage,
-    // Callback from remote back end to UI
-    kRPVControllerFutureRemoteCallbackType,
-    // User prompt type
-    kRPVControllerFutureUserPromptType,
-    // User generic prompt title
-    kRPVControllerFutureUserGenericPromptName,
-    // User generic prompt instruction
-    kRPVControllerFutureUserGenericPromptInstruction,
-    // User generic prompt instruction
-    kRPVControllerFutureUserGenericNumPrompts,
-    // User generic prompt text
-    kRPVControllerFutureUserGenericPromptTextIndexed,
-    // User generic prompt echo (hide prompt)
-    kRPVControllerFutureUserGenericPromptEchoIndexed,
-    // User host key prompt host
-    kRPVControllerFutureUserHostKeyPromptHost,
-    // User host key prompt port
-    kRPVControllerFutureUserHostKeyPromptPort,
-    // User host key prompt fingerprint
-    kRPVControllerFutureUserHostKeyPromptFinderprint,
-    // User host key prompt key encryption type
-    kRPVControllerFutureUserHostKeyPromptEncryptType,
-    // User host key prompt key state
-    kRPVControllerFutureUserHostKeyPromptState,
-    // Remote execute std out
-    kRPVControllerFutureRemoteExecuteStdOut,
-    // Remote file name
-    kRPVControllerFutureRemoteFileName,
-    // Remote file size
-    kRPVControllerFutureRemoteFileSize,
-    // Remote file time
-    kRPVControllerFutureRemoteFileTime,
-    // Remote downloaded file bytes
-    kRPVControllerFutureRemoteDownloaded,
-    // Remote last error
-    kRPVControllerFutureRemoteLastError,
     __kRPVControllerFuturePropertiesLast
+   
 } rocprofvis_controller_future_properties_t;
 
 /*

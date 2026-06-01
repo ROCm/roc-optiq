@@ -17,18 +17,21 @@ namespace Controller
     {
      public:
 
-    static rocprofvis_result_t AsyncConnect(
-        Future& future,
+    static rocprofvis_result_t  Remote::AllocateConnection(
         Arguments& args,
         Array& output);
+
+    static rocprofvis_result_t DeleteConnection(
+        SshConnection& connection);
+
+    static rocprofvis_result_t AsyncConnect(
+        Future& future,
+        SshConnection& connection);
 
     static rocprofvis_result_t AsyncAuthenticate(
         Future& future,
         SshConnection& connection,
         Arguments& args);
-
-    static rocprofvis_result_t Disconnect(
-        SshConnection& connection);
 
     static rocprofvis_result_t AsyncExecute(
         Future& future,

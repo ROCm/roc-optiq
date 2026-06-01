@@ -3,7 +3,7 @@
 
 #include "rocprofvis_ssh_auth_modal.h"
 
-#include "rocprofvis_ssh_access.h"
+#include "rocprofvis_ssh_session.h"
 #include "../widgets/rocprofvis_widget.h"
 #include "imgui.h"
 #include <spdlog/spdlog.h>
@@ -28,11 +28,12 @@ struct KbdintState
 KbdintState& KbdintForFrame() { static KbdintState s; return s; }
 }  // namespace
 
-void RenderSshAuthModal(Ssh* ssh_access)
+void RenderSshAuthModal(SshSession* ssh_session)
 {
+    if (!ssh_session) return;
 
     // ---- kbdint ----
-    if (auto req = ssh_access->GetPromptRequest()->consume_if_updated())
+    if (auto req = ssh_session->GetPromptRequest()->consume_if_updated())
     {
         auto& st = KbdintForFrame();
         if(!st.opened)
@@ -81,18 +82,18 @@ void RenderSshAuthModal(Ssh* ssh_access)
             {
                 std::vector<std::string> resp = st.answers;
 
-                ssh_access->SubmitPromptResponses(resp);
+                ssh_session->SubmitPromptResponses(resp);
                 st = {};
                 ImGui::CloseCurrentPopup();
-                ssh_access->GetPromptRequest()->clear_updated();
+                ssh_session->GetPromptRequest()->clear_updated();
             }
             ImGui::SameLine();
             if(ImGui::Button("Cancel", ImVec2(110, 0)))
             {
-                ssh_access->CancelRequest();
+                ssh_session->CancelRequest();
                 st = {};
                 ImGui::CloseCurrentPopup();
-                ssh_access->GetPromptRequest()->clear_updated();
+                ssh_session->GetPromptRequest()->clear_updated();
             }
             ImGui::EndPopup();
         }
@@ -101,7 +102,7 @@ void RenderSshAuthModal(Ssh* ssh_access)
     }
 
     // ---- host key confirmation ----
-    if(auto req = ssh_access->GetHostKeyRequest()->consume_if_updated())
+    if(auto req = ssh_session->GetHostKeyRequest()->consume_if_updated())
     {
         static bool opened = false;
         if(!opened) { 
@@ -142,26 +143,26 @@ void RenderSshAuthModal(Ssh* ssh_access)
 
             if(ImGui::Button("Trust permanently", ImVec2(160, 0)))
             {
-                ssh_access->SubmitHostKeyDecision(HostKeyDecision::TrustPermanently);
+                ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustPermanently);
                 opened = false;
                 ImGui::CloseCurrentPopup();
-                ssh_access->GetHostKeyRequest()->clear_updated();
+                ssh_session->GetHostKeyRequest()->clear_updated();
             }
             ImGui::SameLine();
             if(ImGui::Button("Trust once", ImVec2(110, 0)))
             {
-                ssh_access->SubmitHostKeyDecision(HostKeyDecision::TrustOnce);
+                ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustOnce);
                 opened = false;
                 ImGui::CloseCurrentPopup();
-                ssh_access->GetHostKeyRequest()->clear_updated();
+                ssh_session->GetHostKeyRequest()->clear_updated();
             }
             ImGui::SameLine();
             if(ImGui::Button("Reject", ImVec2(110, 0)))
             {
-                ssh_access->SubmitHostKeyDecision(HostKeyDecision::Reject);
+                ssh_session->SubmitHostKeyDecision(HostKeyDecision::Reject);
                 opened = false;
                 ImGui::CloseCurrentPopup();
-                ssh_access->GetHostKeyRequest()->clear_updated();
+                ssh_session->GetHostKeyRequest()->clear_updated();
             }
             ImGui::EndPopup();
         }

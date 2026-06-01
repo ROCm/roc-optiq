@@ -8,7 +8,7 @@ namespace RocProfVis
 namespace View
 {
 
-	class Ssh;
+	class SshSession;
 
 // Polls the bridge each frame; if a kbdint prompt or host-key request is
 // pending, opens the corresponding modal popup. Submits the user's response
@@ -17,7 +17,7 @@ namespace View
 // Must be called every frame from AppWindow::Render(), after any user-
 // initiated SSH connection has been started.
 
-	void RenderSshAuthModal(Ssh* ssh_access);
+	void RenderSshAuthModal(SshSession* ssh_session);
 
 }  // namespace View
 }  // namespace RocProfVis

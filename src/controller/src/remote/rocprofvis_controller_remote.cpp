@@ -11,45 +11,61 @@ namespace Controller
 {
     SshClient Remote::s_ssh_client;
 
+    rocprofvis_result_t  Remote::AllocateConnection(
+        Arguments& args,
+        Array& output)
+    {
+        std::array<char, 128> host{};
+        uint32_t host_length = host.size();
+
+        uint64_t port;
+        if (kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerRemoteTypePort, 0, &port))
+        {
+            port = 22;
+        }
+
+        if (kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeHost, 0, host.data(), &host_length))
+        {
+            SshConnection * connection = s_ssh_client.AllocateConnection(host.data(), port);
+            if (connection)
+            {
+                output.SetObject(kRPVControllerArrayEntryIndexed, 0, (rocprofvis_handle_t*)connection);
+                return kRocProfVisResultSuccess;
+            }
+        }
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    rocprofvis_result_t Remote::DeleteConnection(
+        SshConnection& connection)
+    {
+        s_ssh_client.DeleteConnection(&connection);
+        return kRocProfVisResultSuccess;
+    }
+
 	rocprofvis_result_t Remote::AsyncConnect(
             Future& future,
-            Arguments& args,    
-            Array& output)
+            SshConnection& connection)
 	{
         rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
 
-        future.Set(JobSystem::Get().IssueJob([&args, &output](Future* future) -> rocprofvis_result_t {
+        future.Set(JobSystem::Get().IssueJob([&connection](Future* future) -> rocprofvis_result_t {
             std::string error;
-            std::array<char, 128> host{};
-            uint32_t host_length = host.size();
 
-            uint64_t port;
-            if (kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerRemoteTypePort, 0, &port))
-            {
-                port = 22;
-            }
-            
-            if (kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeHost, 0, host.data(), &host_length))
-            {
-                SshConnection * connection  = s_ssh_client.Connect(
-                    host.data(), 
-                    port,
+            SshClient::Result result =  s_ssh_client.Connect(
+                    &connection, 
                     future);
-                if (connection)
+
+               if (result == SshClient::Result::Success)
                 {
-                    output.SetObject(kRPVControllerArrayEntryIndexed, 0, (rocprofvis_handle_t*)connection);
+                   connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
                     return kRocProfVisResultSuccess;
                 }
                 else
                 {
-                    future->FailRemote();
-                    return kRocProfVisResultFailedSshCommunication;
+                   connection.GetSshBridge()->SetStatus(kRPVControllerSshFailed);
+                   return kRocProfVisResultFailedSshCommunication;
                 }
-            }
-            else
-            {
-                return kRocProfVisResultInvalidArgument;
-            }
             
             }, &future));
 
@@ -94,11 +110,12 @@ namespace Controller
 
                 if (result == SshClient::Result::Success)
                 {
+                    connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
                     return kRocProfVisResultSuccess;
                 }
                 else
                 {
-                    future->FailRemote();
+                    connection.GetSshBridge()->SetStatus(kRPVControllerSshFailed);
                     return kRocProfVisResultFailedSshCommunication;
                 }
             }
@@ -121,7 +138,7 @@ namespace Controller
         SshConnection& connection, 
         Arguments& args) 
     {
-        if (connection.GetAuthBridge())
+        if (connection.GetSshBridge())
         {
             uint64_t num_responses = 0;
             if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerUserNumResponses, 0, &num_responses))
@@ -136,7 +153,7 @@ namespace Controller
                         responses.push_back(response.data());
                     }
                 }
-                connection.GetAuthBridge()->SubmitPromptResponses(responses);
+                connection.GetSshBridge()->SubmitPromptResponses(responses);
             }
             return kRocProfVisResultSuccess;
         }
@@ -147,9 +164,9 @@ namespace Controller
         SshConnection& connection, 
         uint64_t decision) 
     {
-        if (connection.GetAuthBridge())
+        if (connection.GetSshBridge())
         {
-            connection.GetAuthBridge()->SubmitHostKeyDecision((HostKeyDecision)decision);
+            connection.GetSshBridge()->SubmitHostKeyDecision((HostKeyDecision)decision);
             return kRocProfVisResultSuccess;
         }
         return kRocProfVisResultInvalidArgument;
@@ -158,20 +175,15 @@ namespace Controller
     rocprofvis_result_t Remote::CancelPrompt(
         SshConnection& connection) 
     {
-        if (connection.GetAuthBridge())
+        if (connection.GetSshBridge())
         {
-            connection.GetAuthBridge()->Cancel();
+            connection.GetSshBridge()->Cancel();
             return kRocProfVisResultSuccess;
         }
         return kRocProfVisResultInvalidArgument;
     }
 
-    rocprofvis_result_t Remote::Disconnect(
-        SshConnection& connection)
-	{
-        s_ssh_client.Disconnect(&connection);
-        return kRocProfVisResultSuccess;
-	}
+
          
     rocprofvis_result_t Remote::AsyncExecute(
         Future& future,
@@ -188,11 +200,12 @@ namespace Controller
             {
                 if (SshClient::Result::Success == s_ssh_client.ExecuteCommand(&connection, command.data(), future))
                 {
+                    connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
                     return kRocProfVisResultSuccess;
                 }
                 else
                 {
-                    future->FailRemote();
+                    connection.GetSshBridge()->SetStatus(kRPVControllerSshFailed);
                     return kRocProfVisResultFailedSshCommunication;
                 }
             }
@@ -233,11 +246,12 @@ namespace Controller
                 {
                     if (SshClient::Result::Success == s_ssh_client.DownloadFile(&connection, src_path.data(), dst_path.data(), future))
                     {
+                        connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
                         return kRocProfVisResultSuccess;
                     }
                     else
                     {
-                        future->FailRemote();
+                        connection.GetSshBridge()->SetStatus(kRPVControllerSshFailed);
                         return kRocProfVisResultFailedSshCommunication;
                     }
                 }

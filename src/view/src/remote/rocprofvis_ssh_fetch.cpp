@@ -130,6 +130,7 @@ namespace View
 
     void ExecutionOutput::clear_updated() {
         updated_ = false;
+        finished_ = false;
     }
 
     ExecutionOutput::Snapshot ExecutionOutput::get() const

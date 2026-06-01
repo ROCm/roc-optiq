@@ -15,7 +15,7 @@
 
 #ifdef TEST_SSH_CONNECTION
 #include "remote/rocprofvis_ssh_uri.h"
-#include "remote/rocprofvis_ssh_access.h"
+#include "remote/rocprofvis_ssh_session.h"
 #endif
 
 #include <atomic>
@@ -208,13 +208,13 @@ private:
     bool                             m_should_close_popup;
     std::string                      m_remote_status_msg;
     RemoteUri                        m_remote_uri;
-    Ssh                              m_ssh_access;
+    SshSession*                      m_ssh_session;
 
-    bool                             m_show_remote_stdout_popup = false;
+    bool                             m_show_remote_stdout_popup;
     ExecutionOutput::Snapshot        m_last_stdout;
 
 
-    bool                             m_show_progress_popup = false;
+    bool                             m_show_progress_popup;
     FileStat::Snapshot               m_last_progress;
     std::string                      m_popup_id;
 

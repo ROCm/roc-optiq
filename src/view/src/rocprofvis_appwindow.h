@@ -75,6 +75,13 @@ public:
 
     void OpenFile(std::string file_path);
 
+    // Opens two trace files as a single compare project (combined timeline, A/B tags).
+    void OpenCompare(const std::string& first_file, const std::string& second_file);
+
+    // Stable, file-derived project id/key for a compare of the given source files.
+    // Used as the tab id and the m_projects key for both fresh and reopened compares.
+    static std::string MakeCompareId(const std::vector<std::string>& files);
+
     void ShowCloseConfirm();
     
     void SetFullscreenState(bool is_fullscreen);

@@ -3,8 +3,6 @@
 
 #include "rocprofvis_trace_data_model.h"
 
-#include <yaml-cpp/yaml.h>
-
 namespace RocProfVis
 {
 namespace View
@@ -15,38 +13,9 @@ TraceDataModel::TraceDataModel()
 {}
 
 void
-TraceDataModel::LoadCompareMetadata(const std::string& path)
+TraceDataModel::SetCompareSources(const std::vector<CompareSourceInfo>& sources)
 {
-    m_compare_sources.clear();
-    try
-    {
-        YAML::Node root  = YAML::LoadFile(path);
-        YAML::Node optiq = root["optiq"];
-        if(!optiq || !optiq["compare"].as<bool>(false))
-        {
-            return;
-        }
-        YAML::Node files = optiq["compare_files"];
-        if(!files || !files.IsSequence())
-        {
-            return;
-        }
-        for(const YAML::Node& entry : files)
-        {
-            CompareSourceInfo info;
-            info.id   = entry["id"].as<std::string>("");
-            info.name = entry["name"].as<std::string>("");
-            info.path = entry["path"].as<std::string>("");
-            if(!info.id.empty())
-            {
-                m_compare_sources.push_back(std::move(info));
-            }
-        }
-    }
-    catch(const YAML::Exception&)
-    {
-        m_compare_sources.clear();
-    }
+    m_compare_sources = sources;
 }
 
 const CompareSourceInfo*

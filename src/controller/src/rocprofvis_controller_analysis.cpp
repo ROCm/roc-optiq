@@ -393,11 +393,13 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Quer
             }
         }
     }
+    const char* group = (m_op == kRocProfVisDmOperationLaunchSample) ? "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal" :
+        "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal, AVG(duration) AS DurationAvg, MIN(duration) AS DurationMin, MAX(duration) AS DurationMax";
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     result = args.GetUInt64(kRPVControllerTableArgsSortColumn, 0, &sort_column_index);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     result = args.GetUInt64(kRPVControllerTableArgsSortOrder, 0, &sort_order);
-    out = {"", "__op = " + std::to_string(m_op), "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal, AVG(duration) AS DurationAvg, MIN(duration) AS DurationMin, MAX(duration) AS DurationMax", "name", sort_column_index, (rocprofvis_controller_sort_order_t)sort_order, tracks, {}, use_case, start_ts, end_ts};
+    out = {"", "__op = " + std::to_string(m_op), group, "name", sort_column_index, (rocprofvis_controller_sort_order_t)sort_order, tracks, {}, use_case, start_ts, end_ts};
     return result;
 }
 

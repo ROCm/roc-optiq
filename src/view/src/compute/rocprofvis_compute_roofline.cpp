@@ -823,6 +823,12 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
             {
                 empty = false;
                 ImGui::PushID(i);
+                ImGui::PushStyleColor(ImGuiCol_Header,
+                                      m_settings.GetColor(Colors::kSelection));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                                      m_settings.GetColor(Colors::kHighlightChart));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                                      m_settings.GetColor(Colors::kHighlightChart));
                 ImVec2 pos         = ImGui::GetCursorPos();
                 bool   row_clicked = ImGui::Selectable(
                     "", false,
@@ -887,6 +893,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                         m_options_changed  = true;
                     }
                 }
+                ImGui::PopStyleColor(3);
                 ImGui::PopID();
             }
         }

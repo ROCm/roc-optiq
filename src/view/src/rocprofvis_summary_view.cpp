@@ -4,6 +4,7 @@
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "implot/implot.h"
+#include "model/rocprofvis_common_defs.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -18,13 +19,18 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float  IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
-constexpr double PIE_CHART_RADIUS                = 1.0;
-constexpr double BAR_CHART_THICKNESS             = 0.67;
-constexpr ImVec2 CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
-constexpr float  FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
-constexpr ImVec2 INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
-constexpr float  INITIAL_RELATIVE_SIZE           = 0.8f;
+constexpr float       IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
+constexpr double      PIE_CHART_RADIUS                = 1.0;
+constexpr double      BAR_CHART_THICKNESS             = 0.67;
+constexpr ImVec2      CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
+constexpr float       FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
+constexpr ImVec2      INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
+constexpr float       INITIAL_RELATIVE_SIZE           = 0.8f;
+constexpr const char* TRACK_ID_COLUMN_NAME            = "__trackId";
+constexpr const char* STREAM_ID_COLUMN_NAME           = "__streamTrackId";
+constexpr const char* ID_COLUMN_NAME                  = "__uuid";
+constexpr const char* EVENT_ID_COLUMN_NAME            = "id";
+constexpr const char* NAME_COLUMN_NAME                = "name";
 
 namespace
 {
@@ -41,16 +47,12 @@ PushPlotChrome(SettingsManager& settings)
                            ThemeColor(settings, Colors::kBorderColor, 0.7f));
     ImPlot::PushStyleColor(ImPlotCol_AxisTick,
                            ThemeColor(settings, Colors::kTextDim, 0.56f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendBg,
-                           ThemeColor(settings, Colors::kBgPanel, 0.96f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
-                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendText, ThemeColor(settings, Colors::kTextMain));
 }
 
 }  // namespace
 
-SummaryView::SummaryView(DataProvider& dp)
+SummaryView::SummaryView(DataProvider&                      dp,
+                         std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
 , m_settings(SettingsManager::GetInstance())
 , m_h_container(nullptr)
@@ -58,11 +60,15 @@ SummaryView::SummaryView(DataProvider& dp)
 , m_kernel_instance_table(nullptr)
 , m_top_kernels(nullptr)
 , m_hw_utilization(nullptr)
+, m_hw_utilization_item(nullptr)
+, m_top_kernels_item(nullptr)
+, m_kernel_instance_table_item(nullptr)
 , m_open(SettingsManager::GetInstance().GetAppWindowSettings().show_summary)
 , m_fetched(false)
 {
-    m_kernel_instance_table = std::make_shared<KernelInstanceTable>(m_data_provider);
-    m_top_kernels           = std::make_shared<TopKernels>(
+    m_kernel_instance_table =
+        std::make_shared<KernelInstanceTable>(m_data_provider, timeline_selection);
+    m_top_kernels = std::make_shared<TopKernels>(
         m_data_provider,
         [this](const char* kernel_name, const uint64_t* node_id,
                const uint64_t* device_id) {
@@ -70,18 +76,19 @@ SummaryView::SummaryView(DataProvider& dp)
         },
         [this]() { m_kernel_instance_table->Clear(); });
     m_hw_utilization = std::make_shared<HWUtilization>(m_data_provider);
-    m_v_container    = std::make_shared<VSplitContainer>(
-        LayoutItem::CreateFromWidget(m_top_kernels),
-        LayoutItem::CreateFromWidget(m_kernel_instance_table));
-    m_v_container->SetSplit(0.5f);
 
-    auto hw_utilization_item = LayoutItem::CreateFromWidget(m_hw_utilization);
-    m_h_container =
-        std::make_unique<HSplitContainer>(hw_utilization_item,
-                                          LayoutItem::CreateFromWidget(m_v_container));
+    m_top_kernels_item           = LayoutItem::CreateFromWidget(m_top_kernels);
+    m_kernel_instance_table_item = LayoutItem::CreateFromWidget(m_kernel_instance_table);
+    m_hw_utilization_item        = LayoutItem::CreateFromWidget(m_hw_utilization);
+
+    m_v_container = std::make_shared<VSplitContainer>(m_top_kernels_item,
+                                                      m_kernel_instance_table_item);
+    m_v_container->SetSplit(0.5f);
+    m_h_container = std::make_unique<HSplitContainer>(
+        m_hw_utilization_item, LayoutItem::CreateFromWidget(m_v_container));
     m_h_container->SetSplit(0.25f);
     // Hide HW utilization for now as the data is not yet reliable
-    hw_utilization_item->m_visible = false;
+    m_hw_utilization_item->m_visible = false;
 }
 
 void
@@ -118,6 +125,9 @@ SummaryView::Render()
         m_v_container->SetMinBottomHeight(m_kernel_instance_table->MinHeight());
         m_h_container->SetMinLeftWidth(m_hw_utilization->MinWidth());
         m_h_container->SetMinRightWidth(m_top_kernels->MinWidth());
+        m_top_kernels_item->m_bg_color           = m_settings.GetColor(Colors::kBgPanel);
+        m_kernel_instance_table_item->m_bg_color = m_settings.GetColor(Colors::kBgPanel);
+        m_hw_utilization_item->m_bg_color        = m_settings.GetColor(Colors::kBgPanel);
         ImGui::SetNextWindowPos(ImGui::GetWindowSize() * INITIAL_RELATIVE_POS,
                                 ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImGui::GetWindowSize() * INITIAL_RELATIVE_SIZE,
@@ -720,7 +730,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(9);
+    ImPlot::PopStyleColor(6);
     ImPlot::PopStyleVar();
     PlotInputHandler();
 }
@@ -779,7 +789,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(9);
+    ImPlot::PopStyleColor(6);
     ImPlot::PopStyleVar();
     PlotInputHandler();
 }
@@ -791,14 +801,21 @@ TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
                                ImGui::GetFontSize() + plot_style.PlotBorderSize +
                                    plot_style.PlotPadding.y +
                                    2 * plot_style.LabelPadding.y));
-    if(ImGui::BeginTable(
-           "Table", 5,
-           ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable,
-           ImGui::GetContentRegionAvail() -
-               ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                      ImGui::GetFrameHeightWithSpacing() + 2 * plot_style.PlotPadding.y +
-                          plot_style.PlotBorderSize)))
+    if(ImGui::BeginTable("Table", 5,
+                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
+                             ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
+                             ImGuiTableFlags_Resizable,
+                         ImGui::GetContentRegionAvail() -
+                             ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
+                                    ImGui::GetFrameHeightWithSpacing() +
+                                        2 * plot_style.PlotPadding.y +
+                                        plot_style.PlotBorderSize)))
     {
+        ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kSelection));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              m_settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              m_settings.GetColor(Colors::kHighlightChart));
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("Name");
         ImGui::TableSetupColumn("Invocations");
@@ -841,6 +858,7 @@ TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
                                              (*m_kernels)[i].exec_time_min, time_format)
                                              .c_str());
         }
+        ImGui::PopStyleColor(3);
         ImGui::EndTable();
     }
 }
@@ -882,10 +900,15 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
                        3 * plot_style.PlotPadding.y - plot_style.PlotBorderSize));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
+        ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kSelection));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              m_settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              m_settings.GetColor(Colors::kHighlightChart));
         ImGui::BeginChild("legend", ImVec2(region.x * 0.25f, 0),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-        float legend_width = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
-        float icon_width   = ImGui::GetFontSize();
+        float legend_width     = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
+        float icon_width       = ImGui::GetFontSize();
         float scroll_bar_width = ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f;
         ImGui::BeginChild(
             "legend_scroll_view", ImVec2(legend_width - scroll_bar_width, 0),
@@ -926,7 +949,7 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
         }
         ImGui::EndChild();
         ImGui::EndChild();
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(4);
         ImGui::PopStyleVar();
         ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
     }
@@ -1042,12 +1065,13 @@ TopKernels::ToggleSelectKernel(const size_t& idx)
     }
 }
 
-KernelInstanceTable::KernelInstanceTable(DataProvider& dp)
+KernelInstanceTable::KernelInstanceTable(
+    DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection)
 : InfiniteScrollTable(
       dp, TableType::kSummaryKernelTable, kRPVControllerTableTypeSummaryKernelInstances,
       DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); })
+      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, timeline_selection)
 , m_fetched(false)
 , m_fetch_deferred(false)
 {
@@ -1125,6 +1149,54 @@ KernelInstanceTable::FormatData() const
     formatted_column_data.clear();
     formatted_column_data.resize(m_table_model().GetTableHeader(m_table_type).size());
     InfiniteScrollTable::FormatTimeColumns();
+}
+
+void
+KernelInstanceTable::IndexColumns()
+{
+    const std::vector<std::string>& column_names =
+        m_table_model().GetTableHeader(m_table_type);
+    // remember column index positions
+    m_important_column_idxs =
+        std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
+    for(size_t i = 0; i < column_names.size(); i++)
+    {
+        const auto& col = column_names[i];
+        if(!col.empty())
+        {
+            if(col == TRACK_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kTrackId] = i;
+            }
+            else if(col == STREAM_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kStreamId] = i;
+            }
+            else if(col == ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kUUId] = i;
+            }
+            else if(col == EVENT_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kDbEventId] = i;
+            }
+            else if(col == NAME_COLUMN_NAME)
+            {
+                m_important_column_idxs[kName] = i;
+            }
+        }
+    }
+    InfiniteScrollTable::IndexColumns();
+}
+
+void
+KernelInstanceTable::RowSelected(const ImGuiMouseButton mouse_button)
+{
+    if(mouse_button == ImGuiMouseButton_Right)
+    {
+        InfiniteScrollTable::SelectedRowContextMenu();
+    }
+    InfiniteScrollTable::RowSelected(mouse_button);
 }
 
 void

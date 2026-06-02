@@ -199,21 +199,21 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                 dm_track_handle,
                                                 kRPVDMTrackCategoryEnumCharPtr, 0);
 
-                                        track->SetString(kRPVControllerCategory, 0,
+                                        track->SetString(kRPVControllerTrackCategory, 0,
                                                          category.c_str());
 
                                         std::string main_name =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackMainProcessNameCharPtr, 0);
-                                        track->SetString(kRPVControllerMainName, 0,
+                                        track->SetString(kRPVControllerTrackMainName, 0,
                                                          main_name.c_str());
 
                                         std::string sub_name =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackSubProcessNameCharPtr, 0);
-                                        track->SetString(kRPVControllerSubName, 0,
+                                        track->SetString(kRPVControllerTrackSubName, 0,
                                                          sub_name.c_str());
 
                                         uint64_t num_records =
@@ -360,6 +360,69 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                          name.c_str(), value.c_str());
                                         }
 
+                                        switch((rocprofvis_dm_track_category_t)dm_track_type)
+                                        {
+                                            case kRocProfVisDmPmcTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationNoOp);
+                                                break;
+                                            }
+                                            case kRocProfVisDmRegionTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 2);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunch);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 1, kRocProfVisDmOperationLaunchSample);
+                                                break;
+                                            }
+                                            case kRocProfVisDmKernelDispatchTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationDispatch);
+                                                break;
+                                            }
+                                            case kRocProfVisDmMemoryAllocationTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationMemoryAllocate);
+                                                break;
+                                            }
+                                            case kRocProfVisDmMemoryCopyTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationMemoryCopy);
+                                                break;
+                                            }
+                                            case kRocProfVisDmStreamTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 5);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunch);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 1, kRocProfVisDmOperationDispatch);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 2, kRocProfVisDmOperationMemoryAllocate);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 3, kRocProfVisDmOperationMemoryCopy);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 4, kRocProfVisDmOperationLaunchSample);
+                                                break;
+                                            }
+                                            case kRocProfVisDmRegionMainTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunch);
+                                                break;
+                                            }
+                                            case kRocProfVisDmRegionSampleTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunchSample);
+                                                break;
+                                            }
+                                            default:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmMultipleOperations);
+                                                break;
+                                            }
+                                        }
+                                        
                                         uint32_t index = static_cast<uint32_t>(m_tracks.size());
                                         m_tracks.push_back(track);
                                         if(m_tracks.size() != (index + 1))

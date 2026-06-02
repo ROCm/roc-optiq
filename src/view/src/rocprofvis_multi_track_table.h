@@ -34,32 +34,29 @@ public:
     void Render() override;
     void Update() override;
 
-    void HandleTrackSelectionChanged();
+    virtual void HandleTrackSelectionChanged(uint64_t track_id, bool selected);
+    virtual void HandleTimeRangeSelectionChanged(double start_ns, double end_ns);
 
 protected:
+    virtual bool IncludeTrack(uint64_t track_id) const;
     void         FormatData() const override;
     void         IndexColumns() override;
     void         RowSelected(const ImGuiMouseButton mouse_button) override;
-    virtual void FilterSelectedTracksForTableType(
-        const std::vector<uint64_t>& selected_track_ids,
-        std::vector<uint64_t>&       filtered_track_ids) const;
+
+    // Subset of selected tracks applicable to this table type
+    std::vector<uint64_t> m_included_tracks;
 
 private:
-    void RenderContextMenu();
+    void FetchSelectionData();
     bool XButton(const char* id) const;
-    void CopyCellToClipboard(bool use_formatted_data);
 
-    bool m_defer_track_selection_changed;
+    bool m_retry_selection_fetch;
     bool m_display_filters;
-
-    // Keep track of currently selected tracks for this table type
-    std::vector<uint64_t> m_selected_tracks;
 
     std::vector<std::string> m_group_by_choices;
     std::vector<const char*> m_group_by_choices_ptr;
     int                      m_group_by_selection_index;
 
-    bool m_open_context_menu;
     char m_filter_store[FILTER_SIZE];
 };
 

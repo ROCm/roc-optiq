@@ -1022,14 +1022,29 @@ DataProvider::HandleLoadTrackMetaData()
                                         ? kRPVControllerTrackTypeSamples
                                         : kRPVControllerTrackTypeEvents;
 
-            result = GetString(track, kRPVControllerCategory, 0, track_info.category);
+            result = GetString(track, kRPVControllerTrackCategory, 0, track_info.category);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            result = GetString(track, kRPVControllerMainName, 0,
+            uint64_t operation_type_count = 0;
+            result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackNumberOfOperationTypes, 0,
+                &operation_type_count);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            for(uint64_t i = 0; i < operation_type_count; i++)
+            {
+                uint64_t operation_type = 0;
+                result = rocprofvis_controller_get_uint64(
+                    track, kRPVControllerTrackOperationTypeIndexed, i, &operation_type);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                track_info.operation_types.insert(
+                    (rocprofvis_dm_event_operation_t)operation_type);
+            }
+
+            result = GetString(track, kRPVControllerTrackMainName, 0,
                                track_info.main_name);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             
-            result = GetString(track, kRPVControllerSubName, 0,
+            result = GetString(track, kRPVControllerTrackSubName, 0,
                                track_info.sub_name);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 

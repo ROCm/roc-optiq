@@ -171,11 +171,22 @@ namespace Controller
     }
 
     rocprofvis_result_t Remote::CancelPrompt(
-        SshConnection& connection) 
+        SshConnection& connection)
     {
         if (connection.GetSshBridge())
         {
             connection.GetSshBridge()->Cancel();
+            return kRocProfVisResultSuccess;
+        }
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    rocprofvis_result_t Remote::Reset(
+        SshConnection& connection)
+    {
+        if (connection.GetSshBridge())
+        {
+            connection.GetSshBridge()->Reset();
             return kRocProfVisResultSuccess;
         }
         return kRocProfVisResultInvalidArgument;

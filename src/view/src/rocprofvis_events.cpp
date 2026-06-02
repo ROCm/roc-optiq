@@ -446,3 +446,33 @@ ProfilerStatusEvent::GetState() const
 {
     return m_state;
 }
+
+RemoteStatusEvent::RemoteStatusEvent(uint64_t            operation_id,
+                                     uint32_t            status,
+                                     rocprofvis_result_t result,
+                                     const std::string&  source_id)
+: RocEvent(static_cast<int>(RocEvents::kRemoteStatusChanged), source_id)
+, m_operation_id(operation_id)
+, m_status(status)
+, m_result(result)
+{
+    m_event_type = RocEventType::kRemoteStatusEvent;
+}
+
+uint64_t
+RemoteStatusEvent::GetOperationId() const
+{
+    return m_operation_id;
+}
+
+uint32_t
+RemoteStatusEvent::GetStatus() const
+{
+    return m_status;
+}
+
+rocprofvis_result_t
+RemoteStatusEvent::GetResult() const
+{
+    return m_result;
+}

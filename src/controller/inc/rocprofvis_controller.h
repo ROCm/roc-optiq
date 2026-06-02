@@ -400,6 +400,16 @@ rocprofvis_result_t rocprofvis_controller_remote_cancel_prompt(
     rocprofvis_controller_connection_t* connection);
 
 /*
+* Resets the connection's SSH bridge cancellation/prompt state so the same
+* live connection can be reused for further operations after a cancel. Clears
+* the latched cancelled flag and any pending prompt/host-key state.
+* @param connection The connection whose bridge state should be reset.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_reset(
+    rocprofvis_controller_connection_t* connection);
+
+/*
 * Frees the provided summary metrics container object
 * @param object The object to free.
 */

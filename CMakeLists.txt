@@ -109,6 +109,8 @@ set(VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_fetch.cpp
     src/view/src/remote/rocprofvis_ssh_session.cpp
     src/view/src/remote/rocprofvis_ssh_auth_modal.cpp
+    src/view/src/remote/rocprofvis_remote_trace_orchestrator.cpp
+    src/view/src/remote/rocprofvis_remote_trace_orchestrator.h
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
     src/view/src/widgets/rocprofvis_flex_container.cpp

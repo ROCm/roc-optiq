@@ -109,6 +109,8 @@ set(VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_fetch.cpp
     src/view/src/remote/rocprofvis_ssh_session.cpp
     src/view/src/remote/rocprofvis_ssh_auth_modal.cpp
+    src/view/src/remote/rocprofvis_remote_trace_orchestrator.cpp
+    src/view/src/remote/rocprofvis_remote_trace_orchestrator.h
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
     src/view/src/widgets/rocprofvis_flex_container.cpp
@@ -121,6 +123,8 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_notification_manager.cpp
     src/view/src/profiler/rocprofvis_profiler_launcher_dialog.cpp
     src/view/src/profiler/rocprofvis_profiler_launcher_dialog.h
+    src/view/src/profiler/rocprofvis_profiler_session.cpp
+    src/view/src/profiler/rocprofvis_profiler_session.h
     src/view/src/profiler/rocprofvis_launch_config.cpp
     src/view/src/profiler/rocprofvis_launch_config.h
     src/view/src/profiler/rocprofvis_profiler_backend.h
@@ -130,6 +134,8 @@ set(VIEW_FILES
     src/view/src/profiler/rocprofvis_launch_preset_manager.h
     src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp
     src/view/src/profiler/rocprofvis_launch_shared_tabs.h
+    src/view/src/rocprofvis_appmonitor.cpp
+    src/view/src/rocprofvis_appmonitor.h
     )
 
 if(COMPUTE_UI_SUPPORT) 

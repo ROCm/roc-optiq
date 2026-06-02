@@ -54,6 +54,9 @@ namespace Controller
     static rocprofvis_result_t CancelPrompt(
         SshConnection& connection);
 
+    static rocprofvis_result_t Reset(
+        SshConnection& connection);
+
     private:
         static SshClient s_ssh_client;
 

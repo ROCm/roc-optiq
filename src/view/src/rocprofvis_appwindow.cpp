@@ -10,6 +10,7 @@
 #include "ImGuiFileDialog.h"
 
 #include "amd_rocm_optiq_logo_png.h"
+#include "rocprofvis_appmonitor.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
@@ -119,11 +120,9 @@ AppWindow::AppWindow()
 , m_restore_fullscreen_later(false)
 , m_next_provider_cleanup_id(0)
 #ifdef TEST_SSH_CONNECTION
-, m_ssh_session(nullptr)
 , m_remote_show_password(false)
 , m_remote_show_passphrase(false)
 , m_open_remote_dialog(false)
-, m_thread_running(false)
 , m_should_close_popup(false)
 #endif
 {
@@ -147,6 +146,15 @@ AppWindow::~AppWindow()
     }
     m_provider_cleanup_jobs.clear();
     m_projects.clear();
+    // Destroy owners of monitored sessions (e.g. the profiler dialog and the
+    // remote-trace orchestrator) before tearing down the monitor so they
+    // unregister cleanly instead of lazily re-creating the singleton during
+    // their own destruction.
+    m_profiler_launcher_dialog.reset();
+#ifdef TEST_SSH_CONNECTION
+    m_remote_orchestrator.reset();
+#endif
+    AppMonitor::DestroyInstance();
 }
 
 bool
@@ -468,6 +476,15 @@ AppWindow::BeginAppShutdown()
         m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
     }
 
+    // Release the profiler dialog and remote-trace orchestrator now so their
+    // sessions transfer any in-flight work to the AppMonitor (non-blocking).
+    // Subsequent Update() frames drain the monitor; the exit gate waits until it
+    // is empty.
+    m_profiler_launcher_dialog.reset();
+#ifdef TEST_SSH_CONNECTION
+    m_remote_orchestrator.reset();
+#endif
+
     if(!m_provider_cleanup_jobs.empty())
     {
         NotificationManager::GetInstance().ShowPersistent(
@@ -564,7 +581,8 @@ void
 AppWindow::RequestExitIfProviderCleanupsComplete()
 {
     if(!m_shutdown_requested || m_exit_notification_sent ||
-       !m_provider_cleanup_jobs.empty())
+       !m_provider_cleanup_jobs.empty() ||
+       AppMonitor::GetInstance()->HasPendingOperations())
     {
         return;
     }
@@ -587,10 +605,16 @@ AppWindow::Update()
     UpdateProviderCleanups();
     if(m_shutdown_requested)
     {
+        // Keep draining cancelling/in-flight monitored operations so their
+        // resources are freed (non-blocking) before the app exits.
+        AppMonitor::GetInstance()->Update();
         return;
     }
 
     HotkeyManager::GetInstance().ProcessInput();
+    // Poll long-running operations (profiler sessions, SSH) and queue any
+    // status-change events before they are dispatched below this frame.
+    AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
@@ -664,7 +688,7 @@ AppWindow::Render()
         m_open_remote_dialog = false;
     }
     RenderRemoteOpenDialog();
-    RenderSshAuthModal(m_ssh_session);
+    RenderSshAuthModal(m_remote_orchestrator ? m_remote_orchestrator->GetSession() : nullptr);
     RenderRemoteProgressDialog();
     RenderRemoteOutputDialog();
 #endif
@@ -1716,10 +1740,14 @@ AppWindow::RenderRemoteOpenDialog()
 
         ImGui::Spacing();
 
-        if (!m_remote_status_msg.empty())
+        // Prefer the live orchestrator status when a workflow exists, falling
+        // back to the standalone message (e.g. SaveToJson failure).
+        const std::string& status_msg =
+            m_remote_orchestrator ? m_remote_orchestrator->GetStatusMessage() : m_remote_status_msg;
+        if (!status_msg.empty())
         {
             ImVec4 color = ImVec4(1.0f, 0.5f, 0.3f, 1.0f);
-            ImGui::TextColored(color, "%s", m_remote_status_msg.c_str());
+            ImGui::TextColored(color, "%s", status_msg.c_str());
         }
 
         ImGui::Spacing();
@@ -1730,7 +1758,8 @@ AppWindow::RenderRemoteOpenDialog()
         bool has_remote_path = !m_remote_uri.GetRemoteCommandLineString().empty() || !m_remote_uri.GetRemoteResultPathString().empty();
         bool can_open = !m_remote_uri.GetRemoteHostString().empty() && !m_remote_uri.GetRemoteUserString().empty() && has_remote_path && can_authenticate;
         if (!can_open) ImGui::BeginDisabled();
-        if (!m_thread_running)
+        bool running = m_remote_orchestrator && m_remote_orchestrator->IsRunning();
+        if (!running)
         {
             if (ImGui::Button("Open", ImVec2(110, 0)))
             {
@@ -1739,85 +1768,28 @@ AppWindow::RenderRemoteOpenDialog()
                     m_remote_status_msg =
                         "Failed to backup authentication parameters.";
                 }
-                m_thread_running = true;
                 m_should_close_popup = true;
                 m_show_remote_stdout_popup = false;
                 m_show_progress_popup = false;
-                std::thread([&]()
-                    {
-                        
-                        m_remote_status_msg = "Creating session...";
-                        m_ssh_session = new SshSession(&m_remote_uri);
 
-                        while (true)
-                        {
-                            m_remote_status_msg = "Connecting...";
-                            rocprofvis_result_t result = m_ssh_session->Connect();
-                            if (result != kRocProfVisResultSuccess)
-                            {
-                                
-                                m_remote_status_msg = "SSH connection failed.";
-                                break;
-                            }
-
-                            result = m_ssh_session->Authenticate();
-                            if (result != kRocProfVisResultSuccess)
-                            {
-                                m_remote_status_msg = "SSH authentication failed.";
-                                break;
-                            }
-
-                            if (!m_remote_uri.GetRemoteCommandLineString().empty())
-                            {
-                                m_remote_status_msg = std::string("Executing command (") + m_remote_uri.GetRemoteCommandLineString() + ")";
-                                result = m_ssh_session->Execute();
-                                if (result != kRocProfVisResultSuccess)
-                                {
-                                    m_remote_status_msg = "CLI execution failed. Check remote command syntax and try again.";
-                                    break;
-                                }
-                            }
-
-
-
-                            if (!m_remote_uri.GetRemoteResultPathString().empty())
-                            {
-
-                                m_remote_status_msg = std::string("Downloading (") + m_remote_uri.GetRemoteResultPathString() + ")";
-                                result = m_ssh_session->Download();
-
-                                if (result == kRocProfVisResultSuccess)
-                                {
-                                    
-                                    OpenFile( m_remote_uri.GetLocalResultPathString());
-                                }
-                                else
-                                {
-                                    m_remote_status_msg =
-                                        "Result database download failed. Check profiler result path and try again.";
-                                }
-                            }
-
-                            break;
-                        }
-
-                        delete m_ssh_session;
-                        m_ssh_session = nullptr;
-
-                        m_thread_running = false;
-                    }).detach();
+                // Drive the connect -> authenticate -> execute -> download chain
+                // on the main thread via the AppMonitor; OpenFile is invoked when
+                // the trace has been downloaded.
+                m_remote_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
+                    &m_remote_uri,
+                    [this](const std::string& local_path) { OpenFile(local_path); });
+                m_remote_orchestrator->Start();
             }
-
         }
         else
         {
-            ImGui::Text("Working...");
+            ImGui::Text("%s", m_remote_orchestrator->GetStatusMessage().c_str());
         }
 
         if (!can_open) ImGui::EndDisabled();
 
         ImGui::SameLine();
-        if (!m_thread_running)
+        if (!running)
         {
             if (ImGui::Button("Cancel", ImVec2(110, 0)))
             {
@@ -1839,9 +1811,11 @@ AppWindow::RenderRemoteOpenDialog()
 
 void AppWindow::RenderRemoteProgressDialog()
 {
-    if (!m_ssh_session) return;
+    SshSession* ssh_session =
+        m_remote_orchestrator ? m_remote_orchestrator->GetSession() : nullptr;
+    if (!ssh_session) return;
 
-    if (auto fetch = m_ssh_session->GetFileStat()->consume_if_updated())
+    if (auto fetch = ssh_session->GetFileStat()->consume_if_updated())
     {
         m_last_progress = *fetch;
 
@@ -1903,9 +1877,11 @@ void AppWindow::RenderRemoteProgressDialog()
 void
 AppWindow::RenderRemoteOutputDialog()
 {
-    if (!m_ssh_session) return;
+    SshSession* ssh_session =
+        m_remote_orchestrator ? m_remote_orchestrator->GetSession() : nullptr;
+    if (!ssh_session) return;
 
-    if (auto fetch = m_ssh_session->GetExecutionOutput()->consume_if_updated())
+    if (auto fetch = ssh_session->GetExecutionOutput()->consume_if_updated())
     {
         m_last_stdout = *fetch;
         if (!m_show_remote_stdout_popup)

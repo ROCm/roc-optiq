@@ -4,13 +4,15 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
-#include "rocprofvis_data_provider.h"
+#include "rocprofvis_events.h"
+#include "rocprofvis_event_manager.h"
+#include "rocprofvis_profiler_session.h"
 #include "rocprofvis_launch_config.h"
 #include "rocprofvis_profiler_backend.h"
 #include "rocprofvis_launch_preset_manager.h"
 #include "imgui.h"
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 #include <functional>
 #include <utility>
@@ -21,7 +23,6 @@ namespace View
 {
 
 class AppWindow;
-class DataProvider;
 
 class ProfilerLauncherDialog
 {
@@ -47,7 +48,7 @@ private:
     void OnLaunchClicked();
     void OnCancelClicked();
     void OnCloseClicked();
-    void PollProfilerState();
+    void OnProfilerStateChanged(rocprofvis_profiler_state_t new_state);
     void UpdateOutput();
     void RebuildComposedOutput();
     void RefreshExecutionCache();
@@ -63,7 +64,8 @@ private:
     std::string GetProfilerPath() const;
 
     AppWindow* m_app_window;
-    DataProvider m_data_provider;
+    ProfilerSession m_profiler_session;
+    EventManager::SubscriptionToken m_profiler_status_token;
 
     bool m_should_open;
     bool m_show_window;

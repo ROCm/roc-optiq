@@ -9,6 +9,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace RocProfVis
@@ -26,10 +27,14 @@ public:
     static EventManager* GetInstance();
     static void          DestroyInstance();
 
+    // Main thread only.
     SubscriptionToken Subscribe(int event_id, EventHandler handler);
     bool              Unsubscribe(int event_id, SubscriptionToken token);
 
+    // Main thread only. Drains the pending queue and invokes handlers.
     void DispatchEvents();
+
+    // Thread-safe. Queues an event for the next DispatchEvents() on the main thread.
     void AddEvent(std::shared_ptr<RocEvent> event);
 
 private:
@@ -38,6 +43,7 @@ private:
     size_t m_next_token;
     std::map<int, std::vector<std::pair<SubscriptionToken, EventHandler>>>
                                          m_subscriptions;
+    std::mutex                           m_queue_mutex;
     std::list<std::shared_ptr<RocEvent>> m_event_queue;
 
     static EventManager* s_instance;

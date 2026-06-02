@@ -581,6 +581,18 @@ rocprofvis_result_t rocprofvis_controller_remote_cancel_prompt(
     return error;
 }
 
+rocprofvis_result_t rocprofvis_controller_remote_reset(
+    rocprofvis_controller_connection_t* connection)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::Reset(*connection_ref);
+    }
+    return error;
+}
+
 rocprofvis_result_t rocprofvis_controller_remote_execute_async(
     rocprofvis_controller_future_t* future,
     rocprofvis_controller_connection_t* connection,

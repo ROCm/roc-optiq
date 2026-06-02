@@ -16,11 +16,13 @@
 #ifdef TEST_SSH_CONNECTION
 #include "remote/rocprofvis_ssh_uri.h"
 #include "remote/rocprofvis_ssh_session.h"
+#include "remote/rocprofvis_remote_trace_orchestrator.h"
 #endif
 
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <memory>
 #include <thread>
 #include <vector>
 
@@ -204,11 +206,10 @@ private:
     bool                             m_open_remote_dialog;
     bool                             m_remote_show_password;
     bool                             m_remote_show_passphrase;
-    bool                             m_thread_running;
     bool                             m_should_close_popup;
     std::string                      m_remote_status_msg;
     RemoteUri                        m_remote_uri;
-    SshSession*                      m_ssh_session;
+    std::unique_ptr<RemoteTraceOrchestrator> m_remote_orchestrator;
 
     bool                             m_show_remote_stdout_popup;
     ExecutionOutput::Snapshot        m_last_stdout;

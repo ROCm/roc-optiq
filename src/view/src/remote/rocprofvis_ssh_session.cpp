@@ -2,16 +2,24 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_ssh_session.h"
+#include "rocprofvis_appmonitor.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_events.h"
 #include <cfloat>
+#include <memory>
 
 namespace RocProfVis
 {
 namespace View
 {
 
-    SshSession::SshSession(RemoteUri* uri) : m_connection(nullptr), m_uri(uri)
+    SshSession::SshSession(RemoteUri* uri)
+    : m_uri(uri)
+    , m_connection(nullptr)
+    , m_active_operation(SshOperation::None)
+    , m_active_operation_id(0)
+    , m_last_result(kRocProfVisResultSuccess)
     {
         if (uri)
         {
@@ -21,104 +29,213 @@ namespace View
     }
 
     SshSession::~SshSession() {
+        // If a phase is still in flight, the worker may still be using the
+        // connection. Hand the connection-free to the monitor so it runs only
+        // after the bound future resolves (deferred, non-blocking). The closure
+        // captures the connection BY VALUE so it stays valid after this session
+        // is gone. If AppendTeardown reports the op was already reaped, the
+        // worker is done and we can free the connection directly.
+        bool connection_owned_by_monitor = false;
+        if (m_active_operation != SshOperation::None && m_active_operation_id != 0 && m_connection)
+        {
+            rocprofvis_handle_t* connection = m_connection;
+            connection_owned_by_monitor = AppMonitor::GetInstance()->AppendTeardown(
+                m_active_operation_id,
+                [connection]() { rocprofvis_controller_ssh_connection_free(connection); });
+            if (connection_owned_by_monitor)
+            {
+                m_connection = nullptr;
+            }
+        }
+
+        // Requests cancel of the active op (non-blocking). The monitor reaps it
+        // (freeing the future and, if transferred above, the connection) once
+        // the worker resolves the future.
+        CancelActiveOperation();
+
+        // Free the connection directly only when the monitor did not take
+        // ownership of it (no op in flight, or the op was already reaped).
         if (m_connection)
         {
             rocprofvis_controller_ssh_connection_free(m_connection);
+            m_connection = nullptr;
         }
     }
 
-    rocprofvis_result_t SshSession::Connect()
+    // Drives the active phase's check work each frame and returns the raw remote
+    // status. Called by the AppMonitor via the registered status callback.
+    uint64_t SshSession::Poll()
     {
-        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        switch (m_active_operation)
+        {
+            case SshOperation::Connect:      m_last_result = CheckConnection(); break;
+            case SshOperation::Authenticate: m_last_result = CheckAuthentication(); break;
+            case SshOperation::Execute:      m_last_result = CheckExecution(); break;
+            case SshOperation::Download:     m_last_result = CheckDownload(); break;
+            case SshOperation::None:
+            default:
+                return kRPVControllerSshIdle;
+        }
+
+        uint64_t remote_status = kRPVControllerSshIdle;
         if (m_connection)
         {
-            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
-            ROCPROFVIS_ASSERT(future);
-
-            result = StartConnection(future);
-            if (result == kRocProfVisResultSuccess)
-            {
-                while (kRocProfVisResultTimeout == rocprofvis_controller_future_wait(future, 0))
-                {
-                    result = CheckConnection();
-                }
-                result = CheckConnection();
-            }
-            rocprofvis_controller_future_free(future);
+            rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
         }
-        return result;
+
+        bool terminal =
+            remote_status == kRPVControllerSshCompleted || remote_status == kRPVControllerSshFailed;
+        if (terminal)
+        {
+            // Flush buffered stdout once an execute phase finishes, mirroring the
+            // old blocking path's post-loop FinalizeExecution().
+            if (m_active_operation == SshOperation::Execute)
+            {
+                FinalizeExecution();
+            }
+            // The monitor will remove this op (it waits on then frees the
+            // future). Clear our in-flight markers so the next phase can start;
+            // the monitor-owned future and operation id are no longer ours to
+            // touch. The emitted event captured the id by value, so resetting it
+            // here does not affect the terminal event being built this frame.
+            m_active_operation = SshOperation::None;
+        }
+        return remote_status;
     }
 
-    rocprofvis_result_t SshSession::Authenticate()
+    uint64_t SshSession::BeginOperation(SshOperation operation, MonitorOperationType monitor_type,
+            std::function<rocprofvis_result_t(rocprofvis_controller_future_t*)> start_fn)
     {
-        // Default to unknown error until all required authentication steps succeed.
-        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (m_connection && m_uri)
+        if (!m_connection)
         {
-            // Allocate async completion primitive used by the controller call.
-            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
-            ROCPROFVIS_ASSERT(future);
-
-            result = StartAuthentication(future);
-
-            if (result == kRocProfVisResultSuccess)
-            {
-                while (kRocProfVisResultTimeout == rocprofvis_controller_future_wait(future, 0))
-                {
-                    result = CheckAuthentication();
-                }
-                result = CheckAuthentication();
-            }
-            rocprofvis_controller_future_free(future);
+            return 0;
         }
-        return result;
+
+        // Only one phase may be in flight per session. Callers must let the
+        // active operation reach a terminal state (or explicitly cancel it)
+        // before starting the next one.
+        if (m_active_operation != SshOperation::None)
+        {
+            ROCPROFVIS_ASSERT_MSG(false, "SshSession: an operation is already in flight");
+            return 0;
+        }
+
+        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        ROCPROFVIS_ASSERT(future);
+
+        rocprofvis_result_t result = start_fn(future);
+        if (result != kRocProfVisResultSuccess)
+        {
+            rocprofvis_controller_future_free(future);
+            return 0;
+        }
+
+        m_active_operation = operation;
+        m_last_result      = kRocProfVisResultPending;
+
+        // Holds the operation id captured by value into the event factory, so
+        // emitted events carry the correct id even after Poll() clears the
+        // in-flight markers on terminal status.
+        auto id_holder = std::make_shared<uint64_t>(0);
+
+        // Register with the monitor. The status callback drives Poll() each
+        // frame; the factory emits a RemoteStatusEvent carrying this session's
+        // operation id and the latest check result; the monitor reaps the op
+        // (running the teardown to free the future) once it resolves. cancel_fn
+        // signals the bridge so an in-flight phase can unblock and resolve its
+        // future. The teardown captures the future BY VALUE so it remains valid
+        // even if this session is destroyed before the worker finishes.
+        rocprofvis_handle_t* connection = m_connection;
+        m_active_operation_id = AppMonitor::GetInstance()->AddOperation(
+            monitor_type,
+            [this]() -> uint64_t { return Poll(); },
+            [this, id_holder](uint64_t status) -> std::shared_ptr<RocEvent>
+            {
+                return std::make_shared<RemoteStatusEvent>(
+                    *id_holder, static_cast<uint32_t>(status), m_last_result);
+            },
+            [](uint64_t status) -> bool
+            {
+                return status == kRPVControllerSshCompleted || status == kRPVControllerSshFailed;
+            },
+            [connection]() { rocprofvis_controller_remote_cancel_prompt(connection); },
+            future,
+            [future]() { rocprofvis_controller_future_free(future); });
+
+        *id_holder = m_active_operation_id;
+        return m_active_operation_id;
     }
 
-    // if command_line is omited, the data will be taken from corresponded fields of m_uri
-    rocprofvis_result_t SshSession::Execute(const char* command_line)
+    uint64_t SshSession::StartConnect()
     {
-        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (m_connection && m_uri)
-        {
-            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
-            ROCPROFVIS_ASSERT(future);
-            result = command_line ? StartExecution(command_line, future) : StartExecution(future);
-            if (result == kRocProfVisResultSuccess)
-            {
-                while (kRocProfVisResultTimeout == rocprofvis_controller_future_wait(future, 0))
-                {
-                    result = CheckExecution();
-                }
-                result = CheckExecution();
-            }
-            FinalizeExecution();   
-            rocprofvis_controller_future_free(future);
-
-        }
-        return result;
+        return BeginOperation(SshOperation::Connect, MonitorOperationType::SshConnection,
+            [this](rocprofvis_controller_future_t* future) { return StartConnection(future); });
     }
 
-    // if remote_path or local_path omited, the data will be taken from corresponded fields of m_uri
-    rocprofvis_result_t SshSession::Download(const char* remote_path, const char* local_path)
+    uint64_t SshSession::StartAuthenticate()
     {
-        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (m_connection)
+        if (!m_uri)
         {
-            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
-            ROCPROFVIS_ASSERT(future);
-
-            result = remote_path && local_path ? StartDownload(remote_path, local_path, future) : StartDownload(future);
-            if (result == kRocProfVisResultSuccess)
-            {
-                while (kRocProfVisResultTimeout == rocprofvis_controller_future_wait(future, 0))
-                {
-                    result = CheckDownload();
-                }
-                result = CheckDownload();
-            }
-            rocprofvis_controller_future_free(future);
+            return 0;
         }
-        return result;
+        return BeginOperation(SshOperation::Authenticate, MonitorOperationType::SshAuthentication,
+            [this](rocprofvis_controller_future_t* future) { return StartAuthentication(future); });
+    }
+
+    // if command_line is omitted, the data will be taken from m_uri
+    uint64_t SshSession::StartExecute(const char* command_line)
+    {
+        m_pending_command = command_line ? command_line : std::string();
+        bool have_cmd = command_line != nullptr;
+        return BeginOperation(SshOperation::Execute, MonitorOperationType::SshConnection,
+            [this, have_cmd](rocprofvis_controller_future_t* future)
+            {
+                return have_cmd ? StartExecution(m_pending_command.c_str(), future)
+                                : StartExecution(future);
+            });
+    }
+
+    // if remote_path or local_path omitted, the data will be taken from m_uri
+    uint64_t SshSession::StartDownload(const char* remote_path, const char* local_path)
+    {
+        m_pending_remote_path = remote_path ? remote_path : std::string();
+        m_pending_local_path  = local_path ? local_path : std::string();
+        bool have_paths = remote_path && local_path;
+        return BeginOperation(SshOperation::Download, MonitorOperationType::FileTransfer,
+            [this, have_paths](rocprofvis_controller_future_t* future)
+            {
+                return have_paths
+                    ? StartDownloadOp(m_pending_remote_path.c_str(), m_pending_local_path.c_str(), future)
+                    : StartDownloadOp(future);
+            });
+    }
+
+    void SshSession::CancelActiveOperation()
+    {
+        // Only act while a phase is genuinely in flight. After a phase reaches a
+        // terminal state, Poll() clears m_active_operation and the monitor has
+        // already removed (and freed) the operation, so there is nothing to do.
+        if (m_active_operation == SshOperation::None)
+        {
+            m_active_operation_id = 0;
+            return;
+        }
+
+        if (m_active_operation == SshOperation::Execute)
+        {
+            FinalizeExecution();
+        }
+
+        // RemoveOperation signals the bridge (cancel_fn) and requests cancel.
+        // It never blocks: the monitor reaps the op (freeing the future via the
+        // registered teardown) once the worker resolves it.
+        if (m_active_operation_id != 0)
+        {
+            AppMonitor::GetInstance()->RemoveOperation(m_active_operation_id);
+            m_active_operation_id = 0;
+        }
+
+        m_active_operation = SshOperation::None;
     }
 
     rocprofvis_result_t SshSession::AllocateConnection(const char* host, int port)
@@ -421,19 +538,19 @@ namespace View
     }
 
 
-    rocprofvis_result_t SshSession::StartDownload(rocprofvis_controller_future_t* future)
+    rocprofvis_result_t SshSession::StartDownloadOp(rocprofvis_controller_future_t* future)
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (m_connection && m_uri)
         {
             std::string remote_path = m_uri->GetRemoteResultPathString();
             std::string local_path = m_uri->GetLocalResultPathString();
-            result =  StartDownload(remote_path.c_str(), local_path.c_str(), future);
+            result =  StartDownloadOp(remote_path.c_str(), local_path.c_str(), future);
         }
         return result;
     }
 
-    rocprofvis_result_t SshSession::StartDownload(const char* remote_path, const char* local_path, rocprofvis_controller_future_t* future)
+    rocprofvis_result_t SshSession::StartDownloadOp(const char* remote_path, const char* local_path, rocprofvis_controller_future_t* future)
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (m_connection)

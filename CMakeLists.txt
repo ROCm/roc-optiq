@@ -121,6 +121,8 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_notification_manager.cpp
     src/view/src/profiler/rocprofvis_profiler_launcher_dialog.cpp
     src/view/src/profiler/rocprofvis_profiler_launcher_dialog.h
+    src/view/src/profiler/rocprofvis_profiler_session.cpp
+    src/view/src/profiler/rocprofvis_profiler_session.h
     src/view/src/profiler/rocprofvis_launch_config.cpp
     src/view/src/profiler/rocprofvis_launch_config.h
     src/view/src/profiler/rocprofvis_profiler_backend.h
@@ -130,6 +132,8 @@ set(VIEW_FILES
     src/view/src/profiler/rocprofvis_launch_preset_manager.h
     src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp
     src/view/src/profiler/rocprofvis_launch_shared_tabs.h
+    src/view/src/rocprofvis_appmonitor.cpp
+    src/view/src/rocprofvis_appmonitor.h
     )
 
 if(COMPUTE_UI_SUPPORT) 

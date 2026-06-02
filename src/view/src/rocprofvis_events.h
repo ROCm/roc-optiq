@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_controller_enums.h"
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -30,6 +31,7 @@ enum class RocEvents
     kTimeFormatChanged,
     kTopologyChanged,
     kRequestProgressUpdate,
+    kProfilerStatusChanged,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,
@@ -52,6 +54,7 @@ enum class RocEventType
     kRangeEvent,
     kNavigationEvent,
     kRequestProgressUpdateEvent,
+    kProfilerStatusEvent,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeTableSearchEvent,
     kComputeSelectionChangedEvent,
@@ -323,6 +326,22 @@ private:
     RequestType m_request_type;
     uint64_t    m_progress_percent;
     std::string m_message;
+};
+
+// Emitted by AppMonitor when a monitored profiler session changes state.
+// Carries the monitor operation id so concurrent profiler sessions can be
+// distinguished by listeners.
+class ProfilerStatusEvent : public RocEvent
+{
+public:
+    ProfilerStatusEvent(uint64_t operation_id, rocprofvis_profiler_state_t state,
+                        const std::string& source_id = std::string());
+    uint64_t                    GetOperationId() const;
+    rocprofvis_profiler_state_t GetState() const;
+
+private:
+    uint64_t                    m_operation_id;
+    rocprofvis_profiler_state_t m_state;
 };
 
 }  // namespace View

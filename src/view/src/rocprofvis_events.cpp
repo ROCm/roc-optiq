@@ -424,3 +424,25 @@ RequestProgressUpdateEvent::GetMessage() const
 {
     return m_message;
 }
+
+ProfilerStatusEvent::ProfilerStatusEvent(uint64_t                    operation_id,
+                                         rocprofvis_profiler_state_t state,
+                                         const std::string&          source_id)
+: RocEvent(static_cast<int>(RocEvents::kProfilerStatusChanged), source_id)
+, m_operation_id(operation_id)
+, m_state(state)
+{
+    m_event_type = RocEventType::kProfilerStatusEvent;
+}
+
+uint64_t
+ProfilerStatusEvent::GetOperationId() const
+{
+    return m_operation_id;
+}
+
+rocprofvis_profiler_state_t
+ProfilerStatusEvent::GetState() const
+{
+    return m_state;
+}

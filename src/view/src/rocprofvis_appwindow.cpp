@@ -10,6 +10,7 @@
 #include "ImGuiFileDialog.h"
 
 #include "amd_rocm_optiq_logo_png.h"
+#include "rocprofvis_appmonitor.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
@@ -147,6 +148,11 @@ AppWindow::~AppWindow()
     }
     m_provider_cleanup_jobs.clear();
     m_projects.clear();
+    // Destroy owners of monitored sessions (e.g. the profiler dialog) before
+    // tearing down the monitor so they unregister cleanly instead of lazily
+    // re-creating the singleton during their own destruction.
+    m_profiler_launcher_dialog.reset();
+    AppMonitor::DestroyInstance();
 }
 
 bool
@@ -591,6 +597,9 @@ AppWindow::Update()
     }
 
     HotkeyManager::GetInstance().ProcessInput();
+    // Poll long-running operations (profiler sessions, SSH) and queue any
+    // status-change events before they are dispatched below this frame.
+    AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();

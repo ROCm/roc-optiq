@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_profiler_launcher_dialog.h"
-#include "rocprofvis_data_provider.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -22,7 +21,8 @@ namespace View
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     : m_app_window(app_window)
-    , m_data_provider()
+    , m_profiler_session()
+    , m_profiler_status_token(EventManager::InvalidSubscriptionToken)
     , m_should_open(false)
     , m_show_window(false)
     , m_is_running(false)
@@ -47,10 +47,28 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
 
     LoadFromSettings();
     RefreshExecutionCache();
+
+    // Listen for profiler state transitions surfaced by the AppMonitor. Filter
+    // to events belonging to this dialog's session by operation id.
+    m_profiler_status_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kProfilerStatusChanged),
+        [this](std::shared_ptr<RocEvent> event)
+        {
+            auto* status_event = static_cast<ProfilerStatusEvent*>(event.get());
+            if(status_event->GetOperationId() == m_profiler_session.GetOperationId())
+            {
+                OnProfilerStateChanged(status_event->GetState());
+            }
+        });
 }
 
 ProfilerLauncherDialog::~ProfilerLauncherDialog()
 {
+    if(m_profiler_status_token != EventManager::InvalidSubscriptionToken)
+    {
+        EventManager::GetInstance()->Unsubscribe(
+            static_cast<int>(RocEvents::kProfilerStatusChanged), m_profiler_status_token);
+    }
 }
 
 void ProfilerLauncherDialog::Show()
@@ -130,7 +148,7 @@ void ProfilerLauncherDialog::Render()
         if (RenderOutputConsole(m_output_text, m_error_message,
                                 static_cast<int>(m_profiler_state), m_auto_scroll_output))
         {
-            m_data_provider.ClearProfilerOutput();
+            m_profiler_session.ClearOutput();
             m_output_text.clear();
             m_output_preamble.clear();
             m_output_epilogue.clear();
@@ -330,10 +348,8 @@ void ProfilerLauncherDialog::Update()
         RefreshExecutionCache();
     }
 
-    if (m_is_running)
-    {
-        PollProfilerState();
-    }
+    // Profiler state transitions arrive via kProfilerStatusChanged events
+    // (see OnProfilerStateChanged), dispatched by the AppMonitor each frame.
 
     // Always try to fetch output while there's an active profiler session,
     // even after the process has completed (output may arrive asynchronously)
@@ -385,8 +401,9 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
     std::string const& profiler_args_str = m_execution_cache.profiler_args;
 
-    // Launch via DataProvider (uses the existing C API path for now)
-    bool success = m_data_provider.LaunchProfiler(
+    // Launch via the profiler session; state transitions are reported through
+    // kProfilerStatusChanged events handled in OnProfilerStateChanged().
+    bool success = m_profiler_session.Launch(
         profiler_type,
         profiler_path,
         m_config.target.executable,
@@ -419,7 +436,7 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
 void ProfilerLauncherDialog::OnCancelClicked()
 {
-    if (m_data_provider.CancelProfiler())
+    if (m_profiler_session.Cancel())
     {
         m_output_epilogue += "\nProfiler cancelled by user.\n";
         RebuildComposedOutput();
@@ -436,69 +453,69 @@ void ProfilerLauncherDialog::OnCloseClicked()
 {
     if (m_is_running)
     {
-        m_data_provider.CancelProfiler();
+        m_profiler_session.Cancel();
     }
 
-    m_data_provider.CloseProfiler();
+    m_profiler_session.Close();
     m_is_running = false;
     m_profiler_state = kRPVProfilerStateIdle;
 }
 
-void ProfilerLauncherDialog::PollProfilerState()
+void ProfilerLauncherDialog::OnProfilerStateChanged(rocprofvis_profiler_state_t new_state)
 {
-    rocprofvis_profiler_state_t new_state = m_data_provider.GetProfilerState();
-
-    if (new_state != m_profiler_state)
+    if (new_state == m_profiler_state)
     {
-        m_profiler_state = new_state;
+        return;
+    }
 
-        if (new_state == kRPVProfilerStateCompleted)
+    m_profiler_state = new_state;
+
+    if (new_state == kRPVProfilerStateCompleted)
+    {
+        m_is_running = false;
+        m_output_epilogue += "\nProfiler completed successfully.\n";
+
+        std::string trace_path = m_profiler_session.GetTracePath();
+        if (!trace_path.empty())
         {
-            m_is_running = false;
-            m_output_epilogue += "\nProfiler completed successfully.\n";
+            m_output_epilogue += "Trace file: " + trace_path + "\n";
 
-            std::string trace_path = m_data_provider.GetProfilerTracePath();
-            if (!trace_path.empty())
+            if (m_config.target.auto_load_trace && m_app_window)
             {
-                m_output_epilogue += "Trace file: " + trace_path + "\n";
-
-                if (m_config.target.auto_load_trace && m_app_window)
-                {
-                    m_app_window->OpenFile(trace_path);
-                }
+                m_app_window->OpenFile(trace_path);
             }
-            RebuildComposedOutput();
         }
-        else if (new_state == kRPVProfilerStateFailed)
+        RebuildComposedOutput();
+    }
+    else if (new_state == kRPVProfilerStateFailed)
+    {
+        m_is_running = false;
+        int32_t exit_code = m_profiler_session.GetExitCode();
+        char exit_msg[128];
+        std::snprintf(exit_msg, sizeof(exit_msg),
+                      "\nProfiler failed (exit code %d).\n", exit_code);
+        m_output_epilogue += exit_msg;
+        RebuildComposedOutput();
+        if (exit_code == 127)
         {
-            m_is_running = false;
-            int32_t exit_code = m_data_provider.GetProfilerExitCode();
-            char exit_msg[128];
+            m_error_message = "Profiler executable not found or could not be started (exit code 127)";
+        }
+        else
+        {
             std::snprintf(exit_msg, sizeof(exit_msg),
-                          "\nProfiler failed (exit code %d).\n", exit_code);
-            m_output_epilogue += exit_msg;
-            RebuildComposedOutput();
-            if (exit_code == 127)
-            {
-                m_error_message = "Profiler executable not found or could not be started (exit code 127)";
-            }
-            else
-            {
-                std::snprintf(exit_msg, sizeof(exit_msg),
-                              "Profiler execution failed (exit code %d)", exit_code);
-                m_error_message = exit_msg;
-            }
+                          "Profiler execution failed (exit code %d)", exit_code);
+            m_error_message = exit_msg;
         }
-        else if (new_state == kRPVProfilerStateCancelled)
-        {
-            m_is_running = false;
-        }
+    }
+    else if (new_state == kRPVProfilerStateCancelled)
+    {
+        m_is_running = false;
     }
 }
 
 void ProfilerLauncherDialog::UpdateOutput()
 {
-    std::string new_raw = m_data_provider.GetProfilerOutput();
+    std::string new_raw = m_profiler_session.GetOutput();
     if (new_raw != m_process_output_raw)
     {
         m_process_output_raw = std::move(new_raw);

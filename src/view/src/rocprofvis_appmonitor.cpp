@@ -5,10 +5,21 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_controller.h"
 
+#include <spdlog/spdlog.h>
+
+#include <cfloat>
+
 namespace RocProfVis
 {
 namespace View
 {
+
+namespace
+{
+// Bounded wait used only during process teardown to drain any operations that
+// have not resolved yet. Normal cancellation never blocks.
+constexpr float kShutdownDrainTimeoutSeconds = 5.0f;
+}  // namespace
 
 AppMonitor* AppMonitor::s_instance = nullptr;
 
@@ -37,7 +48,34 @@ AppMonitor::AppMonitor()
 {
 }
 
-AppMonitor::~AppMonitor() {}
+AppMonitor::~AppMonitor()
+{
+    // Process teardown: any operation still tracked here means its session was
+    // already destroyed (having transferred its resources to us). Drain each
+    // with a bounded blocking wait - acceptable only at true process exit - so
+    // no background job is left holding freed resources.
+    for(auto& entry : m_operations)
+    {
+        MonitorOperation& op = entry.second;
+        if(op.future != nullptr)
+        {
+            if(op.cancel_fn)
+            {
+                op.cancel_fn();
+            }
+            rocprofvis_controller_future_cancel(op.future);
+            if(rocprofvis_controller_future_wait(op.future, kShutdownDrainTimeoutSeconds) ==
+               kRocProfVisResultTimeout)
+            {
+                spdlog::warn("AppMonitor: operation {} did not resolve before shutdown drain "
+                             "timeout; freeing anyway",
+                             op.operation_id);
+            }
+        }
+        ReapOperation(op);
+    }
+    m_operations.clear();
+}
 
 uint64_t
 AppMonitor::AddOperation(MonitorOperationType            type,
@@ -45,7 +83,8 @@ AppMonitor::AddOperation(MonitorOperationType            type,
                          MonitorOperation::EventFactory  event_factory,
                          MonitorOperation::IsTerminalFn  is_terminal_fn,
                          MonitorOperation::CancelFn      cancel_fn,
-                         rocprofvis_controller_future_t* future)
+                         rocprofvis_controller_future_t* future,
+                         MonitorOperation::TeardownFn    teardown_fn)
 {
     ROCPROFVIS_ASSERT(status_fn != nullptr);
 
@@ -62,29 +101,95 @@ AppMonitor::AddOperation(MonitorOperationType            type,
     op.last_status    = 0;
     op.has_status     = false;
     op.cancelling     = false;
+    if(teardown_fn)
+    {
+        op.teardowns.push_back(std::move(teardown_fn));
+    }
 
     m_operations.emplace(id, std::move(op));
     return id;
 }
 
 bool
-AppMonitor::TryReleaseFuture(MonitorOperation& op)
+AppMonitor::AppendTeardown(uint64_t operation_id, MonitorOperation::TeardownFn teardown_fn)
+{
+    auto it = m_operations.find(operation_id);
+    if(it == m_operations.end())
+    {
+        return false;
+    }
+    if(teardown_fn)
+    {
+        it->second.teardowns.push_back(std::move(teardown_fn));
+    }
+    return true;
+}
+
+void
+AppMonitor::AddTeardownOp(MonitorOperationType             type,
+                          rocprofvis_controller_future_t*  future,
+                          MonitorOperation::CancelFn       cancel_fn,
+                          MonitorOperation::TeardownFn     teardown_fn)
+{
+    // Create a bare operation with no status/event callbacks: it exists solely
+    // so Update() can reap it (running teardown_fn) once the future resolves.
+    uint64_t id = m_next_operation_id++;
+
+    MonitorOperation op;
+    op.operation_id   = id;
+    op.operation_type = type;
+    op.status_fn      = nullptr;
+    op.event_factory  = nullptr;
+    op.is_terminal_fn = nullptr;
+    op.cancel_fn      = std::move(cancel_fn);
+    op.future         = future;
+    op.last_status    = 0;
+    op.has_status     = false;
+    op.cancelling     = true;  // never polled; only drained
+    if(teardown_fn)
+    {
+        op.teardowns.push_back(std::move(teardown_fn));
+    }
+
+    // Signal cancel immediately so the worker unblocks; reaping happens in
+    // Update() once the future resolves (or right away if already resolved).
+    if(op.cancel_fn)
+    {
+        op.cancel_fn();
+    }
+    if(op.future != nullptr)
+    {
+        rocprofvis_controller_future_cancel(op.future);
+    }
+
+    m_operations.emplace(id, std::move(op));
+}
+
+bool
+AppMonitor::FutureResolved(MonitorOperation& op)
 {
     if(op.future == nullptr)
     {
         return true;
     }
+    // Non-blocking probe. The future is freed by a teardown closure, never here.
+    return rocprofvis_controller_future_wait(op.future, 0) != kRocProfVisResultTimeout;
+}
 
-    // Non-blocking probe. rocprofvis_controller_future_free does not join the
-    // worker, so we must not free until the future has actually resolved.
-    if(rocprofvis_controller_future_wait(op.future, 0) == kRocProfVisResultTimeout)
+void
+AppMonitor::ReapOperation(MonitorOperation& op)
+{
+    // Run teardowns in registration order (future first, then transferred
+    // resources such as an SSH connection).
+    for(auto& teardown : op.teardowns)
     {
-        return false;
+        if(teardown)
+        {
+            teardown();
+        }
     }
-
-    rocprofvis_controller_future_free(op.future);
+    op.teardowns.clear();
     op.future = nullptr;
-    return true;
 }
 
 void
@@ -99,8 +204,9 @@ AppMonitor::RemoveOperation(uint64_t operation_id)
     MonitorOperation& op = it->second;
 
     // If the future is already resolved (or absent), reap immediately.
-    if(TryReleaseFuture(op))
+    if(FutureResolved(op))
     {
+        ReapOperation(op);
         m_operations.erase(it);
         return;
     }
@@ -125,6 +231,12 @@ AppMonitor::HasOperation(uint64_t operation_id) const
     return m_operations.find(operation_id) != m_operations.end();
 }
 
+bool
+AppMonitor::HasPendingOperations() const
+{
+    return !m_operations.empty();
+}
+
 void
 AppMonitor::Update()
 {
@@ -133,11 +245,12 @@ AppMonitor::Update()
         MonitorOperation& op = it->second;
 
         // A cancelling operation no longer polls status or emits events; we just
-        // wait (non-blocking) for its future to resolve so it can be freed.
+        // wait (non-blocking) for its future to resolve so it can be reaped.
         if(op.cancelling)
         {
-            if(TryReleaseFuture(op))
+            if(FutureResolved(op))
             {
+                ReapOperation(op);
                 it = m_operations.erase(it);
             }
             else
@@ -168,10 +281,11 @@ AppMonitor::Update()
         if(terminal)
         {
             // Terminal status means the bound future has resolved (or is about
-            // to). Try to free it now; if it has not quite resolved yet, defer
-            // reaping to a later frame via the cancelling path (no blocking).
-            if(TryReleaseFuture(op))
+            // to). Reap now if resolved; otherwise defer to a later frame via
+            // the cancelling path (no blocking).
+            if(FutureResolved(op))
             {
+                ReapOperation(op);
                 it = m_operations.erase(it);
             }
             else

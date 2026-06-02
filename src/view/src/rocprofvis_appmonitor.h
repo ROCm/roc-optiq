@@ -13,6 +13,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -55,23 +56,31 @@ struct MonitorOperation
     // a later Update() once the future has resolved.
     using CancelFn = std::function<void()>;
 
+    // Frees one worker-touched resource. Closures MUST capture raw resource
+    // pointers BY VALUE (never the owning session's `this`) so they remain
+    // valid after the session is destroyed. The monitor runs an operation's
+    // teardowns in registration order (FIFO) only after its future has
+    // resolved, so no resource is freed while a background job still uses it.
+    using TeardownFn = std::function<void()>;
+
     uint64_t             operation_id;    // unique id of the operation
     MonitorOperationType operation_type;  // type of operation
     StatusFn             status_fn;        // reads the current status (run every frame)
     EventFactory         event_factory;    // builds the status-changed event
     IsTerminalFn         is_terminal_fn;   // detects terminal status
     CancelFn             cancel_fn;        // signals the work to stop (optional)
-    // Optional future owned by the monitor. When set, the monitor frees it once
-    // it has resolved (on terminal status, or after a cancel request). Freeing
-    // is always deferred until the future resolves - the monitor never blocks
-    // the main thread waiting. Sessions that drive their own work via status_fn
-    // pass nullptr.
+    // Teardown closures run FIFO when the operation is reaped (after its future
+    // resolves). Typically [0] frees the future; later entries free additional
+    // resources transferred via AppendTeardown (e.g. an SSH connection).
+    std::vector<TeardownFn> teardowns;
+    // Optional future used only to probe completion (future_wait(.,0)). The
+    // future itself is freed by a teardown closure, not directly by the monitor.
     rocprofvis_controller_future_t* future;
     uint64_t             last_status;      // last observed status
     bool                 has_status;       // whether last_status is valid yet
     // True once a cancel has been requested. While cancelling, the monitor stops
     // polling status / emitting events and only waits (non-blocking) for the
-    // future to resolve so it can be freed and the operation reaped.
+    // future to resolve so it can be reaped.
     bool                 cancelling;
 };
 
@@ -86,42 +95,69 @@ public:
     static void        DestroyInstance();
 
     // Registers a new operation to monitor. Returns the assigned operation id.
-    // status_fn is required; event_factory, is_terminal_fn and cancel_fn may be
-    // empty. When future is non-null the monitor takes ownership and, on
-    // removal, waits for it to resolve before freeing it (calling cancel_fn
-    // first to unblock in-flight work).
+    // status_fn is required; event_factory, is_terminal_fn, cancel_fn and
+    // teardown_fn may be empty. teardown_fn is the initial teardown closure
+    // (typically frees the bound future); it runs - together with any closures
+    // added later via AppendTeardown - only after the future resolves.
     uint64_t AddOperation(MonitorOperationType            type,
                           MonitorOperation::StatusFn      status_fn,
                           MonitorOperation::EventFactory  event_factory,
                           MonitorOperation::IsTerminalFn  is_terminal_fn,
                           MonitorOperation::CancelFn      cancel_fn = nullptr,
-                          rocprofvis_controller_future_t* future = nullptr);
+                          rocprofvis_controller_future_t* future = nullptr,
+                          MonitorOperation::TeardownFn    teardown_fn = nullptr);
+
+    // Transfers ownership of an additional resource teardown to the monitor so
+    // it is freed after the operation's future resolves. Returns true if the
+    // operation exists (the closure was queued); false if it has already been
+    // reaped, in which case the caller must free the resource itself directly
+    // (safe, because reaping only happens after the future resolves). This is
+    // the atomic handoff used by sessions destroyed while an op is in flight.
+    bool AppendTeardown(uint64_t operation_id, MonitorOperation::TeardownFn teardown_fn);
+
+    // Registers a fire-and-forget teardown-only operation for resources whose
+    // bound future is still in flight. The monitor signals cancel_fn (once),
+    // then frees the resources via teardown_fn after the future resolves - all
+    // non-blocking, across frames. Use this when an owner is being destroyed but
+    // a background job may still be using its resources. teardown_fn must free
+    // the future too and capture all resources by value.
+    void AddTeardownOp(MonitorOperationType             type,
+                       rocprofvis_controller_future_t*  future,
+                       MonitorOperation::CancelFn       cancel_fn,
+                       MonitorOperation::TeardownFn     teardown_fn);
 
     // Requests cancellation / removal of the given operation. Safe to call with
     // an unknown id. Never blocks the main thread:
     //   - If the bound future has already resolved (or there is none), the
-    //     operation is freed and removed immediately.
+    //     operation's teardowns run and it is removed immediately.
     //   - Otherwise cancel_fn is invoked (once) to signal the work to stop and
     //     the operation enters a "cancelling" state; a later Update() reaps it
     //     once the future resolves. The background job is never left with a
-    //     dangling future.
+    //     dangling future / resource.
     void RemoveOperation(uint64_t operation_id);
 
     // True if the operation is still tracked (either active or cancelling).
     bool HasOperation(uint64_t operation_id) const;
 
+    // True if any operation is still tracked (active or cancelling). Used by the
+    // shutdown gate to defer process exit until the monitor has drained.
+    bool HasPendingOperations() const;
+
     // Main thread only. Polls every tracked operation and queues status-change
-    // events. Terminal operations are removed after their final event.
+    // events. Terminal / cancelling operations are reaped once their future
+    // resolves.
     void Update();
 
 private:
     AppMonitor();
     ~AppMonitor();
 
-    // Returns true once op's monitor-owned future has resolved (or is null),
-    // freeing it in that case. Returns false if the future is still in flight
-    // (never blocks). Used to defer freeing until the background job is done.
-    bool TryReleaseFuture(MonitorOperation& op);
+    // Non-blocking probe: true if op has no future or its future has resolved.
+    bool FutureResolved(MonitorOperation& op);
+
+    // Runs op's teardown closures in order (frees future + transferred
+    // resources). Must only be called once FutureResolved(op) is true.
+    void ReapOperation(MonitorOperation& op);
 
     uint64_t                              m_next_operation_id;
     std::map<uint64_t, MonitorOperation>  m_operations;

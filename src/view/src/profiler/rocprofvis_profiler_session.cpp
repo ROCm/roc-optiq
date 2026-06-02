@@ -35,16 +35,6 @@ ProfilerSession::~ProfilerSession()
     Close();
 }
 
-void
-ProfilerSession::StopMonitoring()
-{
-    if(m_operation_id != 0)
-    {
-        AppMonitor::GetInstance()->RemoveOperation(m_operation_id);
-        m_operation_id = 0;
-    }
-}
-
 bool
 ProfilerSession::Launch(rocprofvis_profiler_type_t profiler_type,
                         const std::string&         profiler_path,
@@ -108,11 +98,18 @@ ProfilerSession::Launch(rocprofvis_profiler_type_t profiler_type,
         return false;
     }
 
-    // Register with the monitor so state transitions are surfaced as events.
-    // The callbacks capture `this`; the session always outlives its monitor
-    // registration because Close()/dtor unregister before freeing state. The
-    // event factory reads m_operation_id at emit time so each event carries the
-    // owning session's id (concurrent profiler sessions are distinguishable).
+    // Register with the monitor as a pure status poller. The session retains
+    // ownership of its resources while running and after normal completion, so
+    // the dialog can still read state / trace path / output. On terminal state
+    // the monitor simply drops the op (no teardown); the session frees its
+    // resources in Close(). If Close() happens while the job is still running,
+    // ownership is transferred to the monitor for deferred (non-blocking)
+    // teardown - see Close().
+    //
+    // status_fn / event_factory capture `this`; the monitor only invokes them
+    // while the op is active, and Close() removes the op before this session is
+    // destroyed. The event factory reads m_operation_id at emit time so each
+    // event carries the owning session's id.
     m_operation_id = AppMonitor::GetInstance()->AddOperation(
         MonitorOperationType::ProfilerSession,
         [this]() -> uint64_t { return static_cast<uint64_t>(GetState()); },
@@ -233,30 +230,55 @@ ProfilerSession::Cancel()
 void
 ProfilerSession::Close()
 {
-    // Unregister from the monitor before tearing down state so no event factory
-    // observes freed objects.
-    StopMonitoring();
-
-    // Cancel via the session handle: terminates the child process AND forwards
-    // Cancel() to the bound future so any waiter unblocks.
-    if(m_profiler != nullptr)
+    // Stop the status poller (it captures `this`, which is about to go away).
+    if(m_operation_id != 0)
     {
-        rocprofvis_profiler_cancel(m_profiler);
+        AppMonitor::GetInstance()->RemoveOperation(m_operation_id);
+        m_operation_id = 0;
     }
 
+    if(m_profiler == nullptr && m_future == nullptr && m_config == nullptr)
+    {
+        return;
+    }
+
+    // If the job is still running, the worker is touching the profiler handle.
+    // Transfer the resources to the monitor for deferred, non-blocking teardown
+    // (cancel signalled, freed once the future resolves). Capture BY VALUE so
+    // the closures remain valid after this session is destroyed.
+    if(m_future != nullptr &&
+       rocprofvis_controller_future_wait(m_future, 0) == kRocProfVisResultTimeout)
+    {
+        rocprofvis_profiler_config_t*   config   = m_config;
+        rocprofvis_profiler_t*          profiler = m_profiler;
+        rocprofvis_controller_future_t* future   = m_future;
+        AppMonitor::GetInstance()->AddTeardownOp(
+            MonitorOperationType::ProfilerSession,
+            future,
+            [profiler]() { rocprofvis_profiler_cancel(profiler); },
+            [config, profiler, future]()
+            {
+                rocprofvis_controller_future_free(future);
+                rocprofvis_profiler_free(profiler);
+                rocprofvis_profiler_config_free(config);
+            });
+        m_future   = nullptr;
+        m_profiler = nullptr;
+        m_config   = nullptr;
+        return;
+    }
+
+    // Future resolved (or none): no worker is using the resources; free now.
     if(m_future != nullptr)
     {
-        rocprofvis_controller_future_wait(m_future, 5.0f);
         rocprofvis_controller_future_free(m_future);
         m_future = nullptr;
     }
-
     if(m_profiler != nullptr)
     {
         rocprofvis_profiler_free(m_profiler);
         m_profiler = nullptr;
     }
-
     if(m_config != nullptr)
     {
         rocprofvis_profiler_config_free(m_config);

@@ -476,6 +476,15 @@ AppWindow::BeginAppShutdown()
         m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
     }
 
+    // Release the profiler dialog and remote-trace orchestrator now so their
+    // sessions transfer any in-flight work to the AppMonitor (non-blocking).
+    // Subsequent Update() frames drain the monitor; the exit gate waits until it
+    // is empty.
+    m_profiler_launcher_dialog.reset();
+#ifdef TEST_SSH_CONNECTION
+    m_remote_orchestrator.reset();
+#endif
+
     if(!m_provider_cleanup_jobs.empty())
     {
         NotificationManager::GetInstance().ShowPersistent(
@@ -572,7 +581,8 @@ void
 AppWindow::RequestExitIfProviderCleanupsComplete()
 {
     if(!m_shutdown_requested || m_exit_notification_sent ||
-       !m_provider_cleanup_jobs.empty())
+       !m_provider_cleanup_jobs.empty() ||
+       AppMonitor::GetInstance()->HasPendingOperations())
     {
         return;
     }
@@ -595,6 +605,9 @@ AppWindow::Update()
     UpdateProviderCleanups();
     if(m_shutdown_requested)
     {
+        // Keep draining cancelling/in-flight monitored operations so their
+        // resources are freed (non-blocking) before the app exits.
+        AppMonitor::GetInstance()->Update();
         return;
     }
 

@@ -29,10 +29,36 @@ namespace View
     }
 
     SshSession::~SshSession() {
+        // If a phase is still in flight, the worker may still be using the
+        // connection. Hand the connection-free to the monitor so it runs only
+        // after the bound future resolves (deferred, non-blocking). The closure
+        // captures the connection BY VALUE so it stays valid after this session
+        // is gone. If AppendTeardown reports the op was already reaped, the
+        // worker is done and we can free the connection directly.
+        bool connection_owned_by_monitor = false;
+        if (m_active_operation != SshOperation::None && m_active_operation_id != 0 && m_connection)
+        {
+            rocprofvis_handle_t* connection = m_connection;
+            connection_owned_by_monitor = AppMonitor::GetInstance()->AppendTeardown(
+                m_active_operation_id,
+                [connection]() { rocprofvis_controller_ssh_connection_free(connection); });
+            if (connection_owned_by_monitor)
+            {
+                m_connection = nullptr;
+            }
+        }
+
+        // Requests cancel of the active op (non-blocking). The monitor reaps it
+        // (freeing the future and, if transferred above, the connection) once
+        // the worker resolves the future.
         CancelActiveOperation();
+
+        // Free the connection directly only when the monitor did not take
+        // ownership of it (no op in flight, or the op was already reaped).
         if (m_connection)
         {
             rocprofvis_controller_ssh_connection_free(m_connection);
+            m_connection = nullptr;
         }
     }
 
@@ -114,9 +140,11 @@ namespace View
 
         // Register with the monitor. The status callback drives Poll() each
         // frame; the factory emits a RemoteStatusEvent carrying this session's
-        // operation id and the latest check result; terminal status removes the
-        // op (the monitor waits on then frees the future). cancel_fn signals the
-        // bridge so an in-flight phase can unblock and resolve its future.
+        // operation id and the latest check result; the monitor reaps the op
+        // (running the teardown to free the future) once it resolves. cancel_fn
+        // signals the bridge so an in-flight phase can unblock and resolve its
+        // future. The teardown captures the future BY VALUE so it remains valid
+        // even if this session is destroyed before the worker finishes.
         rocprofvis_handle_t* connection = m_connection;
         m_active_operation_id = AppMonitor::GetInstance()->AddOperation(
             monitor_type,
@@ -131,7 +159,8 @@ namespace View
                 return status == kRPVControllerSshCompleted || status == kRPVControllerSshFailed;
             },
             [connection]() { rocprofvis_controller_remote_cancel_prompt(connection); },
-            future);
+            future,
+            [future]() { rocprofvis_controller_future_free(future); });
 
         *id_holder = m_active_operation_id;
         return m_active_operation_id;
@@ -197,9 +226,9 @@ namespace View
             FinalizeExecution();
         }
 
-        // RemoveOperation signals the bridge (cancel_fn), waits for the bound
-        // future to resolve, then frees it - so the worker is never left with a
-        // dangling future.
+        // RemoveOperation signals the bridge (cancel_fn) and requests cancel.
+        // It never blocks: the monitor reaps the op (freeing the future via the
+        // registered teardown) once the worker resolves it.
         if (m_active_operation_id != 0)
         {
             AppMonitor::GetInstance()->RemoveOperation(m_active_operation_id);

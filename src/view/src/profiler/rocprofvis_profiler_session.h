@@ -56,8 +56,6 @@ public:
     uint64_t GetOperationId() const { return m_operation_id; }
 
 private:
-    void StopMonitoring();
-
     rocprofvis_profiler_config_t*   m_config;
     rocprofvis_profiler_t*          m_profiler;
     rocprofvis_controller_future_t* m_future;

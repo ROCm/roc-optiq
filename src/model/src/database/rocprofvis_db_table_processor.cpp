@@ -61,7 +61,7 @@ namespace DataModel
     }
 
     rocprofvis_dm_result_t TableProcessor::ExecuteCompoundQuery(Future* future,
-        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query>>& queries,
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries,
         std::set<uint32_t>& tracks,
         std::vector<rocprofvis_db_compound_query_command> commands,
         rocprofvis_dm_handle_t handle,
@@ -101,13 +101,13 @@ namespace DataModel
             {
                 m_tables.clear();
                 std::vector<std::pair<DbInstance*, std::string>> new_queries;
-                for (const std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query>>& track : queries)
+                for (const std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
                 {
-                    for (const std::pair<const std::string, rocprofvis_db_compound_query>& compound_query : track.second)
+                    for (const std::pair<const std::string, rocprofvis_db_compound_query_info>& compound_query : track.second)
                     {
                         m_tables.push_back(std::make_unique<PackedTable>());
                         DbInstance* db_instance = m_db->DbInstancePtrAt(compound_query.second.guid_id);
-                        new_queries.push_back({ db_instance, compound_query.second.query });
+                        new_queries.push_back({ db_instance, compound_query.first });
                     }
                     
                 }
@@ -177,7 +177,7 @@ namespace DataModel
         return query_without_commands;
     }
 
-    bool TableProcessor::IsCompoundQuery(const char* query, std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query>>& queries, std::set<uint32_t>& tracks, std::vector<rocprofvis_db_compound_query_command>& commands)
+    bool TableProcessor::IsCompoundQuery(const char* query, std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries, std::set<uint32_t>& tracks, std::vector<rocprofvis_db_compound_query_command>& commands)
     {
         std::istringstream stream(query);
         std::string line;
@@ -212,7 +212,7 @@ namespace DataModel
                                 uint32_t track = std::atol(s_track.c_str());
                                 uint32_t guid_id = std::atoll(s_guid_id.c_str());
                                 tracks.insert(track);
-                                queries[track][stmt] = { stmt, track, guid_id };
+                                queries[track][stmt] = { track, guid_id };
                             }
                            
                         }
@@ -229,13 +229,13 @@ namespace DataModel
         return false;
     }
 
-    bool TableProcessor::IsCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query>>& queries)
+    bool TableProcessor::IsCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries)
     {
         if(m_current_queries.size() && (*m_current_queries.begin()).second.size() && TABLE_QUERY_UNPACK_OP_TYPE((*(*m_current_queries.begin()).second.begin()).second.track))
         {
             return false;
         }
-        for(std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query>>& track : queries)
+        for(std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
         {
             if(m_current_queries.count(track.first) && track.second.size())
             {

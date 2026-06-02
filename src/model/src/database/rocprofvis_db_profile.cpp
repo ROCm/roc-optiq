@@ -1521,7 +1521,7 @@ rocprofvis_dm_result_t  ProfileDatabase::ExecuteQuery(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_table_t table = BindObject()->FuncAddTable(BindObject()->trace_object, query, description);
         ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query>> queries;
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
         std::vector<rocprofvis_db_compound_query_command> commands;
         std::set<uint32_t> tracks;
         if (TableProcessor::IsCompoundQuery(query, queries, tracks,  commands))
@@ -1634,7 +1634,7 @@ rocprofvis_dm_result_t ProfileDatabase::ExportTableCSV(rocprofvis_dm_charptr_t q
     if (result == kRocProfVisDmResultSuccess)
     {
         rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
-        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query>> queries;
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
         std::vector<rocprofvis_db_compound_query_command> commands;
         std::set<uint32_t> tracks;
         TableProcessor::IsCompoundQuery(query, queries, tracks,  commands);

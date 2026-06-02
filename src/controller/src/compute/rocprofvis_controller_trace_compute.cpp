@@ -440,8 +440,11 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                     {
                                         std::string workload_id_str = std::to_string(id);
                                         uint64_t value_names_count = 0;
-                                        for(const auto& [cat_id, tbl_id] : unique_tables)
+                                        for(const auto& p : unique_tables)
                                         {
+                                            auto cat_id = p.first;
+                                            auto tbl_id = p.second;
+
                                             std::string prefix = std::to_string(cat_id) + "." + std::to_string(tbl_id);
                                             m_query_arguments = {
                                                 {kRPVComputeParamWorkloadId, workload_id_str},

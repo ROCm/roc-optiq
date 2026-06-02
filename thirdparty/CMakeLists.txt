@@ -84,6 +84,18 @@ if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 	)
      endif()
 
+    if (APPLE)
+	set_target_properties(OpenSSL::SSL PROPERTIES
+    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/lib/libssl.3.dylib"
+    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
+	)
+
+	set_target_properties(OpenSSL::Crypto PROPERTIES
+    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/lib/libcrypto.3.dylib"
+    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
+	)
+     endif()
+
 
     	set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
     	set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)

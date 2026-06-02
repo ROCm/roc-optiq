@@ -73,6 +73,10 @@ public:
     void ClearAll();
     void Render();
 
+    // True while any toast is still showing/fading, so the lazy render loop can
+    // keep animating notifications when nothing else is active.
+    bool HasActiveNotifications() const { return !m_notifications.empty(); }
+
 private:
     NotificationManager();
 

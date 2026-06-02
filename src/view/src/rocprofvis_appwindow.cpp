@@ -576,6 +576,40 @@ AppWindow::Update()
     UpdateStatusBar();
 }
 
+bool
+AppWindow::WantsContinuousRender()
+{
+    if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
+       m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents() ||
+       NotificationManager::GetInstance().HasActiveNotifications())
+    {
+        return true;
+    }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    if(m_test_data_provider.GetPendingRequestCount() > 0)
+    {
+        return true;
+    }
+#endif
+
+    bool wants_render = false;
+    for(const auto& [id, project] : m_projects)
+    {
+        RootView* root_view = dynamic_cast<RootView*>(project->GetView().get());
+        if(root_view)
+        {
+            DataProvider* data_provider = root_view->GetDataProvider();
+            if(data_provider && data_provider->GetPendingRequestCount() > 0)
+            {
+                wants_render = true;
+                break;
+            }
+        }
+    }
+    return wants_render;
+}
+
 void
 AppWindow::Render()
 {

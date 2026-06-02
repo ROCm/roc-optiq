@@ -48,6 +48,10 @@ public:
     void Render() override;
     void Update() override;
 
+    // True when async work, queued events, or animations require redraws even
+    // without OS input. Drives the lazy render loop in the app shell.
+    bool WantsContinuousRender();
+
     const std::string& GetMainTabSourceName() const;
     void               SetTabLabel(const std::string& label, const std::string& id);
 

@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <spdlog/spdlog.h>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -44,7 +45,11 @@ std::string DefaultHomePath()
 std::string DefaultKnownHostsPath()
 {
     std::string path = DefaultHomePath();
+#if defined(_WIN32)
     return path.empty() ? path : path + "\\.ssh\\known_hosts";
+#else
+    return path.empty() ? path : path + "/.ssh/known_hosts";
+#endif
 }
 
 std::string Base64Encode(const unsigned char* data, size_t n)
@@ -128,6 +133,7 @@ bool KnownHosts::Add(const std::string& host, int port)
     if(!m_kh) return false;
     size_t      key_len  = 0;
     int         key_type = 0;
+    int         rc = 0;
     const char* key      = libssh2_session_hostkey(m_session, &key_len, &key_type);
     if(!key) return false;
 
@@ -147,9 +153,14 @@ bool KnownHosts::Add(const std::string& host, int port)
         default: return false;
     }
 
-    return libssh2_knownhost_addc(m_kh, host.c_str(), nullptr, key, key_len,
-                                  "added by roc-optiq", strlen("added by roc-optiq"),
-                                  type_mask, nullptr) == 0;
+    rc = libssh2_knownhost_addc(m_kh, host.c_str(), nullptr, key, key_len,
+        "added by roc-optiq", strlen("added by roc-optiq"),
+        type_mask, nullptr);
+    if (rc != 0) {
+        spdlog::error("failed adding new host: {}", rc);
+        false;
+    }
+    return true;
 }
 
 

@@ -82,7 +82,7 @@ namespace Controller
         SshConnection& connection,
         Arguments& args)
     {
-        rocprofvis_result_t   error = kRocProfVisResultUnknownError;
+        rocprofvis_result_t   error = kRocProfVisResultInvalidArgument;
 
         std::array<char, 128> password{};
         uint32_t password_length = password.size();
@@ -188,7 +188,7 @@ namespace Controller
         SshConnection& connection,
         Arguments& args)
 	{
-        rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
+        rocprofvis_result_t   error     = kRocProfVisResultInvalidArgument;
         std::array<char, 4096> command{};
         uint32_t command_length = command.size();
 
@@ -222,7 +222,7 @@ namespace Controller
         SshConnection& connection,
         Arguments& args)
     {
-        rocprofvis_result_t   error = kRocProfVisResultUnknownError;
+        rocprofvis_result_t   error = kRocProfVisResultInvalidArgument;
         std::array<char, 128> src_path{};
         uint32_t src_path_length = src_path.size();
         std::array<char, 128> dst_path{};

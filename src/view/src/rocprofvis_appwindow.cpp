@@ -1917,6 +1917,7 @@ AppWindow::RenderRemoteOutputDialog()
 
     if (m_show_remote_stdout_popup)
     {
+        ImGui::SetNextWindowSize(ImVec2(600, 400));
         if (ImGui::BeginPopupModal("Remote Execute", nullptr))
         {
             ImGui::BeginChild("output", ImVec2(0, 0), true);

@@ -38,10 +38,7 @@ constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
 
-// Builds a readable, tab-separated text block for one event's popout details,
-// mirroring the sections the user sees in EventsView. Sections without data are
-// omitted so the clipboard output matches the visible detail panel. Tabs match
-// the row-copy format used elsewhere (event flow/call-stack context menus).
+// Build a tab-separated text block of an event's details for the clipboard.
 static std::string
 FormatEventDetails(const EventInfo& info, double trace_start_time,
                    TimeFormat time_format)
@@ -69,10 +66,7 @@ FormatEventDetails(const EventInfo& info, double trace_start_time,
             {
                 case kRocProfVisEventEssentialDataStart:
                 case kRocProfVisEventEssentialDataEnd:
-                    // Start/end are absolute timestamps; rebase them onto the
-                    // trace start before formatting, like the detail panel does.
                     offset_ns = trace_start_time;
-                    [[fallthrough]];
                 case kRocProfVisEventEssentialDataDuration:
                     value = nanosecond_str_to_formatted_str(ext.value, offset_ns,
                                                             time_format, true);
@@ -484,8 +478,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup("TimelineContextMenu"))
     {
-        // Show event-centric actions when there are selected events and the
-        // right-click landed on an event lane.
+        // Show event actions when there are selected events
         if(m_timeline_selection->HasSelectedEvents() &&
            TimelineFocusManager::GetInstance().GetRightClickLayer() == Layer::kGraphLayer)
         {

@@ -5,7 +5,6 @@
 #include "rocprofvis_db_expression_filter.h"
 #include "rocprofvis_c_interface.h"
 #include <sstream>
-#include <unordered_set>
 #include <cfloat>
 #include <yaml-cpp/yaml.h>
 #include "json.h"
@@ -1272,7 +1271,7 @@ ProfileDatabase::BuildTableQuery(
                         query += where;
                     }
                     query += ";";
-                    query += std::to_string(track);
+                    query += std::to_string(tracks[i]);
                     query += ";";
                     query += std::to_string(it_instance->first);
                     query += "\n";
@@ -1522,10 +1521,9 @@ rocprofvis_dm_result_t  ProfileDatabase::ExecuteQuery(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_table_t table = BindObject()->FuncAddTable(BindObject()->trace_object, query, description);
         ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-        std::vector<rocprofvis_db_compound_query> queries;
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
         std::vector<rocprofvis_db_compound_query_command> commands;
         std::set<uint32_t> tracks;
-        std::string query_without_commands = TableProcessor::QueryWithoutCommands(query);
         if (TableProcessor::IsCompoundQuery(query, queries, tracks,  commands))
         {
             auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
@@ -1534,9 +1532,9 @@ rocprofvis_dm_result_t  ProfileDatabase::ExecuteQuery(
             {
                 data_type = (rocprofvis_db_compound_table_type)std::atol(it->parameter.c_str());
             }
-            bool query_updated = !m_table_processor[data_type].IsCurrentQuery(query_without_commands.c_str());
-            m_table_processor[data_type].SaveCurrentQuery(query_without_commands.c_str());
-            if (kRocProfVisDmResultSuccess != m_table_processor[data_type].ExecuteCompoundQuery(future, queries, tracks, commands, table, data_type, query_updated)) break;
+            bool query_updated = !m_table_processor[data_type].IsCurrentQuery(queries);
+            m_table_processor[data_type].SaveCurrentQuery(queries);
+            if (kRocProfVisDmResultSuccess != m_table_processor[data_type].ExecuteCompoundQuery(future, queries, tracks, commands, table, query_updated)) break;
         }
         else
         {
@@ -1630,27 +1628,20 @@ rocprofvis_dm_result_t ProfileDatabase::ExportTableCSV(rocprofvis_dm_charptr_t q
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(BindObject()->trace_object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
-
-    rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
-    std::vector<rocprofvis_db_compound_query> queries;
-    std::vector<rocprofvis_db_compound_query_command> commands;
-    std::set<uint32_t> tracks;
-    if (TableProcessor::IsCompoundQuery(query, queries, tracks,  commands))
+    Future* internal_future = future->AddSubFuture();
+    result = ExecuteQuery(query, "ExportTableCSV", internal_future);
+    future->WaitAndDeleteSubFuture(internal_future);
+    if (result == kRocProfVisDmResultSuccess)
     {
+        rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
+        std::vector<rocprofvis_db_compound_query_command> commands;
+        std::set<uint32_t> tracks;
+        TableProcessor::IsCompoundQuery(query, queries, tracks,  commands);
         auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
         if (it != commands.end())
         {
             data_type = (rocprofvis_db_compound_table_type)std::atol(it->parameter.c_str());
-            result = kRocProfVisDmResultSuccess;
-        }            
-    }
-    if (result == kRocProfVisDmResultSuccess)
-    {
-        Future* internal_future = future->AddSubFuture();
-        result = ExecuteQuery(query, "ExportTableCSV", internal_future);
-        future->WaitAndDeleteSubFuture(internal_future);
-        if (result == kRocProfVisDmResultSuccess)
-        {
             result = m_table_processor[data_type].ExportToCSV(file_path);
             if (result == kRocProfVisDmResultSuccess)
             {

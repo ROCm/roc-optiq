@@ -17,7 +17,7 @@ namespace Controller
     {
      public:
 
-    static rocprofvis_result_t  Remote::AllocateConnection(
+    static rocprofvis_result_t  AllocateConnection(
         Arguments& args,
         Array& output);
 

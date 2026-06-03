@@ -165,7 +165,6 @@ if(APPLE)
         src/app/src/rocprofvis_imgui_opengl.cpp
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
-        src/app/src/glfw_util_macos.mm
         src/app/src/rocprofvis_cli_parser.cpp
         ${VIEW_FILES})
 else()
@@ -233,10 +232,6 @@ target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(APPLE)
-    # glfw_util_macos.mm calls Cocoa (AppKit) APIs directly to drive native
-    # fullscreen, so link the framework explicitly rather than relying on GLFW.
-    target_link_libraries(${TARGET_NAME} PRIVATE "-framework Cocoa")
-
     set(ROCPROFVIS_BUNDLE_VULKAN ON CACHE BOOL
         "Bundle the Vulkan loader into the macOS app. MoltenVK is resolved \
 from the user's LunarG Vulkan SDK install at runtime; the entitlements \

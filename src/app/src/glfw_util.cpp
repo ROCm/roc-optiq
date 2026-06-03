@@ -109,12 +109,6 @@ toggle_fullscreen(GLFWwindow* window, FullscreenState& state)
         return;
     }
 
-#ifdef __APPLE__
-    // Drive native fullscreen (same as the green button). The transition is async,
-    // so state is mirrored back in sync_fullscreen_state() once it completes.
-    (void) state;
-    macos_request_toggle_fullscreen(window);
-#else
     if(state.is_fullscreen)
     {
         // Switch to windowed mode
@@ -145,7 +139,6 @@ toggle_fullscreen(GLFWwindow* window, FullscreenState& state)
 
     // Update the view layer with the new fullscreen state
     rocprofvis_view_set_fullscreen_state(state.is_fullscreen);
-#endif
 }
 
 void
@@ -171,12 +164,9 @@ sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState
             glfwGetWindowPos(window, &state.windowed_xpos, &state.windowed_ypos);
             state.windowed_width  = width;
             state.windowed_height = height;
-#ifndef __APPLE__
-            // Restore windowed mode (set monitor to nullptr). On macOS AppKit owns
-            // the native transition and restores the frame itself.
+            // Restore windowed mode (set monitor to nullptr)
             glfwSetWindowMonitor(window, nullptr, state.windowed_xpos, state.windowed_ypos,
-                             state.windowed_width, state.windowed_height, GLFW_DONT_CARE);
-#endif
+                             state.windowed_width, state.windowed_height, GLFW_DONT_CARE);            
         }
 
         // Notify view layer
@@ -189,10 +179,6 @@ is_fullscreen_active(GLFWwindow* window)
 {
     if (!window) return false;
 
-#ifdef __APPLE__
-    // Native fullscreen isn't reported by glfwGetWindowMonitor; check the style mask.
-    return macos_is_native_fullscreen(window);
-#else
     GLFWmonitor* monitor = glfwGetWindowMonitor(window);
     if (!monitor)
     {
@@ -239,7 +225,6 @@ is_fullscreen_active(GLFWwindow* window)
         (std::abs(wh - mode->height) <= TOL);
 
     return matches_workarea || matches_vidmode;
-#endif
 }
 
 }  // namespace View

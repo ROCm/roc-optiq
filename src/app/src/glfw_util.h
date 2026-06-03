@@ -43,14 +43,6 @@ void sync_fullscreen_state(GLFWwindow* window, int width, int height, Fullscreen
 // Check if the window is currently in fullscreen mode
 bool is_fullscreen_active(GLFWwindow* window);
 
-#ifdef __APPLE__
-// macOS uses native (green-button) fullscreen so both controls share one state.
-// Defined in glfw_util_macos.mm. The toggle is async; observe the result via
-// is_fullscreen_active().
-void macos_request_toggle_fullscreen(GLFWwindow* window);
-bool macos_is_native_fullscreen(GLFWwindow* window);
-#endif
-
 }  // namespace View
 }  // namespace RocProfVis
 

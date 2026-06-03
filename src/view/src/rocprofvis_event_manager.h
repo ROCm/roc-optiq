@@ -32,8 +32,7 @@ public:
     void DispatchEvents();
     void AddEvent(std::shared_ptr<RocEvent> event);
 
-    // True when events are queued but not yet dispatched. Lets the lazy render
-    // loop keep ticking until the deferred-dispatch queue drains.
+    // True while events are queued for deferred dispatch (keeps lazy render on).
     bool HasPendingEvents() const { return !m_event_queue.empty(); }
 
 private:

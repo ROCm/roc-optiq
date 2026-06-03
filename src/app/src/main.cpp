@@ -328,12 +328,8 @@ main(int argc, char** argv)
                         g_file_was_dropped = false;
                     }
 
-                    // While there is async work/animation, keep the render budget
-                    // topped up. This keeps us ticking now AND leaves a short tail
-                    // of frames after the work finishes, so the final state (plus
-                    // any deferred event dispatch and ImGui multi-frame layout
-                    // settling) is drawn before we sleep -- otherwise the last
-                    // frame can be stale and only "catch up" on the next input.
+                    // Async work/animation in flight: refill the budget so the
+                    // settle tail also covers the final frames after it finishes.
                     if(rocprofvis_view_wants_continuous_render())
                     {
                         g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
@@ -341,14 +337,12 @@ main(int argc, char** argv)
 
                     if(g_frames_to_render > 0)
                     {
-                        // Keep ticking so per-frame controller polling, event
-                        // dispatch, and the settle tail all run.
+                        // Busy: poll so per-frame controller/event work keeps running.
                         glfwWaitEventsTimeout(BUSY_POLL_INTERVAL_SEC);
                     }
                     else
                     {
-                        // Fully idle: block until a real OS event wakes us, then
-                        // render a few frames so input-driven animations settle.
+                        // Idle: sleep until an OS event, then render a few frames.
                         glfwWaitEvents();
                         g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
                     }

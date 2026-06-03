@@ -594,10 +594,8 @@ AppWindow::WantsContinuousRender()
     }
 #endif
 
-    // The active view may have render-driven work that produces no events or
-    // pending requests yet (e.g. the timeline's loading-timer debounce that
-    // gates track-data requests). Only the active tab renders, so only it can
-    // stall this way -- query it directly.
+    // Only the active tab renders, so only it can have render-driven work with
+    // no events/requests yet (e.g. the timeline loading-timer debounce).
     Project* current_project = GetCurrentProject();
     if(current_project)
     {
@@ -616,11 +614,8 @@ AppWindow::WantsContinuousRender()
         if(root_view)
         {
             DataProvider* data_provider = root_view->GetDataProvider();
-            // kLoading covers the entire initial trace load (topology parse and
-            // all its internal stages), even when the pending-request count
-            // momentarily drops to zero between stages. This guarantees the loop
-            // keeps rendering until the load fully finishes, so it can never
-            // pause mid-load and leave a frozen loading screen / blank view.
+            // kLoading spans the whole initial load, even when the pending count
+            // briefly drops to zero between stages, so we never freeze mid-load.
             if(data_provider &&
                (data_provider->GetState() == ProviderState::kLoading ||
                 data_provider->GetPendingRequestCount() > 0))

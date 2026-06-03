@@ -29,9 +29,8 @@ public:
 
     virtual DataProvider* GetDataProvider() { return nullptr; };
 
-    // True when this view has render-driven work that produces no events yet
-    // (e.g. a debounce timer that gates data requests and only advances while
-    // rendering). The app shell keeps rendering while the active view wants it.
+    // True when this view has render-driven work that emits no events yet (e.g.
+    // a debounce timer that only advances while rendering). Drives lazy render.
     virtual bool WantsContinuousRender() const { return false; }
 
 protected:

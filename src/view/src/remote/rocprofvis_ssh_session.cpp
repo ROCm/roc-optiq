@@ -14,16 +14,16 @@ namespace RocProfVis
 namespace View
 {
 
-    SshSession::SshSession(RemoteUri* uri)
-    : m_uri(uri)
+    SshSession::SshSession(std::shared_ptr<RemoteUri> uri)
+    : m_uri(std::move(uri))
     , m_connection(nullptr)
     , m_active_operation(SshOperation::None)
     , m_active_operation_id(0)
     , m_last_result(kRocProfVisResultSuccess)
     {
-        if (uri)
+        if (m_uri)
         {
-            AllocateConnection(uri->GetRemoteHostString().c_str(), uri->GetRemotePortInt());
+            AllocateConnection(m_uri->GetRemoteHostString().c_str(), m_uri->GetRemotePortInt());
         }
        
     }

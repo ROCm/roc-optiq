@@ -39,7 +39,7 @@ namespace View
     class SshSession
     {
     public:
-        SshSession(RemoteUri* uri);
+        SshSession(std::shared_ptr<RemoteUri> uri);
         ~SshSession();
 
         // Phase starters. Return the monitor operation id, or 0 on failure.
@@ -92,7 +92,7 @@ namespace View
         rocprofvis_result_t GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                 uint64_t index, std::string& out_string);
 
-        RemoteUri* m_uri;
+        std::shared_ptr<RemoteUri> m_uri;
         rocprofvis_handle_t* m_connection;
         PromptRequest m_prompt_request;
         HostKeyRequest m_host_key_request;

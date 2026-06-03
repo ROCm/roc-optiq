@@ -14,8 +14,8 @@ namespace View
 {
 
 RemoteTraceOrchestrator::RemoteTraceOrchestrator(
-    RemoteUri* uri, std::function<void(const std::string&)> on_open_file)
-: m_uri(uri)
+    std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file)
+: m_uri(std::move(uri))
 , m_on_open_file(std::move(on_open_file))
 , m_session(nullptr)
 , m_status_token(EventManager::InvalidSubscriptionToken)

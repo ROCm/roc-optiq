@@ -35,7 +35,7 @@ class RemoteTraceOrchestrator
 public:
     // on_open_file is invoked with the local path once a trace has been
     // downloaded (or immediately if the workflow only executes a command).
-    RemoteTraceOrchestrator(RemoteUri* uri, std::function<void(const std::string&)> on_open_file);
+    RemoteTraceOrchestrator(std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file);
     ~RemoteTraceOrchestrator();
 
     // Begins the workflow (connect phase). Returns false if the session could
@@ -70,7 +70,7 @@ private:
     void AdvanceAfterDownload();
     void Fail(const std::string& message);
 
-    RemoteUri*                               m_uri;
+    std::shared_ptr<RemoteUri>               m_uri;
     std::function<void(const std::string&)>  m_on_open_file;
     std::unique_ptr<SshSession>              m_session;
     EventManager::SubscriptionToken          m_status_token;

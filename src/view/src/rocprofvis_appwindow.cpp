@@ -119,16 +119,7 @@ AppWindow::AppWindow()
 , m_exit_notification_sent(false)
 , m_restore_fullscreen_later(false)
 , m_next_provider_cleanup_id(0)
-#ifdef TEST_SSH_CONNECTION
-, m_remote_show_password(false)
-, m_remote_show_passphrase(false)
-, m_open_remote_dialog(false)
-, m_should_close_popup(false)
-#endif
 {
-#ifdef TEST_SSH_CONNECTION
-    m_remote_uri.LoadFromJson();
-#endif
 }
 
 AppWindow::~AppWindow()
@@ -152,7 +143,7 @@ AppWindow::~AppWindow()
     // their own destruction.
     m_profiler_launcher_dialog.reset();
 #ifdef TEST_SSH_CONNECTION
-    m_remote_orchestrator.reset();
+    m_ssh_test_dialog.reset();
 #endif
     AppMonitor::DestroyInstance();
 }
@@ -482,7 +473,7 @@ AppWindow::BeginAppShutdown()
     // is empty.
     m_profiler_launcher_dialog.reset();
 #ifdef TEST_SSH_CONNECTION
-    m_remote_orchestrator.reset();
+    m_ssh_test_dialog.reset();
 #endif
 
     if(!m_provider_cleanup_jobs.empty())
@@ -682,15 +673,10 @@ AppWindow::Render()
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
 #ifdef TEST_SSH_CONNECTION
-    if(m_open_remote_dialog)
+    if(m_ssh_test_dialog)
     {
-        ImGui::OpenPopup("SSH Test");
-        m_open_remote_dialog = false;
+        m_ssh_test_dialog->Render();
     }
-    RenderRemoteOpenDialog();
-    RenderSshAuthModal(m_remote_orchestrator ? m_remote_orchestrator->GetSession() : nullptr);
-    RenderRemoteProgressDialog();
-    RenderRemoteOutputDialog();
 #endif
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
@@ -1659,259 +1645,14 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
 void
 AppWindow::HandleOpenRemote()
 {
-    m_open_remote_dialog       = true;
-    m_remote_status_msg.clear();
+    if(!m_ssh_test_dialog)
+    {
+        m_ssh_test_dialog = std::make_unique<SshTestDialog>(this);
+    }
+    m_ssh_test_dialog->Show();
 }
 
-/**
- * Render the modal dialog used to test opening a remote SSH target.
- *
- * This routine owns the complete immediate-mode UI flow for the SSH test popup:
- * styling, input capture, triggering connection checks, and presenting status.
- * Keeping these phases documented is important because this dialog coordinates
- * several pieces of transient UI state in one large render function.
- */
-void
-AppWindow::RenderRemoteOpenDialog()
-{
-    // Configure shared popup visuals and placement before creating modal content.
-    PopUpStyle popup_style;
-    popup_style.PushPopupStyles();
-    popup_style.PushTitlebarColors();
-    popup_style.CenterPopup();
-
-    // Keep the modal width stable while allowing height to auto-fit content.
-    ImGui::SetNextWindowSize(ImVec2(560, 0));
-
-    // Render and process the SSH test modal while it is open.
-    if (ImGui::BeginPopupModal("SSH Test", nullptr,
-        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
-    {
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        const float label_w = 110.0f;
-        ImGui::AlignTextToFramePadding(); ImGui::Text("Host"); ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputText("##rhost", m_remote_uri.GetRemoteHostBuffer(), m_remote_uri.GetRemoteHostBufferSize());
-
-        ImGui::AlignTextToFramePadding(); ImGui::Text("Port"); ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputText("##rport", m_remote_uri.GetRemotePortBuffer(), m_remote_uri.GetRemotePortBufferSize());
-
-        ImGui::AlignTextToFramePadding(); ImGui::Text("User"); ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputText("##ruser", m_remote_uri.GetRemoteUserBuffer(), m_remote_uri.GetRemoteUserBufferSize());
-
-        ImGui::AlignTextToFramePadding(); ImGui::Text("Password"); ImGui::SameLine(label_w);
-        ImGuiInputTextFlags pwd_flags = m_remote_show_password ? 0 : ImGuiInputTextFlags_Password;
-        ImGui::SetNextItemWidth(-FLT_MIN - 90.0f);
-        ImGui::InputText("##rpass", m_remote_uri.GetRemotePasswordBuffer(), m_remote_uri.GetRemotePasswordBufferSize(), pwd_flags);
-        ImGui::SameLine();
-        ImGui::Checkbox("Show", &m_remote_show_password);
-
-        ImGui::AlignTextToFramePadding(); ImGui::Text("Profiler command line"); ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputTextWithHint("##rcommand", "/path/to/executable [parameters]",
-            m_remote_uri.GetRemoteCommandLineBuffer(), m_remote_uri.GetRemoteCommandLineBufferSize());
-
-        ImGui::AlignTextToFramePadding(); ImGui::Text("Profiler output database"); ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputTextWithHint("##rpath", "/path/to/file.db",
-            m_remote_uri.GetRemoteResultPathBuffer(), m_remote_uri.GetRemoteResultPathBufferSize());
-
-        ImGui::AlignTextToFramePadding(); ImGui::Text("SSH Key"); ImGui::SameLine(label_w);
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputTextWithHint(
-            "##rkey",
-            "Optional - path to private key (e.g. ~/.ssh/id_ed25519). Leave blank for default keys or password.",
-            m_remote_uri.GetRemoteIdentityFileBuffer(), m_remote_uri.GetRemoteIdentityFileBufferSize());
-
-        ImGui::AlignTextToFramePadding(); ImGui::Text("Key Passphrase"); ImGui::SameLine(label_w);
-        ImGuiInputTextFlags pass_flags =
-            m_remote_show_passphrase ? 0 : ImGuiInputTextFlags_Password;
-        ImGui::SetNextItemWidth(-FLT_MIN - 90.0f);
-        ImGui::InputTextWithHint(
-            "##rkeypass", "Leave blank if key is unencrypted or loaded in ssh-agent",
-            m_remote_uri.GetPassphraseBuffer(), m_remote_uri.GetPassphraseBufferSize(), pass_flags);
-        ImGui::SameLine();
-        ImGui::Checkbox("Show##kpshow", &m_remote_show_passphrase);
-
-        ImGui::Spacing();
-
-        // Prefer the live orchestrator status when a workflow exists, falling
-        // back to the standalone message (e.g. SaveToJson failure).
-        const std::string& status_msg =
-            m_remote_orchestrator ? m_remote_orchestrator->GetStatusMessage() : m_remote_status_msg;
-        if (!status_msg.empty())
-        {
-            ImVec4 color = ImVec4(1.0f, 0.5f, 0.3f, 1.0f);
-            ImGui::TextColored(color, "%s", status_msg.c_str());
-        }
-
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        bool can_authenticate = !m_remote_uri.GetRemotePasswordString().empty() || !m_remote_uri.GetRemoteIdentityFileString().empty();
-        bool has_remote_path = !m_remote_uri.GetRemoteCommandLineString().empty() || !m_remote_uri.GetRemoteResultPathString().empty();
-        bool can_open = !m_remote_uri.GetRemoteHostString().empty() && !m_remote_uri.GetRemoteUserString().empty() && has_remote_path && can_authenticate;
-        if (!can_open) ImGui::BeginDisabled();
-        bool running = m_remote_orchestrator && m_remote_orchestrator->IsRunning();
-        if (!running)
-        {
-            if (ImGui::Button("Open", ImVec2(110, 0)))
-            {
-                if (!m_remote_uri.SaveToJson())
-                {
-                    m_remote_status_msg =
-                        "Failed to backup authentication parameters.";
-                }
-                m_should_close_popup = true;
-                m_show_remote_stdout_popup = false;
-                m_show_progress_popup = false;
-
-                // Drive the connect -> authenticate -> execute -> download chain
-                // on the main thread via the AppMonitor; OpenFile is invoked when
-                // the trace has been downloaded.
-                m_remote_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
-                    &m_remote_uri,
-                    [this](const std::string& local_path) { OpenFile(local_path); });
-                m_remote_orchestrator->Start();
-            }
-        }
-        else
-        {
-            ImGui::Text("%s", m_remote_orchestrator->GetStatusMessage().c_str());
-        }
-
-        if (!can_open) ImGui::EndDisabled();
-
-        ImGui::SameLine();
-        if (!running)
-        {
-            if (ImGui::Button("Cancel", ImVec2(110, 0)))
-            {
-                m_should_close_popup = true;
-            }
-            if (m_should_close_popup)
-            {
-                ImGui::CloseCurrentPopup();
-                m_should_close_popup = false;
-            }
-        }
-
-        ImGui::EndPopup();
-    }
-    // Always restore style state after modal rendering to avoid leaking UI styles.
-    popup_style.PopStyles();
-}
-
-
-void AppWindow::RenderRemoteProgressDialog()
-{
-    SshSession* ssh_session =
-        m_remote_orchestrator ? m_remote_orchestrator->GetSession() : nullptr;
-    if (!ssh_session) return;
-
-    if (auto fetch = ssh_session->GetFileStat()->consume_if_updated())
-    {
-        m_last_progress = *fetch;
-
-        if (!m_show_progress_popup)
-        {
-            m_show_progress_popup = true;
-            ImGui::OpenPopup("Remote Download");
-        }
-    }
-
-    if (m_show_progress_popup)
-    {
-        PopUpStyle popup_style;
-        popup_style.PushPopupStyles();
-        popup_style.PushTitlebarColors();
-        popup_style.CenterPopup();
-        ImGui::SetNextWindowSize(ImVec2(440, 0));
-
-        if (ImGui::BeginPopupModal("Remote Download", nullptr,
-            ImGuiWindowFlags_AlwaysAutoResize |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoTitleBar))
-        {
-            const auto& fetch = m_last_progress;
-
-            ImGui::Text("Downloading: %s", fetch.name.c_str());
-
-            uint64_t done = fetch.downloaded;
-            uint64_t total = fetch.size;
-
-            if (total > 0)
-            {
-                float frac = static_cast<float>(done) / static_cast<float>(total);
-
-                std::string label =
-                    std::to_string(done / 1024) + " / " +
-                    std::to_string(total / 1024) + " KiB";
-
-                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
-            }
-            else
-            {
-                ImGui::Text("Connecting...");
-            }
-
-            if (total > 0 && done >= total)
-            {
-                ImGui::CloseCurrentPopup();
-                m_show_progress_popup = false;
-            }
-
-            ImGui::EndPopup();
-        }
-
-        popup_style.PopStyles();
-    }
-}
-
-void
-AppWindow::RenderRemoteOutputDialog()
-{
-    SshSession* ssh_session =
-        m_remote_orchestrator ? m_remote_orchestrator->GetSession() : nullptr;
-    if (!ssh_session) return;
-
-    if (auto fetch = ssh_session->GetExecutionOutput()->consume_if_updated())
-    {
-        m_last_stdout = *fetch;
-        if (!m_show_remote_stdout_popup)
-        {
-            m_show_remote_stdout_popup = true;
-            ImGui::OpenPopup("Remote Execute");
-        }
-    }
-
-    if (m_show_remote_stdout_popup)
-    {
-        ImGui::SetNextWindowSize(ImVec2(600, 400));
-        if (ImGui::BeginPopupModal("Remote Execute", nullptr))
-        {
-            ImGui::BeginChild("output", ImVec2(0, 0), true);
-            ImGui::TextUnformatted(m_last_stdout.text.c_str());
-            ImGui::EndChild();
-
-            if (m_last_stdout.finished)
-            {
-                ImGui::CloseCurrentPopup();
-                m_show_remote_stdout_popup = false;
-            }
-
-            ImGui::EndPopup();
-        }
-    }
-}
-
-#endif
+#endif // TEST_SSH_CONNECTION
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void

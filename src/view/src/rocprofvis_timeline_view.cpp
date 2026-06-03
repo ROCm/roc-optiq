@@ -1201,6 +1201,16 @@ TimelineView::RenderGraphView()
 }
 
 bool
+TimelineView::WantsContinuousRender() const
+{
+    // The loading-timer debounce gates track-data requests and only advances
+    // while we render (Tick() runs once per frame). While it is still counting
+    // down, keep the app rendering so it can expire and the gated requests get
+    // issued -- otherwise the load stalls until the next input wakes the loop.
+    return m_loading_timer.IsRunning();
+}
+
+bool
 TimelineView::IsRequestDataNeeded()
 {
     bool request_data = false;

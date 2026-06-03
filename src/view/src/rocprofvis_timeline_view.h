@@ -47,6 +47,10 @@ public:
 
     void Start();
     bool IsStarted() const { return m_started; }
+    // Counting down: started and not yet at its delay. The timer only advances
+    // via Tick() each rendered frame, so callers use this to keep rendering
+    // until it expires instead of stalling work that is gated on expiry.
+    bool IsRunning() const { return m_started && m_timer < m_delay; }
     bool IsExpired();
     void Restart();
     void Tick();
@@ -84,6 +88,7 @@ public:
     ~TimelineView();
     virtual void                                     Render() override;
     void                                             Update() override;
+    bool                                             WantsContinuousRender() const;
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();

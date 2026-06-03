@@ -587,11 +587,27 @@ AppWindow::WantsContinuousRender()
     }
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-    if(m_test_data_provider.GetPendingRequestCount() > 0)
+    if(m_test_data_provider.GetState() == ProviderState::kLoading ||
+       m_test_data_provider.GetPendingRequestCount() > 0)
     {
         return true;
     }
 #endif
+
+    // The active view may have render-driven work that produces no events or
+    // pending requests yet (e.g. the timeline's loading-timer debounce that
+    // gates track-data requests). Only the active tab renders, so only it can
+    // stall this way -- query it directly.
+    Project* current_project = GetCurrentProject();
+    if(current_project)
+    {
+        RootView* current_root =
+            dynamic_cast<RootView*>(current_project->GetView().get());
+        if(current_root && current_root->WantsContinuousRender())
+        {
+            return true;
+        }
+    }
 
     bool wants_render = false;
     for(const auto& [id, project] : m_projects)
@@ -600,7 +616,14 @@ AppWindow::WantsContinuousRender()
         if(root_view)
         {
             DataProvider* data_provider = root_view->GetDataProvider();
-            if(data_provider && data_provider->GetPendingRequestCount() > 0)
+            // kLoading covers the entire initial trace load (topology parse and
+            // all its internal stages), even when the pending-request count
+            // momentarily drops to zero between stages. This guarantees the loop
+            // keeps rendering until the load fully finishes, so it can never
+            // pause mid-load and leave a frozen loading screen / blank view.
+            if(data_provider &&
+               (data_provider->GetState() == ProviderState::kLoading ||
+                data_provider->GetPendingRequestCount() > 0))
             {
                 wants_render = true;
                 break;

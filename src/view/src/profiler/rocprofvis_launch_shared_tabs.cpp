@@ -172,13 +172,12 @@ void RenderConnectionSection(ConnectionSpec& connection)
 
     if (connection.type == ConnectionType::kSsh)
     {
-        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.0f, 1.0f), "SSH not yet supported");
-        ImGui::BeginDisabled();
-        char host_buf[128] = {};
-        char user_buf[64] = {};
-        ImGui::InputText("Host##SSH", host_buf, sizeof(host_buf));
-        ImGui::InputText("User##SSH", user_buf, sizeof(user_buf));
-        ImGui::EndDisabled();
+        // The SSH connection target (host/user/auth) and the remote output
+        // database path are configured by the owning ProfilerLauncherDialog via
+        // the reusable SshSettingsDialog (see RenderRemoteSection there). This
+        // selector only chooses local vs. remote execution.
+        ImGui::SameLine();
+        ImGui::TextDisabled("(configure connection below)");
     }
 }
 

@@ -137,6 +137,21 @@ void rocprofvis_profiler_free(rocprofvis_profiler_t* profiler);
 rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_t* profiler, rocprofvis_profiler_config_t* config, rocprofvis_controller_future_t* future);
 
 /*
+* Launches a profiler process on a remote host over an existing SSH connection.
+* The connection must already be connected and authenticated (e.g. by the View's
+* SshSession) and must be idle (no other SSH operation in flight) for the
+* duration of the remote profiler run. The connection is borrowed; the caller
+* retains ownership and must keep it alive until the profiler reaches a terminal
+* state. Downloading the produced trace back is the caller's responsibility.
+* @param profiler The profiler session handle (owns the controller state).
+* @param config The profiler configuration (should have SSH connection set).
+* @param connection The connected/authenticated SSH connection handle.
+* @param future The future object used to track job completion / cancellation.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_launch_remote_async(rocprofvis_profiler_t* profiler, rocprofvis_profiler_config_t* config, rocprofvis_controller_connection_t* connection, rocprofvis_controller_future_t* future);
+
+/*
 * Gets the current state of the profiler execution.
 * @param profiler The profiler session handle.
 * @param state Output parameter for the profiler state.

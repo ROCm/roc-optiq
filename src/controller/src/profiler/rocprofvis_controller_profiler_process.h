@@ -11,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <atomic>
+#include <thread>
 #include <utility>
 
 #ifdef _WIN32
@@ -29,6 +30,7 @@ namespace Controller
 {
 
 class Future;
+class SshConnection;
 
 enum class ConnectionType
 {
@@ -145,6 +147,15 @@ public:
     ~ProfilerProcessController();
 
     rocprofvis_result_t LaunchAsync(ProfilerConfig const* config);
+
+    // Remote variant: runs the profiler over the supplied (already connected and
+    // authenticated) SSH connection via an SshProfilerExecutor. The connection
+    // is borrowed; the caller (View/SshSession) owns its lifetime. `future` is
+    // the bound profiler future, observed by the remote exec loop for
+    // cancellation; it is borrowed and may be null.
+    rocprofvis_result_t LaunchAsyncRemote(ProfilerConfig const* config,
+                                          SshConnection*        connection,
+                                          Future*               future);
 
     rocprofvis_profiler_state_t GetState() const;
 

@@ -7,7 +7,10 @@
 #include "rocprofvis_utils.h"
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_rocprof_sys_backend.h"
+#include "remote/rocprofvis_ssh_auth_modal.h"
+#include "widgets/rocprofvis_widget.h"
 #include "imgui.h"
+#include <cfloat>
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -23,6 +26,11 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     : m_app_window(app_window)
     , m_profiler_session()
     , m_profiler_status_token(EventManager::InvalidSubscriptionToken)
+    , m_remote_uri(std::make_shared<RemoteUri>())
+    , m_ssh_settings_dialog(nullptr)
+    , m_remote_session(nullptr)
+    , m_remote_show_progress_popup(false)
+    , m_remote_last_progress()
     , m_should_open(false)
     , m_show_window(false)
     , m_is_running(false)
@@ -48,8 +56,11 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     LoadFromSettings();
     RefreshExecutionCache();
 
+    m_remote_uri->LoadFromJson();
+
     // Listen for profiler state transitions surfaced by the AppMonitor. Filter
-    // to events belonging to this dialog's session by operation id.
+    // to events belonging to this dialog's LOCAL session by operation id (the
+    // remote session manages its own profiler op internally).
     m_profiler_status_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kProfilerStatusChanged),
         [this](std::shared_ptr<RocEvent> event)
@@ -64,6 +75,10 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
 
 ProfilerLauncherDialog::~ProfilerLauncherDialog()
 {
+    // Destroy the remote session (which owns the monitored SshSession) before
+    // the shared RemoteUri reference held here is released.
+    m_remote_session.reset();
+
     if(m_profiler_status_token != EventManager::InvalidSubscriptionToken)
     {
         EventManager::GetInstance()->Unsubscribe(
@@ -159,6 +174,10 @@ void ProfilerLauncherDialog::Render()
 
     }
     ImGui::End();
+
+    // SSH settings dialog, auth prompts and download progress (rendered outside
+    // the main window scope, mirroring SshTestDialog).
+    RenderRemotePopups();
 
     if (!window_open)
     {
@@ -289,6 +308,145 @@ void ProfilerLauncherDialog::RenderMainContent()
 
         ImGui::EndTabBar();
     }
+
+    // SSH connection configuration (only shown in SSH mode).
+    RenderRemoteSection();
+}
+
+void ProfilerLauncherDialog::RenderRemoteSection()
+{
+    if (!IsSshMode())
+    {
+        return;
+    }
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Remote (SSH) execution");
+
+    const float label_w = 170.0f;
+
+    ImGui::AlignTextToFramePadding(); ImGui::Text("Connection"); ImGui::SameLine(label_w);
+    std::string host = m_remote_uri->GetRemoteHostString();
+    std::string user = m_remote_uri->GetRemoteUserString();
+    if (host.empty())
+    {
+        ImGui::TextDisabled("Not configured");
+    }
+    else
+    {
+        ImGui::Text("%s@%s:%s",
+                    user.empty() ? "?" : user.c_str(),
+                    host.c_str(),
+                    m_remote_uri->GetRemotePortString().c_str());
+    }
+
+    if (ImGui::Button("Configure SSH Connection..."))
+    {
+        m_ssh_settings_dialog = std::make_unique<SshSettingsDialog>(
+            *m_remote_uri,
+            [this](RemoteUri edited) { *m_remote_uri = std::move(edited); });
+    }
+
+    // Remote output database path to download once the profiler completes.
+    ImGui::AlignTextToFramePadding(); ImGui::Text("Remote output database"); ImGui::SameLine(label_w);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputTextWithHint("##remote_db", "/remote/path/to/trace.db",
+        m_remote_uri->GetRemoteResultPathBuffer(), m_remote_uri->GetRemoteResultPathBufferSize());
+
+    if (m_remote_session && !m_remote_session->GetStatusMessage().empty())
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "%s",
+                           m_remote_session->GetStatusMessage().c_str());
+    }
+}
+
+void ProfilerLauncherDialog::RenderRemotePopups()
+{
+    // Render the transient SSH settings dialog; destroy once it reports closed.
+    if (m_ssh_settings_dialog)
+    {
+        if (!m_ssh_settings_dialog->Render())
+        {
+            m_ssh_settings_dialog.reset();
+        }
+    }
+
+    SshSession* ssh_session = m_remote_session ? m_remote_session->GetSession() : nullptr;
+
+    // Auth prompts / host-key requests.
+    RenderSshAuthModal(ssh_session);
+
+    // Open the download-progress popup once the workflow enters the download
+    // phase. Whether/when individual FileStat progress snapshots arrive is
+    // unreliable for small/fast transfers, so the popup is driven by the
+    // session's phase, not by the progress reaching downloaded==size.
+    bool downloading = m_remote_session && m_remote_session->IsDownloading();
+    if (downloading && !m_remote_show_progress_popup)
+    {
+        m_remote_show_progress_popup = true;
+        m_remote_last_progress = FileStat::Snapshot{};
+        ImGui::OpenPopup("Remote Trace Download");
+    }
+
+    // Pull the latest progress snapshot when available.
+    if (ssh_session)
+    {
+        if (auto fetch = ssh_session->GetFileStat()->consume_if_updated())
+        {
+            m_remote_last_progress = *fetch;
+        }
+    }
+
+    if (m_remote_show_progress_popup)
+    {
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+        popup_style.CenterPopup();
+        ImGui::SetNextWindowSize(ImVec2(440, 0));
+
+        if (ImGui::BeginPopupModal("Remote Trace Download", nullptr,
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoTitleBar))
+        {
+            const auto& fetch = m_remote_last_progress;
+            ImGui::Text("Downloading: %s", fetch.name.c_str());
+
+            uint64_t done  = fetch.downloaded;
+            uint64_t total = fetch.size;
+            if (total > 0)
+            {
+                float frac = static_cast<float>(done) / static_cast<float>(total);
+                if (frac > 1.0f) { frac = 1.0f; }
+                std::string label = std::to_string(done / 1024) + " / " +
+                                    std::to_string(total / 1024) + " KiB";
+                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
+            }
+            else
+            {
+                ImGui::Text("Starting...");
+            }
+
+            // Close as soon as the download phase ends (completed, failed, or the
+            // session was torn down). CloseCurrentPopup must be called inside the
+            // popup scope to take effect. This avoids hanging open when the final
+            // "downloaded == size" snapshot never arrives for fast transfers.
+            if (!downloading)
+            {
+                ImGui::CloseCurrentPopup();
+                m_remote_show_progress_popup = false;
+            }
+
+            ImGui::EndPopup();
+        }
+        else
+        {
+            // Popup not actually open (e.g. dismissed); clear our flag so it can
+            // be reopened on the next download.
+            m_remote_show_progress_popup = false;
+        }
+        popup_style.PopStyles();
+    }
 }
 
 void ProfilerLauncherDialog::RenderButtonRow()
@@ -348,7 +506,54 @@ void ProfilerLauncherDialog::Update()
         RefreshExecutionCache();
     }
 
-    // Profiler state transitions arrive via kProfilerStatusChanged events
+    if (m_remote_session)
+    {
+        // The remote session owns the connect -> auth -> profile -> download
+        // phase machine. The dialog reflects the overall workflow: it stays
+        // "running" (Launch disabled, Cancel enabled) until the whole workflow
+        // finishes, then shows Completed / Failed based on the remote profiler's
+        // final state. We never mirror the session's transient Idle back onto
+        // the dialog (that would regress the label to [Idle]).
+        rocprofvis_profiler_state_t remote_state = m_remote_session->GetProfilerState();
+
+        // Pull streamed remote profiler output into the console.
+        std::string remote_out = m_remote_session->GetProfilerOutput();
+        if (!remote_out.empty() && remote_out != m_process_output_raw)
+        {
+            m_process_output_raw = std::move(remote_out);
+            m_process_output_stripped = strip_ansi_for_display(m_process_output_raw);
+            RebuildComposedOutput();
+        }
+
+        if (m_remote_session->IsRunning())
+        {
+            // Whole workflow still in progress.
+            m_is_running = true;
+            m_profiler_state = kRPVProfilerStateRunning;
+        }
+        else
+        {
+            // Workflow finished (or failed). Settle the displayed state to the
+            // remote profiler's terminal result, then keep the session around
+            // only until output stops arriving (dropped on next Launch/Close).
+            m_is_running = false;
+            if (remote_state == kRPVProfilerStateCompleted)
+            {
+                m_profiler_state = kRPVProfilerStateCompleted;
+            }
+            else if (remote_state == kRPVProfilerStateCancelled)
+            {
+                m_profiler_state = kRPVProfilerStateCancelled;
+            }
+            else
+            {
+                m_profiler_state = kRPVProfilerStateFailed;
+            }
+        }
+        return;
+    }
+
+    // Local: profiler state transitions arrive via kProfilerStatusChanged events
     // (see OnProfilerStateChanged), dispatched by the AppMonitor each frame.
 
     // Always try to fetch output while there's an active profiler session,
@@ -359,6 +564,16 @@ void ProfilerLauncherDialog::Update()
     {
         UpdateOutput();
     }
+}
+
+rocprofvis_profiler_type_t ProfilerLauncherDialog::ResolveProfilerType() const
+{
+    if (m_config.tool_id == "instrument")
+    {
+        return kRPVProfilerTypeRocprofSysInstrument;
+    }
+    // "run" / "sample" / default
+    return kRPVProfilerTypeRocprofSysRun;
 }
 
 void ProfilerLauncherDialog::OnLaunchClicked()
@@ -386,19 +601,20 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
     RefreshExecutionCache();
 
-    // Determine profiler type enum for controller
-    rocprofvis_profiler_type_t profiler_type = kRPVProfilerTypeRocprofSysRun;
-    if (m_config.tool_id == "run" || m_config.tool_id == "sample")
+    if (IsSshMode())
     {
-        profiler_type = kRPVProfilerTypeRocprofSysRun;
+        OnLaunchRemote();
     }
-    else if (m_config.tool_id == "instrument")
+    else
     {
-        profiler_type = kRPVProfilerTypeRocprofSysInstrument;
+        OnLaunchLocal();
     }
+}
 
+void ProfilerLauncherDialog::OnLaunchLocal()
+{
+    rocprofvis_profiler_type_t profiler_type = ResolveProfilerType();
     std::string const& profiler_path = m_execution_cache.profiler_path;
-
     std::string const& profiler_args_str = m_execution_cache.profiler_args;
 
     // Launch via the profiler session; state transitions are reported through
@@ -434,8 +650,78 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     }
 }
 
+void ProfilerLauncherDialog::OnLaunchRemote()
+{
+    if (m_remote_uri->GetRemoteHostString().empty() ||
+        m_remote_uri->GetRemoteUserString().empty())
+    {
+        m_error_message = "Configure the SSH connection (host/user) before launching.";
+        return;
+    }
+
+    m_remote_uri->SaveToJson();
+
+    rocprofvis_profiler_type_t profiler_type = ResolveProfilerType();
+
+    // Spawn a RemoteProfilerSession that drives connect -> auth -> remote launch
+    // -> download -> open. Auth prompts / download progress surface via the SSH
+    // popups rendered in RenderRemotePopups().
+    m_remote_show_progress_popup = false;
+    m_remote_session = std::make_unique<RemoteProfilerSession>(
+        m_remote_uri,
+        [this](const std::string& local_path)
+        {
+            if (m_app_window && !local_path.empty())
+            {
+                m_app_window->OpenFile(local_path);
+            }
+        });
+
+    bool success = m_remote_session->Launch(
+        profiler_type,
+        m_execution_cache.profiler_path,
+        m_config.target.executable,
+        m_config.target.arguments,
+        m_config.target.output_directory,
+        m_execution_cache.profiler_args,
+        m_execution_cache.env_vars);
+
+    if (success)
+    {
+        m_is_running = true;
+        m_profiler_state = kRPVProfilerStateRunning;
+
+        std::ostringstream preamble;
+        preamble << "[remote] " << m_execution_cache.command_preview << "\n\n";
+        m_output_preamble = preamble.str();
+        RebuildComposedOutput();
+
+        SaveToSettings();
+        AddRecentTarget(m_config.target.executable);
+    }
+    else
+    {
+        m_error_message = "Failed to start remote profiler: " +
+                          (m_remote_session ? m_remote_session->GetStatusMessage() : std::string());
+        m_profiler_state = kRPVProfilerStateFailed;
+        m_remote_session.reset();
+    }
+}
+
 void ProfilerLauncherDialog::OnCancelClicked()
 {
+    if (m_remote_session)
+    {
+        // Tearing down the remote session cancels the in-flight phase (SSH or
+        // remote profiler) via the AppMonitor's deferred teardown.
+        m_remote_session.reset();
+        m_output_epilogue += "\nRemote profiler cancelled by user.\n";
+        RebuildComposedOutput();
+        m_profiler_state = kRPVProfilerStateCancelled;
+        m_is_running = false;
+        return;
+    }
+
     if (m_profiler_session.Cancel())
     {
         m_output_epilogue += "\nProfiler cancelled by user.\n";
@@ -451,11 +737,7 @@ void ProfilerLauncherDialog::OnCancelClicked()
 
 void ProfilerLauncherDialog::OnCloseClicked()
 {
-    if (m_is_running)
-    {
-        m_profiler_session.Cancel();
-    }
-
+    m_remote_session.reset();
     m_profiler_session.Close();
     m_is_running = false;
     m_profiler_state = kRPVProfilerStateIdle;
@@ -469,6 +751,25 @@ void ProfilerLauncherDialog::OnProfilerStateChanged(rocprofvis_profiler_state_t 
     }
 
     m_profiler_state = new_state;
+
+    // In remote mode the RemoteProfilerSession owns trace download + auto-load
+    // (via its on_open_file callback); the dialog only mirrors state/output and
+    // must not consult the local session's (empty) trace path.
+    if (m_remote_session)
+    {
+        if (new_state == kRPVProfilerStateCompleted)
+        {
+            m_output_epilogue += "\nRemote profiler completed; downloading trace...\n";
+            RebuildComposedOutput();
+        }
+        else if (new_state == kRPVProfilerStateFailed)
+        {
+            m_is_running = false;
+            m_output_epilogue += "\nRemote profiler failed.\n";
+            RebuildComposedOutput();
+        }
+        return;
+    }
 
     if (new_state == kRPVProfilerStateCompleted)
     {

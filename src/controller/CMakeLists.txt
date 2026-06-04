@@ -25,6 +25,7 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_job_system.cpp
     src/profiler/rocprofvis_controller_profiler_process.cpp
     src/profiler/rocprofvis_controller_profiler_cmdline.cpp
+    src/profiler/rocprofvis_controller_ssh_profiler_executor.cpp
     src/profiler/rocprofvis_profiler.cpp
     src/remote/rocprofvis_controller_remote.cpp
     src/remote/rocprofvis_controller_ssh_bridge.cpp

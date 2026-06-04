@@ -122,6 +122,9 @@ private:
     std::shared_ptr<RocWidget> m_view;
     std::list<ProjectSetting*> m_settings;
     jt::Json                   m_settings_json;
+    // Specific failure message set by OpenProject/OpenTrace and surfaced by
+    // Open(). Empty means "use the generic could-not-be-opened message".
+    std::string                m_open_error_message;
 };
 
 constexpr const char* JSON_KEY_GROUP_GENERAL  = "general";

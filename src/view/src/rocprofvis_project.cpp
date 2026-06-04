@@ -58,6 +58,7 @@ Project::OpenResult
 Project::Open(std::string& file_path)
 {
     OpenResult result = Failed;
+    m_open_error_message.clear();
     if(std::filesystem::exists(file_path))
     {
         std::string file_ext = std::filesystem::path(file_path).extension().string();
@@ -72,12 +73,16 @@ Project::Open(std::string& file_path)
 
         if(result == Failed)
         {
-            // show error dialog
+            // OpenProject/OpenTrace may set a specific message (e.g. naming a
+            // missing trace file referenced by the project). Fall back to the
+            // generic message only when no specific one was provided.
             AppWindow::GetInstance()->ShowMessageDialog(
                 "Error",
-                "The file could not be opened:\n\n" + file_path +
-                    "\n\nPlease make sure the file is a valid trace or project file.");
-            spdlog::error("Failed to open file: {}, invalid trace or project file", file_path);                    
+                m_open_error_message.empty()
+                    ? "The file could not be opened:\n\n" + file_path +
+                          "\n\nPlease make sure the file is a valid trace or project file."
+                    : m_open_error_message);
+            spdlog::error("Failed to open file: {}", file_path);
         }
     }
     else
@@ -144,16 +149,35 @@ Project::OpenProject(std::string& file_path)
                                                          [JSON_KEY_GENERAL_TRACE_PATH]
                                                              .getString()))
                     .string();
-            result = OpenTrace(trace_path);
-            if(result == Duplicate)
+            if(std::filesystem::exists(trace_path))
             {
-                file_path = trace_path;
+                result = OpenTrace(trace_path);
+                if(result == Duplicate)
+                {
+                    file_path = trace_path;
+                }
+            }
+            else
+            {
+                // The project references a trace file that is no longer present.
+                // Name the missing trace (not the project) and skip the open
+                // attempt, which would otherwise create an empty database file
+                // at the trace's original path.
+                m_open_error_message =
+                    "The trace file referenced by this project could not be "
+                    "found:\n\n" +
+                    trace_path +
+                    "\n\nIt may have been moved or deleted. Restore it and try "
+                    "again.";
+                spdlog::error("Failed to open project {}: referenced trace file "
+                              "does not exist: {}",
+                              file_path, trace_path);
             }
         }
         else
         {
-            AppWindow::GetInstance()->ShowMessageDialog(
-                "Error", "Failed to load project: " + file_path);
+            m_open_error_message = "Failed to load project:\n\n" + file_path +
+                                   "\n\nThe project file is invalid or corrupted.";
         }
         file.close();
     }

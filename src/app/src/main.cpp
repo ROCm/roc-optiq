@@ -68,12 +68,14 @@ app_notification_callback(GLFWwindow* window, int notification)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+#ifndef __APPLE__
     else if(notification ==
             static_cast<int>(rocprofvis_view_notification_t::
                                  kRocProfVisViewNotification_Toggle_Fullscreen))
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
+#endif
 }
 
 static void
@@ -91,15 +93,20 @@ glfw_error_callback(int error, const char* description)
 static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    // Unused parameters
     (void) scancode;
     (void) mods;
 
+#ifndef __APPLE__
     // Toggle fullscreen with F11
     if(key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
+#else
+    (void) window;
+    (void) key;
+    (void) action;
+#endif
 }
 
 static void

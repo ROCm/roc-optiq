@@ -952,6 +952,7 @@ AppWindow::RenderViewMenu(Project* project)
                 tool_bar_item->m_visible = settings.show_toolbar;
             }
         }
+#ifndef __APPLE__
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
         {
             if(m_notification_callback)
@@ -961,6 +962,7 @@ AppWindow::RenderViewMenu(Project* project)
                         kRocProfVisViewNotification_Toggle_Fullscreen);
             }
         }
+#endif
         ImGui::SeparatorText("System Profiler Panels");
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))

@@ -27,7 +27,8 @@ public:
     void Update() override;
     void Render() override;
 
-    void HandleTrackSelectionChanged();
+    void HandleTrackSelectionChanged(uint64_t track_id, bool selected);
+    void HandleTimeRangeSelectionChanged(double start_ns, double end_ns);
 
 private:
     class TopEventsTable : public MultiTrackTable
@@ -36,8 +37,14 @@ private:
         TopEventsTable(DataProvider& dp, TableType table_type,
                        rocprofvis_controller_table_type_t request_table_type,
                        uint64_t                           request_id,
-                       std::shared_ptr<TimelineSelection> timeline_selection);
+                       std::shared_ptr<TimelineSelection> timeline_selection,
+                       rocprofvis_dm_event_operation_t op, const char* header);
         ~TopEventsTable();
+
+        void Render() override;
+        void HandleTrackSelectionChanged(uint64_t track_id, bool selected) override;
+
+        bool Visible() const;
 
     private:
         enum DurationColumns
@@ -49,22 +56,19 @@ private:
             kNumDurationColumns
         };
 
+        bool IncludeTrack(uint64_t track_id) const override;
         void IndexColumns() override;
         void FormatData() const override;
-        void FilterSelectedTracksForTableType(
-            const std::vector<uint64_t>& selected_track_ids,
-            std::vector<uint64_t>&       filtered_track_ids) const override;
+
+        size_t Rows() const;
 
         std::array<size_t, kNumDurationColumns> m_duration_column_indices;
-    };
-    struct Section
-    {
-        const char*                     heading;
-        std::unique_ptr<TopEventsTable> table;
+        rocprofvis_dm_event_operation_t         m_op;
+        const char*                             m_header;
+        bool                                    m_visible;
     };
 
-    std::array<Section, 5> m_sections;
-    DataProvider&          m_data_provider;
+    std::array<std::unique_ptr<TopEventsTable>, 5> m_tables;
 };
 
 }  // namespace View

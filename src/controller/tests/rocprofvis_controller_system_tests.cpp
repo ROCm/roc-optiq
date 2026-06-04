@@ -1957,34 +1957,34 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
             uint32_t len = 0;
             result       = rocprofvis_controller_get_string(
-                track_handle, kRPVControllerCategory, 0, nullptr, &len);
+                track_handle, kRPVControllerTrackCategory, 0, nullptr, &len);
             REQUIRE(result == kRocProfVisResultSuccess);
             std::string category;
             category.resize(len);
             result = rocprofvis_controller_get_string(
-                track_handle, kRPVControllerCategory, 0,
+                track_handle, kRPVControllerTrackCategory, 0,
                 const_cast<char*>(category.c_str()), &len);
             REQUIRE(result == kRocProfVisResultSuccess);
 
             len    = 0;
             result = rocprofvis_controller_get_string(
-                track_handle, kRPVControllerMainName, 0, nullptr, &len);
+                track_handle, kRPVControllerTrackMainName, 0, nullptr, &len);
             REQUIRE(result == kRocProfVisResultSuccess);
             std::string main_name;
             main_name.resize(len);
             result = rocprofvis_controller_get_string(
-                track_handle, kRPVControllerMainName, 0,
+                track_handle, kRPVControllerTrackMainName, 0,
                 const_cast<char*>(main_name.c_str()), &len);
             REQUIRE(result == kRocProfVisResultSuccess);
 
             len    = 0;
-            result = rocprofvis_controller_get_string(track_handle, kRPVControllerSubName,
+            result = rocprofvis_controller_get_string(track_handle, kRPVControllerTrackSubName,
                                                       0, nullptr, &len);
             REQUIRE(result == kRocProfVisResultSuccess);
             std::string sub_name;
             sub_name.resize(len);
             result = rocprofvis_controller_get_string(
-                track_handle, kRPVControllerSubName, 0,
+                track_handle, kRPVControllerTrackSubName, 0,
                 const_cast<char*>(sub_name.c_str()), &len);
             REQUIRE(result == kRocProfVisResultSuccess);
 

@@ -706,7 +706,6 @@ SystemTable::UnpackUseCase(Arguments& args, rocprofvis_dm_table_use_case_enum_t&
         switch (table_type)
         {
             case kRPVControllerTableTypeEvents:
-            case kRPVControllerTableTypeSearchResults:
             case kRPVControllerTableTypeSummaryKernelInstances:
             {
                 out = kRPVDMTableUseCaseEventTrackTable;

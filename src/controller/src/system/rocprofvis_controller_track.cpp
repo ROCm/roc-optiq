@@ -552,7 +552,26 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                 *value = m_queue_id_or_tid;
                 result = kRocProfVisResultSuccess;
                 break;
-            }  
+            }
+            case kRPVControllerTrackNumberOfOperationTypes:
+            {
+                *value = m_operation_types.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTrackOperationTypeIndexed:
+            {
+                if(index < m_operation_types.size())
+                {
+                    *value = m_operation_types[index];
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
             default:
             {
                 result = UnhandledProperty(property);
@@ -669,17 +688,17 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerCategory:
+        case kRPVControllerTrackCategory:
         {
             result = GetStdStringImpl(value, length, m_category);
             break;
         }
-        case kRPVControllerMainName:
+        case kRPVControllerTrackMainName:
         {
             result = GetStdStringImpl(value, length, m_main_name);
             break;
         }
-        case kRPVControllerSubName:
+        case kRPVControllerTrackSubName:
         {
             result = GetStdStringImpl(value, length, m_sub_name);
             break;
@@ -752,6 +771,25 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         {
             m_queue_id_or_tid = value;
             result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerTrackNumberOfOperationTypes:
+        {
+            m_operation_types.resize(value);
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerTrackOperationTypeIndexed:
+        {
+            if(index < m_operation_types.size())
+            {
+                m_operation_types[index] = (rocprofvis_dm_event_operation_t)value;
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
             break;
         }
         default:
@@ -987,19 +1025,19 @@ rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t in
     {
         switch(property)
         {
-            case kRPVControllerCategory:
+            case kRPVControllerTrackCategory:
             {
                 m_category = value;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerMainName:
+            case kRPVControllerTrackMainName:
             {
                 m_main_name = value;
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerSubName:
+            case kRPVControllerTrackSubName:
             {
                 m_sub_name = value;
                 result = kRocProfVisResultSuccess;

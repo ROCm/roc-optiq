@@ -20,16 +20,16 @@ constexpr const char* ID_COLUMN_NAME        = "__uuid";
 constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 
-EventSearch::EventSearch(DataProvider& dp)
+EventSearch::EventSearch(DataProvider&                      dp,
+                         std::shared_ptr<TimelineSelection> timeline_selection)
 : InfiniteScrollTable(
       dp, TableType::kEventSearchTable, kRPVControllerTableTypeSearchResults,
       DataProvider::EVENT_SEARCH_REQUEST_ID,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, nullptr, 1,
-      kRPVControllerSortOrderAscending, "Event Search Table", "")
+      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, timeline_selection,
+      1, kRPVControllerSortOrderAscending, "Event Search Table", "")
 , m_should_open(false)
 , m_should_close(false)
-, m_open_context_menu(false)
 , m_focus_text_input(false)
 , m_search_deferred(false)
 , m_searched(false)
@@ -94,7 +94,6 @@ EventSearch::Render()
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
                 InfiniteScrollTable::Render();
                 ImGui::PopStyleVar();
-                RenderContextMenu();
             }
             auto table_params = tm.GetTableParams(m_table_type);
             if(table_params)
@@ -318,46 +317,9 @@ EventSearch::RowSelected(const ImGuiMouseButton mouse_button)
     }
     else if(mouse_button == ImGuiMouseButton_Right)
     {
-        m_open_context_menu = true;
+        SelectedRowContextMenu();
     }
     InfiniteScrollTable::RowSelected(mouse_button);
-}
-
-void
-EventSearch::RenderContextMenu()
-{
-    if(m_open_context_menu)
-    {
-        ImGui::OpenPopup("");
-        m_open_context_menu = false;
-    }
-
-    const ImGuiStyle& style = m_settings.GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-    if(ImGui::BeginPopup(""))
-    {
-        uint64_t target_track_id = SelectedRowToTrackID(
-            m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
-        if(ImGui::MenuItem("Copy Row Data", nullptr, false))
-        {
-            SelectedRowToClipboard();
-        }
-        else if(ImGui::MenuItem("Go To Event", nullptr, false,
-                                target_track_id != INVALID_UINT64_INDEX))
-        {
-            SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
-                                     m_important_column_idxs[kStreamId]);
-        }
-        else if(ImGui::MenuItem("Export To File", nullptr, false,
-                                !m_data_provider.IsRequestPending(
-                                    DataProvider::TABLE_EXPORT_REQUEST_ID)))
-        {
-            ExportToFile();
-        }
-        ImGui::EndPopup();
-    }
-    ImGui::PopStyleVar(2);
 }
 
 float

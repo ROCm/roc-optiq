@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_infinite_scroll_table.h"
-#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_common_defs.h"
-#include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -20,10 +18,11 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr uint64_t    FETCH_CHUNK_SIZE     = 1000;
-constexpr const char* START_TS_COLUMN_NAME = "start";
-constexpr const char* END_TS_COLUMN_NAME   = "end";
-constexpr const char* DURATION_COLUMN_NAME = "duration";
+constexpr const char* ROWCONTEXTMENU_POPUP_NAME = "RowContextMenu";
+constexpr uint64_t    FETCH_CHUNK_SIZE          = 1000;
+constexpr const char* START_TS_COLUMN_NAME      = "start";
+constexpr const char* END_TS_COLUMN_NAME        = "end";
+constexpr const char* DURATION_COLUMN_NAME      = "duration";
 
 InfiniteScrollTable::InfiniteScrollTable(
     DataProvider& dp, TableType table_type,
@@ -35,6 +34,7 @@ InfiniteScrollTable::InfiniteScrollTable(
     rocprofvis_controller_sort_order_t        default_sort_order,
     const std::string& friendly_name, const std::string& no_data_text)
 : m_data_provider(dp)
+, m_open_context_menu(false)
 , m_skip_data_fetch(false)
 , m_table_type(table_type)
 , m_request_table_type(request_table_type)
@@ -245,7 +245,7 @@ InfiniteScrollTable::Render()
                               m_settings.GetColor(Colors::kFillerColor));
         if(!table_data.empty())
         {
-            if(ImGui::BeginTable("Event Data Table",
+            if(ImGui::BeginTable("infinite_scroll_table",
                                  static_cast<int>(column_names.size()), table_flags,
                                  outer_size))
             {
@@ -504,6 +504,7 @@ InfiniteScrollTable::Render()
                 }
                 ImGui::EndTable();  // End BeginTable
             }
+            RenderContextMenu();
         }
         else if(!m_no_data_text.empty() && !show_loading_indicator &&
                 ImGui::GetContentRegionAvail().y > ImGui::GetTextLineHeight())
@@ -560,6 +561,89 @@ InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int colum
     {
         m_hovered_row = row;
     }
+}
+
+void
+InfiniteScrollTable::RenderContextMenu()
+{
+    if(m_open_context_menu)
+    {
+        ImGui::OpenPopup(ROWCONTEXTMENU_POPUP_NAME);
+        m_open_context_menu = false;
+    }
+
+    auto style = m_settings.GetDefaultStyle();
+
+    // Render context menu for row actions
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    if(ImGui::BeginPopup(ROWCONTEXTMENU_POPUP_NAME))
+    {
+        uint64_t target_track_id = SelectedRowToTrackID(
+            m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
+        if(target_track_id != INVALID_UINT64_INDEX)
+        {
+            if(ImGui::MenuItem(m_table_type == TableType::kSampleTable ? "Go To Sample"
+                                                                       : "Go To Event",
+                               nullptr, false, target_track_id != INVALID_UINT64_INDEX))
+            {
+                SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
+                                         m_important_column_idxs[kStreamId]);
+            }
+            ImGui::Separator();
+        }        
+        if(ImGui::MenuItem("Copy Row Data", nullptr, false))
+        {
+            SelectedRowToClipboard();
+        }
+        else if(ImGui::MenuItem("Copy Cell Data", nullptr, false))
+        {
+            SelectedCellToClipboard(true);
+        }
+
+        // Only show option to copy unformatted cell data if
+        // column has formatting applied to it.
+        bool show_copy_unformatted = false;
+        if(m_selected_column >= 0 &&
+           m_selected_column < (int) m_table_model().GetTableHeader(m_table_type).size())
+        {
+            const auto&                             table_model = m_table_model();
+            const std::vector<FormattedColumnInfo>& formatted_table_data =
+                table_model.GetFormattedTableData(m_table_type);
+            const auto& col_format_info = formatted_table_data[m_selected_column];
+            show_copy_unformatted       = col_format_info.needs_formatting;
+        }
+        if(show_copy_unformatted)
+        {
+            if(ImGui::MenuItem("Copy Unformatted Cell Data", nullptr, false))
+            {
+                SelectedCellToClipboard(false);
+            }
+        }
+        ImGui::Separator();
+        if(ImGui::MenuItem(
+               "Export To File", nullptr, false,
+               !m_data_provider.IsRequestPending(DataProvider::TABLE_EXPORT_REQUEST_ID)))
+        {
+            ExportToFile();
+        }
+        // TODO handle event selection
+        // else if(ImGui::MenuItem("Select event", nullptr, false))
+        // {
+        //     uint64_t event_id = INVALID_UINT64_INDEX;
+
+        //     if(m_important_columns[kUUId] != INVALID_COLUMN_INDEX &&
+        //        m_important_columns[kUUId] < table_data[m_selected_row].size())
+        //     {
+        //         event_id =
+        //             std::stoull(table_data[m_selected_row][m_important_columns[kUUId]]);
+        //     }
+        // }
+
+        ImGui::EndPopup();
+    }
+    // Pop the style vars for window padding and item spacing
+    ImGui::PopStyleVar(2);
 }
 
 void
@@ -740,6 +824,46 @@ InfiniteScrollTable::SelectedRowToClipboard() const
 }
 
 void
+InfiniteScrollTable::SelectedCellToClipboard(bool use_formatted_data) const
+{
+    const std::vector<std::vector<std::string>>& table_data =
+        m_table_model().GetTableData(m_table_type);
+
+    if(m_selected_row < 0 || m_selected_row >= (int) table_data.size())
+    {
+        spdlog::warn("Selected row index out of bounds: {}", m_selected_row);
+        return;
+    }
+
+    if(m_selected_column < 0 ||
+       m_selected_column >= (int) table_data[m_selected_row].size())
+    {
+        spdlog::warn("Selected column index out of bounds: {}", m_selected_column);
+        return;
+    }
+
+    std::string cell_text = table_data[m_selected_row][m_selected_column];
+
+    if(use_formatted_data)
+    {
+        const auto&                             table_model = m_table_model();
+        const std::vector<FormattedColumnInfo>& formatted_table_data =
+            table_model.GetFormattedTableData(m_table_type);
+
+        const auto& col_format_info = formatted_table_data[m_selected_column];
+        if(col_format_info.needs_formatting &&
+           m_selected_row < col_format_info.formatted_row_value.size())
+        {
+            cell_text = col_format_info.formatted_row_value[m_selected_row];
+        }
+    }
+
+    ImGui::SetClipboardText(cell_text.c_str());
+    NotificationManager::GetInstance().Show("Cell data was copied",
+                                            NotificationLevel::Info);
+}
+
+void
 InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
                                               size_t stream_id_column_index) const
 {
@@ -783,6 +907,12 @@ InfiniteScrollTable::SelectedRowNavigateEvent(size_t track_id_column_index,
             spdlog::warn("No valid track or stream ID found for row: {}", m_selected_row);
         }
     }
+}
+
+void
+InfiniteScrollTable::SelectedRowContextMenu()
+{
+    m_open_context_menu = true;
 }
 
 void

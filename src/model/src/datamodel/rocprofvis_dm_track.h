@@ -60,6 +60,10 @@ public:
         return m_track_params->track_indentifiers.db_instance == nullptr ?
             0 : ((DbInstance*)m_track_params->track_indentifiers.db_instance)->GuidIndex();
     }
+    rocprofvis_dm_id_t                                  FileId() { 
+        return m_track_params->track_indentifiers.db_instance == nullptr ?
+            0 : ((DbInstance*)m_track_params->track_indentifiers.db_instance)->FileIndex();
+    }
     // Returns pointer to category string
     rocprofvis_dm_charptr_t                             CategoryString();
     // Return histogram bucket value per index (for events - sum all durations (just in case, not used), for counters - average value)

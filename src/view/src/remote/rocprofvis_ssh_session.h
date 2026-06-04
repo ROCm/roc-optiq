@@ -27,6 +27,7 @@ namespace View
         Authenticate,
         Execute,
         Download,
+        Browse,
     };
 
     // Non-blocking SSH session. Each Start* method kicks off one phase against
@@ -47,6 +48,7 @@ namespace View
         uint64_t StartAuthenticate();
         uint64_t StartExecute(const char* command_line = nullptr);
         uint64_t StartDownload(const char* remote_path = nullptr, const char* local_path = nullptr);
+        uint64_t StartBrowsing(const char* remote_path);
 
         // Cancels the in-flight phase (if any) and unregisters it from the
         // monitor. The connection stays alive for further phases.
@@ -63,6 +65,7 @@ namespace View
         HostKeyRequest* GetHostKeyRequest() { return &m_host_key_request; };
         ExecutionOutput* GetExecutionOutput() { return &m_stdout; };
         FileStat* GetFileStat() { return &m_file_stat; };
+        RemoteDir* GetRemoteDir() { return &m_directory; };
 
     private:
         // Runs the check phase for the active operation (side effects: append
@@ -84,10 +87,12 @@ namespace View
         rocprofvis_result_t StartExecution(const char* command_line, rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartDownloadOp(rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartDownloadOp(const char* remote_path, const char* local_path, rocprofvis_controller_future_t* future);
+        rocprofvis_result_t StartBrowsingOp(const char* remote_path, rocprofvis_controller_future_t* future);
         rocprofvis_result_t CheckConnection();
         rocprofvis_result_t CheckAuthentication();
         rocprofvis_result_t CheckExecution();
         rocprofvis_result_t CheckDownload();
+        rocprofvis_result_t CheckBrowsing();
         void FinalizeExecution();
         rocprofvis_result_t GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                 uint64_t index, std::string& out_string);
@@ -98,6 +103,7 @@ namespace View
         HostKeyRequest m_host_key_request;
         ExecutionOutput m_stdout;
         FileStat m_file_stat;
+        RemoteDir m_directory;
 
         SshOperation        m_active_operation;
         uint64_t            m_active_operation_id;

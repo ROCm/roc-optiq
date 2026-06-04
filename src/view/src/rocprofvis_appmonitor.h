@@ -26,6 +26,7 @@ enum class MonitorOperationType
     SshAuthentication,
     ProfilerSession,
     FileTransfer,
+    DirectoryListing
 };
 
 // A single long-running operation tracked by the AppMonitor. The monitor is

@@ -39,6 +39,7 @@ namespace View
 
         const std::array<char, 1024>& GetRemoteResultPathArray() const;
         std::string GetRemoteResultPathString() const;
+        std::string GetRemoteBrowsingPathString() const;
 
         const std::array<char, 1024>& GetRemoteIdentityFileArray() const;
         std::string GetRemoteIdentityFileString() const;
@@ -68,6 +69,11 @@ namespace View
 
         std::string GetLocalResultPathString();
 
+        void InitRemoteBrowsingPathString(const char * source);
+        void UseRemoteBrowsingPathString();
+        void MakeRemoteBrowsingPath(const char* file_name);
+        void SetCurrentDirectoryPath(const char* path);
+
     private:
         void SetDefaults();
         std::string GetConfigRoot();
@@ -96,6 +102,9 @@ namespace View
         std::array<char, 1024> m_remote_result_path{};
         std::array<char, 1024> m_remote_identity_file{};
         std::array<char, 256>  m_passphrase{};
+        std::array<char, 1024> m_file_browser_buffer{};
+        std::array<char, 1024> m_current_directory_buffer{};
+        char* m_file_browser_source;
     };
 
 

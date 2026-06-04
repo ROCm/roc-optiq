@@ -627,6 +627,23 @@ rocprofvis_result_t rocprofvis_controller_remote_transfer_async(
     return error;
 }
 
+rocprofvis_result_t rocprofvis_controller_remote_browser_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::FutureRef future_ref(future);
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (future_ref.IsValid() && args_ref.IsValid() && connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::AsyncRemoteDirectory(*future_ref, *connection_ref, *args_ref);
+    }
+    return error;
+}
+
 void rocprofvis_controller_summary_metric_free(rocprofvis_controller_summary_metrics_t* object)
 {
     RocProfVis::Controller::SummaryMetricsRef summary_metrics(object);

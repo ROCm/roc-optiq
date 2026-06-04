@@ -372,6 +372,19 @@ rocprofvis_result_t rocprofvis_controller_remote_transfer_async(
 );
 
 /*
+* Browse remote direcrory over ssh. 
+* @param connection libssh2 connection for reading directory
+* @param args contains remote path 
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+
+rocprofvis_result_t rocprofvis_controller_remote_browser_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+);
+
+/*
 * Reports host authentication decision 
 * @param connection libssh2 connection to report to
 * @param decision trust or reject connection

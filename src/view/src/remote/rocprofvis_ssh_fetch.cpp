@@ -200,5 +200,44 @@ namespace View
     }
 
 
+    void RemoteDir::update(std::string name,
+        uint64_t size,
+        uint64_t time,
+        uint64_t attrs)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        m_list_dir.push_back({ std::move(name), size, time, attrs & FileAttrs::Directory ? true : false });
+        updated_ = true;
+    }
+
+    std::optional<RemoteDir::Snapshot> RemoteDir::consume_if_updated()
+    {
+        std::lock_guard<std::mutex> lock(m_);
+
+        if (!updated_)
+            return std::nullopt;
+
+        updated_ = false;
+
+        return Snapshot{
+            m_list_dir
+        };
+    }
+
+    RemoteDir::Snapshot RemoteDir::get() const
+    {
+        std::lock_guard<std::mutex> lock(m_);
+
+        return Snapshot{
+            m_list_dir
+        };
+    }
+
+    void RemoteDir::clear() {
+        m_list_dir.clear();
+        updated_ = true;
+    }
+
+
 }  // namespace DataModel
 }  // namespace RocProfVis

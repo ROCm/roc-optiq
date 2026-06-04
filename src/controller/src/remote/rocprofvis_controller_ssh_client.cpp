@@ -51,6 +51,7 @@
 
 #endif
 
+
 namespace RocProfVis
 {
 namespace Controller
@@ -877,6 +878,8 @@ namespace Controller
             return SshClient::Result::Cancelled;
         }
 
+        connection->GetSshBridge()->WaitStatusConsumed();
+
         return Result::Success;
     }
  
@@ -898,6 +901,7 @@ namespace Controller
         Future* future)
     {
         std::string err;
+        connection->GetSshBridge()->Clear();
         connection->GetSshBridge()->SetStatus(kRPVControllerSshDownloading);
 
         if (!connection->IsValid())
@@ -1049,6 +1053,156 @@ namespace Controller
             return SshClient::Result::Cancelled;
         }
 
+        connection->GetSshBridge()->WaitStatusConsumed();
+
+        return Result::Success;
+    }
+
+    SshClient::Result SshClient::BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future)
+    {
+        std::string output;
+        int exit_code = -1;
+        connection->GetSshBridge()->Clear();
+        connection->GetSshBridge()->SetStatus(kRPVControllerSshBrowsing);
+
+        if (!connection->IsValid())
+        {
+            output = "Invalid connection";
+            connection->GetSshBridge()->SaveError(output);
+            return Result::SessionError;
+        }
+        if (!connection->IsConnected())
+        {
+            output = "Lost connection";
+            connection->GetSshBridge()->SaveError(output);
+            return Result::SessionError;
+        }
+
+
+        LIBSSH2_SFTP* sftp = NULL;
+
+        // --- Init SFTP (non-blocking) ---
+        while ((sftp = libssh2_sftp_init(connection->GetSession())) == NULL) {
+            int err = libssh2_session_last_errno(connection->GetSession());
+
+            if (err == LIBSSH2_ERROR_EAGAIN) {
+                if (!WaitSocket(connection))
+                {
+                    output = "Network failure while initializing SFTP";
+                    connection->GetSshBridge()->SaveError(output);
+                    break;
+                }
+            } else {
+                output = "SFTP init failed: " + std::to_string(err);
+                connection->GetSshBridge()->SaveError(output);
+                return Result::SessionError;
+            }
+            if (IsFutureCanceled(connection, future))
+            {
+                break;
+            }
+        }
+
+        LIBSSH2_SFTP_HANDLE* dir = NULL;
+
+        libssh2_session_set_blocking(connection->GetSession(), 0);
+
+
+        while ((dir = libssh2_sftp_opendir(sftp, path.c_str())) == NULL) {
+            if (libssh2_session_last_errno(connection->GetSession()) == LIBSSH2_ERROR_EAGAIN) {
+                if (!WaitSocket(connection))
+                {
+                    output = "Network failure while opening remote directory";
+                    connection->GetSshBridge()->SaveError(output);
+                    break;
+                }
+            } else {
+                output = "Unable to open directory ";
+                connection->GetSshBridge()->SaveError(output);
+                libssh2_sftp_shutdown(sftp);
+                return Result::SessionError;
+            }
+            if (IsFutureCanceled(connection, future))
+            {
+                break;
+            }
+        }
+
+        char mem[512];
+        LIBSSH2_SFTP_ATTRIBUTES attrs;
+
+        while (true) {
+            int rc;
+            if (IsFutureCanceled(connection, future))
+            {
+                break;
+            }
+
+            do {
+                rc = libssh2_sftp_readdir(dir, mem, sizeof(mem), &attrs);
+
+                if (rc == LIBSSH2_ERROR_EAGAIN) {
+                    if (!WaitSocket(connection))
+                    {
+                        output = "Network failure while reading remote directory content";
+                        connection->GetSshBridge()->SaveError(output);
+                        break;
+                    }
+                }
+
+            } while (rc == LIBSSH2_ERROR_EAGAIN);
+
+            if (rc > 0) {
+                mem[rc] = '\0';
+
+                if (strcmp(mem, ".") == 0 || strcmp(mem, "..") == 0)
+                    continue;
+
+                int isDir = 0;
+                if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) {
+                    isDir = LIBSSH2_SFTP_S_ISDIR(attrs.permissions);
+                }
+
+                connection->GetSshBridge()->SetFileInfo(mem, attrs.filesize, attrs.mtime, isDir);
+
+            }
+            else if (rc == 0) {
+                break; // done
+            }
+            else {
+                output = "Directory read error";
+                connection->GetSshBridge()->SaveError(output);
+                break;
+            }
+        }
+
+
+        while (libssh2_sftp_closedir(dir) == LIBSSH2_ERROR_EAGAIN) {
+            if (!WaitSocket(connection))
+            {
+                output = "Network failure while closing remote directory";
+                connection->GetSshBridge()->SaveError(output);
+                break;
+            }
+        }
+
+        while (libssh2_sftp_shutdown(sftp) == LIBSSH2_ERROR_EAGAIN) {
+            if (!WaitSocket(connection))
+            {
+                output = "Network failure while shutting down SFTP";
+                connection->GetSshBridge()->SaveError(output);
+                break;
+            }
+        }
+
+
+        if (IsFutureCanceled(connection, future))
+        {
+            return SshClient::Result::Cancelled;
+        }
+
+        connection->GetSshBridge()->WaitStatusConsumed();
+        
         return Result::Success;
     }
 

@@ -41,6 +41,7 @@ public:
     // Begins the workflow (connect phase). Returns false if the session could
     // not be created / connected.
     bool Start();
+    bool StartBrowsing();
 
     // True while a phase is in flight or pending.
     bool IsRunning() const { return m_running; }
@@ -59,6 +60,7 @@ private:
         Authenticating,
         Executing,
         Downloading,
+        Browsing,
         Done,
         Failed,
     };
@@ -68,6 +70,8 @@ private:
     void AdvanceAfterAuthenticate();
     void AdvanceAfterExecute();
     void AdvanceAfterDownload();
+    void AdvanceAfterBrowsing();
+    void Browse();
     void Fail(const std::string& message);
 
     std::shared_ptr<RemoteUri>               m_uri;
@@ -75,6 +79,7 @@ private:
     std::unique_ptr<SshSession>              m_session;
     EventManager::SubscriptionToken          m_status_token;
     Phase                                    m_phase;
+    Phase                                    m_task;
     bool                                     m_running;
     std::string                              m_status_message;
 };

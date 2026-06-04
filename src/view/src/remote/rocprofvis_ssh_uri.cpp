@@ -43,6 +43,7 @@ namespace View
 
     void RemoteUri::SetDefaults()
     {
+        m_file_browser_source = nullptr;
         CopyToArray(m_remote_port, "22");
     }
 
@@ -274,6 +275,31 @@ namespace View
         return util::string::trim_copy(std::string(m_remote_result_path.data()));
     }
 
+
+    void RemoteUri::InitRemoteBrowsingPathString(const char* source)
+    {
+        std::string dir = std::filesystem::path(source).parent_path().string();
+        if (dir.empty())
+        {
+            dir = ".";
+        }
+        std::snprintf((char*)m_file_browser_buffer.data(), m_file_browser_buffer.size(), "%s", dir.c_str());
+        m_file_browser_source = (char*)source;
+    }
+
+    void RemoteUri::UseRemoteBrowsingPathString()
+    {
+        if (m_file_browser_source)
+        {
+            std::snprintf(m_file_browser_source, m_file_browser_buffer.size(), "%s", m_file_browser_buffer.data());
+        }
+    }
+
+    std::string RemoteUri::GetRemoteBrowsingPathString() const
+    {
+        return std::string(m_file_browser_buffer.data());
+    }
+
     const std::array<char, 1024>& RemoteUri::GetRemoteIdentityFileArray() const
     {
         return m_remote_identity_file;
@@ -373,6 +399,59 @@ namespace View
     {
         return m_passphrase.size();
     }
+
+    void RemoteUri::SetCurrentDirectoryPath(const char* path)
+    {
+        std::snprintf(m_current_directory_buffer.data(), m_current_directory_buffer.size(), "%s", path);
+    }
+
+    void RemoteUri::MakeRemoteBrowsingPath(const char* file_name)
+    {
+        if (!file_name)
+            return;
+
+        m_file_browser_buffer = m_current_directory_buffer;
+
+        char* path = m_file_browser_buffer.data();
+        size_t capacity = m_file_browser_buffer.size();
+
+        if (std::strcmp(file_name, "..") == 0)
+        {
+            size_t len = std::strlen(path);
+
+            if (len > 1 && path[len - 1] == '/')
+            {
+                path[--len] = '\0';
+            }
+
+            char* last_slash = std::strrchr(path, '/');
+
+            if (last_slash)
+            {
+                if (last_slash != path)
+                {
+                    *last_slash = '\0'; 
+                }
+                else
+                {
+                    path[1] = '\0';
+                }
+            }
+
+            return;
+        }
+
+        size_t len = std::strlen(path);
+
+        if (len > 0 && path[len - 1] != '/')
+        {
+            std::strncat(path, "/", capacity - len - 1);
+            len = std::strlen(path);
+        }
+
+        std::strncat(path, file_name, capacity - len - 1);
+    }
+
 
 
 }  // namespace DataModel

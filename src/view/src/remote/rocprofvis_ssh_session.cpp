@@ -72,6 +72,7 @@ namespace View
             case SshOperation::Authenticate: m_last_result = CheckAuthentication(); break;
             case SshOperation::Execute:      m_last_result = CheckExecution(); break;
             case SshOperation::Download:     m_last_result = CheckDownload(); break;
+            case SshOperation::Browse:       m_last_result = CheckBrowsing(); break;
             case SshOperation::None:
             default:
                 return kRPVControllerSshIdle;
@@ -207,6 +208,18 @@ namespace View
                 return have_paths
                     ? StartDownloadOp(m_pending_remote_path.c_str(), m_pending_local_path.c_str(), future)
                     : StartDownloadOp(future);
+            });
+    }
+
+    // if remote_path , the data will be taken from m_uri
+    uint64_t SshSession::StartBrowsing(const char* remote_path)
+    {
+        m_directory.clear();
+        m_pending_remote_path = remote_path;
+        return BeginOperation(SshOperation::Browse, MonitorOperationType::DirectoryListing,
+            [this](rocprofvis_controller_future_t* future)
+            {
+                return StartBrowsingOp(m_pending_remote_path.c_str(),  future);
             });
     }
 
@@ -640,6 +653,83 @@ namespace View
     }
 
 
+    rocprofvis_result_t SshSession::StartBrowsingOp(const char* remote_path, rocprofvis_controller_future_t* future)
+    {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if (m_connection)
+        {
+            rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+            ROCPROFVIS_ASSERT(args != nullptr);
+
+            result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeFilePathDst, 0, remote_path);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            if (result == kRocProfVisResultSuccess)
+            {
+                result = rocprofvis_controller_remote_browser_async(future, m_connection, args);
+            }
+            rocprofvis_controller_arguments_free(args);
+        }
+        return result;
+    }
+
+    rocprofvis_result_t SshSession::CheckBrowsing()
+    {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if (m_connection)
+        {
+            uint64_t remote_status;
+            rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
+            if (kRocProfVisResultSuccess == remote_result)
+            {
+                if (remote_status == kRPVControllerSshCompleted)
+                {
+                    result = kRocProfVisResultSuccess;
+                }
+                else if (remote_status == kRPVControllerSshFailed)
+                {
+                    result = kRocProfVisResultFailedSshCommunication;
+                } else
+                    if (remote_status == kRPVControllerSshBrowsingProgress)
+                    {
+                        std::string name;
+                        uint64_t size, time, permissions, num;
+                        rocprofvis_result_t progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteDirNumFiles, 0, &num);
+                        for (int i = 0; i < num; i++)
+                        {
+                            if (kRocProfVisResultSuccess != progress_result)
+                            {
+                                return kRocProfVisResultFailedSshCommunication;
+                            }
+                            progress_result = GetString(m_connection, kRPVControllerRemoteFileName, i, name);
+                            if (kRocProfVisResultSuccess != progress_result)
+                            {
+                                return kRocProfVisResultFailedSshCommunication;
+                            }
+                            progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileSize, i, &size);
+                            if (kRocProfVisResultSuccess != progress_result)
+                            {
+                                return kRocProfVisResultFailedSshCommunication;
+                            }
+                            progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileTime, i, &time);
+                            if (kRocProfVisResultSuccess != progress_result)
+                            {
+                                return kRocProfVisResultFailedSshCommunication;
+                            }
+                            progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileAttrs, i, &permissions);
+                            if (kRocProfVisResultSuccess != progress_result)
+                            {
+                                return kRocProfVisResultFailedSshCommunication;
+                            }
+                            m_directory.update(name, size, time, permissions);
+                        }
+                        result = kRocProfVisResultPending;
+                    }
+                       
+            }
+        }
+        return result;
+    }
 
     bool SshSession::IsConnected()
     {

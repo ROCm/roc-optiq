@@ -27,6 +27,7 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
 , m_last_stdout()
 , m_show_progress_popup(false)
 , m_last_progress()
+, m_show_remote_filesystem_popup(false)
 {
     m_uri->LoadFromJson();
 }
@@ -94,9 +95,21 @@ SshTestDialog::Render()
                 m_uri->GetRemoteCommandLineBuffer(), m_uri->GetRemoteCommandLineBufferSize());
 
             ImGui::AlignTextToFramePadding(); ImGui::Text("Profiler output database"); ImGui::SameLine(label_w);
-            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::SetNextItemWidth(-FLT_MIN-90);
             ImGui::InputTextWithHint("##rpath", "/path/to/file.db",
                 m_uri->GetRemoteResultPathBuffer(), m_uri->GetRemoteResultPathBufferSize());
+            ImGui::SameLine();
+            if (ImGui::Button("Browse", ImVec2(80, 0)))
+            {
+                m_uri->InitRemoteBrowsingPathString(m_uri->GetRemoteResultPathArray().data());
+                m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
+                    m_uri,
+                    [this](const std::string& path)
+                    {
+                        m_uri->SetCurrentDirectoryPath(path.c_str());
+                    });
+                m_orchestrator->StartBrowsing();
+            }
 
             ImGui::Spacing();
 
@@ -180,6 +193,7 @@ SshTestDialog::Render()
     RenderSshAuthModal(m_orchestrator ? m_orchestrator->GetSession() : nullptr);
     RenderProgressPopup();
     RenderOutputPopup();
+    RenderRemoteFilePopup();
 }
 
 void
@@ -282,6 +296,164 @@ SshTestDialog::RenderOutputPopup()
         }
     }
 }
+
+void SshTestDialog::RenderRemoteFilePopup()
+{
+    SshSession* ssh_session =
+        m_orchestrator ? m_orchestrator->GetSession() : nullptr;
+    if (!ssh_session) return;
+
+    if (auto fetch = ssh_session->GetRemoteDir()->consume_if_updated())
+    {
+        m_last_directory_state = *fetch;
+        if (!m_show_remote_filesystem_popup)
+        {
+            m_show_remote_filesystem_popup = true;
+            ImGui::OpenPopup("Remote File System");
+        }
+    }
+
+    if (m_show_remote_filesystem_popup)
+    {
+        ImGui::SetNextWindowSize(ImVec2(600, 400));
+        if (ImGui::BeginPopupModal("Remote File System", nullptr))
+        {
+            float button_area_height = ImGui::GetFrameHeightWithSpacing() * 2.5f;
+
+            // --- Scroll area ---
+            ImGui::BeginChild("FileList", ImVec2(0, -button_area_height), true);
+
+            ImGui::Indent(10.0f);
+
+            int index = 0;
+
+            // --- ".." entry ---
+            {
+                bool selected = (m_selected_file_index == index);
+                if (ImGui::Selectable("..", selected, ImGuiSelectableFlags_AllowDoubleClick))
+                {
+                    m_selected_file_index = index;
+
+                    if (ImGui::IsMouseDoubleClicked(0))
+                    {
+                        m_uri->MakeRemoteBrowsingPath("..");
+                        m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
+                            m_uri,
+                            [this](const std::string& path)
+                            {
+                                m_uri->SetCurrentDirectoryPath(path.c_str());
+                            });
+                        m_orchestrator->StartBrowsing();
+                    }
+                }
+                index++;
+            }
+
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 6));
+
+            for (auto& f : m_last_directory_state.list_dir)
+            {
+                bool selected = (m_selected_file_index == index);
+
+                std::string label = f.is_dir
+                    ? (f.name + "/")
+                    : f.name;
+
+                if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick))
+                {
+                    m_selected_file_index = index;
+
+                    if (ImGui::IsMouseDoubleClicked(0))
+                    {
+                        m_uri->MakeRemoteBrowsingPath(f.name.c_str());
+                        if (f.is_dir)
+                        {
+                            m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
+                                m_uri,
+                                [this](const std::string& path)
+                                {
+                                    m_uri->SetCurrentDirectoryPath(path.c_str());
+                                });
+                            m_orchestrator->StartBrowsing();
+                        }
+                        else
+                        {
+                            m_orchestrator.release();
+                            m_uri->UseRemoteBrowsingPathString();
+                            ImGui::CloseCurrentPopup();
+                            m_show_remote_filesystem_popup = false;
+                        }
+                    }
+                }
+
+                index++;
+            }
+
+            ImGui::PopStyleVar();
+            ImGui::Unindent(10.0f);
+
+            ImGui::EndChild();
+
+            // --- Bottom buttons ---
+            ImGui::Separator();
+
+            float button_width = 110.0f;
+            float spacing = ImGui::GetStyle().ItemSpacing.x;
+            float total_width = button_width * 2 + spacing;
+
+            ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - total_width);
+
+            if (ImGui::Button("Cancel", ImVec2(button_width, 0)))
+            {
+                ImGui::CloseCurrentPopup();
+                m_show_remote_filesystem_popup = false;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Open", ImVec2(button_width, 0)))
+            {
+
+                if (m_selected_file_index == 0)
+                {
+                    m_uri->MakeRemoteBrowsingPath("..");
+                    m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
+                        m_uri,
+                        [this](const std::string& path)
+                        {
+                            m_uri->SetCurrentDirectoryPath(path.c_str());
+                        });
+                    m_orchestrator->StartBrowsing();
+                }
+                else
+                {
+                    auto& f = m_last_directory_state.list_dir[m_selected_file_index - 1];
+                    m_uri->MakeRemoteBrowsingPath(f.name.c_str());
+                    if (f.is_dir)
+                    {
+                        m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
+                            m_uri,
+                            [this](const std::string& path)
+                            {
+                                m_uri->SetCurrentDirectoryPath(path.c_str());
+                            });
+                        m_orchestrator->StartBrowsing();
+                    }
+                    else
+                    {
+                        m_orchestrator.release();
+                        m_uri->UseRemoteBrowsingPathString();
+                        ImGui::CloseCurrentPopup();
+                        m_show_remote_filesystem_popup = false;
+                    }
+                }
+            }
+
+            ImGui::EndPopup();
+        }
+    }
+}
+
 
 }  // namespace View
 }  // namespace RocProfVis

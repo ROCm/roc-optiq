@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <optional>
 #include <variant>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -46,6 +47,7 @@ public:
     void SaveError(const std::string& err);
     void SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded);
     void SetDownloaded(uint64_t size);
+    void SetFileInfo(std::string name, uint64_t size, uint64_t time, uint64_t attrs);
 
     std::optional<std::vector<std::string>> AskPrompts(const PromptRequest& req);
     std::optional<HostKeyDecision>          AskHostKey(const HostKeyRequest& req);
@@ -55,13 +57,17 @@ public:
     void SubmitHostKeyDecision(HostKeyDecision decision);
     void Cancel();
     void Reset();
+    void Clear();
+    void WaitStatusConsumed();
 
 private:
+
     SshStatus                                            m_ssh_status;
     rocprofvis_controller_user_prompt_t                  m_pending;
     std::string                                          m_stdout;
     std::string                                          m_error_str;
-    FileStat                                             m_remote_file_stat;
+    std::vector<FileStat>                                m_remote_file_stat;
+    std::vector<FileStat>                                m_remote_dir_info;
     std::mutex                                           m_mutex;
     std::condition_variable                              m_worker_cv;
     bool                                                 m_cancelled = false;

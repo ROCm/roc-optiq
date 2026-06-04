@@ -694,10 +694,12 @@ typedef enum rocprofvis_controller_remote_status_t : uint32_t
     kRPVControllerSshAuthenticating,
     kRPVControllerSshDownloading,
     kRPVControllerSshExecuting,
+    kRPVControllerSshBrowsing,
     kRPVControllerSshAuthRequest,
     kRPVControllerSshExecuteStdOut,
     kRPVControllerSshDownloadStarted,
     kRPVControllerSshDownloadProgress,
+    kRPVControllerSshBrowsingProgress,
     kRPVControllerSshFailed,
     kRPVControllerSshCompleted
 } rocprofvis_controller_remote_status_t;
@@ -741,6 +743,10 @@ typedef enum rocprofvis_controller_remote_properties_t : uint32_t
     kRPVControllerRemoteDownloaded,
     // Remote last error
     kRPVControllerRemoteLastError,
+    // Number of files properties collected from remote directory
+    kRPVControllerRemoteDirNumFiles,
+    // Remote file attributes
+    kRPVControllerRemoteFileAttrs,
     __kRPVControllerRemotePropertiesLast
 }rocprofvis_controller_remote_properties_t;
 

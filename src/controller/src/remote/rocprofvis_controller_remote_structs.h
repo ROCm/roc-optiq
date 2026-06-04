@@ -55,7 +55,9 @@ struct FileStat
     uint64_t                size;
     uint64_t                time;
     uint64_t                downloaded;
+    uint64_t                attrs;
 };
+
 
 }  // namespace DataModel
 }  // namespace RocProfVis

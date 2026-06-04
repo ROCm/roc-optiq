@@ -44,6 +44,7 @@ public:
 private:
     void RenderProgressPopup();
     void RenderOutputPopup();
+    void RenderRemoteFilePopup();
 
     AppWindow*                               m_app_window;
     std::shared_ptr<RemoteUri>               m_uri;
@@ -58,6 +59,10 @@ private:
 
     bool                                     m_show_progress_popup;
     FileStat::Snapshot                       m_last_progress;
+
+    bool                                     m_show_remote_filesystem_popup;
+    RemoteDir::Snapshot                      m_last_directory_state;
+    uint32_t                                 m_selected_file_index;
 };
 
 }  // namespace View

@@ -274,5 +274,39 @@ namespace Controller
         return error;
     }
 
+    rocprofvis_result_t Remote::AsyncRemoteDirectory(
+        Future& future,
+        SshConnection& connection,
+        Arguments& args)
+    {
+        rocprofvis_result_t   error = kRocProfVisResultInvalidArgument;
+        std::array<char, 128> path{};
+        uint32_t path_length = path.size();
+        if (args.GetString(kRPVControllerRemoteTypeFilePathDst, 0, path.data(), &path_length) == kRocProfVisResultSuccess)
+        {
+
+            future.Set(JobSystem::Get().IssueJob([&connection, path](Future* future) -> rocprofvis_result_t {
+                if (SshClient::Result::Success == s_ssh_client.BrowseRemoteDirectory(&connection, path.data(), future))
+                {
+                    connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
+                    return kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    connection.GetSshBridge()->SetStatus(kRPVControllerSshFailed);
+                    return kRocProfVisResultFailedSshCommunication;
+                }
+
+                }, &future));
+        }
+
+        if (future.IsValid())
+        {
+            error = kRocProfVisResultSuccess;
+        }
+
+        return error;
+    }
+
 }
 }

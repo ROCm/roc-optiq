@@ -132,6 +132,7 @@ namespace Controller
 
         static Result ExecuteCommand(SshConnection* connection, const std::string& command, Future* future);
         static Result DownloadFile(SshConnection * connection, const std::string& remote_path, const std::string& local_path, Future* future);
+        static Result BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future);
 
         static bool IsAlive(SshConnection * connection);
         static bool IsFutureCanceled(SshConnection * connection, Future* future);

@@ -65,6 +65,35 @@ RemoteTraceOrchestrator::Start()
     m_status_message = "Connecting...";
     m_phase          = Phase::Connecting;
     m_running        = true;
+    m_task           = Phase::Executing;
+
+    if(m_session->StartConnect() == 0)
+    {
+        Fail("SSH connection could not be started.");
+        return false;
+    }
+    return true;
+}
+
+bool
+RemoteTraceOrchestrator::StartBrowsing()
+{
+    if(m_running)
+    {
+        return false;
+    }
+
+    m_session = std::make_unique<SshSession>(m_uri);
+    if(!m_session->IsConnected())
+    {
+        Fail("Failed to create SSH session.");
+        return false;
+    }
+
+    m_status_message = "Connecting...";
+    m_phase          = Phase::Connecting;
+    m_running        = true;
+    m_task           = Phase::Browsing;
 
     if(m_session->StartConnect() == 0)
     {
@@ -89,6 +118,9 @@ RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t res
             case Phase::Downloading:
                 Fail("Result database download failed. Check profiler result path and try again.");
                 break;
+            case Phase::Browsing:
+                Fail("Remote filesystem browsing failed.");
+                break;
             default: Fail("SSH operation failed."); break;
         }
         return;
@@ -108,6 +140,7 @@ RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t res
         case Phase::Authenticating: AdvanceAfterAuthenticate(); break;
         case Phase::Executing:     AdvanceAfterExecute(); break;
         case Phase::Downloading:   AdvanceAfterDownload(); break;
+        case Phase::Browsing:   AdvanceAfterBrowsing(); break;
         default: break;
     }
 }
@@ -126,18 +159,25 @@ RemoteTraceOrchestrator::AdvanceAfterConnect()
 void
 RemoteTraceOrchestrator::AdvanceAfterAuthenticate()
 {
-    if(m_uri && !m_uri->GetRemoteCommandLineString().empty())
-    {
-        m_status_message =
-            std::string("Executing command (") + m_uri->GetRemoteCommandLineString() + ")";
-        m_phase = Phase::Executing;
-        if(m_session->StartExecute() == 0)
+    if (m_task == Phase::Executing)
+    { 
+        if(m_uri && !m_uri->GetRemoteCommandLineString().empty())
         {
-            Fail("CLI execution could not be started.");
+            m_status_message =
+                std::string("Executing command (") + m_uri->GetRemoteCommandLineString() + ")";
+            m_phase = Phase::Executing;
+            if(m_session->StartExecute() == 0)
+            {
+                Fail("CLI execution could not be started.");
+            }
+            return;
         }
-        return;
+        AdvanceAfterExecute();
     }
-    AdvanceAfterExecute();
+    else if (m_task == Phase::Browsing)
+    {
+        Browse();
+    }
 }
 
 void
@@ -171,6 +211,39 @@ RemoteTraceOrchestrator::AdvanceAfterDownload()
     {
         m_on_open_file(m_uri->GetLocalResultPathString());
     }
+}
+
+void
+RemoteTraceOrchestrator::AdvanceAfterBrowsing()
+{
+    m_phase          = Phase::Done;
+    m_running        = false;
+    m_status_message = "Done.";
+
+    if(m_uri && m_on_open_file)
+    {
+        m_on_open_file(m_uri->GetRemoteBrowsingPathString());
+    }
+}
+
+void
+RemoteTraceOrchestrator::Browse()
+{
+    if(m_uri && !m_uri->GetRemoteBrowsingPathString().empty())
+    {
+        m_status_message =
+            std::string("Browsing (") + m_uri->GetRemoteBrowsingPathString() + ")";
+        m_phase = Phase::Browsing;
+        if(m_session->StartBrowsing(m_uri->GetRemoteBrowsingPathString().c_str()) == 0)
+        {
+            Fail("Remote filesystem browsing cannot be started.");
+        }
+        return;
+    }
+    // Nothing to download; the workflow is complete.
+    m_phase          = Phase::Done;
+    m_running        = false;
+    m_status_message = "Done.";
 }
 
 void

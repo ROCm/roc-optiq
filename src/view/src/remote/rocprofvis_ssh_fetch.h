@@ -213,5 +213,63 @@ namespace View
     };
 
 
+    class RemoteDir
+    {
+    public:
+        enum FileAttrs
+        {
+            Directory = 1
+        };
+
+
+        struct FileEntry {
+            std::string name;           
+            uint64_t size;
+            uint64_t time;
+            bool is_dir;
+        };
+
+
+        struct Snapshot
+        {
+            std::vector<FileEntry> list_dir;
+        };
+
+        // Constructors
+        RemoteDir() = default;
+        ~RemoteDir() = default;
+
+        // Non-copyable (recommended due to mutex)
+        RemoteDir(const RemoteDir&) = delete;
+        RemoteDir& operator=(const RemoteDir&) = delete;
+
+        // Movable (optional)
+        RemoteDir(RemoteDir&&) = default;
+        RemoteDir& operator=(RemoteDir&&) = default;
+
+    public:
+        // Update all fields
+        void update(std::string name,
+            uint64_t size,
+            uint64_t time,
+            uint64_t attrs);
+
+        // Consume update flag
+        std::optional<Snapshot> consume_if_updated();
+
+        // Always get snapshot
+        Snapshot get() const;
+
+        void clear();
+
+
+    private:
+        mutable std::mutex m_;
+
+        std::vector<FileEntry> m_list_dir;
+
+        bool updated_ = false;
+    };
+
 }  // namespace DataModel
 }  // namespace RocProfVis

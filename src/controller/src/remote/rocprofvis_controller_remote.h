@@ -43,6 +43,11 @@ namespace Controller
         SshConnection& connection,
         Arguments& args);
 
+    static rocprofvis_result_t AsyncRemoteDirectory(
+        Future& future,
+        SshConnection& connection,
+        Arguments& args);
+
     static rocprofvis_result_t SubmitPromptResponses(
         SshConnection& connection,
         Arguments& args);

@@ -44,24 +44,50 @@ void SshBridge::SaveError(const std::string& err)
     m_ssh_status.next = kRPVControllerSshFailed;
 }
 
+void SshBridge::Clear()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_remote_file_stat.clear();
+    m_remote_dir_info.clear();
+}
+
+void SshBridge::WaitStatusConsumed() {
+    std::unique_lock<std::mutex> lk(m_mutex);
+    m_worker_cv.wait(lk, [&] { return m_ssh_status.next == m_ssh_status.now; });
+}
+
 void SshBridge::SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    m_remote_file_stat.resize(1);
 
-    m_remote_file_stat.name = std::move(name);
-    m_remote_file_stat.size = size;
-    m_remote_file_stat.time = time;
-    m_remote_file_stat.downloaded = downloaded;
+    m_remote_file_stat[0].name = std::move(name);
+    m_remote_file_stat[0].size = size;
+    m_remote_file_stat[0].time = time;
+    m_remote_file_stat[0].downloaded = downloaded;
 
     m_ssh_status.now = kRPVControllerSshDownloadStarted;
-    m_ssh_status.next = m_remote_file_stat.size == m_remote_file_stat.downloaded ? kRPVControllerSshCompleted : kRPVControllerSshDownloading;
+    m_ssh_status.next = m_remote_file_stat[0].size == m_remote_file_stat[0].downloaded ? kRPVControllerSshCompleted : kRPVControllerSshDownloading;
+}
+
+void SshBridge::SetFileInfo(std::string name, uint64_t size, uint64_t time, uint64_t attrs)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    FileStat file_info;
+    file_info.name = std::move(name);
+    file_info.size = size;
+    file_info.time = time;
+    file_info.attrs = attrs;
+    m_remote_dir_info.push_back(file_info);
+    m_ssh_status.now = kRPVControllerSshBrowsingProgress;
+    m_ssh_status.next = kRPVControllerSshBrowsing;
 }
 
 void SshBridge::SetDownloaded(uint64_t size)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    m_remote_file_stat.downloaded += size;
+    m_remote_file_stat[0].downloaded += size;
     m_ssh_status.now = kRPVControllerSshDownloadProgress;
     m_ssh_status.next = kRPVControllerSshDownloading;
 }
@@ -84,21 +110,57 @@ rocprofvis_result_t SshBridge::GetUInt64(
 
     switch (property)
     {
-        case kRPVControllerRemoteFileSize:
-            *value = m_remote_file_stat.size;
+        case kRPVControllerRemoteDirNumFiles:
+            m_remote_file_stat = std::move(m_remote_dir_info);
+            m_remote_dir_info.clear();
+            *value = m_remote_file_stat.size();
             return kRocProfVisResultSuccess;
+
+        case kRPVControllerRemoteFileSize:
+            if (index < m_remote_file_stat.size())
+            {
+                *value = m_remote_file_stat[index].size;
+                return kRocProfVisResultSuccess;
+            }
+            else
+            {
+                return kRocProfVisResultInvalidArgument;
+            }
 
         case kRPVControllerRemoteFileTime:
-            *value = m_remote_file_stat.time;
-            return kRocProfVisResultSuccess;
-
+            if (index < m_remote_file_stat.size())
+            {
+                *value = m_remote_file_stat[index].time;
+                return kRocProfVisResultSuccess;
+            }
+            else
+            {
+                return kRocProfVisResultInvalidArgument;
+            }
         case kRPVControllerRemoteDownloaded:
-            *value = m_remote_file_stat.downloaded;
-            return kRocProfVisResultSuccess;
-
+            if (index < m_remote_file_stat.size())
+            {
+                *value = m_remote_file_stat[index].downloaded;
+                return kRocProfVisResultSuccess;
+            }
+            else
+            {
+                return kRocProfVisResultInvalidArgument;
+            }
+        case kRPVControllerRemoteFileAttrs:
+            if (index < m_remote_file_stat.size())
+            {
+                *value = m_remote_file_stat[index].attrs;
+                return kRocProfVisResultSuccess;
+            }
+            else
+            {
+                return kRocProfVisResultInvalidArgument;
+            }
         case kRPVControllerRemoteStatus:
             *value  = m_ssh_status.now;
             m_ssh_status.now = m_ssh_status.next.load();
+            m_worker_cv.notify_all();
             return kRocProfVisResultSuccess;
 
         case kRPVControllerRemoteUserPromptType:
@@ -179,7 +241,14 @@ rocprofvis_result_t SshBridge::GetString(
             return GetStdStringImpl(value, length, m_error_str);
 
         case kRPVControllerRemoteFileName:
-            return GetStdStringImpl(value, length, m_remote_file_stat.name);
+            if (index < m_remote_file_stat.size())
+            {
+                return GetStdStringImpl(value, length, m_remote_file_stat[index].name);
+            }
+            else
+            {
+                return kRocProfVisResultInvalidArgument;
+            }
 
         case kRPVControllerRemoteUserGenericPromptName:
             if (auto* req = std::get_if<PromptRequest>(&m_pending))

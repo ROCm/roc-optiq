@@ -58,6 +58,7 @@ public:
     void RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
                          float reorder_grip_width);
     ImVec2 GetPillSize();
+    bool   GetLastScreenRect(ImVec2& out_min, ImVec2& out_max) const;
 
 private:
     void                            CalculatePillSize();
@@ -66,6 +67,9 @@ private:
     std::string                     m_pill_label;
     std::string                     m_tooltip_label;
     ImVec2                          m_pillbox_size;
+    ImVec2                          m_last_screen_min;
+    ImVec2                          m_last_screen_max;
+    bool                            m_has_last_screen_rect;
     const float                     m_padding_x = 8.0f;
     const float                     m_padding_y = 2.0f;
     EventManager::SubscriptionToken m_font_changed_token;

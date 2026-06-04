@@ -8,6 +8,8 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
+#include "widgets/rocprofvis_widget.h"
 #include <memory>
 #include <algorithm>
 
@@ -18,6 +20,8 @@ namespace View
 
 constexpr float kMinTooltipWrapWidth = 200.0f;
 constexpr float kMaxTooltipWrapWidth = 600.0f;
+
+inline constexpr uint64_t kCompactCountThreshold = 1000;
 
 float TrackItem::s_metadata_width = 400.0f;
 
@@ -306,23 +310,6 @@ TrackItem::RenderMetaArea()
         ImGui::PopStyleColor();
         ImGui::EndGroup();
 
-        if(!m_meta_area_tooltip.empty() && ImGui::IsItemHovered())
-        {
-            const float tooltip_max_width = std::max(
-                kMinTooltipWrapWidth,
-                std::min(kMaxTooltipWrapWidth, s_metadata_width - m_reorder_grip_width -
-                                                   2.0f * m_metadata_padding.x));
-
-            // Constrain tooltip window width (height auto-fits)
-            ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                                ImVec2(tooltip_max_width, FLT_MAX));
-            BeginTooltipStyled();
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + tooltip_max_width);
-            ImGui::TextUnformatted(m_meta_area_tooltip.c_str());
-            ImGui::PopTextWrapPos();
-            EndTooltipStyled();
-        }
-
         ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
                                        m_meta_area_scale_width - menu_button_width,
                                    m_metadata_padding.y));
@@ -369,6 +356,61 @@ TrackItem::RenderMetaArea()
     {
         m_meta_area_clicked = false;
     }
+
+    ImVec2 pill_min, pill_max;
+    const bool over_pill = m_pill.GetLastScreenRect(pill_min, pill_max) &&
+                           ImGui::IsMouseHoveringRect(pill_min, pill_max);
+    const bool meta_area_hovered =
+        ImGui::IsMouseHoveringRect(meta_min, meta_max) &&
+        !ImGui::IsAnyItemHovered() && !over_pill &&
+        !ImGui::IsPopupOpen(nullptr,
+            ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+
+    if(meta_area_hovered && !m_meta_area_tooltip.empty())
+    {
+        const float tooltip_max_width = std::max(
+            kMinTooltipWrapWidth,
+            std::min(kMaxTooltipWrapWidth, s_metadata_width - m_reorder_grip_width -
+                                               2.0f * m_metadata_padding.x));
+
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                            ImVec2(tooltip_max_width, FLT_MAX));
+        BeginTooltipStyled();
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + tooltip_max_width);
+        ImGui::TextUnformatted(m_meta_area_tooltip.c_str());
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();
+    }
+
+    const std::string copy_popup_id =
+        "##track_copy_menu_" + std::to_string(m_track_id);
+    if(meta_area_hovered &&
+       ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+    {
+        ImGui::OpenPopup(copy_popup_id.c_str());
+    }
+    const ImGuiStyle& popup_style = m_settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, popup_style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, popup_style.ItemSpacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, popup_style.FramePadding);
+    if(ImGui::BeginPopup(copy_popup_id.c_str()))
+    {
+        if(ImGui::MenuItem("Copy track name"))
+        {
+            ImGui::SetClipboardText(m_meta_area_label.c_str());
+            NotificationManager::GetInstance().Show(
+                COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+        }
+        if(ImGui::MenuItem("Copy track ID"))
+        {
+            std::string id_str = std::to_string(m_track_id);
+            ImGui::SetClipboardText(id_str.c_str());
+            NotificationManager::GetInstance().Show(
+                COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar(3);
 }
 
 void
@@ -702,6 +744,58 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
             break;
         }
     }
+
+    std::string track_type_label;
+    switch(track_info->topology.type)
+    {
+        case TrackInfo::TrackType::Queue:              track_type_label = "Queue"; break;
+        case TrackInfo::TrackType::Stream:             track_type_label = "Stream"; break;
+        case TrackInfo::TrackType::Counter:            track_type_label = "Counter"; break;
+        case TrackInfo::TrackType::InstrumentedThread: track_type_label = "Instrumented Thread"; break;
+        case TrackInfo::TrackType::SampledThread:      track_type_label = "Sampled Thread"; break;
+        default:                                       track_type_label = "Track"; break;
+    }
+
+    // Pick "events" vs "samples" based on the controller-side track type so
+    // counter tracks read "samples" and flame tracks read "events".
+    const bool is_sample_track =
+        track_info->track_type == kRPVControllerTrackTypeSamples;
+    const char* count_label = is_sample_track ? "Samples" : "Events";
+
+    std::string meta_lines;
+    meta_lines += "Track ID: " + std::to_string(track_info->id) + "\n";
+    meta_lines += "Type: " + track_type_label;
+    if(!track_info->category.empty() &&
+       track_info->category != track_type_label)
+    {
+        meta_lines += " (" + track_info->category + ")";
+    }
+    meta_lines += "\n";
+    if(show_node_id)
+    {
+        meta_lines += "Node ID: " + node_id_str + "\n";
+    }
+    if(show_process_id)
+    {
+        meta_lines += "Process ID: " + process_id_str + "\n";
+    }
+    meta_lines += std::string(count_label) + ": " +
+                  std::to_string(track_info->num_entries);
+    if(track_info->num_entries >= kCompactCountThreshold)
+    {
+        meta_lines += " (" + compact_number_format(
+                                static_cast<double>(track_info->num_entries)) +
+                      ")";
+    }
+
+    if(m_meta_area_tooltip.empty())
+    {
+        m_meta_area_tooltip = meta_lines;
+    }
+    else
+    {
+        m_meta_area_tooltip += "\n\n" + meta_lines;
+    }
 }
 
 bool
@@ -802,6 +896,9 @@ Pill::Pill(const std::string& label, bool shown, bool active)
 : m_pill_label(label)
 , m_show_pill_label(shown)
 , m_active(active)
+, m_has_last_screen_rect(false)
+, m_last_screen_min(0, 0)
+, m_last_screen_max(0, 0)
 , m_font_changed_token(static_cast<uint64_t>(-1))
 {
     CalculatePillSize();
@@ -862,12 +959,17 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
 {
     if(m_show_pill_label == false)
     {
+        m_has_last_screen_rect = false;
         return;
     }
     ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault),
                     settings.GetFontManager().GetFontSize(FontSize::kSmall));
 
     ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
+    ImVec2 win_pos_for_rect = ImGui::GetWindowPos();
+    m_last_screen_min      = win_pos_for_rect + pillbox_pos;
+    m_last_screen_max      = m_last_screen_min + m_pillbox_size;
+    m_has_last_screen_rect = true;
 
     if (m_active)
     {
@@ -910,6 +1012,18 @@ ImVec2
 Pill::GetPillSize()
 {
     return m_pillbox_size;
+}
+
+bool
+Pill::GetLastScreenRect(ImVec2& out_min, ImVec2& out_max) const
+{
+    if(!m_has_last_screen_rect)
+    {
+        return false;
+    }
+    out_min = m_last_screen_min;
+    out_max = m_last_screen_max;
+    return true;
 }
 
 void

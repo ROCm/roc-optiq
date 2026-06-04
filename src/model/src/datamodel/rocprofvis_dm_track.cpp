@@ -218,6 +218,9 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
         case kRPVDMTrackInstanceIdUInt64:
             *value = InstanceId();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackFileIdUInt64:
+            *value = FileId();
+            return kRocProfVisDmResultSuccess;
         case kRPVDMNumberOfSlicesUInt64:
             *value = NumberOfSlices();
             return kRocProfVisDmResultSuccess;

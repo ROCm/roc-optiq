@@ -580,6 +580,13 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerTrackFileId:
+            {
+                *value = rocprofvis_dm_get_property_as_uint64(
+                    m_dm_handle, kRPVDMTrackFileIdUInt64, 0);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             default:
             {
                 result = UnhandledProperty(property);

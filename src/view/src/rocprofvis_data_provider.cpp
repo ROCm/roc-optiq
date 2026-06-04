@@ -1065,6 +1065,10 @@ DataProvider::HandleLoadTrackMetaData()
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackFileId, 0, &track_info.file_id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_get_uint64(
                 track, kRPVControllerTrackAgentIdOrPid, 0, &track_info.agent_or_pid);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
@@ -1195,7 +1199,7 @@ DataProvider::HandleLoadTrackMetaData()
             }
 
             if(const CompareSourceInfo* source =
-                   m_model.GetCompareSource(track_info.instance_id))
+                   m_model.GetCompareSource(track_info.file_id))
             {
                 track_info.compare_source = *source;
             }

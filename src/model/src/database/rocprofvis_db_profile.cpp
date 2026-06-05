@@ -1601,9 +1601,7 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename, 
     {
         return rocprofvis_db_type_t::kRocprofMultinodeSqlite;
     }
-    // Open without SQLITE_OPEN_CREATE so probing a missing file does not create
-    // an empty (0-byte) database at that path. sqlite3_close handles the handle
-    // sqlite allocates even when the open fails (and is a no-op on nullptr).
+    // Avoid SQLITE_OPEN_CREATE so detecting a missing file doesn't create one.
     if (sqlite3_open_v2(filename, &db, SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK)
     {
         sqlite3_close(db);

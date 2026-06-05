@@ -73,9 +73,7 @@ Project::Open(std::string& file_path)
 
         if(result == Failed)
         {
-            // OpenProject/OpenTrace may set a specific message (e.g. naming a
-            // missing trace file referenced by the project). Fall back to the
-            // generic message only when no specific one was provided.
+            // Use the specific failure message if one was set, else a generic one.
             AppWindow::GetInstance()->ShowMessageDialog(
                 "Error",
                 m_open_error_message.empty()
@@ -159,10 +157,8 @@ Project::OpenProject(std::string& file_path)
             }
             else
             {
-                // The project references a trace file that is no longer present.
-                // Name the missing trace (not the project) and skip the open
-                // attempt, which would otherwise create an empty database file
-                // at the trace's original path.
+                // Referenced trace is gone: name it and don't open it, which would
+                // create an empty database at its original path.
                 m_open_error_message =
                     "The trace file referenced by this project could not be "
                     "found:\n\n" +

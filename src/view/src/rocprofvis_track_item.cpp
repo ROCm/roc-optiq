@@ -18,16 +18,14 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float kMinTooltipWrapWidth = 200.0f;
-constexpr float kMaxTooltipWrapWidth = 600.0f;
-
-inline constexpr uint64_t kCompactCountThreshold = 1000;
+inline constexpr float    DEFAULT_MIN_TRACK_HEIGHT     = 10.0f;
+inline constexpr float    DEFAULT_GRIP_WIDTH           = 20.0f;
+inline constexpr uint64_t DEFAULT_CHUNK_DURATION       = TimeConstants::ns_per_s * 30;
+inline constexpr float    META_TOOLTIP_WRAP_WIDTH_MIN  = 200.0f;
+inline constexpr float    META_TOOLTIP_WRAP_WIDTH_MAX  = 600.0f;
+inline constexpr uint64_t META_TOOLTIP_COMPACT_COUNT_MIN = 1000;
 
 float TrackItem::s_metadata_width = 400.0f;
-
-inline constexpr float    DEFAULT_MIN_TRACK_HEIGHT = 10.0f;
-inline constexpr float    DEFAULT_GRIP_WIDTH       = 20.0f;
-inline constexpr uint64_t DEFAULT_CHUNK_DURATION   = TimeConstants::ns_per_s * 30;
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id,
                      std::shared_ptr<TimePixelTransform> tpt)
@@ -369,9 +367,10 @@ TrackItem::RenderMetaArea()
     if(meta_area_hovered && !m_meta_area_tooltip.empty())
     {
         const float tooltip_max_width = std::max(
-            kMinTooltipWrapWidth,
-            std::min(kMaxTooltipWrapWidth, s_metadata_width - m_reorder_grip_width -
-                                               2.0f * m_metadata_padding.x));
+            META_TOOLTIP_WRAP_WIDTH_MIN,
+            std::min(META_TOOLTIP_WRAP_WIDTH_MAX,
+                     s_metadata_width - m_reorder_grip_width -
+                         2.0f * m_metadata_padding.x));
 
         ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
                                             ImVec2(tooltip_max_width, FLT_MAX));
@@ -395,18 +394,18 @@ TrackItem::RenderMetaArea()
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, popup_style.FramePadding);
     if(ImGui::BeginPopup(copy_popup_id.c_str()))
     {
-        if(ImGui::MenuItem("Copy track name"))
-        {
-            ImGui::SetClipboardText(m_meta_area_label.c_str());
+        auto copy_to_clipboard = [](const std::string& text) {
+            ImGui::SetClipboardText(text.c_str());
             NotificationManager::GetInstance().Show(
                 COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+        };
+        if(ImGui::MenuItem("Copy track name"))
+        {
+            copy_to_clipboard(m_meta_area_label);
         }
         if(ImGui::MenuItem("Copy track ID"))
         {
-            std::string id_str = std::to_string(m_track_id);
-            ImGui::SetClipboardText(id_str.c_str());
-            NotificationManager::GetInstance().Show(
-                COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+            copy_to_clipboard(std::to_string(m_track_id));
         }
         ImGui::EndPopup();
     }
@@ -745,32 +744,12 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         }
     }
 
-    std::string track_type_label;
-    switch(track_info->topology.type)
-    {
-        case TrackInfo::TrackType::Queue:              track_type_label = "Queue"; break;
-        case TrackInfo::TrackType::Stream:             track_type_label = "Stream"; break;
-        case TrackInfo::TrackType::Counter:            track_type_label = "Counter"; break;
-        case TrackInfo::TrackType::InstrumentedThread: track_type_label = "Instrumented Thread"; break;
-        case TrackInfo::TrackType::SampledThread:      track_type_label = "Sampled Thread"; break;
-        default:                                       track_type_label = "Track"; break;
-    }
-
-    // Pick "events" vs "samples" based on the controller-side track type so
-    // counter tracks read "samples" and flame tracks read "events".
     const bool is_sample_track =
         track_info->track_type == kRPVControllerTrackTypeSamples;
     const char* count_label = is_sample_track ? "Samples" : "Events";
 
     std::string meta_lines;
     meta_lines += "Track ID: " + std::to_string(track_info->id) + "\n";
-    meta_lines += "Type: " + track_type_label;
-    if(!track_info->category.empty() &&
-       track_info->category != track_type_label)
-    {
-        meta_lines += " (" + track_info->category + ")";
-    }
-    meta_lines += "\n";
     if(show_node_id)
     {
         meta_lines += "Node ID: " + node_id_str + "\n";
@@ -781,7 +760,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
     }
     meta_lines += std::string(count_label) + ": " +
                   std::to_string(track_info->num_entries);
-    if(track_info->num_entries >= kCompactCountThreshold)
+    if(track_info->num_entries >= META_TOOLTIP_COMPACT_COUNT_MIN)
     {
         meta_lines += " (" + compact_number_format(
                                 static_cast<double>(track_info->num_entries)) +
@@ -904,6 +883,7 @@ Pill::Pill(const std::string& label, bool shown, bool active)
     CalculatePillSize();
 
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void) e;
         CalculatePillSize();
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(

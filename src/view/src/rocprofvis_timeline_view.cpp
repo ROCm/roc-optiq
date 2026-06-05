@@ -38,7 +38,7 @@ constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
 
-// Build a text block mirroring the on-hover tooltip (name, timing, and ids)
+// Build a text block mirroring the on-hover tooltip (name, timing, and id)
 // for the clipboard.
 static std::string
 FormatEventDetails(const EventInfo& info, double trace_start_time,
@@ -54,9 +54,6 @@ FormatEventDetails(const EventInfo& info, double trace_start_time,
         << "\n";
     out << "Duration: "
         << nanosecond_to_formatted_str(basic.duration, time_format, true) << "\n";
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-    out << "UUID: " << basic.id.uuid << "\n";
-#endif
     out << "ID: " << basic.id.bitfield.event_id << "\n";
 
     return out.str();

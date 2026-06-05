@@ -18,11 +18,10 @@ namespace RocProfVis
 namespace View
 {
 
-inline constexpr float    DEFAULT_MIN_TRACK_HEIGHT     = 10.0f;
-inline constexpr float    DEFAULT_GRIP_WIDTH           = 20.0f;
-inline constexpr uint64_t DEFAULT_CHUNK_DURATION       = TimeConstants::ns_per_s * 30;
-inline constexpr float    META_TOOLTIP_WRAP_WIDTH_MIN  = 200.0f;
-inline constexpr float    META_TOOLTIP_WRAP_WIDTH_MAX  = 600.0f;
+inline constexpr float    DEFAULT_MIN_TRACK_HEIGHT       = 10.0f;
+inline constexpr float    DEFAULT_GRIP_WIDTH             = 20.0f;
+inline constexpr uint64_t DEFAULT_CHUNK_DURATION         = TimeConstants::ns_per_s * 30;
+inline constexpr float    META_TOOLTIP_MAX_WIDTH         = 320.0f;
 inline constexpr uint64_t META_TOOLTIP_COMPACT_COUNT_MIN = 1000;
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -355,27 +354,16 @@ TrackItem::RenderMetaArea()
         m_meta_area_clicked = false;
     }
 
-    ImVec2 pill_min, pill_max;
-    const bool over_pill = m_pill.GetLastScreenRect(pill_min, pill_max) &&
-                           ImGui::IsMouseHoveringRect(pill_min, pill_max);
-    const bool meta_area_hovered =
-        ImGui::IsMouseHoveringRect(meta_min, meta_max) &&
-        !ImGui::IsAnyItemHovered() && !over_pill &&
-        !ImGui::IsPopupOpen(nullptr,
-            ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+    const bool meta_area_hovered = ImGui::IsItemHovered() &&
+                                   !ImGui::IsAnyItemHovered() &&
+                                   !m_pill.WasLastHovered();
 
     if(meta_area_hovered && !m_meta_area_tooltip.empty())
     {
-        const float tooltip_max_width = std::max(
-            META_TOOLTIP_WRAP_WIDTH_MIN,
-            std::min(META_TOOLTIP_WRAP_WIDTH_MAX,
-                     s_metadata_width - m_reorder_grip_width -
-                         2.0f * m_metadata_padding.x));
-
-        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                            ImVec2(tooltip_max_width, FLT_MAX));
+        ImGui::SetNextWindowSizeConstraints(
+            ImVec2(0, 0), ImVec2(META_TOOLTIP_MAX_WIDTH, FLT_MAX));
         BeginTooltipStyled();
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + tooltip_max_width);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + META_TOOLTIP_MAX_WIDTH);
         ImGui::TextUnformatted(m_meta_area_tooltip.c_str());
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
@@ -383,15 +371,10 @@ TrackItem::RenderMetaArea()
 
     const std::string copy_popup_id =
         "##track_copy_menu_" + std::to_string(m_track_id);
-    if(meta_area_hovered &&
-       ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+    if(meta_area_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
         ImGui::OpenPopup(copy_popup_id.c_str());
     }
-    const ImGuiStyle& popup_style = m_settings.GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, popup_style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, popup_style.ItemSpacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, popup_style.FramePadding);
     if(ImGui::BeginPopup(copy_popup_id.c_str()))
     {
         auto copy_to_clipboard = [](const std::string& text) {
@@ -409,7 +392,6 @@ TrackItem::RenderMetaArea()
         }
         ImGui::EndPopup();
     }
-    ImGui::PopStyleVar(3);
 }
 
 void
@@ -875,9 +857,6 @@ Pill::Pill(const std::string& label, bool shown, bool active)
 : m_pill_label(label)
 , m_show_pill_label(shown)
 , m_active(active)
-, m_has_last_screen_rect(false)
-, m_last_screen_min(0, 0)
-, m_last_screen_max(0, 0)
 , m_font_changed_token(static_cast<uint64_t>(-1))
 {
     CalculatePillSize();
@@ -939,17 +918,13 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
 {
     if(m_show_pill_label == false)
     {
-        m_has_last_screen_rect = false;
+        m_was_last_hovered = false;
         return;
     }
     ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault),
                     settings.GetFontManager().GetFontSize(FontSize::kSmall));
 
     ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
-    ImVec2 win_pos_for_rect = ImGui::GetWindowPos();
-    m_last_screen_min      = win_pos_for_rect + pillbox_pos;
-    m_last_screen_max      = m_last_screen_min + m_pillbox_size;
-    m_has_last_screen_rect = true;
 
     if (m_active)
     {
@@ -979,7 +954,9 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     ImVec2 text_pos = pillbox_pos + ImVec2(m_padding_x, m_padding_y);
     ImGui::SetCursorPos(text_pos);
     ImGui::TextUnformatted(m_pill_label.c_str());
-    if(!m_tooltip_label.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    m_was_last_hovered =
+        ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
+    if(!m_tooltip_label.empty() && m_was_last_hovered)
     {
         SetTooltipStyled("%s", m_tooltip_label.c_str());
     }
@@ -992,18 +969,6 @@ ImVec2
 Pill::GetPillSize()
 {
     return m_pillbox_size;
-}
-
-bool
-Pill::GetLastScreenRect(ImVec2& out_min, ImVec2& out_max) const
-{
-    if(!m_has_last_screen_rect)
-    {
-        return false;
-    }
-    out_min = m_last_screen_min;
-    out_max = m_last_screen_max;
-    return true;
 }
 
 void

@@ -1264,10 +1264,6 @@ ProfileDatabase::BuildTableQuery(
                     query += std::to_string(fetch_start);
                     query += " and ";
                     query += Builder::START_SERVICE_NAME;
-                    // Internal chunk seams use strict '<' so a row whose
-                    // START lands on a seam is counted exactly once. The
-                    // final chunk uses '<=' so the global upper bound is
-                    // inclusive, matching the trace-wide record count.
                     query += (j == divider - 1) ? " <= " : " < ";
                     query += std::to_string(fetch_end);
                     if (where && strlen(where))

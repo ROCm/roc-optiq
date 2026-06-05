@@ -38,7 +38,8 @@ constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
 
-// Build a tab-separated text block of an event's details for the clipboard.
+// Build a text block mirroring the on-hover tooltip (name, timing, and ids)
+// for the clipboard.
 static std::string
 FormatEventDetails(const EventInfo& info, double trace_start_time,
                    TimeFormat time_format)
@@ -46,7 +47,6 @@ FormatEventDetails(const EventInfo& info, double trace_start_time,
     std::ostringstream    out;
     const BasicEventData& basic = info.basic_info;
 
-    out << "Event ID: " << basic.id.bitfield.event_id << "\n";
     out << "Name: " << basic.name << "\n";
     out << "Start: "
         << nanosecond_to_formatted_str(basic.start_ts - trace_start_time, time_format,
@@ -54,63 +54,10 @@ FormatEventDetails(const EventInfo& info, double trace_start_time,
         << "\n";
     out << "Duration: "
         << nanosecond_to_formatted_str(basic.duration, time_format, true) << "\n";
-
-    if(!info.ext_info.empty())
-    {
-        out << "\nExtended Data:\n";
-        for(const EventExtData& ext : info.ext_info)
-        {
-            double      offset_ns = 0.0;
-            std::string value;
-            switch(ext.category_enum)
-            {
-                case kRocProfVisEventEssentialDataStart:
-                case kRocProfVisEventEssentialDataEnd:
-                    offset_ns = trace_start_time;
-                case kRocProfVisEventEssentialDataDuration:
-                    value = nanosecond_str_to_formatted_str(ext.value, offset_ns,
-                                                            time_format, true);
-                    break;
-                default:
-                    value = ext.value;
-                    break;
-            }
-            out << ext.name << ": " << value << "\n";
-        }
-    }
-
-    if(!info.args.empty())
-    {
-        out << "\nArguments:\nPos\tType\tName\tValue\n";
-        for(const EventArg& arg : info.args)
-        {
-            out << arg.position << "\t" << arg.data_type << "\t" << arg.name << "\t"
-                << arg.value << "\n";
-        }
-    }
-
-    if(!info.flow_info.empty())
-    {
-        out << "\nFlow Data:\nID\tName\tTimestamp\tTrack ID\tLevel\tDirection\n";
-        for(const EventFlowData& flow : info.flow_info)
-        {
-            out << flow.id.bitfield.event_id << "\t" << flow.name << "\t"
-                << nanosecond_to_formatted_str(flow.start_timestamp - trace_start_time,
-                                               time_format, true)
-                << "\t" << flow.track_id << "\t" << flow.level << "\t" << flow.direction
-                << "\n";
-        }
-    }
-
-    if(!info.call_stack_info.empty())
-    {
-        out << "\nCall Stack Data:\nID\tAddress\tName\tFile\tPC\n";
-        for(const CallStackData& frame : info.call_stack_info)
-        {
-            out << frame.id.bitfield.event_id << "\t" << frame.address << "\t"
-                << frame.name << "\t" << frame.file << "\t" << frame.pc << "\n";
-        }
-    }
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    out << "UUID: " << basic.id.uuid << "\n";
+#endif
+    out << "ID: " << basic.id.bitfield.event_id << "\n";
 
     return out.str();
 }
@@ -504,8 +451,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                 CopySelectedEventNames();
                 ImGui::CloseCurrentPopup();
             }
-            if(ImGui::MenuItem(multiple_events ? "Copy Event Details (All)"
-                                               : "Copy Event Details"))
+            if(ImGui::MenuItem("Copy Event Details"))
             {
                 CopySelectedEventDetails();
                 ImGui::CloseCurrentPopup();

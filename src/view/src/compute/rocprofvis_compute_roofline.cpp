@@ -45,6 +45,7 @@ constexpr const char* DISPLAY_NAMES_KERNEL_INTENSITY[] = {
     "HBM Intensity",  // kRPVControllerRooflineKernelIntensityTypeHBM
     "L2 Intensity",   // kRPVControllerRooflineKernelIntensityTypeL2
     "L1 Intensity",   // kRPVControllerRooflineKernelIntensityTypeL1
+    "LDS Intensity",  // kRPVControllerRooflineKernelIntensityTypeLDS
 };
 constexpr const char* DISPLAY_NAMES_PRESET[] = {
     "FP4",   // PresetModel::Type::FP4

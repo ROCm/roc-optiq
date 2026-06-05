@@ -675,6 +675,11 @@ bool Roofline::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocpr
             out = kRPVControllerRooflineKernelIntensityTypeHBM;
             break;
         }
+        case kRPVComputeColumnRooflineLDSCacheData:
+        {
+            out = kRPVControllerRooflineKernelIntensityTypeLDS;
+            break;
+        }
         default:
         {
             valid = false;

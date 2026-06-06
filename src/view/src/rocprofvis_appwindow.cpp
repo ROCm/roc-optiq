@@ -748,6 +748,7 @@ AppWindow::OpenFile(std::string file_path)
             TabItem tab =
                 TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
             m_tab_container->AddTab(std::move(tab));
+            m_tab_container->SetActiveTab(project->GetID());            
             m_projects[project->GetID()] = std::move(project);
             SettingsManager::GetInstance().AddRecentFile(file_path);
             break;

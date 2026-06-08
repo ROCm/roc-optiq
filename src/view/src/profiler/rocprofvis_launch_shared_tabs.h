@@ -18,15 +18,14 @@ namespace View
 class AppWindow;
 
 /**
- * Renders the Target section: connection, executable, arguments, working dir, output dir.
+ * Renders the Target section: executable, arguments, working dir, output dir.
+ * The connection-mode selector lives in the launcher dialog (ProfilerLauncher
+ * Dialog::RenderRemoteSection), next to the dialog-owned SSH options; the mode
+ * is passed in here so labels read "Remote ..." and local file/path pickers are
+ * disabled when targeting a remote host.
  * Returns true if any field was modified.
  */
-bool RenderTargetSection(TargetSpec& target, ConnectionSpec& connection, AppWindow* app_window);
-
-/**
- * Renders the Connection section (local-only this phase; SSH fields disabled).
- */
-void RenderConnectionSection(ConnectionSpec& connection);
+bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window);
 
 /**
  * Renders the Raw Env Vars tab: editable name/value table with add/remove rows.

@@ -282,6 +282,10 @@ void ProfilerLauncherDialog::RenderMainContent()
 {
     IProfilerBackend const* backend = m_backends[m_backend_index].get();
 
+    // Connection mode selector + SSH connection options (when in SSH mode).
+    RenderRemoteSection();
+    ImGui::Separator();
+
     // Target is always visible at the top, not buried in a tab.
     RenderTargetSection(m_config.target, m_config.connection, m_app_window);
     ImGui::Separator();
@@ -308,19 +312,33 @@ void ProfilerLauncherDialog::RenderMainContent()
 
         ImGui::EndTabBar();
     }
-
-    // SSH connection configuration (only shown in SSH mode).
-    RenderRemoteSection();
 }
 
 void ProfilerLauncherDialog::RenderRemoteSection()
 {
+    // Local vs. remote (SSH) execution selector. Kept here (rather than in the
+    // shared RenderTargetSection) so it sits alongside the SSH connection
+    // options, which need dialog-owned state (RemoteUri / SshSettingsDialog /
+    // RemoteProfilerSession) to render.
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Connection:");
+    ImGui::SameLine();
+
+    const char* conn_types[] = {"Local", "Remote (SSH)"};
+    int conn_idx = (m_config.connection == ConnectionType::kLocal) ? 0 : 1;
+    ImGui::PushItemWidth(150);
+    if (ImGui::Combo("##Connection", &conn_idx, conn_types, 2))
+    {
+        m_config.connection = (conn_idx == 0) ? ConnectionType::kLocal : ConnectionType::kSsh;
+    }
+    ImGui::PopItemWidth();
+
     if (!IsSshMode())
     {
         return;
     }
 
-    ImGui::Separator();
+    ImGui::Spacing();
     ImGui::TextUnformatted("Remote (SSH) execution");
 
     const float label_w = 170.0f;

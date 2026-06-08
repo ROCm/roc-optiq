@@ -88,6 +88,9 @@ private:
     void OnProfilerStatus(uint64_t operation_id, rocprofvis_profiler_state_t state);
 
     void StartProfiler();
+    uint64_t                  ReadProfilerState() const;
+    std::shared_ptr<RocEvent> BuildProfilerStatusEvent(uint64_t state) const;
+    static bool               IsTerminalProfilerState(uint64_t state);
     void StartDownload();
     void Fail(const std::string& message);
 

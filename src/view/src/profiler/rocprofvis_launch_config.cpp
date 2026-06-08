@@ -11,7 +11,7 @@ namespace View
 LaunchConfig::LaunchConfig()
     : profiler_id("rocprof-sys")
     , tool_id("run")
-    , connection()
+    , connection(ConnectionType::kLocal)
     , target()
     , extra_env()
     , extra_argv()
@@ -26,15 +26,7 @@ jt::Json LaunchConfig::ToJson() const
     json["tool_id"] = tool_id;
 
     jt::Json& conn = json["connection"];
-    conn["type"] = (connection.type == ConnectionType::kLocal) ? "local" : "ssh";
-    if (connection.type == ConnectionType::kSsh)
-    {
-        conn["host"] = connection.ssh.host;
-        conn["user"] = connection.ssh.user;
-        conn["port"] = static_cast<long>(connection.ssh.port);
-        conn["identity_file"] = connection.ssh.identity_file;
-        conn["remote_stage_dir"] = connection.ssh.remote_stage_dir;
-    }
+    conn["type"] = (connection == ConnectionType::kLocal) ? "local" : "ssh";
 
     jt::Json& tgt = json["target"];
     tgt["executable"] = target.executable;
@@ -82,17 +74,7 @@ LaunchConfig LaunchConfig::FromJson(jt::Json const& json)
             std::string conn_type = conn["type"].getString();
             if (conn_type == "ssh")
             {
-                cfg.connection.type = ConnectionType::kSsh;
-                if (conn.contains("host"))
-                    cfg.connection.ssh.host = conn["host"].getString();
-                if (conn.contains("user"))
-                    cfg.connection.ssh.user = conn["user"].getString();
-                if (conn.contains("port"))
-                    cfg.connection.ssh.port = static_cast<int>(conn["port"].getLong());
-                if (conn.contains("identity_file"))
-                    cfg.connection.ssh.identity_file = conn["identity_file"].getString();
-                if (conn.contains("remote_stage_dir"))
-                    cfg.connection.ssh.remote_stage_dir = conn["remote_stage_dir"].getString();
+                cfg.connection = ConnectionType::kSsh;
             }
         }
     }

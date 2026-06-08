@@ -59,7 +59,7 @@ private:
     void RebuildComposedOutput();
     void RefreshExecutionCache();
 
-    bool IsSshMode() const { return m_config.connection.type == ConnectionType::kSsh; }
+    bool IsSshMode() const { return m_config.connection == ConnectionType::kSsh; }
     rocprofvis_profiler_type_t ResolveProfilerType() const;
 
     void RenderToolbar();

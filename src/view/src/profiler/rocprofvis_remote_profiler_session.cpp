@@ -7,6 +7,7 @@
 #include "rocprofvis_events.h"
 #include "remote/rocprofvis_ssh_uri.h"
 
+#include <functional>
 #include <spdlog/spdlog.h>
 
 namespace RocProfVis
@@ -43,10 +44,14 @@ RemoteProfilerSession::RemoteProfilerSession(
         static_cast<int>(RocEvents::kRemoteStatusChanged),
         [this](std::shared_ptr<RocEvent> event)
         {
-            auto* e = static_cast<RemoteStatusEvent*>(event.get());
-            if(m_session && e->GetOperationId() == m_session->GetActiveOperationId())
+            auto* e = dynamic_cast<RemoteStatusEvent*>(event.get());
+            if(e)
             {
                 OnRemoteStatus(e->GetOperationId(), e->GetStatus(), e->GetResult());
+            }
+            else
+            {
+                spdlog::warn("Received non-RemoteStatusEvent on RemoteProfilerSession subscriber");
             }
         });
 
@@ -54,10 +59,14 @@ RemoteProfilerSession::RemoteProfilerSession(
         static_cast<int>(RocEvents::kProfilerStatusChanged),
         [this](std::shared_ptr<RocEvent> event)
         {
-            auto* e = static_cast<ProfilerStatusEvent*>(event.get());
-            if(m_profiler_op_id != 0 && e->GetOperationId() == m_profiler_op_id)
+            auto* e = dynamic_cast<ProfilerStatusEvent*>(event.get());
+            if(e)
             {
                 OnProfilerStatus(e->GetOperationId(), e->GetState());
+            }
+            else
+            {
+                spdlog::warn("Received non-ProfilerStatusEvent on RemoteProfilerSession subscriber");
             }
         });
 }
@@ -153,9 +162,14 @@ RemoteProfilerSession::Launch(rocprofvis_profiler_type_t profiler_type,
 }
 
 void
-RemoteProfilerSession::OnRemoteStatus(uint64_t /*operation_id*/, uint64_t status,
+RemoteProfilerSession::OnRemoteStatus(uint64_t operation_id, uint64_t status,
                                       rocprofvis_result_t /*result*/)
 {
+    if(!m_session || operation_id != m_session->GetActiveOperationId())
+    {
+        return;
+    }
+
     if(status == kRPVControllerSshFailed)
     {
         switch(m_phase)
@@ -232,29 +246,48 @@ RemoteProfilerSession::StartProfiler()
     // read the LIVE controller state (not the cached m_profiler_state, which is
     // only updated by OnProfilerStatus - that would be circular and never
     // change). Output is pulled lazily by the dialog.
-    rocprofvis_profiler_t* profiler = m_profiler;
     m_profiler_op_id = AppMonitor::GetInstance()->AddOperation(
         MonitorOperationType::ProfilerSession,
-        [profiler]() -> uint64_t
-        {
-            rocprofvis_profiler_state_t state = kRPVProfilerStateIdle;
-            rocprofvis_profiler_get_state(profiler, &state);
-            return static_cast<uint64_t>(state);
+        [this]() -> uint64_t { return ReadProfilerState(); },
+        [this](uint64_t state) -> std::shared_ptr<RocEvent> {
+            return BuildProfilerStatusEvent(state);
         },
-        [this](uint64_t state) -> std::shared_ptr<RocEvent>
-        {
-            return std::make_shared<ProfilerStatusEvent>(
-                m_profiler_op_id, static_cast<rocprofvis_profiler_state_t>(state));
-        },
-        [](uint64_t state) -> bool
-        {
-            return is_terminal_profiler_state(static_cast<rocprofvis_profiler_state_t>(state));
-        });
+        [this](uint64_t state) -> bool { return IsTerminalProfilerState(state); });
+}
+
+uint64_t
+RemoteProfilerSession::ReadProfilerState() const
+{
+    rocprofvis_profiler_state_t state = kRPVProfilerStateIdle;
+    if(m_profiler != nullptr)
+    {
+        rocprofvis_profiler_get_state(m_profiler, &state);
+    }
+
+    return static_cast<uint64_t>(state);
+}
+
+std::shared_ptr<RocEvent>
+RemoteProfilerSession::BuildProfilerStatusEvent(uint64_t state) const
+{
+    return std::make_shared<ProfilerStatusEvent>(
+        m_profiler_op_id, static_cast<rocprofvis_profiler_state_t>(state));
+}
+
+bool
+RemoteProfilerSession::IsTerminalProfilerState(uint64_t state)
+{
+    return is_terminal_profiler_state(static_cast<rocprofvis_profiler_state_t>(state));
 }
 
 void
-RemoteProfilerSession::OnProfilerStatus(uint64_t /*operation_id*/, rocprofvis_profiler_state_t state)
+RemoteProfilerSession::OnProfilerStatus(uint64_t operation_id, rocprofvis_profiler_state_t state)
 {
+    if(m_profiler_op_id == 0 || operation_id != m_profiler_op_id)
+    {
+        return;
+    }
+
     m_profiler_state = state;
 
     if(state == kRPVProfilerStateCompleted)

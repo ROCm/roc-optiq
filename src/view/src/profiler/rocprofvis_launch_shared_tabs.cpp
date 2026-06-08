@@ -35,9 +35,14 @@ void SyncBufFromString(char* buf, size_t buf_size, std::string const& str)
 
 } // namespace
 
-bool RenderTargetSection(TargetSpec& target, ConnectionSpec& connection, AppWindow* app_window)
+bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window)
 {
     bool modified = false;
+
+    // In remote (SSH) mode the executable / directories refer to paths on the
+    // remote host, so the local file/path Browse pickers don't apply (a remote
+    // file browser may re-enable them later).
+    const bool is_remote = (connection == ConnectionType::kSsh);
 
     // Always sync buffers from target when target changed externally (e.g. preset load)
     if (target.executable != s_target_exe_buf)
@@ -57,18 +62,16 @@ bool RenderTargetSection(TargetSpec& target, ConnectionSpec& connection, AppWind
         SyncBufFromString(s_output_dir_buf, sizeof(s_output_dir_buf), target.output_directory);
     }
 
-    RenderConnectionSection(connection);
-    // Future SSH target options can be appended here when remote launch is implemented.
-    ImGui::Separator();
-
-    ImGui::Text("Target Executable:");
+    ImGui::Text(is_remote ? "Remote Target Executable:" : "Target Executable:");
     if (ImGui::InputText("##TargetExe", s_target_exe_buf, sizeof(s_target_exe_buf)))
     {
         target.executable = s_target_exe_buf;
         modified = true;
     }
 
+    // Local file picker - disabled for remote targets until remote browsing exists.
     ImGui::SameLine();
+    if (is_remote) ImGui::BeginDisabled();
     if (ImGui::Button("Browse##TargetExe") && app_window)
     {
         app_window->ShowOpenFileDialog(
@@ -79,10 +82,11 @@ bool RenderTargetSection(TargetSpec& target, ConnectionSpec& connection, AppWind
                 SyncBufFromString(s_target_exe_buf, sizeof(s_target_exe_buf), path);
             });
     }
+    if (is_remote) ImGui::EndDisabled();
 
     SettingsManager& settings = SettingsManager::Get();
     ProfilerSettings& prof_settings = settings.GetProfilerSettings();
-    if (!prof_settings.recent_targets.empty())
+    if (!is_remote && !prof_settings.recent_targets.empty())
     {
         ImGui::SameLine();
         if (ImGui::ArrowButton("##RecentTargetExe", ImGuiDir_Down))
@@ -131,13 +135,15 @@ bool RenderTargetSection(TargetSpec& target, ConnectionSpec& connection, AppWind
         modified = true;
     }
 
-    ImGui::Text("Output Directory:");
+    ImGui::Text(is_remote ? "Remote Output Directory:" : "Output Directory:");
     if (ImGui::InputText("##OutputDir", s_output_dir_buf, sizeof(s_output_dir_buf)))
     {
         target.output_directory = s_output_dir_buf;
         modified = true;
     }
+    // Local path picker - disabled for remote targets until remote browsing exists.
     ImGui::SameLine();
+    if (is_remote) ImGui::BeginDisabled();
     if (ImGui::Button("Browse##OutputDir") && app_window)
     {
         app_window->ShowPathPickerDialog(
@@ -148,37 +154,11 @@ bool RenderTargetSection(TargetSpec& target, ConnectionSpec& connection, AppWind
                 SyncBufFromString(s_output_dir_buf, sizeof(s_output_dir_buf), path);
             });
     }
+    if (is_remote) ImGui::EndDisabled();
 
     ImGui::Checkbox("Open trace when profiling completes", &target.auto_load_trace);
 
     return modified;
-}
-
-void RenderConnectionSection(ConnectionSpec& connection)
-{
-    ImGui::AlignTextToFramePadding();
-    ImGui::Text("Connection:");
-    ImGui::SameLine();
-
-    const char* conn_types[] = {"Local", "SSH (future)"};
-    int conn_idx = (connection.type == ConnectionType::kLocal) ? 0 : 1;
-
-    ImGui::PushItemWidth(150);
-    if (ImGui::Combo("##Connection", &conn_idx, conn_types, 2))
-    {
-        connection.type = (conn_idx == 0) ? ConnectionType::kLocal : ConnectionType::kSsh;
-    }
-    ImGui::PopItemWidth();
-
-    if (connection.type == ConnectionType::kSsh)
-    {
-        // The SSH connection target (host/user/auth) and the remote output
-        // database path are configured by the owning ProfilerLauncherDialog via
-        // the reusable SshSettingsDialog (see RenderRemoteSection there). This
-        // selector only chooses local vs. remote execution.
-        ImGui::SameLine();
-        ImGui::TextDisabled("(configure connection below)");
-    }
 }
 
 void RenderRawEnvVarsTab(std::map<std::string, std::string>& extra_env,

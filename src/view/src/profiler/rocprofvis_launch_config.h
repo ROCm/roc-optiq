@@ -19,20 +19,9 @@ enum class ConnectionType
     kSsh
 };
 
-struct SshConnectionSpec
-{
-    std::string host;
-    std::string user;
-    int         port = 22;
-    std::string identity_file;
-    std::string remote_stage_dir;
-};
-
-struct ConnectionSpec
-{
-    ConnectionType  type = ConnectionType::kLocal;
-    SshConnectionSpec ssh;
-};
+// Note: only the connection MODE (local vs. SSH) is stored on a LaunchConfig.
+// The actual SSH connection details (host/user/auth/output path) live in
+// RemoteUri, edited via the SshSettingsDialog and persisted separately.
 
 struct TargetSpec
 {
@@ -47,7 +36,7 @@ struct LaunchConfig
 {
     std::string              profiler_id;
     std::string              tool_id;
-    ConnectionSpec           connection;
+    ConnectionType           connection = ConnectionType::kLocal;
     TargetSpec               target;
     std::map<std::string, std::string> extra_env;
     std::vector<std::string> extra_argv;

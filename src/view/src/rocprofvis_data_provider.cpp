@@ -1041,6 +1041,10 @@ DataProvider::HandleLoadTrackMetaData()
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackOrderRanking, 0, &track_info.order_rank);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_get_uint64(
                 track, kRPVControllerTrackAgentIdOrPid, 0, &track_info.agent_or_pid);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 

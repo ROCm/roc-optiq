@@ -484,6 +484,57 @@ Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it,
     newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]); 
 }
 
+void Database::CreateTracksOrderRanking() {
+
+
+    using Track = rocprofvis_dm_track_params_t;
+
+    std::map<std::set<uint32_t>, std::vector<Track*>> partitions;
+
+    for (auto& track_prop : m_track_properties) {
+        Track* t = track_prop.get();
+        partitions[t->load_id].push_back(t);
+    }
+
+    uint32_t partition_id = 0;
+
+    for (auto& [load_set, partition_tracks] : partitions) {
+
+        std::map<rocprofvis_db_instance_t, std::vector<Track*>> groups;
+
+        for (auto* t : partition_tracks) {
+            groups[t->track_indentifiers.db_instance].push_back(t);
+        }
+
+        for (auto& [db, vec] : groups) {
+            std::sort(vec.begin(), vec.end(),[](
+                const Track* a, const Track* b) {
+                    return a->track_indentifiers.track_id <
+                    b->track_indentifiers.track_id;
+                });
+        }
+
+        size_t max_len = 0;
+        for (const auto& [_, vec] : groups) {
+            max_len = std::max(max_len, vec.size());
+        }
+
+        uint32_t local_order = 0;
+
+        for (size_t i = 0; i < max_len; ++i) {
+            for (auto& [db, vec] : groups) {
+                if (i < vec.size()) {
+                    vec[i]->order_id = partition_id * 100 + local_order;
+                    ++local_order;
+                }
+            }
+        }
+
+        ++partition_id;
+    }
+
+}
+
 void DatabaseVersion::SetVersion(const char* version) {
     m_db_version = ConvertVersionStringToInt(version);
 }

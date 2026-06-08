@@ -73,8 +73,9 @@ struct TrackInfo
     double                             min_ts;           // starting time stamp of track
     double                             max_ts;           // ending time stamp of track
     uint64_t                           num_entries;      // number of entries in the track
-    uint64_t                           instance_id;      // source database instance index
-    uint64_t                           file_id;          // source database file index
+    uint64_t                           instance_id;      // source database instance index for track
+    uint64_t                           file_id;          // source database file index for track
+    uint64_t                           order_rank;       // track order ranking
     uint64_t                           agent_or_pid;     // agent id or process id
     uint64_t                           queue_id_or_tid;  // queue id or thread id
     double min_value;  // minimum value in the track (for samples) or level (for events)

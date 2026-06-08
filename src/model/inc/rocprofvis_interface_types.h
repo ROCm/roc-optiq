@@ -273,6 +273,8 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackSubProcessIdUInt64,
     // Track File ID
     kRPVDMTrackFileIdUInt64,
+    // Track Order Ranking ID
+    kRPVDMTrackOrderRankingUInt64,
 } rocprofvis_dm_track_property_t;
 
 // Slice properties

@@ -34,7 +34,6 @@ static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 // deferred event dispatch settle, then sleep until the next event when idle.
 static int       g_frames_to_render        = 1;
 constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
-constexpr double BUSY_POLL_INTERVAL_SEC    = 1.0 / 60.0;
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -337,8 +336,9 @@ main(int argc, char** argv)
 
                     if(g_frames_to_render > 0)
                     {
-                        // Busy: poll so per-frame controller/event work keeps running.
-                        glfwWaitEventsTimeout(BUSY_POLL_INTERVAL_SEC);
+                        // Busy: poll so per-frame controller/event work keeps
+                        // running. vsync in present() caps the frame rate.
+                        glfwPollEvents();
                     }
                     else
                     {

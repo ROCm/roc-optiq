@@ -1,7 +1,23 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+// Windows: ensure NOMINMAX is defined before any header drags in windows.h
+// (via winsock2.h in the SSH client header), so std::min/std::max are not
+// shadowed by the min/max macros.
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#endif
+
 #include "rocprofvis_profiler.h"
+// Include the SSH client header (which pulls winsock2.h) BEFORE the profiler
+// process header (which pulls windows.h) so the winsock/windows include order
+// is correct on Windows.
+#include "remote/rocprofvis_controller_ssh_client.h"
 #include "rocprofvis_controller_profiler_process.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_future.h"
@@ -17,6 +33,7 @@ namespace Controller
 typedef Reference<rocprofvis_controller_future_t, Future, kRPVControllerObjectTypeFuture> FutureRef;
 typedef Reference<rocprofvis_profiler_config_t, ProfilerConfig, kRPVProfilerConfig> ProfilerConfigRef;
 typedef Reference<rocprofvis_profiler_t, ProfilerSession, kRPVProfiler> ProfilerSessionRef;
+typedef Reference<rocprofvis_controller_connection_t, SshConnection, kRPVControllerObjectTypeRemoteConnection> ConnectionRef;
 
 // Copies a std::string into the caller's buffer using the standard
 // "pass null buffer to query length" idiom shared by every string getter
@@ -203,6 +220,41 @@ rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_t* prof
     RocProfVis::Controller::ProfilerProcessController& controller = session_ref->GetController();
 
     rocprofvis_result_t result = controller.LaunchAsync(config_ref.Get());
+    if (result != kRocProfVisResultSuccess)
+    {
+        return result;
+    }
+
+    session_ref->SetBoundFuture(future_ref.Get());
+
+    RocProfVis::Controller::ProfilerProcessController* controller_ptr = &controller;
+    RocProfVis::Controller::Job* job = RocProfVis::Controller::JobSystem::Get().IssueJob(
+        [controller_ptr](RocProfVis::Controller::Future* job_future) -> rocprofvis_result_t
+        {
+            RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
+            return kRocProfVisResultSuccess;
+        },
+        future_ref.Get());
+    future_ref->Set(job);
+
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t rocprofvis_profiler_launch_remote_async(rocprofvis_profiler_t* profiler, rocprofvis_profiler_config_t* config, rocprofvis_controller_connection_t* connection, rocprofvis_controller_future_t* future)
+{
+    RocProfVis::Controller::ProfilerSessionRef session_ref(profiler);
+    RocProfVis::Controller::ProfilerConfigRef  config_ref(config);
+    RocProfVis::Controller::ConnectionRef       connection_ref(connection);
+    RocProfVis::Controller::FutureRef           future_ref(future);
+    if (!session_ref.IsValid() || !config_ref.IsValid() || !connection_ref.IsValid() || !future_ref.IsValid())
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    RocProfVis::Controller::ProfilerProcessController& controller = session_ref->GetController();
+
+    // Pass the bound future so the remote exec loop can observe cancellation.
+    rocprofvis_result_t result = controller.LaunchAsyncRemote(config_ref.Get(), connection_ref.Get(), future_ref.Get());
     if (result != kRocProfVisResultSuccess)
     {
         return result;

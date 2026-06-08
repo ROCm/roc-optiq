@@ -58,6 +58,15 @@ namespace View
         SshOperation GetActiveOperation() const { return m_active_operation; }
         uint64_t GetActiveOperationId() const { return m_active_operation_id; }
 
+        // Returns the underlying connection handle for use with controller ABIs
+        // that operate on an existing connection (e.g.
+        // rocprofvis_profiler_launch_remote_async). Only valid once the session
+        // has connected + authenticated and while no SSH phase is in flight.
+        rocprofvis_controller_connection_t* GetConnectionHandle() const
+        {
+            return reinterpret_cast<rocprofvis_controller_connection_t*>(m_connection);
+        }
+
         rocprofvis_result_t SubmitPromptResponses(std::vector<std::string>& responses);
         rocprofvis_result_t CancelRequest();
         rocprofvis_result_t SubmitHostKeyDecision(HostKeyDecision decision);

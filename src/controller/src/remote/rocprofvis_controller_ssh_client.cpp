@@ -101,7 +101,7 @@ namespace Controller
 
         // libssh2 fires this callback for every kbdint round, including "info"
         // rounds (banner / status messages with no input). If there are no
-        // prompts, there is nothing to ask the user — just acknowledge and
+        // prompts, there is nothing to ask the user  just acknowledge and
         // continue without touching the UI.
         if(num_prompts == 0)
         {
@@ -238,7 +238,7 @@ namespace Controller
         case LIBSSH2_ERROR_FILE:
             hint = " [file unreadable or unsupported format]"; break;
         case LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED:
-            hint = " [server rejected the key — possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
+            hint = " [server rejected the key  possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
         case LIBSSH2_ERROR_AUTHENTICATION_FAILED:
             hint = " [auth rejected by server]"; break;
         case LIBSSH2_ERROR_METHOD_NOT_SUPPORTED:
@@ -591,7 +591,7 @@ namespace Controller
                 {
                     connection->Disconnect();
                     err = (m == KnownHostMatch::Mismatch)
-                        ? "Host key mismatch — connection rejected."
+                        ? "Host key mismatch  connection rejected."
                         : "Host key not trusted.";
                     connection->GetSshBridge()->SaveError(err);
                     return Result::AuthError;
@@ -641,7 +641,7 @@ namespace Controller
                     return Result::Success;
                 }
             }
-            // 1b) ssh-agent — handles encrypted keys without us needing a passphrase.
+            // 1b) ssh-agent  handles encrypted keys without us needing a passphrase.
             spdlog::info("[ssh] trying ssh-agent");
             if (TryAgent(connection, user, future))
             {
@@ -779,7 +779,7 @@ namespace Controller
 
 
 
-    SshClient::Result SshClient::ExecuteCommand(SshConnection * connection, const std::string& command, Future* future)
+    SshClient::Result SshClient::ExecuteCommand(SshConnection * connection, const std::string& command, Future* future, int* exit_code_out)
     {
         std::string output;
         int exit_code = -1;
@@ -867,6 +867,11 @@ namespace Controller
         libssh2_channel_wait_closed(channel);
 
         exit_code = libssh2_channel_get_exit_status(channel);
+
+        if (exit_code_out != nullptr)
+        {
+            *exit_code_out = exit_code;
+        }
 
         output = "Exit code : " + std::to_string(exit_code);
         connection->GetSshBridge()->AddStdOut(output.data(), output.size()+1);

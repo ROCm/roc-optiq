@@ -3,6 +3,7 @@
 
 #include "rocprofvis_controller_profiler_process.h"
 #include "rocprofvis_controller_profiler_cmdline.h"
+#include "rocprofvis_controller_ssh_profiler_executor.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_job_system.h"
 #include "spdlog/spdlog.h"
@@ -701,6 +702,44 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
     return kRocProfVisResultSuccess;
 }
 
+rocprofvis_result_t ProfilerProcessController::LaunchAsyncRemote(ProfilerConfig const* config,
+                                                                 SshConnection*        connection,
+                                                                 Future*               future)
+{
+    if (config == nullptr || connection == nullptr)
+    {
+        spdlog::error("ProfilerProcessController::LaunchAsyncRemote: null config/connection");
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    if (m_state != kRPVProfilerStateIdle)
+    {
+        spdlog::error("ProfilerProcessController::LaunchAsyncRemote: already running (state={})",
+                      static_cast<int>(m_state.load()));
+        return kRocProfVisResultNotSupported;
+    }
+
+    m_config = std::make_unique<ProfilerConfig>(*config);
+
+    // The executor reads the future lazily inside its worker thread (started in
+    // Start) to observe cancellation; the ABI sets the future's job right after
+    // this returns, which is fine.
+    m_executor = std::make_unique<SshProfilerExecutor>(connection, future);
+
+    bool launched = m_executor->Start(*m_config);
+    if (!launched)
+    {
+        spdlog::error("ProfilerProcessController::LaunchAsyncRemote: failed to start remote profiler");
+        m_state = kRPVProfilerStateFailed;
+        m_executor.reset();
+        return kRocProfVisResultUnknownError;
+    }
+
+    spdlog::info("Remote profiler launched successfully");
+    m_state = kRPVProfilerStateRunning;
+    return kRocProfVisResultSuccess;
+}
+
 rocprofvis_profiler_state_t ProfilerProcessController::GetState() const
 {
     return m_state;
@@ -785,6 +824,14 @@ std::string ProfilerProcessController::DetermineTracePath(ProfilerConfig const* 
     if (config == nullptr)
     {
         return "";
+    }
+
+    // Remote: the trace lives on the remote host, so we cannot scan the local
+    // filesystem. Report the remote output directory; the View knows the
+    // expected artifact name and drives the SFTP download from there.
+    if (config->GetConnectionType() == ConnectionType::kSsh)
+    {
+        return config->GetOutputDirectory();
     }
 
     std::string output_dir = config->GetOutputDirectory();

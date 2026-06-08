@@ -130,7 +130,12 @@ namespace Controller
             Future* future);
 
 
-        static Result ExecuteCommand(SshConnection* connection, const std::string& command, Future* future);
+        // Executes `command` on the remote host, streaming stdout/stderr into
+        // the connection's bridge. If `exit_code` is non-null, the remote
+        // process's exit status (from libssh2_channel_get_exit_status) is written
+        // to it. The returned Result reflects the SSH transport outcome
+        // (Success/Cancelled/transport errors), NOT the remote process exit code.
+        static Result ExecuteCommand(SshConnection* connection, const std::string& command, Future* future, int* exit_code = nullptr);
         static Result DownloadFile(SshConnection * connection, const std::string& remote_path, const std::string& local_path, Future* future);
         static Result BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future);
 

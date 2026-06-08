@@ -7,9 +7,13 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_profiler_session.h"
+#include "rocprofvis_remote_profiler_session.h"
 #include "rocprofvis_launch_config.h"
 #include "rocprofvis_profiler_backend.h"
 #include "rocprofvis_launch_preset_manager.h"
+#include "remote/rocprofvis_ssh_uri.h"
+#include "remote/rocprofvis_ssh_settings_dialog.h"
+#include "remote/rocprofvis_ssh_fetch.h"
 #include "imgui.h"
 #include <memory>
 #include <string>
@@ -46,6 +50,8 @@ private:
     };
 
     void OnLaunchClicked();
+    void OnLaunchLocal();
+    void OnLaunchRemote();
     void OnCancelClicked();
     void OnCloseClicked();
     void OnProfilerStateChanged(rocprofvis_profiler_state_t new_state);
@@ -53,9 +59,14 @@ private:
     void RebuildComposedOutput();
     void RefreshExecutionCache();
 
+    bool IsSshMode() const { return m_config.connection == ConnectionType::kSsh; }
+    rocprofvis_profiler_type_t ResolveProfilerType() const;
+
     void RenderToolbar();
     void RenderMainContent();
+    void RenderRemoteSection();
     void RenderButtonRow();
+    void RenderRemotePopups();
 
     void SwitchBackend(int index);
     void LoadFromSettings();
@@ -66,6 +77,15 @@ private:
     AppWindow* m_app_window;
     ProfilerSession m_profiler_session;
     EventManager::SubscriptionToken m_profiler_status_token;
+
+    // Remote (SSH) profiling. The connection config is owned here as a shared
+    // RemoteUri (edited via the on-demand SshSettingsDialog) and consumed by the
+    // spawned RemoteProfilerSession, mirroring the SshTestDialog pattern.
+    std::shared_ptr<RemoteUri>             m_remote_uri;
+    std::unique_ptr<SshSettingsDialog>     m_ssh_settings_dialog;
+    std::unique_ptr<RemoteProfilerSession> m_remote_session;
+    bool                                   m_remote_show_progress_popup;
+    FileStat::Snapshot                     m_remote_last_progress;
 
     bool m_should_open;
     bool m_show_window;

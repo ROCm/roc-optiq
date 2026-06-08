@@ -500,10 +500,12 @@ void Database::CreateTracksOrderRanking() {
 
     for (auto& [load_set, partition_tracks] : partitions) {
 
-        std::map<rocprofvis_db_instance_t, std::vector<Track*>> groups;
+
+        std::map<uint32_t, std::vector<Track*>> groups;
 
         for (auto* t : partition_tracks) {
-            groups[t->track_indentifiers.db_instance].push_back(t);
+            DbInstance* db_instance = (DbInstance*)t->track_indentifiers.db_instance;
+            groups[db_instance->FileIndex()].push_back(t);
         }
 
         for (auto& [db, vec] : groups) {

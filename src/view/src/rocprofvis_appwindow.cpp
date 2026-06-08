@@ -576,6 +576,58 @@ AppWindow::Update()
     UpdateStatusBar();
 }
 
+bool
+AppWindow::WantsContinuousRender()
+{
+    if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
+       m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents() ||
+       NotificationManager::GetInstance().HasActiveNotifications())
+    {
+        return true;
+    }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    if(m_test_data_provider.GetState() == ProviderState::kLoading ||
+       m_test_data_provider.GetPendingRequestCount() > 0)
+    {
+        return true;
+    }
+#endif
+
+    // Only the active tab renders, so only it can have render-driven work with
+    // no events/requests yet (e.g. the timeline loading-timer debounce).
+    Project* current_project = GetCurrentProject();
+    if(current_project)
+    {
+        RootView* current_root =
+            dynamic_cast<RootView*>(current_project->GetView().get());
+        if(current_root && current_root->WantsContinuousRender())
+        {
+            return true;
+        }
+    }
+
+    bool wants_render = false;
+    for(const auto& [id, project] : m_projects)
+    {
+        RootView* root_view = dynamic_cast<RootView*>(project->GetView().get());
+        if(root_view)
+        {
+            DataProvider* data_provider = root_view->GetDataProvider();
+            // kLoading spans the whole initial load, even when the pending count
+            // briefly drops to zero between stages, so we never freeze mid-load.
+            if(data_provider &&
+               (data_provider->GetState() == ProviderState::kLoading ||
+                data_provider->GetPendingRequestCount() > 0))
+            {
+                wants_render = true;
+                break;
+            }
+        }
+    }
+    return wants_render;
+}
+
 void
 AppWindow::Render()
 {

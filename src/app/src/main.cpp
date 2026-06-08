@@ -30,6 +30,11 @@ static rocprofvis_view_render_options_t g_render_options =
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 
+// Lazy rendering: after each OS event render a few frames so animations and the
+// deferred event dispatch settle, then sleep until the next event when idle.
+static int       g_frames_to_render        = 1;
+constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
+
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
 {
@@ -329,7 +334,25 @@ main(int argc, char** argv)
                         g_file_was_dropped = false;
                     }
 
-                    glfwPollEvents();
+                    // Async work/animation in flight: refill the budget so the
+                    // settle tail also covers the final frames after it finishes.
+                    if(rocprofvis_view_wants_continuous_render())
+                    {
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        // Busy: poll so per-frame controller/event work keeps
+                        // running. vsync in present() caps the frame rate.
+                        glfwPollEvents();
+                    }
+                    else
+                    {
+                        // Idle: sleep until an OS event, then render a few frames.
+                        glfwWaitEvents();
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
 
                     // Handle changes in the frame buffer size
                     int fb_width, fb_height;
@@ -357,6 +380,11 @@ main(int argc, char** argv)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
                         backend.m_present(&backend);
+                    }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        --g_frames_to_render;
                     }
                 }
 

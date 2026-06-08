@@ -127,6 +127,8 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_notification_manager.cpp
     src/view/src/profiler/rocprofvis_profiler_launcher_dialog.cpp
     src/view/src/profiler/rocprofvis_profiler_launcher_dialog.h
+    src/view/src/profiler/rocprofvis_profiler_session_base.cpp
+    src/view/src/profiler/rocprofvis_profiler_session_base.h
     src/view/src/profiler/rocprofvis_profiler_session.cpp
     src/view/src/profiler/rocprofvis_profiler_session.h
     src/view/src/profiler/rocprofvis_remote_profiler_session.cpp

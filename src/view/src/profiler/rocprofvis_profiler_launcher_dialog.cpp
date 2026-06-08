@@ -535,7 +535,7 @@ void ProfilerLauncherDialog::Update()
         rocprofvis_profiler_state_t remote_state = m_remote_session->GetProfilerState();
 
         // Pull streamed remote profiler output into the console.
-        std::string remote_out = m_remote_session->GetProfilerOutput();
+        std::string remote_out = m_remote_session->GetOutput();
         if (!remote_out.empty() && remote_out != m_process_output_raw)
         {
             m_process_output_raw = std::move(remote_out);

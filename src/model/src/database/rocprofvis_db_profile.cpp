@@ -1599,7 +1599,12 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename, 
     {
         return rocprofvis_db_type_t::kRocprofMultinodeSqlite;
     }
-    if( sqlite3_open(filename, &db) != SQLITE_OK) return rocprofvis_db_type_t::kAutodetect;
+    // Avoid SQLITE_OPEN_CREATE so detecting a missing file doesn't create one.
+    if (sqlite3_open_v2(filename, &db, SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK)
+    {
+        sqlite3_close(db);
+        return rocprofvis_db_type_t::kAutodetect;
+    }
 
     if (DetectTable(db, "rocpd_event") == SQLITE_OK) {
         sqlite3_close(db);

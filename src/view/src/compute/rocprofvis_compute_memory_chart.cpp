@@ -63,30 +63,21 @@ struct ChartColors
     ImU32 shadow;
 };
 
-static constexpr ChartColors DARK_CHART_COLORS = {
-    IM_COL32(29, 30, 38, 255), IM_COL32(34, 37, 48, 245),
-    IM_COL32(39, 43, 56, 245), IM_COL32(62, 116, 168, 220),
-    IM_COL32(78, 152, 220, 255), IM_COL32(238, 243, 255, 255),
-    IM_COL32(145, 156, 174, 255), IM_COL32(47, 214, 220, 235),
-    IM_COL32(225, 203, 78, 235), IM_COL32(184, 139, 226, 235),
-    IM_COL32(129, 231, 79, 255), IM_COL32(231, 196, 65, 255),
-    IM_COL32(235, 82, 98, 255), IM_COL32(0, 0, 0, 85)};
-
-static constexpr ChartColors LIGHT_CHART_COLORS = {
-    IM_COL32(248, 251, 255, 255), IM_COL32(255, 255, 255, 246),
-    IM_COL32(241, 247, 255, 246), IM_COL32(91, 139, 184, 205),
-    IM_COL32(38, 132, 214, 255), IM_COL32(25, 38, 56, 255),
-    IM_COL32(92, 106, 126, 255), IM_COL32(0, 132, 155, 235),
-    IM_COL32(168, 128, 0, 235), IM_COL32(124, 78, 190, 235),
-    IM_COL32(58, 145, 26, 255), IM_COL32(177, 130, 0, 255),
-    IM_COL32(204, 55, 70, 255), IM_COL32(76, 95, 128, 35)};
-
-static const ChartColors&
+// The memory-chart palette lives in SettingsManager (Colors::kMemChart*); this
+// assembles the themed struct from those entries so call sites stay unchanged.
+static ChartColors
 C()
 {
-    return SettingsManager::GetInstance().GetUserSettings().display_settings.use_dark_mode
-               ? DARK_CHART_COLORS
-               : LIGHT_CHART_COLORS;
+    const SettingsManager& s = SettingsManager::GetInstance();
+    return ChartColors{
+        s.GetColor(Colors::kMemChartBg),        s.GetColor(Colors::kMemChartPanel),
+        s.GetColor(Colors::kMemChartPanelAlt),  s.GetColor(Colors::kMemChartBorder),
+        s.GetColor(Colors::kMemChartBorderHot), s.GetColor(Colors::kMemChartTextMain),
+        s.GetColor(Colors::kMemChartTextDim),   s.GetColor(Colors::kMemChartRead),
+        s.GetColor(Colors::kMemChartWrite),     s.GetColor(Colors::kMemChartAtomic),
+        s.GetColor(Colors::kMemChartUtil),      s.GetColor(Colors::kMemChartHit),
+        s.GetColor(Colors::kMemChartStall),     s.GetColor(Colors::kMemChartShadow),
+    };
 }
 
 static bool

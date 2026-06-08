@@ -509,9 +509,10 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     // Parameters
     static constexpr float ribbon_thickness = 20.0f;
     static constexpr float min_base_length  = 150.0f;
-    static constexpr ImU32 col_fill         = IM_COL32(200, 16, 32, 150);
-    static constexpr ImU32 col_border       = IM_COL32(255, 255, 255, 40);
-    static constexpr ImU32 col_text         = IM_COL32(255, 255, 255, 255);
+    SettingsManager& settings    = SettingsManager::GetInstance();
+    const ImU32      col_fill     = settings.GetColor(Colors::kBannerFill);
+    const ImU32      col_border   = settings.GetColor(Colors::kBannerBorder);
+    const ImU32      col_text     = settings.GetColor(Colors::kBannerText);
 
     // use precomputed cos/sin for 45 degrees to avoid trig calls
     static constexpr float c_45 = 0.70710678118f;

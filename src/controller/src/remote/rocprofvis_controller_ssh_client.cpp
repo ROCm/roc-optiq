@@ -779,7 +779,7 @@ namespace Controller
 
 
 
-    SshClient::Result SshClient::ExecuteCommand(SshConnection * connection, const std::string& command, Future* future, int* exit_code_out)
+    SshClient::Result SshClient::ExecuteCommand(SshConnection * connection, const std::string& command, Future* future, int* exit_code_out, bool wait_for_status_consumed)
     {
         std::string output;
         int exit_code = -1;
@@ -883,7 +883,14 @@ namespace Controller
             return SshClient::Result::Cancelled;
         }
 
-        connection->GetSshBridge()->WaitStatusConsumed();
+        // Interactive SshSession consumers poll the bridge status each frame, so
+        // block here until the final status is consumed (back-pressure). The
+        // profiler executor has no status consumer and passes false, otherwise
+        // this would deadlock the worker thread.
+        if (wait_for_status_consumed)
+        {
+            connection->GetSshBridge()->WaitStatusConsumed();
+        }
 
         return Result::Success;
     }

@@ -163,14 +163,15 @@ Project::OpenProject(std::string& file_path)
 Project::OpenResult
 Project::OpenTrace(std::string& file_path)
 {
-    OpenResult result    = Failed;
-    Project*   duplicate = AppWindow::GetInstance()->GetProject(file_path);
+    OpenResult result = Failed;
+    // canonicalize so a .db and the path stored in a .rpv resolve to the same trace
+    file_path = std::filesystem::weakly_canonical(file_path).string();
+    // trace already open, return duplicate so we switch tabs instead of loading it twice
+    Project* duplicate = AppWindow::GetInstance()->GetProject(file_path);
     if(duplicate)
     {
         file_path = duplicate->GetID();
         result    = Duplicate;
-        NotificationManager::GetInstance().Show(file_path + " already open.",
-                                                NotificationLevel::Warning);
     }
     else if(!m_view)
     {

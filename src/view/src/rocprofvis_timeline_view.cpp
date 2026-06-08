@@ -413,8 +413,6 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 
     if(!ImGui::IsPopupOpen("TimelineContextMenu"))
     {
-        // Clear right-click state when popup closes
-        TimelineFocusManager::GetInstance().ClearRightClickLayer();
         return;
     }
     auto style = m_settings.GetDefaultStyle();
@@ -422,9 +420,9 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup("TimelineContextMenu"))
     {
-        // Show event actions when there are selected events
-        if(m_timeline_selection->HasSelectedEvents() &&
-           TimelineFocusManager::GetInstance().GetRightClickLayer() == Layer::kGraphLayer)
+        // Show event actions whenever events are selected, regardless of where the
+        // right-click landed.
+        if(m_timeline_selection->HasSelectedEvents())
         {
             if(ImGui::MenuItem("Make Time Range Selection"))
             {
@@ -2054,12 +2052,6 @@ TimelineView::RenderTraceView()
                                 screen_pos + subcomponent_size_main,
                                 m_settings.GetColor(Colors::kBgPanel),
                                 m_settings.GetDefaultStyle().ChildRounding);
-
-    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-    {
-        // Reset per-click context so only event right-clicks repopulate it.
-        TimelineFocusManager::GetInstance().ClearRightClickLayer();
-    }
 
     ImGui::BeginChild("Grid View 2",
                       ImVec2(subcomponent_size_main.x,

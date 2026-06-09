@@ -747,6 +747,9 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         meta_lines += "Process ID: " + process_id_str + "\n";
     }
     meta_lines += std::string(count_label) + ": ";
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    meta_lines += std::to_string(track_info->num_entries);
+#else
     if(track_info->num_entries >= META_TOOLTIP_COMPACT_COUNT_MIN)
     {
         meta_lines +=
@@ -756,6 +759,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
     {
         meta_lines += std::to_string(track_info->num_entries);
     }
+#endif
 
     if(m_meta_area_tooltip.empty())
     {

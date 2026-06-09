@@ -1819,6 +1819,9 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
     std::string table_name = GetMetadataVersionControl()->GetTrackInfoTableName();
     for (int i = 0; i < NumTracks(); i++)
     {
+        // Write a merged track's total on one load_id row only; the loader
+        // re-sums rows, so repeating it per row would multiply it on reload.
+        bool first_load_id = true;
         for (auto load_id : TrackPropertiesAt(i)->load_id)
         {
             DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
@@ -1829,7 +1832,8 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
             p.track_id = TrackPropertiesAt(i)->track_indentifiers.track_id;
             p.category = TrackPropertiesAt(i)->track_indentifiers.category;
             p.op = TrackPropertiesAt(i)->op;
-            p.record_count = TrackPropertiesAt(i)->record_count;
+            p.record_count = first_load_id ? TrackPropertiesAt(i)->record_count : 0;
+            first_load_id = false;
             p.min_ts = TrackPropertiesAt(i)->min_ts;
             p.max_ts = TrackPropertiesAt(i)->max_ts;
             p.min_val = TrackPropertiesAt(i)->min_value;

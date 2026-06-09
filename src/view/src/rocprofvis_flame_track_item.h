@@ -127,6 +127,7 @@ private:
     bool                     m_compact_mode;
 
     const AnalysisQueueUtilization* m_queue_utilization;
+    float                           m_queue_utilization_width;
 };
 
 }  // namespace View

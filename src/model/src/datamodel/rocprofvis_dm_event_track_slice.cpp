@@ -10,8 +10,8 @@ namespace RocProfVis
 namespace DataModel
 {
 
-EventTrackSlice::EventTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
-: TrackSlice(ctx, start, end)
+EventTrackSlice::EventTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_hashed_timestamp_tag_t tag)
+: TrackSlice(ctx, start, end, tag)
 {
     m_samples.reserve(ctx->NumRecords());
 }; 
@@ -132,6 +132,13 @@ rocprofvis_dm_result_t EventTrackSlice::GetRecordGraphLevelAt(const rocprofvis_d
     ROCPROFVIS_ASSERT_MSG_RETURN(Ctx()->Ctx(), ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultNotLoaded);
     level = m_samples[index]->EventLevel();
     return kRocProfVisDmResultSuccess;
+}
+
+void
+EventTrackSlice::SetComplete()
+{
+    std::sort(m_samples.begin(), m_samples.end(), [](EventRecord* a, EventRecord* b) -> bool { return a->Timestamp() != b->Timestamp() ? a->Timestamp() < b->Timestamp() : a->EventLevel() < b->EventLevel(); });
+    TrackSlice::SetComplete();
 }
 
 }  // namespace DataModel

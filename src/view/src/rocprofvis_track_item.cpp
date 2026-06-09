@@ -179,7 +179,9 @@ TrackItem::GetReorderGripWidth()
 void
 TrackItem::UpdateMaxMetaAreaSize(float new_size)
 {
-    m_meta_area_scale_width = std::max(CalculateNewMetaAreaSize(), new_size);
+    m_meta_area_scale_width = m_meta_area_scale_width == 0.0
+                                  ? 0.0
+                                  : std::max(CalculateNewMetaAreaSize(), new_size);
 }
 
 float
@@ -282,15 +284,13 @@ TrackItem::RenderMetaArea()
         //     }
         // }
 
-        float available_for_text =
-            content_size.x - (m_meta_area_scale_width + menu_button_width + grid_icon_width + arrow_width +
-            4.0f * m_metadata_padding.x + 2.0f);
-
-        if(available_for_text < 0.0f) available_for_text = 0.0f;
+        float available_for_text = content_size.x - m_meta_area_scale_width -
+                                   menu_button_width - m_reorder_grip_width;
 
         ImVec2 text_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
 
-        if(content_size.y - text_size.y < m_pill.GetPillSize().y)
+        if(available_for_text < m_pill.GetPillSize().x ||
+           content_size.y - text_size.y < m_pill.GetPillSize().y)
             m_pill.Hide();
         else
             m_pill.Show();

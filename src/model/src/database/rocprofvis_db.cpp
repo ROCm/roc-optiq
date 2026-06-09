@@ -86,20 +86,21 @@ rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
 rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
                                                     rocprofvis_dm_timestamp_t start,
                                                     rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                     rocprofvis_db_num_of_tracks_t num,
                                                     rocprofvis_db_track_selection_t tracks,
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
-    rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end, num, tracks); 
+    rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end, tag, num, tracks);
     if(result != kRocProfVisDmResultNotLoaded)
     {
         spdlog::debug("Slice ({},{}) exists!", start, end);
         return future->SetPromise(result);
     }
     try {
-        future->SetWorker(std::move(std::thread(Database::ReadTraceSliceStatic, this, start, end, num, tracks, future)));
+        future->SetWorker(std::move(std::thread(Database::ReadTraceSliceStatic, this, start, end, tag, num, tracks, future)));
     }
     catch (std::exception ex)
     {
@@ -291,10 +292,11 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceStatic(
                                                     Database* db,
                                                     rocprofvis_dm_timestamp_t start,
                                                     rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                     rocprofvis_db_num_of_tracks_t num,
                                                     rocprofvis_db_track_selection_t tracks,
                                                     Future* object){
-    return db->ReadTraceSlice(start, end, num, tracks, object);
+    return db->ReadTraceSlice(start, end, tag, num, tracks, object);
 }
 
 

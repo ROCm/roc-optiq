@@ -85,6 +85,7 @@ class ProfileDatabase : public SqliteDatabase
         rocprofvis_dm_result_t  ReadTraceSlice(
                         rocprofvis_dm_timestamp_t start,
                         rocprofvis_dm_timestamp_t end,
+                        rocprofvis_dm_hashed_timestamp_tag_t tag,
                         rocprofvis_db_num_of_tracks_t num,
                         rocprofvis_db_track_selection_t tracks,
                         Future* object) override;

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "rocprofvis_analysis_model.h"
 #include "rocprofvis_event_model.h"
 #include "rocprofvis_model_types.h"
 #include "rocprofvis_summary_model.h"
@@ -47,6 +48,9 @@ public:
     const EventModel& GetEvents() const { return m_events; }
     EventModel&       GetEvents() { return m_events; }
 
+    const AnalysisModel& GetAnalysis() const { return m_analysis; }
+    AnalysisModel&       GetAnalysis() { return m_analysis; }
+
     // Trace file metadata
     const std::string& GetTraceFilePath() const { return m_trace_file_path; }
     void SetTraceFilePath(const std::string& path) { m_trace_file_path = path; }
@@ -63,6 +67,7 @@ private:
     TablesModel       m_tables;
     SummaryModel      m_summary;
     EventModel        m_events;
+    AnalysisModel     m_analysis;
 
     std::string m_trace_file_path;
 };

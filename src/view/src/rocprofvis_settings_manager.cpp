@@ -42,14 +42,14 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(145, 156, 174, 255),  // Colors::kScrubberNumberColor
     IM_COL32(78, 152, 220, 210),   // Colors::kArrowColor
     IM_COL32(50, 59, 76, 255),     // Colors::kBorderColor
-    IM_COL32(39, 43, 56, 255),     // Colors::kSplitterColor
+    IM_COL32(50, 56, 72, 255),     // Colors::kSplitterColor
     IM_COL32(29, 30, 38, 255),     // Colors::kBgMain
     IM_COL32(34, 37, 48, 255),     // Colors::kBgPanel
     IM_COL32(39, 43, 56, 255),     // Colors::kBgFrame
     IM_COL32(48, 56, 76, 255),     // Colors::kComboFill
-    IM_COL32(106, 164, 232, 255),  // Colors::kAccentRed
-    IM_COL32(140, 190, 245, 255),  // Colors::kAccentRedHover
-    IM_COL32(78, 132, 202, 255),   // Colors::kAccentRedActive
+    IM_COL32(106, 164, 232, 255),  // Colors::kAccent
+    IM_COL32(140, 190, 245, 255),  // Colors::kAccentHover
+    IM_COL32(78, 132, 202, 255),   // Colors::kAccentActive
     IM_COL32(34, 37, 48, 255),     // Colors::kTabAccent
     IM_COL32(44, 50, 66, 255),     // Colors::kTabAccentHover
     IM_COL32(39, 43, 56, 255),     // Colors::kTabAccentActive
@@ -58,17 +58,21 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(145, 156, 174, 255),  // Colors::kTextDim
     IM_COL32(29, 30, 38, 255),     // Colors::kScrollBg
     IM_COL32(70, 82, 104, 255),    // Colors::kScrollGrab
-    IM_COL32(29, 30, 38, 255),     // Colors::kTableHeaderBg
+    IM_COL32(32, 34, 44, 255),     // Colors::kTableHeaderBg
     IM_COL32(50, 59, 76, 255),     // Colors::kTableBorderStrong
     IM_COL32(39, 43, 56, 255),     // Colors::kTableBorderLight
-    IM_COL32(34, 37, 48, 255),     // Colors::kTableRowBg
-    IM_COL32(39, 43, 56, 255),     // Colors::kTableRowBgAlt
+    IM_COL32(32, 36, 47, 255),     // Colors::kTableRowBg
+    IM_COL32(38, 42, 54, 255),     // Colors::kTableRowBgAlt
+    IM_COL32(34, 37, 48, 255),     // Colors::kTableBorderInner
+    IM_COL32(44, 50, 64, 255),     // Colors::kTableBorderOuter
+    IM_COL32(40, 45, 58, 255),     // Colors::kPanelBorderSubtle
     IM_COL32(106, 164, 232, 230),  // Colors::kEventHighlight
     IM_COL32(130, 210, 178, 230),  // Colors::kEventSearchHighlight
+    IM_COL32(106, 164, 232, 85),   // Colors::kAreaOfInterest
     IM_COL32(120, 162, 255, 120),  // Colors::kLineChartColor
-    IM_COL32(39, 43, 56, 255),     // Colors::kButton
-    IM_COL32(50, 59, 76, 255),     // Colors::kButtonHovered
-    IM_COL32(62, 76, 102, 255),    // Colors::kButtonActive
+    IM_COL32(44, 52, 70, 255),     // Colors::kButton
+    IM_COL32(56, 66, 88, 255),     // Colors::kButtonHovered
+    IM_COL32(66, 80, 108, 255),    // Colors::kButtonActive
     IM_COL32(180, 160, 60, 255),   // Colors::kBgWarning
     IM_COL32(160, 60, 60, 255),    // Colors::kBgError
     IM_COL32(60, 160, 60, 255),    // Colors::kBgSuccess
@@ -92,10 +96,44 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(29, 30, 38, 255),     // Colors::kMinimapBg
     IM_COL32(10, 12, 18, 170),     // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 200, 255, 255),    // Colors::kMeasurementColor
+    IM_COL32(30, 30, 30, 240),     // Colors::kMeasurementLabelBg
+    IM_COL32(70, 70, 70, 200),     // Colors::kMeasurementLabelEdge
+    IM_COL32(255, 255, 255, 255),  // Colors::kMeasurementLabelText
+    IM_COL32(255, 255, 255, 120),  // Colors::kMeasurementNotch
     IM_COL32(42, 82, 118, 255),    // Colors::kComparisonBase
     IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
     IM_COL32(205, 170, 82, 255),   // Colors::kComparisonLesser
     IM_COL32(92, 62, 132, 255),    // Colors::kComparisonGreater
+
+    // Centralized from view widgets (kept in Colors enum order):
+    IM_COL32(29, 30, 38, 255),     // Colors::kMemChartBg
+    IM_COL32(34, 37, 48, 245),     // Colors::kMemChartPanel
+    IM_COL32(39, 43, 56, 245),     // Colors::kMemChartPanelAlt
+    IM_COL32(62, 116, 168, 220),   // Colors::kMemChartBorder
+    IM_COL32(78, 152, 220, 255),   // Colors::kMemChartBorderHot
+    IM_COL32(238, 243, 255, 255),  // Colors::kMemChartTextMain
+    IM_COL32(145, 156, 174, 255),  // Colors::kMemChartTextDim
+    IM_COL32(47, 214, 220, 235),   // Colors::kMemChartRead
+    IM_COL32(225, 203, 78, 235),   // Colors::kMemChartWrite
+    IM_COL32(184, 139, 226, 235),  // Colors::kMemChartAtomic
+    IM_COL32(129, 231, 79, 255),   // Colors::kMemChartUtil
+    IM_COL32(231, 196, 65, 255),   // Colors::kMemChartHit
+    IM_COL32(235, 82, 98, 255),    // Colors::kMemChartStall
+    IM_COL32(0, 0, 0, 85),         // Colors::kMemChartShadow
+    IM_COL32(58, 53, 36, 245),     // Colors::kStickyNoteBg
+    IM_COL32(62, 116, 168, 220),   // Colors::kStickyNoteBorder
+    IM_COL32(70, 62, 40, 248),     // Colors::kStickyNoteHeader
+    IM_COL32(0, 0, 0, 85),         // Colors::kStickyNoteShadow
+    IM_COL32(238, 243, 255, 255),  // Colors::kStickyNoteText
+    IM_COL32(145, 156, 174, 255),  // Colors::kStickyNoteTextMuted
+    IM_COL32(225, 203, 78, 235),   // Colors::kStickyNoteAccent
+    IM_COL32(200, 200, 80, 255),   // Colors::kStickyNoteResize
+    IM_COL32(200, 100, 100, 255),  // Colors::kStickyNoteResizeActive
+    IM_COL32(200, 16, 32, 150),    // Colors::kBannerFill
+    IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
+    IM_COL32(255, 255, 255, 255),  // Colors::kBannerText
+    IM_COL32(228, 228, 228, 255),  // Colors::kDebugNavBarBg
     // This must follow the ordering of Colors enum.
 };
 
@@ -120,14 +158,14 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(86, 92, 108, 255),    // Colors::kScrubberNumberColor
     IM_COL32(56, 124, 244, 200),   // Colors::kArrowColor
     IM_COL32(228, 231, 236, 255),  // Colors::kBorderColor
-    IM_COL32(238, 240, 244, 255),  // Colors::kSplitterColor
+    IM_COL32(228, 232, 240, 255),  // Colors::kSplitterColor
     IM_COL32(247, 248, 250, 255),  // Colors::kBgMain
     IM_COL32(255, 255, 255, 255),  // Colors::kBgPanel
     IM_COL32(244, 246, 250, 255),  // Colors::kBgFrame
     IM_COL32(232, 240, 251, 255),  // Colors::kComboFill
-    IM_COL32(54, 132, 214, 255),   // Colors::kAccentRed
-    IM_COL32(88, 164, 232, 255),   // Colors::kAccentRedHover
-    IM_COL32(32, 102, 180, 255),   // Colors::kAccentRedActive
+    IM_COL32(54, 132, 214, 255),   // Colors::kAccent
+    IM_COL32(88, 164, 232, 255),   // Colors::kAccentHover
+    IM_COL32(32, 102, 180, 255),   // Colors::kAccentActive
     IM_COL32(238, 240, 244, 255),  // Colors::kTabAccent
     IM_COL32(244, 246, 250, 255),  // Colors::kTabAccentHover
     IM_COL32(228, 231, 236, 255),  // Colors::kTabAccentActive
@@ -136,17 +174,21 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(106, 112, 128, 255),  // Colors::kTextDim
     IM_COL32(247, 248, 250, 255),  // Colors::kScrollBg
     IM_COL32(190, 196, 208, 255),  // Colors::kScrollGrab
-    IM_COL32(247, 248, 250, 255),  // Colors::kTableHeaderBg
+    IM_COL32(245, 246, 248, 255),  // Colors::kTableHeaderBg
     IM_COL32(214, 218, 226, 255),  // Colors::kTableBorderStrong
     IM_COL32(232, 235, 240, 255),  // Colors::kTableBorderLight
-    IM_COL32(255, 255, 255, 255),  // Colors::kTableRowBg
-    IM_COL32(250, 251, 253, 255),  // Colors::kTableRowBgAlt
+    IM_COL32(253, 254, 255, 255),  // Colors::kTableRowBg
+    IM_COL32(248, 250, 253, 255),  // Colors::kTableRowBgAlt
+    IM_COL32(244, 246, 250, 255),  // Colors::kTableBorderInner
+    IM_COL32(220, 224, 232, 255),  // Colors::kTableBorderOuter
+    IM_COL32(236, 239, 244, 255),  // Colors::kPanelBorderSubtle
     IM_COL32(54, 132, 214, 220),   // Colors::kEventHighlight
     IM_COL32(72, 174, 136, 220),   // Colors::kEventSearchHighlight
+    IM_COL32(54, 132, 214, 35),    // Colors::kAreaOfInterest
     IM_COL32(88, 132, 245, 105),   // Colors::kLineChartColor
-    IM_COL32(244, 246, 250, 255),  // Colors::kButton
-    IM_COL32(232, 236, 244, 255),  // Colors::kButtonHovered
-    IM_COL32(220, 226, 238, 255),  // Colors::kButtonActive
+    IM_COL32(232, 238, 248, 255),  // Colors::kButton
+    IM_COL32(222, 230, 242, 255),  // Colors::kButtonHovered
+    IM_COL32(212, 222, 238, 255),  // Colors::kButtonActive
     IM_COL32(250, 250, 100, 255),  // Colors::kBgWarning
     IM_COL32(250, 100, 100, 255),  // Colors::kBgError
     IM_COL32(100, 250, 100, 255),  // Colors::kBgSuccess
@@ -170,10 +212,44 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(247, 250, 254, 255),  // Colors::kMinimapBg
     IM_COL32(0, 0, 0, 60),         // Colors::kLoadingScreenColor
     IM_COL32(255, 255, 255, 255),  // Colors::kTextOnAccent
+    IM_COL32(0, 160, 220, 255),    // Colors::kMeasurementColor
+    IM_COL32(240, 240, 240, 240),  // Colors::kMeasurementLabelBg
+    IM_COL32(180, 180, 180, 200),  // Colors::kMeasurementLabelEdge
+    IM_COL32(20, 20, 20, 255),     // Colors::kMeasurementLabelText
+    IM_COL32(80, 80, 80, 120),     // Colors::kMeasurementNotch
     IM_COL32(203, 230, 252, 255),  // Colors::kComparisonBase
     IM_COL32(194, 235, 230, 255),  // Colors::kComparisonTarget
     IM_COL32(248, 224, 166, 255),  // Colors::kComparisonLesser
     IM_COL32(224, 206, 244, 255),  // Colors::kComparisonGreater
+
+    // Centralized from view widgets (kept in Colors enum order):
+    IM_COL32(248, 251, 255, 255),  // Colors::kMemChartBg
+    IM_COL32(255, 255, 255, 246),  // Colors::kMemChartPanel
+    IM_COL32(241, 247, 255, 246),  // Colors::kMemChartPanelAlt
+    IM_COL32(91, 139, 184, 205),   // Colors::kMemChartBorder
+    IM_COL32(38, 132, 214, 255),   // Colors::kMemChartBorderHot
+    IM_COL32(25, 38, 56, 255),     // Colors::kMemChartTextMain
+    IM_COL32(92, 106, 126, 255),   // Colors::kMemChartTextDim
+    IM_COL32(0, 132, 155, 235),    // Colors::kMemChartRead
+    IM_COL32(168, 128, 0, 235),    // Colors::kMemChartWrite
+    IM_COL32(124, 78, 190, 235),   // Colors::kMemChartAtomic
+    IM_COL32(58, 145, 26, 255),    // Colors::kMemChartUtil
+    IM_COL32(177, 130, 0, 255),    // Colors::kMemChartHit
+    IM_COL32(204, 55, 70, 255),    // Colors::kMemChartStall
+    IM_COL32(76, 95, 128, 35),     // Colors::kMemChartShadow
+    IM_COL32(255, 252, 228, 248),  // Colors::kStickyNoteBg
+    IM_COL32(91, 139, 184, 205),   // Colors::kStickyNoteBorder
+    IM_COL32(255, 247, 204, 248),  // Colors::kStickyNoteHeader
+    IM_COL32(76, 95, 128, 35),     // Colors::kStickyNoteShadow
+    IM_COL32(25, 38, 56, 255),     // Colors::kStickyNoteText
+    IM_COL32(92, 106, 126, 255),   // Colors::kStickyNoteTextMuted
+    IM_COL32(168, 128, 0, 235),    // Colors::kStickyNoteAccent
+    IM_COL32(200, 200, 80, 255),   // Colors::kStickyNoteResize
+    IM_COL32(200, 100, 100, 255),  // Colors::kStickyNoteResizeActive
+    IM_COL32(200, 16, 32, 150),    // Colors::kBannerFill
+    IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
+    IM_COL32(255, 255, 255, 255),  // Colors::kBannerText
+    IM_COL32(228, 228, 228, 255),  // Colors::kDebugNavBarBg
     // This must follow the ordering of Colors enum.
 };
 // Same hue order as origin/main, desaturated for the redesign.
@@ -228,11 +304,11 @@ SettingsManager::ApplyColorStyling()
     ImVec4 bgMain    = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgMain));
     ImVec4 bgPanel   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgPanel));
     ImVec4 bgFrame   = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kBgFrame));
-    ImVec4 accentRed = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRed));
-    ImVec4 accentRedHover =
-        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedHover));
-    ImVec4 accentRedActive =
-        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentRedActive));
+    ImVec4 accent = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccent));
+    ImVec4 accentHover =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentHover));
+    ImVec4 accentActive =
+        ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kAccentActive));
     ImVec4 tabAccent = ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccent));
     ImVec4 tabAccentHover =
         ImGui::ColorConvertU32ToFloat4(GetColor(Colors::kTabAccentHover));
@@ -256,13 +332,13 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);
 
     // Frame
-    style.Colors[ImGuiCol_FrameBg]        = bgFrame;
+    style.Colors[ImGuiCol_FrameBg]        = button;
     style.Colors[ImGuiCol_FrameBgHovered] = buttonHovered;
-    style.Colors[ImGuiCol_FrameBgActive]  = tabAccentHover;
+    style.Colors[ImGuiCol_FrameBgActive]  = buttonActive;
 
     // Title bar
     style.Colors[ImGuiCol_TitleBg]          = bgPanel;
-    style.Colors[ImGuiCol_TitleBgActive]    = accentRed;
+    style.Colors[ImGuiCol_TitleBgActive]    = accent;
     style.Colors[ImGuiCol_TitleBgCollapsed] = borderGray;
 
     // Menu bar
@@ -292,11 +368,11 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_ScrollbarGrabActive]  = buttonActive;
 
     // Checkboxes, radio buttons
-    style.Colors[ImGuiCol_CheckMark] = accentRed;
+    style.Colors[ImGuiCol_CheckMark] = accent;
 
     // Slider
-    style.Colors[ImGuiCol_SliderGrab]       = accentRed;
-    style.Colors[ImGuiCol_SliderGrabActive] = accentRedActive;
+    style.Colors[ImGuiCol_SliderGrab]       = accent;
+    style.Colors[ImGuiCol_SliderGrabActive] = accentActive;
 
     // Buttons
     style.Colors[ImGuiCol_Button]        = button;
@@ -309,37 +385,37 @@ SettingsManager::ApplyColorStyling()
     style.Colors[ImGuiCol_TabActive]          = tabAccent;
     style.Colors[ImGuiCol_TabUnfocused]       = bgFrame;
     style.Colors[ImGuiCol_TabUnfocusedActive] = tabAccentActive;
-    style.Colors[ImGuiCol_TabSelectedOverline] = accentRed;
-    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = accentRedActive;
+    style.Colors[ImGuiCol_TabSelectedOverline] = accent;
+    style.Colors[ImGuiCol_TabDimmedSelectedOverline] = accentActive;
 
     // Headers (collapsing, selectable, etc)
     style.Colors[ImGuiCol_Header]        = tabAccent;
     style.Colors[ImGuiCol_HeaderHovered] = tabAccentHover;
-    style.Colors[ImGuiCol_HeaderActive]  = accentRed;
+    style.Colors[ImGuiCol_HeaderActive]  = accent;
 
     // Separator, resize grip
     style.Colors[ImGuiCol_Separator]         = borderGray;
-    style.Colors[ImGuiCol_SeparatorHovered]  = accentRedHover;
-    style.Colors[ImGuiCol_SeparatorActive]   = accentRedActive;
+    style.Colors[ImGuiCol_SeparatorHovered]  = accentHover;
+    style.Colors[ImGuiCol_SeparatorActive]   = accentActive;
     style.Colors[ImGuiCol_ResizeGrip]        = tabAccent;
     style.Colors[ImGuiCol_ResizeGripHovered] = tabAccentHover;
-    style.Colors[ImGuiCol_ResizeGripActive]  = accentRedActive;
+    style.Colors[ImGuiCol_ResizeGripActive]  = accentActive;
 
     // Text
     style.Colors[ImGuiCol_Text]         = textMain;
     style.Colors[ImGuiCol_TextDisabled] = textDim;
 
     // Drag and drop
-    style.Colors[ImGuiCol_DragDropTarget] = accentRed;
+    style.Colors[ImGuiCol_DragDropTarget] = accent;
 
     // Navigation highlight
-    style.Colors[ImGuiCol_NavHighlight] = accentRedHover;
+    style.Colors[ImGuiCol_NavHighlight] = accentHover;
 
     // Plot colors
-    style.Colors[ImGuiCol_PlotLines]            = accentRed;
-    style.Colors[ImGuiCol_PlotLinesHovered]     = accentRedHover;
-    style.Colors[ImGuiCol_PlotHistogram]        = accentRed;
-    style.Colors[ImGuiCol_PlotHistogramHovered] = accentRedHover;
+    style.Colors[ImGuiCol_PlotLines]            = accent;
+    style.Colors[ImGuiCol_PlotLinesHovered]     = accentHover;
+    style.Colors[ImGuiCol_PlotHistogram]        = accent;
+    style.Colors[ImGuiCol_PlotHistogramHovered] = accentHover;
 
     // Modal window dim
     style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0, 0, 0, 0.7f);

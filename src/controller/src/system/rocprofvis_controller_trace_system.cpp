@@ -92,6 +92,11 @@ MemoryManager* SystemTrace::GetMemoryManager(){
     return m_mem_mgmt;
 }
 
+std::mutex& SystemTrace::GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case)
+{
+    return m_table_mutex[use_case];
+}
+
 void SystemTrace::DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int level)
 {
     std::string line;
@@ -194,21 +199,21 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                 dm_track_handle,
                                                 kRPVDMTrackCategoryEnumCharPtr, 0);
 
-                                        track->SetString(kRPVControllerCategory, 0,
+                                        track->SetString(kRPVControllerTrackCategory, 0,
                                                          category.c_str());
 
                                         std::string main_name =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackMainProcessNameCharPtr, 0);
-                                        track->SetString(kRPVControllerMainName, 0,
+                                        track->SetString(kRPVControllerTrackMainName, 0,
                                                          main_name.c_str());
 
                                         std::string sub_name =
                                             rocprofvis_dm_get_property_as_charptr(
                                                 dm_track_handle,
                                                 kRPVDMTrackSubProcessNameCharPtr, 0);
-                                        track->SetString(kRPVControllerSubName, 0,
+                                        track->SetString(kRPVControllerTrackSubName, 0,
                                                          sub_name.c_str());
 
                                         uint64_t num_records =
@@ -355,6 +360,69 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                          name.c_str(), value.c_str());
                                         }
 
+                                        switch((rocprofvis_dm_track_category_t)dm_track_type)
+                                        {
+                                            case kRocProfVisDmPmcTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationNoOp);
+                                                break;
+                                            }
+                                            case kRocProfVisDmRegionTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 2);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunch);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 1, kRocProfVisDmOperationLaunchSample);
+                                                break;
+                                            }
+                                            case kRocProfVisDmKernelDispatchTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationDispatch);
+                                                break;
+                                            }
+                                            case kRocProfVisDmMemoryAllocationTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationMemoryAllocate);
+                                                break;
+                                            }
+                                            case kRocProfVisDmMemoryCopyTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationMemoryCopy);
+                                                break;
+                                            }
+                                            case kRocProfVisDmStreamTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 5);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunch);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 1, kRocProfVisDmOperationDispatch);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 2, kRocProfVisDmOperationMemoryAllocate);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 3, kRocProfVisDmOperationMemoryCopy);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 4, kRocProfVisDmOperationLaunchSample);
+                                                break;
+                                            }
+                                            case kRocProfVisDmRegionMainTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunch);
+                                                break;
+                                            }
+                                            case kRocProfVisDmRegionSampleTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunchSample);
+                                                break;
+                                            }
+                                            default:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmMultipleOperations);
+                                                break;
+                                            }
+                                        }
+                                        
                                         uint32_t index = static_cast<uint32_t>(m_tracks.size());
                                         m_tracks.push_back(track);
                                         if(m_tracks.size() != (index + 1))
@@ -701,51 +769,12 @@ rocprofvis_result_t SystemTrace::AsyncFetch(rocprofvis_property_t property, Futu
     return error;
 }
 
-rocprofvis_result_t SystemTrace::AsyncFetch(Table& table, Future& future, Array& array,
-    uint64_t index, uint64_t count)
-{
-    rocprofvis_result_t error = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
-
-    future.Set(JobSystem::Get().IssueJob([&table, &array, index, count, dm_handle](Future* future) -> rocprofvis_result_t {
-                              rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                              result = table.Fetch(dm_handle, index, count, array, future);
-                              return result;
-                          },&future));
-
-    if(future.IsValid())
-    {
-        error = kRocProfVisResultSuccess;
-    }
-
-    return error;
-}
-
 rocprofvis_result_t SystemTrace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
 {
     rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
-            rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            result = table.Setup(dm_handle, args, future);
-            if (result == kRocProfVisResultSuccess)
-            {
-                uint64_t start_index = 0;
-                uint64_t start_count = 0;
-                if(result == kRocProfVisResultSuccess)
-                {
-                    result = args.GetUInt64(kRPVControllerTableArgsStartIndex, 0,
-                                            &start_index);
-                }
-                if(result == kRocProfVisResultSuccess)
-                {
-                    result = args.GetUInt64(kRPVControllerTableArgsStartCount, 0,
-                                            &start_count);
-                }
-                result = table.Fetch(dm_handle, start_index, start_count, array, future);
-            }
-            return result;
+    future.Set(JobSystem::Get().IssueJob([this, &table, &args, &array](Future* future) -> rocprofvis_result_t {
+            return table.SetupAndFetch(*this, args, array, future);
         }, &future));
 
     if(future.IsValid())

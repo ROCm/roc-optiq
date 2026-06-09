@@ -8,6 +8,7 @@
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_future.h"
+#include "rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
 #include <algorithm>
@@ -28,6 +29,15 @@ ComputePivotTable::ComputePivotTable(const uint64_t id)
 }
 
 ComputePivotTable::~ComputePivotTable() {}
+
+rocprofvis_result_t
+ComputePivotTable::SetupAndFetch(Trace& controller, Arguments& args,
+                                 Array& array, Future* future)
+{
+    ComputeTrace* compute_controller = dynamic_cast<ComputeTrace*>(&controller);
+    ROCPROFVIS_ASSERT(compute_controller);
+    return Table::SetupAndFetch(controller, args, array, future);
+}
 
 rocprofvis_result_t
 ComputePivotTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future)

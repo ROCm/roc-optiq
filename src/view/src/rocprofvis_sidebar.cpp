@@ -141,12 +141,14 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 
     ImGui::PushID(static_cast<int>(graph.chart->GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_settings.GetColor(Colors::kHighlightChart));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, m_settings.GetColor(Colors::kHighlightChart));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
 
     bool display = graph.display;
     if(show_eye_button)
     {
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
         if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
         {
             graph.display         = !graph.display;
@@ -160,7 +162,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
             SetTooltipStyled("Toggle Track Visibility");
 
         ImGui::SameLine();
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
         if(ImGui::Button(ICON_ARROWS_SHRINK))
         {
             EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
@@ -173,17 +175,15 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     }
 
     ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(3);
     if(show_eye_button)
     {
         ImGui::SameLine();
     }
 
-    bool highlight = graph.selected;
-    if(!highlight)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    }
+    ImGui::PushStyleColor(
+        ImGuiCol_Button,
+        m_settings.GetColor(graph.selected ? Colors::kSelection : Colors::kTransparent));
     if(!display)
     {
         ImGui::PushStyleColor(ImGuiCol_Text,
@@ -197,10 +197,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     {
         ImGui::PopStyleColor();
     }
-    if(!highlight)
-    {
-        ImGui::PopStyleColor();
-    }
+    ImGui::PopStyleColor();
 
     ImGui::PopID();
 }
@@ -439,7 +436,7 @@ SideBar::EyeButtonState
 SideBar::DrawEyeButton(EyeButtonState eye_button_state)
 {
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
 
     ImVec2 eye_size = ImGui::CalcTextSize(ICON_EYE);
     float  button_w = eye_size.x + ImGui::GetStyle().FramePadding.x * 2;

@@ -10,6 +10,7 @@
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
 
 namespace RocProfVis
 {
@@ -121,7 +122,7 @@ MetricTableBase::Render()
             const ImVec2 row_max(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
                                  row_min.y + row_hover_height);
             if(ImGui::IsWindowHovered() &&
-               ImGui::IsMouseHoveringRect(row_min, row_max, true))
+               ImGui::IsMouseHoveringRect(row_min, row_max, false))
             {
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
                                        settings.GetColor(Colors::kHighlightChart));
@@ -369,7 +370,7 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
 {
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem("Copy"))
+        if(IconMenuItem(ICON_COPY, "Copy"))
         {
             ImGui::SetClipboardText(value_to_copy);
             NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -379,7 +380,7 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         // not equal pin column, MetricId, Metric Name and Metric Unit
         {
             if(!m_event_source_id.empty() &&
-               ImGui::MenuItem("Send metric to kernel details"))
+               IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }
@@ -526,7 +527,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
     {
         if(value_to_copy && std::string_view(value_to_copy) != "N/A")
         {
-            if(ImGui::MenuItem("Copy"))
+            if(IconMenuItem(ICON_COPY, "Copy"))
             {
                 ImGui::SetClipboardText(value_to_copy);
                 NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -537,7 +538,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         if(IsValueColumn(column_index))
         {
             if(!m_event_source_id.empty() &&
-               ImGui::MenuItem("Send metric to kernel details"))
+               IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }

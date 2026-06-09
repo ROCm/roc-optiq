@@ -735,7 +735,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         }
         ImGui::SetCursorPos(button_pos +
                             ImVec2(0.0f, menus_on_bottom ? -button_size : button_size));
-        ImGui::PushFont(m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
         if(ImGui::Button(m_menus_mode == Legend ? ICON_GEAR : ICON_LIST,
                          ImVec2(button_size, button_size)))
         {
@@ -823,6 +823,12 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
             {
                 empty = false;
                 ImGui::PushID(i);
+                ImGui::PushStyleColor(ImGuiCol_Header,
+                                      m_settings.GetColor(Colors::kSelection));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                                      m_settings.GetColor(Colors::kHighlightChart));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                                      m_settings.GetColor(Colors::kHighlightChart));
                 ImVec2 pos         = ImGui::GetCursorPos();
                 bool   row_clicked = ImGui::Selectable(
                     "", false,
@@ -868,8 +874,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                 }
                 else
                 {
-                    ImGui::PushFont(
-                        m_settings.GetFontManager().GetIconFont(FontType::kDefault));
+                    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
                     ImGui::TextUnformatted(m_items[i].visible ? ICON_EYE
                                                               : ICON_EYE_SLASH);
                     ImGui::PopFont();
@@ -888,6 +893,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                         m_options_changed  = true;
                     }
                 }
+                ImGui::PopStyleColor(3);
                 ImGui::PopID();
             }
         }

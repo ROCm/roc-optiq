@@ -213,6 +213,7 @@ typedef rocprofvis_dm_extdata_t (*rocprofvis_dm_add_extdata_func_t) (const rocpr
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_extdata_record_func_t) (const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t& data);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_argdata_record_func_t) (const rocprofvis_dm_extdata_t object, rocprofvis_db_argument_data_t& data);
 typedef rocprofvis_dm_table_t (*rocprofvis_dm_add_table_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_remove_table_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query);
 typedef rocprofvis_dm_table_row_t (*rocprofvis_dm_add_table_row_func_t) (const rocprofvis_dm_table_t object);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t column_name);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_enum_func_t) (const rocprofvis_dm_table_t object, rocprofvis_db_table_column_enum_t column_enum);
@@ -267,6 +268,7 @@ typedef struct
         rocprofvis_dm_add_extdata_record_func_t FuncAddExtDataRecord;   // Called by database query callback to add ext data record to ext data object
         rocprofvis_dm_add_argdata_record_func_t FuncAddArgDataRecord;   // Called by database query callback to add argument data record to ext data object
         rocprofvis_dm_add_table_func_t FuncAddTable;                    // Called by database query to add a table object to a list located in trace object
+        rocprofvis_dm_remove_table_func_t FuncRemoveTable;              // Called by database query to remove a table object from a list located in trace object
         rocprofvis_dm_add_table_row_func_t FuncAddTableRow;             // Called by database query callback to add new row to a table object
         rocprofvis_dm_add_table_column_func_t FuncAddTableColumn;       // Called by database query callback to add new column name to a table object
         rocprofvis_dm_add_table_column_enum_func_t FuncAddTableColumnEnum; // Called by database query callback to add new column enumeration constant to a table object

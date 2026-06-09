@@ -193,3 +193,27 @@ rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
 
     return true;
 }
+
+ImTextureID
+rocprofvis_imgui_backend_create_gui_texture_rgba32(void* user_data,
+                                                   const unsigned char* pixels,
+                                                   int width, int height)
+{
+    auto* backend = static_cast<rocprofvis_imgui_backend_t*>(user_data);
+    if(!backend || !backend->m_create_texture_rgba32)
+    {
+        return ImTextureID_Invalid;
+    }
+
+    return backend->m_create_texture_rgba32(backend, pixels, width, height);
+}
+
+void
+rocprofvis_imgui_backend_destroy_gui_texture(void* user_data, ImTextureID texture_id)
+{
+    auto* backend = static_cast<rocprofvis_imgui_backend_t*>(user_data);
+    if(backend && backend->m_destroy_texture)
+    {
+        backend->m_destroy_texture(backend, texture_id);
+    }
+}

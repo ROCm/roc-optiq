@@ -42,19 +42,14 @@ void
 PushPlotChrome(SettingsManager& settings)
 {
     ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kTransparent));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
     ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
-                           ThemeColor(settings, Colors::kTransparent));
+                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
     ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextMain));
     ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
                            ThemeColor(settings, Colors::kBorderColor, 0.7f));
     ImPlot::PushStyleColor(ImPlotCol_AxisTick,
                            ThemeColor(settings, Colors::kTextDim, 0.56f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendBg,
-                           ThemeColor(settings, Colors::kBgPanel, 0.96f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
-                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendText, ThemeColor(settings, Colors::kTextMain));
 }
 
 }  // namespace
@@ -477,8 +472,7 @@ ComputeTopKernels::RenderChartContent()
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + plot_style.PlotPadding.y);
     ImGui::BeginGroup();
-    if(IconButton(ICON_CHART_PIE,
-                  m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+    if(IconButton(ICON_CHART_PIE, m_settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(0, 0), nullptr, false, style.FramePadding,
                   m_settings.GetColor(m_display_mode == Pie ? Colors::kButton
                                                             : Colors::kTransparent),
@@ -488,8 +482,7 @@ ComputeTopKernels::RenderChartContent()
         m_display_mode = Pie;
     }
     ImGui::SameLine();
-    if(IconButton(ICON_CHART_BAR,
-                  m_settings.GetFontManager().GetIconFont(FontType::kDefault),
+    if(IconButton(ICON_CHART_BAR, m_settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(0, 0), nullptr, false, style.FramePadding,
                   m_settings.GetColor(m_display_mode == Bar ? Colors::kButton
                                                             : Colors::kTransparent),
@@ -611,7 +604,7 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::EndPlot();
     }
     ImGui::PopID();
-    ImPlot::PopStyleColor(9);
+    ImPlot::PopStyleColor(6);
     ImPlot::PopStyleVar();
 }
 
@@ -709,7 +702,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(9);
+    ImPlot::PopStyleColor(6);
     ImPlot::PopStyleVar();
     ImGui::EndChild();
 }
@@ -756,6 +749,12 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
         for(size_t i = 0; i < m_kernels.size(); i++)
         {
             ImGui::PushID(static_cast<int>(i));
+            ImGui::PushStyleColor(ImGuiCol_Header,
+                                  m_settings.GetColor(Colors::kSelection));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                                  m_settings.GetColor(Colors::kHighlightChart));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                                  m_settings.GetColor(Colors::kHighlightChart));
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::GetWindowDrawList()->AddRectFilled(
@@ -814,6 +813,7 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
                     }
                 }
             }
+            ImGui::PopStyleColor(3);
             ImGui::PopID();
         }
         ImGui::EndTable();

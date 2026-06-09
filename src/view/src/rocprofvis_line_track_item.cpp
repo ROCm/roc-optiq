@@ -58,17 +58,16 @@ LineTrackItem::~LineTrackItem() {}
 void
 LineTrackItem::UpdateMetadata()
 {
-    const TrackInfo* track_info = m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
-    if(track_info)
+    if(m_track_metadata)
     {
-        const CounterInfo* counter =
-            m_data_provider.DataModel().GetTopology().GetCounter(track_info->topology.id.value);
+        const CounterInfo* counter = m_data_provider.DataModel().GetTopology().GetCounter(
+            m_track_metadata->topology.id.value);
         if(counter)
         {
             m_units = counter->units;
         }
         m_min_y.Init(0.0, m_units);  // Want to start at 0 by default.
-        m_max_y.Init(m_units == "%" ? 100.0 : track_info->max_value, m_units);
+        m_max_y.Init(m_units == "%" ? 100.0 : m_track_metadata->max_value, m_units);
     }
     else
     {
@@ -123,7 +122,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImU32 alt_fill_color    = m_settings.GetColor(Colors::kLineChartColorAlt);
     ImU32 transparent_color = m_settings.GetColor(Colors::kTransparent);
     ImU32 outline_color     = alt_fill_color;
-    ImU32 accent_red        = m_settings.GetColor(Colors::kAccentRed);
+    ImU32 accent            = m_settings.GetColor(Colors::kAccent);
 
     int hovered_idx = -1;
     size_t data_len = m_data.size();
@@ -194,10 +193,10 @@ LineTrackItem::BoxPlotRender(float graph_width)
                                      cursor_position, content_size, scale_y);
 
         // Draw a circle at the start
-        draw_list->AddCircle(start_point, 4.0f, accent_red, 12, 3);
+        draw_list->AddCircle(start_point, 4.0f, accent, 12, 3);
 
         // Draw a line from start to end
-        draw_list->AddLine(start_point, end_point, accent_red,
+        draw_list->AddLine(start_point, end_point, accent,
                            DEFAULT_LINE_THICKNESS * 3);
     }
 

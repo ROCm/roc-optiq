@@ -477,7 +477,6 @@ rocprofvis_controller_object_type_t Track::GetType(void)
 
 rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -555,6 +554,13 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }  
+            case kRPVControllerTrackHistogramBucketDensityIndexed:
+            {
+                *value = rocprofvis_dm_get_property_as_uint64(
+                    m_dm_handle, kRPVDMTrackHistogramBucketEventDensityUInt64Indexed, index);
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             default:
             {
                 result = UnhandledProperty(property);
@@ -603,13 +609,6 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
                 result = kRocProfVisResultSuccess;
                 break;
             }  
-            case kRPVControllerTrackHistogramBucketDensityIndexed:
-            {
-                *value = static_cast<double>(rocprofvis_dm_get_property_as_uint64(
-                    m_dm_handle, kRPVDMTrackHistogramBucketEventDensityUInt64Indexed, index));
-                result = kRocProfVisResultSuccess;
-                break;
-            }
             default:
             {
                 result = UnhandledProperty(property);

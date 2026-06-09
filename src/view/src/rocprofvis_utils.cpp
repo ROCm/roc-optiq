@@ -18,7 +18,9 @@
 #include <windows.h>
 #endif
 
-namespace
+namespace RocProfVis
+{
+namespace View
 {
 // Portable, deprecation-safe wrapper around getenv. Returns the value of `name`
 // or an empty string if unset. On MSVC, std::getenv is /W4-deprecated as C4996
@@ -40,7 +42,8 @@ safe_getenv(const char* name)
     return value ? std::string(value) : std::string();
 #endif
 }
-}  // namespace
+}  // namespace View
+}  // namespace RocProfVis
 
 std::string
 RocProfVis::View::nanosecond_to_str(double time_point_ns, bool include_units) {
@@ -464,7 +467,7 @@ namespace
 bool
 display_looks_forwarded()
 {
-    const std::string disp = safe_getenv("DISPLAY");
+    const std::string disp = RocProfVis::View::safe_getenv("DISPLAY");
     if(disp.empty())
     {
         return false;

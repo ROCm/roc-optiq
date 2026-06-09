@@ -2200,8 +2200,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                 }
                 else
                 {
-                    double density = 0;
-                    result         = rocprofvis_controller_get_double(
+                    uint64_t density = 0;
+                    result           = rocprofvis_controller_get_uint64(
                         track_handle, kRPVControllerTrackHistogramBucketDensityIndexed,
                         bin, &density);
                     REQUIRE(result == kRocProfVisResultSuccess);

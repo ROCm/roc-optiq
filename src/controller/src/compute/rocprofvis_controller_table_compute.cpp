@@ -232,7 +232,7 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
             {
                 if (csv_row[col].is_null())
                 {
-                    row_data.emplace_back(static_cast<uint64_t>(INVALID_INDEX_64)); // Rows may have empty fields.
+                    row_data.emplace_back(INVALID_INDEX_64); // Rows may have empty fields.
                 }
                 else
                 {

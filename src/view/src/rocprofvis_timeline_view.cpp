@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_timeline_view.h"
-#include "rocprofvis_shared_types.h"
 #include "imgui.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_click_manager.h"
@@ -53,10 +52,10 @@ TimelineView::TimelineView(DataProvider&                       dp,
 , m_resize_activity(false)
 , m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
                          TimelineSelection::INVALID_SELECTION_TIME })
-, m_new_track_token(INVALID_INDEX_64)
-, m_scroll_to_track_token(INVALID_INDEX_64)
-, m_font_changed_token(INVALID_INDEX_64)
-, m_set_view_range_token(INVALID_INDEX_64)
+, m_new_track_token(EventManager::InvalidSubscriptionToken)
+, m_scroll_to_track_token(EventManager::InvalidSubscriptionToken)
+, m_font_changed_token(EventManager::InvalidSubscriptionToken)
+, m_set_view_range_token(EventManager::InvalidSubscriptionToken)
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0.0)
 , m_last_data_req_view_time_offset_ns(0.0)

@@ -549,19 +549,19 @@ namespace DataModel
         
 
 
-        uint64_t offset = 0;
-        uint64_t limit = 100;
+        uint32_t offset = 0;
+        uint32_t limit = 100;
         rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
         auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "OFFSET"; });
         if (it != commands.end())
         {
-            offset = std::atoll(it->parameter.c_str());
+            offset = std::atol(it->parameter.c_str());
         }
 
         it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "LIMIT"; });
         if (it != commands.end())
         {
-            limit = std::atoll(it->parameter.c_str());
+            limit = std::atol(it->parameter.c_str());
         }
 
         if (updated)
@@ -664,27 +664,27 @@ namespace DataModel
                 if (!m_last_group_str.empty())
                 {
                     static int max_events_per_thread = 10000;
-                    int use_threads = static_cast<int>((m_merged_table.RowCount()+max_events_per_thread) / max_events_per_thread);
-                    size_t thread_count = std::thread::hardware_concurrency() - 1;
+                    uint32_t use_threads = static_cast<uint32_t>((m_merged_table.RowCount()+max_events_per_thread) / max_events_per_thread);
+                    uint32_t thread_count = std::thread::hardware_concurrency() - 1;
                     if (use_threads < thread_count)
                         thread_count = use_threads;
 
                     std::vector<std::thread> threads;
-                    size_t rows_per_task = thread_count == 0 ? 0 : m_merged_table.RowCount() / thread_count;
+                    uint32_t rows_per_task = thread_count == 0 ? 0u : static_cast<uint32_t>(m_merged_table.RowCount() / thread_count);
 
                     if (m_merged_table.SetupAggregation(m_last_group_str, static_cast<int>(thread_count + 1)))
                     {
-                        auto task = [&](size_t thread_index, size_t start_row, size_t end_row) {
-                            for (size_t row_index = start_row; row_index < end_row; row_index++)
+                        auto task = [&](uint32_t thread_index, uint32_t start_row, uint32_t end_row) {
+                            for (uint32_t row_index = start_row; row_index < end_row; row_index++)
                             {
-                                if (!filtered || m_filter_lookup.count(static_cast<uint32_t>(row_index)))
+                                if (!filtered || m_filter_lookup.count(row_index))
                                     m_merged_table.AggregateRow(m_db, static_cast<int>(row_index), static_cast<int>(thread_index));
                             }
                             };
 
-                        for (int i = 0; i < thread_count-1; ++i)
+                        for (uint32_t i = 0; i < thread_count-1; ++i)
                             threads.emplace_back(task, i, rows_per_task * i, rows_per_task * (i + 1));
-                        threads.emplace_back(task, thread_count, rows_per_task * (thread_count-1), m_merged_table.RowCount());
+                        threads.emplace_back(task, thread_count, rows_per_task * (thread_count-1), static_cast<uint32_t>(m_merged_table.RowCount()));
 
                         for (auto& t : threads)
                             t.join();
@@ -728,13 +728,13 @@ namespace DataModel
                 result = AddAggregatedColumns(false, table);
                 if (kRocProfVisDmResultSuccess == result)
                 {
-                    for (uint64_t row_index = offset; row_index < offset + limit; row_index++)
+                    for (uint32_t row_index = offset; row_index < offset + limit; row_index++)
                     {
                         if (row_index >= m_merged_table.AggregationRowCount())
                             break;
                         rocprofvis_dm_table_row_t row =
                             m_db->BindObject()->FuncAddTableRow(table);
-                        result = AddAggregatedCells(false, row, static_cast<uint32_t>(row_index));
+                        result = AddAggregatedCells(false, row, row_index);
                         if (result != kRocProfVisDmResultSuccess)
                             break;
                     }
@@ -803,11 +803,11 @@ namespace DataModel
                     }
                     else
                     {
-                        for (uint64_t row_index = offset; row_index < offset + limit; row_index++)
+                        for (uint32_t row_index = offset; row_index < offset + limit; row_index++)
                         {
                             if (row_index >= m_merged_table.RowCount())
                                 break;
-                            uint32_t sorted_index = m_merged_table.SortedIndex(static_cast<uint32_t>(row_index));
+                            uint32_t sorted_index = m_merged_table.SortedIndex(row_index);
                             rocprofvis_dm_table_row_t row =
                                 m_db->BindObject()->FuncAddTableRow(table);
                             result = AddTableCells(false, row, sorted_index);

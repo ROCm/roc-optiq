@@ -23,6 +23,7 @@ inline constexpr float    DEFAULT_GRIP_WIDTH             = 20.0f;
 inline constexpr uint64_t DEFAULT_CHUNK_DURATION         = TimeConstants::ns_per_s * 30;
 inline constexpr float    META_TOOLTIP_MAX_WIDTH         = 320.0f;
 inline constexpr uint64_t META_TOOLTIP_COMPACT_COUNT_MIN = 1000;
+constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 
 float TrackItem::s_metadata_width = 400.0f;
 
@@ -358,24 +359,28 @@ TrackItem::RenderMetaArea()
                                    !ImGui::IsAnyItemHovered() &&
                                    !m_pill.WasLastHovered();
 
-    if(meta_area_hovered && !m_meta_area_tooltip.empty())
+    const ImGuiStyle& style = m_settings.GetDefaultStyle();
+
+    if(meta_area_hovered && !m_meta_area_tooltip.empty() &&
+       ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
     {
+        const float wrap_width = META_TOOLTIP_MAX_WIDTH - 2.0f * style.WindowPadding.x;
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(0, 0), ImVec2(META_TOOLTIP_MAX_WIDTH, FLT_MAX));
         BeginTooltipStyled();
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + META_TOOLTIP_MAX_WIDTH);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + wrap_width);
         ImGui::TextUnformatted(m_meta_area_tooltip.c_str());
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }
 
-    const std::string copy_popup_id =
-        "##track_copy_menu_" + std::to_string(m_track_id);
     if(meta_area_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
-        ImGui::OpenPopup(copy_popup_id.c_str());
+        ImGui::OpenPopup(TRACK_COPY_MENU_POPUP_NAME);
     }
-    if(ImGui::BeginPopup(copy_popup_id.c_str()))
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    if(ImGui::BeginPopup(TRACK_COPY_MENU_POPUP_NAME))
     {
         auto copy_to_clipboard = [](const std::string& text) {
             ImGui::SetClipboardText(text.c_str());
@@ -392,6 +397,7 @@ TrackItem::RenderMetaArea()
         }
         ImGui::EndPopup();
     }
+    ImGui::PopStyleVar(2);
 }
 
 void
@@ -740,13 +746,15 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
     {
         meta_lines += "Process ID: " + process_id_str + "\n";
     }
-    meta_lines += std::string(count_label) + ": " +
-                  std::to_string(track_info->num_entries);
+    meta_lines += std::string(count_label) + ": ";
     if(track_info->num_entries >= META_TOOLTIP_COMPACT_COUNT_MIN)
     {
-        meta_lines += " (" + compact_number_format(
-                                static_cast<double>(track_info->num_entries)) +
-                      ")";
+        meta_lines +=
+            compact_number_format(static_cast<double>(track_info->num_entries));
+    }
+    else
+    {
+        meta_lines += std::to_string(track_info->num_entries);
     }
 
     if(m_meta_area_tooltip.empty())

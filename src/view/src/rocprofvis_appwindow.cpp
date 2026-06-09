@@ -162,7 +162,6 @@ AppWindow::Init()
     LayoutItem status_bar_item(-1, initial_status_bar_height);
     status_bar_item.m_item =
         std::make_shared<RocCustomWidget>([this]() { RenderStatusBar(); });
-    status_bar_item.m_window_flags = ImGuiWindowFlags_NoScrollbar;
     LayoutItem main_area_item(-1, -initial_status_bar_height);
     LayoutItem tool_bar_item(-1, 0);
     tool_bar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
@@ -1198,10 +1197,15 @@ AppWindow::HandleFontChanged()
         return;
     }
 
-    // Match RenderStatusBar()'s content extent (AlignTextToFramePadding + Dummy).
-    const float frame_h      = ImGui::GetFrameHeight();
-    const float line_h       = ImGui::GetTextLineHeight();
-    status_bar_item->m_height = frame_h + (frame_h - line_h) * 0.5f;
+    // Fit the slot to one framed line plus the child border so the status bar
+    // content cannot overflow into a scrollbar. FramePadding matches
+    // RenderStatusBar().
+    const ImGuiStyle& default_style = SettingsManager::GetInstance().GetDefaultStyle();
+    const float       content_height =
+        ImGui::GetFontSize() + (default_style.FramePadding.y * 2.0f);
+    const float border_height = (status_bar_item->m_window_padding.y * 2.0f) +
+                                (ImGui::GetStyle().ChildBorderSize * 2.0f);
+    status_bar_item->m_height = content_height + border_height;
 
     // adjust main view's size to account for new status bar height
     auto main_view_item = m_main_view->GetMutableAt(count - 2);

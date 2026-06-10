@@ -77,12 +77,8 @@ bool SshProfilerExecutor::Start(const ProfilerConfig& config)
         // cancelled - the exec loop polls future->IsCancelled()). On a clean
         // run it writes the remote process's exit status into `remote_exit`.
         int               remote_exit = -1;
-        // The profiler path has no bridge status consumer; pass false so the
-        // exec call does not block on the interactive status handshake (which
-        // would deadlock this worker thread and stall the profiler state).
         SshClient::Result result =
-            SshClient::ExecuteCommand(connection, remote_cmd, future, &remote_exit,
-                                      /*wait_for_status_consumed=*/false);
+            SshClient::ExecuteCommand(connection, remote_cmd, future, &remote_exit);
 
         if (result == SshClient::Result::Success)
         {

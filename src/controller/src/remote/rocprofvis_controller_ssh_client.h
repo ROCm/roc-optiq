@@ -59,12 +59,6 @@ namespace Controller
 
 
         private:
-            // Actions (called by SSH layer to send a message to UI)
-            void                 AddStdOut(char* stdout_buffer, uint64_t stdout_count, bool last = false);
-            void                 SaveError(std::string& err);
-            void                 SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t dowloaded);
-            void                 SetDownloaded(uint64_t size);
-
             SshBridge            m_net_bridge;
             LIBSSH2_SESSION*     m_session;
             int                  m_socket;
@@ -135,11 +129,7 @@ namespace Controller
         // process's exit status (from libssh2_channel_get_exit_status) is written
         // to it. The returned Result reflects the SSH transport outcome
         // (Success/Cancelled/transport errors), NOT the remote process exit code.
-        // wait_for_status_consumed: when true (interactive SshSession path), the
-        // call blocks at the end until the UI consumes the final bridge status
-        // (back-pressure handshake). The profiler executor path has no status
-        // consumer and must pass false to avoid deadlocking the worker thread.
-        static Result ExecuteCommand(SshConnection* connection, const std::string& command, Future* future, int* exit_code = nullptr, bool wait_for_status_consumed = true);
+        static Result ExecuteCommand(SshConnection* connection, const std::string& command, Future* future, int* exit_code = nullptr);
         static Result DownloadFile(SshConnection * connection, const std::string& remote_path, const std::string& local_path, Future* future);
         static Result BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future);
 

@@ -234,23 +234,26 @@ void ProfilerLauncherDialog::RenderToolbar()
 
     VerticalSeparator();
 
-    // Profiler path override
-    ImGui::Text("Profiler Path:");
-    ImGui::SameLine();
-    char path_buf[512];
-    std::snprintf(path_buf, sizeof(path_buf), "%s", m_profiler_path_override.c_str());
-    ImGui::PushItemWidth(220);
-    if (ImGui::InputText("##ProfPath", path_buf, sizeof(path_buf)))
-    {
-        m_profiler_path_override = path_buf;
-    }
-    ImGui::PopItemWidth();
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::SetTooltip("Leave empty to use PATH");
-    }
+    // TODO: keep this option?
+    bool show_profiler_path = false;
+    if(show_profiler_path) {
+        ImGui::Text("Profiler Path:");
+        ImGui::SameLine();
+        char path_buf[512];
+        std::snprintf(path_buf, sizeof(path_buf), "%s", m_profiler_path_override.c_str());
+        ImGui::PushItemWidth(220);
+        if (ImGui::InputText("##ProfPath", path_buf, sizeof(path_buf)))
+        {
+            m_profiler_path_override = path_buf;
+        }
+        ImGui::PopItemWidth();
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Leave empty to use PATH");
+        }
 
-    VerticalSeparator();
+        VerticalSeparator();
+    }
 
     // Saved launch profiles (Optiq JSON presets)
     std::string load_name = RenderSavedProfileBar(

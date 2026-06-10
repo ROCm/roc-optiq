@@ -43,7 +43,7 @@ public:
     void SetStatus(rocprofvis_controller_remote_status_t status);
 
     // Actions (called by SSH layer)
-    void AddStdOut(const char* buffer, uint64_t count, bool last = false);
+    void AddStdOut(const char* buffer, uint64_t count);
     void SaveError(const std::string& err);
     void SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded);
     void SetDownloaded(uint64_t size);
@@ -58,7 +58,6 @@ public:
     void Cancel();
     void Reset();
     void Clear();
-    void WaitStatusConsumed();
 
 private:
 

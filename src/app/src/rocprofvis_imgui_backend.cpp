@@ -23,6 +23,9 @@ setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend, GLFWwindow*
 {
     glfwDefaultWindowHints();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+#if defined(GLFW_SCALE_TO_MONITOR)
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+#endif
 #if defined(__APPLE__)
     // GL 3.2 + GLSL 150
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);

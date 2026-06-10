@@ -13,8 +13,8 @@
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
 #include "rocprofvis_platform_helpers.h"
-#include "widgets/rocprofvis_gui_helpers.h"
-#include "widgets/rocprofvis_image_helpers.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb-image/stb_image.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -326,8 +326,6 @@ main(int argc, char** argv)
                 io.ConfigDpiScaleFonts               = true;
                 io.ConfigDpiScaleViewports           = true;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
-                // Keep undocked windows out of the OS taskbar.
-                io.ConfigViewportsNoTaskBarIcon = false;
 
                 ImGui::StyleColorsLight();
                 ImGui::GetStyle().FontScaleMain = 1.0f;
@@ -350,13 +348,26 @@ main(int argc, char** argv)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-                RocProfVis::View::EmbeddedImage icon(AMD_LOGO_png,
-                                                     static_cast<int>(AMD_LOGO_png_len));
-                if(icon.Valid())
+                int            icon_w = 0;
+                int            icon_h = 0;
+                int            icon_channels = 0;
+                unsigned char* icon_pixels =
+                    stbi_load_from_memory(AMD_LOGO_png,
+                                          static_cast<int>(AMD_LOGO_png_len), &icon_w, &icon_h,
+                                          &icon_channels, STBI_rgb_alpha);
+                if(icon_pixels && icon_w > 0 && icon_h > 0)
                 {
-                    GLFWimage glfw_icon = { icon.GetWidth(), icon.GetHeight(),
-                                            icon.GetPixels() };
+                    GLFWimage glfw_icon = { icon_w, icon_h, icon_pixels };
                     glfwSetWindowIcon(window, 1, &glfw_icon);
+                }
+                else
+                {
+                    spdlog::warn("Window icon: failed to decode image ({} bytes): {}",
+                                  AMD_LOGO_png_len, stbi_failure_reason());
+                }
+                if(icon_pixels)
+                {
+                    stbi_image_free(icon_pixels);
                 }
 
                 while(!glfwWindowShouldClose(window))

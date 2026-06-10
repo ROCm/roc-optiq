@@ -130,8 +130,11 @@ SummaryView::Render()
         m_hw_utilization_item->m_bg_color        = m_settings.GetColor(Colors::kBgPanel);
         ImGui::SetNextWindowPos(ImGui::GetWindowSize() * INITIAL_RELATIVE_POS,
                                 ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImGui::GetWindowSize() * INITIAL_RELATIVE_SIZE,
+                                 ImGuiCond_FirstUseEver);
         ImGui::Begin("Summary", &m_settings.GetAppWindowSettings().show_summary,
-                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                         ImGuiWindowFlags_NoScrollbar |
                          ImGuiWindowFlags_NoScrollWithMouse);
         if(m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID) ||
            m_data_provider.GetState() == ProviderState::kLoading)

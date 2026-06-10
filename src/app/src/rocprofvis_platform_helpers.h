@@ -42,7 +42,6 @@ raise_dragged_viewport_after_release();
 // unset and policy falls through to the env-var / default tier.
 void
 set_drag_repair_override(bool on);
-void
-clear_drag_repair_override();
+
 
 #endif

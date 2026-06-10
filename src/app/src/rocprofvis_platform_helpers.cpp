@@ -89,12 +89,6 @@ set_drag_repair_override(bool on)
     spdlog::info("Window drag fix: {}", g_cli_drag_repair_override);
 }
 
-void
-clear_drag_repair_override()
-{
-    g_cli_drag_repair_override = -1;
-}
-
 // Layered policy for the post-drag click-through fix (the one with
 // the magic-lamp flicker).  Resolution order, highest priority first:
 //   1. CLI override (--drag-repair on|off, set from main()).

@@ -24,7 +24,11 @@ class TopologyNode : public DmBase {
 public:
 	using TopologyProperty = std::variant<uint64_t, double, std::string>;
     using TopologyNodeId = uint64_t;
-	TopologyNode(rocprofvis_controller_topology_node_type_t type, TopologyNodeId id, TopologyNode* prev_node):m_type(type), m_id(id), m_prev_node(prev_node) {};
+    TopologyNode(
+        rocprofvis_controller_topology_node_type_t type, 
+        TopologyNodeId id, 
+        TopologyNode* prev_node, 
+        rocprofvis_db_instance_t db_instance);
 	virtual ~TopologyNode() {};
 
     TopologyNodeId GetId() { return m_id; };
@@ -88,12 +92,13 @@ protected:
 	std::map<uint32_t, TopologyProperty>         m_properties;
     TopologyNode*                                m_prev_node;
     std::string                                  m_name;
+    rocprofvis_db_instance_t                     m_db_instance;
 };
 
 
 class TopologyNodeRoot : public TopologyNode {
 public:
-    TopologyNodeRoot():TopologyNode(kRPVControllerTopologyNodeRoot,0, nullptr) {};
+    TopologyNodeRoot():TopologyNode(kRPVControllerTopologyNodeRoot,0, nullptr, nullptr) {};
     ~TopologyNodeRoot() {};
 
     rocprofvis_dm_result_t          AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
@@ -121,7 +126,7 @@ protected:
 class TopologyNodeSystemNode :  public TopologyNode {
 public:
     TopologyNodeSystemNode(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx):
-        TopologyNode(kRPVControllerTopologyNodeSytemNode, track_identifiers->id[TRACK_ID_NODE], ctx) {};
+        TopologyNode(kRPVControllerTopologyNodeSytemNode, track_identifiers->id[TRACK_ID_NODE], ctx, track_identifiers->db_instance) {};
     ~TopologyNodeSystemNode() {};
     rocprofvis_dm_result_t AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
     std::string GetNodeName() override;
@@ -160,7 +165,7 @@ class TopologyNodeProcess : public TopologyNode {
 public:
 
     TopologyNodeProcess(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) :
-        TopologyNode(kRPVControllerTopologyNodeProcess, track_identifiers->id[TRACK_ID_PID], ctx) {}
+        TopologyNode(kRPVControllerTopologyNodeProcess, track_identifiers->id[TRACK_ID_PID], ctx, track_identifiers->db_instance) {}
     ~TopologyNodeProcess() {};
     rocprofvis_dm_result_t AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
     std::string GetNodeName() override;
@@ -186,7 +191,8 @@ private:
 class TopologyNodeProcessor : public TopologyNode {
 public:
 
-    TopologyNodeProcessor(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) :TopologyNode(kRPVControllerTopologyNodeProcessor, track_identifiers->id[TRACK_ID_AGENT], ctx) {}
+    TopologyNodeProcessor(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) :
+        TopologyNode(kRPVControllerTopologyNodeProcessor, track_identifiers->id[TRACK_ID_AGENT], ctx, track_identifiers->db_instance) {}
     ~TopologyNodeProcessor() {};
     rocprofvis_dm_result_t AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
     std::string GetNodeName() override;
@@ -217,7 +223,7 @@ class TopologyNodeThread : public TopologyNode, public TopologyTrackRefence {
 public:
 
     TopologyNodeThread(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) :
-        TopologyNode(kRPVControllerTopologyNodeThread, track_identifiers->id[TRACK_ID_TID], ctx),
+        TopologyNode(kRPVControllerTopologyNodeThread, track_identifiers->id[TRACK_ID_TID], ctx, track_identifiers->db_instance),
         TopologyTrackRefence(track_identifiers->track_id),
         m_thread_type(track_identifiers->category == kRocProfVisDmRegionSampleTrack ? kRPVControllerThreadTypeSampled : kRPVControllerThreadTypeInstrumented) {}
     virtual ~TopologyNodeThread() {};
@@ -267,7 +273,7 @@ class TopologyNodeQueue : public TopologyNode , public TopologyTrackRefence, pub
 public:
 
     TopologyNodeQueue(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) :
-        TopologyNode(kRPVControllerTopologyNodeQueue, track_identifiers->id[TRACK_ID_QUEUE], ctx),
+        TopologyNode(kRPVControllerTopologyNodeQueue, track_identifiers->id[TRACK_ID_QUEUE], ctx, track_identifiers->db_instance),
         TopologyTrackRefence(track_identifiers->track_id),
         TopologyProcessRefence(track_identifiers->process_id) {}
     virtual ~TopologyNodeQueue() {};
@@ -318,7 +324,7 @@ class TopologyNodeStream : public TopologyNode, public TopologyTrackRefence {
 public:
 
     TopologyNodeStream(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) :
-        TopologyNode(kRPVControllerTopologyNodeStream, track_identifiers->id[TRACK_ID_STREAM], ctx),
+        TopologyNode(kRPVControllerTopologyNodeStream, track_identifiers->id[TRACK_ID_STREAM], ctx, track_identifiers->db_instance),
         TopologyTrackRefence(track_identifiers->track_id){}
     ~TopologyNodeStream() {};
     std::string GetNodeName() override;
@@ -330,6 +336,7 @@ private:
     const std::map<std::string, uint32_t>* GetPropertiesMap() override { return &s_columns_ids; }
     bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Stream"; }
     bool IsRelevantTopologyTableName(std::string table_name) override { return table_name == "QueueRef"; };
+    bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
         { "id", kRPVControllerStreamId },
@@ -346,7 +353,8 @@ public:
     TopologyNodeCounter(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) :
         TopologyNode(kRPVControllerTopologyNodeCounter, 
             track_identifiers->id[TRACK_ID_COUNTER],
-            ctx),
+            ctx, 
+            track_identifiers->db_instance),
         TopologyTrackRefence(track_identifiers->track_id),
         TopologyProcessRefence(track_identifiers->process_id),
     m_tag(track_identifiers->tag[TRACK_ID_COUNTER]) { }
@@ -388,7 +396,7 @@ private:
 class TopologyReferenceNode : public TopologyNode {
 public:
     TopologyReferenceNode(rocprofvis_controller_topology_node_type_t type, uint64_t id, rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) 
-        :TopologyNode(type, id, ctx) { downstream_track_identifiers = *track_identifiers; }
+        :TopologyNode(type, id, ctx, track_identifiers->db_instance) { downstream_track_identifiers = *track_identifiers; }
     virtual rocprofvis_dm_result_t          GetPropertyAsUint64(rocprofvis_dm_property_t property, 
         rocprofvis_dm_property_index_t index, 
         uint64_t* value) override;  

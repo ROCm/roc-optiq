@@ -807,7 +807,12 @@ AppWindow::OpenFile(std::string file_path)
         }
         case Project::OpenResult::Duplicate:
         {
-            // File is already opened, just switch to that tab
+            // trace already open, tell the user which tab and switch to it
+            Project* existing = GetProject(file_path);
+            ShowMessageDialog("Trace Already Open",
+                              "This trace is already open in \"" +
+                                  (existing ? existing->GetName() : file_path) +
+                                  "\".\n\nSwitched to the existing tab.");
             m_tab_container->SetActiveTab(file_path);
             break;
         }

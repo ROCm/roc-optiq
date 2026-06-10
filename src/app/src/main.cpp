@@ -13,6 +13,9 @@
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_image_helpers.h"
+#ifdef __APPLE__
+#include "rocprofvis_macos_input.h"
+#endif
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -87,6 +90,59 @@ glfw_error_callback(int error, const char* description)
 {
     spdlog::error("GLFW Error {}: {}", error, description);
 }
+
+#ifdef __APPLE__
+// Reconcile ImGui's modifier state with the live OS modifier state.
+//
+// macOS system gestures (e.g. Mission Control via Ctrl+Up while dragging the
+// window to a new Space) can consume the modifier key-up before GLFW sees it,
+// leaving GLFW's cached key state stuck "down". Because ImGui enables
+// ConfigMacOSXBehaviors on macOS, a stuck Control key makes ImGui translate
+// every left-click into a right-click, so buttons and menus stop responding.
+// Feeding the true OS state back into ImGui clears the phantom modifier.
+static void
+sync_imgui_modifiers_with_os()
+{
+    ImGuiIO&                       io = ImGui::GetIO();
+    RocProfVis::App::ModifierState m  = RocProfVis::App::get_os_modifier_state();
+
+    if(io.KeyCtrl != m.ctrl)
+    {
+        io.AddKeyEvent(ImGuiMod_Ctrl, m.ctrl);
+    }
+    if(io.KeyShift != m.shift)
+    {
+        io.AddKeyEvent(ImGuiMod_Shift, m.shift);
+    }
+    if(io.KeyAlt != m.alt)
+    {
+        io.AddKeyEvent(ImGuiMod_Alt, m.alt);
+    }
+    if(io.KeySuper != m.super)
+    {
+        io.AddKeyEvent(ImGuiMod_Super, m.super);
+    }
+}
+
+// Replaces the ImGui GLFW backend's mouse-button callback on macOS so the
+// modifier state is corrected from the OS *before* the click is queued. This
+// guarantees a phantom-stuck Control key cannot turn a left-click into a
+// right-click for the very click that exposes the problem.
+static void
+mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    (void) window;
+    (void) mods;
+
+    sync_imgui_modifiers_with_os();
+
+    ImGuiIO& io = ImGui::GetIO();
+    if(button >= 0 && button < ImGuiMouseButton_COUNT)
+    {
+        io.AddMouseButtonEvent(button, action == GLFW_PRESS);
+    }
+}
+#endif
 
 static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -291,6 +347,11 @@ main(int argc, char** argv)
                 }, fd_pref);
 
                 backend.m_config(&backend, window);
+#ifdef __APPLE__
+                // Install after m_config so this overrides the ImGui GLFW
+                // backend's own mouse-button callback (set during m_config).
+                glfwSetMouseButtonCallback(window, mouse_button_callback);
+#endif
                 rocprofvis_view_set_texture_backend(
                     rocprofvis_imgui_backend_create_gui_texture_rgba32,
                     rocprofvis_imgui_backend_destroy_gui_texture, &backend);
@@ -323,6 +384,12 @@ main(int argc, char** argv)
                     }
 
                     glfwPollEvents();
+
+#ifdef __APPLE__
+                    // Clear any phantom-stuck modifier (e.g. Control left down
+                    // after a Mission Control gesture) before the frame renders.
+                    sync_imgui_modifiers_with_os();
+#endif
 
                     // Handle changes in the frame buffer size
                     int fb_width, fb_height;

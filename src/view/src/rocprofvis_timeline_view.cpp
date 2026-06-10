@@ -865,12 +865,7 @@ TimelineView::RenderSplitter()
             (drag_delta.x / display_size.x) *
                 m_tpt->GetVWidth());  // Prevents chart from moving in unexpected way.
         ImGui::ResetMouseDragDelta();
-        ImGui::EndDragDropSource();
         m_resize_activity |= true;
-    }
-    if(ImGui::BeginDragDropTarget())
-    {
-        ImGui::EndDragDropTarget();
     }
 
     ImGui::EndChild();
@@ -1398,9 +1393,11 @@ TimelineView::RenderTrack(int track_index, bool request_data,
         // Save distance for book keeping
         track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
 
-        // This item is being reordered if there is an active payload and its id
-        // matches the payload's id.
-        bool is_reordering = ImGui::GetDragDropPayload() &&
+        // Match on the "reorder_request" payload type so unrelated drags
+        // (e.g. imgui docking window moves) don't trigger reordering.
+        const ImGuiPayload* payload      = ImGui::GetDragDropPayload();
+        bool                is_reordering = payload &&
+                             payload->IsDataType("reorder_request") &&
                              m_reorder_request.track_id == track_item->GetID();
 
         // Check if the track is visible

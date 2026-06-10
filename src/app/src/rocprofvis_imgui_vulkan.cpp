@@ -384,8 +384,9 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
                                                  &backend_data->m_queue);
 
                                 // Create Descriptor Pool
-                                // ImGui 1.92+'s dynamic texture system creates many more
-                                // textures, so we need a larger descriptor pool.
+                                // ImGui 1.92+'s dynamic texture system and the
+                                // multi-viewport platform windows both consume many
+                                // descriptors, so size the pool generously.
                                 {
                                     VkDescriptorPoolSize pool_sizes[] = {
                                         { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,

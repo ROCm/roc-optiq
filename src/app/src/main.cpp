@@ -12,12 +12,17 @@
 #include "rocprofvis_cli_parser.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
-#include "widgets/rocprofvis_image_helpers.h"
+#include "rocprofvis_platform_helpers.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb-image/stb_image.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef __linux__
+#    include <unordered_map>
+#endif
 
 const char* APP_NAME = "ROCm(TM) Optiq Beta";
 
@@ -26,6 +31,15 @@ static std::vector<std::string>         g_dropped_file_paths;
 static bool                             g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
+
+#ifdef __linux__
+// Per-frame snapshot of the "intended" (drag-target) position that
+// UpdateMouseMovingWindowNewFrame() wrote into viewport->Pos before we
+// snap it to the actual OS position.  Populated in the post-NewFrame
+// hook, consumed in the pre-UpdatePlatformWindows hook so the requested
+// move is still transmitted to the OS.  Key: viewport ID.
+static std::unordered_map<ImGuiID, ImVec2> g_viewport_intended_pos;
+#endif
 
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
@@ -45,15 +59,6 @@ drop_callback(GLFWwindow* window, int count, const char* paths[])
         g_dropped_file_paths.push_back(paths[i]);
     }
     g_file_was_dropped = true;
-}
-
-static void
-content_scale_callback(GLFWwindow* window, float xscale, float yscale)
-{
-    // Unused parameters
-    (void) window;
-    (void) yscale;
-    rocprofvis_view_set_dpi(xscale);
 }
 
 static void
@@ -138,6 +143,14 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
         "Set file dialog backend: 'auto' (default), 'native' (system file "
         "dialog), or 'imgui' (built-in). Use 'imgui' when running over SSH",
         true);
+#ifdef __linux__
+    result &= cli_parser.AddOption(
+        "r", "drag-repair",
+        "Linux post-drag click-through fix for floating windows "
+        "(Ubuntu Wayland bug; trade-off: brief flicker per drag-release): "
+        "'on'|'off' (env: ROCPROFVIS_DRAG_REPAIR; default: off)",
+        true);
+#endif
     result &= cli_parser.AddOption("h", "help",
         "Show this help message and exit", false);
     ROCPROFVIS_ASSERT(result);
@@ -160,6 +173,27 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
         }
     }
 
+#ifdef __linux__
+    // Apply --drag-repair before any frame runs so the platform helper
+    // policy is in place from the very first viewport interaction.
+    // 'auto' (or unrecognised values) leaves the override unset, so
+    // the helper falls back through env var to auto-detection.
+    if(!exit_app && cli_parser.WasOptionFound("drag-repair"))
+    {
+        const std::string v = cli_parser.GetOptionValue("drag-repair");
+        if(v == "on" || v == "1" || v == "true" || v == "yes")
+        {
+            set_drag_repair_override(true);
+        }
+        else if(v == "off" || v == "0" || v == "false" || v == "no")
+        {
+            set_drag_repair_override(false);
+        }
+        // else: "auto" or anything else -> do nothing, defer to env /
+        // auto-detect tiers in should_apply_drag_repair().
+    }
+#endif
+
     if(exit_app)
     {
         std::cout.flush();
@@ -175,15 +209,6 @@ main(int argc, char** argv)
 {
     int app_result_code = 0;
 
-    RocProfVis::View::CLIParser::AttachToConsole();
-    RocProfVis::View::CLIParser cli_parser;
-    bool                        exit_app = false;
-    parse_command_line_args(argc, argv, cli_parser, exit_app);
-    if(exit_app)
-    {
-        return app_result_code;
-    }
-
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
@@ -194,6 +219,15 @@ main(int argc, char** argv)
         std::filesystem::path(config_path) / "roc-optiq.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
+    
+    RocProfVis::View::CLIParser::AttachToConsole();
+    RocProfVis::View::CLIParser cli_parser;
+    bool                        exit_app = false;
+    parse_command_line_args(argc, argv, cli_parser, exit_app);
+    if(exit_app)
+    {
+        return app_result_code;
+    }
 
     // Parse backend preference from command line
     rocprofvis_imgui_backend_preference_t backend_pref = kRPVBackendAuto;
@@ -277,12 +311,6 @@ main(int argc, char** argv)
             {
                 // After init: window may be recreated (e.g. Vulkan -> OpenGL fallback)
                 glfwSetDropCallback(window, drop_callback);
-                glfwSetWindowContentScaleCallback(window, content_scale_callback);
-                {
-                    float xs, ys;
-                    glfwGetWindowContentScale(window, &xs, &ys);
-                    content_scale_callback(window, xs, ys);
-                }
                 glfwSetWindowCloseCallback(window, close_callback);
                 glfwSetWindowSizeCallback(window, window_size_change_callback);
                 glfwSetKeyCallback(window, key_callback);
@@ -294,9 +322,13 @@ main(int argc, char** argv)
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+                io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+                io.ConfigDpiScaleFonts               = true;
+                io.ConfigDpiScaleViewports           = true;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
 
                 ImGui::StyleColorsLight();
+                ImGui::GetStyle().FontScaleMain = 1.0f;
 
                 rocprofvis_view_init([window](int notification) -> void {
                     app_notification_callback(window, notification);
@@ -316,13 +348,26 @@ main(int argc, char** argv)
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-                RocProfVis::View::EmbeddedImage icon(AMD_LOGO_png,
-                                                     static_cast<int>(AMD_LOGO_png_len));
-                if(icon.Valid())
+                int            icon_w = 0;
+                int            icon_h = 0;
+                int            icon_channels = 0;
+                unsigned char* icon_pixels =
+                    stbi_load_from_memory(AMD_LOGO_png,
+                                          static_cast<int>(AMD_LOGO_png_len), &icon_w, &icon_h,
+                                          &icon_channels, STBI_rgb_alpha);
+                if(icon_pixels && icon_w > 0 && icon_h > 0)
                 {
-                    GLFWimage glfw_icon = { icon.GetWidth(), icon.GetHeight(),
-                                            icon.GetPixels() };
+                    GLFWimage glfw_icon = { icon_w, icon_h, icon_pixels };
                     glfwSetWindowIcon(window, 1, &glfw_icon);
+                }
+                else
+                {
+                    spdlog::warn("Window icon: failed to decode image ({} bytes): {}",
+                                  AMD_LOGO_png_len, stbi_failure_reason());
+                }
+                if(icon_pixels)
+                {
+                    stbi_image_free(icon_pixels);
                 }
 
                 while(!glfwWindowShouldClose(window))
@@ -368,6 +413,21 @@ main(int argc, char** argv)
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
 
+#ifdef __linux__
+                    // Hook A: snap secondary viewport Pos to the actual
+                    // OS window position before user code runs, so
+                    // hit-testing and rendering agree with reality when
+                    // the window manager clamps our requested drag pos.
+                    // Call raise_dragged_viewport_after_release(), this is a fix
+                    // for the post-drag click-fall-through bug under
+                    // Xwayland/Mutter.
+                    if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+                    {
+                        snap_secondary_viewports_to_os_pos(g_viewport_intended_pos);
+                        raise_dragged_viewport_after_release();
+                    }
+#endif
+
                     rocprofvis_view_render(g_render_options);
                     g_render_options = rocprofvis_view_render_options_t::
                         kRocProfVisViewRenderOption_None;
@@ -379,6 +439,26 @@ main(int argc, char** argv)
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
+                    }
+
+                    // Render windows that have been dragged out of the main viewport.
+                    if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+                    {
+                        GLFWwindow* backup_current_context = glfwGetCurrentContext();
+#ifdef __linux__
+                        // Hook B: restore the drag-target Pos we
+                        // temporarily replaced with the OS pos in Hook A
+                        // so UpdatePlatformWindows() still transmits the
+                        // requested move.
+                        restore_secondary_viewport_intended_pos(g_viewport_intended_pos);
+#endif
+                        ImGui::UpdatePlatformWindows();
+                        ImGui::RenderPlatformWindowsDefault();
+                        glfwMakeContextCurrent(backup_current_context);
+                    }
+
+                    if(!is_minimized)
+                    {
                         backend.m_present(&backend);
                     }
 

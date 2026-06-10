@@ -1029,5 +1029,6 @@ typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
     kRPVControllerRooflineKernelIntensityTypeHBM,
     kRPVControllerRooflineKernelIntensityTypeL2,
     kRPVControllerRooflineKernelIntensityTypeL1,
+    kRPVControllerRooflineKernelIntensityTypeLDS,
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
 #endif

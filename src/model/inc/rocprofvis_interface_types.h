@@ -490,6 +490,7 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnRooflineL1CacheData,
     kRPVComputeColumnRooflineL2CacheData,
     kRPVComputeColumnRooflineHBMCacheData,
+    kRPVComputeColumnRooflineLDSCacheData,
 
     kRPVComputeColumnMetricId,
     kRPVComputeColumnTableId,

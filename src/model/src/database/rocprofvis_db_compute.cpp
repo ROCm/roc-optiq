@@ -196,10 +196,11 @@ namespace DataModel
 			query += " total_flops, ";
 			query += " l1_cache_data, ";
 			query += " l2_cache_data, ";
-			query += " hbm_cache_data, ";
-			query += IsVersionGreaterOrEqual("1.4.0")
-				? " lds_cache_data "
-				: " 0 AS lds_cache_data ";
+			query += " hbm_cache_data ";
+			if (IsVersionGreaterOrEqual("1.4.0"))
+			{ 
+				query += ", lds_cache_data ";
+			}
 			if (IsVersionGreaterOrEqual("1.3.0"))
 			{
 				query += " FROM compute_kernel_roofline_data CRD ";	

@@ -523,7 +523,6 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                     { kRPVComputeColumnRooflineL1CacheData, std::nullopt },
                                                     { kRPVComputeColumnRooflineL2CacheData, std::nullopt },
                                                     { kRPVComputeColumnRooflineHBMCacheData, std::nullopt },
-                                                    { kRPVComputeColumnRooflineLDSCacheData, std::nullopt },
                                                 }, 
                                                 {} 
                                             };

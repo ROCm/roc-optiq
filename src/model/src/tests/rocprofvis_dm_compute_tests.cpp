@@ -444,7 +444,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
                 REQUIRE(roofline.columns.count(kRPVComputeColumnRooflineL1CacheData) > 0);
                 REQUIRE(roofline.columns.count(kRPVComputeColumnRooflineL2CacheData) > 0);
                 REQUIRE(roofline.columns.count(kRPVComputeColumnRooflineHBMCacheData) > 0);
-                REQUIRE(roofline.columns.count(kRPVComputeColumnRooflineLDSCacheData) > 0);
 
                 for(size_t i = 0; i < roofline.rows.size(); i++)
                 {

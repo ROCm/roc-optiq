@@ -21,6 +21,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
+#include <sstream>
 
 namespace RocProfVis
 {
@@ -36,6 +37,27 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
+
+// Build a text block mirroring the on-hover tooltip (name, timing, and id)
+// for the clipboard.
+static std::string
+FormatEventDetails(const EventInfo& info, double trace_start_time,
+                   TimeFormat time_format)
+{
+    std::ostringstream    out;
+    const BasicEventData& basic = info.basic_info;
+
+    out << "Name: " << basic.name << "\n";
+    out << "Start: "
+        << nanosecond_to_formatted_str(basic.start_ts - trace_start_time, time_format,
+                                       true)
+        << "\n";
+    out << "Duration: "
+        << nanosecond_to_formatted_str(basic.duration, time_format, true) << "\n";
+    out << "ID: " << basic.id.bitfield.event_id << "\n";
+
+    return out.str();
+}
 
 TimelineView::TimelineView(DataProvider&                          dp,
                            std::shared_ptr<TimelineSelection>     timeline_selection,
@@ -391,8 +413,6 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 
     if(!ImGui::IsPopupOpen("TimelineContextMenu"))
     {
-        // Clear right-click state when popup closes
-        TimelineFocusManager::GetInstance().ClearRightClickLayer();
         return;
     }
     auto style = m_settings.GetDefaultStyle();
@@ -400,9 +420,9 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
     if(ImGui::BeginPopup("TimelineContextMenu"))
     {
-        // Show "Make Time Range Selection" when there are selected events
-        if(m_timeline_selection->HasSelectedEvents() &&
-           TimelineFocusManager::GetInstance().GetRightClickLayer() == Layer::kGraphLayer)
+        // Show event actions whenever events are selected, regardless of where the
+        // right-click landed.
+        if(m_timeline_selection->HasSelectedEvents())
         {
             if(ImGui::MenuItem("Make Time Range Selection"))
             {
@@ -415,6 +435,20 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                                              m_tpt->NormalizeTime(end_ts) };
                     m_timeline_selection->SelectTimeRange(start_ts, end_ts);
                 }
+                ImGui::CloseCurrentPopup();
+            }
+
+            std::vector<uint64_t> selected_event_ids;
+            m_timeline_selection->GetSelectedEvents(selected_event_ids);
+            const bool multiple_events = selected_event_ids.size() > 1;
+            if(ImGui::MenuItem(multiple_events ? "Copy Event Names" : "Copy Event Name"))
+            {
+                CopySelectedEventNames();
+                ImGui::CloseCurrentPopup();
+            }
+            if(ImGui::MenuItem("Copy Event Details"))
+            {
+                CopySelectedEventDetails();
                 ImGui::CloseCurrentPopup();
             }
         }
@@ -495,6 +529,84 @@ TimelineView::ClearTimeRangeSelection()
         m_highlighted_region.first  = TimelineSelection::INVALID_SELECTION_TIME;
         m_highlighted_region.second = TimelineSelection::INVALID_SELECTION_TIME;
     }
+}
+
+void
+TimelineView::CopySelectedEventNames()
+{
+    std::vector<uint64_t> event_ids;
+    if(!m_timeline_selection->GetSelectedEvents(event_ids))
+    {
+        return;
+    }
+
+    const EventModel&  events = m_data_provider.DataModel().GetEvents();
+    std::ostringstream out;
+    size_t             count = 0;
+    for(uint64_t event_id : event_ids)
+    {
+        const EventInfo* info = events.GetEvent(event_id);
+        if(info)
+        {
+            if(count > 0)
+            {
+                out << "\n";
+            }
+            out << info->basic_info.name;
+            ++count;
+        }
+    }
+
+    if(count == 0)
+    {
+        return;
+    }
+
+    ImGui::SetClipboardText(out.str().c_str());
+    NotificationManager::GetInstance().Show(
+        count > 1 ? "Event names were copied" : "Event name was copied",
+        NotificationLevel::Info);
+}
+
+void
+TimelineView::CopySelectedEventDetails()
+{
+    std::vector<uint64_t> event_ids;
+    if(!m_timeline_selection->GetSelectedEvents(event_ids))
+    {
+        return;
+    }
+
+    const EventModel& events = m_data_provider.DataModel().GetEvents();
+    const double      trace_start_time =
+        m_data_provider.DataModel().GetTimeline().GetStartTime();
+    const TimeFormat time_format =
+        m_settings.GetUserSettings().unit_settings.time_format;
+
+    std::ostringstream out;
+    size_t             count = 0;
+    for(uint64_t event_id : event_ids)
+    {
+        const EventInfo* info = events.GetEvent(event_id);
+        if(info)
+        {
+            if(count > 0)
+            {
+                out << "\n----------------------------------------\n\n";
+            }
+            out << FormatEventDetails(*info, trace_start_time, time_format);
+            ++count;
+        }
+    }
+
+    if(count == 0)
+    {
+        return;
+    }
+
+    ImGui::SetClipboardText(out.str().c_str());
+    NotificationManager::GetInstance().Show("Event details were copied",
+                                            NotificationLevel::Info);
 }
 
 float
@@ -1948,12 +2060,6 @@ TimelineView::RenderTraceView()
                                 screen_pos + subcomponent_size_main,
                                 m_settings.GetColor(Colors::kBgPanel),
                                 m_settings.GetDefaultStyle().ChildRounding);
-
-    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-    {
-        // Reset per-click context so only event right-clicks repopulate it.
-        TimelineFocusManager::GetInstance().ClearRightClickLayer();
-    }
 
     ImGui::BeginChild("Grid View 2",
                       ImVec2(subcomponent_size_main.x,

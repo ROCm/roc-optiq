@@ -33,6 +33,19 @@ enum class ProviderState
     kError
 };
 
+struct DataProviderCleanupWork
+{
+    std::string                           trace_file_path;
+    std::unordered_map<int64_t, RequestInfo> requests;
+    rocprofvis_controller_t*              controller = nullptr;
+};
+
+struct DataProviderCleanupResult
+{
+    std::string trace_file_path;
+    size_t      request_count = 0;
+};
+
 class DataProvider
 {
 public:
@@ -48,6 +61,11 @@ public:
     static const uint64_t FETCH_SYSTEM_TRACE_REQUEST_ID;
     static const uint64_t SUMMARY_REQUEST_ID;
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID;
+    static const uint64_t ANALYSIS_TOP_DISPATCH_EVENTS_TABLE_REQUEST_ID;
+    static const uint64_t ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID;
+    static const uint64_t ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID;
+    static const uint64_t ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
 #ifdef COMPUTE_UI_SUPPORT
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
     static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
@@ -76,9 +94,19 @@ public:
     void SetSelectedState(const std::string& id);
 
     /*
-     *   Free all requests. This does not cancel the requests on the controller end.
+     *   Cancel, wait for, and free outstanding requests on the calling thread.
+     *   Use DetachCleanupWork() when the caller needs asynchronous cleanup.
      */
     void FreeRequests();
+
+    /*
+     *   Get the number of pending requests.
+     */
+    size_t GetPendingRequestCount() const;
+
+    DataProviderCleanupWork DetachCleanupWork();
+    static DataProviderCleanupResult CleanupDetachedResources(
+        DataProviderCleanupWork cleanup_work);
 
     /*
      * Loads the trace data into the controller.
@@ -165,6 +193,9 @@ public:
     bool FetchTable(const TableRequestParams& table_params);
 
     bool FetchSummary();
+
+    bool FetchAnalysisQueueUtilization(
+        const AnalysisQueueUtilizationRequestParams& params);
 
     bool IsRequestPending(uint64_t request_id) const;
 
@@ -265,6 +296,7 @@ private:
     void ProcessSaveTrimmedTraceRequest(RequestInfo& req);
     void ProcessCleanupDatabaseRequest(RequestInfo& req);
     void ProcessSummaryRequest(RequestInfo& req);
+    void ProcessAnalysisQueueUtilizationRequest(RequestInfo& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);

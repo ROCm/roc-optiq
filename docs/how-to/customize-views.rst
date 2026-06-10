@@ -14,15 +14,21 @@ Customize your ROCm Optiq project
 .. |reset| image:: ../images/reset.png
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
+.. |plus| image:: ../images/plus.png
+.. |recall| image:: ../images/recall.png
+.. |overwrite| image:: ../images/overwrite.png
+.. |delete| image:: ../images/delete.png
 
 You can customize display settings, filters, bookmarks, and more in your ROCm Optiq projects.
 
-Change display settings
-=======================
+.. _change-settings:
 
-You can adjust the display settings in your ROCm Compute Profiler and ROCm Systems Profiler projects.
+Change settings
+===============
 
-Select **Edit** > **Preferences** to adjust these global display settings for ROCm Optiq from the **Settings** menu: 
+You can adjust the settings in your ROCm Compute Profiler and ROCm Systems Profiler projects.
+
+Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq from the **Settings** menu: 
 
 - The application theme display (Light or Dark mode).
 - The font scaling: automatic based on the display DPI, or customized using the font size control:
@@ -30,9 +36,14 @@ Select **Edit** > **Preferences** to adjust these global display settings for RO
   .. image:: ../images/settings.png
      :width: 600
 
-- The time unit settings displayed on the **Timeline View**.
+- The time unit settings displayed on the **Timeline View**:
 
   .. image:: ../images/units.png
+     :width: 600
+
+- The hotkey settings allow keyboard shortcuts to be redefined:
+
+  .. image:: ../images/hotkeys.png
      :width: 600
 
 Show/hide panels
@@ -43,7 +54,7 @@ Use the **View** menu to show and hide application panels.
 .. image:: ../images/view.png
   :width: 300
 
-Customize ROCm Optiq projects for ROCm Systems Profiler traces
+Customize projects for ROCm Systems Profiler traces
 ==============================================================
 
 You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, saved trace selections, added bookmarks/annotations, and more.
@@ -71,7 +82,7 @@ If one or more events are selected, the **Make Time Range Selection** option dis
 
 |make|
 
-Selecting this will set a time range filter with boundaries at the event's start and end times, or the first start time and last end time if multiple events are selected. 
+Selecting this sets a time-range filter with boundaries at the event's start and end times, or at the first start time and last end time if multiple events are selected. 
 
 .. tip::
 
@@ -153,16 +164,16 @@ Customize display options for each track by clicking the gear icon in the track'
 .. image:: ../images/track-gear.png
    :width: 600
 
-- For event tracks, you can toggle between **Color by name** and **Compact mode**.
+- For event tracks, you can toggle between **Color by name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
-  - **Color by name**: Change the coloring method used to color the events.
-  - **Compact Mode**: Shrink the event heights so that tall flame graphs can be displayed in a smaller area.
+  - **Color by name**, **Color by Time Level**, and **No Color***: Change the coloring method used to color the events.
+  - **Compact Mode**: Shrink event heights to display tall flame graphs in a smaller area.
 
 - For sample counter tracks, you can toggle between **Show Counter Boxes**, **Alternate Counter Coloring**, and **Highlight Y Range**:
 
   - **Show Counter Boxes**: Display as a line only, or fill the area under the line as well.
   - **Alternate Counter Coloring**: If the area under the line is filled, alternate the fill color for each sample.
-  - **Highlight Y Range**: Select an area of the graph to highlight. Choose the min and max range that you want to highlight. The tool highlights these values on the track region.
+  - **Highlight Y Range**: Select an area of the graph to highlight. Choose the minimum and maximum range that you want to highlight. The tool highlights these values on the track region.
 
     .. image:: ../images/timeline-display-options.png
        :width: 400  
@@ -178,7 +189,7 @@ Customize display options for each track by clicking the gear icon in the track'
 Set the flow rendering display mode
 -----------------------------------
 
-Use the **Flow** buttons on the **Toolbar** to show and hide flow information on the :ref:`timeline`, or change the flow display mode from Render (fan) to Chain mode. 
+Use the **Flow** buttons on the toolbar to show and hide flow information on the :ref:`timeline`, or change the flow display mode from Render (fan) to Chain mode. 
 
 |flow|
 
@@ -203,3 +214,30 @@ Persist the customizations made to tracks, bookmarks, and annotations by saving 
 
 - Select **File** > **Save As** to create a new project.
 - Select **File** > **Save** to overwrite the currently opened project.
+
+Remove Optiq-specific metadata from an open trace file
+------------------------------------------------------
+
+You can remove metadata added by ROCm Optiq during processing trace data by selecting **File > Database > Full Cleanup**.
+
+.. image:: ../images/cleanup.png
+   :width: 300
+
+Customize projects for ROCm Compute Profiler Analysis Data
+==========================================================
+
+.. _presets:
+
+Presets
+-------
+
+Persist the pinned metric configurations for the Table View and Baseline Comparison by saving them as a preset. To do this, go to **Presets**, enter a preset name into the **New Preset Name** field, then click |plus|.
+
+.. image:: ../images/presets.png
+   :width: 300
+
+After a preset is saved, you can:
+
+- Recall it by clicking |recall| in the preset's row.
+- Overwrite it by clicking |overwrite|.
+- Delete it by clicking |delete|.  

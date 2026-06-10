@@ -66,7 +66,6 @@ Notification::IsExpired(double current_time) const
 NotificationManager::NotificationManager()
 : m_default_duration(1.5f)
 , m_default_fade_duration(0.25f)
-, m_notification_spacing(5.0f)
 , m_next_uid(0)
 {}
 
@@ -160,10 +159,8 @@ NotificationManager::Render()
     const ImGuiStyle&    style    = ImGui::GetStyle();
     ImVec2               base_pos = viewport->WorkPos;
     float                y_offset = 0.0f;
-    const float          padding  = 10.0f;
-
-    // Default height for notifications
-    float notification_height = ImGui::GetTextLineHeight() + style.WindowPadding.y * 2.0f;
+    const float          padding  = std::max(style.WindowPadding.x, style.WindowPadding.y);
+    const float          notification_spacing = style.ItemSpacing.y;
 
     double current_time = ImGui::GetTime();
 
@@ -179,6 +176,8 @@ NotificationManager::Render()
 
         bool display_progress =
             notification.progress_pct > 0 || !notification.progress_message.empty();
+        float notification_height =
+            ImGui::GetTextLineHeight() + style.WindowPadding.y * 2.0f;
         if(display_progress)
         {
             notification_height += ImGui::GetFrameHeightWithSpacing();
@@ -187,7 +186,8 @@ NotificationManager::Render()
                           base_pos.y + viewport->WorkSize.y - padding - y_offset);
         ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always,
                                 ImVec2(1.0f, 1.0f));  // Pivot at bottom-right
-        ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, notification_height), ImVec2(FLT_MAX, notification_height));
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, notification_height),
+                                            ImVec2(FLT_MAX, notification_height));
         ImGui::SetNextWindowBgAlpha(opacity);
         ImVec4 bg_color = GetBgColorForLevel(notification.level);
 
@@ -220,7 +220,7 @@ NotificationManager::Render()
         }
         ImGui::PopStyleColor();
 
-        y_offset += notification_height + m_notification_spacing;
+        y_offset += notification_height + notification_spacing;
 
         ImGui::End();
         ImGui::PopStyleColor();

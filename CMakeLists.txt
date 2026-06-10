@@ -10,7 +10,7 @@ project(${TARGET_NAME})
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 4)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 0)
+set(PROJECT_VERSION_BUILD 3)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -27,12 +27,6 @@ option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui fi
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
 
-if(APPLE AND USE_NATIVE_FILE_DIALOG)
-    set(USE_NATIVE_FILE_DIALOG OFF CACHE BOOL
-        "Use the OS native file dialog instead of ImGui file dialog" FORCE)
-    message(WARNING "Disabling native file dialog on macOS; it must run on the main thread.")
-endif()
-
 if(COMPUTE_UI_SUPPORT) 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)
@@ -42,9 +36,6 @@ endif(ROCPROFVIS_DEVELOPER_MODE)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
-if(USE_NATIVE_FILE_DIALOG)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NATIVE_FILE_DIALOG")
-endif(USE_NATIVE_FILE_DIALOG)
 
 # Set GLFW library type based on option
 if(GLFW_LINK_STATIC)
@@ -71,8 +62,10 @@ find_package(Vulkan REQUIRED)
 
 # View related src files
 set(VIEW_FILES
-    src/view/src/rocprofvis_appwindow.cpp 
-    src/view/src/rocprofvis_appwindow.h 
+    src/view/src/rocprofvis_appwindow.cpp
+    src/view/src/rocprofvis_appwindow.h
+    src/view/src/welcome/rocprofvis_welcome_page.cpp
+    src/view/src/welcome/rocprofvis_welcome_page.h
     src/view/src/rocprofvis_annotation_view.cpp
     src/view/src/rocprofvis_track_item.cpp 
     src/view/src/rocprofvis_flame_track_item.cpp 
@@ -85,8 +78,10 @@ set(VIEW_FILES
     src/view/src/rocprofvis_hotkey_manager.cpp 
     src/view/src/rocprofvis_stickynote.cpp
     src/view/src/rocprofvis_click_manager.cpp
+    src/view/src/rocprofvis_measurement_controller.cpp
     src/view/src/rocprofvis_analysis_view.cpp 
     src/view/src/rocprofvis_trace_view.cpp 
+    src/view/src/rocprofvis_top_events_view.cpp
     src/view/src/rocprofvis_line_track_item.cpp 
     src/view/src/rocprofvis_timeline_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 
@@ -98,6 +93,7 @@ set(VIEW_FILES
     src/view/src/model/rocprofvis_tables_model.cpp
     src/view/src/model/rocprofvis_summary_model.cpp
     src/view/src/model/rocprofvis_event_model.cpp
+    src/view/src/model/rocprofvis_analysis_model.cpp
     src/view/src/model/rocprofvis_trace_data_model.cpp
     src/view/src/rocprofvis_raw_track_data.cpp
     src/view/src/rocprofvis_events.cpp
@@ -112,6 +108,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_summary_view.cpp
     src/view/src/rocprofvis_time_to_pixel.cpp
     src/view/src/rocprofvis_minimap.cpp
+    src/view/src/rocprofvis_presets.cpp
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
     src/view/src/widgets/rocprofvis_flex_container.cpp
@@ -119,6 +116,7 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_editable_textfield.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
+    src/view/src/widgets/rocprofvis_image_helpers.cpp
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
     src/view/src/widgets/rocprofvis_dialog.cpp
     src/view/src/widgets/rocprofvis_notification_manager.cpp
@@ -236,6 +234,34 @@ target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(APPLE)
+    set(ROCPROFVIS_BUNDLE_VULKAN ON CACHE BOOL
+        "Bundle the Vulkan loader into the macOS app. MoltenVK is resolved \
+from the user's LunarG Vulkan SDK install at runtime; the entitlements \
+plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
+    if(ROCPROFVIS_BUNDLE_VULKAN)
+        set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "")
+        if(Vulkan_LIBRARY)
+            set(ROCPROFVIS_VULKAN_LOADER_LIBRARY "${Vulkan_LIBRARY}")
+        elseif(Vulkan_LIBRARIES)
+            list(GET Vulkan_LIBRARIES 0 ROCPROFVIS_VULKAN_LOADER_LIBRARY)
+        endif()
+        if(ROCPROFVIS_VULKAN_LOADER_LIBRARY)
+            get_filename_component(ROCPROFVIS_VULKAN_LOADER_DIR
+                "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}" DIRECTORY)
+            if(EXISTS "${ROCPROFVIS_VULKAN_LOADER_DIR}/libvulkan.1.dylib")
+                set(ROCPROFVIS_VULKAN_LOADER_LIBRARY
+                    "${ROCPROFVIS_VULKAN_LOADER_DIR}/libvulkan.1.dylib")
+            endif()
+        endif()
+        if(NOT ROCPROFVIS_VULKAN_LOADER_LIBRARY OR
+           NOT EXISTS "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}")
+            message(FATAL_ERROR
+                "ROCPROFVIS_BUNDLE_VULKAN is ON, but the Vulkan loader library "
+                "was not found. Set Vulkan_LIBRARY to the SDK libvulkan.dylib.")
+        endif()
+
+    endif()
+
     set_target_properties(${TARGET_NAME} PROPERTIES
         BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
         INSTALL_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
@@ -259,18 +285,66 @@ if(APPLE)
             "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
         COMMENT "Staging GLFW dylib into the app bundle"
     )
+    if(ROCPROFVIS_BUNDLE_VULKAN)
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROCPROFVIS_VULKAN_LOADER_LIBRARY}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/licenses/Vulkan-Loader-LICENSE.txt"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/Vulkan-Loader-LICENSE.txt"
+            COMMENT "Staging Vulkan loader and license into the app bundle"
+        )
+    endif()
+
+    set(ROCPROFVIS_MACOS_CODESIGN_IDENTITY "" CACHE STRING
+        "codesign --sign identity. Empty=skip, '-'=ad-hoc, \
+'Developer ID Application: ... (TEAMID)' for notarization-ready release.")
+    set(ROCPROFVIS_MACOS_ENTITLEMENTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/roc-optiq.entitlements.plist"
+        CACHE FILEPATH "Entitlements plist used when codesigning the .app")
+
+    if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY)
+        # Ad-hoc signing can't use --options runtime / --timestamp / --entitlements.
+        if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY STREQUAL "-")
+            set(_rocprofvis_codesign_runtime_args "")
+        else()
+            set(_rocprofvis_codesign_runtime_args
+                --options runtime
+                --timestamp
+                --entitlements "${ROCPROFVIS_MACOS_ENTITLEMENTS}")
+        endif()
+
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND codesign --force --deep
+                --sign "${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}"
+                ${_rocprofvis_codesign_runtime_args}
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
+            COMMAND codesign --verify --verbose=2
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
+            COMMENT "Codesigning bundle with identity '${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}'"
+        )
+    endif()
 endif()
 
 # === NativeFileDialog Extended ===
+# When enabled, the native (portal) dialog is compiled in, but the in-process
+# ImGuiFileDialog is ALWAYS linked as well so the app can fall back to it at
+# runtime (e.g. when running over ssh -X where xdg-desktop-portal cannot
+# forward the dialog to the client).
 if(USE_NATIVE_FILE_DIALOG)
   set(NFD_PORTAL ON CACHE BOOL "Use xdg-desktop-portal instead of GTK")
   add_subdirectory(thirdparty/nativefiledialog-extended)
   target_link_libraries(${TARGET_NAME} PRIVATE nfd)
+  target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
 endif()
-# === ImGuiFileDialog ===
-if(NOT USE_NATIVE_FILE_DIALOG)
-  target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
-endif()
+# === ImGuiFileDialog (always linked as portable / SSH fallback) ===
+target_link_libraries(${TARGET_NAME} PRIVATE ImGuiFileDialog)
 
 # === Vulkan ===
 target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")

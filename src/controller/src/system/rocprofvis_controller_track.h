@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include <memory>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -66,6 +67,7 @@ private:
     std::string m_category;
     std::string m_main_name;
     std::string m_sub_name;
+    std::vector<rocprofvis_dm_event_operation_t> m_operation_types;
     rocprofvis_dm_track_t m_dm_handle;
     Thread* m_thread;
     Queue* m_queue;

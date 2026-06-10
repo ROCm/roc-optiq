@@ -4,6 +4,7 @@
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "implot/implot.h"
+#include "model/rocprofvis_common_defs.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -18,15 +19,40 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float  IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
-constexpr double PIE_CHART_RADIUS                = 1.0;
-constexpr double BAR_CHART_THICKNESS             = 0.67;
-constexpr ImVec2 CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
-constexpr float  FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
-constexpr ImVec2 INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
-constexpr float  INITIAL_RELATIVE_SIZE           = 0.8f;
+constexpr float       IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
+constexpr double      PIE_CHART_RADIUS                = 1.0;
+constexpr double      BAR_CHART_THICKNESS             = 0.67;
+constexpr ImVec2      CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
+constexpr float       FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
+constexpr ImVec2      INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
+constexpr float       INITIAL_RELATIVE_SIZE           = 0.8f;
+constexpr const char* TRACK_ID_COLUMN_NAME            = "__trackId";
+constexpr const char* STREAM_ID_COLUMN_NAME           = "__streamTrackId";
+constexpr const char* ID_COLUMN_NAME                  = "__uuid";
+constexpr const char* EVENT_ID_COLUMN_NAME            = "id";
+constexpr const char* NAME_COLUMN_NAME                = "name";
 
-SummaryView::SummaryView(DataProvider& dp)
+namespace
+{
+
+void
+PushPlotChrome(SettingsManager& settings)
+{
+    ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
+                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextMain));
+    ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
+                           ThemeColor(settings, Colors::kBorderColor, 0.7f));
+    ImPlot::PushStyleColor(ImPlotCol_AxisTick,
+                           ThemeColor(settings, Colors::kTextDim, 0.56f));
+}
+
+}  // namespace
+
+SummaryView::SummaryView(DataProvider&                      dp,
+                         std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
 , m_settings(SettingsManager::GetInstance())
 , m_h_container(nullptr)
@@ -34,11 +60,15 @@ SummaryView::SummaryView(DataProvider& dp)
 , m_kernel_instance_table(nullptr)
 , m_top_kernels(nullptr)
 , m_hw_utilization(nullptr)
+, m_hw_utilization_item(nullptr)
+, m_top_kernels_item(nullptr)
+, m_kernel_instance_table_item(nullptr)
 , m_open(SettingsManager::GetInstance().GetAppWindowSettings().show_summary)
 , m_fetched(false)
 {
-    m_kernel_instance_table = std::make_shared<KernelInstanceTable>(m_data_provider);
-    m_top_kernels           = std::make_shared<TopKernels>(
+    m_kernel_instance_table =
+        std::make_shared<KernelInstanceTable>(m_data_provider, timeline_selection);
+    m_top_kernels = std::make_shared<TopKernels>(
         m_data_provider,
         [this](const char* kernel_name, const uint64_t* node_id,
                const uint64_t* device_id) {
@@ -46,18 +76,19 @@ SummaryView::SummaryView(DataProvider& dp)
         },
         [this]() { m_kernel_instance_table->Clear(); });
     m_hw_utilization = std::make_shared<HWUtilization>(m_data_provider);
-    m_v_container    = std::make_shared<VSplitContainer>(
-        LayoutItem::CreateFromWidget(m_top_kernels),
-        LayoutItem::CreateFromWidget(m_kernel_instance_table));
-    m_v_container->SetSplit(0.5f);
 
-    auto hw_utilization_item = LayoutItem::CreateFromWidget(m_hw_utilization);
-    m_h_container =
-        std::make_unique<HSplitContainer>(hw_utilization_item,
-                                          LayoutItem::CreateFromWidget(m_v_container));
+    m_top_kernels_item           = LayoutItem::CreateFromWidget(m_top_kernels);
+    m_kernel_instance_table_item = LayoutItem::CreateFromWidget(m_kernel_instance_table);
+    m_hw_utilization_item        = LayoutItem::CreateFromWidget(m_hw_utilization);
+
+    m_v_container = std::make_shared<VSplitContainer>(m_top_kernels_item,
+                                                      m_kernel_instance_table_item);
+    m_v_container->SetSplit(0.5f);
+    m_h_container = std::make_unique<HSplitContainer>(
+        m_hw_utilization_item, LayoutItem::CreateFromWidget(m_v_container));
     m_h_container->SetSplit(0.25f);
     // Hide HW utilization for now as the data is not yet reliable
-    hw_utilization_item->m_visible = false;
+    m_hw_utilization_item->m_visible = false;
 }
 
 void
@@ -94,10 +125,10 @@ SummaryView::Render()
         m_v_container->SetMinBottomHeight(m_kernel_instance_table->MinHeight());
         m_h_container->SetMinLeftWidth(m_hw_utilization->MinWidth());
         m_h_container->SetMinRightWidth(m_top_kernels->MinWidth());
-        const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-        const ImVec2         viewport_pos  = main_viewport->WorkPos;
-        const ImVec2         viewport_size = main_viewport->WorkSize;
-        ImGui::SetNextWindowPos(viewport_pos + viewport_size * INITIAL_RELATIVE_POS,
+        m_top_kernels_item->m_bg_color           = m_settings.GetColor(Colors::kBgPanel);
+        m_kernel_instance_table_item->m_bg_color = m_settings.GetColor(Colors::kBgPanel);
+        m_hw_utilization_item->m_bg_color        = m_settings.GetColor(Colors::kBgPanel);
+        ImGui::SetNextWindowPos(ImGui::GetWindowSize() * INITIAL_RELATIVE_POS,
                                 ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(viewport_size * INITIAL_RELATIVE_SIZE,
                                  ImGuiCond_FirstUseEver);
@@ -545,8 +576,8 @@ TopKernels::Render()
                                        plot_style.PlotPadding.y));
         ImGui::BeginGroup();
         if(IconButton(ICON_CHART_PIE,
-                      m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                      m_settings.GetFontManager().GetFont(FontType::kIcon),
+                      ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Pie ? Colors::kButton
                                                                 : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -556,8 +587,8 @@ TopKernels::Render()
         }
         ImGui::SameLine();
         if(IconButton(ICON_CHART_BAR,
-                      m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                      m_settings.GetFontManager().GetFont(FontType::kIcon),
+                      ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Bar ? Colors::kButton
                                                                 : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -567,8 +598,8 @@ TopKernels::Render()
         }
         ImGui::SameLine();
         if(IconButton(ICON_LIST,
-                      m_settings.GetFontManager().GetIconFont(FontType::kDefault),
-                      ImVec2(0, 0), nullptr, ImVec2(0, 0), false, style.FramePadding,
+                      m_settings.GetFontManager().GetFont(FontType::kIcon),
+                      ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Table ? Colors::kButton
                                                                   : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -582,18 +613,25 @@ TopKernels::Render()
                                        region.x / 2.0f - 4.0f * plot_style.PlotPadding.x,
                                    region.y - ImGui::GetFrameHeightWithSpacing() -
                                        plot_style.PlotPadding.y));
+        // Split container pushes (0,0); restore defaults so combos aren't squished.
+        const ImGuiStyle& base_style = m_settings.GetDefaultStyle();
+        ImGui::PushStyleVar(
+            ImGuiStyleVar_ItemSpacing,
+            ImVec2(plot_style.PlotPadding.x, base_style.ItemSpacing.y));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base_style.FramePadding);
         ImGui::AlignTextToFramePadding();
-        ImGui::PushStyleVarX(ImGuiStyleVar_ItemSpacing, plot_style.PlotPadding.x);
         ImGui::BeginDisabled(m_node_combo.info.size() < 2);
         ImGui::TextUnformatted("Node:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(region.x * 0.25f);
+        PushComboStyles();
         if(ImGui::Combo("##node_combo", &m_node_combo.selected_idx,
                         m_node_combo.labels.data(),
                         static_cast<int>(m_node_combo.labels.size())))
         {
             m_filter_dirty = true;
         }
+        PopComboStyles();
         ImGui::EndDisabled();
         ImGui::SameLine();
 
@@ -601,14 +639,16 @@ TopKernels::Render()
         ImGui::TextUnformatted("GPU:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(region.x * 0.25f);
+        PushComboStyles();
         if(ImGui::Combo("##gpu_combo", &m_gpu_combo.selected_idx,
                         m_gpu_combo.labels_ptr.data(),
                         static_cast<int>(m_gpu_combo.labels.size())))
         {
             m_filter_dirty = true;
         }
+        PopComboStyles();
         ImGui::EndDisabled();
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
         // Update size requirements...
         m_min_size.x =
             ImGui::GetFrameHeightWithSpacing() * FILTER_COMBO_RELATIVE_MIN_WIDTH;
@@ -635,8 +675,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
                            int& hovered_idx)
 {
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     if(ImPlot::BeginPlot("##Pie",
                          ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
                                         plot_style.PlotPadding.y),
@@ -689,9 +728,9 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
             ImPlot::PopColormap();
         }
         ImPlot::EndPlot();
-        ImPlot::PopStyleColor(2);
-        ImPlot::PopStyleVar();
     }
+    ImPlot::PopStyleColor(6);
+    ImPlot::PopStyleVar();
     PlotInputHandler();
 }
 
@@ -700,8 +739,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
                            TimeFormat time_format, int& hovered_idx)
 {
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, m_settings.GetColor(Colors::kTransparent));
+    PushPlotChrome(m_settings);
     if(ImPlot::BeginPlot("##Bar",
                          ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
                                         plot_style.PlotPadding.y),
@@ -750,7 +788,7 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(2);
+    ImPlot::PopStyleColor(6);
     ImPlot::PopStyleVar();
     PlotInputHandler();
 }
@@ -762,14 +800,21 @@ TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
                                ImGui::GetFontSize() + plot_style.PlotBorderSize +
                                    plot_style.PlotPadding.y +
                                    2 * plot_style.LabelPadding.y));
-    if(ImGui::BeginTable(
-           "Table", 5,
-           ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable,
-           ImGui::GetContentRegionAvail() -
-               ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                      ImGui::GetFrameHeightWithSpacing() + 2 * plot_style.PlotPadding.y +
-                          plot_style.PlotBorderSize)))
+    if(ImGui::BeginTable("Table", 5,
+                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
+                             ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
+                             ImGuiTableFlags_Resizable,
+                         ImGui::GetContentRegionAvail() -
+                             ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
+                                    ImGui::GetFrameHeightWithSpacing() +
+                                        2 * plot_style.PlotPadding.y +
+                                        plot_style.PlotBorderSize)))
     {
+        ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kSelection));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              m_settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              m_settings.GetColor(Colors::kHighlightChart));
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("Name");
         ImGui::TableSetupColumn("Invocations");
@@ -812,6 +857,7 @@ TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
                                              (*m_kernels)[i].exec_time_min, time_format)
                                              .c_str());
         }
+        ImGui::PopStyleColor(3);
         ImGui::EndTable();
     }
 }
@@ -853,10 +899,15 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
                        3 * plot_style.PlotPadding.y - plot_style.PlotBorderSize));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
+        ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kSelection));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              m_settings.GetColor(Colors::kHighlightChart));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              m_settings.GetColor(Colors::kHighlightChart));
         ImGui::BeginChild("legend", ImVec2(region.x * 0.25f, 0),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-        float legend_width = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
-        float icon_width   = ImGui::GetFontSize();
+        float legend_width     = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
+        float icon_width       = ImGui::GetFontSize();
         float scroll_bar_width = ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f;
         ImGui::BeginChild(
             "legend_scroll_view", ImVec2(legend_width - scroll_bar_width, 0),
@@ -897,7 +948,7 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
         }
         ImGui::EndChild();
         ImGui::EndChild();
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(4);
         ImGui::PopStyleVar();
         ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
     }
@@ -1013,8 +1064,13 @@ TopKernels::ToggleSelectKernel(const size_t& idx)
     }
 }
 
-KernelInstanceTable::KernelInstanceTable(DataProvider& dp)
-: InfiniteScrollTable(dp, TableType::kSummaryKernelTable)
+KernelInstanceTable::KernelInstanceTable(
+    DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection)
+: InfiniteScrollTable(
+      dp, TableType::kSummaryKernelTable, kRPVControllerTableTypeSummaryKernelInstances,
+      DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID,
+      [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
+      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, timeline_selection)
 , m_fetched(false)
 , m_fetch_deferred(false)
 {
@@ -1024,7 +1080,7 @@ KernelInstanceTable::KernelInstanceTable(DataProvider& dp)
 void
 KernelInstanceTable::Update()
 {
-    if(m_fetch_deferred && !m_data_provider.IsRequestPending(GetRequestID()))
+    if(m_fetch_deferred && !m_data_provider.IsRequestPending(m_request_id))
     {
         Fetch();
     }
@@ -1041,7 +1097,7 @@ KernelInstanceTable::Render()
         InfiniteScrollTable::Render();
         ImGui::AlignTextToFramePadding();
         ImGui::Text("Showing %llu dispatch(es)",
-                    m_data_provider.DataModel().GetTables().GetTableTotalRowCount(m_table_type));
+                    m_table_model().GetTableTotalRowCount(m_table_type));
     }
     else
     {
@@ -1073,8 +1129,8 @@ KernelInstanceTable::ToggleSelectKernel(const std::string& kernel_name,
 void
 KernelInstanceTable::Clear()
 {
-    m_data_provider.CancelRequest(GetRequestID());
-    m_data_provider.DataModel().GetTables().ClearTable(m_table_type);
+    m_data_provider.CancelRequest(m_request_id);
+    m_table_model_mutable().ClearTable(m_table_type);
     m_fetched = false;
 }
 
@@ -1088,22 +1144,70 @@ void
 KernelInstanceTable::FormatData() const
 {
     std::vector<FormattedColumnInfo>& formatted_column_data =
-        m_data_provider.DataModel().GetTables().GetMutableFormattedTableData(m_table_type);
+        m_table_model_mutable().GetMutableFormattedTableData(m_table_type);
     formatted_column_data.clear();
-    formatted_column_data.resize(m_data_provider.DataModel().GetTables().GetTableHeader(m_table_type).size());
+    formatted_column_data.resize(m_table_model().GetTableHeader(m_table_type).size());
     InfiniteScrollTable::FormatTimeColumns();
+}
+
+void
+KernelInstanceTable::IndexColumns()
+{
+    const std::vector<std::string>& column_names =
+        m_table_model().GetTableHeader(m_table_type);
+    // remember column index positions
+    m_important_column_idxs =
+        std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
+    for(size_t i = 0; i < column_names.size(); i++)
+    {
+        const auto& col = column_names[i];
+        if(!col.empty())
+        {
+            if(col == TRACK_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kTrackId] = i;
+            }
+            else if(col == STREAM_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kStreamId] = i;
+            }
+            else if(col == ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kUUId] = i;
+            }
+            else if(col == EVENT_ID_COLUMN_NAME)
+            {
+                m_important_column_idxs[kDbEventId] = i;
+            }
+            else if(col == NAME_COLUMN_NAME)
+            {
+                m_important_column_idxs[kName] = i;
+            }
+        }
+    }
+    InfiniteScrollTable::IndexColumns();
+}
+
+void
+KernelInstanceTable::RowSelected(const ImGuiMouseButton mouse_button)
+{
+    if(mouse_button == ImGuiMouseButton_Right)
+    {
+        InfiniteScrollTable::SelectedRowContextMenu();
+    }
+    InfiniteScrollTable::RowSelected(mouse_button);
 }
 
 void
 KernelInstanceTable::Fetch()
 {
-    m_data_provider.CancelRequest(GetRequestID());
+    m_data_provider.CancelRequest(m_request_id);
     const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
-    m_fetch_deferred         = !m_data_provider.FetchTable(
-        TableRequestParams(m_req_table_type, {}, { kRocProfVisDmOperationDispatch },
-                                   tlm.GetStartTime(), tlm.GetEndTime(), m_where.c_str(), "", "",
-                                   "", { m_kernel_name }, 0, m_fetch_chunk_size));
-    m_fetched = true;
+    m_fetch_deferred         = !m_data_provider.FetchTable(TableRequestParams(
+        m_request_table_type, {}, { kRocProfVisDmOperationDispatch }, tlm.GetStartTime(),
+        tlm.GetEndTime(), m_where.c_str(), "", "", "", { m_kernel_name }, 0,
+        m_fetch_chunk_size, m_sort_column_index, m_sort_order));
+    m_fetched                = true;
 }
 
 }  // namespace View

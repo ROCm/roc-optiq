@@ -215,7 +215,7 @@ namespace DataModel
             if (pos != std::string::npos)
             {
                 std:: string column = params[i].substr(pos+strlen(SQL_AS_STATEMENT));
-                if (column != TRACK_CATEGORY_SERVICE_NAME && column != OPERATION_SERVICE_NAME && column != SPACESAVER_SERVICE_NAME)
+                if (column != TRACK_CATEGORY_SERVICE_NAME && column != SPACESAVER_SERVICE_NAME)
                 {
                     if(count++ > 0)
                     {

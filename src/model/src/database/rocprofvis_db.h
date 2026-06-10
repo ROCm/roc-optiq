@@ -183,6 +183,7 @@ class Database
                                                                rocprofvis_dm_string_t& query) = 0;
 
        virtual rocprofvis_dm_result_t BuildTableQuery(
+                                                                rocprofvis_dm_table_use_case_enum_t use_case,
                                                                 rocprofvis_dm_timestamp_t start, 
                                                                 rocprofvis_dm_timestamp_t end,
                                                                 rocprofvis_db_num_of_tracks_t num, 
@@ -198,7 +199,6 @@ class Database
                                                                 uint64_t max_count, 
                                                                 uint64_t offset,
                                                                 bool count_only,
-                                                                bool summary,
                                                                 rocprofvis_dm_string_t& query) = 0;
 
 

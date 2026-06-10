@@ -60,13 +60,12 @@ namespace DataModel
         return column;
     }
 
-    rocprofvis_dm_result_t TableProcessor::ExecuteCompoundQuery(Future* future, 
-        std::vector<rocprofvis_db_compound_query>& queries, 
+    rocprofvis_dm_result_t TableProcessor::ExecuteCompoundQuery(Future* future,
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries,
         std::set<uint32_t>& tracks,
-        std::vector<rocprofvis_db_compound_query_command> commands, 
-        rocprofvis_dm_handle_t handle, 
-        rocprofvis_db_compound_table_type type,
-        bool query_updated) 
+        std::vector<rocprofvis_db_compound_query_command> commands,
+        rocprofvis_dm_handle_t handle,
+        bool query_updated)
     {
         m_timer.pause();
         rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
@@ -89,31 +88,31 @@ namespace DataModel
                 m_tracks.begin(), m_tracks.end(),
                 std::inserter(added_tracks, added_tracks.end())
             );
-            bool sametracks = (removed_tracks.size() == 0) && (added_tracks.size() == 0);
-            if (sametracks && query_updated)
+
+            if (query_updated)
             {
                 removed_tracks = m_tracks;
                 added_tracks = tracks;
             }
 
             result = kRocProfVisDmResultSuccess;
-            bool same_queries = (removed_tracks.size() == 0) && (added_tracks.size() == 0);
+            bool same_queries = removed_tracks.empty() && added_tracks.empty();
             if (!same_queries)
             {
                 m_tables.clear();
                 std::vector<std::pair<DbInstance*, std::string>> new_queries;
-                for (int i = 0; i < queries.size(); i++)
+                for (const std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
                 {
-                    if (added_tracks.find(queries[i].track) != added_tracks.end())
+                    for (const std::pair<const std::string, rocprofvis_db_compound_query_info>& compound_query : track.second)
                     {
                         m_tables.push_back(std::make_unique<PackedTable>());
-                        DbInstance* db_instance = m_db->DbInstancePtrAt(queries[i].guid_id);
-                        new_queries.push_back({ db_instance, queries[i].query });
+                        DbInstance* db_instance = m_db->DbInstancePtrAt(compound_query.second.guid_id);
+                        new_queries.push_back({ db_instance, compound_query.first });
                     }
                     
                 }
 
-                m_merged_table.RemoveRowsForSetOfTracks(tracks, removed_tracks, sametracks && query_updated);
+                m_merged_table.RemoveRowsForSetOfTracks(tracks, removed_tracks, query_updated);
 
                 if (new_queries.size())
                 {
@@ -148,18 +147,19 @@ namespace DataModel
                 m_merged_table.CreateSortOrderArray();
                 if (m_merged_table.RowCount() == 0)
                 {
-                    result = kRocProfVisDmResultNotLoaded;
+                    result = (kRocProfVisDmResultSuccess == result) ? kRocProfVisDmResultSuccess : kRocProfVisDmResultNotLoaded;
                 }
             }
 
 
-            if (kRocProfVisDmResultSuccess == result)
+            if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0)
             {
                 result = ProcessCompoundQuery(handle, commands, !same_queries);
                 m_tracks = tracks;
             }
             else
             {
+                m_tracks.clear();
                 m_tables.clear();
             }
         }
@@ -177,7 +177,7 @@ namespace DataModel
         return query_without_commands;
     }
 
-    bool TableProcessor::IsCompoundQuery(const char* query, std::vector<rocprofvis_db_compound_query>& queries, std::set<uint32_t>& tracks, std::vector<rocprofvis_db_compound_query_command>& commands)
+    bool TableProcessor::IsCompoundQuery(const char* query, std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries, std::set<uint32_t>& tracks, std::vector<rocprofvis_db_compound_query_command>& commands)
     {
         std::istringstream stream(query);
         std::string line;
@@ -212,7 +212,7 @@ namespace DataModel
                                 uint32_t track = std::atol(s_track.c_str());
                                 uint32_t guid_id = std::atoll(s_guid_id.c_str());
                                 tracks.insert(track);
-                                queries.push_back({ stmt,track,guid_id });
+                                queries[track][stmt] = { track, guid_id };
                             }
                            
                         }
@@ -229,6 +229,21 @@ namespace DataModel
         return false;
     }
 
+    bool TableProcessor::IsCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries)
+    {
+        if(m_current_queries.size() && (*m_current_queries.begin()).second.size() && TABLE_QUERY_UNPACK_OP_TYPE((*(*m_current_queries.begin()).second.begin()).second.track))
+        {
+            return false;
+        }
+        for(std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
+        {
+            if(m_current_queries.count(track.first) && track.second.size())
+            {
+                return m_current_queries.at(track.first).count((*track.second.begin()).first);
+            }
+        }
+        return true;
+    }
 
     rocprofvis_dm_result_t TableProcessor::AddTableCells(bool to_file, rocprofvis_dm_handle_t handle, uint32_t row_index)
     {
@@ -245,8 +260,6 @@ namespace DataModel
             ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
             for (int column_index = 0; column_index < m_merged_table.MergedColumnCount(); column_index++)
             {
-                if (columns[column_index].m_schema_index[op] == Builder::SCHEMA_INDEX_OPERATION)
-                    continue;
                 if (columns[column_index].m_schema_index[op] == Builder::SCHEMA_INDEX_STREAM_TRACK_ID)
                 {
                     if (to_file == false)
@@ -354,27 +367,24 @@ namespace DataModel
         int column_index = 0;
         for (auto column : m_merged_table.GetMergedColumns())
         {
-            if (column.m_max_schema_index != Builder::SCHEMA_INDEX_OPERATION)
+            if (to_file)
             {
-                if (to_file)
+                if (column.m_max_schema_index != Builder::SCHEMA_INDEX_TRACK_ID && column.m_max_schema_index != Builder::SCHEMA_INDEX_STREAM_TRACK_ID)
                 {
-                    if (column.m_max_schema_index != Builder::SCHEMA_INDEX_TRACK_ID && column.m_max_schema_index != Builder::SCHEMA_INDEX_STREAM_TRACK_ID)
+                    if (column_index > 0)
                     {
-                        if (column_index > 0)
-                        {
-                            *file << ", ";
-                        }
-                        *file << column.m_name;
-                        column_index++;
+                        *file << ", ";
                     }
-                }
-                else
-                {
-                    result = m_db->BindObject()->FuncAddTableColumn(table, column.m_name.c_str());
+                    *file << column.m_name;
                     column_index++;
-                    if (result != kRocProfVisDmResultSuccess)
-                        break;
-                }               
+                }
+            }
+            else
+            {
+                result = m_db->BindObject()->FuncAddTableColumn(table, column.m_name.c_str());
+                column_index++;
+                if (result != kRocProfVisDmResultSuccess)
+                    break;
             }
         }
         return result;
@@ -480,8 +490,6 @@ namespace DataModel
                     uint8_t op = m_merged_table.GetOperationValue(row_index);
                     for (int column_index = 0; column_index < m_merged_table.MergedColumnCount(); column_index++)
                     {
-                        if (columns[column_index].m_schema_index[op] == Builder::SCHEMA_INDEX_OPERATION)
-                            continue;
                         if (columns[column_index].m_schema_index[op] == Builder::SCHEMA_INDEX_NULL)
                         {
                             map[columns[column_index].m_name] = "";
@@ -694,6 +702,7 @@ namespace DataModel
                         m_merged_table.ClearAggregation();
                     }                    
                 }
+                InvalidateSorting();
             }
 
             auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "SORT"; });
@@ -956,7 +965,8 @@ namespace DataModel
         return 0;
     }
 
-    rocprofvis_dm_result_t TableProcessor::ExportToCSV(rocprofvis_dm_charptr_t file_path) {
+    rocprofvis_dm_result_t TableProcessor::ExportToCSV(rocprofvis_dm_charptr_t file_path)
+    {
         rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
         std::ofstream file(file_path);
         if (file.is_open())

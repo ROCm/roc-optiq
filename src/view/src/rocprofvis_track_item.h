@@ -58,11 +58,13 @@ public:
     void RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
                          float reorder_grip_width);
     ImVec2 GetPillSize();
+    bool   WasLastHovered() const { return m_was_last_hovered; }
 
 private:
     void                            CalculatePillSize();
     bool                            m_show_pill_label;
     bool                            m_active;
+    bool                            m_was_last_hovered = false;
     std::string                     m_pill_label;
     std::string                     m_tooltip_label;
     ImVec2                          m_pillbox_size;
@@ -98,6 +100,7 @@ public:
     virtual bool  HasData();
     virtual bool  ReleaseData();
     virtual void  RequestData(double min, double max, float width);
+    virtual void  RequestAnalysis();
     virtual bool  HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
     virtual bool  HasPendingRequests() const;
     virtual float CalculateNewMetaAreaSize();
@@ -125,23 +128,25 @@ protected:
     void SetDefaultPillLabel(const TrackInfo* track_info);
     void SetMetaAreaLabel(const TrackInfo* track_info);
 
-    uint64_t              m_track_id;
-    float                 m_track_height;
-    float                 m_track_content_height;
-    float                 m_min_track_height;
-    bool                  m_track_height_changed;
-    bool                  m_is_in_view_vertical;
-    float                 m_distance_to_view_y;
-    std::string           m_name;
-    ImVec2                m_metadata_padding;
-    float                 m_resize_grip_thickness;
-    DataProvider&         m_data_provider;
-    TrackDataRequestState m_request_state;
-    SettingsManager&      m_settings;
-    bool                  m_meta_area_clicked;
-    float                 m_meta_area_scale_width;
-    bool                  m_selected;
-    float                 m_reorder_grip_width;
+    const TrackInfo*                    m_track_metadata;
+    uint64_t                            m_track_id;
+    float                               m_track_height;
+    float                               m_track_content_height;
+    float                               m_min_track_height;
+    bool                                m_track_height_changed;
+    bool                                m_is_in_view_vertical;
+    float                               m_distance_to_view_y;
+    std::string                         m_name;
+    ImVec2                              m_metadata_padding;
+    float                               m_resize_grip_thickness;
+    DataProvider&                       m_data_provider;
+    TrackDataRequestState               m_request_state;
+    SettingsManager&                    m_settings;
+    bool                                m_meta_area_clicked;
+    float                               m_meta_area_scale_width;
+    bool                                m_selected;
+    float                               m_reorder_grip_width;
+    bool                                m_analysis_request_pending;
     std::shared_ptr<TimePixelTransform> m_tpt;
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
     uint8_t  m_group_id_counter;   // Counter for grouping requests

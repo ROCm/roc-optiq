@@ -177,6 +177,8 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, ro
     }
     else
     {
+        // Streams merge several per-operation queries into one track; sum the counts.
+        it->get()->record_count += track_params.record_count;
         it->get()->load_id.insert(*track_params.load_id.begin());
         track_params.track_indentifiers.track_id = it->get()->track_indentifiers.track_id;
     }
@@ -1861,31 +1863,6 @@ rocprofvis_dm_string_t RocprofDatabase::GetEventOperationQuery(const rocprofvis_
             return "";
         }
     }
-}
-
-rocprofvis_dm_result_t
-RocprofDatabase::BuildTableSummaryClause(bool sample_query,
-                                   rocprofvis_dm_string_t& select,
-                                   rocprofvis_dm_string_t& group_by)
-{
-    if(sample_query)
-    {
-        select += Builder::COUNTER_ID_PUBLIC_NAME;
-        select += ", AVG(";
-        select += Builder::COUNTER_VALUE_PUBLIC_NAME;
-        select += ") AS avg_value, MIN(";
-        select += Builder::COUNTER_VALUE_PUBLIC_NAME;
-        select += ") AS min_value, MAX(";
-        select += Builder::COUNTER_VALUE_PUBLIC_NAME;
-        select += ") AS max_value";
-        group_by += Builder::COUNTER_ID_PUBLIC_NAME;
-    }
-    else
-    {
-        select = "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration";
-        group_by = "name";
-    }
-    return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(

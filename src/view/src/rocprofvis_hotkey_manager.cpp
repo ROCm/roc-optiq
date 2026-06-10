@@ -97,6 +97,31 @@ HotkeyManager::BookmarkRestoreAction(int index)
 }
 
 bool
+HotkeyManager::IsRebindableKey(ImGuiKey key)
+{
+    // Esc cancels rebind; F11 is reserved for fullscreen toggle.
+    if(key == ImGuiKey_None || key == ImGuiKey_Escape || key == ImGuiKey_F11)
+        return false;
+
+    if(key == ImGuiKey_LeftCtrl  || key == ImGuiKey_RightCtrl ||
+       key == ImGuiKey_LeftShift || key == ImGuiKey_RightShift ||
+       key == ImGuiKey_LeftAlt   || key == ImGuiKey_RightAlt  ||
+       key == ImGuiKey_LeftSuper || key == ImGuiKey_RightSuper)
+        return false;
+
+    if(key >= ImGuiKey_GamepadStart && key <= ImGuiKey_GamepadRStickDown)
+        return false;
+
+    if(key >= ImGuiKey_MouseLeft && key <= ImGuiKey_MouseWheelY)
+        return false;
+
+    if(key >= ImGuiKey_ReservedForModCtrl && key <= ImGuiKey_ReservedForModSuper)
+        return false;
+
+    return true;
+}
+
+bool
 HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const
 {
     if(chord == ImGuiKey_None)
@@ -115,7 +140,42 @@ HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const
     if((mod_flags & ImGuiMod_Ctrl) && !io.KeyCtrl)   return false;
     if((mod_flags & ImGuiMod_Shift) && !io.KeyShift) return false;
     if((mod_flags & ImGuiMod_Alt) && !io.KeyAlt)     return false;
-    if(!(mod_flags & ImGuiMod_Ctrl) && io.KeyCtrl)   return false;
+
+    // Ctrl is reserved as a click-modifier (Multi-Select, Region Select);
+    // never let a bare-key chord fire while Ctrl is held.
+    if(key != ImGuiKey_None && io.KeyCtrl && !(mod_flags & ImGuiMod_Ctrl))
+        return false;
+
+    // Shift/Alt may legitimately combine with keyboard actions (e.g. Speed
+    // Boost), so only suppress when another action explicitly owns the
+    // more-specific variant.
+    if(key != ImGuiKey_None)
+    {
+        ImGuiKeyChord extra_mods = 0;
+        if(io.KeyShift && !(mod_flags & ImGuiMod_Shift)) extra_mods |= ImGuiMod_Shift;
+        if(io.KeyAlt   && !(mod_flags & ImGuiMod_Alt))   extra_mods |= ImGuiMod_Alt;
+
+        if(extra_mods != 0)
+        {
+            for(size_t i = 0; i < kHotkeyActionCount; ++i)
+            {
+                ImGuiKeyChord candidates[2] = {m_bindings[i].primary,
+                                               m_bindings[i].alternate};
+                for(ImGuiKeyChord cand : candidates)
+                {
+                    if(cand == ImGuiKey_None)
+                        continue;
+                    if((cand & ~ImGuiMod_Mask_) != key)
+                        continue;
+                    ImGuiKeyChord added_mods = (cand & ImGuiMod_Mask_) & ~mod_flags;
+                    if(added_mods == 0)
+                        continue;
+                    if((added_mods & extra_mods) == added_mods)
+                        return false;
+                }
+            }
+        }
+    }
 
     return true;
 }

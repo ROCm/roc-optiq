@@ -14,6 +14,7 @@
 #include "rocprofvis_view_module.h"
 #include "rocprofvis_platform_helpers.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_image_helpers.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -42,6 +43,11 @@ static std::unordered_map<ImGuiID, ImVec2> g_viewport_intended_pos;
 
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
+
+// Lazy rendering: after each OS event render a few frames so animations and the
+// deferred event dispatch settle, then sleep until the next event when idle.
+static int       g_frames_to_render        = 1;
+constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -81,12 +87,14 @@ app_notification_callback(GLFWwindow* window, int notification)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+#ifndef __APPLE__
     else if(notification ==
             static_cast<int>(rocprofvis_view_notification_t::
                                  kRocProfVisViewNotification_Toggle_Fullscreen))
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
+#endif
 }
 
 static void
@@ -104,15 +112,20 @@ glfw_error_callback(int error, const char* description)
 static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    // Unused parameters
     (void) scancode;
     (void) mods;
 
+#ifndef __APPLE__
     // Toggle fullscreen with F11
     if(key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
+#else
+    (void) window;
+    (void) key;
+    (void) action;
+#endif
 }
 
 static void
@@ -129,18 +142,26 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
 {
     cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
     bool result = true;
-    result &= cli_parser.AddOption("v", "version", "Print application version", false);
-    result &= cli_parser.AddOption("f", "file", "Open file", true);
-    result &= cli_parser.AddOption("b", "backend", "Force rendering backend: 'vulkan' or 'opengl' (default: auto with fallback)", true);
-#ifdef __linux__
+    result &= cli_parser.AddOption("v", "version", "Print version and exit", false);
+    result &= cli_parser.AddOption("f", "file", "Open a trace or project file", true);
+    result &= cli_parser.AddOption(
+        "b", "backend",
+        "Set rendering backend: 'auto' (default), 'vulkan', or 'opengl'", true);
+    result &= cli_parser.AddOption(
+        "d", "file-dialog",
+        "Set file dialog backend: 'auto' (default), 'native' (system file "
+        "dialog), or 'imgui' (built-in). Use 'imgui' when running over SSH",
+        true);
+  #ifdef __linux__
     result &= cli_parser.AddOption(
         "r", "drag-repair",
         "Linux post-drag click-through fix for floating windows "
         "(Ubuntu Wayland bug; trade-off: brief flicker per drag-release): "
         "'on'|'off' (env: ROCPROFVIS_DRAG_REPAIR; default: off)",
         true);
-#endif
-    result &= cli_parser.AddOption("h", "help", "Help the user with commands", false);
+  #endif
+    result &= cli_parser.AddOption("h", "help",
+        "Show this help message and exit", false);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -209,11 +230,11 @@ main(int argc, char** argv)
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "visualizer.debug.log";
+        std::filesystem::path(config_path) / "roc-optiq.debug.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::debug);
 #else
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "visualizer.log";
+        std::filesystem::path(config_path) / "roc-optiq.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
 
@@ -222,7 +243,11 @@ main(int argc, char** argv)
     if(cli_parser.WasOptionFound("backend"))
     {
         std::string backend_str = cli_parser.GetOptionValue("backend");
-        if(backend_str == "vulkan")
+        if(backend_str == "auto")
+        {
+            backend_pref = kRPVBackendAuto;
+        }
+        else if(backend_str == "vulkan")
         {
             backend_pref = kRPVBackendForceVulkan;
         }
@@ -232,7 +257,32 @@ main(int argc, char** argv)
         }
         else
         {
-            spdlog::error("Invalid backend '{}'. Valid options: vulkan, opengl", backend_str);
+            spdlog::error("Invalid backend '{}'. Valid options: auto, vulkan, opengl", backend_str);
+            return 1;
+        }
+    }
+
+    rocprofvis_view_file_dialog_preference_t fd_pref = kRocProfVisViewFileDialog_Auto;
+    if(cli_parser.WasOptionFound("file-dialog"))
+    {
+        std::string fd_str = cli_parser.GetOptionValue("file-dialog");
+        if(fd_str == "auto")
+        {
+            fd_pref = kRocProfVisViewFileDialog_Auto;
+        }
+        else if(fd_str == "native")
+        {
+            fd_pref = kRocProfVisViewFileDialog_Native;
+        }
+        else if(fd_str == "imgui")
+        {
+            fd_pref = kRocProfVisViewFileDialog_ImGui;
+        }
+        else
+        {
+            spdlog::error("Invalid --file-dialog '{}'. Valid options: auto, "
+                          "native, imgui",
+                          fd_str);
             return 1;
         }
     }
@@ -296,9 +346,12 @@ main(int argc, char** argv)
 
                 rocprofvis_view_init([window](int notification) -> void {
                     app_notification_callback(window, notification);
-                });
+                }, fd_pref);
 
                 backend.m_config(&backend, window);
+                rocprofvis_view_set_texture_backend(
+                    rocprofvis_imgui_backend_create_gui_texture_rgba32,
+                    rocprofvis_imgui_backend_destroy_gui_texture, &backend);
 
                 if(cli_parser.WasOptionFound("file") &&
                    !cli_parser.GetOptionValue("file").empty())
@@ -327,7 +380,25 @@ main(int argc, char** argv)
                         g_file_was_dropped = false;
                     }
 
-                    glfwPollEvents();
+                    // Async work/animation in flight: refill the budget so the
+                    // settle tail also covers the final frames after it finishes.
+                    if(rocprofvis_view_wants_continuous_render())
+                    {
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        // Busy: poll so per-frame controller/event work keeps
+                        // running. vsync in present() caps the frame rate.
+                        glfwPollEvents();
+                    }
+                    else
+                    {
+                        // Idle: sleep until an OS event, then render a few frames.
+                        glfwWaitEvents();
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
 
                     // Handle changes in the frame buffer size
                     int fb_width, fb_height;
@@ -391,11 +462,17 @@ main(int argc, char** argv)
                     {
                         backend.m_present(&backend);
                     }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        --g_frames_to_render;
+                    }
                 }
 
+                rocprofvis_view_destroy();
+                rocprofvis_view_set_texture_backend(nullptr, nullptr, nullptr);
                 backend.m_shutdown(&backend);
 
-                rocprofvis_view_destroy();
                 ImGui_ImplGlfw_Shutdown();
                 ImGui::DestroyContext();
 

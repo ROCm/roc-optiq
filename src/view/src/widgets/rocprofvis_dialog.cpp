@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_dialog.h"
+#include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_widget.h"
 
 namespace RocProfVis
@@ -36,7 +37,8 @@ ConfirmationDialog::Render()
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
         popup_style.CenterPopup();
-        ImGui::SetNextWindowSize(ImVec2(580, 0));
+        ImGui::SetNextWindowSize(
+            GetResponsiveWindowSize(ImVec2(580.0f, 0.0f), ImVec2(360.0f, 0.0f)));
 
         if(ImGui::BeginPopupModal(m_title.c_str(), NULL,
                                   ImGuiWindowFlags_AlwaysAutoResize |
@@ -122,28 +124,31 @@ MessageDialog::Render()
 
     if(ImGui::IsPopupOpen(m_title.c_str(), ImGuiPopupFlags_None))
     {
-        // Always center this window when appearing
-        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 2));
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+        popup_style.CenterPopup();
+        ImGui::SetNextWindowSize(
+            GetResponsiveWindowSize(ImVec2(420.0f, 0.0f), ImVec2(300.0f, 0.0f)));
 
         if(ImGui::BeginPopupModal(m_title.c_str(), NULL,
-                                  ImGuiWindowFlags_AlwaysAutoResize))
+                                  ImGuiWindowFlags_AlwaysAutoResize |
+                                      ImGuiWindowFlags_NoSavedSettings))
         {
             ImGui::NewLine();
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() +
+                                   ImGui::GetContentRegionAvail().x);
             ImGui::TextUnformatted(m_message.c_str());
+            ImGui::PopTextWrapPos();
             ImGui::NewLine();
+            ImGui::Separator();
             if(ImGui::Button("Close"))
             {
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
         }
-
-        ImGui::PopStyleVar(
-            2);  // Pop ImGuiStyleVar_WindowPadding, ImGuiStyleVar_ItemSpacing
+        popup_style.PopStyles();
     }
 }
 

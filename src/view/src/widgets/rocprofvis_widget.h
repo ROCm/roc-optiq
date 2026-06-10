@@ -50,7 +50,8 @@ public:
     float                      m_width   = 0;
     bool                       m_visible = true;
 
-    int32_t m_bg_color = 0;
+    int32_t m_bg_color         = 0;
+    bool    m_inherit_bg_color = false;
 
     ImVec2 m_item_spacing   = ImVec2(0, 0);
     ImVec2 m_window_padding = ImVec2(0, 0);
@@ -94,6 +95,10 @@ CopyableTextUnformatted(
     bool one_click_copy = false, bool context_menu = false,
     std::function<void(const char* value_to_copy)> menu_func = nullptr);
 
+
+// Renders a selectable menu item with an icon (from the icon font) followed by a text label.
+// Returns true when clicked. Intended for use inside BeginPopup/BeginPopupContextItem blocks.
+bool IconMenuItem(const char* icon, const char* label);
 
 inline constexpr std::string_view COPY_DATA_NOTIFICATION = "Cell data was copied";
 

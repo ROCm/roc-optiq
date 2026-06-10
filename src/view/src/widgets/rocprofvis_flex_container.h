@@ -34,6 +34,10 @@ public:
 
     std::vector<FlexItem> items;
     float                 gap = DEFAULT_GAP;
+
+    // True: transparent items with a separator between siblings (one outer card).
+    // False (default): each item paints its own card.
+    bool subcomponent_layout = false;
 };
 
 }  // namespace View

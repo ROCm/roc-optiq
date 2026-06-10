@@ -102,6 +102,29 @@ WithPadding(float left, float right, float top, float bottom,
 }
 
 bool
+IconMenuItem(const char* icon, const char* label)
+{
+    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+
+    bool clicked = ImGui::Selectable(("##menu_item" + std::string(label)).c_str(), false,
+                                     ImGuiSelectableFlags_SpanAllColumns,
+                                     ImVec2(0, ImGui::GetTextLineHeightWithSpacing()));
+    ImGui::SameLine(0.0f, 0.0f);
+
+    ImGui::BeginGroup();
+    ImGui::PushFont(icon_font);
+    ImGui::TextUnformatted(icon);
+    ImGui::PopFont();
+    ImGui::SameLine(0.f, ImGui::GetStyle().ItemSpacing.x);
+    ImGui::TextUnformatted(label);
+    ImGui::EndGroup();
+
+    if(clicked)
+        ImGui::CloseCurrentPopup();
+    return clicked;
+}
+
+bool
 CopyableTextUnformatted(
     const char* text, std::string_view unique_id, std::string_view notification,
     bool one_click_copy, bool context_menu,
@@ -132,13 +155,16 @@ CopyableTextUnformatted(
     
     if(context_menu)
     {
+        auto style = SettingsManager::GetInstance().GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
         if (menu_func)
         {
             menu_func(text);
         }
         else if(ImGui::BeginPopupContextItem())
         {
-            if(ImGui::MenuItem("Copy"))
+            if(IconMenuItem(ICON_COPY, "Copy"))
             {
                 ImGui::SetClipboardText(text);
                 if(!notification.empty())
@@ -149,6 +175,7 @@ CopyableTextUnformatted(
             }
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar(2);
     }
 
     if(one_click_copy)
@@ -193,7 +220,9 @@ PopUpStyle::PushPopupStyles()
                         settings.GetDefaultStyle().FrameRounding);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         settings.GetDefaultStyle().ChildRounding);
-    m_style_var_count += 6;
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding,
+                        settings.GetDefaultStyle().PopupRounding);
+    m_style_var_count += 7;
 }
 
 void

@@ -46,10 +46,10 @@ ComputeKernelSelectionTable::Clear()
 
 ComputeDataModel::ComputeDataModel() {}
 
-const std::unordered_map<uint32_t, WorkloadInfo>&
-ComputeDataModel::GetWorkloads() const
+const std::vector<const WorkloadInfo*>&
+ComputeDataModel::GetWorkloadList() const
 {
-    return m_workloads;
+    return m_ordered_workloads;
 }
 
 const WorkloadInfo*
@@ -78,6 +78,34 @@ ComputeDataModel::AddWorkload(WorkloadInfo& workload)
     uint32_t id = workload.id;
     m_workloads[id] = std::move(workload);
     OrderAvailableMetrics(m_workloads[id]);
+    OrderKernels(m_workloads[id]);
+    OrderWorkloads();
+}
+
+void
+ComputeDataModel::OrderKernels(WorkloadInfo& workload)
+{
+    workload.ordered_kernels.clear();
+    workload.ordered_kernels.reserve(workload.kernels.size());
+    for(const std::pair<const uint32_t, KernelInfo>& kernel_pair : workload.kernels)
+    {
+        workload.ordered_kernels.push_back(&kernel_pair.second);
+    }
+    std::sort(workload.ordered_kernels.begin(), workload.ordered_kernels.end(),
+              [](const KernelInfo* a, const KernelInfo* b) { return a->id < b->id; });
+}
+
+void
+ComputeDataModel::OrderWorkloads()
+{
+    m_ordered_workloads.clear();
+    m_ordered_workloads.reserve(m_workloads.size());
+    for(const std::pair<const uint32_t, WorkloadInfo>& workload_pair : m_workloads)
+    {
+        m_ordered_workloads.push_back(&workload_pair.second);
+    }
+    std::sort(m_ordered_workloads.begin(), m_ordered_workloads.end(),
+              [](const WorkloadInfo* a, const WorkloadInfo* b) { return a->id < b->id; });
 }
 
 void
@@ -139,7 +167,7 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
         {
             valid = workload.kernels.count(kernel_id) > 0;
         }
-        
+
         if(valid)
         {
             valid =
@@ -155,23 +183,20 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
                     workload.available_metrics.tree.at(category_id)
                         .tables.at(table_id)
                         .entries.at(entry_id);
-                MetricKey metric_id{};
-                metric_id.fields.category_id = category_id;
-                metric_id.fields.table_id    = table_id;
-                metric_id.fields.entry_id    = entry_id;
+                MetricId metric_id{ category_id, table_id, entry_id };
 
                 if(source_type == kRPVControllerMetricSourceTypeWorkload)
                 {
                     MetricStore& ms = m_workload_metrics[store_id][workload_id];
                     // Check if metric value already exists for the given metric ID
-                    if(ms.m_metrics_map.count(metric_id.id))
+                    if(ms.m_metrics_map.count(metric_id))
                     {
                         // Update existing metric value
-                        ms.m_metrics_map[metric_id.id]->values[value_name] = value;
-                        ms.m_metrics_map[metric_id.id]->entry              = &entry;
-                        ms.m_metrics_map[metric_id.id]->source_type        = source_type;
-                        ms.m_metrics_map[metric_id.id]->workload           = &workload;
-                        ms.m_metrics_map[metric_id.id]->kernel             = nullptr;
+                        ms.m_metrics_map[metric_id]->values[value_name] = value;
+                        ms.m_metrics_map[metric_id]->entry              = &entry;
+                        ms.m_metrics_map[metric_id]->source_type        = source_type;
+                        ms.m_metrics_map[metric_id]->workload           = &workload;
+                        ms.m_metrics_map[metric_id]->kernel             = nullptr;
                     }
                     else
                     {
@@ -184,28 +209,26 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
                                          { { value_name, value } } });
 
                         ms.m_metrics_data.push_back(metric);
-                        ms.m_metrics_map[metric_id.id] = metric;
+                        ms.m_metrics_map[metric_id] = metric;
 
                         // Also add to the table ID map for easy lookup by table
-                        TableKey table_id_union{};
-                        table_id_union.fields.category_id = category_id;
-                        table_id_union.fields.table_id    = table_id;
 
-                        ms.m_metrics_by_table_id[table_id_union.id][entry_id] = metric;
+                        ms.m_metrics_by_table_id[metric_id.GetTableKey()][entry_id] =
+                            metric;
                     }
                 }
                 else if(source_type == kRPVControllerMetricSourceTypeKernel)
                 {
                     MetricStore& ms = m_kernel_metrics[store_id][kernel_id];
                     // Check if metric value already exists for the given metric ID
-                    if(ms.m_metrics_map.count(metric_id.id))
+                    if(ms.m_metrics_map.count(metric_id))
                     {
                         // Update existing metric value
-                        ms.m_metrics_map[metric_id.id]->values[value_name] = value;
-                        ms.m_metrics_map[metric_id.id]->entry              = &entry;
-                        ms.m_metrics_map[metric_id.id]->source_type        = source_type;
-                        ms.m_metrics_map[metric_id.id]->workload           = nullptr;
-                        ms.m_metrics_map[metric_id.id]->kernel =
+                        ms.m_metrics_map[metric_id]->values[value_name] = value;
+                        ms.m_metrics_map[metric_id]->entry              = &entry;
+                        ms.m_metrics_map[metric_id]->source_type        = source_type;
+                        ms.m_metrics_map[metric_id]->workload           = nullptr;
+                        ms.m_metrics_map[metric_id]->kernel =
                             &workload.kernels.at(kernel_id);
                     }
                     else
@@ -219,14 +242,12 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
                                          { { value_name, value } } });
 
                         ms.m_metrics_data.push_back(metric);
-                        ms.m_metrics_map[metric_id.id] = metric;
+                        ms.m_metrics_map[metric_id] = metric;
 
                         // Also add to the table ID map for easy lookup by table
-                        TableKey table_id_union{};
-                        table_id_union.fields.category_id = category_id;
-                        table_id_union.fields.table_id    = table_id;
 
-                        ms.m_metrics_by_table_id[table_id_union.id][entry_id] = metric;
+                        ms.m_metrics_by_table_id[metric_id.GetTableKey()][entry_id] =
+                            metric;
                     }
                 }
             }
@@ -243,6 +264,7 @@ ComputeDataModel::AddMetricValue(uint64_t                                   stor
     }
     return valid;
 }
+
 
 const AvailableMetrics::Entry*
 ComputeDataModel::GetMetricInfo(uint32_t workload_id, uint32_t category_id,
@@ -278,6 +300,7 @@ ComputeDataModel::Clear()
 {
     ClearAllMetricValues();
     m_workloads.clear();
+    m_ordered_workloads.clear();
     m_kernel_selection_table.Clear();
 }
 
@@ -367,25 +390,22 @@ ComputeDataModel::GetWorkloadMetricValue(uint64_t store_id, uint32_t workload_id
                                  uint32_t category_id, uint32_t table_id,
                                  uint32_t entry_id) const
 {
-    MetricKey metric_id{};
-    metric_id.fields.category_id = category_id;
-    metric_id.fields.table_id    = table_id;
-    metric_id.fields.entry_id    = entry_id;
+    MetricId metric_id{ category_id , table_id, entry_id};
 
-    return GetWorkloadMetricValue(store_id, workload_id, metric_id.id);
+    return GetWorkloadMetricValue(store_id, workload_id, metric_id);
 }
 
 std::shared_ptr<MetricValue>
 ComputeDataModel::GetWorkloadMetricValue(uint64_t store_id, uint32_t workload_id,
-                                         uint64_t metric_key) const
+                                         MetricId metric_id) const
 {
     if(m_workload_metrics.count(store_id) &&
        m_workload_metrics.at(store_id).count(workload_id) &&
-       m_workload_metrics.at(store_id).at(workload_id).m_metrics_map.count(metric_key))
+       m_workload_metrics.at(store_id).at(workload_id).m_metrics_map.count(metric_id))
     {
         return m_workload_metrics.at(store_id)
             .at(workload_id)
-            .m_metrics_map.at(metric_key);
+            .m_metrics_map.at(metric_id);
     }
 
     return nullptr;
@@ -396,23 +416,20 @@ ComputeDataModel::GetKernelMetricValue(uint64_t store_id, uint32_t kernel_id,
                                  uint32_t category_id, uint32_t table_id,
                                  uint32_t entry_id) const
 {
-    MetricKey metric_id{};
-    metric_id.fields.category_id = category_id;
-    metric_id.fields.table_id    = table_id;
-    metric_id.fields.entry_id    = entry_id;
+    MetricId metric_id{ category_id , table_id, entry_id};
 
-    return GetKernelMetricValue(store_id, kernel_id, metric_id.id);
+    return GetKernelMetricValue(store_id, kernel_id, metric_id);
 }
 
 std::shared_ptr<MetricValue>
 ComputeDataModel::GetKernelMetricValue(uint64_t store_id, uint32_t kernel_id,
-                                       uint64_t metric_key) const
+                                 MetricId metric_id) const
 {
     if(m_kernel_metrics.count(store_id) &&
        m_kernel_metrics.at(store_id).count(kernel_id) &&
-       m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_map.count(metric_key))
+       m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_map.count(metric_id))
     {
-        return m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_map.at(metric_key);
+        return m_kernel_metrics.at(store_id).at(kernel_id).m_metrics_map.at(metric_id);
     }
 
     return nullptr;
@@ -422,11 +439,8 @@ ComputeDataModel::MetricValuesByEntryId*
 ComputeDataModel::GetKernelMetricValuesByTable(uint64_t store_id, uint32_t kernel_id,
                                          uint32_t category_id, uint32_t table_id)
 {
-    TableKey table_id_union{};
-    table_id_union.fields.category_id = category_id;
-    table_id_union.fields.table_id    = table_id;
-
-    return GetKernelMetricValuesByTable(store_id, kernel_id, table_id_union.id);
+    uint64_t table_key = MetricId::GetTableKey(category_id, table_id);
+    return GetKernelMetricValuesByTable(store_id, kernel_id, table_key);
 }
 
 ComputeDataModel::MetricValuesByEntryId*
@@ -449,11 +463,7 @@ ComputeDataModel::GetKernelInfoList(uint32_t workload_id) const
     std::vector<const KernelInfo*> kernel_info_list;
     if(m_workloads.count(workload_id))
     {
-        const WorkloadInfo& workload = m_workloads.at(workload_id);
-        for(const auto& kernel_pair : workload.kernels)
-        {
-            kernel_info_list.push_back(&kernel_pair.second);
-        }
+        kernel_info_list = m_workloads.at(workload_id).ordered_kernels;
     }
     return kernel_info_list;
 }

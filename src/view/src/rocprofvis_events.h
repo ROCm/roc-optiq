@@ -19,6 +19,7 @@ enum class RocEvents
     kTabClosed,
     kTabSelected,
     kTimelineTrackSelectionChanged,
+    kTimelineTimeRangeChanged,
     kTimelineEventSelectionChanged,
     kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
@@ -34,6 +35,7 @@ enum class RocEvents
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,
     kComputeMetricsFetched,
+    kComputeShowMetricInKernelDetails,
 #endif
 };
 
@@ -44,6 +46,7 @@ enum class RocEventType
     kTableDataEvent,
     kTabEvent,
     kTimelineTrackSelectionChangedEvent,
+    kTimelineTimeRangeChangedEvent,
     kTimelineEventSelectionChangedEvent,
     kTimelineEventHighlightChangedEvent,
     kScrollToTrackEvent,
@@ -55,6 +58,7 @@ enum class RocEventType
     kComputeTableSearchEvent,
     kComputeSelectionChangedEvent,
     kComputeMetricsFetchedEvent,
+    kComputeAddMetricToKernelDetailsEvent,
 #endif
 };
 
@@ -215,6 +219,23 @@ private:
     uint64_t m_client_id;
 };
 
+class ComputeAddMetricToKernelDetailsEvent : public RocEvent
+{
+public:
+    ComputeAddMetricToKernelDetailsEvent(uint32_t category_id, uint32_t table_id, uint32_t entry_id,
+                                         const std::string& value_name, const std::string& source_id);
+    uint32_t GetCategoryId() const;
+    uint32_t GetTableId() const;
+    uint32_t GetEntryId() const;
+    const std::string& GetValueName() const;
+
+private:
+    uint32_t m_category_id;
+    uint32_t m_table_id;
+    uint32_t m_entry_id;
+    std::string  m_value_name;
+};
+
 #endif
 
 class TabEvent : public RocEvent
@@ -237,6 +258,19 @@ public:
 private:
     uint64_t m_track_id;
     bool     m_selected;
+};
+
+class TimeRangeSelectionChangedEvent : public RocEvent
+{
+public:
+    TimeRangeSelectionChangedEvent(double start_ns, double end_ns,
+                                  const std::string& source_id);
+    double GetStartNs() const;
+    double GetEndNs() const;
+
+private:
+    double m_start_ns;
+    double m_end_ns;
 };
 
 class EventSelectionChangedEvent : public RocEvent

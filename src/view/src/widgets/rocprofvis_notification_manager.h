@@ -73,6 +73,9 @@ public:
     void ClearAll();
     void Render();
 
+    // True while any toast is showing/fading (keeps lazy render animating it).
+    bool HasActiveNotifications() const { return !m_notifications.empty(); }
+
 private:
     NotificationManager();
 
@@ -82,7 +85,6 @@ private:
     std::deque<Notification> m_notifications;
     float                    m_default_duration;
     float                    m_default_fade_duration;
-    float                    m_notification_spacing;
     uint64_t                 m_next_uid;
 };
 

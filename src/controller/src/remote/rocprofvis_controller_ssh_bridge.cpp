@@ -11,7 +11,7 @@ SshBridge::SshBridge()
              __kRPVControllerRemotePropertiesLast)
  
 {
-    m_ssh_status.now = m_ssh_status.next = kRPVControllerSshIdle;
+    m_ssh_status = kRPVControllerSshIdle;
 }
 
 rocprofvis_controller_object_type_t SshBridge::GetType()
@@ -21,7 +21,7 @@ rocprofvis_controller_object_type_t SshBridge::GetType()
 
 void SshBridge::SetStatus(rocprofvis_controller_remote_status_t status)
 {
-    m_ssh_status.now = m_ssh_status.next = status;
+    m_ssh_status = status;
 }
 
 //----------------------------------------------------------
@@ -33,16 +33,17 @@ void SshBridge::AddStdOut(const char* buffer, uint64_t count)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_stdout.append(buffer, count);
-    m_ssh_status.now  = kRPVControllerSshExecuteStdOut;
-    m_ssh_status.next = kRPVControllerSshExecuting;
+    // Streaming: the stdout payload is delivered losslessly via m_stdout, so the
+    // status just reflects the ongoing exec (no distinct one-shot edge needed).
+    m_ssh_status = kRPVControllerSshExecuting;
 }
 
 void SshBridge::SaveError(const std::string& err)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_error_str = err;
-    // Latch the terminal failure status (now == next) so it cannot be missed.
-    m_ssh_status.now = m_ssh_status.next = kRPVControllerSshFailed;
+    // Latch the terminal failure status so it cannot be missed.
+    m_ssh_status = kRPVControllerSshFailed;
 }
 
 void SshBridge::Clear()
@@ -65,12 +66,12 @@ void SshBridge::SetFileStat(std::string name, uint64_t size, uint64_t time, uint
     if(m_remote_file_stat[0].size == m_remote_file_stat[0].downloaded)
     {
         // Whole file already present: latch terminal so it cannot be missed.
-        m_ssh_status.now = m_ssh_status.next = kRPVControllerSshCompleted;
+        m_ssh_status = kRPVControllerSshCompleted;
     }
     else
     {
-        m_ssh_status.now  = kRPVControllerSshDownloadStarted;
-        m_ssh_status.next = kRPVControllerSshDownloading;
+        // Progress is re-derived each frame from m_remote_file_stat.
+        m_ssh_status = kRPVControllerSshDownloading;
     }
 }
 
@@ -83,8 +84,8 @@ void SshBridge::SetFileInfo(std::string name, uint64_t size, uint64_t time, uint
     file_info.time = time;
     file_info.attrs = attrs;
     m_remote_dir_info.push_back(file_info);
-    m_ssh_status.now = kRPVControllerSshBrowsingProgress;
-    m_ssh_status.next = kRPVControllerSshBrowsing;
+    // Entries accumulate losslessly in m_remote_dir_info; status reflects browsing.
+    m_ssh_status = kRPVControllerSshBrowsing;
 }
 
 void SshBridge::SetDownloaded(uint64_t size)
@@ -92,8 +93,8 @@ void SshBridge::SetDownloaded(uint64_t size)
     std::lock_guard<std::mutex> lock(m_mutex);
 
     m_remote_file_stat[0].downloaded += size;
-    m_ssh_status.now = kRPVControllerSshDownloadProgress;
-    m_ssh_status.next = kRPVControllerSshDownloading;
+    // Progress is re-derived each frame from m_remote_file_stat.
+    m_ssh_status = kRPVControllerSshDownloading;
 }
 
 //----------------------------------------------------------
@@ -162,21 +163,14 @@ rocprofvis_result_t SshBridge::GetUInt64(
                 return kRocProfVisResultInvalidArgument;
             }
         case kRPVControllerRemoteStatus:
-        {
-            // Terminal statuses are latched: once Completed/Failed is set they
-            // stay set (until Reset() for connection reuse), so the consumer can
-            // never miss them regardless of when it polls. This removes the need
-            // for the worker to block on a status-consumption handshake.
-            rocprofvis_controller_remote_status_t cur = m_ssh_status.now.load();
-            *value = cur;
-            if(cur != kRPVControllerSshCompleted && cur != kRPVControllerSshFailed)
-            {
-                m_ssh_status.now = m_ssh_status.next.load();
-            }
-            // Retained for prompt / host-key waiters that block on m_worker_cv.
-            m_worker_cv.notify_all();
+            // Observe-only: return the current status without mutating any state.
+            // Producers (worker/controller threads) own every status transition;
+            // a terminal status (Completed/Failed) is latched until Reset(), so it
+            // can never be missed regardless of when the UI polls. Prompt/host-key
+            // waiters are woken by SubmitPromptResponses/SubmitHostKeyDecision/
+            // Cancel, not by this read.
+            *value = m_ssh_status.load();
             return kRocProfVisResultSuccess;
-        }
 
         case kRPVControllerRemoteUserPromptType:
             if (std::holds_alternative<PromptRequest>(m_pending))
@@ -305,10 +299,14 @@ SshBridge::AskPrompts(const PromptRequest& req)
 {
     std::unique_lock<std::mutex> lk(m_mutex);
     m_pending = req;
-    m_ssh_status.now = kRPVControllerSshAuthRequest;
-    m_ssh_status.next = kRPVControllerSshAuthenticating;
+    // Advertise the pending request (level-triggered: persists while the worker
+    // blocks below, so the UI can observe it on any frame and open the modal).
+    m_ssh_status = kRPVControllerSshAuthRequest;
     m_prompt_responses.reset();
     m_worker_cv.wait(lk, [&] { return m_prompt_responses.has_value() || m_cancelled; });
+    // The worker (not the UI read) clears the request status now that it has
+    // been serviced, so AuthRequest does not stay latched.
+    m_ssh_status = kRPVControllerSshAuthenticating;
     m_pending = std::monostate{};
     if(m_cancelled)
     {
@@ -324,10 +322,14 @@ SshBridge::AskHostKey(const HostKeyRequest& req)
 {
     std::unique_lock<std::mutex> lk(m_mutex);
     m_pending = req;
-    m_ssh_status.now = kRPVControllerSshAuthRequest;
-    m_ssh_status.next = kRPVControllerSshAuthenticating;
+    // Advertise the pending request (level-triggered: persists while the worker
+    // blocks below, so the UI can observe it on any frame and open the modal).
+    m_ssh_status = kRPVControllerSshAuthRequest;
     m_hostkey_decision.reset();
     m_worker_cv.wait(lk, [&] { return m_hostkey_decision.has_value() || m_cancelled; });
+    // The worker (not the UI read) clears the request status now that it has
+    // been serviced, so AuthRequest does not stay latched.
+    m_ssh_status = kRPVControllerSshAuthenticating;
     m_pending = std::monostate{};
     if(m_cancelled)
     {
@@ -375,7 +377,7 @@ void SshBridge::Reset()
     m_prompt_responses.reset();
     m_hostkey_decision.reset();
     // Clear any latched terminal status so a reused connection starts clean.
-    m_ssh_status.now = m_ssh_status.next = kRPVControllerSshIdle;
+    m_ssh_status = kRPVControllerSshIdle;
 }
 
 } // namespace Controller

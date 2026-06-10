@@ -117,6 +117,11 @@ namespace View
         SshOperation        m_active_operation;
         uint64_t            m_active_operation_id;
         rocprofvis_result_t m_last_result;
+        // Tracks whether an auth prompt/host-key request has already been built
+        // for the current AuthRequest. The remote status is now level-triggered
+        // (it persists while a request is pending), so this guards against
+        // rebuilding the request every frame.
+        bool                m_auth_request_built = false;
         // Pending command/paths captured for the active operation so the start
         // happens lazily inside BeginOperation's start_fn.
         std::string         m_pending_command;

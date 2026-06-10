@@ -17,13 +17,23 @@ namespace RocProfVis
 namespace Controller
 {
 
+// Bridge between SSH worker threads (producers) and the UI (observer).
+//
+// Status / ownership contract:
+//   - Worker/controller threads OWN all status transitions and the payload
+//     buffers (m_stdout, m_remote_file_stat, m_remote_dir_info). They set
+//     m_ssh_status to the value they want observed.
+//   - Reading kRPVControllerRemoteStatus from the UI is a pure, NON-MUTATING
+//     observation. The UI never advances the status; no worker thread ever
+//     blocks waiting for the UI to observe a status.
+//   - A terminal status (Completed / Failed) is latched: once set it stays set
+//     until Reset() (used for connection reuse), so it can never be missed.
+//   - The ONLY UI-blocking dependency is the prompt / host-key rendezvous
+//     (AskPrompts / AskHostKey) which blocks the worker on m_worker_cv until
+//     the UI submits responses / a decision (or cancels). That is a genuine
+//     data dependency, separate from the status channel.
 class SshBridge : public Handle
 {
-    struct SshStatus
-    {
-        std::atomic<rocprofvis_controller_remote_status_t> now;
-        std::atomic<rocprofvis_controller_remote_status_t> next;
-    };
 public:
     SshBridge();
 
@@ -61,7 +71,7 @@ public:
 
 private:
 
-    SshStatus                                            m_ssh_status;
+    std::atomic<rocprofvis_controller_remote_status_t>   m_ssh_status;
     rocprofvis_controller_user_prompt_t                  m_pending;
     std::string                                          m_stdout;
     std::string                                          m_error_str;

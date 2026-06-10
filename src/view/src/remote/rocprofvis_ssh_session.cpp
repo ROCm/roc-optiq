@@ -386,6 +386,15 @@ namespace View
             } else
             if (kRPVControllerSshAuthRequest == remote_status)
             {
+                // The remote status is level-triggered (it persists while the
+                // request is pending), so build the prompt/host-key request only
+                // once per AuthRequest rather than every frame.
+                if (m_auth_request_built)
+                {
+                    return kRocProfVisResultPending;
+                }
+                m_auth_request_built = true;
+
                 uint64_t prompt_type = 0;
                 rocprofvis_result_t prompt_result = rocprofvis_controller_get_uint64(
                     m_connection, kRPVControllerRemoteUserPromptType, 0, &prompt_type);
@@ -470,6 +479,12 @@ namespace View
                         }
                     }
                 }
+            }
+            else
+            {
+                // Left the AuthRequest state (e.g. back to Authenticating after a
+                // prompt was serviced); allow the next request to rebuild.
+                m_auth_request_built = false;
             }
         }
         return kRocProfVisResultPending;
@@ -602,20 +617,41 @@ namespace View
             {
                 if (remote_status == kRPVControllerSshCompleted)
                 {
+                    // Publish the final stat so the progress bar reaches 100% and
+                    // the popup closes (covers the "already up-to-date" path where
+                    // the status jumps straight to Completed without progress).
+                    std::string name;
+                    uint64_t size, time, downloaded_bytes;
+                    if (kRocProfVisResultSuccess == GetString(m_connection, kRPVControllerRemoteFileName, 0, name) &&
+                        kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileSize, 0, &size) &&
+                        kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileTime, 0, &time) &&
+                        kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteDownloaded, 0, &downloaded_bytes))
+                    {
+                        m_file_stat.update(name, size, time, downloaded_bytes);
+                    }
                     result = kRocProfVisResultSuccess;
                 }
                 else if (remote_status == kRPVControllerSshFailed)
                 {
                     result = kRocProfVisResultFailedSshCommunication;
                 } else
-                if (remote_status == kRPVControllerSshDownloadStarted)
+                if (remote_status == kRPVControllerSshDownloading)
                 {
+                    // Progress is re-derived from the file stat each poll (the
+                    // status is level-triggered). name/size/time are published
+                    // once by SetFileStat at download start and persist; the
+                    // downloaded count is incremented as bytes arrive. The stat
+                    // may not be published yet on the first Downloading poll, in
+                    // which case the getters return InvalidArgument and we simply
+                    // wait for the next poll.
                     std::string name;
                     uint64_t size, time, downloaded_bytes;
                     rocprofvis_result_t progress_result = GetString(m_connection, kRPVControllerRemoteFileName, 0, name);
                     if (kRocProfVisResultSuccess != progress_result)
                     {
-                        return kRocProfVisResultFailedSshCommunication;
+                        return progress_result == kRocProfVisResultInvalidArgument
+                                   ? kRocProfVisResultPending
+                                   : kRocProfVisResultFailedSshCommunication;
                     }
                     progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileSize, 0, &size);
                     if (kRocProfVisResultSuccess != progress_result)
@@ -635,18 +671,6 @@ namespace View
                     m_file_stat.update(name, size, time, downloaded_bytes);
                     result = kRocProfVisResultPending;
                 }
-                else
-                if (remote_status == kRPVControllerSshDownloadProgress)
-                {
-                    uint64_t downloaded_bytes;
-                    rocprofvis_result_t progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteDownloaded, 0, &downloaded_bytes);
-                    if (kRocProfVisResultSuccess != progress_result)
-                    {
-                        return kRocProfVisResultFailedSshCommunication;
-                    }
-                    m_file_stat.set_downloaded(downloaded_bytes);
-                    result = kRocProfVisResultPending;
-                }               
             }
         }
         return result;
@@ -682,50 +706,55 @@ namespace View
             rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
             if (kRocProfVisResultSuccess == remote_result)
             {
-                if (remote_status == kRPVControllerSshCompleted)
-                {
-                    result = kRocProfVisResultSuccess;
-                }
-                else if (remote_status == kRPVControllerSshFailed)
+                if (remote_status == kRPVControllerSshFailed)
                 {
                     result = kRocProfVisResultFailedSshCommunication;
-                } else
-                    if (remote_status == kRPVControllerSshBrowsingProgress)
+                }
+                else if (remote_status == kRPVControllerSshCompleted)
+                {
+                    // The directory listing accumulates losslessly on the bridge
+                    // and is read in one pass once browsing completes. Reading
+                    // kRPVControllerRemoteDirNumFiles moves the accumulated
+                    // entries into the indexed buffer; rebuild m_directory fresh.
+                    m_directory.clear();
+
+                    uint64_t num = 0;
+                    rocprofvis_result_t entry_result =
+                        rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteDirNumFiles, 0, &num);
+                    if (kRocProfVisResultSuccess != entry_result)
+                    {
+                        return kRocProfVisResultFailedSshCommunication;
+                    }
+
+                    for (uint64_t i = 0; i < num; i++)
                     {
                         std::string name;
-                        uint64_t size, time, permissions, num;
-                        rocprofvis_result_t progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteDirNumFiles, 0, &num);
-                        for (int i = 0; i < num; i++)
+                        uint64_t size, time, permissions;
+                        entry_result = GetString(m_connection, kRPVControllerRemoteFileName, i, name);
+                        if (kRocProfVisResultSuccess != entry_result)
                         {
-                            if (kRocProfVisResultSuccess != progress_result)
-                            {
-                                return kRocProfVisResultFailedSshCommunication;
-                            }
-                            progress_result = GetString(m_connection, kRPVControllerRemoteFileName, i, name);
-                            if (kRocProfVisResultSuccess != progress_result)
-                            {
-                                return kRocProfVisResultFailedSshCommunication;
-                            }
-                            progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileSize, i, &size);
-                            if (kRocProfVisResultSuccess != progress_result)
-                            {
-                                return kRocProfVisResultFailedSshCommunication;
-                            }
-                            progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileTime, i, &time);
-                            if (kRocProfVisResultSuccess != progress_result)
-                            {
-                                return kRocProfVisResultFailedSshCommunication;
-                            }
-                            progress_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileAttrs, i, &permissions);
-                            if (kRocProfVisResultSuccess != progress_result)
-                            {
-                                return kRocProfVisResultFailedSshCommunication;
-                            }
-                            m_directory.update(name, size, time, permissions);
+                            return kRocProfVisResultFailedSshCommunication;
                         }
-                        result = kRocProfVisResultPending;
+                        entry_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileSize, i, &size);
+                        if (kRocProfVisResultSuccess != entry_result)
+                        {
+                            return kRocProfVisResultFailedSshCommunication;
+                        }
+                        entry_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileTime, i, &time);
+                        if (kRocProfVisResultSuccess != entry_result)
+                        {
+                            return kRocProfVisResultFailedSshCommunication;
+                        }
+                        entry_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileAttrs, i, &permissions);
+                        if (kRocProfVisResultSuccess != entry_result)
+                        {
+                            return kRocProfVisResultFailedSshCommunication;
+                        }
+                        m_directory.update(name, size, time, permissions);
                     }
-                       
+
+                    result = kRocProfVisResultSuccess;
+                }
             }
         }
         return result;

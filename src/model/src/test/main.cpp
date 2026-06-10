@@ -8,11 +8,6 @@
 #include <cstdio>
 #include <random>
 #include <vector>
-#if defined(_WIN32)
-#include <conio.h>
-#else
-#include <curses.h>
-#endif
 #include <cstdarg>
 #include <algorithm>
 #include <string.h>
@@ -140,7 +135,7 @@ bool NextTest(const char* message)
         char ch;
         printf("\x1b[0m%s:", message);
         while (true) {
-            ch = static_cast<char>(_getch());
+            ch = static_cast<char>(getchar());
             if (ch == 27 || ch == 13) break;
         }
         printf("\n");

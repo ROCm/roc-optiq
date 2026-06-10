@@ -7,6 +7,7 @@
 
 #    include <GLFW/glfw3.h>
 
+#    include "spdlog/spdlog.h"
 #    include "rocprofvis_platform_helpers.h"
 
 // This file addresses two distinct Mutter/Xwayland bugs that affect
@@ -85,6 +86,7 @@ void
 set_drag_repair_override(bool on)
 {
     g_cli_drag_repair_override = on ? 1 : 0;
+    spdlog::info("Window drag fix: {}", g_cli_drag_repair_override);
 }
 
 void
@@ -114,8 +116,14 @@ should_apply_drag_repair()
     if(g_cli_drag_repair_override == 0) return false;
 
     static const int env_value = []() {
-        return parse_drag_repair_value(std::getenv("ROCPROFVIS_DRAG_REPAIR"));
+        int repair = parse_drag_repair_value(std::getenv("ROCPROFVIS_DRAG_REPAIR"));
+        if(repair >= 0) 
+        {
+            spdlog::info("Window drag fix: {}", repair);
+        }
+        return repair;
     }();
+
     return env_value == 1;
 }
 

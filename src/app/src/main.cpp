@@ -218,15 +218,6 @@ main(int argc, char** argv)
 {
     int app_result_code = 0;
 
-    RocProfVis::View::CLIParser::AttachToConsole();
-    RocProfVis::View::CLIParser cli_parser;
-    bool                        exit_app = false;
-    parse_command_line_args(argc, argv, cli_parser, exit_app);
-    if(exit_app)
-    {
-        return app_result_code;
-    }
-
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
@@ -237,6 +228,15 @@ main(int argc, char** argv)
         std::filesystem::path(config_path) / "roc-optiq.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
+    
+    RocProfVis::View::CLIParser::AttachToConsole();
+    RocProfVis::View::CLIParser cli_parser;
+    bool                        exit_app = false;
+    parse_command_line_args(argc, argv, cli_parser, exit_app);
+    if(exit_app)
+    {
+        return app_result_code;
+    }
 
     // Parse backend preference from command line
     rocprofvis_imgui_backend_preference_t backend_pref = kRPVBackendAuto;

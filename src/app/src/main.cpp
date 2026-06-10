@@ -14,7 +14,7 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_image_helpers.h"
 #ifdef __APPLE__
-#include "rocprofvis_macos_input.h"
+#include "rocprofvis_platform_helpers.h"
 #endif
 #include <GLFW/glfw3.h>
 #include <filesystem>
@@ -103,8 +103,8 @@ glfw_error_callback(int error, const char* description)
 static void
 sync_imgui_modifiers_with_os()
 {
-    ImGuiIO&                       io = ImGui::GetIO();
-    RocProfVis::App::ModifierState m  = RocProfVis::App::get_os_modifier_state();
+    ImGuiIO&                            io = ImGui::GetIO();
+    RocProfVis::Platform::ModifierState m  = RocProfVis::Platform::get_os_modifier_state();
 
     if(io.KeyCtrl != m.ctrl)
     {

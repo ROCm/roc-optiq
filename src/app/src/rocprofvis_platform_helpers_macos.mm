@@ -1,13 +1,13 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_macos_input.h"
+#include "rocprofvis_platform_helpers.h"
 
 #import <AppKit/AppKit.h>
 
 namespace RocProfVis
 {
-namespace App
+namespace Platform
 {
 
 ModifierState
@@ -26,5 +26,5 @@ get_os_modifier_state()
     return state;
 }
 
-}  // namespace App
+}  // namespace Platform
 }  // namespace RocProfVis

@@ -42,6 +42,27 @@ safe_getenv(const char* name)
     return value ? std::string(value) : std::string();
 #endif
 }
+
+// Sanitizing barrier for environment-derived directory paths. Values read from
+// environment variables (LOCALAPPDATA/XDG_CONFIG_HOME/HOME) are treated as
+// untrusted input that must not flow unchecked into file-open APIs (settings
+// ofstream/ifstream, spdlog log fopen, imgui.ini). Normalize the path and reject
+// anything that is not an absolute path or that still contains ".." traversal;
+// callers fall back to a known-safe location when this returns empty.
+static std::filesystem::path
+sanitize_base_dir(const std::string& raw)
+{
+    if(raw.empty()) return {};
+
+    std::filesystem::path normalized = std::filesystem::path(raw).lexically_normal();
+    if(!normalized.is_absolute()) return {};
+
+    for(const auto& component : normalized)
+    {
+        if(component == "..") return {};
+    }
+    return normalized;
+}
 }  // namespace View
 }  // namespace RocProfVis
 
@@ -369,18 +390,20 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
 {
 #ifdef _WIN32
     const char*           app_config_dir_name = "AMD\\ROCm-Optiq";
-    const std::string     local_appdata       = safe_getenv("LOCALAPPDATA");
-    std::filesystem::path config_dir          = !local_appdata.empty()
-                                                    ? std::filesystem::path(local_appdata)
-                                                    : std::filesystem::current_path();
+    std::filesystem::path base                = sanitize_base_dir(safe_getenv("LOCALAPPDATA"));
+    std::filesystem::path config_dir =
+        !base.empty() ? base : std::filesystem::current_path();
 #else
     const char*           app_config_dir_name = "rocm-optiq";
-    const std::string     xdg_config          = safe_getenv("XDG_CONFIG_HOME");
-    std::filesystem::path config_dir          = !xdg_config.empty()
-                                                    ? std::filesystem::path(xdg_config)
-                                                    : (std::filesystem::path(safe_getenv("HOME")) / ".config");
+    std::filesystem::path config_dir          = sanitize_base_dir(safe_getenv("XDG_CONFIG_HOME"));
+    if(config_dir.empty())
+    {
+        std::filesystem::path home = sanitize_base_dir(safe_getenv("HOME"));
+        config_dir = !home.empty() ? (home / ".config") : std::filesystem::current_path();
+    }
 #endif
     config_dir /= app_config_dir_name;
+    config_dir = config_dir.lexically_normal();
     if(create_dirs)
     {
         std::filesystem::create_directories(config_dir);

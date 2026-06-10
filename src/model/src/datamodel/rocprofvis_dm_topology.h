@@ -75,9 +75,9 @@ protected:
     virtual TopologyNode* FindRelevantPropertyNode(rocprofvis_dm_track_identifiers_t* track_identifiers, std::string table_name);
     virtual TopologyNode* FindRelevantTopologyNode(rocprofvis_dm_track_identifiers_t* track_identifiers, std::string table_name);
     virtual const std::map<std::string, uint32_t>* GetPropertiesMap() { return nullptr; };
-    virtual const bool IsRelevantPropertyTableName(std::string table_name) { (void) table_name; return false; };
-    virtual const bool IsRelevantTopologyTableName(std::string table_name) { (void) table_name; return false; };
-    virtual const uint32_t GetLevelId() const { return INVALID_BRANCH_LEVEL; };
+    virtual bool IsRelevantPropertyTableName(std::string table_name) { (void) table_name; return false; };
+    virtual bool IsRelevantTopologyTableName(std::string table_name) { (void) table_name; return false; };
+    virtual uint32_t GetLevelId() const { return INVALID_BRANCH_LEVEL; };
     virtual const char* GetLevelTag() const { return ""; }
     TopologyNode* GetRootNode();
     
@@ -127,9 +127,9 @@ public:
     std::string GetNodeName() override;
 private:
     const std::map<std::string, uint32_t>* GetPropertiesMap() override { return &s_columns_ids; }
-    const bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Node"; }
-    const bool IsRelevantTopologyTableName(std::string table_name) override { return table_name == "Agent"; };
-    const uint32_t GetLevelId() const override { return TRACK_ID_NODE; }
+    bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Node"; }
+    bool IsRelevantTopologyTableName(std::string table_name) override { return table_name == "Agent"; };
+    uint32_t GetLevelId() const override { return TRACK_ID_NODE; }
     virtual const char* GetLevelTag() const override { return Builder::NODE_ID_SERVICE_NAME; }
     inline static const std::map<std::string,uint32_t>
         s_columns_ids = {
@@ -166,8 +166,8 @@ public:
     std::string GetNodeName() override;
 private:
     const std::map<std::string, uint32_t>* GetPropertiesMap() override { return &s_columns_ids; }
-    const bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Process"; }
-    const uint32_t GetLevelId() const override { return TRACK_ID_PID; }
+    bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Process"; }
+    uint32_t GetLevelId() const override { return TRACK_ID_PID; }
     const char* GetLevelTag() const override { return Builder::PROCESS_ID_SERVICE_NAME; }
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
@@ -192,8 +192,8 @@ public:
     std::string GetNodeName() override;
 private:
     const std::map<std::string, uint32_t>* GetPropertiesMap() override { return &s_columns_ids; }
-    const bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Agent"; }
-    const uint32_t GetLevelId() const override { return TRACK_ID_AGENT; }
+    bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Agent"; }
+    uint32_t GetLevelId() const override { return TRACK_ID_AGENT; }
     const char* GetLevelTag() const override { return Builder::AGENT_ID_SERVICE_NAME; }
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
@@ -226,10 +226,10 @@ public:
 
 private:
     rocprofvis_controller_thread_type_t m_thread_type;
-    const uint32_t GetLevelId() const override { return TRACK_ID_TID; }
+    uint32_t GetLevelId() const override { return TRACK_ID_TID; }
     const char* GetLevelTag() const override { return Builder::THREAD_ID_SERVICE_NAME; }
     const std::map<std::string, uint32_t>* GetPropertiesMap() override { return &s_columns_ids; }
-    const bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Thread"; }
+    bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Thread"; }
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
         { "id", kRPVControllerThreadId },
@@ -275,10 +275,10 @@ public:
     virtual bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
     rocprofvis_dm_result_t GetTrackId(uint64_t& id) override { id = m_track_id; return kRocProfVisDmResultSuccess;}
 private:
-    const uint32_t GetLevelId() const override { return TRACK_ID_QUEUE; }
+    uint32_t GetLevelId() const override { return TRACK_ID_QUEUE; }
     const char* GetLevelTag() const override { return Builder::QUEUE_ID_SERVICE_NAME; }
     const std::map<std::string, uint32_t>* GetPropertiesMap() override { return &s_columns_ids; }
-    const bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Queue"; }
+    bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Queue"; }
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
         { "id", kRPVControllerQueueId },
@@ -324,12 +324,12 @@ public:
     std::string GetNodeName() override;
     rocprofvis_dm_result_t GetTrackId(uint64_t& id) override { id = m_track_id; return kRocProfVisDmResultSuccess;}
 private:
-    const uint32_t GetLevelId() const override { return TRACK_ID_STREAM; }
+    uint32_t GetLevelId() const override { return TRACK_ID_STREAM; }
     const char* GetLevelTag() const override { return Builder::STREAM_ID_SERVICE_NAME; }
     rocprofvis_dm_result_t  ProcessProperty(const char* name, rocprofvis_db_topology_data_type_t type, void* value) override;
     const std::map<std::string, uint32_t>* GetPropertiesMap() override { return &s_columns_ids; }
-    const bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Stream"; }
-    const bool IsRelevantTopologyTableName(std::string table_name) override { return table_name == "QueueRef"; };
+    bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Stream"; }
+    bool IsRelevantTopologyTableName(std::string table_name) override { return table_name == "QueueRef"; };
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
         { "id", kRPVControllerStreamId },
@@ -356,10 +356,10 @@ public:
     rocprofvis_dm_result_t GetTrackId(uint64_t& id) override { id = m_track_id; return kRocProfVisDmResultSuccess;}
 private:
     std::string m_tag;
-    const uint32_t GetLevelId() const override { return TRACK_ID_COUNTER; }
+    uint32_t GetLevelId() const override { return TRACK_ID_COUNTER; }
     const char* GetLevelTag() const override { return m_tag.c_str();}
     const std::map<std::string, uint32_t>* GetPropertiesMap() override { return &s_columns_ids; }
-    const bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "PMC"; }
+    bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "PMC"; }
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
         { "id", kRPVControllerCounterId },
@@ -415,7 +415,7 @@ public:
         :TopologyReferenceNode(kRPVControllerTopologyNodeProcessor, track_identifiers->id[TRACK_ID_AGENT], track_identifiers, ctx) {}
     rocprofvis_dm_result_t          AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
 private:
-    const uint32_t GetLevelId() const override { return TRACK_ID_AGENT; }
+    uint32_t GetLevelId() const override { return TRACK_ID_AGENT; }
     const char* GetLevelTag() const override { return Builder::AGENT_ID_SERVICE_NAME; }
 };
 
@@ -426,7 +426,7 @@ public:
         TopologyTrackRefence(track_identifiers->track_id){}
     rocprofvis_dm_result_t GetTrackId(uint64_t& id) override { id = m_track_id; return kRocProfVisDmResultSuccess;}
 private:
-    const uint32_t GetLevelId() const override { return TRACK_ID_QUEUE; }
+    uint32_t GetLevelId() const override { return TRACK_ID_QUEUE; }
     const char* GetLevelTag() const override { return Builder::QUEUE_ID_SERVICE_NAME; }
 
 };

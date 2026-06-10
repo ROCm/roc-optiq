@@ -385,8 +385,7 @@ TraceView::Render()
             popup_style.PushPopupStyles();
             popup_style.PushTitlebarColors();
 
-            float dpi = SettingsManager::GetInstance().GetDPI();
-            ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
+            ImGui::SetNextWindowSize(ImVec2(400.0f, 290.0f));
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {

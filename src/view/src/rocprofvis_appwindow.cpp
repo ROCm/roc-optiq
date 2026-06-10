@@ -657,13 +657,12 @@ AppWindow::RenderShutdownState()
 {
     ImGui::OpenPopup(SHUTDOWN_DIALOG_NAME);
 
-    const float dpi = SettingsManager::GetInstance().GetDPI();
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(
         ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
                viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
         ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(360.0f * dpi, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_Always);
 
     PopUpStyle ps;
     ps.PushPopupStyles();
@@ -1140,12 +1139,15 @@ AppWindow::HandleFontChanged()
         return;
     }
 
-    // Calculate status bar height based on font size, with some padding.
-    ImGuiStyle& style     = ImGui::GetStyle();
-    float       line_pad  = style.CellPadding.y * 2.0f;
-    float       line_size = ImGui::GetTextLineHeight() + line_pad;
-
-    status_bar_item->m_height = line_size;
+    // Fit the slot to one framed line plus the child border so the status bar
+    // content cannot overflow into a scrollbar. FramePadding matches
+    // RenderStatusBar().
+    const ImGuiStyle& default_style = SettingsManager::GetInstance().GetDefaultStyle();
+    const float       content_height =
+        ImGui::GetFontSize() + (default_style.FramePadding.y * 2.0f);
+    const float border_height = (status_bar_item->m_window_padding.y * 2.0f) +
+                                (ImGui::GetStyle().ChildBorderSize * 2.0f);
+    status_bar_item->m_height = content_height + border_height;
 
     // adjust main view's size to account for new status bar height
     auto main_view_item = m_main_view->GetMutableAt(count - 2);
@@ -1435,6 +1437,7 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
 void
 AppWindow::UpdateStatusBar()
 {
+    HandleFontChanged();
     // Update status message every N frames
     const int UPDATE_STEP = 4;
     if(ImGui::GetFrameCount() % UPDATE_STEP == 0)

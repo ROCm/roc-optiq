@@ -320,7 +320,6 @@ bool rocprofvis_view_init(std::function<void(int)> notification_callback,
                           rocprofvis_view_file_dialog_preference_t pref);
 void rocprofvis_view_render(const rocprofvis_view_render_options_t& opts);
 void rocprofvis_view_destroy();
-void rocprofvis_view_set_dpi(float dpi);
 void rocprofvis_view_open_files(const std::vector<std::string>& paths);
 void rocprofvis_view_set_fullscreen_state(bool is_fullscreen);
 void rocprofvis_view_set_texture_backend(...);
@@ -1288,8 +1287,7 @@ JSON keys are constants in this header
 ### `FontManager` (`rocprofvis_font_manager.{h,cpp}`)
 
 Owns the text font and the icon font. `Init()` runs after the ImGui
-context is created. `GetDPIScaledFontIndex()` picks the right size
-when DPI scaling is enabled.
+context is created.
 
 ### `HotkeyManager` (`rocprofvis_hotkey_manager.{h,cpp}`)
 

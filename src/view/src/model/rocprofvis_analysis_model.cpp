@@ -37,7 +37,7 @@ AnalysisModel::GetPerTrackQueueUtilization(const TrackInfo& track)
             AnalysisQueueUtilization* queue = &m_per_track_queue_utilization[track.id];
             m_per_track_queue_utilization[track.id].track = &track;
             queue->util_pct                               = 0.0;
-            queue->state = AnalysisQueueUtilization::kStale;
+            queue->state = AnalysisQueueUtilization::kReady;
         }
         return &m_per_track_queue_utilization.at(track.id);
     }
@@ -58,6 +58,18 @@ AnalysisModel::SetPerTrackQueueUtilizationValue(uint64_t track_id, double util_p
     }
 }
 
+const TablesModel&
+AnalysisModel::GetTables() const
+{
+    return m_tables;
+}
+
+TablesModel&
+AnalysisModel::GetTables()
+{
+    return m_tables;
+}
+
 void
 AnalysisModel::ClearPerTrackQueueUtilization()
 {
@@ -67,6 +79,7 @@ AnalysisModel::ClearPerTrackQueueUtilization()
 void
 AnalysisModel::Clear()
 {
+    m_tables.ClearAllTables();
     ClearPerTrackQueueUtilization();
 }
 

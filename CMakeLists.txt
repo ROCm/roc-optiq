@@ -81,6 +81,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_measurement_controller.cpp
     src/view/src/rocprofvis_analysis_view.cpp 
     src/view/src/rocprofvis_trace_view.cpp 
+    src/view/src/rocprofvis_top_events_view.cpp
     src/view/src/rocprofvis_line_track_item.cpp 
     src/view/src/rocprofvis_timeline_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 

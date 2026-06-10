@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_core_assert.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
@@ -280,7 +281,9 @@ rocprofvis_result_t Data::GetString(char* string, uint32_t* length)
             }
             else if (length && string && (*length > 0))
             {
-                strncpy(string, m_string, *length);
+                const size_t src_len = m_string ? strlen(m_string) : 0;
+                const size_t copy    = std::min(src_len, static_cast<size_t>(*length));
+                if (copy > 0) std::memcpy(string, m_string, copy);
                 result = kRocProfVisResultSuccess;
             }
             break;

@@ -164,7 +164,7 @@ class Builder
         static constexpr const char* STREAM_ID_SERVICE_NAME = "streamId";
         static constexpr const char* NODE_ID_SERVICE_NAME = "nodeId";
         static constexpr const char* NODE_ID_PUBLIC_NAME = "nodeId";
-        static constexpr const char* OPERATION_SERVICE_NAME = "op";
+        static constexpr const char* OPERATION_SERVICE_NAME = "__op";
         static constexpr const char* TRACK_CATEGORY_SERVICE_NAME = "trackCategory";
         static constexpr const char* CATEGORY_PUBLIC_NAME = "category";
         static constexpr const char* PROCESS_ID_PUBLIC_NAME = "PID";

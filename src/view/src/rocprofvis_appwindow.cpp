@@ -84,9 +84,9 @@ AppWindow::AppWindow()
 , m_default_padding(0.0f, 0.0f)
 , m_default_spacing(0.0f, 0.0f)
 , m_open_about_dialog(false)
-, m_tabclosed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
-, m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
-, m_font_changed_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_tabclosed_event_token(EventManager::InvalidSubscriptionToken)
+, m_tabselected_event_token(EventManager::InvalidSubscriptionToken)
+, m_font_changed_token(EventManager::InvalidSubscriptionToken)
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 , m_show_debug_window(false)
 , m_show_provider_test_widow(false)
@@ -576,6 +576,58 @@ AppWindow::Update()
     UpdateStatusBar();
 }
 
+bool
+AppWindow::WantsContinuousRender()
+{
+    if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
+       m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents() ||
+       NotificationManager::GetInstance().HasActiveNotifications())
+    {
+        return true;
+    }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    if(m_test_data_provider.GetState() == ProviderState::kLoading ||
+       m_test_data_provider.GetPendingRequestCount() > 0)
+    {
+        return true;
+    }
+#endif
+
+    // Only the active tab renders, so only it can have render-driven work with
+    // no events/requests yet (e.g. the timeline loading-timer debounce).
+    Project* current_project = GetCurrentProject();
+    if(current_project)
+    {
+        RootView* current_root =
+            dynamic_cast<RootView*>(current_project->GetView().get());
+        if(current_root && current_root->WantsContinuousRender())
+        {
+            return true;
+        }
+    }
+
+    bool wants_render = false;
+    for(const auto& [id, project] : m_projects)
+    {
+        RootView* root_view = dynamic_cast<RootView*>(project->GetView().get());
+        if(root_view)
+        {
+            DataProvider* data_provider = root_view->GetDataProvider();
+            // kLoading spans the whole initial load, even when the pending count
+            // briefly drops to zero between stages, so we never freeze mid-load.
+            if(data_provider &&
+               (data_provider->GetState() == ProviderState::kLoading ||
+                data_provider->GetPendingRequestCount() > 0))
+            {
+                wants_render = true;
+                break;
+            }
+        }
+    }
+    return wants_render;
+}
+
 void
 AppWindow::Render()
 {
@@ -748,13 +800,19 @@ AppWindow::OpenFile(std::string file_path)
             TabItem tab =
                 TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
             m_tab_container->AddTab(std::move(tab));
+            m_tab_container->SetActiveTab(project->GetID());            
             m_projects[project->GetID()] = std::move(project);
             SettingsManager::GetInstance().AddRecentFile(file_path);
             break;
         }
         case Project::OpenResult::Duplicate:
         {
-            // File is already opened, just switch to that tab
+            // trace already open, tell the user which tab and switch to it
+            Project* existing = GetProject(file_path);
+            ShowMessageDialog("Trace Already Open",
+                              "This trace is already open in \"" +
+                                  (existing ? existing->GetName() : file_path) +
+                                  "\".\n\nSwitched to the existing tab.");
             m_tab_container->SetActiveTab(file_path);
             break;
         }
@@ -889,7 +947,7 @@ AppWindow::RenderFileMenu(Project* project)
             SettingsManager::GetInstance().GetInternalSettings().recent_files;
         if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))
         {
-            for(const std::string& file : recent_files)
+            for(std::string file : recent_files)
             {
                 if(ImGui::MenuItem(file.c_str(), nullptr))
                 {
@@ -952,6 +1010,7 @@ AppWindow::RenderViewMenu(Project* project)
                 tool_bar_item->m_visible = settings.show_toolbar;
             }
         }
+#ifndef __APPLE__
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
         {
             if(m_notification_callback)
@@ -961,6 +1020,7 @@ AppWindow::RenderViewMenu(Project* project)
                         kRocProfVisViewNotification_Toggle_Fullscreen);
             }
         }
+#endif
         ImGui::SeparatorText("System Profiler Panels");
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))

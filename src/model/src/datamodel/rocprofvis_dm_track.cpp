@@ -5,6 +5,7 @@
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_dm_pmc_track_slice.h"
 #include "rocprofvis_dm_event_track_slice.h"
+#include "rocprofvis_c_interface.h"
 
 namespace RocProfVis
 {
@@ -34,13 +35,13 @@ rocprofvis_dm_timestamp_t Track::MaxTimestamp() {
     return m_track_params->max_ts-m_ctx->BindingInfo()->trace_properties->db_inst_start_time[db_instance->GuidIndex()];
 }
 
-rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
+rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_hashed_timestamp_tag_t tag)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(m_track_params, ERROR_TRACK_PARAMETERS_NOT_ASSIGNED, nullptr);
     if(m_track_params->track_indentifiers.category == kRocProfVisDmPmcTrack)
     {
         try{
-            m_slices.push_back(std::make_shared<PmcTrackSlice>(this, start, end));
+            m_slices.push_back(std::make_shared<PmcTrackSlice>(this, start, end, tag));
         }
         catch(std::exception ex)
         {
@@ -50,7 +51,7 @@ rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofv
     } else
     {
         try{
-            m_slices.push_back(std::make_shared<EventTrackSlice>(this, start, end));
+            m_slices.push_back(std::make_shared<EventTrackSlice>(this, start, end, tag));
         }
         catch(std::exception ex)
         {
@@ -112,13 +113,13 @@ rocprofvis_dm_result_t Track::GetSliceAtIndex(rocprofvis_dm_property_index_t ind
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_result_t Track::GetSliceAtTime(rocprofvis_dm_timestamp_t time,  rocprofvis_dm_slice_t & slice)
+rocprofvis_dm_result_t Track::GetSliceAtTime(rocprofvis_dm_hashed_timestamp time,  rocprofvis_dm_slice_t & slice)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     for (int i = 0; i < m_slices.size(); i++)
     {
-        uint64_t hash_time =
-            hash_combine(m_slices[i]->StartTime(), m_slices[i]->EndTime()); 
+        rocprofvis_dm_hashed_timestamp hash_time =
+            rocprofvis_dm_hash_combine_timestamp(m_slices[i]->StartTime(), m_slices[i]->EndTime(), m_slices[i]->Tag());
         if(time == hash_time)
         {
             if (result == kRocProfVisDmResultSuccess)
@@ -176,7 +177,7 @@ rocprofvis_dm_charptr_t  Track::CategoryString(){
 
 rocprofvis_dm_value_t Track::GetHistogramBucketValueAt(size_t index)
 { 
-    auto it = m_track_params->histogram.find(index);
+    auto it = m_track_params->histogram.find(static_cast<uint32_t>(index));
     if (it == m_track_params->histogram.end())
     {
         return 0;
@@ -188,7 +189,7 @@ rocprofvis_dm_value_t Track::GetHistogramBucketValueAt(size_t index)
 }
 
 uint64_t  Track::GetHistogramBucketNumEventsAt(size_t index) {
-    auto it = m_track_params->histogram.find(index);
+    auto it = m_track_params->histogram.find(static_cast<uint32_t>(index));
     if (it == m_track_params->histogram.end())
     {
         return 0;

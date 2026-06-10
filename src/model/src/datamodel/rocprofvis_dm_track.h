@@ -71,11 +71,11 @@ public:
     // @param slice - handle to slice
     // @return status of operation 
     rocprofvis_dm_result_t                              GetSliceAtIndex(rocprofvis_dm_property_index_t index, rocprofvis_dm_slice_t & slice);
-    // Method to get slice handle for provided start timestamp only (for property getters, since property getter has only one input parameter)
-    // @param start - slice start timestamp
+    // Method to get slice handle for provided hashed timestamp only (for property getters, since property getter has only one input parameter)
+    // @param time - hashed (start, end, tag) timestamp of the slice
     // @param slice - handle to slice
-    // @return status of operation 
-    rocprofvis_dm_result_t                              GetSliceAtTime(rocprofvis_dm_timestamp_t time, rocprofvis_dm_slice_t & slice);
+    // @return status of operation
+    rocprofvis_dm_result_t                              GetSliceAtTime(rocprofvis_dm_hashed_timestamp time, rocprofvis_dm_slice_t & slice);
     // Method to get slice index for provided start and end timestamp
     // @param start - slice start timestamp
     // @param start - slice end timestamp
@@ -96,9 +96,10 @@ public:
     rocprofvis_dm_result_t                              DeleteAllSlices();
     // Method to add empty slice object
     // @param start - slice start timestamp
-    // @param start - slice end timestamp
-    // @return handle to slice 
-    rocprofvis_dm_slice_t                               AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
+    // @param end - slice end timestamp
+    // @param tag - caller tag used to keep slices in distinct cache namespaces
+    // @return handle to slice
+    rocprofvis_dm_slice_t                               AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_hashed_timestamp_tag_t tag);
     // Method to get amount of memory used by Track class object
     // @return used memory size
     rocprofvis_dm_size_t                                GetMemoryFootprint();

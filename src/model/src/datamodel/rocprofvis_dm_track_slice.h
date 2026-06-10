@@ -44,12 +44,14 @@ class TrackSlice : public DmBase {
         // TrackSlice class constructor
         // @param start - time slice start timestamp
         // @param start - time slice end timestamp
-        TrackSlice(    Track* ctx, 
-                            rocprofvis_dm_timestamp_t start, 
-                            rocprofvis_dm_timestamp_t end) : 
-                            m_ctx(ctx), 
-                            m_start_timestamp(start), 
-                            m_end_timestamp(end), 
+        TrackSlice(    Track* ctx,
+                            rocprofvis_dm_timestamp_t start,
+                            rocprofvis_dm_timestamp_t end,
+                            rocprofvis_dm_hashed_timestamp_tag_t tag) :
+                            m_ctx(ctx),
+                            m_start_timestamp(start),
+                            m_end_timestamp(end),
+                            m_tag(tag),
                             m_current_pool(nullptr),
                             m_complete(false){}; 
         // TrackSlice class destructor, required in order to free resources of derived classes
@@ -77,10 +79,12 @@ class TrackSlice : public DmBase {
         rocprofvis_dm_timestamp_t       StartTime() {return m_start_timestamp;}
         // Returns end timestamp
         rocprofvis_dm_timestamp_t       EndTime() {return m_end_timestamp;}
+        // Returns the tag this slice was created with
+        rocprofvis_dm_hashed_timestamp_tag_t Tag() {return m_tag;}
         // Returns class mutex
         std::shared_mutex*              Mutex() override { return &m_lock; }
 
-        void SetComplete();
+        virtual void SetComplete();
         void WaitComplete();
 
         // Pure virtual method to get event timestamp value by provided index of record
@@ -183,6 +187,8 @@ class TrackSlice : public DmBase {
         rocprofvis_dm_timestamp_t                    m_start_timestamp;
         // time slice end
         rocprofvis_dm_timestamp_t                    m_end_timestamp;
+        // tag this time slice was created with
+        rocprofvis_dm_hashed_timestamp_tag_t           m_tag;
         // context pointer
         Track*                                      m_ctx;
         // object mutex, for shared access

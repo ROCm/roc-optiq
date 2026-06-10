@@ -19,12 +19,13 @@ class SettingsManager;
 class KernelInstanceTable;
 class HWUtilization;
 class TopKernels;
+class TimelineSelection;
 enum class TimeFormat;
 
 class SummaryView : public RocWidget
 {
 public:
-    SummaryView(DataProvider& dp);
+    SummaryView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
     void Update() override;
     void Render() override;
 
@@ -37,6 +38,10 @@ private:
     std::shared_ptr<KernelInstanceTable> m_kernel_instance_table;
     std::shared_ptr<HWUtilization>       m_hw_utilization;
     std::shared_ptr<TopKernels>          m_top_kernels;
+
+    LayoutItem::Ptr m_hw_utilization_item;
+    LayoutItem::Ptr m_top_kernels_item;
+    LayoutItem::Ptr m_kernel_instance_table_item;
 
     bool m_open;
     bool m_fetched;
@@ -155,7 +160,8 @@ private:
 class KernelInstanceTable : public InfiniteScrollTable
 {
 public:
-    KernelInstanceTable(DataProvider& dp);
+    KernelInstanceTable(DataProvider&                      dp,
+                        std::shared_ptr<TimelineSelection> timeline_selection);
     void Update() override;
     void Render() override;
 
@@ -166,6 +172,9 @@ public:
 
 private:
     void FormatData() const override;
+    void IndexColumns() override;
+    void RowSelected(const ImGuiMouseButton mouse_button) override;
+
     void Fetch();
 
     std::string m_kernel_name;

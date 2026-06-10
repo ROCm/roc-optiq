@@ -42,19 +42,14 @@ void
 PushPlotChrome(SettingsManager& settings)
 {
     ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kTransparent));
+    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
     ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
-                           ThemeColor(settings, Colors::kTransparent));
+                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
     ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextMain));
     ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
                            ThemeColor(settings, Colors::kBorderColor, 0.7f));
     ImPlot::PushStyleColor(ImPlotCol_AxisTick,
                            ThemeColor(settings, Colors::kTextDim, 0.56f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendBg,
-                           ThemeColor(settings, Colors::kBgPanel, 0.96f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendBorder,
-                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
-    ImPlot::PushStyleColor(ImPlotCol_LegendText, ThemeColor(settings, Colors::kTextMain));
 }
 
 }  // namespace
@@ -215,6 +210,7 @@ ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
     m_kernel_bar.tick_interval_dirty = false;
     m_kernel_bar.axis_label_dirty    = false;
     auto time_format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void) e;
         m_kernel_bar.tick_interval_dirty = true;
         m_kernel_bar.axis_label_dirty    = true;
     };
@@ -541,6 +537,7 @@ ComputeTopKernels::SetWorkload(uint32_t id)
 void
 ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time_format)
 {
+    (void) plot_style;
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
     PushPlotChrome(m_settings);
     ImGui::PushID(m_workload->id);
@@ -557,8 +554,8 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::PlotPieChart(
             m_kernel_pie.labels.data(),
             m_kernel_pie.metric_sets[m_kernel_pie.selected_metric].pct_values.data(),
-            m_kernel_pie.metric_sets[m_kernel_pie.selected_metric].pct_values.size(), 0.0,
-            0.0, PIE_CHART_RADIUS,
+            static_cast<int>(m_kernel_pie.metric_sets[m_kernel_pie.selected_metric].pct_values.size()),
+            0.0, 0.0, PIE_CHART_RADIUS,
             [](double value, char* buff, int size, void* user_data) -> int {
                 (void) user_data;
                 if(value * 100.0 > 10.0)
@@ -607,7 +604,7 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::EndPlot();
     }
     ImGui::PopID();
-    ImPlot::PopStyleColor(9);
+    ImPlot::PopStyleColor(6);
     ImPlot::PopStyleVar();
 }
 
@@ -658,8 +655,9 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::SetupAxisTicks(ImAxis_X1,
                                m_kernel_bar.metric_sets[m_kernel_bar.selected_metric]
                                    .axis_tick_label_positions.data(),
-                               m_kernel_bar.metric_sets[m_kernel_bar.selected_metric]
-                                   .axis_tick_label_positions.size());
+                               static_cast<int>(
+                                   m_kernel_bar.metric_sets[m_kernel_bar.selected_metric]
+                                       .axis_tick_label_positions.size()));
         PlotHoverIdx();
         for(size_t i = 0; i < m_kernels.size(); i++)
         {
@@ -667,10 +665,10 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                m_kernel_bar.selected_metric == KernelInfo::InvocationCount ||
                m_kernel_bar.selected_metric == KernelInfo::DurationTotal)
             {
-                ImGui::PushID(i);
+                ImGui::PushID(static_cast<int>(i));
                 ImGui::SetCursorScreenPos(ImVec2(
                     ImGui::GetWindowPos().x + plot_style.PlotPadding.x,
-                    ImPlot::PlotToPixels(ImPlotPoint(0, i), IMPLOT_AUTO, IMPLOT_AUTO).y -
+                    ImPlot::PlotToPixels(ImPlotPoint(0, static_cast<double>(i)), IMPLOT_AUTO, IMPLOT_AUTO).y -
                         ImGui::GetFontSize() * 0.5f));
                 ElidedText(m_kernels[i]->name.c_str(),
                            y_axis_width - plot_style.LabelPadding.x,
@@ -684,7 +682,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                 const ImU64 bar_value = static_cast<ImU64>(
                     m_kernels[i]->dispatch_metrics[m_kernel_bar.selected_metric]);
                 ImPlot::PlotBars(m_kernels[i]->name.c_str(), &bar_value, 1,
-                                 BAR_CHART_THICKNESS, i, ImPlotBarsFlags_Horizontal);
+                                 BAR_CHART_THICKNESS, static_cast<double>(i), ImPlotBarsFlags_Horizontal);
                 if(i == m_hovered_idx)
                 {
                     ImPlot::PopColormap();
@@ -704,7 +702,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(9);
+    ImPlot::PopStyleColor(6);
     ImPlot::PopStyleVar();
     ImGui::EndChild();
 }
@@ -713,6 +711,7 @@ void
 ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format,
                                std::optional<size_t>& hovered_idx)
 {
+    (void) plot_style;
     if(ImGui::BeginTable(
            "Table", 2 + KernelInfo::NumMetrics,
            ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable))
@@ -749,7 +748,13 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
         ImGui::TableHeadersRow();
         for(size_t i = 0; i < m_kernels.size(); i++)
         {
-            ImGui::PushID(i);
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::PushStyleColor(ImGuiCol_Header,
+                                  m_settings.GetColor(Colors::kSelection));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                                  m_settings.GetColor(Colors::kHighlightChart));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                                  m_settings.GetColor(Colors::kHighlightChart));
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::GetWindowDrawList()->AddRectFilled(
@@ -774,7 +779,7 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
                        ImGui::GetWindowWidth() * 0.5f);
             for(size_t j = 0; j < m_kernels[i]->dispatch_metrics.size(); j++)
             {
-                ImGui::TableSetColumnIndex(2 + j);
+                ImGui::TableSetColumnIndex(static_cast<int>(2 + j));
                 KernelInfo::DispatchMetric metric =
                     static_cast<KernelInfo::DispatchMetric>(j);
                 switch(metric)
@@ -808,6 +813,7 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
                     }
                 }
             }
+            ImGui::PopStyleColor(3);
             ImGui::PopID();
         }
         ImGui::EndTable();
@@ -848,7 +854,7 @@ ComputeTopKernels::RenderPlotTooltip(KernelInfo::DispatchMetric metric,
                     ImGui::Text(
                         "%s: %s", DISPLAY_STRING_METRICS[metric],
                         nanosecond_to_formatted_str(
-                            m_kernels[m_hovered_idx.value()]->dispatch_metrics[metric],
+                            static_cast<double>(m_kernels[m_hovered_idx.value()]->dispatch_metrics[metric]),
                             time_format, true)
                             .c_str());
                     break;

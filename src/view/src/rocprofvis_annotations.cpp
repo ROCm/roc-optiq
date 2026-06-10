@@ -246,11 +246,11 @@ AnnotationsManager::ShowStickyNoteEditPopup()
         ImGui::SameLine();
         bool cancel_clicked = ImGui::Button("Cancel", ImVec2(button_width, 0));
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccentRed));
+        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              settings.GetColor(Colors::kAccentRedHover));
+                              settings.GetColor(Colors::kAccentHover));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              settings.GetColor(Colors::kAccentRedActive));
+                              settings.GetColor(Colors::kAccentActive));
         bool delete_clicked = ImGui::Button("Delete", ImVec2(button_width, 0));
 
         ImGui::PopStyleColor(3);

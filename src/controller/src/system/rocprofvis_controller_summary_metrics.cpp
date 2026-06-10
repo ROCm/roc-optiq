@@ -391,7 +391,7 @@ rocprofvis_result_t SummaryMetrics::SetDouble(rocprofvis_property_t property, ui
         {
             if(m_gpu && index < m_gpu.value().top_kernels.size())
             {
-                m_gpu.value().top_kernels[index].exec_time_pct = value;
+                m_gpu.value().top_kernels[index].exec_time_pct = static_cast<float>(value);
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -528,7 +528,7 @@ rocprofvis_result_t SummaryMetrics::AggregateSubMetrics()
             m_gpu.value().top_kernels.resize(std::min(m_gpu.value().top_kernels.size(), (size_t)10));
             for(KernelMetrics& kernel : m_gpu.value().top_kernels)
             {
-                kernel.exec_time_pct = kernel.exec_time_sum / m_gpu.value().kernel_exec_time_total;
+                kernel.exec_time_pct = static_cast<float>(kernel.exec_time_sum / m_gpu.value().kernel_exec_time_total);
             }
             PadTopKernels();
         }

@@ -79,6 +79,7 @@ private:
     int                                      m_context_menu_flow_index;
     int                                      m_context_menu_flow_column;
     int                                      m_context_menu_callstack_index;
+    int                                      m_context_menu_callstack_column;
     FlowHighlightState                       m_flow_hover;
     FlowHighlightState                       m_frame_flow_hover;
     CallStackHoverState                      m_callstack_hover;

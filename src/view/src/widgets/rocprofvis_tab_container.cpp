@@ -110,13 +110,14 @@ TabContainer::Render()
     if(!m_tabs.empty())
     {
         int index_to_remove = s_invalid_index;
-        ImGui::PushStyleColor(ImGuiCol_Tab, settings.GetColor(Colors::kBgFrame));
+        // Distinguish unselected tabs from the surrounding panel.
+        ImGui::PushStyleColor(ImGuiCol_Tab, settings.GetColor(Colors::kButton));
         ImGui::PushStyleColor(ImGuiCol_TabHovered,
                               settings.GetColor(Colors::kButtonHovered));
         ImGui::PushStyleColor(ImGuiCol_TabActive,
                               settings.GetColor(Colors::kBgPanel));
         ImGui::PushStyleColor(ImGuiCol_TabUnfocused,
-                              settings.GetColor(Colors::kBgFrame));
+                              settings.GetColor(Colors::kButton));
         ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive,
                               settings.GetColor(Colors::kBgPanel));
         if(ImGui::BeginTabBar("Tabs", ImGuiTabBarFlags_NoTabListScrollingButtons |

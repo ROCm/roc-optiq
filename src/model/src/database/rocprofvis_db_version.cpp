@@ -97,7 +97,7 @@ namespace DataModel
             kRocOptiqTablePerFile,
             kRocOptiqTableDisposeWhenTrimmed,
             kRocOptiqTableDependentOnNoDependency, 
-            kRocOptiqTableVersionMemoryCopyLevel, 
+            kRocOptiqTableVersionTrackInfo, 
             db->GetHistogramQueryAndSchemaHash()
         };
         m_roc_optiq_table_properties[kRocOptiqTableKernelDispatchLevel] = {

@@ -36,6 +36,7 @@ rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofv
     m_binding_info.FuncAddExtDataRecord = AddExtDataRecord;
     m_binding_info.FuncAddArgDataRecord = AddArgDataRecord;
     m_binding_info.FuncAddTable = AddTable;
+    m_binding_info.FuncRemoveTable = RemoveTable;
     m_binding_info.FuncAddTableRow = AddTableRow;
     m_binding_info.FuncAddTableColumn = AddTableColumn;
     m_binding_info.FuncAddTableColumnEnum = AddTableColumnEnum;
@@ -582,6 +583,14 @@ rocprofvis_dm_table_t Trace::AddTable(const rocprofvis_dm_trace_t object, rocpro
     return trace->m_tables.back().get();
 }
 
+rocprofvis_dm_result_t Trace::RemoveTable(const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(query, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    Trace* trace = (Trace*) object;
+    return trace->DeleteTableAt(std::hash<std::string>{}(query));
+}
+
 rocprofvis_dm_table_row_t Trace::AddTableRow(const rocprofvis_dm_table_t object){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TABLE_CANNOT_BE_NULL, nullptr);
     Table* table = (Table*) object;
@@ -953,7 +962,6 @@ rocprofvis_dm_result_t Trace::GetStackTraceHandle(rocprofvis_dm_event_id_t event
 }
 
 rocprofvis_dm_result_t Trace::GetTableHandle(rocprofvis_dm_table_id_t id, rocprofvis_dm_table_t & table){
-    TimedLock<std::shared_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     auto  it = find_if(m_tables.begin(), m_tables.end(),
                       [&](std::shared_ptr<Table>& x) {
                           return x.get()->Id() == id;

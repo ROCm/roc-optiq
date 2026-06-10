@@ -73,6 +73,9 @@ public:
     void ClearAll();
     void Render();
 
+    // True while any toast is showing/fading (keeps lazy render animating it).
+    bool HasActiveNotifications() const { return !m_notifications.empty(); }
+
 private:
     NotificationManager();
 

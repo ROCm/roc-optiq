@@ -5,7 +5,6 @@
 #include "rocprofvis_db_expression_filter.h"
 #include "rocprofvis_c_interface.h"
 #include <sstream>
-#include <unordered_set>
 #include <cfloat>
 #include <yaml-cpp/yaml.h>
 #include "json.h"
@@ -1264,7 +1263,7 @@ ProfileDatabase::BuildTableQuery(
                     query += std::to_string(fetch_start);
                     query += " and ";
                     query += Builder::START_SERVICE_NAME;
-                    query += " < ";
+                    query += (j == divider - 1) ? " <= " : " < ";
                     query += std::to_string(fetch_end);
                     if (where && strlen(where))
                     {
@@ -1272,7 +1271,7 @@ ProfileDatabase::BuildTableQuery(
                         query += where;
                     }
                     query += ";";
-                    query += std::to_string(track);
+                    query += std::to_string(tracks[i]);
                     query += ";";
                     query += std::to_string(it_instance->first);
                     query += "\n";
@@ -1522,10 +1521,9 @@ rocprofvis_dm_result_t  ProfileDatabase::ExecuteQuery(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_table_t table = BindObject()->FuncAddTable(BindObject()->trace_object, query, description);
         ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-        std::vector<rocprofvis_db_compound_query> queries;
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
         std::vector<rocprofvis_db_compound_query_command> commands;
         std::set<uint32_t> tracks;
-        std::string query_without_commands = TableProcessor::QueryWithoutCommands(query);
         if (TableProcessor::IsCompoundQuery(query, queries, tracks,  commands))
         {
             auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
@@ -1534,9 +1532,9 @@ rocprofvis_dm_result_t  ProfileDatabase::ExecuteQuery(
             {
                 data_type = (rocprofvis_db_compound_table_type)std::atol(it->parameter.c_str());
             }
-            bool query_updated = !m_table_processor[data_type].IsCurrentQuery(query_without_commands.c_str());
-            m_table_processor[data_type].SaveCurrentQuery(query_without_commands.c_str());
-            if (kRocProfVisDmResultSuccess != m_table_processor[data_type].ExecuteCompoundQuery(future, queries, tracks, commands, table, data_type, query_updated)) break;
+            bool query_updated = !m_table_processor[data_type].IsCurrentQuery(queries);
+            m_table_processor[data_type].SaveCurrentQuery(queries);
+            if (kRocProfVisDmResultSuccess != m_table_processor[data_type].ExecuteCompoundQuery(future, queries, tracks, commands, table, query_updated)) break;
         }
         else
         {
@@ -1601,7 +1599,12 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename, 
     {
         return rocprofvis_db_type_t::kRocprofMultinodeSqlite;
     }
-    if( sqlite3_open(filename, &db) != SQLITE_OK) return rocprofvis_db_type_t::kAutodetect;
+    // Avoid SQLITE_OPEN_CREATE so detecting a missing file doesn't create one.
+    if (sqlite3_open_v2(filename, &db, SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK)
+    {
+        sqlite3_close(db);
+        return rocprofvis_db_type_t::kAutodetect;
+    }
 
     if (DetectTable(db, "rocpd_event") == SQLITE_OK) {
         sqlite3_close(db);
@@ -1626,34 +1629,36 @@ rocprofvis_dm_result_t ProfileDatabase::ExportTableCSV(rocprofvis_dm_charptr_t q
                                                        rocprofvis_dm_charptr_t file_path,
                                                        Future* future)
 {
-    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Output path cannot be NULL.",
-                                 kRocProfVisDmResultInvalidParameter);
-    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
-                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Output path cannot be NULL.", kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(BindObject()->trace_object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
-    std::string query_without_commands = TableProcessor::QueryWithoutCommands(query);
-
-    Future* internal_future = new Future(nullptr);
-
-
-    for (int i = 0; i < kRPVTableDataTypesNum; i++)
-    {
-        if (m_table_processor[i].IsCurrentQuery(query_without_commands.c_str()))
-        {
-            result = m_table_processor[i].ExportToCSV(file_path);
-            break;
-        }
-    }
-
+    Future* internal_future = future->AddSubFuture();
+    result = ExecuteQuery(query, "ExportTableCSV", internal_future);
+    future->WaitAndDeleteSubFuture(internal_future);
     if (result == kRocProfVisDmResultSuccess)
     {
-        ShowProgress(100, "CSV export success", kRPVDbSuccess, future);        
+        rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
+        std::vector<rocprofvis_db_compound_query_command> commands;
+        std::set<uint32_t> tracks;
+        TableProcessor::IsCompoundQuery(query, queries, tracks,  commands);
+        auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
+        if (it != commands.end())
+        {
+            data_type = (rocprofvis_db_compound_table_type)std::atol(it->parameter.c_str());
+            result = m_table_processor[data_type].ExportToCSV(file_path);
+            if (result == kRocProfVisDmResultSuccess)
+            {
+                ShowProgress(100, "CSV export success", kRPVDbSuccess, future);        
+            }
+        }
     }
-    else
+    BindObject()->FuncRemoveTable(BindObject()->trace_object, query);
+    if (result != kRocProfVisDmResultSuccess)
     {
         ShowProgress(0, "CSV export failed", kRPVDbError, future);
     }
-
     return future->SetPromise(result);
 }
 
@@ -1810,6 +1815,9 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
     std::string table_name = GetMetadataVersionControl()->GetTrackInfoTableName();
     for (int i = 0; i < NumTracks(); i++)
     {
+        // Write a merged track's total on one load_id row only; the loader
+        // re-sums rows, so repeating it per row would multiply it on reload.
+        bool first_load_id = true;
         for (auto load_id : TrackPropertiesAt(i)->load_id)
         {
             DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
@@ -1820,7 +1828,8 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
             p.track_id = TrackPropertiesAt(i)->track_indentifiers.track_id;
             p.category = TrackPropertiesAt(i)->track_indentifiers.category;
             p.op = TrackPropertiesAt(i)->op;
-            p.record_count = TrackPropertiesAt(i)->record_count;
+            p.record_count = first_load_id ? TrackPropertiesAt(i)->record_count : 0;
+            first_load_id = false;
             p.min_ts = TrackPropertiesAt(i)->min_ts;
             p.max_ts = TrackPropertiesAt(i)->max_ts;
             p.min_val = TrackPropertiesAt(i)->min_value;
@@ -1909,7 +1918,9 @@ std::string ProfileDatabase::GetHistogramQueryPrefix(uint64_t bucket_size)
     histogram_query_prefix += " AS bucket_size, ";
     histogram_query_prefix += histogram_content_version;
     histogram_query_prefix += " AS version ), ";
-    histogram_query_prefix += "events_src AS ( SELECT (id + op << 60) as event_id, ";
+    histogram_query_prefix += "events_src AS ( SELECT (id + ";
+    histogram_query_prefix += Builder::OPERATION_SERVICE_NAME;
+    histogram_query_prefix += " << 60) as event_id, ";
     histogram_query_prefix += Builder::START_SERVICE_NAME;
     histogram_query_prefix += " as start_ts, ";
     histogram_query_prefix += Builder::END_SERVICE_NAME;

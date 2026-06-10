@@ -13,6 +13,7 @@
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
 #include "rocprofvis_platform_helpers.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_image_helpers.h"
 #include <GLFW/glfw3.h>
 #include <filesystem>
@@ -43,6 +44,11 @@ static std::unordered_map<ImGuiID, ImVec2> g_viewport_intended_pos;
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 
+// Lazy rendering: after each OS event render a few frames so animations and the
+// deferred event dispatch settle, then sleep until the next event when idle.
+static int       g_frames_to_render        = 1;
+constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
+
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
 {
@@ -72,12 +78,14 @@ app_notification_callback(GLFWwindow* window, int notification)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+#ifndef __APPLE__
     else if(notification ==
             static_cast<int>(rocprofvis_view_notification_t::
                                  kRocProfVisViewNotification_Toggle_Fullscreen))
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
+#endif
 }
 
 static void
@@ -95,15 +103,20 @@ glfw_error_callback(int error, const char* description)
 static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    // Unused parameters
     (void) scancode;
     (void) mods;
 
+#ifndef __APPLE__
     // Toggle fullscreen with F11
     if(key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
+#else
+    (void) window;
+    (void) key;
+    (void) action;
+#endif
 }
 
 static void
@@ -196,15 +209,6 @@ main(int argc, char** argv)
 {
     int app_result_code = 0;
 
-    RocProfVis::View::CLIParser::AttachToConsole();
-    RocProfVis::View::CLIParser cli_parser;
-    bool                        exit_app = false;
-    parse_command_line_args(argc, argv, cli_parser, exit_app);
-    if(exit_app)
-    {
-        return app_result_code;
-    }
-
     std::string config_path = rocprofvis_get_application_config_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
@@ -215,6 +219,15 @@ main(int argc, char** argv)
         std::filesystem::path(config_path) / "roc-optiq.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
+    
+    RocProfVis::View::CLIParser::AttachToConsole();
+    RocProfVis::View::CLIParser cli_parser;
+    bool                        exit_app = false;
+    parse_command_line_args(argc, argv, cli_parser, exit_app);
+    if(exit_app)
+    {
+        return app_result_code;
+    }
 
     // Parse backend preference from command line
     rocprofvis_imgui_backend_preference_t backend_pref = kRPVBackendAuto;
@@ -355,7 +368,25 @@ main(int argc, char** argv)
                         g_file_was_dropped = false;
                     }
 
-                    glfwPollEvents();
+                    // Async work/animation in flight: refill the budget so the
+                    // settle tail also covers the final frames after it finishes.
+                    if(rocprofvis_view_wants_continuous_render())
+                    {
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        // Busy: poll so per-frame controller/event work keeps
+                        // running. vsync in present() caps the frame rate.
+                        glfwPollEvents();
+                    }
+                    else
+                    {
+                        // Idle: sleep until an OS event, then render a few frames.
+                        glfwWaitEvents();
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
 
                     // Handle changes in the frame buffer size
                     int fb_width, fb_height;
@@ -418,6 +449,11 @@ main(int argc, char** argv)
                     if(!is_minimized)
                     {
                         backend.m_present(&backend);
+                    }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        --g_frames_to_render;
                     }
                 }
 

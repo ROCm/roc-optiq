@@ -69,15 +69,13 @@ RenderLoadingIndicator(ImU32 color, const char* window_id,
 {
     if(window_id)
     {
+        const ImGuiStyle& style = ImGui::GetStyle();
         // Create an overlay child window to display the loading indicator if requested
-        ImVec2 parent_pos = ImGui::GetWindowPos();
-        ImVec2 parent_size = ImGui::GetWindowSize();
-        ImGui::SetNextWindowPos(parent_pos);
-        ImGui::SetNextWindowSize(parent_size);
+        ImGui::SetNextWindowPos(ImGui::GetWindowPos() + style.WindowPadding);
 
         // set transparent background for the overlay window
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
-        ImGui::BeginChild(window_id, parent_size, ImGuiChildFlags_None);
+        ImGui::BeginChild(window_id, ImGui::GetWindowSize() - style.WindowPadding * 2.0f, ImGuiChildFlags_None);
     }
 
     ImVec2 dot_size   = MeasureLoadingIndicatorDots(dot_radius, num_dots, dot_spacing);
@@ -515,9 +513,10 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     const float            ui_scale         = ImGui::GetFontSize() / BASE_FONT_SIZE;
     const float            ribbon_thickness = 20.0f * ui_scale;
     const float            min_base_length  = 150.0f * ui_scale;
-    static constexpr ImU32 col_fill         = IM_COL32(200, 16, 32, 150);
-    static constexpr ImU32 col_border       = IM_COL32(255, 255, 255, 40);
-    static constexpr ImU32 col_text         = IM_COL32(255, 255, 255, 255);
+    SettingsManager&       settings         = SettingsManager::GetInstance();
+    const ImU32            col_fill         = settings.GetColor(Colors::kBannerFill);
+    const ImU32            col_border       = settings.GetColor(Colors::kBannerBorder);
+    const ImU32            col_text         = settings.GetColor(Colors::kBannerText);
 
     // use precomputed cos/sin for 45 degrees to avoid trig calls
     static constexpr float c_45 = 0.70710678118f;

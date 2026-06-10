@@ -33,7 +33,9 @@ AnnotationView::Render()
 
     if(m_annotations->GetStickyNotes().empty())
     {
-        ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
+        CenterNextTextItem("No annotations.");
+        ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
+                             0.5f);
         ImGui::TextDisabled("No annotations.");
     }
     else if(ImGui::BeginTable("StickyNotesTable", 4,

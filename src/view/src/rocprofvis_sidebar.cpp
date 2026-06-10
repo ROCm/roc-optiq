@@ -141,6 +141,8 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 
     ImGui::PushID(static_cast<int>(graph.chart->GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_settings.GetColor(Colors::kHighlightChart));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, m_settings.GetColor(Colors::kHighlightChart));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
 
     bool display = graph.display;
@@ -173,17 +175,15 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     }
 
     ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(3);
     if(show_eye_button)
     {
         ImGui::SameLine();
     }
 
-    bool highlight = graph.selected;
-    if(!highlight)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    }
+    ImGui::PushStyleColor(
+        ImGuiCol_Button,
+        m_settings.GetColor(graph.selected ? Colors::kSelection : Colors::kTransparent));
     if(!display)
     {
         ImGui::PushStyleColor(ImGuiCol_Text,
@@ -197,10 +197,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     {
         ImGui::PopStyleColor();
     }
-    if(!highlight)
-    {
-        ImGui::PopStyleColor();
-    }
+    ImGui::PopStyleColor();
 
     ImGui::PopID();
 }

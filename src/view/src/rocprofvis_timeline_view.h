@@ -47,6 +47,9 @@ public:
 
     void Start();
     bool IsStarted() const { return m_started; }
+    // Started and still counting down. Advances only via Tick() each frame, so
+    // callers keep rendering until it expires instead of stalling on it.
+    bool IsRunning() const { return m_started && m_timer < m_delay; }
     bool IsExpired();
     void Restart();
     void Tick();
@@ -84,6 +87,7 @@ public:
     ~TimelineView();
     virtual void                                     Render() override;
     void                                             Update() override;
+    bool                                             WantsContinuousRender() const;
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();
@@ -142,6 +146,8 @@ private:
     void RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size);
 
     void                            ClearTimeRangeSelection();
+    void                            CopySelectedEventNames();
+    void                            CopySelectedEventDetails();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
     EventManager::SubscriptionToken m_new_track_token;

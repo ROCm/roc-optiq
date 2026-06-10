@@ -80,9 +80,9 @@ enum class Colors
     kBgPanel,
     kBgFrame,
     kComboFill,
-    kAccentRed,
-    kAccentRedHover,
-    kAccentRedActive,
+    kAccent,
+    kAccentHover,
+    kAccentActive,
     kTabAccent,
     kTabAccentHover,
     kTabAccentActive,
@@ -142,6 +142,40 @@ enum class Colors
     kComparisonTarget,
     kComparisonLesser,
     kComparisonGreater,
+
+    // Memory chart (compute view) palette
+    kMemChartBg,
+    kMemChartPanel,
+    kMemChartPanelAlt,
+    kMemChartBorder,
+    kMemChartBorderHot,
+    kMemChartTextMain,
+    kMemChartTextDim,
+    kMemChartRead,
+    kMemChartWrite,
+    kMemChartAtomic,
+    kMemChartUtil,
+    kMemChartHit,
+    kMemChartStall,
+    kMemChartShadow,
+
+    // Sticky note annotation
+    kStickyNoteBg,
+    kStickyNoteBorder,
+    kStickyNoteHeader,
+    kStickyNoteShadow,
+    kStickyNoteText,
+    kStickyNoteTextMuted,
+    kStickyNoteAccent,
+    kStickyNoteResize,
+    kStickyNoteResizeActive,
+
+    // Internal build banner + debug nav bar
+    kBannerFill,
+    kBannerBorder,
+    kBannerText,
+    kDebugNavBarBg,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };

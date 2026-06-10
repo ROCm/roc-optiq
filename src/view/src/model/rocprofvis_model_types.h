@@ -5,10 +5,12 @@
 
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
+#include "rocprofvis_c_interface_types.h"
 
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace RocProfVis
@@ -74,6 +76,8 @@ struct TrackInfo
     std::string category;  // Category of the track
     std::string main_name; // Track main process string (PID, GPUID, etc)
     std::string sub_name;  // Track sub process string (TID, QueueID, PMC name)
+    std::unordered_set<rocprofvis_dm_event_operation_t>
+        operation_types;  // Operation types supported by the track
     struct Topology
     {
         uint64_t node_id;     // ID of track's parent node

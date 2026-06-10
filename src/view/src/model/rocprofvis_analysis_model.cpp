@@ -37,7 +37,7 @@ AnalysisModel::GetPerTrackQueueUtilization(const TrackInfo& track)
             AnalysisQueueUtilization* queue = &m_per_track_queue_utilization[track.id];
             m_per_track_queue_utilization[track.id].track = &track;
             queue->util_pct                               = 0.0;
-            queue->state = AnalysisQueueUtilization::kStale;
+            queue->state = AnalysisQueueUtilization::kReady;
         }
         return &m_per_track_queue_utilization.at(track.id);
     }

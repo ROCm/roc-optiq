@@ -218,12 +218,6 @@ rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_
     return result;
 }
 
-inline uint64_t hash_combine(uint64_t a, uint64_t b)
-{
-    a ^= b + 0x9e3779b97f4a7c15 + (a << 12) + (a >> 4);
-    return a;
-}
-
 uint32_t Track::GetNumberOfEventsForTimeRange(double start, double end)
 {
     rocprofvis_dm_trace_t trace = rocprofvis_dm_get_property_as_handle(
@@ -283,7 +277,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
             if(kRocProfVisDmResultSuccess ==
                rocprofvis_db_read_trace_slice_async(
                    db, (uint64_t) (fetch_start + (i * time_per_query)),
-                   (uint64_t) (fetch_start + ((i+1) * time_per_query)), 1,
+                   (uint64_t) (fetch_start + ((i+1) * time_per_query)), kRocProfVisDmHashedTimestampTagTrackSlice, 1,
                    (rocprofvis_db_track_selection_t) &m_id, object2wait))
             {
                 futures.push_back(object2wait);
@@ -299,8 +293,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
         {
             rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
                 m_dm_handle, kRPVDMSliceHandleTimed,
-                hash_combine(static_cast<uint64_t>(fetch_start + (i * time_per_query)),
-                             static_cast<uint64_t>(fetch_start + ((i+1) * time_per_query))));
+                rocprofvis_dm_hash_combine_timestamp(fetch_start + (i * time_per_query), fetch_start + ((i+1) * time_per_query), kRocProfVisDmHashedTimestampTagTrackSlice));
             if(nullptr != slice)
             {
                 uint64_t num_records = rocprofvis_dm_get_property_as_uint64(

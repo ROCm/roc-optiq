@@ -204,7 +204,7 @@ int main(int argc, char** argv)
                                 if(load_slice)
                                 {                               
                                     auto t1 = std::chrono::steady_clock::now();
-                                    if (kRocProfVisDmResultSuccess == rocprofvis_db_read_trace_slice_async(db, start_time , end_time, 1, (uint32_t*)&i, object2wait))
+                                    if (kRocProfVisDmResultSuccess == rocprofvis_db_read_trace_slice_async(db, start_time , end_time, kRocProfVisDmHashedTimestampTagTrackSlice, 1, (uint32_t*)&i, object2wait))
                                     {
                                         if (kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object2wait, UINT64_MAX))
                                         {
@@ -214,7 +214,7 @@ int main(int argc, char** argv)
                                             uint32_t num_rows = ((RocProfVis::DataModel::Future*)object2wait)->GetProcessedRowsCount();
                                             total_num_rows += num_rows;
                                             uint64_t hash_time =
-                                                hash_combine(start_time, end_time);
+                                                rocprofvis_dm_hash_combine_timestamp(start_time, end_time, kRocProfVisDmHashedTimestampTagTrackSlice);
                                             rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(track, kRPVDMSliceHandleTimed, hash_time);
                                             uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
                                             printf(ANSI_COLOR_MAGENTA "Track %d has %lld records, read time - %13.9f, number of rows processed = %ld\n" ANSI_COLOR_RESET, i, num_records, diff.count(), num_rows);
@@ -232,7 +232,7 @@ int main(int argc, char** argv)
                                 //Read time slice a process data
                                 PrintHeader("Read time slice for all tracks");
                                 auto t1 = std::chrono::steady_clock::now();
-                                if (kRocProfVisDmResultSuccess == rocprofvis_db_read_trace_slice_async(db, start_time, end_time, num_tracks, tracks_selection, object2wait))
+                                if (kRocProfVisDmResultSuccess == rocprofvis_db_read_trace_slice_async(db, start_time, end_time, kRocProfVisDmHashedTimestampTagTrackSlice, num_tracks, tracks_selection, object2wait))
                                 {
                                     if (kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object2wait, UINT64_MAX))
                                     {
@@ -250,7 +250,7 @@ int main(int argc, char** argv)
                                             char* track_process_name = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackMainProcessNameCharPtr, 0);
                                             char* track_sub_process_name = rocprofvis_dm_get_property_as_charptr(track, kRPVDMTrackSubProcessNameCharPtr, 0);
                                             rocprofvis_dm_track_category_t track_category = (rocprofvis_dm_track_category_t)rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackCategoryEnumUInt64, 0);
-                                            uint64_t hash_time = hash_combine(start_time, end_time);
+                                            uint64_t hash_time = rocprofvis_dm_hash_combine_timestamp(start_time, end_time, kRocProfVisDmHashedTimestampTagTrackSlice);
                                             rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(track, kRPVDMSliceHandleTimed, hash_time);
                                             uint64_t id = rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackIdUInt64, 0);
                                             uint64_t node_id = rocprofvis_dm_get_property_as_uint64(track, kRPVDMTrackNodeIdUInt64, 0);

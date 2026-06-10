@@ -149,6 +149,8 @@ int RocpdDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocp
     }
     else
     {
+        // Streams merge several per-operation queries into one track; sum the counts.
+        it->get()->record_count += track_params.record_count;
         it->get()->load_id.insert(*track_params.load_id.begin());
     }
     return 0;

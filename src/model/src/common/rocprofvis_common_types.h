@@ -201,8 +201,9 @@ typedef struct {
 
 
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_track_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_track_params_t * params);
-typedef rocprofvis_dm_slice_t (*rocprofvis_dm_add_slice_func_t) (const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, 
-                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
+typedef rocprofvis_dm_slice_t (*rocprofvis_dm_add_slice_func_t) (const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id,
+                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, 
+                                                                    const rocprofvis_dm_hashed_timestamp_tag_t tag);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_record_func_t) (const rocprofvis_dm_slice_t object, rocprofvis_db_record_data_t& data);
 typedef rocprofvis_dm_index_t (*rocprofvis_dm_add_string_func_t) (const rocprofvis_dm_trace_t object, const char* stringValue);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_flow_func_t) (const rocprofvis_dm_slice_t object, rocprofvis_db_flow_data_t& data);
@@ -225,7 +226,7 @@ typedef size_t (*rocprofvis_db_get_cached_num_instances_func_t) (const rocprofvi
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_event_level_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id, uint8_t level);
 
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_slice_exists_t) (const rocprofvis_dm_trace_t object, 
-                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_db_num_of_tracks_t num, const rocprofvis_db_track_selection_t tracks);
+                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_dm_hashed_timestamp_tag_t tag, const rocprofvis_db_num_of_tracks_t num, const rocprofvis_db_track_selection_t tracks);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_event_property_exists_t) (const rocprofvis_dm_trace_t object, 
                                                                     rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_table_exists_t) (const rocprofvis_dm_trace_t object,  const rocprofvis_dm_table_id_t table_id);
@@ -300,12 +301,6 @@ typedef struct
 
 
 } rocprofvis_dm_db_bind_struct;
-
-inline uint64_t hash_combine(uint64_t a, uint64_t b)
-{
-    a ^= b + 0x9e3779b97f4a7c15 + (a << 12) + (a >> 4);
-    return a;
-}
 
 class DbInstance
 {

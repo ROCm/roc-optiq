@@ -4,6 +4,7 @@
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_dm_table_row.h"
 #include "rocprofvis_shared_types.h"
+#include "rocprofvis_c_interface.h"
 #include <numeric>
 
 namespace RocProfVis
@@ -352,7 +353,7 @@ rocprofvis_dm_result_t Trace::AddTrack(const rocprofvis_dm_trace_t object, rocpr
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end){
+rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_dm_hashed_timestamp_tag_t tag){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
     rocprofvis_dm_track_t track = nullptr;
@@ -362,7 +363,7 @@ rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const 
         ROCPROFVIS_ASSERT_MSG_RETURN(track, ERROR_TRACK_CANNOT_BE_NULL, nullptr);
         TimedLock<std::unique_lock<std::shared_mutex>> lock(*((Track*)track)->Mutex(), __func__,
                                                             trace);
-        return ((Track*)track)->AddSlice(start, end);
+        return ((Track*)track)->AddSlice(start, end, tag);
     }
     else
         return nullptr;
@@ -654,6 +655,7 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
                         const rocprofvis_dm_trace_t     object,
                         const rocprofvis_dm_timestamp_t start,
                         const rocprofvis_dm_timestamp_t end,
+                        const rocprofvis_dm_hashed_timestamp_tag_t tag,
                         const rocprofvis_db_num_of_tracks_t num,
                         const rocprofvis_db_track_selection_t tracks)
 {
@@ -671,7 +673,7 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
             {
                 rocprofvis_dm_slice_t  slice_object = nullptr;
                 rocprofvis_dm_result_t result =
-                    trace->m_tracks[i].get()->GetSliceAtTime(hash_combine(start,end), slice_object);
+                    trace->m_tracks[i].get()->GetSliceAtTime(rocprofvis_dm_hash_combine_timestamp(start, end, tag), slice_object);
                 if(result == kRocProfVisDmResultSuccess)
                 {
                     ROCPROFVIS_ASSERT_MSG_RETURN(slice_object, ERROR_SLICE_CANNOT_BE_NULL,

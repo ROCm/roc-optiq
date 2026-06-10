@@ -1051,8 +1051,6 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
     rocprofvis_dm_track_params_t* props = TrackPropertiesAt(*tracks);
     DbInstance* db_instance = (DbInstance*)props->track_indentifiers.db_instance;
 
-    slices[*tracks]=BindObject()->FuncAddSlice(BindObject()->trace_object, *tracks, start, end);
-
     start += TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
     end += TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
 
@@ -1098,13 +1096,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_
             }
         }
     }
-    query += ")";
-    query += std::string(" ORDER BY ") + Builder::START_SERVICE_NAME;
-    if (!pmc_query)
-    {
-        query += std::string(", ") + Builder::EVENT_LEVEL_SERVICE_NAME;
-    }
-    query += ";";
+    query += ");";
     return kRocProfVisDmResultSuccess;
 
 }
@@ -1264,7 +1256,7 @@ ProfileDatabase::BuildTableQuery(
                     query += std::to_string(fetch_start);
                     query += " and ";
                     query += Builder::START_SERVICE_NAME;
-                    query += " < ";
+                    query += (j == divider - 1) ? " <= " : " < ";
                     query += std::to_string(fetch_end);
                     if (where && strlen(where))
                     {
@@ -1430,6 +1422,7 @@ bool ProfileDatabase::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end)
 rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice( 
                                                     rocprofvis_dm_timestamp_t start,
                                                     rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                     rocprofvis_db_num_of_tracks_t num,
                                                     rocprofvis_db_track_selection_t tracks,
                                                     Future* future) {
@@ -1444,6 +1437,8 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
 
         std::string slice_query;
         slice_array_t slices;
+
+        slices[*tracks]=BindObject()->FuncAddSlice(BindObject()->trace_object, *tracks, start, end, tag);
         rocprofvis_dm_result_t result = BuildSliceQuery(start, end, num, tracks, slice_query, slices);
         std::string query;
 
@@ -1816,6 +1811,9 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
     std::string table_name = GetMetadataVersionControl()->GetTrackInfoTableName();
     for (int i = 0; i < NumTracks(); i++)
     {
+        // Write a merged track's total on one load_id row only; the loader
+        // re-sums rows, so repeating it per row would multiply it on reload.
+        bool first_load_id = true;
         for (auto load_id : TrackPropertiesAt(i)->load_id)
         {
             DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
@@ -1826,7 +1824,8 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
             p.track_id = TrackPropertiesAt(i)->track_indentifiers.track_id;
             p.category = TrackPropertiesAt(i)->track_indentifiers.category;
             p.op = TrackPropertiesAt(i)->op;
-            p.record_count = TrackPropertiesAt(i)->record_count;
+            p.record_count = first_load_id ? TrackPropertiesAt(i)->record_count : 0;
+            first_load_id = false;
             p.min_ts = TrackPropertiesAt(i)->min_ts;
             p.max_ts = TrackPropertiesAt(i)->max_ts;
             p.min_val = TrackPropertiesAt(i)->min_value;

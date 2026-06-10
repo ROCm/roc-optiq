@@ -22,7 +22,6 @@ constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 constexpr float SCALE_SEPERATOR_WIDTH    = 2.0f;
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
-                             float max_meta_area_width,
                              std::shared_ptr<TimePixelTransform> tpt)
 : TrackItem(dp, track_id, tpt)
 , m_data({})
@@ -41,7 +40,7 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
         spdlog::error("LineTrackItem: m_tpt shared_ptr is null, cannot construct");
         return;
     }
-    m_meta_area_scale_width = max_meta_area_width;
+    m_meta_area_scale_width = CalculateNewMetaAreaSize();
     UpdateMetadata();
 
     if(m_linetrack_project_settings.Valid())

@@ -302,6 +302,9 @@ main(int argc, char** argv)
         // Create initial window with Vulkan hint (GLFW_NO_API) by default
         // The backend setup will recreate the window if OpenGL is needed
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+#if defined(GLFW_SCALE_TO_MONITOR)  // GLFW 3.3+
+        glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+#endif
         GLFWwindow* window = glfwCreateWindow(RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
                                               RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
                                               APP_NAME, nullptr, nullptr);

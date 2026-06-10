@@ -163,15 +163,15 @@ Project::OpenProject(std::string& file_path)
 Project::OpenResult
 Project::OpenTrace(std::string& file_path)
 {
-    OpenResult result = Failed;
+    OpenResult open_result = Failed;
     // canonicalize so a .db and the path stored in a .rpv resolve to the same trace
     file_path = std::filesystem::weakly_canonical(file_path).string();
     // trace already open, return duplicate so we switch tabs instead of loading it twice
     Project* duplicate = AppWindow::GetInstance()->GetProject(file_path);
     if(duplicate)
     {
-        file_path = duplicate->GetID();
-        result    = Duplicate;
+        file_path   = duplicate->GetID();
+        open_result = Duplicate;
     }
     else if(!m_view)
     {
@@ -216,14 +216,14 @@ Project::OpenTrace(std::string& file_path)
                                                                   : m_trace_file_path)
                          .filename()
                          .string();
-            result = Success;
+            open_result = Success;
         }
         else
         {
             rocprofvis_controller_free(controller);
         }
     }
-    return result;
+    return open_result;
 }
 
 bool

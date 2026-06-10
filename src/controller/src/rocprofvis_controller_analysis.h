@@ -163,7 +163,6 @@ private:
     ~Analysis();
 
     rocprofvis_result_t GetOrAllocateEventsTable(EventsTable*& slot, rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table);
-    rocprofvis_result_t ExecuteQuery(Trace* trace, const char* query, const char* description, Future& future, QueryCallback callback) const;
 
     std::unordered_map<Trace*, TraceData> m_data;
 };

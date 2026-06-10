@@ -172,7 +172,7 @@ database.
 rocprofvis_dm_result_t rocprofvis_db_read_metadata_async(database, future);
 rocprofvis_dm_result_t rocprofvis_db_cleanup_async(database, future, rebuild);
 rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
-    database, start_ns, end_ns, num_tracks, track_id_array, future);
+    database, start_ns, end_ns, hashed_timestamp_tag, num_tracks, track_id_array, future);
 rocprofvis_dm_result_t rocprofvis_db_read_event_property_async(
     database, kRPVDMEventFlowTrace|kRPVDMEventStackTrace|kRPVDMEventExtData,
     event_id, future);
@@ -1466,7 +1466,7 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Run anything async                                                | `rocprofvis_db_future_alloc(callback, ud)` + `rocprofvis_db_future_wait(future, t)`       |
 | Compose a DB future with a controller future                      | `Future::AddDependentFuture(db_future)` + `Future::ProgressCallback`                      |
 | Read trace metadata                                               | `rocprofvis_db_read_metadata_async(database, future)`                                     |
-| Read a time slice                                                 | `rocprofvis_db_read_trace_slice_async(database, start, end, num, tracks, future)`         |
+| Read a time slice                                                 | `rocprofvis_db_read_trace_slice_async(database, start, end, tag, num, tracks, future)`         |
 | Read flow / stack / ext data for an event                         | `rocprofvis_db_read_event_property_async(database, type, event_id, future)`               |
 | Build a system table query                                        | `rocprofvis_db_build_table_query(...)` (then `rocprofvis_db_execute_query_async`)         |
 | Build a compute query                                             | `rocprofvis_db_build_compute_query(...)` (then `rocprofvis_db_execute_compute_query_async`)|
@@ -1594,7 +1594,7 @@ exploratory testing during development.
   `rocprofvis_dm_trace_params_t`, `rocprofvis_db_flow_data_t`,
   `rocprofvis_db_stack_data_t`, `rocprofvis_db_ext_data_t`,
   `rocprofvis_db_argument_data_t`, the `rocprofvis_dm_db_bind_struct`,
-  `DbInstance`, `hash_combine`, and `TRACK_ID_*` constants.
+  `DbInstance`, and `TRACK_ID_*` constants.
 - `rocprofvis_error_handling.h` -> ANSI color macros + `ERROR_*`
   message strings.
 - `rocprofvis_c_interface.cpp` -> `extern "C"` entry points; the

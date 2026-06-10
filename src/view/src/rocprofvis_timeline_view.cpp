@@ -1788,10 +1788,7 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                graph.chart =
-                    new LineTrackItem(m_data_provider, track_info->id, 
-                                      m_max_meta_area_size, m_tpt);
-                UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
+                graph.chart = new LineTrackItem(m_data_provider, track_info->id, m_tpt);
                 graph.graph_type = GraphType::TYPE_LINECHART;
                 break;
             }
@@ -1802,6 +1799,7 @@ TimelineView::MakeGraphView()
         }
         if(graph.chart)
         {
+            UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
             m_tpt->SetMinMaxX(std::min(track_info->min_ts, m_tpt->GetMinX()),
                               std::max(track_info->max_ts, m_tpt->GetMaxX()));
 
@@ -2719,11 +2717,8 @@ TimelineView::CalculateMaxMetaAreaSize()
     {
         const TrackInfo* track_info = track_list[i];
         auto             graph      = (*m_graphs)[track_info->index];
-        if(track_info->track_type == kRPVControllerTrackTypeSamples)
-        {
-            m_max_meta_area_size =
-                std::max(graph.chart->CalculateNewMetaAreaSize(), m_max_meta_area_size);
-        }
+        m_max_meta_area_size =
+            std::max(graph.chart->CalculateNewMetaAreaSize(), m_max_meta_area_size);
     }
 }
 
@@ -2737,10 +2732,7 @@ TimelineView::UpdateAllMaxMetaAreaSizes()
     {
         const TrackInfo* track_info = track_list[i];
         auto             graph      = (*m_graphs)[track_info->index];
-        if(track_info->track_type == kRPVControllerTrackTypeSamples)
-        {
-            graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
-        }
+        graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
     }
 }
 

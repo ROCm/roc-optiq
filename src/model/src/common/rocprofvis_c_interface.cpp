@@ -270,6 +270,7 @@ rocprofvis_dm_result_t rocprofvis_db_cleanup_async(
  * @param database database handle
  * @param start begining of the time slice
  * @param start end of the time slice
+ * @param user tag given to the time slice
  * @param num number of tracks in rocprofvis_db_track_selection_t array (uint32*)
  * @param track tracks selection array (uint32*)
  * @param object future handle allocated by rocprofvis_db_future_alloc
@@ -283,6 +284,7 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                         rocprofvis_dm_database_t database,
                                         rocprofvis_dm_timestamp_t start,
                                         rocprofvis_dm_timestamp_t end,
+                                        rocprofvis_dm_hashed_timestamp_tag_t tag,
                                         rocprofvis_db_num_of_tracks_t num,
                                         rocprofvis_db_track_selection_t tracks,
                                         rocprofvis_db_future_t object){
@@ -291,7 +293,7 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                  RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
-    return db->ReadTraceSliceAsync(start,end,num,tracks,object);
+    return db->ReadTraceSliceAsync(start,end,tag,num,tracks,object);
 }
 
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
@@ -702,6 +704,16 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_all_tables(
     ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     return ((RocProfVis::DataModel::Trace*)trace)->DeleteAllTables();
+}
+
+rocprofvis_dm_hashed_timestamp rocprofvis_dm_hash_combine_timestamp(
+                                        rocprofvis_dm_timestamp_t start,
+                                        rocprofvis_dm_timestamp_t end,
+                                        rocprofvis_dm_hashed_timestamp_tag_t tag){
+    rocprofvis_dm_hashed_timestamp hash = start;
+    hash ^= end + 0x9e3779b97f4a7c15 + (hash << 12) + (hash >> 4);
+    hash ^= tag + 0x9e3779b97f4a7c15 + (hash << 12) + (hash >> 4);
+    return hash;
 }
 
 /***********************************Universal property getters**************************************

@@ -67,6 +67,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
 , m_is_expanded(false)
 , m_compact_mode(false)
 , m_queue_utilization(nullptr)
+, m_queue_utilization_width(0.0f)
 {
     if(!m_tpt)
     {
@@ -124,14 +125,15 @@ FlameTrackItem::RenderMetaAreaExpand()
                           m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                           m_settings.GetColor(Colors::kTransparent));
-    ImGui::SetCursorPos(
+    ImVec2 button_pos =
         ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
-               ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight())));
-
+               ImVec2(ImGui::GetTextLineHeight() + m_meta_area_scale_width,
+                      ImGui::GetTextLineHeight()));
     int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
 
     if(visible_levels <= m_max_level + 1)
     {
+        ImGui::SetCursorPos(button_pos);
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
             RecalculateTrackHeight();
@@ -143,6 +145,7 @@ FlameTrackItem::RenderMetaAreaExpand()
             std::max(m_max_level * m_level_height + m_level_height,
                      DEFAULT_TRACK_HEIGHT))  // stand-in for default height..
     {
+        ImGui::SetCursorPos(button_pos);
         if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
         {
             m_track_height =
@@ -787,12 +790,20 @@ FlameTrackItem::RenderMetaAreaScale()
     {
         ImVec2 content_region = ImGui::GetContentRegionMax();
         ImVec2 window_pos     = ImGui::GetWindowPos();
-        ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
-                                       m_metadata_padding.x + SCALE_SEPERATOR_WIDTH,
-                                   m_metadata_padding.y));
+        ImGui::SetCursorPos(ImVec2(
+            content_region.x - m_queue_utilization_width - m_metadata_padding.x,
+            (content_region.y - m_metadata_padding.y - ImGui::GetTextLineHeight()) *
+                0.5f));
         ImGui::BeginDisabled(m_queue_utilization->state !=
                              AnalysisQueueUtilization::kReady);
-        ImGui::Text("%.1f%%", m_queue_utilization->util_pct);
+        ImGui::Text("%.1f %%", m_queue_utilization->util_pct);
+        m_queue_utilization_width = ImGui::GetItemRectSize().x;
+        if(ImGui::IsItemHovered())
+        {
+            BeginTooltipStyled();
+            ImGui::Text("Queue Utilization: %.1f %%", m_queue_utilization->util_pct);
+            EndTooltipStyled();        
+        }
         ImGui::EndDisabled();
         ImGui::GetWindowDrawList()->AddLine(
             ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
@@ -808,7 +819,7 @@ FlameTrackItem::CalculateNewMetaAreaSize()
 {
     if(m_track_metadata && m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
     {
-        return ImGui::CalcTextSize("888.8%").x + 2.0f * m_metadata_padding.x +
+        return ImGui::CalcTextSize("100.0 %").x + 2.0f * m_metadata_padding.x +
                SCALE_SEPERATOR_WIDTH;
     }
     else
@@ -890,8 +901,6 @@ FlameTrackItem::RequestAnalysis()
                     ? AnalysisQueueUtilization::kRequested
                     : AnalysisQueueUtilization::kPending;
         }
-        m_analysis_request_pending =
-            (m_queue_utilization->state == AnalysisQueueUtilization::kPending);
     }
 }
 

@@ -942,7 +942,7 @@ AppWindow::RenderFileMenu(Project* project)
             SettingsManager::GetInstance().GetInternalSettings().recent_files;
         if(ImGui::BeginMenu("Recent Files", !recent_files.empty()))
         {
-            for(const std::string& file : recent_files)
+            for(std::string file : recent_files)
             {
                 if(ImGui::MenuItem(file.c_str(), nullptr))
                 {

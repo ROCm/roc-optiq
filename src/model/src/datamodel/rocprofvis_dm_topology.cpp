@@ -75,7 +75,6 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, uint64
 
 
 rocprofvis_dm_result_t   TopologyNodeRoot::AddProperty(rocprofvis_dm_track_identifiers_t* track_identifiers, rocprofvis_db_topology_data_type_t type, const char* table, const char* name, void* value) {
-	rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
 	DbInstance* db_instance = (DbInstance*)track_identifiers->db_instance;
 	TopologyNode* node = FindRelevantPropertyNode(track_identifiers, table);
 	if (node)
@@ -188,14 +187,13 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsUint64(rocprofvis_dm_property_
 			ROCPROFVIS_ASSERT_MSG_RETURN(index < m_properties.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultInvalidParameter);
 			auto it = m_properties.begin();
 			std::advance(it, index);
-			return GetPropertyType(it->second.index(), value);
-			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultInvalidProperty);
+			return GetPropertyType(static_cast<int>(it->second.index()), value);
 		}
 		case kRPVControllerTopologyNodePropertyTypeKeyed:
 		{
-			auto it = m_properties.find(index);
+			auto it = m_properties.find(static_cast<unsigned int>(index));
 			ROCPROFVIS_ASSERT_MSG_RETURN(it!=m_properties.end(), ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultInvalidProperty);
-			return GetPropertyType(it->second.index(), value);
+			return GetPropertyType(static_cast<int>(it->second.index()), value);
 		}
 		case kRPVControllerTopologyNodePropertyValueIndexed:
 		{
@@ -210,7 +208,7 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsUint64(rocprofvis_dm_property_
 		}
 		case kRPVControllerTopologyNodePropertyValueKeyed:
 		{
-			auto it = m_properties.find(index);
+			auto it = m_properties.find(static_cast<unsigned int>(index));
 			ROCPROFVIS_ASSERT_MSG_RETURN(it!=m_properties.end(), ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotLoaded);
 			if (std::holds_alternative<uint64_t>(it->second)) {
 				*value = std::get<uint64_t>(it->second);
@@ -247,7 +245,7 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsDouble(rocprofvis_dm_property_
 		}
 		case kRPVControllerTopologyNodePropertyValueKeyed:
 		{
-			auto it = m_properties.find(index);
+			auto it = m_properties.find(static_cast<unsigned int>(index));
 			ROCPROFVIS_ASSERT_MSG_RETURN(it!=m_properties.end(), ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultInvalidProperty);
 			if (std::holds_alternative<double>(it->second)) {
 				*value = std::get<double>(it->second);
@@ -286,7 +284,7 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 		}
 		case kRPVControllerTopologyNodePropertyValueKeyed:
 		{
-			auto it = m_properties.find(index);
+			auto it = m_properties.find(static_cast<unsigned int>(index));
 			ROCPROFVIS_ASSERT_MSG_RETURN(it!=m_properties.end(), ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultInvalidProperty);
 			if (std::holds_alternative<std::string>(it->second)) {
 				*value = (char*)std::get<std::string>(it->second).c_str();

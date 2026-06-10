@@ -71,10 +71,11 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
 
         char* fetch_query = nullptr;
         rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
-            db, m_use_case, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_where.c_str(),  m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), sort_column,
-            (rocprofvis_dm_sort_order_t)m_sort_order, m_string_table_filters_ptr.size(), m_string_table_filters_ptr.data(), 
+            db, m_use_case, static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts),
+            static_cast<rocprofvis_db_num_of_tracks_t>(m_tracks.size()), m_tracks.data(), m_where.c_str(),  m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), sort_column,
+            (rocprofvis_dm_sort_order_t)m_sort_order, static_cast<rocprofvis_dm_num_string_table_filters_t>(m_string_table_filters_ptr.size()), m_string_table_filters_ptr.data(), 
             count, index, false, &fetch_query);
-        rocprofvis_dm_table_id_t table_id = 0;                       
+        rocprofvis_dm_table_id_t table_id = 0;
         uint64_t num_records = 0;
         if(dm_result == kRocProfVisDmResultSuccess)
         {
@@ -276,8 +277,12 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
 
             char*                  count_query = nullptr;
             rocprofvis_dm_result_t dm_result   = rocprofvis_db_build_table_query(
-                db, m_use_case, m_start_ts, m_end_ts, m_tracks.size(), m_tracks.data(), m_where.c_str(), m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), nullptr,
-                (rocprofvis_dm_sort_order_t) m_sort_order, m_string_table_filters_ptr.size(), m_string_table_filters_ptr.data(), 
+                db, m_use_case, static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts),
+                static_cast<rocprofvis_db_num_of_tracks_t>(m_tracks.size()),
+                m_tracks.data(), m_where.c_str(), m_filter.c_str(), m_group.c_str(), m_group_cols.c_str(), nullptr,
+                (rocprofvis_dm_sort_order_t) m_sort_order,
+                static_cast<rocprofvis_dm_num_string_table_filters_t>(m_string_table_filters_ptr.size()),
+                m_string_table_filters_ptr.data(),
                 0, 0, true, &count_query);
             if(dm_result == kRocProfVisDmResultSuccess)
             {
@@ -394,7 +399,7 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
 
             char* query = nullptr;
             rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(
-                db, query_args.m_use_case, query_args.m_start_ts, query_args.m_end_ts, (rocprofvis_db_num_of_tracks_t)query_args.m_tracks.size(), query_args.m_tracks.data(), query_args.m_where.c_str(), 
+                db, query_args.m_use_case, static_cast<rocprofvis_dm_timestamp_t>(query_args.m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(query_args.m_end_ts), (rocprofvis_db_num_of_tracks_t)query_args.m_tracks.size(), query_args.m_tracks.data(), query_args.m_where.c_str(), 
                 query_args.m_filter.c_str(), query_args.m_group.c_str(), query_args.m_group_cols.c_str(), sort_column, (rocprofvis_dm_sort_order_t)query_args.m_sort_order, 
                 (rocprofvis_dm_num_string_table_filters_t)string_table_filters_ptr.size(), string_table_filters_ptr.data(), 0, 0, false, &query);
             if(dm_result == kRocProfVisDmResultSuccess)
@@ -509,14 +514,13 @@ SystemTable::UnpackArguments(Arguments& args, QueryArguments& out) const
     std::vector<const char*> string_table_filters_ptr;
     rocprofvis_dm_table_use_case_enum_t use_case = kRPVDMTableUseCaseEventTrackTable;
     rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeEvents;
-    uint64_t table_type = kRPVControllerTableTypeEvents;
-    
+    uint64_t table_type = static_cast<uint64_t>(kRPVControllerTableTypeEvents);
+
     result = UnpackUseCase(args, use_case);
     if (result == kRocProfVisResultSuccess)
     {
         result = args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
     }
-    
     if (result == kRocProfVisResultSuccess)
     {
         switch (table_type)
@@ -607,7 +611,7 @@ SystemTable::UnpackArguments(Arguments& args, QueryArguments& out) const
                 if(result == kRocProfVisResultSuccess)
                 {
                     ROCPROFVIS_ASSERT(op_type_uint64 < kRocProfVisDmNumOperation);
-                    tracks.push_back(TABLE_QUERY_PACK_OP_TYPE(op_type_uint64));
+                    tracks.push_back(static_cast<uint32_t>(TABLE_QUERY_PACK_OP_TYPE(op_type_uint64)));
                 }                
             }
         }

@@ -19,6 +19,8 @@
 // SOFTWARE.
 
 #pragma once
+#include "rocprofvis_shared_types.h"
+
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -40,11 +42,11 @@ namespace DataModel
 {
     typedef struct rocprofvis_db_sqlite_track_identifier_index_t
     {
-        uint32_t                        nid_index = -1;
-        uint32_t                        pid_index = -1;
-        uint32_t                        process_index = -1;
-        uint32_t                        sub_process_index = -1;
-        uint32_t                        stream_index = -1;
+        uint32_t                        nid_index = INVALID_INDEX;
+        uint32_t                        pid_index = INVALID_INDEX;
+        uint32_t                        process_index = INVALID_INDEX;
+        uint32_t                        sub_process_index = INVALID_INDEX;
+        uint32_t                        stream_index = INVALID_INDEX;
         bool                            is_pmc_identifier = false;
         bool                            is_rocpd_pmc = false;
     } rocprofvis_db_sqlite_track_identifier_index_t;
@@ -190,7 +192,7 @@ namespace DataModel
         void ManageColumns(std::vector<std::unique_ptr<PackedTable>>& tables);
        
         static uint8_t ColumnTypeSize(ColumnType type);
-        void Clear() { m_columns.clear(); m_rows.clear(); m_merged_columns.clear(); m_rowSize = 0; m_currentRow = static_cast<size_t>(-1); };
+        void Clear() { m_columns.clear(); m_rows.clear(); m_merged_columns.clear(); m_rowSize = 0; m_currentRow = static_cast<size_t>(INVALID_INDEX_64); };
 
         void RemoveDuplicates();
         void CreateSortOrderArray();
@@ -205,7 +207,7 @@ namespace DataModel
         static const char* ConvertSqlStringReference(ProfileDatabase* db, uint32_t column_index, uint64_t index, uint32_t node_id, bool & numeric_string);
 
         void ResetTrackIdetifiers() { 
-            track_ids_indices.nid_index = track_ids_indices.process_index = track_ids_indices.sub_process_index = track_ids_indices.stream_index = track_ids_indices.pid_index = -1; 
+            track_ids_indices.nid_index = track_ids_indices.process_index = track_ids_indices.sub_process_index = track_ids_indices.stream_index = track_ids_indices.pid_index = INVALID_INDEX; 
             track_ids_indices.is_pmc_identifier = track_ids_indices.is_rocpd_pmc = false;
         };
 
@@ -215,7 +217,7 @@ namespace DataModel
         std::vector<uint32_t> m_sort_order;
         mutable std::vector<MergedColumnDef> m_merged_columns;
         uint8_t m_rowSize = 0;
-        size_t m_currentRow = static_cast<size_t>(-1); 
+        size_t m_currentRow = static_cast<size_t>(INVALID_INDEX_64); 
         Aggregation m_aggregation;
     public:
         rocprofvis_db_sqlite_track_identifier_index_t track_ids_indices;

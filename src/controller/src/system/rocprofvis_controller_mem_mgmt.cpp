@@ -129,7 +129,7 @@ void MemoryManager::Init(size_t trace_size)
         num_gigabytes >>= 1;
         exponent <<= 1;
     }
-    m_mem_block_size = exponent << 11;
+    m_mem_block_size = static_cast<uint32_t>(exponent << 11);
 
     spdlog::debug("Physical memory = {}!", s_physical_memory_avail);
     spdlog::debug("Memory manager memory allocation block  size = {}!", m_mem_block_size);
@@ -149,18 +149,24 @@ void MemoryManager::Init(size_t trace_size)
 void
 MemoryManager::UpdateSizeLimit()
 {
-    size_t total_weighted_size = 0;
+    double total_weighted_size = 0.0;
 
     for(auto& instance : s_memory_manager_instances)
     {
-        total_weighted_size += instance->m_trace_weight * instance->m_trace_size;
+        total_weighted_size += instance->m_trace_weight * static_cast<double>(instance->m_trace_size);
     }
 
     for(auto& instance : s_memory_manager_instances)
     {
-        size_t size_limit =
-            ((instance->m_trace_weight * instance->m_trace_size) / total_weighted_size) *
-                            s_physical_memory_avail;
+        double weighted = instance->m_trace_weight * static_cast<double>(instance->m_trace_size);
+        double fraction = (total_weighted_size > 0.0) ? weighted / total_weighted_size : 0.0;
+
+        if (!std::isfinite(fraction))
+        {
+            fraction = 1.0;
+        }
+        fraction = std::clamp(fraction, 0.0, 1.0);
+        size_t size_limit = static_cast<size_t>(fraction * static_cast<double>(s_physical_memory_avail));
         {
             std::unique_lock<std::mutex> lock(instance->m_lru_cond_mutex);
             instance->m_lru_size_limit = size_limit;
@@ -204,7 +210,7 @@ MemoryManager::CancelArrayOwnership(void* array_ptr, rocprofvis_owner_type_t typ
     {
         m_lru_inuse_lookup[type].erase(it);
         {
-            std::unique_lock lock(m_lru_cond_mutex);
+            std::unique_lock cond_lock(m_lru_cond_mutex);
             m_lru_configured = true;
         }
         m_lru_cv.notify_one();
@@ -294,6 +300,7 @@ void
 MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint32_t lod,
                                void* array_ptr)
 {
+    (void) lod;
     std::unique_lock lock(m_lru_mutex);
     auto& member_ptr = m_lru_array[owner];
     if(!member_ptr)
@@ -470,7 +477,7 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
 
     if(current_pool == nullptr)
     {
-        current_pool = new MemoryPool(size, type, m_mem_block_size);
+        current_pool = new MemoryPool(static_cast<uint32_t>(size), type, m_mem_block_size);
         auto& inner_map = m_object_pools[pool_idetifier];
         auto [inner_it, inserted] = inner_map.emplace(current_pool->m_base, current_pool);
         if(inserted)
@@ -695,10 +702,10 @@ BitSet::FindFirstZero() const
             size_t bit_index = __builtin_ctzll(free_bits);
             size_t bit_pos   = i * WORD_SIZE + bit_index;
 #endif
-            if(bit_pos < Size()) return bit_pos;
+            if(bit_pos < Size()) return static_cast<uint32_t>(bit_pos);
         }
     }
-    return Size();
+    return static_cast<uint32_t>(Size());
 }
 
 uint32_t
@@ -712,7 +719,7 @@ BitSet::Count() const {
         total += __builtin_popcountll(word);
 #endif
     }
-    return total;
+    return static_cast<uint32_t>(total);
 }
 
 

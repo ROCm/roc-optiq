@@ -76,6 +76,7 @@ InfiniteScrollTable::InfiniteScrollTable(
 
     // subscribe to time format changed event
     auto format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void) e;
         // Reformat time columns
         this->FormatData();
     };

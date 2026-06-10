@@ -324,11 +324,11 @@ namespace DataModel
     }
 
     const uint8_t Builder::TypeEnumToInt(const char* type, std::vector<std::string>& lookup) {
-        for (int i=0; i < lookup.size(); i++)
+        for (size_t i = 0; i < lookup.size(); i++)
         {
             if (lookup[i] == type)
             {
-                return i;
+                return static_cast<uint8_t>(i);
             }
         }
         return 0;

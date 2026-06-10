@@ -8,7 +8,6 @@
 * Use CInterfaceTypes.h for C/C++ code
 */
 
-#define INVALID_INDEX 0xFFFFFFFF
 #define TABLE_QUERY_PACK_OP_TYPE(rocprofvis_dm_event_operation_t_op_type) (rocprofvis_dm_event_operation_t_op_type << 28)
 #define TABLE_QUERY_UNPACK_OP_TYPE(rocprofvis_dm_track_id_t_track_id) (rocprofvis_dm_track_id_t_track_id >> 28)
 #define TABLE_QUERY_UNPACK_TRACK_ID(rocprofvis_dm_track_id_t_track_id) (rocprofvis_dm_track_id_t_track_id & 0x0FFFFFFF)

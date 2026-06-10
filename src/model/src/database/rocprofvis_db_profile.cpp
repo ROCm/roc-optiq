@@ -3,6 +3,7 @@
 
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_db_expression_filter.h"
+#include "rocprofvis_shared_types.h"
 #include "rocprofvis_c_interface.h"
 #include <sstream>
 #include <cfloat>
@@ -255,9 +256,8 @@ int ProfileDatabase::CallBackLoadTrack(void *data, int argc, sqlite3_stmt* stmt,
     track_params.track_indentifiers.db_instance = callback_params->db_instance;
     track_params.load_id.insert(callback_params->track_id);
     track_params.track_indentifiers.track_id = (rocprofvis_dm_track_id_t)db->NumTracks();
-    uint32_t loaded_track_id = db->Sqlite3ColumnInt(func, stmt, azColName, kRpvDbTrackLoadTrackId);
     track_params.track_indentifiers.category = (rocprofvis_dm_track_category_t)db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadCategory);
-    track_params.op = track_params.record_count=db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadOp);
+    track_params.op = static_cast<rocprofvis_dm_op_t>(track_params.record_count=db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadOp));
     track_params.track_indentifiers.process_id = db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadPID);
     track_params.record_count=db->Sqlite3ColumnInt(func, stmt, azColName,kRpvDbTrackLoadRecordCount);
     if (track_params.op < kRocProfVisDmNumOperation)
@@ -336,6 +336,7 @@ int
 ProfileDatabase::CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
                                                 char** azColName)
 {
+    (void) argc;
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void *func = (void*)&CallbackTrimTableQuery;
     rocprofvis_db_sqlite_callback_parameters* callback_params =
@@ -402,7 +403,7 @@ int ProfileDatabase::CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* st
         record.event.timestamp-=db->TraceProperties()->db_inst_start_time[db_instance];
         record.event.category = db->Sqlite3ColumnInt64(func, stmt, azColName, 3);
         record.event.symbol = db->Sqlite3ColumnInt64(func, stmt, azColName, 4);
-        record.event.level   = db->Sqlite3ColumnInt64(func, stmt, azColName, 9);
+        record.event.level   = static_cast<rocprofvis_dm_event_level_t>(db->Sqlite3ColumnInt64(func, stmt, azColName, 9));
         if (kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
     }
     else {
@@ -445,7 +446,7 @@ int ProfileDatabase::CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* st
         record.time-=db->TraceProperties()->db_inst_start_time[db_instance];
         record.category_id = db->Sqlite3ColumnInt64(func, stmt, azColName, 7);
         record.symbol_id = db->Sqlite3ColumnInt64(func, stmt, azColName, 8);
-        record.level = db->Sqlite3ColumnInt64(func, stmt, azColName, 9);
+        record.level = static_cast<rocprofvis_dm_event_level_t>(db->Sqlite3ColumnInt64(func, stmt, azColName, 9));
         record.end_time = db->Sqlite3ColumnInt64(func, stmt, azColName, 10);  
         record.end_time-=db->TraceProperties()->db_inst_start_time[db_instance];
         if(kRocProfVisDmResultSuccess != db->RemapStringIds(record)) return 0;
@@ -493,6 +494,7 @@ int ProfileDatabase::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt
 }
 
 int ProfileDatabase::CallbackAddArgumentsInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+    (void) argc;
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallbackAddArgumentsInfo;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
@@ -540,7 +542,7 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
         callback_params->db_instance->GuidIndex(),
         track_id))
     {
-        track_id = -1;
+        track_id = INVALID_INDEX;
     }
 
     if(track_id != -1)
@@ -576,7 +578,7 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
             callback_params->db_instance->GuidIndex(),
             track_id))
     {
-        track_id = -1;
+        track_id = INVALID_INDEX;
     }
 
     if (track_id != -1)
@@ -637,7 +639,7 @@ ProfileDatabase::GetTrackIdentifierIndices(
     ProfileDatabase* db, int column_index, char** azColName,
     rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices)
 {
-    void* func = (void*)&GetTrackIdentifierIndices;
+    (void) db;
     std::string column_name = azColName[column_index];
 
     if (column_name == Builder::NODE_ID_SERVICE_NAME)
@@ -733,7 +735,7 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
 {
     std::stringstream ss;
     DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(index)->track_indentifiers.db_instance;
-    int               size = TrackPropertiesAt(index)->query[type].size();
+    int               size = static_cast<int>(TrackPropertiesAt(index)->query[type].size());
     ROCPROFVIS_ASSERT_MSG_RETURN(size, "Error! SQL query cannot be empty!", kRocProfVisDmResultUnknownError);
     ss << query << " FROM (";
     for(int i = 0; i < size; i++)
@@ -747,9 +749,9 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
             ss << "SAMPLE.id IS NULL and ";
         }
         int count = 0;
-        for(int i = 0; i < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; i++)
+        for(int param_index = 0; param_index < NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS; param_index++)
         {
-            if(TrackPropertiesAt(index)->track_indentifiers.tag[i] == "const")
+            if(TrackPropertiesAt(index)->track_indentifiers.tag[param_index] == "const")
             {
                 continue;
             }
@@ -757,14 +759,14 @@ ProfileDatabase::BuildTrackQuery(rocprofvis_dm_index_t index,
             {
                 ss << " and ";
             }
-            ss << TrackPropertiesAt(index)->track_indentifiers.tag[i] << "==";
-            if(TrackPropertiesAt(index)->track_indentifiers.is_numeric[i])
+            ss << TrackPropertiesAt(index)->track_indentifiers.tag[param_index] << "==";
+            if(TrackPropertiesAt(index)->track_indentifiers.is_numeric[param_index])
             {
-                ss << TrackPropertiesAt(index)->track_indentifiers.id[i];
+                ss << TrackPropertiesAt(index)->track_indentifiers.id[param_index];
             }
             else
             {
-                ss << "'" << TrackPropertiesAt(index)->track_indentifiers.name[i] << "'";
+                ss << "'" << TrackPropertiesAt(index)->track_indentifiers.name[param_index] << "'";
             }
             count++;
         }
@@ -838,19 +840,19 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
             {
                 total_event_count += TraceProperties()->events_count[j];
             }
-            split_count = (TrackPropertiesAt(i)->record_count * 10) / total_event_count;
+            split_count = static_cast<uint32_t>((TrackPropertiesAt(i)->record_count * 10) / total_event_count);
 
             if (split_count == 0)
             {
                 split_count = 1;
             } else if ((TrackPropertiesAt(i)->record_count / split_count) < SINGLE_THREAD_RECORDS_COUNT_LIMIT)
             {
-                split_count = (TrackPropertiesAt(i)->record_count + SINGLE_THREAD_RECORDS_COUNT_LIMIT) / SINGLE_THREAD_RECORDS_COUNT_LIMIT;
+                split_count = static_cast<uint32_t>((TrackPropertiesAt(i)->record_count + SINGLE_THREAD_RECORDS_COUNT_LIMIT) / SINGLE_THREAD_RECORDS_COUNT_LIMIT);
             }
 
         }
 
-        for (int j = 0; j < split_count; j++)
+        for (uint32_t j = 0; j < split_count; j++)
         {
             futures.push_back((Future*)rocprofvis_db_future_alloc(nullptr));
             std::string async_query = func_prepare(TrackPropertiesAt(i), prefix);
@@ -988,7 +990,6 @@ void ProfileDatabase::BuildSliceQueryMap(slice_query_map_t& slice_query_map, roc
 
 rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceLeftNeighbourQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_index_t track_index, rocprofvis_dm_string_t& query) {
     slice_query_map_t slice_query_map;
-    bool timed_query = false;
     rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track_index);
     DbInstance* db_instance = (DbInstance*)props->track_indentifiers.db_instance;
 
@@ -997,7 +998,8 @@ rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceLeftNeighbourQuery(rocp
     
     BuildSliceQueryMap(slice_query_map, props);
 
-    for (auto it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
+    if (!slice_query_map.empty()) {
+        auto it_query = slice_query_map.begin();
         query = "SELECT *, ";
         query += std::to_string(track_index);
         query += " as track_id FROM(";
@@ -1008,7 +1010,6 @@ rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceLeftNeighbourQuery(rocp
         query += " < ";
         query += std::to_string(start);
         query += std::string(" ORDER BY ") + Builder::START_SERVICE_NAME + " DESC LIMIT 1 )";
-        break;
     }
     return kRocProfVisDmResultSuccess;
 
@@ -1016,7 +1017,6 @@ rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceLeftNeighbourQuery(rocp
 
 rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceRightNeighbourQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_index_t track_index, rocprofvis_dm_string_t& query) {
     slice_query_map_t slice_query_map;
-    bool timed_query = false;
     rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track_index);
     DbInstance* db_instance = (DbInstance*)props->track_indentifiers.db_instance;
 
@@ -1025,7 +1025,8 @@ rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceRightNeighbourQuery(roc
 
     BuildSliceQueryMap(slice_query_map, props);
 
-    for (auto it_query = slice_query_map.begin(); it_query != slice_query_map.end(); ++it_query) {
+    if (!slice_query_map.empty()) {
+        auto it_query = slice_query_map.begin();
         query = "SELECT *, ";
         query += std::to_string(track_index);
         query += " as track_id FROM(";
@@ -1036,13 +1037,13 @@ rocprofvis_dm_result_t ProfileDatabase::BuildCounterSliceRightNeighbourQuery(roc
         query += " > ";
         query += std::to_string(end);
         query += std::string(" ORDER BY ") + Builder::START_SERVICE_NAME + " ASC LIMIT 1 )";
-        break;
     }
     return kRocProfVisDmResultSuccess;
 
 }
 
 rocprofvis_dm_result_t ProfileDatabase::BuildSliceQuery(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, rocprofvis_dm_string_t& query, slice_array_t& slices) {
+    (void) num;
     slice_query_map_t slice_query_map;
     bool timed_query = false;
     bool pmc_query = false;
@@ -1211,7 +1212,7 @@ ProfileDatabase::BuildTableQuery(
         rocprofvis_dm_index_t track = tracks[i];
         track = TABLE_QUERY_UNPACK_TRACK_ID(track);
         
-        int divider = thread_count / num;
+        int divider = static_cast<int>(thread_count / num);
         if (divider == 0) divider = 1;
         for (auto it_query = slice_query_map_array[i].begin(); it_query != slice_query_map_array[i].end(); ++it_query) 
         {
@@ -1396,7 +1397,7 @@ bool ProfileDatabase::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end)
 
     if (TABLE_QUERY_UNPACK_OP_TYPE(track) != 0)
     {
-        auto it = TraceProperties()->histogram.lower_bound(start_bucket);
+        auto it = TraceProperties()->histogram.lower_bound(static_cast<uint32_t>(start_bucket));
         while (it != TraceProperties()->histogram.end() && it->first <= end_bucket) {
             if (it->second > 0) {
                 return false;
@@ -1406,7 +1407,7 @@ bool ProfileDatabase::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end)
     }
     else
     {
-        auto it = TrackPropertiesAt(TABLE_QUERY_UNPACK_TRACK_ID(track))->histogram.lower_bound(start_bucket);
+        auto it = TrackPropertiesAt(TABLE_QUERY_UNPACK_TRACK_ID(track))->histogram.lower_bound(static_cast<uint32_t>(start_bucket));
         while (it != TrackPropertiesAt(TABLE_QUERY_UNPACK_TRACK_ID(track))->histogram.end() && it->first <= end_bucket) {
             if (it->second.first > 0) {
                 return false;
@@ -1459,10 +1460,8 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
                 if (result == kRocProfVisDmResultSuccess)
                 {
                     query = "";
-                    rocprofvis_dm_track_params_t* props = TrackPropertiesAt(*tracks);
                     if (props->track_indentifiers.category == kRocProfVisDmPmcTrack)
                     {
-                        rocprofvis_dm_track_params_t* props = TrackPropertiesAt(*tracks);
                         if (props->track_indentifiers.category == kRocProfVisDmPmcTrack)
                         {
                             future->ResetRowCount();
@@ -1700,7 +1699,7 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
                 break;
             }
 
-            level = it->level + 1;
+            level = static_cast<uint8_t>(it->level + 1);
             parent_id = ((rocprofvis_dm_event_id_t*)&it->id)->bitfield.event_id;
         }
         it = next_it;
@@ -1714,16 +1713,17 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
     callback_params->future->CountThisRow();
     {
         std::lock_guard<std::mutex> lock(db->m_level_lock);
-        auto                        it = db->m_event_levels_id_to_index[op][db_instance->GuidIndex()].find(id);
+        auto                        level_it = db->m_event_levels_id_to_index[op][db_instance->GuidIndex()].find(id);
         int                         index = 0;
-        if(it == db->m_event_levels_id_to_index[op][db_instance->GuidIndex()].end())
+        if(level_it == db->m_event_levels_id_to_index[op][db_instance->GuidIndex()].end())
         {
-            db->m_event_levels_id_to_index[op][db_instance->GuidIndex()][id] = index = db->m_event_levels[op][db_instance->GuidIndex()].size();
+            index = static_cast<int>(db->m_event_levels[op][db_instance->GuidIndex()].size());
+            db->m_event_levels_id_to_index[op][db_instance->GuidIndex()][id] = index;
             db->m_event_levels[op][db_instance->GuidIndex()].push_back({id, parent_id,0,0});
         }
         else
         {
-            index = it->second;
+            index = static_cast<int>(level_it->second);
         }
         if(params->track_indentifiers.category == kRocProfVisDmStreamTrack)
         {
@@ -1745,6 +1745,7 @@ int ProfileDatabase::CalculateEventLevels(void* data, int argc, sqlite3_stmt* st
 // and uses the provided Future/database context to insert one row per track
 // into the track_properties table defined below.
 rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
+    (void) future;
     // Define the schema for the track_properties table that will receive the
     // per-track summary rows. The SQLInsertParams describes the column names
     // and their SQLite types; the order here must match the order used when
@@ -1857,7 +1858,7 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
                 sqlite3_bind_int(stmt, kRpvDbTrackLoadTrackId + 1, p.track_id);
                 sqlite3_bind_int(stmt, kRpvDbTrackLoadCategory + 1, p.category);
                 sqlite3_bind_int(stmt, kRpvDbTrackLoadOp + 1, p.op);
-                sqlite3_bind_int(stmt, kRpvDbTrackLoadRecordCount + 1, p.record_count);
+                sqlite3_bind_int(stmt, kRpvDbTrackLoadRecordCount + 1, static_cast<int>(p.record_count));
                 sqlite3_bind_int64(stmt, kRpvDbTrackLoadMinTs + 1, p.min_ts);
                 sqlite3_bind_int64(stmt, kRpvDbTrackLoadMaxTs + 1, p.max_ts);
                 sqlite3_bind_double(stmt, kRpvDbTrackLoadMinValue + 1, p.min_val);
@@ -2056,10 +2057,10 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
 
             for (int i = 0; i < NumTracks(); i++)
             {
-                DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
+                DbInstance* track_db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
                 for (GuidInfo& guid_info : DbInstances())
                 {
-                    if (guid_info.first.FileIndex() == db_instance->FileIndex())
+                    if (guid_info.first.FileIndex() == track_db_instance->FileIndex())
                     {
                         guids_per_file.push_back(guid_info);
                     }
@@ -2067,11 +2068,11 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
             }
 
             auto insert_start_time = [&](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {
-                DbInstance* db_instance = (DbInstance*)params->track_indentifiers.db_instance;
+                DbInstance* params_db_instance = (DbInstance*)params->track_indentifiers.db_instance;
                 std::string str = query;
                 size_t pos = str.find(start_time_substring);
                 if (pos != std::string::npos) {
-                    str.replace(pos, strlen(start_time_substring), std::to_string(TraceProperties()->db_inst_start_time[db_instance->GuidIndex()]));
+                    str.replace(pos, strlen(start_time_substring), std::to_string(TraceProperties()->db_inst_start_time[params_db_instance->GuidIndex()]));
                 }
                 return str;
                 };
@@ -2081,7 +2082,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                 histogram_query_prefix.c_str(),
                 histogram_query_suffix.c_str(), &CallbackMakeHistogramPerTrack,
                 insert_start_time,
-                [](rocprofvis_dm_track_params_t* params) {},
+                [](rocprofvis_dm_track_params_t* params) { (void) params; },
                 guids_per_file);
 
 
@@ -2096,7 +2097,7 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                     histogram_query.c_str(),
                     "GROUP BY bucket", &CallbackMakeHistogramPerTrack,
                     insert_start_time,
-                    [](rocprofvis_dm_track_params_t* params) {},
+                    [](rocprofvis_dm_track_params_t* params) { (void) params; },
                     guids_per_file);
             }
 
@@ -2131,8 +2132,8 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                 uint32_t counter = 0;
                 for (int i = 0; i < NumTracks(); i++)
                 {
-                    DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
-                    if (file_node->node_id == db_instance->FileIndex())
+                    DbInstance* track_db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
+                    if (file_node->node_id == track_db_instance->FileIndex())
                     {
                         for (auto& [key, value] : TrackPropertiesAt(i)->histogram)
                         {

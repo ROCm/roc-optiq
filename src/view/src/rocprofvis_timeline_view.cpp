@@ -75,11 +75,11 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_resize_activity(false)
 , m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
                          TimelineSelection::INVALID_SELECTION_TIME })
-, m_new_track_token(static_cast<uint64_t>(-1))
-, m_scroll_to_track_token(static_cast<uint64_t>(-1))
-, m_font_changed_token(static_cast<uint64_t>(-1))
-, m_set_view_range_token(static_cast<uint64_t>(-1))
-, m_timeline_time_range_changed_token(static_cast<uint64_t>(-1))
+, m_new_track_token(EventManager::InvalidSubscriptionToken)
+, m_scroll_to_track_token(EventManager::InvalidSubscriptionToken)
+, m_font_changed_token(EventManager::InvalidSubscriptionToken)
+, m_set_view_range_token(EventManager::InvalidSubscriptionToken)
+, m_timeline_time_range_changed_token(EventManager::InvalidSubscriptionToken)
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0.0)
 , m_last_data_req_view_time_offset_ns(0.0)
@@ -144,6 +144,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
         static_cast<int>(RocEvents::kSetViewRange), set_view_range_handle);
 
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void) e;
         m_recalculate_grid_interval = true;
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
         CalculateMaxMetaAreaSize();

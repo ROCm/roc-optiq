@@ -322,7 +322,8 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
         char* ptr = (char*) calloc(query.length() + 1, 1);
         ROCPROFVIS_ASSERT_MSG_RETURN(ptr, "Error! Couldn't allocate query string.",
                                      kRocProfVisDmResultAllocFailure);
-        strncpy(ptr, query.c_str(), query.length());
+        std::memcpy(ptr, query.c_str(), query.length());
+        ptr[query.length()] = '\0';
         *out_query = ptr;
     }
     return result;
@@ -347,7 +348,8 @@ rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
         char* ptr = (char*) calloc(query.length() + 1, 1);
         ROCPROFVIS_ASSERT_MSG_RETURN(ptr, "Error! Couldn't allocate query string.",
             kRocProfVisDmResultAllocFailure);
-        strncpy(ptr, query.c_str(), query.length());
+        std::memcpy(ptr, query.c_str(), query.length());
+        ptr[query.length()] = '\0';
         *out_query = ptr;
     }
     return result;

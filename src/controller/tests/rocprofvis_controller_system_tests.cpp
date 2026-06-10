@@ -560,8 +560,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         REQUIRE(args != nullptr);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
-                                                  kRPVControllerTableTypeEvents);
+        result = rocprofvis_controller_set_uint64(
+            args, kRPVControllerTableArgsType, 0,
+            static_cast<uint64_t>(kRPVControllerTableTypeEvents));
         REQUIRE(result == kRocProfVisResultSuccess);
 
         uint32_t num_event_tracks = 0;
@@ -860,8 +861,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         REQUIRE(args != nullptr);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
-                                                  kRPVControllerTableTypeSamples);
+        result = rocprofvis_controller_set_uint64(
+            args, kRPVControllerTableArgsType, 0,
+            static_cast<uint64_t>(kRPVControllerTableTypeSamples));
         REQUIRE(result == kRocProfVisResultSuccess);
 
         uint32_t num_sample_tracks = 0;
@@ -1151,7 +1153,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         for(uint32_t track_idx = 0; track_idx < num_tracks; track_idx++)
         {
             rocprofvis_handle_t* track_handle = nullptr;
-            rocprofvis_result_t  result       = rocprofvis_controller_get_object(
+            result                            = rocprofvis_controller_get_object(
                 m_controller, kRPVControllerSystemTrackIndexed, track_idx, &track_handle);
             REQUIRE(result == kRocProfVisResultSuccess);
             REQUIRE(track_handle != nullptr);
@@ -1195,7 +1197,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                 double start_ts = min_time;
                 double RANGE    = (max_time - min_time) / 10;
 
-                uint64_t total = 0;
                 while(start_ts < max_time)
                 {
                     double end_ts = std::min(start_ts + RANGE, max_time);
@@ -2191,8 +2192,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                 }
                 else
                 {
-                    double density = 0;
-                    result         = rocprofvis_controller_get_double(
+                    uint64_t density = 0;
+                    result           = rocprofvis_controller_get_uint64(
                         track_handle, kRPVControllerTrackHistogramBucketDensityIndexed,
                         bin, &density);
                     REQUIRE(result == kRocProfVisResultSuccess);
@@ -2992,8 +2993,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         REQUIRE(args != nullptr);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
-                                                  kRPVControllerTableTypeSearchResults);
+        result = rocprofvis_controller_set_uint64(
+            args, kRPVControllerTableArgsType, 0,
+            static_cast<uint64_t>(kRPVControllerTableTypeSearchResults));
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime,

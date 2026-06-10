@@ -86,7 +86,7 @@ PrintHeader(const char* fmt, ...)
     va_list     argptr;
     char        buffer[256];
     va_start(argptr, fmt);
-    vsprintf(buffer, fmt, argptr);
+    vsnprintf(buffer, sizeof(buffer), fmt, argptr);
     va_end(argptr);
     size_t text_len = strlen(buffer);
     if(HEADER_LEN > text_len) header.assign((HEADER_LEN - text_len) / 2, '*');
@@ -99,6 +99,8 @@ db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_future_id_t id,
             rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status,
             rocprofvis_db_status_message_t msg, void* user_data)
 {
+    (void) id;
+    (void) user_data;
     const char* str   = " ERROR ";
     const char* color = "\x1b[31m";
     if(status == kRPVDbSuccess)
@@ -169,7 +171,7 @@ ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
     uint32_t num_rows = 0;
     if(object2wait != nullptr)
     {
-        for(int i = 0; i < accessInMillisec; i++)
+        for(uint32_t i = 0; i < accessInMillisec; i++)
         {
             num_rows =
                 ((RocProfVis::DataModel::Future*) object2wait)->GetProcessedRowsCount();
@@ -192,7 +194,7 @@ ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
                      accessInMillisec);
     }
 
-    for(int i = 0; i < num_tracks; i++)
+    for(uint32_t i = 0; i < num_tracks; i++)
     {
         rocprofvis_dm_track_t track =
             rocprofvis_dm_get_property_as_handle(trace, kRPVDMTrackHandleIndexed, i);
@@ -506,7 +508,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
             bool load_slice = false;
             for(int j = 0; j < m_num_tracks; j++)
             {
-                if(m_tracks_selection[j] == i)
+                if(m_tracks_selection[j] == static_cast<uint32_t>(i))
                 {
                     load_slice = true;
                     break;
@@ -635,14 +637,14 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
 
                 spdlog::info(ANSI_COLOR_CYAN "\t{0} : {1} : {2}", "Properties",
                              "Memory usage", memory_usage);
-                for(int i = 0; i < num_ext_data; i++)
+                for(int ext_data_index = 0; ext_data_index < num_ext_data; ext_data_index++)
                 {
                     char* ext_data_category = rocprofvis_dm_get_property_as_charptr(
-                        track, kRPVDMTrackExtDataCategoryCharPtrIndexed, i);
+                        track, kRPVDMTrackExtDataCategoryCharPtrIndexed, ext_data_index);
                     char* ext_data_name = rocprofvis_dm_get_property_as_charptr(
-                        track, kRPVDMTrackExtDataNameCharPtrIndexed, i);
+                        track, kRPVDMTrackExtDataNameCharPtrIndexed, ext_data_index);
                     char* ext_data_value = rocprofvis_dm_get_property_as_charptr(
-                        track, kRPVDMTrackExtDataValueCharPtrIndexed, i);
+                        track, kRPVDMTrackExtDataValueCharPtrIndexed, ext_data_index);
                     REQUIRE(ext_data_category);
                     REQUIRE(ext_data_name);
                     REQUIRE(ext_data_value);

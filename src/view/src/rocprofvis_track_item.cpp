@@ -869,7 +869,7 @@ Pill::Pill(const std::string& label, bool shown, bool active)
 : m_pill_label(label)
 , m_show_pill_label(shown)
 , m_active(active)
-, m_font_changed_token(static_cast<uint64_t>(-1))
+, m_font_changed_token(EventManager::InvalidSubscriptionToken)
 {
     CalculatePillSize();
 

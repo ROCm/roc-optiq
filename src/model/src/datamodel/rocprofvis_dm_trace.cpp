@@ -3,6 +3,7 @@
 
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_dm_table_row.h"
+#include "rocprofvis_shared_types.h"
 #include "rocprofvis_c_interface.h"
 #include <numeric>
 
@@ -405,7 +406,7 @@ void Trace::BuildStringsOrderArray() {
         });
     m_sorted_strings_lookup_array.resize(m_strings.size());
     for (size_t sorted_pos = 0; sorted_pos < idx.size(); ++sorted_pos)
-        m_sorted_strings_lookup_array[idx[sorted_pos]] = sorted_pos;
+        m_sorted_strings_lookup_array[idx[sorted_pos]] = static_cast<rocprofvis_dm_index_t>(sorted_pos);
 }
 
 const size_t Trace::GetStringOrder(const rocprofvis_dm_trace_t object, uint32_t index) {
@@ -560,7 +561,7 @@ rocprofvis_dm_table_t Trace::AddInfoTable(const rocprofvis_dm_trace_t object, ro
     Trace* trace = (Trace*) object;
     TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
-        uint32_t id = trace->m_info_tables.size();
+        uint32_t id = static_cast<uint32_t>(trace->m_info_tables.size());
         trace->m_info_tables.push_back(std::make_unique<InfoTable>(trace, id, node, name, handle));
     }
     catch(const std::exception&)
@@ -670,14 +671,14 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
         {
             if(trace->m_tracks[i]->TrackId() == tracks[n])
             {
-                rocprofvis_dm_slice_t  object = nullptr;
+                rocprofvis_dm_slice_t  slice_object = nullptr;
                 rocprofvis_dm_result_t result =
-                    trace->m_tracks[i].get()->GetSliceAtTime(rocprofvis_dm_hash_combine_timestamp(start,end, tag), object);
+                    trace->m_tracks[i].get()->GetSliceAtTime(rocprofvis_dm_hash_combine_timestamp(start, end, tag), slice_object);
                 if(result == kRocProfVisDmResultSuccess)
                 {
-                    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
+                    ROCPROFVIS_ASSERT_MSG_RETURN(slice_object, ERROR_SLICE_CANNOT_BE_NULL,
                                                     kRocProfVisDmResultUnknownError);
-                    TrackSlice* slice = (TrackSlice*) object;
+                    TrackSlice* slice = (TrackSlice*) slice_object;
                     lock.unlock();
 
                     slice->WaitComplete();
@@ -803,6 +804,7 @@ rocprofvis_dm_result_t Trace::GetStringIndicesWithSubstring(rocprofvis_dm_num_st
 }
 
 rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+    (void) index;
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
@@ -855,25 +857,25 @@ rocprofvis_dm_result_t    Trace::GetPropertyAsHandle(rocprofvis_dm_property_t pr
         case kRPVDMTableHandleByID:
             return GetTableHandle(*(rocprofvis_dm_table_id_t*) &index, *value);
         case kRPVDNodeInfoTableHandleIndexed:
-            return GetInfoTableHandle("Node",index, *value);
+            return GetInfoTableHandle("Node",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDAgentInfoTableHandleIndexed:
-            return GetInfoTableHandle("Agent",index, *value);
+            return GetInfoTableHandle("Agent",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDQueueInfoTableHandleIndexed:
-            return GetInfoTableHandle("Queue",index, *value);
+            return GetInfoTableHandle("Queue",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDProcessInfoTableHandleIndexed:
-            return GetInfoTableHandle("Process",index, *value);
+            return GetInfoTableHandle("Process",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDThreadInfoTableHandleIndexed:
-            return GetInfoTableHandle("Thread",index, *value);
+            return GetInfoTableHandle("Thread",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDStreamInfoTableHandleIndexed:
-            return GetInfoTableHandle("Stream",index, *value);
+            return GetInfoTableHandle("Stream",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDPmcInfoTableHandleIndexed:
-            return GetInfoTableHandle("PMC",index, *value);
+            return GetInfoTableHandle("PMC",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDAgentQueueMappingInfoTableHandleIndexed:
-            return GetInfoTableHandle("AgentToQueue",index, *value);
+            return GetInfoTableHandle("AgentToQueue",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDAgentStreamMappingInfoTableHandleIndexed:
-            return GetInfoTableHandle("AgentToStream",index, *value);
+            return GetInfoTableHandle("AgentToStream",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDStreamQueueMappingInfoTableHandleIndexed:
-            return GetInfoTableHandle("StreamToQueue",index, *value);
+            return GetInfoTableHandle("StreamToQueue",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDMTopologyHandle:
             *value = Topology();
             return kRocProfVisDmResultSuccess;

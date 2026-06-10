@@ -25,7 +25,7 @@ rocprofvis_dm_result_t Database::AddTrackProperties(
     try {
         m_track_properties.push_back(std::make_unique<rocprofvis_dm_track_params_t>(props));
     }
-    catch (const std::exception& ex)
+    catch (const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, kRocProfVisDmResultAllocFailure);
     }
@@ -187,7 +187,6 @@ Database::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED,
                                  kRocProfVisDmResultResourceBusy);
-    rocprofvis_dm_result_t result = kRocProfVisDmResultUnknownError;
     try
     {
         future->SetWorker(std::move(std::thread(&SaveTrimmedDataStatic, this, start, end, new_db_path, future)));
@@ -376,7 +375,7 @@ rocprofvis_dm_result_t   Database::FindCachedTableValue(
                                                         rocprofvis_dm_charptr_t* value){
     Database* db = (Database*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    *value = db->CachedTables(node)->GetTableCell(table, id, column); 
+    *value = db->CachedTables(static_cast<uint32_t>(node))->GetTableCell(table, id, column); 
     return kRocProfVisDmResultSuccess;
 }
 
@@ -384,7 +383,7 @@ rocprofvis_dm_result_t   Database::FindCachedTableValue(
 rocprofvis_dm_table_t Database::GetInfoTableHandle(const rocprofvis_dm_database_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t table_name){
     Database* db = (Database*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, nullptr);
-    return db->CachedTables(node)->GetTableHandle(table_name);
+    return db->CachedTables(static_cast<uint32_t>(node))->GetTableHandle(table_name);
 }
 size_t Database::GetInfoTableNumColumns(rocprofvis_dm_table_t object){
     TableCache* table = (TableCache*)object;
@@ -399,7 +398,7 @@ size_t Database::GetInfoTableNumRows(rocprofvis_dm_table_t object){
 const char* Database::GetInfoTableColumnName(rocprofvis_dm_table_t object, size_t column_index){
     TableCache* table = (TableCache*)object;
     ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, 0);
-    return table->GetColumnName(column_index);
+    return table->GetColumnName(static_cast<uint32_t>(column_index));
 }
 rocprofvis_dm_table_row_t Database::GetInfoTableRowHandle(rocprofvis_dm_table_t object, size_t row_index){
     TableCache* table = (TableCache*)object;

@@ -15,7 +15,7 @@ typedef struct rocprofvis_db_string_id_hash_t
 {
     size_t operator()(const rocprofvis_db_string_id_t& s) const noexcept
     {
-        size_t h1 = std::hash<uint32_t>{}(s.m_string_id);
+        size_t h1 = std::hash<uint64_t>{}(s.m_string_id);
         size_t h2 = std::hash<uint32_t>{}(s.m_guid_id);
         size_t h3 = std::hash<rocprofvis_db_string_type_t>{}(s.m_string_type);
 

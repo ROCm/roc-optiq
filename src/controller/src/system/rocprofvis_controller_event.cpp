@@ -153,8 +153,8 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                         )
                                     {
                                         FlowControl* flow_control = new FlowControl(
-                                            id, start_timestamp, end_timestamp, track_id,
-                                            level,
+                                            id, start_timestamp, end_timestamp, static_cast<uint32_t>(track_id),
+                                            static_cast<uint32_t>(level),
                                             dm_event_id.bitfield.event_op ==
                                                         kRocProfVisDmOperationLaunch ||
                                             dm_event_id.bitfield.event_op ==
@@ -229,7 +229,6 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                 for(int index = 0; index < records_count; index++)
                                 {
                                     char* symbol = nullptr;
-                                    char* args     = nullptr;
                                     char* codeline    = nullptr;
                                     uint64_t id = 0;
                                     uint64_t depth = 0;
@@ -460,17 +459,11 @@ Event::Fetch(rocprofvis_property_t property, Array& array,
              rocprofvis_dm_trace_t dm_trace_handle)
 {
     (void) array;
+    (void) property;
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     if(dm_trace_handle)
     {
-        switch(property)
-        {
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
-        }
+        result = kRocProfVisResultInvalidEnum;
     }
     return result;
 }

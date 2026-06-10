@@ -210,6 +210,7 @@ ComputeTopKernels::ComputeTopKernels(DataProvider& dp)
     m_kernel_bar.tick_interval_dirty = false;
     m_kernel_bar.axis_label_dirty    = false;
     auto time_format_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void) e;
         m_kernel_bar.tick_interval_dirty = true;
         m_kernel_bar.axis_label_dirty    = true;
     };
@@ -536,6 +537,7 @@ ComputeTopKernels::SetWorkload(uint32_t id)
 void
 ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time_format)
 {
+    (void) plot_style;
     ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
     PushPlotChrome(m_settings);
     ImGui::PushID(m_workload->id);
@@ -552,8 +554,8 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::PlotPieChart(
             m_kernel_pie.labels.data(),
             m_kernel_pie.metric_sets[m_kernel_pie.selected_metric].pct_values.data(),
-            m_kernel_pie.metric_sets[m_kernel_pie.selected_metric].pct_values.size(), 0.0,
-            0.0, PIE_CHART_RADIUS,
+            static_cast<int>(m_kernel_pie.metric_sets[m_kernel_pie.selected_metric].pct_values.size()),
+            0.0, 0.0, PIE_CHART_RADIUS,
             [](double value, char* buff, int size, void* user_data) -> int {
                 (void) user_data;
                 if(value * 100.0 > 10.0)
@@ -653,8 +655,9 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
         ImPlot::SetupAxisTicks(ImAxis_X1,
                                m_kernel_bar.metric_sets[m_kernel_bar.selected_metric]
                                    .axis_tick_label_positions.data(),
-                               m_kernel_bar.metric_sets[m_kernel_bar.selected_metric]
-                                   .axis_tick_label_positions.size());
+                               static_cast<int>(
+                                   m_kernel_bar.metric_sets[m_kernel_bar.selected_metric]
+                                       .axis_tick_label_positions.size()));
         PlotHoverIdx();
         for(size_t i = 0; i < m_kernels.size(); i++)
         {
@@ -662,10 +665,10 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                m_kernel_bar.selected_metric == KernelInfo::InvocationCount ||
                m_kernel_bar.selected_metric == KernelInfo::DurationTotal)
             {
-                ImGui::PushID(i);
+                ImGui::PushID(static_cast<int>(i));
                 ImGui::SetCursorScreenPos(ImVec2(
                     ImGui::GetWindowPos().x + plot_style.PlotPadding.x,
-                    ImPlot::PlotToPixels(ImPlotPoint(0, i), IMPLOT_AUTO, IMPLOT_AUTO).y -
+                    ImPlot::PlotToPixels(ImPlotPoint(0, static_cast<double>(i)), IMPLOT_AUTO, IMPLOT_AUTO).y -
                         ImGui::GetFontSize() * 0.5f));
                 ElidedText(m_kernels[i]->name.c_str(),
                            y_axis_width - plot_style.LabelPadding.x,
@@ -679,7 +682,7 @@ ComputeTopKernels::RenderBarChart(const ImPlotStyle& plot_style, TimeFormat time
                 const ImU64 bar_value = static_cast<ImU64>(
                     m_kernels[i]->dispatch_metrics[m_kernel_bar.selected_metric]);
                 ImPlot::PlotBars(m_kernels[i]->name.c_str(), &bar_value, 1,
-                                 BAR_CHART_THICKNESS, i, ImPlotBarsFlags_Horizontal);
+                                 BAR_CHART_THICKNESS, static_cast<double>(i), ImPlotBarsFlags_Horizontal);
                 if(i == m_hovered_idx)
                 {
                     ImPlot::PopColormap();
@@ -708,6 +711,7 @@ void
 ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format,
                                std::optional<size_t>& hovered_idx)
 {
+    (void) plot_style;
     if(ImGui::BeginTable(
            "Table", 2 + KernelInfo::NumMetrics,
            ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable))
@@ -744,7 +748,7 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
         ImGui::TableHeadersRow();
         for(size_t i = 0; i < m_kernels.size(); i++)
         {
-            ImGui::PushID(i);
+            ImGui::PushID(static_cast<int>(i));
             ImGui::PushStyleColor(ImGuiCol_Header,
                                   m_settings.GetColor(Colors::kSelection));
             ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
@@ -775,7 +779,7 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
                        ImGui::GetWindowWidth() * 0.5f);
             for(size_t j = 0; j < m_kernels[i]->dispatch_metrics.size(); j++)
             {
-                ImGui::TableSetColumnIndex(2 + j);
+                ImGui::TableSetColumnIndex(static_cast<int>(2 + j));
                 KernelInfo::DispatchMetric metric =
                     static_cast<KernelInfo::DispatchMetric>(j);
                 switch(metric)
@@ -850,7 +854,7 @@ ComputeTopKernels::RenderPlotTooltip(KernelInfo::DispatchMetric metric,
                     ImGui::Text(
                         "%s: %s", DISPLAY_STRING_METRICS[metric],
                         nanosecond_to_formatted_str(
-                            m_kernels[m_hovered_idx.value()]->dispatch_metrics[metric],
+                            static_cast<double>(m_kernels[m_hovered_idx.value()]->dispatch_metrics[metric]),
                             time_format, true)
                             .c_str());
                     break;

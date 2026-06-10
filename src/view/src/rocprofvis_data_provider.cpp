@@ -505,13 +505,13 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
             {
                 for(int bin_num = 0; bin_num < num_buckets; bin_num++)
                 {
-                    double binval;
-                    result = rocprofvis_controller_get_double(
+                    uint64_t binval = 0;
+                    result = rocprofvis_controller_get_uint64(
                         track, kRPVControllerTrackHistogramBucketDensityIndexed, bin_num,
                         &binval);
 
-                    histogram_track[bin_num] = binval;
-                    histogram[bin_num] += binval;
+                    histogram_track[bin_num] = static_cast<double>(binval);
+                    histogram[bin_num] += static_cast<double>(binval);
                 }
             }
 

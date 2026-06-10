@@ -184,7 +184,7 @@ void Future::ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_d
         {
             future->m_progress_percentage += progress.second;
         }
-        future->m_progress_percentage /= future->m_progress_map.size();
+        future->m_progress_percentage /= static_cast<uint16_t>(future->m_progress_map.size());
         future->m_progress_message = message ? message : "";
     }
 }

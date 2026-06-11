@@ -11,7 +11,7 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr char* TITLE_LABEL = "Select Metric";
+constexpr const char* TITLE_LABEL = "Select Metric";
 
 QueryBuilder::QueryBuilder()
 {

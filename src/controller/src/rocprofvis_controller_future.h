@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_job_system.h"
+#include "remote/rocprofvis_controller_remote_future.h"
 #include "rocprofvis_c_interface.h"
 #include <string>
 #include <unordered_map>
@@ -41,6 +42,14 @@ public:
     void ResetProgress();
     static void ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_db_future_id_t db_future_id, rocprofvis_db_progress_percent_t progress_percent, rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data);
 
+    void AskPrompts(const rocprofvis_controller_user_prompt_t& req);
+
+    void AddStdOut(char* stdout_buffer, uint64_t stdout_count);
+    void SaveError(std::string& err);
+    void SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t dowloaded);
+    void SetDownloaded(uint64_t size);
+	void FailRemote();
+
 private:
     Job* m_job;
     std::vector<rocprofvis_db_future_t> m_db_futures;
@@ -49,6 +58,9 @@ private:
     uint16_t m_progress_percentage;
     std::string m_progress_message;
     std::unordered_map<uint64_t, uint16_t> m_progress_map;
+
+    FutureRemote m_remote;
+
 };
 
 }

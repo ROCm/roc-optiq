@@ -11,6 +11,106 @@ set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Disable yaml-cpp tests")
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Disable yaml-cpp tools")
 add_subdirectory(yaml-cpp)
 
+set(ENABLE_ZLIB_COMPRESSION OFF)
+set(CRYPTO_BACKEND "OpenSSL" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
+
+if (CRYPTO_BACKEND STREQUAL "mbedTLS")
+
+	set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+	set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+	set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
+	set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+	set(BUILD_TESTING OFF)
+	set(BUILD_EXAMPLES OFF)
+	set(_prev_skip_install_rules ${CMAKE_SKIP_INSTALL_RULES})
+	set(CMAKE_SKIP_INSTALL_RULES ON)
+	add_subdirectory(mbedtls EXCLUDE_FROM_ALL)
+    set(CMAKE_SKIP_INSTALL_RULES ${_prev_skip_install_rules})
+	set(CRYPTO_BACKEND mbedTLS CACHE STRING "" FORCE)
+
+    	set(ENABLE_MBEDTLS ON CACHE BOOL "" FORCE)
+    	set(ENABLE_OPENSSL OFF CACHE BOOL "" FORCE)
+
+	set(MBEDTLS_FOUND TRUE)
+	set(MBEDTLS_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/mbedtls/include)
+	set(MBEDCRYPTO_LIBRARY mbedcrypto)
+	set(MBEDX509_LIBRARY mbedx509)
+	set(MBEDTLS_LIBRARY mbedtls)
+
+endif()
+
+if (CRYPTO_BACKEND STREQUAL "OpenSSL")
+
+	set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+	set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
+	set(BUILD_TESTING OFF)
+	set(BUILD_EXAMPLES OFF)
+
+    if (WIN32)
+        set(OPENSSL_ROOT_DIR "${CMAKE_SOURCE_DIR}/thirdparty/openssl/windows" CACHE FILEPATH "" FORCE)
+    elseif(APPLE)
+        set(OPENSSL_ROOT_DIR "${CMAKE_SOURCE_DIR}/thirdparty/openssl/macos" CACHE FILEPATH "" FORCE)
+    elseif(UNIX)
+        set(OPENSSL_ROOT_DIR "${CMAKE_SOURCE_DIR}/thirdparty/openssl/linux" CACHE FILEPATH "" FORCE)
+    endif()
+
+
+    add_library(OpenSSL::SSL SHARED IMPORTED GLOBAL)
+    add_library(OpenSSL::Crypto SHARED IMPORTED GLOBAL)
+
+    if (WIN32)
+	set_target_properties(OpenSSL::SSL PROPERTIES
+    	IMPORTED_IMPLIB "${OPENSSL_ROOT_DIR}/lib/libssl.lib"
+    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/bin/libssl-4-x64.dll"
+    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
+	)
+
+	set_target_properties(OpenSSL::Crypto PROPERTIES
+    	IMPORTED_IMPLIB "${OPENSSL_ROOT_DIR}/lib/libcrypto.lib"
+    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/bin/libcrypto-4-x64.dll"
+    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
+	)
+     endif()
+
+    if (LINUX)
+	set_target_properties(OpenSSL::SSL PROPERTIES
+    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/lib64/libssl.so.3"
+    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
+	)
+
+	set_target_properties(OpenSSL::Crypto PROPERTIES
+    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/lib64/libcrypto.so.3"
+    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
+	)
+     endif()
+
+
+    	set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
+    	set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
+
+endif()
+
+
+set(LIBSSH2_INSTALL OFF CACHE BOOL "" FORCE)
+set(LIBSSH2_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+
+add_subdirectory(libssh2)
+
+target_include_directories(libssh2_static PUBLIC 
+${CMAKE_SOURCE_DIR}/thirdparty/libssh2/include)
+
+if (CRYPTO_BACKEND STREQUAL "mbedTLS")
+	target_include_directories(libssh2_static PRIVATE
+    		${CMAKE_SOURCE_DIR}/thirdparty/mbedtls/include
+	)
+
+	target_link_libraries(libssh2_static PRIVATE
+    	mbedtls
+    	mbedx509
+    	mbedcrypto
+	)
+endif()
+
 add_library(imgui STATIC
     imgui/imgui.cpp
     imgui/imgui_draw.cpp

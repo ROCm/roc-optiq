@@ -25,6 +25,11 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#ifdef TEST_SSH_CONNECTION
+#include "remote/rocprofvis_ssh_uri.h"
+#include "remote/rocprofvis_ssh_access.h"
+#include "remote/rocprofvis_ssh_auth_modal.h"
+#endif
 #include "welcome/rocprofvis_welcome_page.h"
 #include <algorithm>
 #include <filesystem>
@@ -109,7 +114,18 @@ AppWindow::AppWindow()
 , m_restore_fullscreen_later(false)
 , m_next_provider_cleanup_id(0)
 , m_status_show_busy_indicator(false)
-{}
+#ifdef TEST_SSH_CONNECTION
+, m_remote_show_password(false)
+, m_remote_show_passphrase(false)
+, m_open_remote_dialog(false)
+, m_thread_running(false)
+, m_should_close_popup(false)
+#endif
+{
+#ifdef TEST_SSH_CONNECTION
+    m_remote_uri.LoadFromJson();
+#endif
+}
 
 AppWindow::~AppWindow()
 {
@@ -682,6 +698,17 @@ AppWindow::Render()
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
+#ifdef TEST_SSH_CONNECTION
+    if(m_open_remote_dialog)
+    {
+        ImGui::OpenPopup("SSH Test");
+        m_open_remote_dialog = false;
+    }
+    RenderRemoteOpenDialog();
+    RenderSshAuthModal(&m_ssh_access);
+    RenderRemoteProgressDialog();
+    RenderRemoteOutputDialog();
+#endif
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
     m_settings_panel->Render();
@@ -885,6 +912,12 @@ AppWindow::RenderFileMenu(Project* project)
         {
             HandleOpenFile();
         }
+#ifdef TEST_SSH_CONNECTION
+        if(ImGui::MenuItem("Open Remote...", nullptr, false, !is_open_file_dialog_open))
+        {
+            HandleOpenRemote();
+        }
+#endif
         if(ImGui::MenuItem("Save", nullptr, false,
                            !is_open_file_dialog_open && (project && project->IsProject())))
         {
@@ -1490,6 +1523,303 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
                                             filter_stream.str().c_str(), config);
 }
 
+#ifdef TEST_SSH_CONNECTION
+
+void
+AppWindow::HandleOpenRemote()
+{
+    m_open_remote_dialog       = true;
+    m_remote_status_msg.clear();
+}
+
+/**
+ * Render the modal dialog used to test opening a remote SSH target.
+ *
+ * This routine owns the complete immediate-mode UI flow for the SSH test popup:
+ * styling, input capture, triggering connection checks, and presenting status.
+ * Keeping these phases documented is important because this dialog coordinates
+ * several pieces of transient UI state in one large render function.
+ */
+void
+AppWindow::RenderRemoteOpenDialog()
+{
+    // Configure shared popup visuals and placement before creating modal content.
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+
+    // Keep the modal width stable while allowing height to auto-fit content.
+    ImGui::SetNextWindowSize(ImVec2(560, 0));
+
+    // Render and process the SSH test modal while it is open.
+    if (ImGui::BeginPopupModal("SSH Test", nullptr,
+        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+    {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        const float label_w = 110.0f;
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Host"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputText("##rhost", m_remote_uri.GetRemoteHostBuffer(), m_remote_uri.GetRemoteHostBufferSize());
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Port"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputText("##rport", m_remote_uri.GetRemotePortBuffer(), m_remote_uri.GetRemotePortBufferSize());
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("User"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputText("##ruser", m_remote_uri.GetRemoteUserBuffer(), m_remote_uri.GetRemoteUserBufferSize());
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Password"); ImGui::SameLine(label_w);
+        ImGuiInputTextFlags pwd_flags = m_remote_show_password ? 0 : ImGuiInputTextFlags_Password;
+        ImGui::SetNextItemWidth(-FLT_MIN - 90.0f);
+        ImGui::InputText("##rpass", m_remote_uri.GetRemotePasswordBuffer(), m_remote_uri.GetRemotePasswordBufferSize(), pwd_flags);
+        ImGui::SameLine();
+        ImGui::Checkbox("Show", &m_remote_show_password);
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Profiler command line"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##rcommand", "/path/to/executable [parameters]",
+            m_remote_uri.GetRemoteCommandLineBuffer(), m_remote_uri.GetRemoteCommandLineBufferSize());
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Profiler output database"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##rpath", "/path/to/file.db",
+            m_remote_uri.GetRemoteResultPathBuffer(), m_remote_uri.GetRemoteResultPathBufferSize());
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("SSH Key"); ImGui::SameLine(label_w);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint(
+            "##rkey",
+            "Optional - path to private key (e.g. ~/.ssh/id_ed25519). Leave blank for default keys or password.",
+            m_remote_uri.GetRemoteIdentityFileBuffer(), m_remote_uri.GetRemoteIdentityFileBufferSize());
+
+        ImGui::AlignTextToFramePadding(); ImGui::Text("Key Passphrase"); ImGui::SameLine(label_w);
+        ImGuiInputTextFlags pass_flags =
+            m_remote_show_passphrase ? 0 : ImGuiInputTextFlags_Password;
+        ImGui::SetNextItemWidth(-FLT_MIN - 90.0f);
+        ImGui::InputTextWithHint(
+            "##rkeypass", "Leave blank if key is unencrypted or loaded in ssh-agent",
+            m_remote_uri.GetPassphraseBuffer(), m_remote_uri.GetPassphraseBufferSize(), pass_flags);
+        ImGui::SameLine();
+        ImGui::Checkbox("Show##kpshow", &m_remote_show_passphrase);
+
+        ImGui::Spacing();
+
+        if (!m_remote_status_msg.empty())
+        {
+            ImVec4 color = ImVec4(1.0f, 0.5f, 0.3f, 1.0f);
+            ImGui::TextColored(color, "%s", m_remote_status_msg.c_str());
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        bool can_authenticate = !m_remote_uri.GetRemotePasswordString().empty() || !m_remote_uri.GetRemoteIdentityFileString().empty();
+        bool has_remote_path = !m_remote_uri.GetRemoteCommandLineString().empty() || !m_remote_uri.GetRemoteResultPathString().empty();
+        bool can_open = !m_remote_uri.GetRemoteHostString().empty() && !m_remote_uri.GetRemoteUserString().empty() && has_remote_path && can_authenticate;
+        if (!can_open) ImGui::BeginDisabled();
+        if (!m_thread_running)
+        {
+            if (ImGui::Button("Open", ImVec2(110, 0)))
+            {
+                if (!m_remote_uri.SaveToJson())
+                {
+                    m_remote_status_msg =
+                        "Failed to backup authentication parameters.";
+                }
+                m_thread_running = true;
+                m_should_close_popup = true;
+                std::thread([&]()
+                    {
+                        
+                        while (true)
+                        {
+                            m_remote_status_msg = "Connecting...";
+                            rocprofvis_result_t result = m_ssh_access.Connect(&m_remote_uri);
+                            if (result != kRocProfVisResultSuccess)
+                            {
+                                m_remote_status_msg = "SSH connection failed.";
+                                break;
+                            }
+
+                            result = m_ssh_access.Authenticate(&m_remote_uri);
+                            if (result != kRocProfVisResultSuccess)
+                            {
+                                m_remote_status_msg = "SSH authentication failed.";
+                                break;
+                            }
+
+                            if (!m_remote_uri.GetRemoteCommandLineString().empty())
+                            {
+                                m_remote_status_msg = std::string("Executing command (") + m_remote_uri.GetRemoteCommandLineString() + ")";
+                                result = m_ssh_access.Execute(&m_remote_uri);
+                            }
+
+                            if (result != kRocProfVisResultSuccess)
+                            {
+                                m_remote_status_msg = "CLI execution failed. Check remote command syntax and try again.";
+                                break;
+                            }
+
+                            if (!m_remote_uri.GetRemoteResultPathString().empty())
+                            {
+
+                                m_remote_status_msg = std::string("Downloading (") + m_remote_uri.GetRemoteResultPathString() + ")";
+                                result = m_ssh_access.Download(&m_remote_uri);
+
+                                if (result == kRocProfVisResultSuccess)
+                                {
+                                    
+                                    OpenFile( m_remote_uri.GetLocalResultPathString());
+                                }
+                                else
+                                {
+                                    m_remote_status_msg =
+                                        "Result database download failed. Check profiler result path and try again.";
+                                }
+                            }
+
+                            break;
+                        }
+
+                        if (m_ssh_access.IsConnected())
+                        {
+                            m_ssh_access.Disconnect();
+                        }
+
+                        m_thread_running = false;
+                    }).detach();
+            }
+
+        }
+        else
+        {
+            ImGui::Text("Working...");
+        }
+
+        if (!can_open) ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        if (!m_thread_running)
+        {
+            if (ImGui::Button("Cancel", ImVec2(110, 0)))
+            {
+                m_should_close_popup = true;
+            }
+            if (m_should_close_popup)
+            {
+                ImGui::CloseCurrentPopup();
+                m_should_close_popup = false;
+            }
+        }
+
+        ImGui::EndPopup();
+    }
+    // Always restore style state after modal rendering to avoid leaking UI styles.
+    popup_style.PopStyles();
+}
+
+
+void AppWindow::RenderRemoteProgressDialog()
+{
+    if (auto fetch = m_ssh_access.GetFileStat()->consume_if_updated())
+    {
+        m_last_progress = *fetch;
+
+        if (!m_show_progress_popup)
+        {
+            m_show_progress_popup = true;
+            ImGui::OpenPopup("Remote Download");
+        }
+    }
+
+    if (m_show_progress_popup)
+    {
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+        popup_style.CenterPopup();
+        ImGui::SetNextWindowSize(ImVec2(440, 0));
+
+        if (ImGui::BeginPopupModal("Remote Download", nullptr,
+            ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoTitleBar))
+        {
+            const auto& fetch = m_last_progress;
+
+            ImGui::Text("Downloading: %s", fetch.name.c_str());
+
+            uint64_t done = fetch.downloaded;
+            uint64_t total = fetch.size;
+
+            if (total > 0)
+            {
+                float frac = static_cast<float>(done) / static_cast<float>(total);
+
+                std::string label =
+                    std::to_string(done / 1024) + " / " +
+                    std::to_string(total / 1024) + " KiB";
+
+                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
+            }
+            else
+            {
+                ImGui::Text("Connecting...");
+            }
+
+            if (total > 0 && done >= total)
+            {
+                ImGui::CloseCurrentPopup();
+                m_show_progress_popup = false;
+            }
+
+            ImGui::EndPopup();
+        }
+
+        popup_style.PopStyles();
+    }
+}
+
+void
+AppWindow::RenderRemoteOutputDialog()
+{
+    if (auto fetch = m_ssh_access.GetExecutionOutput()->consume_if_updated())
+    {
+        m_last_stdout = *fetch;
+        if (!m_show_remote_stdout_popup)
+        {
+            m_show_remote_stdout_popup = true;
+            ImGui::OpenPopup("Remote Execute");
+        }
+    }
+
+    if (m_show_remote_stdout_popup)
+    {
+        if (ImGui::BeginPopupModal("Remote Execute", nullptr))
+        {
+            ImGui::BeginChild("output", ImVec2(0, 0), true);
+            ImGui::TextUnformatted(m_last_stdout.text.c_str());
+            ImGui::EndChild();
+
+            if (m_last_stdout.finished)
+            {
+                ImGui::CloseCurrentPopup();
+                m_show_remote_stdout_popup = false;
+            }
+
+            ImGui::EndPopup();
+        }
+    }
+}
+
+#endif
+
 void
 AppWindow::UpdateStatusBar()
 {
@@ -1536,8 +1866,7 @@ AppWindow::UpdateStatusBar()
     }
 }
 
-void
-AppWindow::RenderStatusBar()
+void AppWindow::RenderStatusBar()
 {
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = settings.GetDefaultStyle();

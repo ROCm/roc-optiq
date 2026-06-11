@@ -924,7 +924,7 @@ KernelMetricTable::RenderBarChartContextMenu(int col)
     if(ImGui::BeginPopupContextItem("##bar_ctx"))
     {
         bool has_bars = m_bar_chart_columns.count(col) > 0;
-        if(ImGui::MenuItem(has_bars ? "Hide Bar Chart" : "Show Bar Chart"))
+        if(IconMenuItem(ICON_CHART_BAR, has_bars ? "Hide Bar Chart" : "Show Bar Chart"))
         {
             if(has_bars)
             {

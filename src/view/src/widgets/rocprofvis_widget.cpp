@@ -102,9 +102,12 @@ WithPadding(float left, float right, float top, float bottom,
 }
 
 bool
-IconMenuItem(const char* icon, const char* label)
+IconMenuItem(const char* icon, const char* label, bool enabled)
 {
     ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+
+    if(!enabled)
+        ImGui::BeginDisabled();
 
     bool clicked = ImGui::Selectable(("##menu_item" + std::string(label)).c_str(), false,
                                      ImGuiSelectableFlags_SpanAllColumns,
@@ -118,6 +121,9 @@ IconMenuItem(const char* icon, const char* label)
     ImGui::SameLine(0.f, ImGui::GetStyle().ItemSpacing.x);
     ImGui::TextUnformatted(label);
     ImGui::EndGroup();
+
+    if(!enabled)
+        ImGui::EndDisabled();
 
     if(clicked)
         ImGui::CloseCurrentPopup();

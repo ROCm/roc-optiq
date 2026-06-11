@@ -10,6 +10,8 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <sstream>
 
@@ -122,6 +124,30 @@ IconMenuItem(const char* icon, const char* label)
     if(clicked)
         ImGui::CloseCurrentPopup();
     return clicked;
+}
+
+bool
+IconBeginMenu(const char* icon, const char* label)
+{
+    ImFont* icon_font =
+        SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImVec2      row_start = ImGui::GetCursorScreenPos();
+    float       font_size = ImGui::GetFontSize();
+    float       icon_w    = icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon).x;
+    float       space_w   = ImGui::CalcTextSize(" ").x;
+    float       gap       = ImGui::GetStyle().ItemInnerSpacing.x;
+
+    int pad_spaces =
+        space_w > 0.0f ? static_cast<int>(std::ceil((icon_w + gap) / space_w)) : 1;
+    std::string padded_label(static_cast<size_t>(std::max(pad_spaces, 1)), ' ');
+    padded_label += label;
+
+    bool open = ImGui::BeginMenu(padded_label.c_str());
+
+    draw_list->AddText(icon_font, font_size, row_start,
+                       ImGui::GetColorU32(ImGuiCol_Text), icon);
+    return open;
 }
 
 bool

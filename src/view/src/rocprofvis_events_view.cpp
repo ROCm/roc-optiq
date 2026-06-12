@@ -11,6 +11,9 @@
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
+#include <array>
+#include <vector>
+
 namespace RocProfVis
 {
 namespace View
@@ -23,6 +26,9 @@ constexpr ImGuiTableFlags TABLE_FLAGS = ImGuiTableFlags_BordersOuter |
 
 constexpr int kFlowColumnCount      = 6;
 constexpr int kCallStackColumnCount = 5;
+constexpr int kArgColumnCount       = 4;
+constexpr int kBasicColumnCount     = 2;
+constexpr int kExtColumnCount       = 2;
 
 namespace
 {
@@ -63,6 +69,12 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_context_menu_flow_column(-1)
 , m_context_menu_callstack_index(-1)
 , m_context_menu_callstack_column(-1)
+, m_context_menu_arg_index(-1)
+, m_context_menu_arg_column(-1)
+, m_context_menu_basic_index(-1)
+, m_context_menu_basic_column(-1)
+, m_context_menu_ext_index(-1)
+, m_context_menu_ext_column(-1)
 {
     static_assert(CallStackHoverState::kInvalidId ==
                       TimelineSelection::INVALID_SELECTION_ID,
@@ -214,30 +226,95 @@ EventsView::RenderBasicData(const EventInfo* event_data)
     std::string duration_label = nanosecond_to_formatted_str(info.duration,
                                                              time_format, true);
 
-    if(ImGui::BeginTable("EventSummaryTable", 2,
+    std::vector<std::array<std::string, kBasicColumnCount>> rows = {
+        { std::string("ID"), db_id_label },
+        { std::string("Name"), info.name },
+        { std::string("Start"), start_label },
+        { std::string("Duration"), duration_label },
+    };
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    rows.push_back({ std::string("Level"), std::to_string(info.level) });
+#endif
+
+    if(ImGui::BeginTable("EventSummaryTable", kBasicColumnCount,
                          ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings))
     {
         ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::GetFontSize() * 8.5f);
         ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
-        const auto row = [&](const char* label, const char* value, const char* id) {
+        bool open_basic_context_menu = false;
+
+        for(int i = 0; i < static_cast<int>(rows.size()); i++)
+        {
+            std::string row_str = std::to_string(i);
+
+            ImGui::PushID(i);
             ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::TextDisabled("%s", label);
-            ImGui::TableNextColumn();
-            CopyableTextUnformatted(value, id, DATA_COPIED_NOTIFICATION, false, true);
-        };
+            ImGui::TableSetColumnIndex(0);
 
-        row("ID", db_id_label.c_str(), "ID");
-        row("Name", info.name.c_str(), "Name");
-        row("Start", start_label.c_str(), "Start_time");
-        row("Duration", duration_label.c_str(), "Duration");
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+            ImGui::Selectable(("##basic_sel_" + row_str).c_str(), false,
+                              ImGuiSelectableFlags_SpanAllColumns |
+                                  ImGuiSelectableFlags_AllowOverlap,
+                              ImVec2(0.0f, 0.0f));
+            if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+            {
+                m_context_menu_basic_index = i;
+                int hovered_col            = ImGui::TableGetHoveredColumn();
+                m_context_menu_basic_column =
+                    (hovered_col >= 0 && hovered_col < kBasicColumnCount) ? hovered_col
+                                                                         : 0;
+                open_basic_context_menu = true;
+            }
+            ImGui::PopStyleColor(3);
 
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-        std::string level_label = std::to_string(info.level);
-        row("Level", level_label.c_str(), "Level");
-#endif
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", rows[i][0].c_str());
+            ImGui::TableSetColumnIndex(1);
+            CopyableTextUnformatted(rows[i][1].c_str(), "##basic_value",
+                                    DATA_COPIED_NOTIFICATION, false, false);
+            ImGui::PopID();
+        }
+
+        if(open_basic_context_menu)
+        {
+            ImGui::OpenPopup("##BasicContextMenu");
+        }
+
+        auto style = m_settings.GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+        if(ImGui::BeginPopup("##BasicContextMenu"))
+        {
+            if(m_context_menu_basic_index >= 0 &&
+               m_context_menu_basic_index < static_cast<int>(rows.size()))
+            {
+                const auto& ctx_row = rows[m_context_menu_basic_index];
+
+                if(ImGui::MenuItem("Copy Row Data"))
+                {
+                    std::string row_text;
+                    for(int c = 0; c < kBasicColumnCount; c++)
+                    {
+                        if(c > 0) row_text += '\t';
+                        row_text += ctx_row[c];
+                    }
+                    ImGui::SetClipboardText(row_text.c_str());
+                }
+                if(ImGui::MenuItem("Copy Cell Data"))
+                {
+                    int col = m_context_menu_basic_column;
+                    if(col >= 0 && col < kBasicColumnCount)
+                        ImGui::SetClipboardText(ctx_row[col].c_str());
+                }
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
+
         ImGui::EndTable();
     }
     return true;
@@ -262,23 +339,15 @@ EventsView::RenderEventExtData(const EventInfo* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("ExtDataTable", 2, TABLE_FLAGS))
+            if(ImGui::BeginTable("ExtDataTable", kExtColumnCount, TABLE_FLAGS))
             {
                 ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed);
                 ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
-                double     offset_ns = 0;
                 TimeFormat time_format =
                     m_settings.GetUserSettings().unit_settings.time_format;
 
-                for(size_t i = 0; i < event_data->ext_info.size(); ++i)
-                {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    CopyableTextUnformatted(event_data->ext_info[i].name.c_str(),
-                                            std::to_string(i), COPY_DATA_NOTIFICATION,
-                                            false, true);
-                    ImGui::TableSetColumnIndex(1);
-
+                auto format_ext_value = [&](int i) -> std::string {
+                    double offset_ns = 0;
                     switch(event_data->ext_info[i].category_enum)
                     {
                         case kRocProfVisEventEssentialDataStart:
@@ -286,23 +355,92 @@ EventsView::RenderEventExtData(const EventInfo* event_data)
                             offset_ns =
                                 m_data_provider.DataModel().GetTimeline().GetStartTime();
                         case kRocProfVisEventEssentialDataDuration:
-                        {
-                            CopyableTextUnformatted(nanosecond_str_to_formatted_str(
-                                                        event_data->ext_info[i].value,
-                                                        offset_ns, time_format, true)
-                                                        .c_str(),
-                                                    std::to_string(i),
-                                                    COPY_DATA_NOTIFICATION, false, true);
-                            offset_ns = 0;
-                            break;
-                        }
+                            return nanosecond_str_to_formatted_str(
+                                event_data->ext_info[i].value, offset_ns, time_format,
+                                true);
                         default:
-                            CopyableTextUnformatted(event_data->ext_info[i].value.c_str(),
-                                                    std::to_string(i),
-                                                    COPY_DATA_NOTIFICATION, false, true);
-                            break;
+                            return event_data->ext_info[i].value;
                     }
+                };
+
+                bool open_ext_context_menu = false;
+
+                for(int i = 0; i < static_cast<int>(event_data->ext_info.size()); i++)
+                {
+                    std::string row_str = std::to_string(i);
+
+                    ImGui::PushID(i);
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+
+                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+                    ImGui::Selectable(("##ext_sel_" + row_str).c_str(), false,
+                                      ImGuiSelectableFlags_SpanAllColumns |
+                                          ImGuiSelectableFlags_AllowOverlap,
+                                      ImVec2(0.0f, 0.0f));
+                    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+                    {
+                        m_context_menu_ext_index = i;
+                        int hovered_col          = ImGui::TableGetHoveredColumn();
+                        m_context_menu_ext_column =
+                            (hovered_col >= 0 && hovered_col < kExtColumnCount)
+                                ? hovered_col
+                                : 0;
+                        open_ext_context_menu = true;
+                    }
+                    ImGui::PopStyleColor(3);
+
+                    ImGui::SameLine();
+                    CopyableTextUnformatted(event_data->ext_info[i].name.c_str(),
+                                            "##ext_name", COPY_DATA_NOTIFICATION, false,
+                                            false);
+                    ImGui::TableSetColumnIndex(1);
+                    CopyableTextUnformatted(format_ext_value(i).c_str(), "##ext_value",
+                                            COPY_DATA_NOTIFICATION, false, false);
+                    ImGui::PopID();
                 }
+
+                if(open_ext_context_menu)
+                {
+                    ImGui::OpenPopup("##ExtContextMenu");
+                }
+
+                auto style = m_settings.GetDefaultStyle();
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+                if(ImGui::BeginPopup("##ExtContextMenu"))
+                {
+                    if(m_context_menu_ext_index >= 0 &&
+                       m_context_menu_ext_index <
+                           static_cast<int>(event_data->ext_info.size()))
+                    {
+                        std::string cells[kExtColumnCount] = {
+                            event_data->ext_info[m_context_menu_ext_index].name,
+                            format_ext_value(m_context_menu_ext_index) };
+
+                        if(ImGui::MenuItem("Copy Row Data"))
+                        {
+                            std::string row_text;
+                            for(int c = 0; c < kExtColumnCount; c++)
+                            {
+                                if(c > 0) row_text += '\t';
+                                row_text += cells[c];
+                            }
+                            ImGui::SetClipboardText(row_text.c_str());
+                        }
+                        if(ImGui::MenuItem("Copy Cell Data"))
+                        {
+                            int col = m_context_menu_ext_column;
+                            if(col >= 0 && col < kExtColumnCount)
+                                ImGui::SetClipboardText(cells[col].c_str());
+                        }
+                    }
+                    ImGui::EndPopup();
+                }
+                ImGui::PopStyleVar(2);
+
                 ImGui::EndTable();
             }
         }
@@ -737,37 +875,109 @@ EventsView::RenderArgumentData(const EventInfo* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("EventArgTable", 4, TABLE_FLAGS))
+            if(ImGui::BeginTable("EventArgTable", kArgColumnCount, TABLE_FLAGS))
             {
                 ImGui::TableSetupColumn("Pos");
                 ImGui::TableSetupColumn("Type");
                 ImGui::TableSetupColumn("Name");
                 ImGui::TableSetupColumn("Value");
                 ImGui::TableHeadersRow();
+
+                bool open_arg_context_menu = false;
+
+                auto arg_cell = [&](int col, const char* text, std::string_view col_id) {
+                    if(col > 0)
+                        ImGui::TableSetColumnIndex(col);
+                    else
+                        ImGui::SameLine();
+                    CopyableTextUnformatted(text, col_id, COPY_DATA_NOTIFICATION, false,
+                                            false);
+                };
+
                 ImGuiListClipper clipper;
                 clipper.Begin(static_cast<int>(event_data->args.size()));
                 while(clipper.Step())
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
+                        std::string row_str = std::to_string(i);
+
                         ImGui::PushID(i);
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
-                        CopyableTextUnformatted(
-                            std::to_string(event_data->args[i].position).c_str(), "",
-                            COPY_DATA_NOTIFICATION, false, true);
-                        ImGui::TableSetColumnIndex(1);
-                        CopyableTextUnformatted(event_data->args[i].data_type.c_str(), "",
-                                                COPY_DATA_NOTIFICATION, false, true);
-                        ImGui::TableSetColumnIndex(2);
-                        CopyableTextUnformatted(event_data->args[i].name.c_str(), "",
-                                                COPY_DATA_NOTIFICATION, false, true);
-                        ImGui::TableSetColumnIndex(3);
-                        CopyableTextUnformatted(event_data->args[i].value.c_str(), "",
-                                                COPY_DATA_NOTIFICATION, false, true);
+
+                        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+                        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+                        ImGui::Selectable(("##arg_sel_" + row_str).c_str(), false,
+                                          ImGuiSelectableFlags_SpanAllColumns |
+                                              ImGuiSelectableFlags_AllowOverlap,
+                                          ImVec2(0.0f, 0.0f));
+                        if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+                        {
+                            m_context_menu_arg_index = i;
+                            int hovered_col          = ImGui::TableGetHoveredColumn();
+                            m_context_menu_arg_column =
+                                (hovered_col >= 0 && hovered_col < kArgColumnCount)
+                                    ? hovered_col
+                                    : 0;
+                            open_arg_context_menu = true;
+                        }
+                        ImGui::PopStyleColor(3);
+
+                        std::string pos_str =
+                            std::to_string(event_data->args[i].position);
+
+                        arg_cell(0, pos_str.c_str(), "##arg_pos");
+                        arg_cell(1, event_data->args[i].data_type.c_str(), "##arg_type");
+                        arg_cell(2, event_data->args[i].name.c_str(), "##arg_name");
+                        arg_cell(3, event_data->args[i].value.c_str(), "##arg_value");
                         ImGui::PopID();
                     }
                 }
+
+                if(open_arg_context_menu)
+                {
+                    ImGui::OpenPopup("##ArgContextMenu");
+                }
+
+                auto style = m_settings.GetDefaultStyle();
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+                if(ImGui::BeginPopup("##ArgContextMenu"))
+                {
+                    if(m_context_menu_arg_index >= 0 &&
+                       m_context_menu_arg_index <
+                           static_cast<int>(event_data->args.size()))
+                    {
+                        const auto& ctx_arg =
+                            event_data->args[m_context_menu_arg_index];
+
+                        std::string cells[] = { std::to_string(ctx_arg.position),
+                                                ctx_arg.data_type, ctx_arg.name,
+                                                ctx_arg.value };
+
+                        if(ImGui::MenuItem("Copy Row Data"))
+                        {
+                            std::string row_text;
+                            for(int c = 0; c < kArgColumnCount; c++)
+                            {
+                                if(c > 0) row_text += '\t';
+                                row_text += cells[c];
+                            }
+                            ImGui::SetClipboardText(row_text.c_str());
+                        }
+                        if(ImGui::MenuItem("Copy Cell Data"))
+                        {
+                            int col = m_context_menu_arg_column;
+                            if(col >= 0 && col < kArgColumnCount)
+                                ImGui::SetClipboardText(cells[col].c_str());
+                        }
+                    }
+                    ImGui::EndPopup();
+                }
+                ImGui::PopStyleVar(2);
+
                 ImGui::EndTable();
             }
         }

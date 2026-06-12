@@ -80,6 +80,12 @@ private:
     int                                      m_context_menu_flow_column;
     int                                      m_context_menu_callstack_index;
     int                                      m_context_menu_callstack_column;
+    int                                      m_context_menu_arg_index;
+    int                                      m_context_menu_arg_column;
+    int                                      m_context_menu_basic_index;
+    int                                      m_context_menu_basic_column;
+    int                                      m_context_menu_ext_index;
+    int                                      m_context_menu_ext_column;
     FlowHighlightState                       m_flow_hover;
     FlowHighlightState                       m_frame_flow_hover;
     CallStackHoverState                      m_callstack_hover;

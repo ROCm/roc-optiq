@@ -426,7 +426,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         // right-click landed.
         if(m_timeline_selection->HasSelectedEvents())
         {
-            if(IconMenuItem(ICON_GRID, "Make Time Range Selection"))
+            if(IconMenuItem(ICON_EXPAND, "Make Time Range Selection"))
             {
                 double start_ts, end_ts;
                 if(m_timeline_selection->GetSelectedEventsTimeRange(start_ts, end_ts))
@@ -475,14 +475,14 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         MeasurementController& fm = *m_measurement;
         if(fm.IsMeasurementMode())
         {
-            if(IconMenuItem(ICON_COMPASS, "Exit Measurement Mode"))
+            if(IconMenuItem(ICON_CROP, "Exit Measurement Mode"))
             {
                 fm.ExitMeasurementMode();
             }
         }
         else
         {
-            if(IconMenuItem(ICON_COMPASS, "Enter Measurement Mode"))
+            if(IconMenuItem(ICON_CROP, "Enter Measurement Mode"))
             {
                 fm.EnterMeasurementMode();
             }

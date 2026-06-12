@@ -585,7 +585,7 @@ InfiniteScrollTable::RenderContextMenu()
             m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
         if(target_track_id != INVALID_UINT64_INDEX)
         {
-            if(IconMenuItem(ICON_COMPASS,
+            if(IconMenuItem(ICON_ARROW_FORWARD,
                             m_table_type == TableType::kSampleTable ? "Go To Sample"
                                                                     : "Go To Event",
                             target_track_id != INVALID_UINT64_INDEX))

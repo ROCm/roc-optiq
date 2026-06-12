@@ -22,6 +22,7 @@ constexpr ImWchar icon_ranges[] = {
     0xF35C, 0xF35D,
     0xF366, 0xF366,
     0xF37E, 0xF37F,
+    0xF386, 0xF386,
     0xF39C, 0xF39C,
     0xF3A8, 0xF3A8,
     0xF424, 0xF424,
@@ -29,6 +30,7 @@ constexpr ImWchar icon_ranges[] = {
     0xF472, 0xF472,
     0xF484, 0xF484,
     0xF41B, 0xF41B,
+    0xF41E, 0xF41E,
     0xF30F, 0xF30F,
     0
 };
@@ -53,6 +55,7 @@ inline constexpr const char* ICON_ARROW_DOWN    = u8"\uF35D";
 inline constexpr const char* ICON_ARROW_UP      = u8"\uF366";
 inline constexpr const char* ICON_EDIT          = u8"\uF37E";
 inline constexpr const char* ICON_TRASH_CAN     = u8"\uF37F";
+inline constexpr const char* ICON_EXPAND        = u8"\uF386";
 inline constexpr const char* ICON_OPEN          = u8"\uF39C";
 inline constexpr const char* ICON_ARROWS_CYCLE  = u8"\uF3A8";
 inline constexpr const char* ICON_EYE_THIN      = u8"\uF424";
@@ -60,6 +63,7 @@ inline constexpr const char* ICON_LIST          = u8"\uF454";
 inline constexpr const char* ICON_STICKY_NOTE   = u8"\uF472";
 inline constexpr const char* ICON_CHART_PIE     = u8"\uF484";
 inline constexpr const char* ICON_COPY          = u8"\uF41B";
+inline constexpr const char* ICON_CROP          = u8"\uF41E";
 inline constexpr const char* ICON_ARROW_FORWARD = u8"\uF30F";
 
 }  // namespace View

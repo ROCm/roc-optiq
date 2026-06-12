@@ -465,7 +465,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         const auto& ctx_flow =
                             event_data->flow_info[m_context_menu_flow_index];
 
-                        if(IconMenuItem(ICON_COMPASS, "Go To Event"))
+                        if(IconMenuItem(ICON_ARROW_FORWARD, "Go To Event"))
                         {
                             m_timeline_selection->NavigateToEvent(
                                 ctx_flow.track_id, ctx_flow.id.uuid,
@@ -681,7 +681,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                         const auto& ctx_frame =
                             event_data->call_stack_info[m_context_menu_callstack_index];
 
-                        if(IconMenuItem(ICON_COMPASS, "Go To Event"))
+                        if(IconMenuItem(ICON_ARROW_FORWARD, "Go To Event"))
                         {
                             navigate_to_frame(ctx_frame.id.uuid);
                         }

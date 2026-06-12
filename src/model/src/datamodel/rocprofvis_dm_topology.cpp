@@ -31,9 +31,10 @@ TopologyNode* TopologyNode::GetRootNode() {
 	}
 }
 
-rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, uint64_t db_instance, rocprofvis_db_topology_data_type_t type, const char* value) {
+rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, rocprofvis_db_instance_t db_instance, rocprofvis_db_topology_data_type_t type, const char* value) {
 	auto props_map = GetPropertiesMap();
 	auto it = props_map->find(name);
+	DbInstance* db_instance_ptr = (DbInstance*)db_instance;
 	if (it != props_map->end())
 	{
 		bool is_topology_id =
@@ -43,16 +44,27 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, uint64
 			it->second == kRPVControllerStreamId;
 		switch (type)
 		{
-			case kRPVTopologyDataTypeInt:
+		case kRPVTopologyDataTypeInt:
+		{
+			uint64_t ival = std::atoll(value);
+			if (is_topology_id)
 			{
-				uint64_t ival = std::atoll(value);
-				if (is_topology_id)
-				{
-					ival |= db_instance << 54;
-				}
-				m_properties[it->second] = ival;
-				break;
+				ival |= (uint64_t)db_instance_ptr->GuidIndex() << TOPOLOGY_INSTANCE_BIT_POS;
 			}
+			auto prop_it = m_properties.find(it->second);
+			if (prop_it == m_properties.end())
+			{
+				m_properties[it->second] = ival;
+			}
+			else
+			{
+				if (it->second == kRPVControllerProcessorId)
+				{
+					db_instance_ptr->SetProcessInstance(std::get<uint64_t>(prop_it->second) >> TOPOLOGY_INSTANCE_BIT_POS);
+				}
+			}
+			break;
+		}
 			case kRPVTopologyDataTypeDouble:
 			{
 				double dval = std::atof(value);
@@ -87,11 +99,10 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, uint64
 
 
 rocprofvis_dm_result_t   TopologyNodeRoot::AddProperty(rocprofvis_dm_track_identifiers_t* track_identifiers, rocprofvis_db_topology_data_type_t type, const char* table, const char* name, void* value) {
-	DbInstance* db_instance = (DbInstance*)track_identifiers->db_instance;
 	TopologyNode* node = FindRelevantPropertyNode(track_identifiers, table);
 	if (node)
 	{
-		node->SetBasicProperty(name, db_instance->GuidIndex(), type, (const char*)value);
+		node->SetBasicProperty(name, track_identifiers->db_instance, type, (const char*)value);
 	}
 
 	node = FindRelevantTopologyNode(track_identifiers, table);

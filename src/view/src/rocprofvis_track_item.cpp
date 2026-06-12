@@ -23,6 +23,8 @@ inline constexpr float    DEFAULT_GRIP_WIDTH             = 20.0f;
 inline constexpr uint64_t DEFAULT_CHUNK_DURATION         = TimeConstants::ns_per_s * 30;
 inline constexpr float    META_TOOLTIP_MAX_WIDTH         = 320.0f;
 inline constexpr uint64_t META_TOOLTIP_COMPACT_COUNT_MIN = 1000;
+inline constexpr float    NAME_LABEL_HITBOX_PADDING_X    = 4.0f;
+inline constexpr float    NAME_LABEL_HITBOX_PADDING_Y    = 3.0f;
 constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -303,19 +305,20 @@ TrackItem::RenderMetaArea()
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
         if(available_for_text > 0.0f)
         {
+            const ImVec2 label_start = ImGui::GetCursorScreenPos();
             ImGui::PushID("meta_area_label");
             ElidedText(m_meta_area_label.c_str(), available_for_text);
             ImGui::PopID();
+
+            const float  label_width = std::min(text_size.x, available_for_text);
+            const ImVec2 hit_padding(NAME_LABEL_HITBOX_PADDING_X, NAME_LABEL_HITBOX_PADDING_Y);
+            name_label_min = label_start - hit_padding;
+            name_label_max = ImVec2(label_start.x + label_width + hit_padding.x,
+                                    label_start.y + text_size.y + hit_padding.y);
+            name_label_visible = true;
         }
         ImGui::PopStyleColor();
         ImGui::EndGroup();
-
-        if(available_for_text > 0.0f)
-        {
-            name_label_min     = ImGui::GetItemRectMin();
-            name_label_max     = ImGui::GetItemRectMax();
-            name_label_visible = true;
-        }
 
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
@@ -347,13 +350,12 @@ TrackItem::RenderMetaArea()
                                    !m_pill.WasLastHovered();
 
     const bool name_label_hovered =
-        meta_area_hovered && name_label_visible &&
+        name_label_visible && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
         ImGui::IsMouseHoveringRect(name_label_min, name_label_max);
 
     const ImGuiStyle& style = m_settings.GetDefaultStyle();
 
-    if(name_label_hovered && !m_meta_area_tooltip.empty() &&
-       ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+    if(name_label_hovered && !m_meta_area_tooltip.empty())
     {
         const float wrap_width = META_TOOLTIP_MAX_WIDTH - 2.0f * style.WindowPadding.x;
         ImGui::SetNextWindowSizeConstraints(

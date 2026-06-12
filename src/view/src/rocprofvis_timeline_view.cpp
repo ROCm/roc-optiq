@@ -1726,18 +1726,14 @@ TimelineView::CalculateTrackCounts()
                 break;
         }
     }
+
+    BuildTrackCountLabels();
 }
 
 void
-TimelineView::RenderTrackStats(float available_width)
+TimelineView::BuildTrackCountLabels()
 {
-    constexpr float PAD_X         = 12.0f;
-    constexpr float PAD_Y         = 6.0f;
-    const float     content_width = std::max(0.0f, available_width - (2.0f * PAD_X));
-
-    FontManager& fonts = m_settings.GetFontManager();
-
-    const std::string total_label =
+    m_track_counts.total_label =
         std::to_string(m_track_counts.total) +
         (m_track_counts.total == 1 ? " Track" : " Tracks");
 
@@ -1755,13 +1751,46 @@ TimelineView::RenderTrackStats(float available_width)
         out += std::to_string(count) + " " + (count == 1 ? singular : plural);
     };
 
-    std::string breakdown;
-    append_part(breakdown, m_track_counts.instrumented_threads, "thread", "threads");
-    append_part(breakdown, m_track_counts.sampled_threads, "sampled", "sampled");
-    append_part(breakdown, m_track_counts.queues, "queue", "queues");
-    append_part(breakdown, m_track_counts.streams, "stream", "streams");
-    append_part(breakdown, m_track_counts.counters, "counter", "counters");
-    append_part(breakdown, m_track_counts.other, "other", "other");
+    m_track_counts.breakdown.clear();
+    append_part(m_track_counts.breakdown, m_track_counts.instrumented_threads, "thread",
+                "threads");
+    append_part(m_track_counts.breakdown, m_track_counts.sampled_threads, "sampled",
+                "sampled");
+    append_part(m_track_counts.breakdown, m_track_counts.queues, "queue", "queues");
+    append_part(m_track_counts.breakdown, m_track_counts.streams, "stream", "streams");
+    append_part(m_track_counts.breakdown, m_track_counts.counters, "counter", "counters");
+    append_part(m_track_counts.breakdown, m_track_counts.other, "other", "other");
+
+    // One "<label>: <count>" row per non-empty category for the hover tooltip.
+    auto append_row = [&](const char* label, uint64_t count) {
+        if(count == 0)
+        {
+            return;
+        }
+        m_track_counts.tooltip_lines.emplace_back(std::string(label) + ": " +
+                                                  std::to_string(count));
+    };
+
+    m_track_counts.tooltip_lines.clear();
+    append_row("Instrumented threads", m_track_counts.instrumented_threads);
+    append_row("Sampled threads", m_track_counts.sampled_threads);
+    append_row("Queues", m_track_counts.queues);
+    append_row("Streams", m_track_counts.streams);
+    append_row("Counters", m_track_counts.counters);
+    append_row("Other", m_track_counts.other);
+}
+
+void
+TimelineView::RenderTrackStats(float available_width)
+{
+    constexpr float PAD_X         = 12.0f;
+    constexpr float PAD_Y         = 6.0f;
+    const float     content_width = std::max(0.0f, available_width - (2.0f * PAD_X));
+
+    FontManager& fonts = m_settings.GetFontManager();
+
+    const std::string& total_label = m_track_counts.total_label;
+    const std::string& breakdown   = m_track_counts.breakdown;
 
     ImGui::SetCursorPos(ImVec2(PAD_X, PAD_Y));
     ImGui::BeginGroup();
@@ -1791,26 +1820,15 @@ TimelineView::RenderTrackStats(float available_width)
     // Hovering the summary reveals the full per-type breakdown.
     if(BeginItemTooltipStyled())
     {
-        auto tooltip_row = [](const char* label, uint64_t count) {
-            if(count == 0)
-            {
-                return;
-            }
-            const std::string row = std::string(label) + ": " + std::to_string(count);
-            ImGui::TextUnformatted(row.c_str());
-        };
-
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
         ImGui::TextUnformatted(total_label.c_str());
         ImGui::PopStyleColor();
         ImGui::Separator();
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
-        tooltip_row("Instrumented threads", m_track_counts.instrumented_threads);
-        tooltip_row("Sampled threads", m_track_counts.sampled_threads);
-        tooltip_row("Queues", m_track_counts.queues);
-        tooltip_row("Streams", m_track_counts.streams);
-        tooltip_row("Counters", m_track_counts.counters);
-        tooltip_row("Other", m_track_counts.other);
+        for(const std::string& line : m_track_counts.tooltip_lines)
+        {
+            ImGui::TextUnformatted(line.c_str());
+        }
         ImGui::PopStyleColor();
         EndTooltipStyled();
     }

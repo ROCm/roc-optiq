@@ -106,19 +106,30 @@ IconMenuItem(const char* icon, const char* label, bool enabled)
 {
     ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
 
+    // Reserve a fixed-width icon column so labels start at the same x with or
+    // without an icon, and keep each row a single frame tall.
+    const float icon_column_width = ImGui::GetFrameHeight();
+
     if(!enabled)
         ImGui::BeginDisabled();
 
     bool clicked = ImGui::Selectable(("##menu_item" + std::string(label)).c_str(), false,
                                      ImGuiSelectableFlags_SpanAllColumns,
-                                     ImVec2(0, ImGui::GetTextLineHeightWithSpacing()));
+                                     ImVec2(0, ImGui::GetFrameHeight()));
     ImGui::SameLine(0.0f, 0.0f);
 
+    const float row_start_x = ImGui::GetCursorPosX();
+
     ImGui::BeginGroup();
-    ImGui::PushFont(icon_font);
-    ImGui::TextUnformatted(icon);
-    ImGui::PopFont();
-    ImGui::SameLine(0.f, ImGui::GetStyle().ItemSpacing.x);
+    ImGui::AlignTextToFramePadding();
+    if(icon && icon[0] != '\0')
+    {
+        ImGui::PushFont(icon_font);
+        ImGui::TextUnformatted(icon);
+        ImGui::PopFont();
+    }
+    ImGui::SameLine(0.0f, 0.0f);
+    ImGui::SetCursorPosX(row_start_x + icon_column_width);
     ImGui::TextUnformatted(label);
     ImGui::EndGroup();
 

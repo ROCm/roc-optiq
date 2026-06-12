@@ -3,6 +3,7 @@
 
 #include "rocprofvis_ssh_settings_dialog.h"
 #include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 #include "imgui.h"
 
@@ -61,36 +62,36 @@ SshSettingsDialog::Render()
         const float label_w = 110.0f;
         ImGui::AlignTextToFramePadding(); ImGui::Text("Host"); ImGui::SameLine(label_w);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputText("##rhost", m_working.GetRemoteHostBuffer(), m_working.GetRemoteHostBufferSize());
+        InputTextString("##rhost", m_working.GetRemoteHost());
 
         ImGui::AlignTextToFramePadding(); ImGui::Text("Port"); ImGui::SameLine(label_w);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputText("##rport", m_working.GetRemotePortBuffer(), m_working.GetRemotePortBufferSize());
+        InputTextString("##rport", m_working.GetRemotePort());
 
         ImGui::AlignTextToFramePadding(); ImGui::Text("User"); ImGui::SameLine(label_w);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputText("##ruser", m_working.GetRemoteUserBuffer(), m_working.GetRemoteUserBufferSize());
+        InputTextString("##ruser", m_working.GetRemoteUser());
 
         ImGui::AlignTextToFramePadding(); ImGui::Text("Password"); ImGui::SameLine(label_w);
         ImGuiInputTextFlags pwd_flags = m_show_password ? 0 : ImGuiInputTextFlags_Password;
         ImGui::SetNextItemWidth(-FLT_MIN - 90.0f);
-        ImGui::InputText("##rpass", m_working.GetRemotePasswordBuffer(), m_working.GetRemotePasswordBufferSize(), pwd_flags);
+        InputTextString("##rpass", m_working.GetRemotePassword(), pwd_flags);
         ImGui::SameLine();
         ImGui::Checkbox("Show", &m_show_password);
 
         ImGui::AlignTextToFramePadding(); ImGui::Text("SSH Key"); ImGui::SameLine(label_w);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputTextWithHint(
+        InputTextStringWithHint(
             "##rkey",
             "Optional - path to private key (e.g. ~/.ssh/id_ed25519). Leave blank for default keys or password.",
-            m_working.GetRemoteIdentityFileBuffer(), m_working.GetRemoteIdentityFileBufferSize());
+            m_working.GetRemoteIdentityFile());
 
         ImGui::AlignTextToFramePadding(); ImGui::Text("Key Passphrase"); ImGui::SameLine(label_w);
         ImGuiInputTextFlags pass_flags = m_show_passphrase ? 0 : ImGuiInputTextFlags_Password;
         ImGui::SetNextItemWidth(-FLT_MIN - 90.0f);
-        ImGui::InputTextWithHint(
+        InputTextStringWithHint(
             "##rkeypass", "Leave blank if key is unencrypted or loaded in ssh-agent",
-            m_working.GetPassphraseBuffer(), m_working.GetPassphraseBufferSize(), pass_flags);
+            m_working.GetPassphrase(), pass_flags);
         ImGui::SameLine();
         ImGui::Checkbox("Show##kpshow", &m_show_passphrase);
 

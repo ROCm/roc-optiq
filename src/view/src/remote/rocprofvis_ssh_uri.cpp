@@ -43,8 +43,8 @@ namespace View
 
     void RemoteUri::SetDefaults()
     {
-        m_file_browser_source = nullptr;
-        CopyToArray(m_remote_port, "22");
+        m_file_browser_source.clear();
+        m_remote_port = "22";
     }
 
     std::string RemoteUri::GetConfigRoot()
@@ -86,14 +86,14 @@ namespace View
 
         auto& obj = j.getObject();
 
-        obj["remote_host"] = ToString(m_remote_host);
-        obj["remote_port"] = ToString(m_remote_port);
-        obj["remote_user"] = ToString(m_remote_user);
-        obj["remote_password"] = ToString(m_remote_password);
-        obj["remote_command_line"] = ToString(m_remote_command_line);
-        obj["remote_result_path"] = ToString(m_remote_result_path);
-        obj["remote_identity_file"] = ToString(m_remote_identity_file);
-        obj["passphrase"] = ToString(m_passphrase);
+        obj["remote_host"] = m_remote_host;
+        obj["remote_port"] = m_remote_port;
+        obj["remote_user"] = m_remote_user;
+        obj["remote_password"] = m_remote_password;
+        obj["remote_command_line"] = m_remote_command_line;
+        obj["remote_result_path"] = m_remote_result_path;
+        obj["remote_identity_file"] = m_remote_identity_file;
+        obj["passphrase"] = m_passphrase;
 
 
         auto full = std::filesystem::weakly_canonical(path+ "/remote.json");
@@ -161,32 +161,10 @@ namespace View
         return true;
     }
 
-    template <size_t N>
-    void RemoteUri::CopyToArray(
-        std::array<char, N>& dst,
-        const std::string& src)
-    {
-        dst.fill('\0');
-
-        size_t len = std::min(src.size(), N - 1);
-
-        memcpy(dst.data(), src.data(), len);
-
-        dst[len] = '\0';
-    }
-
-    template <size_t N>
-    std::string RemoteUri::ToString(
-        const std::array<char, N>& value)
-    {
-        return std::string(value.data());
-    }
-
-    template <size_t N>
     void RemoteUri::LoadField(
         const jt::Json& j,
         const std::string& key,
-        std::array<char, N>& out)
+        std::string& out)
     {
         if (!j.contains(key))
         {
@@ -207,249 +185,156 @@ namespace View
             return;
         }
 
-        CopyToArray(out, it->second.getString());
-    }
-
-    const std::array<char, 256>& RemoteUri::GetRemoteHostArray() const
-    {
-        return m_remote_host;
+        out = it->second.getString();
     }
 
     std::string RemoteUri::GetRemoteHostString() const
     {
-        return util::string::trim_copy(std::string(m_remote_host.data()));
-    }
-
-    const std::array<char, 16>& RemoteUri::GetRemotePortArray() const
-    {
-        return m_remote_port;
+        return util::string::trim_copy(m_remote_host);
     }
 
     std::string RemoteUri::GetRemotePortString() const
     {
-        return util::string::trim_copy(std::string(m_remote_port.data()));
+        return util::string::trim_copy(m_remote_port);
     }
 
     int RemoteUri::GetRemotePortInt() const
     {
-        return std::atoi(m_remote_port.data());
-    }
-
-    const std::array<char, 128>& RemoteUri::GetRemoteUserArray() const
-    {
-        return m_remote_user;
+        return std::atoi(m_remote_port.c_str());
     }
 
     std::string RemoteUri::GetRemoteUserString() const
     {
-        return util::string::trim_copy(std::string(m_remote_user.data()));
-    }
-
-    const std::array<char, 256>& RemoteUri::GetRemotePasswordArray() const
-    {
-        return m_remote_password;
+        return util::string::trim_copy(m_remote_user);
     }
 
     std::string RemoteUri::GetRemotePasswordString() const
     {
-        return util::string::trim_copy(std::string(m_remote_password.data()));
-    }
-
-    const std::array<char, 1024>& RemoteUri::GetRemoteCommandLineArray() const
-    {
-        return m_remote_command_line;
+        return util::string::trim_copy(m_remote_password);
     }
 
     std::string RemoteUri::GetRemoteCommandLineString() const
     {
-        return util::string::trim_copy(std::string(m_remote_command_line.data()));
-    }
-
-    const std::array<char, 1024>& RemoteUri::GetRemoteResultPathArray() const
-    {
-        return m_remote_result_path;
+        return util::string::trim_copy(m_remote_command_line);
     }
 
     std::string RemoteUri::GetRemoteResultPathString() const
     {
-        return util::string::trim_copy(std::string(m_remote_result_path.data()));
-    }
-
-
-    void RemoteUri::InitRemoteBrowsingPathString(const char* source)
-    {
-        std::string dir = std::filesystem::path(source).parent_path().string();
-        if (dir.empty())
-        {
-            dir = ".";
-        }
-        std::snprintf((char*)m_file_browser_buffer.data(), m_file_browser_buffer.size(), "%s", dir.c_str());
-        m_file_browser_source = (char*)source;
-    }
-
-    void RemoteUri::UseRemoteBrowsingPathString()
-    {
-        if (m_file_browser_source)
-        {
-            std::snprintf(m_file_browser_source, m_file_browser_buffer.size(), "%s", m_file_browser_buffer.data());
-        }
-    }
-
-    std::string RemoteUri::GetRemoteBrowsingPathString() const
-    {
-        return std::string(m_file_browser_buffer.data());
-    }
-
-    const std::array<char, 1024>& RemoteUri::GetRemoteIdentityFileArray() const
-    {
-        return m_remote_identity_file;
+        return util::string::trim_copy(m_remote_result_path);
     }
 
     std::string RemoteUri::GetRemoteIdentityFileString() const
     {
-        return util::string::trim_copy(std::string(m_remote_identity_file.data()));
-    }
-
-    const std::array<char, 256>& RemoteUri::GetPassphraseArray() const
-    {
-        return m_passphrase;
+        return util::string::trim_copy(m_remote_identity_file);
     }
 
     std::string RemoteUri::GetPassphraseString() const
     {
-        return util::string::trim_copy(std::string(m_passphrase.data()));
+        return util::string::trim_copy(m_passphrase);
     }
 
-    char* RemoteUri::GetRemoteHostBuffer()
+    std::string RemoteUri::GetRemoteBrowsingPathString() const
     {
-        return m_remote_host.data();
+        return m_file_browser_buffer;
     }
 
-    char* RemoteUri::GetRemotePortBuffer()
+    std::string& RemoteUri::GetRemoteHost()
     {
-        return m_remote_port.data();
+        return m_remote_host;
     }
 
-    char* RemoteUri::GetRemoteUserBuffer()
+    std::string& RemoteUri::GetRemotePort()
     {
-        return m_remote_user.data();
+        return m_remote_port;
     }
 
-    char* RemoteUri::GetRemotePasswordBuffer()
+    std::string& RemoteUri::GetRemoteUser()
     {
-        return m_remote_password.data();
+        return m_remote_user;
     }
 
-    char* RemoteUri::GetRemoteCommandLineBuffer()
+    std::string& RemoteUri::GetRemotePassword()
     {
-        return m_remote_command_line.data();
+        return m_remote_password;
     }
 
-    char* RemoteUri::GetRemoteResultPathBuffer()
+    std::string& RemoteUri::GetRemoteCommandLine()
     {
-        return m_remote_result_path.data();
+        return m_remote_command_line;
     }
 
-    char* RemoteUri::GetRemoteIdentityFileBuffer()
+    std::string& RemoteUri::GetRemoteResultPath()
     {
-        return m_remote_identity_file.data();
+        return m_remote_result_path;
     }
 
-    char* RemoteUri::GetPassphraseBuffer()
+    std::string& RemoteUri::GetRemoteIdentityFile()
     {
-        return m_passphrase.data();
+        return m_remote_identity_file;
     }
 
-    size_t RemoteUri::GetRemoteHostBufferSize() const
+    std::string& RemoteUri::GetPassphrase()
     {
-        return m_remote_host.size();
+        return m_passphrase;
     }
 
-    size_t RemoteUri::GetRemotePortBufferSize() const
+    void RemoteUri::InitRemoteBrowsingPathString(const char* source)
     {
-        return m_remote_port.size();
+        std::string dir = std::filesystem::path(source ? source : "").parent_path().string();
+        if (dir.empty())
+        {
+            dir = ".";
+        }
+        m_file_browser_buffer = dir;
+        m_file_browser_source = source ? source : "";
     }
 
-    size_t RemoteUri::GetRemoteUserBufferSize() const
+    void RemoteUri::UseRemoteBrowsingPathString()
     {
-        return m_remote_user.size();
-    }
-
-    size_t RemoteUri::GetRemotePasswordBufferSize() const
-    {
-        return m_remote_password.size();
-    }
-
-    size_t RemoteUri::GetRemoteCommandLineBufferSize() const
-    {
-        return m_remote_command_line.size();
-    }
-
-    size_t RemoteUri::GetRemoteResultPathBufferSize() const
-    {
-        return m_remote_result_path.size();
-    }
-
-    size_t RemoteUri::GetRemoteIdentityFileBufferSize() const
-    {
-        return m_remote_identity_file.size();
-    }
-
-    size_t RemoteUri::GetPassphraseBufferSize() const
-    {
-        return m_passphrase.size();
+        // The browse flow seeds m_file_browser_source from the result path; commit
+        // the chosen path back into the result-path field.
+        m_remote_result_path = m_file_browser_buffer;
     }
 
     void RemoteUri::SetCurrentDirectoryPath(const char* path)
     {
-        std::snprintf(m_current_directory_buffer.data(), m_current_directory_buffer.size(), "%s", path);
+        m_current_directory_buffer = path ? path : "";
     }
 
     void RemoteUri::MakeRemoteBrowsingPath(const char* file_name)
     {
         if (!file_name)
+        {
             return;
+        }
 
-        m_file_browser_buffer = m_current_directory_buffer;
-
-        char* path = m_file_browser_buffer.data();
-        size_t capacity = m_file_browser_buffer.size();
+        std::string path = m_current_directory_buffer;
 
         if (std::strcmp(file_name, "..") == 0)
         {
-            size_t len = std::strlen(path);
-
-            if (len > 1 && path[len - 1] == '/')
+            if (path.size() > 1 && path.back() == '/')
             {
-                path[--len] = '\0';
+                path.pop_back();
             }
 
-            char* last_slash = std::strrchr(path, '/');
-
-            if (last_slash)
+            auto last_slash = path.rfind('/');
+            if (last_slash != std::string::npos)
             {
-                if (last_slash != path)
-                {
-                    *last_slash = '\0'; 
-                }
-                else
-                {
-                    path[1] = '\0';
-                }
+                // Preserve the leading '/' for absolute paths.
+                path.erase(last_slash == 0 ? 1 : last_slash);
             }
 
+            m_file_browser_buffer = path;
             return;
         }
 
-        size_t len = std::strlen(path);
-
-        if (len > 0 && path[len - 1] != '/')
+        if (!path.empty() && path.back() != '/')
         {
-            std::strncat(path, "/", capacity - len - 1);
-            len = std::strlen(path);
+            path += '/';
         }
+        path += file_name;
 
-        std::strncat(path, file_name, capacity - len - 1);
+        m_file_browser_buffer = path;
     }
 
 

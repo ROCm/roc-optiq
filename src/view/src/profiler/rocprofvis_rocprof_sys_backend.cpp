@@ -140,27 +140,6 @@ void WarningText(char const* text)
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "(!) %s", text);
 }
 
-int StringResizeCallback(ImGuiInputTextCallbackData* data)
-{
-    if (data->EventFlag == ImGuiInputTextFlags_CallbackResize)
-    {
-        std::string* str = static_cast<std::string*>(data->UserData);
-        str->resize(static_cast<size_t>(data->BufTextLen));
-        data->Buf = str->data();
-    }
-    return 0;
-}
-
-bool InputTextString(char const* label, std::string& str,
-                     ImGuiInputTextFlags flags = 0)
-{
-    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
-    return ImGui::InputText(
-        label, str.data(), str.capacity() + 1,
-        flags | ImGuiInputTextFlags_CallbackResize,
-        StringResizeCallback, static_cast<void*>(&str));
-}
-
 void RenderCheckboxMap(
     std::map<std::string, bool>& map,
     CheckboxEntry const* entries,

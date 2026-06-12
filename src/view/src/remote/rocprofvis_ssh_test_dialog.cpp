@@ -5,6 +5,7 @@
 #include "rocprofvis_ssh_auth_modal.h"
 #include "rocprofvis_appwindow.h"
 #include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 #include "imgui.h"
 
@@ -91,17 +92,17 @@ SshTestDialog::Render()
             // Per-profiler fields that stay on this dialog.
             ImGui::AlignTextToFramePadding(); ImGui::Text("Profiler command line"); ImGui::SameLine(label_w);
             ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::InputTextWithHint("##rcommand", "/path/to/executable [parameters]",
-                m_uri->GetRemoteCommandLineBuffer(), m_uri->GetRemoteCommandLineBufferSize());
+            InputTextStringWithHint("##rcommand", "/path/to/executable [parameters]",
+                m_uri->GetRemoteCommandLine());
 
             ImGui::AlignTextToFramePadding(); ImGui::Text("Profiler output database"); ImGui::SameLine(label_w);
             ImGui::SetNextItemWidth(-FLT_MIN-90);
-            ImGui::InputTextWithHint("##rpath", "/path/to/file.db",
-                m_uri->GetRemoteResultPathBuffer(), m_uri->GetRemoteResultPathBufferSize());
+            InputTextStringWithHint("##rpath", "/path/to/file.db",
+                m_uri->GetRemoteResultPath());
             ImGui::SameLine();
             if (ImGui::Button("Browse", ImVec2(80, 0)))
             {
-                m_uri->InitRemoteBrowsingPathString(m_uri->GetRemoteResultPathArray().data());
+                m_uri->InitRemoteBrowsingPathString(m_uri->GetRemoteResultPathString().c_str());
                 m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
                     m_uri,
                     [this](const std::string& path)

@@ -9,6 +9,7 @@
 #include "rocprofvis_rocprof_sys_backend.h"
 #include "remote/rocprofvis_ssh_auth_modal.h"
 #include "widgets/rocprofvis_widget.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "imgui.h"
 #include <cfloat>
 #include <algorithm>
@@ -371,8 +372,8 @@ void ProfilerLauncherDialog::RenderRemoteSection()
     // Remote output database path to download once the profiler completes.
     ImGui::AlignTextToFramePadding(); ImGui::Text("Remote output database"); ImGui::SameLine(label_w);
     ImGui::SetNextItemWidth(-FLT_MIN);
-    ImGui::InputTextWithHint("##remote_db", "/remote/path/to/trace.db",
-        m_remote_uri->GetRemoteResultPathBuffer(), m_remote_uri->GetRemoteResultPathBufferSize());
+    InputTextStringWithHint("##remote_db", "/remote/path/to/trace.db",
+        m_remote_uri->GetRemoteResultPath());
 
     if (m_remote_session && !m_remote_session->GetStatusMessage().empty())
     {

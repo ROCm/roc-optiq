@@ -32,7 +32,6 @@ public:
     bool QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocprofvis_property_t& property, rocprofvis_controller_primitive_type_t& type) const;
 
 private:
-
     struct SourceLine
     {
         uint32_t    id             = 0;
@@ -46,7 +45,6 @@ private:
         std::string file_path;
         std::string content_checksum;
     };
-
     struct IsaLine
     {
         uint32_t    id                  = 0;
@@ -62,7 +60,6 @@ private:
         std::string uri;
         std::string content_checksum;
     };
-
     struct IsaToIsaDep
     {
         uint32_t dependent_isa_line_id  = 0;
@@ -90,13 +87,13 @@ private:
         uint32_t count       = 0;
     };
 
-    std::vector<SourceFile>      m_source_files;
-    std::vector<SourceLine>      m_source_lines;
-    std::vector<CodeObject>      m_code_objects;
-    std::vector<IsaLine>         m_isa_lines;
-    std::vector<IsaToIsaDep>     m_isa_to_isa_deps;
-    std::vector<IsaToSourceDep>  m_isa_to_source_deps;
-    std::vector<StallRecord>     m_stall_records;
+    std::vector<SourceFile>       m_source_files;
+    std::vector<SourceLine>       m_source_lines;
+    std::vector<CodeObject>       m_code_objects;
+    std::vector<IsaLine>          m_isa_lines;
+    std::vector<IsaToIsaDep>      m_isa_to_isa_deps;
+    std::vector<IsaToSourceDep>   m_isa_to_source_deps;
+    std::vector<StallRecord>      m_stall_records;
     std::vector<StallReasonCount> m_stall_reason_counts;
 
 };

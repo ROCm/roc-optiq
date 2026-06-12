@@ -23,6 +23,8 @@ inline constexpr float    DEFAULT_GRIP_WIDTH             = 20.0f;
 inline constexpr uint64_t DEFAULT_CHUNK_DURATION         = TimeConstants::ns_per_s * 30;
 inline constexpr float    META_TOOLTIP_MAX_WIDTH         = 320.0f;
 inline constexpr uint64_t META_TOOLTIP_COMPACT_COUNT_MIN = 1000;
+inline constexpr float    NAME_LABEL_HITBOX_PADDING_X    = 4.0f;
+inline constexpr float    NAME_LABEL_HITBOX_PADDING_Y    = 3.0f;
 constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -208,6 +210,10 @@ TrackItem::RenderMetaArea()
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
     m_track_content_height      = m_track_height - metadata_shrink_padding.y * 2.0f;
 
+    ImVec2 name_label_min(0.0f, 0.0f);
+    ImVec2 name_label_max(0.0f, 0.0f);
+    bool   name_label_visible = false;
+
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 3));
@@ -264,8 +270,6 @@ TrackItem::RenderMetaArea()
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
 
         ImGui::TextUnformatted(ICON_GRID);
-        float menu_button_width = ImGui::CalcTextSize(ICON_GEAR).x;
-      
         ImGui::PopFont();
 
         ImGui::SetCursorPos(m_metadata_padding + ImVec2(m_reorder_grip_width, 0));
@@ -286,8 +290,8 @@ TrackItem::RenderMetaArea()
         //     }
         // }
 
-        float available_for_text = content_size.x - m_meta_area_scale_width -
-                                   menu_button_width - m_reorder_grip_width;
+        float available_for_text =
+            content_size.x - m_meta_area_scale_width - m_reorder_grip_width;
 
         ImVec2 text_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
 
@@ -301,35 +305,21 @@ TrackItem::RenderMetaArea()
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
         if(available_for_text > 0.0f)
         {
+            const ImVec2 label_start = ImGui::GetCursorScreenPos();
             ImGui::PushID("meta_area_label");
             ElidedText(m_meta_area_label.c_str(), available_for_text);
             ImGui::PopID();
+
+            const float  label_width = std::min(text_size.x, available_for_text);
+            const ImVec2 hit_padding(NAME_LABEL_HITBOX_PADDING_X, NAME_LABEL_HITBOX_PADDING_Y);
+            name_label_min = label_start - hit_padding;
+            name_label_max = ImVec2(label_start.x + label_width + hit_padding.x,
+                                    label_start.y + text_size.y + hit_padding.y);
+            name_label_visible = true;
         }
         ImGui::PopStyleColor();
         ImGui::EndGroup();
 
-        ImGui::SetCursorPos(ImVec2(m_metadata_padding.x + content_size.x -
-                                       m_meta_area_scale_width - menu_button_width,
-                                   m_metadata_padding.y));
-        IconButton(ICON_GEAR,
-                   m_settings.GetFontManager().GetFont(FontType::kIcon));
-        if(ImGui::IsItemHovered())
-            SetTooltipStyled("Track Options");
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                            m_settings.GetDefaultStyle().WindowPadding);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                            m_settings.GetDefaultStyle().FrameRounding);
-        ImGui::SetNextWindowPos(ImGui::GetCursorScreenPos() +
-                                ImVec2(content_size.x - m_meta_area_scale_width -
-                                           menu_button_width -
-                                           ImGui::GetStyle().FramePadding.x,
-                                       0));
-        if(ImGui::BeginPopupContextItem("", ImGuiPopupFlags_MouseButtonLeft))
-        {
-            RenderMetaAreaOptions();
-            ImGui::EndPopup();
-        }
-        ImGui::PopStyleVar(2);
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
 
@@ -359,10 +349,13 @@ TrackItem::RenderMetaArea()
                                    !ImGui::IsAnyItemHovered() &&
                                    !m_pill.WasLastHovered();
 
+    const bool name_label_hovered =
+        name_label_visible && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        ImGui::IsMouseHoveringRect(name_label_min, name_label_max);
+
     const ImGuiStyle& style = m_settings.GetDefaultStyle();
 
-    if(meta_area_hovered && !m_meta_area_tooltip.empty() &&
-       ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+    if(name_label_hovered && !m_meta_area_tooltip.empty())
     {
         const float wrap_width = META_TOOLTIP_MAX_WIDTH - 2.0f * style.WindowPadding.x;
         ImGui::SetNextWindowSizeConstraints(
@@ -387,13 +380,19 @@ TrackItem::RenderMetaArea()
             NotificationManager::GetInstance().Show(
                 COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
         };
-        if(ImGui::MenuItem("Copy track name"))
+        if(IconMenuItem(ICON_COPY, "Copy track name"))
         {
             copy_to_clipboard(m_meta_area_label);
         }
-        if(ImGui::MenuItem("Copy track ID"))
+        if(IconMenuItem(ICON_COPY, "Copy track ID"))
         {
             copy_to_clipboard(std::to_string(m_track_id));
+        }
+        ImGui::Separator();
+        if(IconBeginMenu(ICON_GEAR, "Track Options"))
+        {
+            RenderMetaAreaOptions();
+            ImGui::EndMenu();
         }
         ImGui::EndPopup();
     }

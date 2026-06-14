@@ -58,9 +58,11 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, rocpro
 			}
 			else
 			{
+				ival = std::min(ival, std::get<uint64_t>(prop_it->second));
+				m_properties[it->second] = ival;
 				if (it->second == kRPVControllerProcessorId)
 				{
-					db_instance_ptr->SetProcessInstance(std::get<uint64_t>(prop_it->second) >> TOPOLOGY_INSTANCE_BIT_POS);
+					db_instance_ptr->SetProcessInstance(ival >> TOPOLOGY_INSTANCE_BIT_POS);
 				}
 			}
 			break;

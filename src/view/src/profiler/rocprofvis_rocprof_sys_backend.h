@@ -147,6 +147,8 @@ public:
     std::vector<WarningMessage> GetWarnings(
         LaunchConfig const& config) const override;
 
+    std::string ParseTraceOutputPath(std::string const& profiler_stdout) const override;
+
 private:
     void RenderGeneralTraceOptions();
     void RenderBackendsTab();

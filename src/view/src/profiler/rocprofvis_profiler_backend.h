@@ -94,6 +94,20 @@ public:
         return {};
     }
 
+    /**
+     * Deduce the produced trace file path from the profiler's captured stdout.
+     * Each profiler reports its output location differently, so parsing rules
+     * are backend-specific. Returns an empty string if the path cannot be
+     * determined (callers should fall back to other discovery, e.g. scanning
+     * the output directory). The returned path is whatever the profiler
+     * reported, so it may be a remote path for SSH launches.
+     */
+    virtual std::string ParseTraceOutputPath(std::string const& profiler_stdout) const
+    {
+        (void)profiler_stdout;
+        return {};
+    }
+
     // TODO(launcher-phase4): Full CLI import/export API
     //
     // Future work beyond the current --preset integration:

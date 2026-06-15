@@ -39,8 +39,14 @@ class RemoteProfilerSession : public ProfilerSessionBase
 {
 public:
     // on_open_file is invoked with the local trace path once downloaded.
-    RemoteProfilerSession(std::shared_ptr<RemoteUri>               uri,
-                          std::function<void(const std::string&)> on_open_file);
+    // parse_trace_path is invoked with the remote profiler's captured stdout
+    // once profiling completes; it must return the remote trace file path the
+    // profiler produced (or empty if it cannot be determined), which drives the
+    // SFTP download. May be null, in which case any path already set on the URI
+    // is used.
+    RemoteProfilerSession(std::shared_ptr<RemoteUri>                     uri,
+                          std::function<void(const std::string&)>       on_open_file,
+                          std::function<std::string(const std::string&)> parse_trace_path = nullptr);
     ~RemoteProfilerSession() override;
 
     // Begins the workflow (connect phase). Profiler parameters mirror the local
@@ -87,9 +93,10 @@ private:
     void StartDownload();
     void Fail(const std::string& message);
 
-    std::shared_ptr<RemoteUri>               m_uri;
-    std::function<void(const std::string&)>  m_on_open_file;
-    std::unique_ptr<SshSession>              m_session;
+    std::shared_ptr<RemoteUri>                     m_uri;
+    std::function<void(const std::string&)>        m_on_open_file;
+    std::function<std::string(const std::string&)> m_parse_trace_path;
+    std::unique_ptr<SshSession>                    m_session;
 
     EventManager::SubscriptionToken m_remote_status_token;
     EventManager::SubscriptionToken m_profiler_status_token;

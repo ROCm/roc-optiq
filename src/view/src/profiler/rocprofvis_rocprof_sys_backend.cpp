@@ -6,6 +6,8 @@
 #include "rocprofvis_json_utils.h"
 #include "imgui.h"
 #include <sstream>
+#include <algorithm>
+#include <cctype>
 
 namespace RocProfVis
 {
@@ -795,6 +797,94 @@ void RocprofSysBackend::FlattenToExecution(
             argv_out.push_back(std::to_string(m_settings.min_instructions));
         }
     }
+}
+
+// ==================================================================================
+// ParseTraceOutputPath
+// ==================================================================================
+
+std::string RocprofSysBackend::ParseTraceOutputPath(std::string const& profiler_stdout) const
+{
+    // rocprof-sys reports the rocpd database path it produced in a couple of
+    // places, e.g.:
+    //   [...]database.cpp:151 database][info] Database: /path/rocpd-<pid>-0.db
+    //   Output Summary box: "RocPD database" -> "File: /path/rocpd-<pid>-0.db"
+    // We can't predict the exact filename (timestamp folder + PID suffix), so
+    // we scrape the path the tool actually printed. Strategy: scan lines and
+    // pull out a token ending in ".db". Prefer a line that explicitly names the
+    // database ("Database:" or "rocpd"); otherwise fall back to the last ".db"
+    // token seen anywhere in the output.
+
+    // Extracts the last whitespace/quote-delimited token ending in ".db" from a
+    // single line, or empty if none. Trims surrounding quotes and punctuation.
+    auto extract_db_token = [](std::string const& line) -> std::string
+    {
+        const std::string ext = ".db";
+        std::string best;
+        size_t pos = 0;
+        while ((pos = line.find(ext, pos)) != std::string::npos)
+        {
+            size_t end = pos + ext.size();
+            // The match must be a real extension: end of line or followed by a
+            // delimiter (not another path char like a letter, which would make
+            // it e.g. ".dbx").
+            if (end < line.size())
+            {
+                char next = line[end];
+                bool is_delim = std::isspace(static_cast<unsigned char>(next)) ||
+                                next == '\'' || next == '"' || next == ',' ||
+                                next == ')' || next == ']';
+                if (!is_delim)
+                {
+                    pos = end;
+                    continue;
+                }
+            }
+
+            // Walk backwards to the start of the token (first delimiter before
+            // the path).
+            size_t start = pos;
+            while (start > 0)
+            {
+                char c = line[start - 1];
+                if (std::isspace(static_cast<unsigned char>(c)) || c == '\'' ||
+                    c == '"' || c == '`' || c == '|')
+                {
+                    break;
+                }
+                --start;
+            }
+
+            best = line.substr(start, end - start);
+            pos = end;
+        }
+        return best;
+    };
+
+    std::string fallback;
+    std::istringstream stream(profiler_stdout);
+    std::string line;
+    while (std::getline(stream, line))
+    {
+        std::string token = extract_db_token(line);
+        if (token.empty())
+        {
+            continue;
+        }
+
+        // A line that explicitly labels the database is the strongest signal;
+        // return it immediately.
+        if (line.find("Database:") != std::string::npos ||
+            token.find("rocpd") != std::string::npos)
+        {
+            return token;
+        }
+
+        // Otherwise remember the most recent ".db" token as a fallback.
+        fallback = token;
+    }
+
+    return fallback;
 }
 
 // ==================================================================================

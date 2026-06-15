@@ -16,9 +16,11 @@ namespace View
 {
 
 RemoteProfilerSession::RemoteProfilerSession(
-    std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file)
+    std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file,
+    std::function<std::string(const std::string&)> parse_trace_path)
 : m_uri(std::move(uri))
 , m_on_open_file(std::move(on_open_file))
+, m_parse_trace_path(std::move(parse_trace_path))
 , m_session(nullptr)
 , m_remote_status_token(EventManager::InvalidSubscriptionToken)
 , m_profiler_status_token(EventManager::InvalidSubscriptionToken)
@@ -258,12 +260,28 @@ RemoteProfilerSession::StartDownload()
     // reference so further status callbacks are ignored.
     m_profiler_op_id = 0;
 
-    if(!m_uri || m_uri->GetRemoteResultPathString().empty())
+    if(!m_uri)
     {
-        // Nothing to download; the run completed but produced no fetchable trace.
-        m_phase          = Phase::Done;
-        m_running        = false;
-        m_status_message = "Done (no trace to download).";
+        Fail("No remote URI; cannot download trace.");
+        return;
+    }
+
+    // Deduce the remote trace path from the profiler's captured stdout (the
+    // profiler reports the file it produced). This replaces the old manual
+    // "Remote output database" field.
+    if(m_parse_trace_path)
+    {
+        std::string parsed = m_parse_trace_path(GetOutput());
+        if(!parsed.empty())
+        {
+            m_uri->GetRemoteResultPath() = parsed;
+        }
+    }
+
+    if(m_uri->GetRemoteResultPathString().empty())
+    {
+        // The run completed but we could not determine a trace path to fetch.
+        Fail("Could not determine remote trace path from profiler output.");
         return;
     }
 

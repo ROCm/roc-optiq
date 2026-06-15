@@ -390,12 +390,6 @@ void ProfilerLauncherDialog::RenderRemoteSection()
             });
     }
 
-    // Remote output database path to download once the profiler completes.
-    ImGui::AlignTextToFramePadding(); ImGui::Text("Remote output database"); ImGui::SameLine(label_w);
-    ImGui::SetNextItemWidth(-FLT_MIN);
-    InputTextStringWithHint("##remote_db", "/remote/path/to/trace.db",
-        m_remote_uri->GetRemoteResultPath());
-
     if (m_remote_session && !m_remote_session->GetStatusMessage().empty())
     {
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "%s",
@@ -711,6 +705,7 @@ void ProfilerLauncherDialog::OnLaunchRemote()
     // -> download -> open. Auth prompts / download progress surface via the SSH
     // popups rendered in RenderRemotePopups().
     m_remote_show_progress_popup = false;
+    IProfilerBackend* backend = m_backends[m_backend_index].get();
     m_remote_session = std::make_unique<RemoteProfilerSession>(
         m_remote_uri,
         [this](const std::string& local_path)
@@ -719,6 +714,10 @@ void ProfilerLauncherDialog::OnLaunchRemote()
             {
                 m_app_window->OpenFile(local_path);
             }
+        },
+        [backend](const std::string& profiler_stdout) -> std::string
+        {
+            return backend ? backend->ParseTraceOutputPath(profiler_stdout) : std::string();
         });
 
     bool success = m_remote_session->Launch(
@@ -820,7 +819,19 @@ void ProfilerLauncherDialog::OnProfilerStateChanged(rocprofvis_profiler_state_t 
         m_is_running = false;
         m_output_epilogue += "\nProfiler completed successfully.\n";
 
-        std::string trace_path = m_profiler_session.GetTracePath();
+        // Prefer the path the profiler actually reported in its output (the
+        // backend knows how to scrape it). Fall back to the controller's
+        // newest-".db" filesystem scan if the parser can't find one.
+        IProfilerBackend* backend = m_backends[m_backend_index].get();
+        std::string       trace_path =
+            backend ? backend->ParseTraceOutputPath(m_process_output_raw) : std::string();
+        if(trace_path.empty())
+        {
+            trace_path = m_profiler_session.GetTracePath();
+            spdlog::warn("ProfilerLauncherDialog: backend {} failed to parse trace path "
+                         "from output; falling back to filesystem scan result '{}'",
+                         trace_path);
+        }
         if (!trace_path.empty())
         {
             m_output_epilogue += "Trace file: " + trace_path + "\n";

@@ -128,9 +128,7 @@ private:
                               ProviderCleanupReason reason);
     void UpdateProviderCleanups();
     void RequestExitIfProviderCleanupsComplete();
-#ifdef TEST_SSH_CONNECTION
-    void HandleOpenRemote();
-#endif
+
 
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
@@ -162,7 +160,9 @@ private:
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();
     void RenderDeveloperMenu();
-
+#ifdef TEST_SSH_CONNECTION
+    void HandleTestRemoteSSH();
+#endif
     bool         m_show_metrics;
     bool         m_show_debug_window;
     DataProvider m_test_data_provider;

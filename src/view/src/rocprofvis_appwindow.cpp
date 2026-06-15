@@ -1027,12 +1027,6 @@ AppWindow::RenderFileMenu(Project* project)
         {
             HandleOpenFile();
         }
-#ifdef TEST_SSH_CONNECTION
-        if(ImGui::MenuItem("Open Remote...", nullptr, false, !is_open_file_dialog_open))
-        {
-            HandleOpenRemote();
-        }
-#endif
         if(ImGui::MenuItem("Save", nullptr, false,
                            !is_open_file_dialog_open && (project && project->IsProject())))
         {
@@ -1643,7 +1637,7 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
 #ifdef TEST_SSH_CONNECTION
 
 void
-AppWindow::HandleOpenRemote()
+AppWindow::HandleTestRemoteSSH()
 {
     if(!m_ssh_test_dialog)
     {
@@ -1697,6 +1691,12 @@ AppWindow::RenderDeveloperMenu()
                                    }
                                });
         }
+#ifdef TEST_SSH_CONNECTION
+        if(ImGui::MenuItem("Open Remote...", nullptr, false))
+        {
+            HandleTestRemoteSSH();
+        }
+#endif        
         ImGui::EndMenu();
     }
 }

@@ -201,6 +201,12 @@ TrackItem::RenderMetaAreaExpand()
 }
 
 void
+TrackItem::RenderMetaAreaScale()
+{
+    // no-op
+}
+
+void
 TrackItem::RenderSecondaryMetaPill(const ImVec2& content_size)
 {
     (void) content_size;

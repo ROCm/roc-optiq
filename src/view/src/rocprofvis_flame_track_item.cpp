@@ -782,13 +782,6 @@ FlameTrackItem::RenderChart(float graph_width)
 }
 
 void
-FlameTrackItem::RenderMetaAreaScale()
-{
-    // Queue utilization is drawn as a pill beside the QUEUE pill in
-    // RenderSecondaryMetaPill, so no separate scale column is rendered here.
-}
-
-void
 FlameTrackItem::RenderSecondaryMetaPill(const ImVec2& content_size)
 {
     if(!(m_track_metadata &&

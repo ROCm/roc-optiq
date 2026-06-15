@@ -121,7 +121,7 @@ public:
 
 protected:
     virtual void RenderMetaArea();
-    virtual void RenderMetaAreaScale()          = 0;
+    virtual void RenderMetaAreaScale();
     virtual void RenderMetaAreaOptions()        = 0;
     virtual void RenderMetaAreaExpand();
     // Optional hook to render an extra pill beside the primary meta-area pill.

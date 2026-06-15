@@ -65,7 +65,6 @@ public:
 
 protected:
     void  RenderChart(float graph_width) override;
-    void  RenderMetaAreaScale() override;
     void  RenderMetaAreaOptions() override;
     void  RenderMetaAreaExpand() override;
     void  RenderSecondaryMetaPill(const ImVec2& content_size) override;

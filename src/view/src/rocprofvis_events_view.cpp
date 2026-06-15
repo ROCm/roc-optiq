@@ -12,6 +12,7 @@
 #include "widgets/rocprofvis_notification_manager.h"
 
 #include <array>
+#include <string_view>
 #include <vector>
 
 namespace RocProfVis
@@ -43,6 +44,104 @@ PushSectionHeaderStyle(SettingsManager& settings)
                           settings.GetColor(Colors::kButtonActive));
 }
 
+// Positions the cursor for a cell: column 0 shares the row with the hit-box via
+// SameLine(), later columns move to their own column.
+void
+PositionCell(int col)
+{
+    if(col > 0)
+        ImGui::TableSetColumnIndex(col);
+    else
+        ImGui::SameLine();
+}
+
+// Renders the transparent, full-row selectable that acts as the right-click
+// hit-box for the empty areas of a table row. Cells drawn on top capture
+// right-clicks that land directly on their text (see CaptureCellRightClick).
+// On a right-click, records the row and hovered column into target and raises
+// open. Returns whether the row is hovered (for double-click / highlight use).
+bool
+RenderRowHitbox(const char* hitbox_id, int row, int column_count,
+                CellMenuTarget& target, bool& open)
+{
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+    bool clicked = ImGui::Selectable(hitbox_id, false,
+                                     ImGuiSelectableFlags_SpanAllColumns |
+                                         ImGuiSelectableFlags_AllowOverlap,
+                                     ImVec2(0.0f, 0.0f));
+    bool hovered = clicked ||
+                   ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
+                                        ImGuiHoveredFlags_AllowWhenOverlappedByItem);
+    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+    {
+        int hovered_col = ImGui::TableGetHoveredColumn();
+        target.row      = row;
+        target.column =
+            (hovered_col >= 0 && hovered_col < column_count) ? hovered_col : 0;
+        open = true;
+    }
+    ImGui::PopStyleColor(3);
+    return hovered;
+}
+
+// Records a right-click that landed on the cell content just submitted (the
+// copyable text/button steals hover from the row hit-box over its own area).
+// Call immediately after rendering a cell's content.
+void
+CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open)
+{
+    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+    {
+        target.row    = row;
+        target.column = col;
+        open          = true;
+    }
+}
+
+// Opens the shared cell context-menu popup with consistent styling. When true is
+// returned, the caller fills in menu items and must call EndCellContextMenu().
+bool
+BeginCellContextMenu(const char* popup_id)
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    bool open = ImGui::BeginPopup(popup_id);
+    if(!open)
+        ImGui::PopStyleVar(2);
+    return open;
+}
+
+void
+EndCellContextMenu()
+{
+    ImGui::EndPopup();
+    ImGui::PopStyleVar(2);
+}
+
+// Adds the shared "Copy Row Data" / "Copy Cell Data" items for the given row.
+void
+AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column)
+{
+    if(ImGui::MenuItem("Copy Row Data"))
+    {
+        std::string row_text;
+        for(int c = 0; c < column_count; c++)
+        {
+            if(c > 0) row_text += '\t';
+            row_text += cells[c];
+        }
+        ImGui::SetClipboardText(row_text.c_str());
+    }
+    if(ImGui::MenuItem("Copy Cell Data"))
+    {
+        if(column >= 0 && column < column_count)
+            ImGui::SetClipboardText(cells[column].c_str());
+    }
+}
+
 }  // namespace
 
 bool
@@ -65,16 +164,6 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_settings(SettingsManager::GetInstance())
 , m_timeline_selection(timeline_selection)
 , m_event_item_id(0)
-, m_context_menu_flow_index(-1)
-, m_context_menu_flow_column(-1)
-, m_context_menu_callstack_index(-1)
-, m_context_menu_callstack_column(-1)
-, m_context_menu_arg_index(-1)
-, m_context_menu_arg_column(-1)
-, m_context_menu_basic_index(-1)
-, m_context_menu_basic_column(-1)
-, m_context_menu_ext_index(-1)
-, m_context_menu_ext_column(-1)
 {
     static_assert(CallStackHoverState::kInvalidId ==
                       TimelineSelection::INVALID_SELECTION_ID,
@@ -243,77 +332,41 @@ EventsView::RenderBasicData(const EventInfo* event_data)
                                 ImGui::GetFontSize() * 8.5f);
         ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
-        bool open_basic_context_menu = false;
+        bool open_menu = false;
 
         for(int i = 0; i < static_cast<int>(rows.size()); i++)
         {
-            std::string row_str = std::to_string(i);
-
             ImGui::PushID(i);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            RenderRowHitbox("##basic_sel", i, kBasicColumnCount, m_basic_menu, open_menu);
 
-            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
-            ImGui::Selectable(("##basic_sel_" + row_str).c_str(), false,
-                              ImGuiSelectableFlags_SpanAllColumns |
-                                  ImGuiSelectableFlags_AllowOverlap,
-                              ImVec2(0.0f, 0.0f));
-            if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-            {
-                m_context_menu_basic_index = i;
-                int hovered_col            = ImGui::TableGetHoveredColumn();
-                m_context_menu_basic_column =
-                    (hovered_col >= 0 && hovered_col < kBasicColumnCount) ? hovered_col
-                                                                         : 0;
-                open_basic_context_menu = true;
-            }
-            ImGui::PopStyleColor(3);
-
-            ImGui::SameLine();
+            PositionCell(0);
             ImGui::TextDisabled("%s", rows[i][0].c_str());
-            ImGui::TableSetColumnIndex(1);
+            CaptureCellRightClick(0, i, m_basic_menu, open_menu);
+
+            PositionCell(1);
             CopyableTextUnformatted(rows[i][1].c_str(), "##basic_value",
-                                    DATA_COPIED_NOTIFICATION, false, false);
+                                    COPY_DATA_NOTIFICATION, false, false);
+            CaptureCellRightClick(1, i, m_basic_menu, open_menu);
             ImGui::PopID();
         }
 
-        if(open_basic_context_menu)
+        if(open_menu)
         {
             ImGui::OpenPopup("##BasicContextMenu");
         }
 
-        auto style = m_settings.GetDefaultStyle();
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-        if(ImGui::BeginPopup("##BasicContextMenu"))
+        if(BeginCellContextMenu("##BasicContextMenu"))
         {
-            if(m_context_menu_basic_index >= 0 &&
-               m_context_menu_basic_index < static_cast<int>(rows.size()))
+            if(m_basic_menu.row >= 0 &&
+               m_basic_menu.row < static_cast<int>(rows.size()))
             {
-                const auto& ctx_row = rows[m_context_menu_basic_index];
-
-                if(ImGui::MenuItem("Copy Row Data"))
-                {
-                    std::string row_text;
-                    for(int c = 0; c < kBasicColumnCount; c++)
-                    {
-                        if(c > 0) row_text += '\t';
-                        row_text += ctx_row[c];
-                    }
-                    ImGui::SetClipboardText(row_text.c_str());
-                }
-                if(ImGui::MenuItem("Copy Cell Data"))
-                {
-                    int col = m_context_menu_basic_column;
-                    if(col >= 0 && col < kBasicColumnCount)
-                        ImGui::SetClipboardText(ctx_row[col].c_str());
-                }
+                AddCopyRowCellMenuItems(rows[m_basic_menu.row].data(), kBasicColumnCount,
+                                        m_basic_menu.column);
             }
-            ImGui::EndPopup();
+            EndCellContextMenu();
         }
-        ImGui::PopStyleVar(2);
 
         ImGui::EndTable();
     }
@@ -363,83 +416,45 @@ EventsView::RenderEventExtData(const EventInfo* event_data)
                     }
                 };
 
-                bool open_ext_context_menu = false;
+                bool open_menu = false;
 
                 for(int i = 0; i < static_cast<int>(event_data->ext_info.size()); i++)
                 {
-                    std::string row_str = std::to_string(i);
-
                     ImGui::PushID(i);
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
+                    RenderRowHitbox("##ext_sel", i, kExtColumnCount, m_ext_menu, open_menu);
 
-                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
-                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
-                    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
-                    ImGui::Selectable(("##ext_sel_" + row_str).c_str(), false,
-                                      ImGuiSelectableFlags_SpanAllColumns |
-                                          ImGuiSelectableFlags_AllowOverlap,
-                                      ImVec2(0.0f, 0.0f));
-                    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-                    {
-                        m_context_menu_ext_index = i;
-                        int hovered_col          = ImGui::TableGetHoveredColumn();
-                        m_context_menu_ext_column =
-                            (hovered_col >= 0 && hovered_col < kExtColumnCount)
-                                ? hovered_col
-                                : 0;
-                        open_ext_context_menu = true;
-                    }
-                    ImGui::PopStyleColor(3);
-
-                    ImGui::SameLine();
+                    PositionCell(0);
                     CopyableTextUnformatted(event_data->ext_info[i].name.c_str(),
                                             "##ext_name", COPY_DATA_NOTIFICATION, false,
                                             false);
-                    ImGui::TableSetColumnIndex(1);
+                    CaptureCellRightClick(0, i, m_ext_menu, open_menu);
+
+                    PositionCell(1);
                     CopyableTextUnformatted(format_ext_value(i).c_str(), "##ext_value",
                                             COPY_DATA_NOTIFICATION, false, false);
+                    CaptureCellRightClick(1, i, m_ext_menu, open_menu);
                     ImGui::PopID();
                 }
 
-                if(open_ext_context_menu)
+                if(open_menu)
                 {
                     ImGui::OpenPopup("##ExtContextMenu");
                 }
 
-                auto style = m_settings.GetDefaultStyle();
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-                if(ImGui::BeginPopup("##ExtContextMenu"))
+                if(BeginCellContextMenu("##ExtContextMenu"))
                 {
-                    if(m_context_menu_ext_index >= 0 &&
-                       m_context_menu_ext_index <
-                           static_cast<int>(event_data->ext_info.size()))
+                    if(m_ext_menu.row >= 0 &&
+                       m_ext_menu.row < static_cast<int>(event_data->ext_info.size()))
                     {
                         std::string cells[kExtColumnCount] = {
-                            event_data->ext_info[m_context_menu_ext_index].name,
-                            format_ext_value(m_context_menu_ext_index) };
-
-                        if(ImGui::MenuItem("Copy Row Data"))
-                        {
-                            std::string row_text;
-                            for(int c = 0; c < kExtColumnCount; c++)
-                            {
-                                if(c > 0) row_text += '\t';
-                                row_text += cells[c];
-                            }
-                            ImGui::SetClipboardText(row_text.c_str());
-                        }
-                        if(ImGui::MenuItem("Copy Cell Data"))
-                        {
-                            int col = m_context_menu_ext_column;
-                            if(col >= 0 && col < kExtColumnCount)
-                                ImGui::SetClipboardText(cells[col].c_str());
-                        }
+                            event_data->ext_info[m_ext_menu.row].name,
+                            format_ext_value(m_ext_menu.row) };
+                        AddCopyRowCellMenuItems(cells, kExtColumnCount, m_ext_menu.column);
                     }
-                    ImGui::EndPopup();
+                    EndCellContextMenu();
                 }
-                ImGui::PopStyleVar(2);
 
                 ImGui::EndTable();
             }
@@ -489,20 +504,14 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         ? m_flow_hover.flow_event_id
                         : TimelineSelection::INVALID_SELECTION_ID;
 
-                auto flow_cell = [&](int col, const char* text, const char* id, int row)
-                {
-                    if(col > 0)
-                        ImGui::TableSetColumnIndex(col);
-                    else
-                        ImGui::SameLine();
-                    CopyableTextUnformatted(text, id, COPY_DATA_NOTIFICATION,
-                                            false, false);
-                    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-                    {
-                        m_context_menu_flow_index  = row;
-                        m_context_menu_flow_column = col;
-                        ImGui::OpenPopup("##FlowContextMenu");
-                    }
+                bool open_menu = false;
+
+                auto flow_cell = [&](int col, const char* text, std::string_view id,
+                                     int row) {
+                    PositionCell(col);
+                    CopyableTextUnformatted(text, id, COPY_DATA_NOTIFICATION, false,
+                                            false);
+                    CaptureCellRightClick(col, row, m_flow_menu, open_menu);
                 };
 
                 ImGuiListClipper clipper;
@@ -512,8 +521,8 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
                         const auto& flow = event_data->flow_info[i];
-                        std::string row_str = std::to_string(i);
 
+                        ImGui::PushID(i);
                         ImGui::TableNextRow();
                         if(flow.id.uuid == prev_hovered_flow_event_id)
                         {
@@ -528,31 +537,9 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                                 m_settings.GetColor(Colors::kAreaOfInterest));
                         }
                         ImGui::TableSetColumnIndex(0);
-
-                        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
-                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
-                        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
-                        bool row_clicked = ImGui::Selectable(
-                            ("##flow_sel_" + row_str).c_str(), false,
-                            ImGuiSelectableFlags_SpanAllColumns |
-                                ImGuiSelectableFlags_AllowOverlap,
-                            ImVec2(0.0f, 0.0f));
-                        bool row_hovered =
-                            row_clicked ||
-                            ImGui::IsItemHovered(
-                                ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
-                                ImGuiHoveredFlags_AllowWhenOverlappedByItem);
-                        if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-                        {
-                            m_context_menu_flow_index = i;
-                            int hovered_col           = ImGui::TableGetHoveredColumn();
-                            m_context_menu_flow_column =
-                                (hovered_col >= 0 && hovered_col < kFlowColumnCount)
-                                    ? hovered_col
-                                    : 0;
-                            ImGui::OpenPopup("##FlowContextMenu");
-                        }
-                        ImGui::PopStyleColor(3);
+                        bool row_hovered = RenderRowHitbox("##flow_sel", i,
+                                                           kFlowColumnCount, m_flow_menu,
+                                                           open_menu);
 
                         std::string id_str        = std::to_string(flow.id.bitfield.event_id);
                         std::string timestamp_str = nanosecond_to_formatted_str(
@@ -561,12 +548,12 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         std::string level_str     = std::to_string(flow.level);
                         std::string dir_str       = std::to_string(flow.direction);
 
-                        flow_cell(0, id_str.c_str(),        ("##id_" + row_str).c_str(), i);
-                        flow_cell(1, flow.name.c_str(),     ("##name_" + row_str).c_str(), i);
-                        flow_cell(2, timestamp_str.c_str(), ("##ts_" + row_str).c_str(), i);
-                        flow_cell(3, track_str.c_str(),     ("##tid_" + row_str).c_str(), i);
-                        flow_cell(4, level_str.c_str(),     ("##lvl_" + row_str).c_str(), i);
-                        flow_cell(5, dir_str.c_str(),       ("##dir_" + row_str).c_str(), i);
+                        flow_cell(0, id_str.c_str(),        "##flow_id", i);
+                        flow_cell(1, flow.name.c_str(),     "##flow_name", i);
+                        flow_cell(2, timestamp_str.c_str(), "##flow_ts", i);
+                        flow_cell(3, track_str.c_str(),     "##flow_tid", i);
+                        flow_cell(4, level_str.c_str(),     "##flow_lvl", i);
+                        flow_cell(5, dir_str.c_str(),       "##flow_dir", i);
 
                         if(row_hovered &&
                            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
@@ -588,20 +575,22 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                                     "This is the selected event for this flow.");
                             }
                         }
+                        ImGui::PopID();
                     }
                 }
 
-                auto style = m_settings.GetDefaultStyle();
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-                if(ImGui::BeginPopup("##FlowContextMenu"))
+                if(open_menu)
                 {
-                    if(m_context_menu_flow_index >= 0 &&
-                       m_context_menu_flow_index <
+                    ImGui::OpenPopup("##FlowContextMenu");
+                }
+
+                if(BeginCellContextMenu("##FlowContextMenu"))
+                {
+                    if(m_flow_menu.row >= 0 &&
+                       m_flow_menu.row <
                            static_cast<int>(event_data->flow_info.size()))
                     {
-                        const auto& ctx_flow =
-                            event_data->flow_info[m_context_menu_flow_index];
+                        const auto& ctx_flow = event_data->flow_info[m_flow_menu.row];
 
                         if(ImGui::MenuItem("Go To Event"))
                         {
@@ -622,26 +611,11 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                             std::to_string(ctx_flow.level),
                             std::to_string(ctx_flow.direction)};
 
-                        if(ImGui::MenuItem("Copy Row Data"))
-                        {
-                            std::string row_text;
-                            for(int c = 0; c < kFlowColumnCount; c++)
-                            {
-                                if(c > 0) row_text += '\t';
-                                row_text += cells[c];
-                            }
-                            ImGui::SetClipboardText(row_text.c_str());
-                        }
-                        if(ImGui::MenuItem("Copy Cell Data"))
-                        {
-                            int col = m_context_menu_flow_column;
-                            if(col >= 0 && col < kFlowColumnCount)
-                                ImGui::SetClipboardText(cells[col].c_str());
-                        }
+                        AddCopyRowCellMenuItems(cells, kFlowColumnCount,
+                                                m_flow_menu.column);
                     }
-                    ImGui::EndPopup();
+                    EndCellContextMenu();
                 }
-                ImGui::PopStyleVar(2);
 
                 ImGui::EndTable();
             }
@@ -678,14 +652,11 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                 ImGui::TableSetupColumn("PC");
                 ImGui::TableHeadersRow();
 
-                bool open_callstack_context_menu = false;
+                bool open_menu = false;
 
                 auto callstack_cell = [&](int col, const std::string& text,
                                            std::string_view col_id, int row) {
-                    if(col > 0)
-                        ImGui::TableSetColumnIndex(col);
-                    else
-                        ImGui::SameLine();
+                    PositionCell(col);
 
                     if(text.empty())
                     {
@@ -702,12 +673,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                                                 COPY_DATA_NOTIFICATION, false, false);
                     }
 
-                    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-                    {
-                        m_context_menu_callstack_index  = row;
-                        m_context_menu_callstack_column = col;
-                        open_callstack_context_menu     = true;
-                    }
+                    CaptureCellRightClick(col, row, m_callstack_menu, open_menu);
                 };
 
                 const uint64_t this_owner_event_id = event_data->basic_info.id.uuid;
@@ -731,7 +697,6 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                         const auto& frame    = event_data->call_stack_info[i];
                         const uint64_t uuid  = frame.id.uuid;
                         const bool     is_owner_frame = (uuid == this_owner_event_id);
-                        std::string row_str = std::to_string(i);
 
                         ImGui::PushID(i);
                         ImGui::TableNextRow();
@@ -749,30 +714,9 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                         }
 
                         ImGui::TableSetColumnIndex(0);
-                        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
-                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
-                        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
-                        bool row_clicked = ImGui::Selectable(
-                            ("##cs_sel_" + row_str).c_str(), false,
-                            ImGuiSelectableFlags_SpanAllColumns |
-                                ImGuiSelectableFlags_AllowOverlap,
-                            ImVec2(0.0f, 0.0f));
-                        bool row_hovered =
-                            row_clicked ||
-                            ImGui::IsItemHovered(
-                                ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
-                                ImGuiHoveredFlags_AllowWhenOverlappedByItem);
-                        if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-                        {
-                            m_context_menu_callstack_index = i;
-                            int hovered_col                = ImGui::TableGetHoveredColumn();
-                            m_context_menu_callstack_column =
-                                (hovered_col >= 0 && hovered_col < kCallStackColumnCount)
-                                    ? hovered_col
-                                    : 0;
-                            open_callstack_context_menu = true;
-                        }
-                        ImGui::PopStyleColor(3);
+                        bool row_hovered = RenderRowHitbox("##cs_sel", i,
+                                                           kCallStackColumnCount,
+                                                           m_callstack_menu, open_menu);
 
                         callstack_cell(0, std::to_string(frame.id.bitfield.event_id),
                                        "##cs_id", i);
@@ -802,22 +746,19 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                     }
                 }
 
-                if(open_callstack_context_menu)
+                if(open_menu)
                 {
                     ImGui::OpenPopup("##CallStackContextMenu");
                 }
 
-                auto style = m_settings.GetDefaultStyle();
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-                if(ImGui::BeginPopup("##CallStackContextMenu"))
+                if(BeginCellContextMenu("##CallStackContextMenu"))
                 {
-                    if(m_context_menu_callstack_index >= 0 &&
-                       m_context_menu_callstack_index <
+                    if(m_callstack_menu.row >= 0 &&
+                       m_callstack_menu.row <
                            static_cast<int>(event_data->call_stack_info.size()))
                     {
                         const auto& ctx_frame =
-                            event_data->call_stack_info[m_context_menu_callstack_index];
+                            event_data->call_stack_info[m_callstack_menu.row];
 
                         if(ImGui::MenuItem("Go To Event"))
                         {
@@ -829,26 +770,11 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                             ctx_frame.address, ctx_frame.name, ctx_frame.file,
                             ctx_frame.pc};
 
-                        if(ImGui::MenuItem("Copy Row Data"))
-                        {
-                            std::string row_text;
-                            for(int c = 0; c < kCallStackColumnCount; c++)
-                            {
-                                if(c > 0) row_text += '\t';
-                                row_text += cells[c];
-                            }
-                            ImGui::SetClipboardText(row_text.c_str());
-                        }
-                        if(ImGui::MenuItem("Copy Cell Data"))
-                        {
-                            int col = m_context_menu_callstack_column;
-                            if(col >= 0 && col < kCallStackColumnCount)
-                                ImGui::SetClipboardText(cells[col].c_str());
-                        }
+                        AddCopyRowCellMenuItems(cells, kCallStackColumnCount,
+                                                m_callstack_menu.column);
                     }
-                    ImGui::EndPopup();
+                    EndCellContextMenu();
                 }
-                ImGui::PopStyleVar(2);
                 ImGui::EndTable();
             }
         }
@@ -883,15 +809,14 @@ EventsView::RenderArgumentData(const EventInfo* event_data)
                 ImGui::TableSetupColumn("Value");
                 ImGui::TableHeadersRow();
 
-                bool open_arg_context_menu = false;
+                bool open_menu = false;
 
-                auto arg_cell = [&](int col, const char* text, std::string_view col_id) {
-                    if(col > 0)
-                        ImGui::TableSetColumnIndex(col);
-                    else
-                        ImGui::SameLine();
+                auto arg_cell = [&](int col, const char* text, std::string_view col_id,
+                                    int row) {
+                    PositionCell(col);
                     CopyableTextUnformatted(text, col_id, COPY_DATA_NOTIFICATION, false,
                                             false);
+                    CaptureCellRightClick(col, row, m_arg_menu, open_menu);
                 };
 
                 ImGuiListClipper clipper;
@@ -900,83 +825,43 @@ EventsView::RenderArgumentData(const EventInfo* event_data)
                 {
                     for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                     {
-                        std::string row_str = std::to_string(i);
-
                         ImGui::PushID(i);
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
-
-                        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
-                        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
-                        ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
-                        ImGui::Selectable(("##arg_sel_" + row_str).c_str(), false,
-                                          ImGuiSelectableFlags_SpanAllColumns |
-                                              ImGuiSelectableFlags_AllowOverlap,
-                                          ImVec2(0.0f, 0.0f));
-                        if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-                        {
-                            m_context_menu_arg_index = i;
-                            int hovered_col          = ImGui::TableGetHoveredColumn();
-                            m_context_menu_arg_column =
-                                (hovered_col >= 0 && hovered_col < kArgColumnCount)
-                                    ? hovered_col
-                                    : 0;
-                            open_arg_context_menu = true;
-                        }
-                        ImGui::PopStyleColor(3);
+                        RenderRowHitbox("##arg_sel", i, kArgColumnCount, m_arg_menu,
+                                        open_menu);
 
                         std::string pos_str =
                             std::to_string(event_data->args[i].position);
 
-                        arg_cell(0, pos_str.c_str(), "##arg_pos");
-                        arg_cell(1, event_data->args[i].data_type.c_str(), "##arg_type");
-                        arg_cell(2, event_data->args[i].name.c_str(), "##arg_name");
-                        arg_cell(3, event_data->args[i].value.c_str(), "##arg_value");
+                        arg_cell(0, pos_str.c_str(), "##arg_pos", i);
+                        arg_cell(1, event_data->args[i].data_type.c_str(), "##arg_type", i);
+                        arg_cell(2, event_data->args[i].name.c_str(), "##arg_name", i);
+                        arg_cell(3, event_data->args[i].value.c_str(), "##arg_value", i);
                         ImGui::PopID();
                     }
                 }
 
-                if(open_arg_context_menu)
+                if(open_menu)
                 {
                     ImGui::OpenPopup("##ArgContextMenu");
                 }
 
-                auto style = m_settings.GetDefaultStyle();
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-                if(ImGui::BeginPopup("##ArgContextMenu"))
+                if(BeginCellContextMenu("##ArgContextMenu"))
                 {
-                    if(m_context_menu_arg_index >= 0 &&
-                       m_context_menu_arg_index <
-                           static_cast<int>(event_data->args.size()))
+                    if(m_arg_menu.row >= 0 &&
+                       m_arg_menu.row < static_cast<int>(event_data->args.size()))
                     {
-                        const auto& ctx_arg =
-                            event_data->args[m_context_menu_arg_index];
+                        const auto& ctx_arg = event_data->args[m_arg_menu.row];
 
                         std::string cells[] = { std::to_string(ctx_arg.position),
                                                 ctx_arg.data_type, ctx_arg.name,
                                                 ctx_arg.value };
 
-                        if(ImGui::MenuItem("Copy Row Data"))
-                        {
-                            std::string row_text;
-                            for(int c = 0; c < kArgColumnCount; c++)
-                            {
-                                if(c > 0) row_text += '\t';
-                                row_text += cells[c];
-                            }
-                            ImGui::SetClipboardText(row_text.c_str());
-                        }
-                        if(ImGui::MenuItem("Copy Cell Data"))
-                        {
-                            int col = m_context_menu_arg_column;
-                            if(col >= 0 && col < kArgColumnCount)
-                                ImGui::SetClipboardText(cells[col].c_str());
-                        }
+                        AddCopyRowCellMenuItems(cells, kArgColumnCount, m_arg_menu.column);
                     }
-                    ImGui::EndPopup();
+                    EndCellContextMenu();
                 }
-                ImGui::PopStyleVar(2);
 
                 ImGui::EndTable();
             }

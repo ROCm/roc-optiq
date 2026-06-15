@@ -31,6 +31,7 @@ inline constexpr float TOOLTIP_OFFSET            = 16.0f;
 inline constexpr int   MAX_CHARACTERS_PER_LINE   = 40;
 inline constexpr float MAX_TABLE_HEIGHT          = 300.0f;
 inline constexpr float SCALE_SEPERATOR_WIDTH     = 2.0f;
+inline constexpr int   STANDARD_VISIBLE_LEVELS    = 2;
 
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
@@ -87,6 +88,11 @@ FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
                 m_data_provider.DataModel().GetAnalysis().GetPerTrackQueueUtilization(
                     *m_track_metadata);
         }
+
+        if(m_track_height == DEFAULT_TRACK_HEIGHT)
+        {
+            m_track_height = StandardTrackHeight();
+        }
     }
 
     auto time_line_selection_changed_handler = [this](std::shared_ptr<RocEvent> e) {
@@ -129,31 +135,34 @@ FlameTrackItem::RenderMetaAreaExpand()
         ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
                ImVec2(ImGui::GetTextLineHeight() + m_meta_area_scale_width,
                       ImGui::GetTextLineHeight()));
-    int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
+    const int total_levels   = static_cast<int>(m_max_level) + 1;
+    const int visible_levels  = static_cast<int>(std::floor(m_track_height / m_level_height));
 
-    if(visible_levels <= m_max_level + 1)
+    if(total_levels > STANDARD_VISIBLE_LEVELS)
     {
-        ImGui::SetCursorPos(button_pos);
-        if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
+        if(visible_levels < total_levels)
         {
-            RecalculateTrackHeight();
-            m_is_expanded = true;
+            ImGui::SetCursorPos(button_pos);
+            if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
+            {
+                RecalculateTrackHeight();
+                m_is_expanded = true;
+            }
+            if(ImGui::IsItemHovered())
+                SetTooltipStyled("Expand track to see all events");
         }
-        if(ImGui::IsItemHovered()) SetTooltipStyled("Expand track to see all events");
-    }
-    else if(m_track_height >
-            std::max(m_max_level * m_level_height + m_level_height,
-                     DEFAULT_TRACK_HEIGHT))  // stand-in for default height..
-    {
-        ImGui::SetCursorPos(button_pos);
-        if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
+        else if(m_track_height > StandardTrackHeight())
         {
-            m_track_height =
-                DEFAULT_TRACK_HEIGHT;  // Default track height defined in parent class.
-            m_track_height_changed = true;
-            m_is_expanded          = false;
+            ImGui::SetCursorPos(button_pos);
+            if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
+            {
+                m_track_height         = StandardTrackHeight();
+                m_track_height_changed = true;
+                m_is_expanded          = false;
+            }
+            if(ImGui::IsItemHovered())
+                SetTooltipStyled("Contract track to default height");
         }
-        if(ImGui::IsItemHovered()) SetTooltipStyled("Contract track to default height");
     }
     ImGui::PopStyleColor(3);
 }
@@ -649,6 +658,15 @@ FlameTrackItem::RecalculateTrackHeight()
     m_track_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
                               DEFAULT_TRACK_HEIGHT);
     m_track_height_changed = true;
+}
+
+float
+FlameTrackItem::StandardTrackHeight() const
+{
+    const float total_levels = m_max_level + 1.0f;
+    const float levels       = std::min(total_levels,
+                                        static_cast<float>(STANDARD_VISIBLE_LEVELS));
+    return std::max(levels * m_level_height + 2.0f, DEFAULT_TRACK_HEIGHT);
 }
 
 void

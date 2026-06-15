@@ -100,6 +100,7 @@ private:
 
     void RenderTooltip(ChartItem& chart_item, int color_index);
     void RecalculateTrackHeight();
+    float StandardTrackHeight() const;
     
     void RequestAnalysis() override;
 

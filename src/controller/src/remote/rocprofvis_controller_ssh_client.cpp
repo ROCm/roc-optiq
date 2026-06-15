@@ -675,42 +675,75 @@ namespace Controller
             return SshClient::Result::Cancelled;
         }
         // 2) password
-        if(MethodListed(methods, "password") && !password.empty())
+        if(MethodListed(methods, "password"))
         {
-            spdlog::info("[ssh] trying password auth");
-            tried_password = true;
-            auth_rc = libssh2_userauth_password(connection->GetSession(), user.c_str(),
-                password.c_str());
-            if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+            // No password was supplied up front (e.g. empty string in the
+            // connection config). Rather than skipping password auth and
+            // failing silently, prompt the UI for one via the same bridge
+            // mechanism keyboard-interactive uses. A null/empty return means
+            // the user cancelled the prompt.
+            std::string effective_password = password;
+            if(effective_password.empty())
             {
+                spdlog::info("[ssh] no password supplied; prompting UI for password");
+                PromptRequest req;
+                req.instruction = "Password";
+                PromptItem item;
+                item.text = "Password: ";
+                item.echo = false;  // mask input
+                req.prompts.push_back(std::move(item));
 
-                std::string u = user;
-
-                std::transform(u.begin(), u.end(), u.begin(),
-                    [](unsigned char c) { return std::tolower(c); });
-                if (u != user && Reconnect(connection, future))
+                auto answer = connection->GetSshBridge()->AskPrompts(req);
+                if(!answer)
                 {
-                    auth_rc = libssh2_userauth_password(connection->GetSession(), u.c_str(),
-                        password.c_str());
+                    err = "password prompt cancelled by user";
+                    spdlog::info("[ssh] {}", err);
+                    connection->GetSshBridge()->SaveError(err);
+                    connection->Disconnect();
+                    return Result::AuthError;
+                }
+                if(!answer->empty())
+                {
+                    effective_password = (*answer)[0];
                 }
             }
-            if(auth_rc == 0)
+
+            if(!effective_password.empty())
             {
-                spdlog::info("[ssh] password auth OK");
-                return Result::Success;
-            }
-            else
-            {
-                char* msg = nullptr;
-                libssh2_session_last_error(connection->GetSession(), &msg, nullptr, 0);
-                spdlog::warn("[ssh] password auth failed (rc={}): {}", auth_rc,
-                    msg ? msg : "(no message)");
+                spdlog::info("[ssh] trying password auth");
+                tried_password = true;
+                auth_rc = libssh2_userauth_password(connection->GetSession(), user.c_str(),
+                    effective_password.c_str());
+                if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+                {
+
+                    std::string u = user;
+
+                    std::transform(u.begin(), u.end(), u.begin(),
+                        [](unsigned char c) { return std::tolower(c); });
+                    if (u != user && Reconnect(connection, future))
+                    {
+                        auth_rc = libssh2_userauth_password(connection->GetSession(), u.c_str(),
+                            effective_password.c_str());
+                    }
+                }
+                if(auth_rc == 0)
+                {
+                    spdlog::info("[ssh] password auth OK");
+                    return Result::Success;
+                }
+                else
+                {
+                    char* msg = nullptr;
+                    libssh2_session_last_error(connection->GetSession(), &msg, nullptr, 0);
+                    spdlog::warn("[ssh] password auth failed (rc={}): {}", auth_rc,
+                        msg ? msg : "(no message)");
+                }
             }
         }
         else
         {
-            spdlog::info("[ssh] skipping password auth (server_lists={} have_password={})",
-                MethodListed(methods, "password"), !password.empty());
+            spdlog::info("[ssh] skipping password auth (server does not advertise password)");
         }
 
         if (IsFutureCanceled(connection, future))

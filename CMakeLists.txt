@@ -105,7 +105,15 @@ set(VIEW_FILES
     src/view/src/rocprofvis_time_to_pixel.cpp
     src/view/src/rocprofvis_minimap.cpp
     src/view/src/rocprofvis_presets.cpp
+    src/view/src/rocprofvis_json_utils.cpp
+    src/view/src/rocprofvis_json_utils.h
+    src/view/src/rocprofvis_profiles_document.cpp
+    src/view/src/rocprofvis_profiles_document.h
     src/view/src/remote/rocprofvis_ssh_uri.cpp
+    src/view/src/remote/rocprofvis_ssh_connection_config.cpp
+    src/view/src/remote/rocprofvis_ssh_connection_config.h
+    src/view/src/remote/rocprofvis_ssh_connection_store.cpp
+    src/view/src/remote/rocprofvis_ssh_connection_store.h
     src/view/src/remote/rocprofvis_ssh_fetch.cpp
     src/view/src/remote/rocprofvis_ssh_session.cpp
     src/view/src/remote/rocprofvis_ssh_auth_modal.cpp

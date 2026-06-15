@@ -37,6 +37,9 @@ struct LaunchConfig
     std::string              profiler_id;
     std::string              tool_id;
     ConnectionType           connection = ConnectionType::kLocal;
+    // Id of the SSH connection profile (SshConnectionConfig::id) used when
+    // connection == kSsh. Empty for local launches or when unset.
+    std::string              ssh_connection_ref;
     TargetSpec               target;
     std::map<std::string, std::string> extra_env;
     std::vector<std::string> extra_argv;

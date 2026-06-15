@@ -1634,7 +1634,7 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
                                             filter_stream.str().c_str(), config);
 }
 
-#ifdef TEST_SSH_CONNECTION
+#if defined(ROCPROFVIS_DEVELOPER_MODE) && defined(TEST_SSH_CONNECTION)
 
 void
 AppWindow::HandleTestRemoteSSH()
@@ -1646,7 +1646,7 @@ AppWindow::HandleTestRemoteSSH()
     m_ssh_test_dialog->Show();
 }
 
-#endif // TEST_SSH_CONNECTION
+#endif // ROCPROFVIS_DEVELOPER_MODE && TEST_SSH_CONNECTION
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 void

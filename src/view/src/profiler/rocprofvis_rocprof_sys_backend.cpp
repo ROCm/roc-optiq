@@ -3,6 +3,7 @@
 
 #include "rocprofvis_rocprof_sys_backend.h"
 #include "rocprofvis_gui_helpers.h"
+#include "rocprofvis_json_utils.h"
 #include "imgui.h"
 #include <sstream>
 
@@ -177,66 +178,31 @@ bool AnyEnabled(std::map<std::string, bool> const& m)
 // JSON helpers
 // ==================================================================================
 
+// Thin forwarders to the shared json_utils helpers, preserving the historic
+// names/signatures used throughout the RocprofSysSettings (de)serialization.
 bool safe_bool(jt::Json& j, char const* key, bool def)
 {
-    if (!j.contains(key))
-        return def;
-    auto& v = j[key];
-    switch (v.getType())
-    {
-        case jt::Json::Bool:   return v.getBool();
-        case jt::Json::String: return v.getString() == "true";
-        case jt::Json::Long:   return v.getLong() != 0;
-        default:               return def;
-    }
+    return JsonUtils::GetBool(j, key, def);
 }
 
 double safe_double(jt::Json& j, char const* key, double def)
 {
-    if (!j.contains(key))
-        return def;
-    auto& v = j[key];
-    switch (v.getType())
-    {
-        case jt::Json::Double: return v.getDouble();
-        case jt::Json::Long:   return static_cast<double>(v.getLong());
-        case jt::Json::Float:  return static_cast<double>(v.getFloat());
-        default:               return def;
-    }
+    return JsonUtils::GetDouble(j, key, def);
 }
 
 int32_t safe_int(jt::Json& j, char const* key, int32_t def)
 {
-    if (!j.contains(key))
-        return def;
-    auto& v = j[key];
-    switch (v.getType())
-    {
-        case jt::Json::Long:   return static_cast<int32_t>(v.getLong());
-        case jt::Json::Double: return static_cast<int32_t>(v.getDouble());
-        case jt::Json::Float:  return static_cast<int32_t>(v.getFloat());
-        default:               return def;
-    }
+    return JsonUtils::GetInt(j, key, def);
 }
 
 std::string safe_string(jt::Json& j, char const* key, char const* def)
 {
-    if (!j.contains(key))
-        return def;
-    auto& v = j[key];
-    if (v.getType() == jt::Json::String)
-        return v.getString();
-    return def;
+    return JsonUtils::GetString(j, key, def);
 }
 
 jt::Json map_to_json(std::map<std::string, bool> const& m)
 {
-    jt::Json obj;
-    for (auto const& kv : m)
-    {
-        obj[kv.first] = kv.second;
-    }
-    return obj;
+    return JsonUtils::BoolMapToJson(m);
 }
 
 std::map<std::string, bool> json_to_map(
@@ -244,22 +210,7 @@ std::map<std::string, bool> json_to_map(
     char const* key,
     std::map<std::string, bool> const& defaults)
 {
-    if (!j.contains(key))
-        return defaults;
-    auto& v = j[key];
-    if (v.getType() != jt::Json::Object)
-        return defaults;
-
-    std::map<std::string, bool> result;
-    auto& obj = v.getObject();
-    for (auto const& kv : obj)
-    {
-        if (kv.second.getType() == jt::Json::Bool)
-            result[kv.first] = kv.second.getBool();
-        else
-            result[kv.first] = false;
-    }
-    return result;
+    return JsonUtils::JsonToBoolMap(j, key, defaults);
 }
 
 } // namespace

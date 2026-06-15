@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_launch_config.h"
+#include "rocprofvis_json_utils.h"
 
 namespace RocProfVis
 {
@@ -27,6 +28,7 @@ jt::Json LaunchConfig::ToJson() const
 
     jt::Json& conn = json["connection"];
     conn["type"] = (connection == ConnectionType::kLocal) ? "local" : "ssh";
+    conn["ssh_connection_ref"] = ssh_connection_ref;
 
     jt::Json& tgt = json["target"];
     tgt["executable"] = target.executable;
@@ -57,69 +59,45 @@ LaunchConfig LaunchConfig::FromJson(jt::Json const& json)
     LaunchConfig cfg;
     jt::Json& j = const_cast<jt::Json&>(json);
 
-    if (j.contains("profiler_id"))
-    {
-        cfg.profiler_id = j["profiler_id"].getString();
-    }
-    if (j.contains("tool_id"))
-    {
-        cfg.tool_id = j["tool_id"].getString();
-    }
+    cfg.profiler_id = JsonUtils::GetString(j, "profiler_id", cfg.profiler_id);
+    cfg.tool_id     = JsonUtils::GetString(j, "tool_id", cfg.tool_id);
 
     if (j.contains("connection"))
     {
         jt::Json& conn = j["connection"];
-        if (conn.contains("type"))
+        if (JsonUtils::GetString(conn, "type", "local") == "ssh")
         {
-            std::string conn_type = conn["type"].getString();
-            if (conn_type == "ssh")
-            {
-                cfg.connection = ConnectionType::kSsh;
-            }
+            cfg.connection = ConnectionType::kSsh;
         }
+        cfg.ssh_connection_ref = JsonUtils::GetString(conn, "ssh_connection_ref", "");
     }
 
     if (j.contains("target"))
     {
         jt::Json& tgt = j["target"];
-        if (tgt.contains("executable"))
-            cfg.target.executable = tgt["executable"].getString();
-        if (tgt.contains("arguments"))
-            cfg.target.arguments = tgt["arguments"].getString();
-        if (tgt.contains("working_directory"))
-            cfg.target.working_directory = tgt["working_directory"].getString();
-        if (tgt.contains("output_directory"))
-            cfg.target.output_directory = tgt["output_directory"].getString();
-        if (tgt.contains("auto_load_trace"))
-            cfg.target.auto_load_trace = tgt["auto_load_trace"].getBool();
+        cfg.target.executable        = JsonUtils::GetString(tgt, "executable", cfg.target.executable);
+        cfg.target.arguments         = JsonUtils::GetString(tgt, "arguments", cfg.target.arguments);
+        cfg.target.working_directory = JsonUtils::GetString(tgt, "working_directory", cfg.target.working_directory);
+        cfg.target.output_directory  = JsonUtils::GetString(tgt, "output_directory", cfg.target.output_directory);
+        cfg.target.auto_load_trace   = JsonUtils::GetBool(tgt, "auto_load_trace", cfg.target.auto_load_trace);
     }
 
-    if (json.contains("extra_env"))
+    if (j.contains("extra_env"))
     {
-        jt::Json& env = const_cast<jt::Json&>(json)["extra_env"];
+        jt::Json& env = j["extra_env"];
         if (env.isObject())
         {
             for (auto& kv : env.getObject())
             {
-                cfg.extra_env[kv.first] = kv.second.getString();
-            }
-        }
-    }
-
-    if (json.contains("extra_argv"))
-    {
-        jt::Json& argv_json = const_cast<jt::Json&>(json)["extra_argv"];
-        if (argv_json.isArray())
-        {
-            for (jt::Json& item : argv_json.getArray())
-            {
-                if (item.isString())
+                if (kv.second.isString())
                 {
-                    cfg.extra_argv.push_back(item.getString());
+                    cfg.extra_env[kv.first] = kv.second.getString();
                 }
             }
         }
     }
+
+    cfg.extra_argv = JsonUtils::GetStringArray(j, "extra_argv");
 
     if (j.contains("backend_payload"))
     {

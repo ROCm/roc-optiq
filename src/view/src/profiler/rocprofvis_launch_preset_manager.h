@@ -40,10 +40,6 @@ public:
 
     bool ImportPreset(std::string const& file_path, std::string const& profiler_id,
                       LaunchConfig& config_out) const;
-
-private:
-    std::string GetPresetsDirectory(std::string const& profiler_id) const;
-    std::string GetPresetFilePath(std::string const& name, std::string const& profiler_id) const;
 };
 
 } // namespace View

@@ -57,7 +57,12 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     LoadFromSettings();
     RefreshExecutionCache();
 
-    m_remote_uri->LoadFromJson();
+    m_connection_store.Load();
+    if(m_connection_store.Get(m_selected_connection_id) == nullptr && !m_connection_store.Empty())
+    {
+        m_selected_connection_id = m_connection_store.List().front().id;
+    }
+    ApplySelectedConnection();
 
     // Listen for profiler state transitions surfaced by the AppMonitor. Filter
     // to events belonging to this dialog's LOCAL session by operation id (the
@@ -116,6 +121,10 @@ void ProfilerLauncherDialog::Render()
         // Sync typed settings to backend_payload so preset save sees current values
         IProfilerBackend* backend = m_backends[m_backend_index].get();
         m_config.backend_payload = backend->SaveSettings();
+
+        // Keep the launch profile's SSH connection reference in sync with the
+        // currently selected connection so saved profiles reference it.
+        m_config.ssh_connection_ref = m_selected_connection_id;
 
         RenderToolbar();
         backend = m_backends[m_backend_index].get();
@@ -278,6 +287,14 @@ void ProfilerLauncherDialog::RenderToolbar()
                     break;
                 }
             }
+            // Resolve the profile's referenced SSH connection (if any) so the
+            // remote section reflects the saved connection.
+            if (!m_config.ssh_connection_ref.empty() &&
+                m_connection_store.Get(m_config.ssh_connection_ref) != nullptr)
+            {
+                m_selected_connection_id = m_config.ssh_connection_ref;
+                ApplySelectedConnection();
+            }
         }
     }
 }
@@ -365,8 +382,12 @@ void ProfilerLauncherDialog::RenderRemoteSection()
     if (ImGui::Button("Configure SSH Connection..."))
     {
         m_ssh_settings_dialog = std::make_unique<SshSettingsDialog>(
-            *m_remote_uri,
-            [this](RemoteUri edited) { *m_remote_uri = std::move(edited); });
+            m_connection_store, m_selected_connection_id,
+            [this](const std::string& id)
+            {
+                m_selected_connection_id = id;
+                ApplySelectedConnection();
+            });
     }
 
     // Remote output database path to download once the profiler completes.
@@ -674,14 +695,15 @@ void ProfilerLauncherDialog::OnLaunchLocal()
 
 void ProfilerLauncherDialog::OnLaunchRemote()
 {
+    // Bind the selected connection profile in case it changed since last apply.
+    ApplySelectedConnection();
+
     if (m_remote_uri->GetRemoteHostString().empty() ||
         m_remote_uri->GetRemoteUserString().empty())
     {
         m_error_message = "Configure the SSH connection (host/user) before launching.";
         return;
     }
-
-    m_remote_uri->SaveToJson();
 
     rocprofvis_profiler_type_t profiler_type = ResolveProfilerType();
 
@@ -920,6 +942,7 @@ void ProfilerLauncherDialog::LoadFromSettings()
     m_config.target.output_directory = ps.profiler_output_directory;
     m_config.target.auto_load_trace = ps.auto_load_trace;
     m_current_preset_name = ps.last_preset_name;
+    m_selected_connection_id = ps.last_ssh_connection_id;
 
     if (!ps.last_profiler_id.empty())
     {
@@ -945,7 +968,21 @@ void ProfilerLauncherDialog::SaveToSettings()
     ps.auto_load_trace = m_config.target.auto_load_trace;
     ps.last_preset_name = m_current_preset_name;
     ps.last_profiler_id = m_config.profiler_id;
+    ps.last_ssh_connection_id = m_selected_connection_id;
     settings.SaveProfilerSettings();
+}
+
+void ProfilerLauncherDialog::ApplySelectedConnection()
+{
+    const SshConnectionConfig* cfg = m_connection_store.Get(m_selected_connection_id);
+    if(cfg)
+    {
+        m_remote_uri->SetConnection(*cfg);
+    }
+    else
+    {
+        m_remote_uri->SetConnection(SshConnectionConfig());
+    }
 }
 
 void ProfilerLauncherDialog::AddRecentTarget(std::string const& exe)

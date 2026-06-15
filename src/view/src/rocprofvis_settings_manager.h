@@ -53,6 +53,7 @@ typedef struct ProfilerSettings
     std::vector<std::string> recent_targets;
     std::string last_preset_name;
     std::string last_profiler_id;
+    std::string last_ssh_connection_id;
 } ProfilerSettings;
 
 typedef struct AppWindowSettings

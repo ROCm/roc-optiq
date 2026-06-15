@@ -822,6 +822,7 @@ SettingsManager::SerializeProfilerSettings(jt::Json& json)
     ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD] = m_profilersettings.auto_load_trace;
     ps["last_preset_name"] = m_profilersettings.last_preset_name;
     ps["last_profiler_id"] = m_profilersettings.last_profiler_id;
+    ps["last_ssh_connection_id"] = m_profilersettings.last_ssh_connection_id;
 
     int rt_idx = 0;
     for (auto const& t : m_profilersettings.recent_targets)
@@ -853,6 +854,10 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
     if(ps["last_profiler_id"].isString())
     {
         m_profilersettings.last_profiler_id = ps["last_profiler_id"].getString();
+    }
+    if(ps["last_ssh_connection_id"].isString())
+    {
+        m_profilersettings.last_ssh_connection_id = ps["last_ssh_connection_id"].getString();
     }
     if(ps["recent_targets"].isArray())
     {

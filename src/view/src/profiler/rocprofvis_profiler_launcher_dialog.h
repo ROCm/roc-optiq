@@ -12,6 +12,7 @@
 #include "rocprofvis_profiler_backend.h"
 #include "rocprofvis_launch_preset_manager.h"
 #include "remote/rocprofvis_ssh_uri.h"
+#include "remote/rocprofvis_ssh_connection_store.h"
 #include "remote/rocprofvis_ssh_settings_dialog.h"
 #include "remote/rocprofvis_ssh_fetch.h"
 #include "imgui.h"
@@ -71,6 +72,7 @@ private:
     void SwitchBackend(int index);
     void LoadFromSettings();
     void SaveToSettings();
+    void ApplySelectedConnection();
     void AddRecentTarget(std::string const& exe);
     std::string GetProfilerPath() const;
 
@@ -82,6 +84,8 @@ private:
     // RemoteUri (edited via the on-demand SshSettingsDialog) and consumed by the
     // spawned RemoteProfilerSession, mirroring the SshTestDialog pattern.
     std::shared_ptr<RemoteUri>             m_remote_uri;
+    SshConnectionStore                     m_connection_store;
+    std::string                            m_selected_connection_id;
     std::unique_ptr<SshSettingsDialog>     m_ssh_settings_dialog;
     std::unique_ptr<RemoteProfilerSession> m_remote_session;
     bool                                   m_remote_show_progress_popup;

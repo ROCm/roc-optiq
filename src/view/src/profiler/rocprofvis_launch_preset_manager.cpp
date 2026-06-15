@@ -3,6 +3,8 @@
 
 #include "rocprofvis_launch_preset_manager.h"
 #include "rocprofvis_utils.h"
+#include "rocprofvis_json_utils.h"
+#include "rocprofvis_profiles_document.h"
 #include "spdlog/spdlog.h"
 #include <filesystem>
 #include <fstream>
@@ -17,44 +19,28 @@ LaunchPresetManager::LaunchPresetManager()
 {
 }
 
-std::string LaunchPresetManager::GetPresetsDirectory(std::string const& profiler_id) const
-{
-    std::string config_path = get_application_config_path(true);
-    std::filesystem::path dir = std::filesystem::path(config_path) / "launch_presets" / profiler_id;
-    return dir.string();
-}
-
-std::string LaunchPresetManager::GetPresetFilePath(std::string const& name,
-                                                    std::string const& profiler_id) const
-{
-    std::filesystem::path dir(GetPresetsDirectory(profiler_id));
-    return (dir / (name + ".json")).string();
-}
-
 std::vector<PresetInfo> LaunchPresetManager::ListPresets(std::string const& profiler_id) const
 {
     std::vector<PresetInfo> presets;
-    std::string dir_path = GetPresetsDirectory(profiler_id);
 
-    if (!std::filesystem::exists(dir_path))
+    jt::Json& profiles = ProfilesDocument::Get().LaunchProfiles();
+    if (!profiles.isObject())
     {
         return presets;
     }
 
-    for (auto const& entry : std::filesystem::directory_iterator(dir_path))
+    for (auto& entry : profiles.getObject())
     {
-        if (!entry.is_regular_file())
-        {
-            continue;
-        }
-        if (entry.path().extension() != ".json")
+        // Only surface profiles for the requested profiler. The profiler id is
+        // stored inside each LaunchConfig entry.
+        if (JsonUtils::GetString(entry.second, "profiler_id", "") != profiler_id)
         {
             continue;
         }
 
         PresetInfo info;
-        info.name = entry.path().stem().string();
-        info.file_path = entry.path().string();
+        info.name = entry.first;
+        info.file_path = entry.first;  // logical name; no longer a filesystem path
         presets.push_back(info);
     }
 
@@ -64,83 +50,65 @@ std::vector<PresetInfo> LaunchPresetManager::ListPresets(std::string const& prof
 bool LaunchPresetManager::SavePreset(std::string const& name, LaunchConfig const& config,
                                       IProfilerBackend const* /*backend*/)
 {
-    std::string dir_path = GetPresetsDirectory(config.profiler_id);
-
-    std::error_code ec;
-    std::filesystem::create_directories(dir_path, ec);
-    if (ec)
+    if (name.empty())
     {
-        spdlog::error("Failed to create presets directory '{}': {}", dir_path, ec.message());
+        spdlog::error("Cannot save launch profile with empty name");
         return false;
     }
 
-    std::string file_path = GetPresetFilePath(name, config.profiler_id);
+    jt::Json& profiles = ProfilesDocument::Get().LaunchProfiles();
+    profiles[name] = config.ToJson();
 
-    jt::Json json = config.ToJson();
-    std::string json_str = json.toString();
-
-    std::ofstream ofs(file_path);
-    if (!ofs.is_open())
+    if (!ProfilesDocument::Get().Persist())
     {
-        spdlog::error("Failed to open preset file for writing: {}", file_path);
+        spdlog::error("Failed to persist launch profile '{}'", name);
         return false;
     }
 
-    ofs << json_str;
-    ofs.close();
-
-    spdlog::info("Saved preset '{}' to {}", name, file_path);
+    spdlog::info("Saved launch profile '{}'", name);
     return true;
 }
 
 bool LaunchPresetManager::LoadPreset(std::string const& name, std::string const& profiler_id,
                                       LaunchConfig& config_out) const
 {
-    std::string file_path = GetPresetFilePath(name, profiler_id);
-
-    if (!std::filesystem::exists(file_path))
+    jt::Json& profiles = ProfilesDocument::Get().LaunchProfiles();
+    if (!profiles.isObject() || !profiles.contains(name))
     {
-        spdlog::error("Preset file not found: {}", file_path);
+        spdlog::error("Launch profile not found: {}", name);
         return false;
     }
 
-    std::ifstream ifs(file_path);
-    if (!ifs.is_open())
+    jt::Json& entry = profiles[name];
+    if (JsonUtils::GetString(entry, "profiler_id", profiler_id) != profiler_id)
     {
-        spdlog::error("Failed to open preset file: {}", file_path);
-        return false;
+        spdlog::warn("Launch profile '{}' belongs to a different profiler", name);
     }
 
-    std::ostringstream ss;
-    ss << ifs.rdbuf();
-    std::string json_str = ss.str();
-    ifs.close();
-
-    auto [status, json] = jt::Json::parse(json_str);
-    if (status != jt::Json::success)
-    {
-        spdlog::error("Failed to parse preset file '{}': parse error", file_path);
-        return false;
-    }
-
-    config_out = LaunchConfig::FromJson(json);
-    spdlog::info("Loaded preset '{}' from {}", name, file_path);
+    config_out = LaunchConfig::FromJson(entry);
+    spdlog::info("Loaded launch profile '{}'", name);
     return true;
 }
 
-bool LaunchPresetManager::DeletePreset(std::string const& name, std::string const& profiler_id)
+bool LaunchPresetManager::DeletePreset(std::string const& name, std::string const& /*profiler_id*/)
 {
-    std::string file_path = GetPresetFilePath(name, profiler_id);
-
-    std::error_code ec;
-    if (std::filesystem::remove(file_path, ec))
+    jt::Json& profiles = ProfilesDocument::Get().LaunchProfiles();
+    if (!profiles.isObject() || !profiles.contains(name))
     {
-        spdlog::info("Deleted preset '{}' ({})", name, file_path);
-        return true;
+        spdlog::error("Launch profile not found for delete: {}", name);
+        return false;
     }
 
-    spdlog::error("Failed to delete preset '{}': {}", file_path, ec.message());
-    return false;
+    profiles.getObject().erase(name);
+
+    if (!ProfilesDocument::Get().Persist())
+    {
+        spdlog::error("Failed to persist after deleting launch profile '{}'", name);
+        return false;
+    }
+
+    spdlog::info("Deleted launch profile '{}'", name);
+    return true;
 }
 
 bool LaunchPresetManager::ExportCfg(std::string const& file_path, LaunchConfig const& config,
@@ -183,6 +151,15 @@ bool LaunchPresetManager::ImportPreset(std::string const& file_path,
         return false;
     }
 
+    // Try JSON preset first.
+    jt::Json json;
+    if (JsonUtils::ReadFile(file_path, json))
+    {
+        config_out = LaunchConfig::FromJson(json);
+        return true;
+    }
+
+    // Fall back to .cfg format: KEY = VALUE lines -> extra_env
     std::ifstream ifs(file_path);
     if (!ifs.is_open())
     {
@@ -195,15 +172,6 @@ bool LaunchPresetManager::ImportPreset(std::string const& file_path,
     std::string content = ss.str();
     ifs.close();
 
-    // Try JSON preset first
-    auto [status, json] = jt::Json::parse(content);
-    if (status == jt::Json::success)
-    {
-        config_out = LaunchConfig::FromJson(json);
-        return true;
-    }
-
-    // Fall back to .cfg format: KEY = VALUE lines -> extra_env
     config_out = LaunchConfig();
     config_out.profiler_id = profiler_id;
 

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_ssh_uri.h"
+#include "rocprofvis_ssh_connection_store.h"
 #include "rocprofvis_ssh_session.h"
 #include "rocprofvis_ssh_settings_dialog.h"
 #include "rocprofvis_remote_trace_orchestrator.h"
@@ -46,7 +47,13 @@ private:
     void RenderOutputPopup();
     void RenderRemoteFilePopup();
 
+    // Binds the currently selected SSH connection profile into m_uri so the
+    // spawned orchestrator/session read the right host/credentials.
+    void ApplySelectedConnection();
+
     AppWindow*                               m_app_window;
+    SshConnectionStore                       m_connection_store;
+    std::string                              m_selected_connection_id;
     std::shared_ptr<RemoteUri>               m_uri;
     std::unique_ptr<SshSettingsDialog>       m_settings_dialog;
     std::unique_ptr<RemoteTraceOrchestrator> m_orchestrator;

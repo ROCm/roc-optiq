@@ -30,7 +30,26 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
 , m_last_progress()
 , m_show_remote_filesystem_popup(false)
 {
-    m_uri->LoadFromJson();
+    m_connection_store.Load();
+    if(!m_connection_store.Empty())
+    {
+        m_selected_connection_id = m_connection_store.List().front().id;
+    }
+    ApplySelectedConnection();
+}
+
+void
+SshTestDialog::ApplySelectedConnection()
+{
+    const SshConnectionConfig* cfg = m_connection_store.Get(m_selected_connection_id);
+    if(cfg)
+    {
+        m_uri->SetConnection(*cfg);
+    }
+    else
+    {
+        m_uri->SetConnection(SshConnectionConfig());
+    }
 }
 
 SshTestDialog::~SshTestDialog()
@@ -80,11 +99,16 @@ SshTestDialog::Render()
 
             if(ImGui::Button("Configure SSH Connection..."))
             {
-                // Create the transient settings dialog on demand, seeded with
-                // the current config; commit copies the edited values back.
+                // Create the transient profile-managing dialog on demand, seeded
+                // with the currently selected connection; on commit, bind the
+                // chosen connection into m_uri.
                 m_settings_dialog = std::make_unique<SshSettingsDialog>(
-                    *m_uri,
-                    [this](RemoteUri edited) { *m_uri = std::move(edited); });
+                    m_connection_store, m_selected_connection_id,
+                    [this](const std::string& id)
+                    {
+                        m_selected_connection_id = id;
+                        ApplySelectedConnection();
+                    });
             }
 
             ImGui::Spacing();
@@ -141,10 +165,9 @@ SshTestDialog::Render()
             {
                 if(ImGui::Button("Open", ImVec2(110, 0)))
                 {
-                    if(!m_uri->SaveToJson())
-                    {
-                        m_status_msg = "Failed to backup authentication parameters.";
-                    }
+                    // Connection config is persisted by the settings dialog; bind
+                    // the selected profile in case it changed since last apply.
+                    ApplySelectedConnection();
                     m_show_stdout_popup   = false;
                     m_show_progress_popup = false;
 
@@ -326,7 +349,7 @@ void SshTestDialog::RenderRemoteFilePopup()
 
             ImGui::Indent(10.0f);
 
-            int index = 0;
+            uint32_t index = 0;
 
             // --- ".." entry ---
             {

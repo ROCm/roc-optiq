@@ -57,8 +57,12 @@ public:
     void Hide();
     void RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
                          float reorder_grip_width);
+    // Render the pill at an explicit window-local top-left position. Lets callers
+    // place a pill somewhere other than the default bottom-left meta-area slot.
+    void RenderPillLabelAt(ImVec2 pillbox_pos, SettingsManager& settings);
     ImVec2 GetPillSize();
     bool   WasLastHovered() const { return m_was_last_hovered; }
+    bool   IsShown() const { return m_show_pill_label; }
 
 private:
     void                            CalculatePillSize();
@@ -117,9 +121,12 @@ public:
 
 protected:
     virtual void RenderMetaArea();
-    virtual void RenderMetaAreaScale()          = 0;
+    virtual void RenderMetaAreaScale();
     virtual void RenderMetaAreaOptions()        = 0;
     virtual void RenderMetaAreaExpand();
+    // Optional hook to render an extra pill beside the primary meta-area pill.
+    // Called right after the primary pill so subclasses share its bottom row.
+    virtual void RenderSecondaryMetaPill(const ImVec2& content_size);
     virtual void RenderChart(float graph_width) = 0;
     virtual void RenderResizeBar(const ImVec2& parent_size);
     virtual bool ExtractPointsFromData() = 0;

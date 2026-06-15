@@ -166,6 +166,7 @@ if(APPLE)
         src/app/src/main.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
+        src/app/src/rocprofvis_platform_helpers_macos.mm
         ${VIEW_FILES})
 else()
     add_executable(${TARGET_NAME}
@@ -230,6 +231,11 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+
+if(APPLE)
+    # rocprofvis_platform_helpers_macos.mm uses AppKit (+[NSEvent modifierFlags]).
+    target_link_libraries(${TARGET_NAME} PRIVATE "-framework AppKit")
+endif()
 
 if(APPLE)
     set(ROCPROFVIS_BUNDLE_VULKAN ON CACHE BOOL

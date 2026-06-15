@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_timeline_view.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_click_manager.h"
@@ -425,7 +426,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         // right-click landed.
         if(m_timeline_selection->HasSelectedEvents())
         {
-            if(ImGui::MenuItem("Make Time Range Selection"))
+            if(IconMenuItem(ICON_EXPAND, "Make Time Range Selection"))
             {
                 double start_ts, end_ts;
                 if(m_timeline_selection->GetSelectedEventsTimeRange(start_ts, end_ts))
@@ -436,40 +437,37 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                                              m_tpt->NormalizeTime(end_ts) };
                     m_timeline_selection->SelectTimeRange(start_ts, end_ts);
                 }
-                ImGui::CloseCurrentPopup();
             }
 
             std::vector<uint64_t> selected_event_ids;
             m_timeline_selection->GetSelectedEvents(selected_event_ids);
             const bool multiple_events = selected_event_ids.size() > 1;
-            if(ImGui::MenuItem(multiple_events ? "Copy Event Names" : "Copy Event Name"))
+            if(IconMenuItem(ICON_COPY,
+                            multiple_events ? "Copy Event Names" : "Copy Event Name"))
             {
                 CopySelectedEventNames();
-                ImGui::CloseCurrentPopup();
             }
-            if(ImGui::MenuItem("Copy Event Details"))
+            if(IconMenuItem(ICON_COPY, "Copy Event Details"))
             {
                 CopySelectedEventDetails();
-                ImGui::CloseCurrentPopup();
             }
         }
         if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
            m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
         {
-            if(ImGui::MenuItem("Remove Time Range Selection"))
+            if(IconMenuItem(ICON_TRASH_CAN, "Remove Time Range Selection"))
             {
                 ClearTimeRangeSelection();
             }
         }
 
-        if(ImGui::MenuItem("Add Annotation"))
+        if(IconMenuItem(ICON_ADD_NOTE, "Add Annotation"))
         {
             float  x_in_chart = rel_mouse_pos.x;
             double time_ns    = m_tpt->PixelToTime(x_in_chart);
             float  y_offset   = rel_mouse_pos.y;
             m_annotations->OpenStickyNotePopup(time_ns, y_offset, m_tpt->GetVMinX(),
                                                m_tpt->GetVMaxX(), m_tpt->GetGraphSize());
-            ImGui::CloseCurrentPopup();
         }
 
         ImGui::Separator();
@@ -477,27 +475,24 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         MeasurementController& fm = *m_measurement;
         if(fm.IsMeasurementMode())
         {
-            if(ImGui::MenuItem("Exit Measurement Mode"))
+            if(IconMenuItem(ICON_CROP, "Exit Measurement Mode"))
             {
                 fm.ExitMeasurementMode();
-                ImGui::CloseCurrentPopup();
             }
         }
         else
         {
-            if(ImGui::MenuItem("Enter Measurement Mode"))
+            if(IconMenuItem(ICON_CROP, "Enter Measurement Mode"))
             {
                 fm.EnterMeasurementMode();
-                ImGui::CloseCurrentPopup();
             }
         }
         if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
         {
-            if(ImGui::MenuItem("Clear Measurement"))
+            if(IconMenuItem(ICON_TRASH_CAN, "Clear Measurement"))
             {
                 fm.ClearMeasurement();
                 m_timeline_selection->UnhighlightPersistentEvents();
-                ImGui::CloseCurrentPopup();
             }
         }
 
@@ -1814,6 +1809,154 @@ TimelineView::MakeGraphView()
     m_histogram       = &tlm.GetHistogram();
     m_meta_map_made   = true;
     m_resize_activity = true;
+
+    CalculateTrackCounts();
+}
+
+void
+TimelineView::CalculateTrackCounts()
+{
+    m_track_counts = TrackTypeCounts{};
+
+    const TimelineModel&          tlm        = m_data_provider.DataModel().GetTimeline();
+    std::vector<const TrackInfo*> track_list = tlm.GetTrackList();
+
+    for(const TrackInfo* track : track_list)
+    {
+        if(!track)
+        {
+            continue;
+        }
+
+        ++m_track_counts.total;
+        switch(track->topology.type)
+        {
+            case TrackInfo::TrackType::InstrumentedThread:
+                ++m_track_counts.instrumented_threads;
+                break;
+            case TrackInfo::TrackType::SampledThread:
+                ++m_track_counts.sampled_threads;
+                break;
+            case TrackInfo::TrackType::Queue:
+                ++m_track_counts.queues;
+                break;
+            case TrackInfo::TrackType::Stream:
+                ++m_track_counts.streams;
+                break;
+            case TrackInfo::TrackType::Counter:
+                ++m_track_counts.counters;
+                break;
+            default:
+                ++m_track_counts.other;
+                break;
+        }
+    }
+
+    BuildTrackCountLabels();
+}
+
+void
+TimelineView::BuildTrackCountLabels()
+{
+    m_track_counts.total_label =
+        std::to_string(m_track_counts.total) +
+        (m_track_counts.total == 1 ? " Track" : " Tracks");
+
+    // Builds a ", "-separated summary of the non-empty track categories.
+    auto append_part = [](std::string& out, uint64_t count, const char* singular,
+                          const char* plural) {
+        if(count == 0)
+        {
+            return;
+        }
+        if(!out.empty())
+        {
+            out += ", ";
+        }
+        out += std::to_string(count) + " " + (count == 1 ? singular : plural);
+    };
+
+    m_track_counts.breakdown.clear();
+    append_part(m_track_counts.breakdown, m_track_counts.instrumented_threads, "thread",
+                "threads");
+    append_part(m_track_counts.breakdown, m_track_counts.sampled_threads, "sampled",
+                "sampled");
+    append_part(m_track_counts.breakdown, m_track_counts.queues, "queue", "queues");
+    append_part(m_track_counts.breakdown, m_track_counts.streams, "stream", "streams");
+    append_part(m_track_counts.breakdown, m_track_counts.counters, "counter", "counters");
+    append_part(m_track_counts.breakdown, m_track_counts.other, "other", "other");
+
+    // One "<label>: <count>" row per non-empty category for the hover tooltip.
+    auto append_row = [&](const char* label, uint64_t count) {
+        if(count == 0)
+        {
+            return;
+        }
+        m_track_counts.tooltip_lines.emplace_back(std::string(label) + ": " +
+                                                  std::to_string(count));
+    };
+
+    m_track_counts.tooltip_lines.clear();
+    append_row("Instrumented threads", m_track_counts.instrumented_threads);
+    append_row("Sampled threads", m_track_counts.sampled_threads);
+    append_row("Queues", m_track_counts.queues);
+    append_row("Streams", m_track_counts.streams);
+    append_row("Counters", m_track_counts.counters);
+    append_row("Other", m_track_counts.other);
+}
+
+void
+TimelineView::RenderTrackStats(float available_width)
+{
+    constexpr float PAD_X         = 12.0f;
+    constexpr float PAD_Y         = 6.0f;
+    const float     content_width = std::max(0.0f, available_width - (2.0f * PAD_X));
+
+    FontManager& fonts = m_settings.GetFontManager();
+
+    const std::string& total_label = m_track_counts.total_label;
+    const std::string& breakdown   = m_track_counts.breakdown;
+
+    ImGui::SetCursorPos(ImVec2(PAD_X, PAD_Y));
+    ImGui::BeginGroup();
+
+    ImGui::PushFont(fonts.GetFont(FontType::kDefault),
+                    fonts.GetFontSize(FontSize::kMedLarge));
+    ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
+    ImGui::TextUnformatted(total_label.c_str());
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+
+    if(!breakdown.empty())
+    {
+        ImGui::SetCursorPosX(PAD_X);
+        ImGui::PushFont(fonts.GetFont(FontType::kDefault),
+                        fonts.GetFontSize(FontSize::kSmall));
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
+        // tooltip_width 0: the full breakdown is shown by the group tooltip below,
+        // so the elided text should not raise a second, competing tooltip.
+        ElidedText(breakdown.c_str(), content_width, 0.0f, Alignment_Left);
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+    }
+
+    ImGui::EndGroup();
+
+    // Hovering the summary reveals the full per-type breakdown.
+    if(BeginItemTooltipStyled())
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
+        ImGui::TextUnformatted(total_label.c_str());
+        ImGui::PopStyleColor();
+        ImGui::Separator();
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
+        for(const std::string& line : m_track_counts.tooltip_lines)
+        {
+            ImGui::TextUnformatted(line.c_str());
+        }
+        ImGui::PopStyleColor();
+        EndTooltipStyled();
+    }
 }
 
 void
@@ -1830,6 +1973,7 @@ TimelineView::RenderHistogram()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
     ImGui::BeginChild("HistogramSidebar", ImVec2(m_sidebar_size, kHistogramTotalHeight),
                       false, ImGuiWindowFlags_NoScrollbar);
+    RenderTrackStats(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();

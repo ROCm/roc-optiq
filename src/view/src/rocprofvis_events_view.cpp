@@ -125,7 +125,7 @@ EndCellContextMenu()
 void
 AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column)
 {
-    if(ImGui::MenuItem("Copy Row Data"))
+    if(IconMenuItem(ICON_COPY, "Copy Row Data"))
     {
         std::string row_text;
         for(int c = 0; c < column_count; c++)
@@ -135,7 +135,7 @@ AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column)
         }
         ImGui::SetClipboardText(row_text.c_str());
     }
-    if(ImGui::MenuItem("Copy Cell Data"))
+    if(IconMenuItem(ICON_COPY, "Copy Cell Data"))
     {
         if(column >= 0 && column < column_count)
             ImGui::SetClipboardText(cells[column].c_str());
@@ -592,7 +592,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                     {
                         const auto& ctx_flow = event_data->flow_info[m_flow_menu.row];
 
-                        if(ImGui::MenuItem("Go To Event"))
+                        if(IconMenuItem(ICON_ARROW_FORWARD, "Go To Event"))
                         {
                             m_timeline_selection->NavigateToEvent(
                                 ctx_flow.track_id, ctx_flow.id.uuid,
@@ -760,7 +760,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                         const auto& ctx_frame =
                             event_data->call_stack_info[m_callstack_menu.row];
 
-                        if(ImGui::MenuItem("Go To Event"))
+                        if(IconMenuItem(ICON_ARROW_FORWARD, "Go To Event"))
                         {
                             navigate_to_frame(ctx_frame.id.uuid);
                         }

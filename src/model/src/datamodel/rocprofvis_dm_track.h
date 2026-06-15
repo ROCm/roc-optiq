@@ -38,7 +38,12 @@ public:
     // Returns node id
     rocprofvis_dm_node_id_t                             NodeId() { return m_track_params->track_indentifiers.id[TRACK_ID_NODE]; }
     // Returns pid or agent id
-    rocprofvis_dm_process_id_t                          ProcessId() { return m_track_params->track_indentifiers.id[TRACK_ID_PID_OR_AGENT]; }
+    rocprofvis_dm_process_id_t                          ProcessId() 
+    { 
+        uint64_t process_instance = m_track_params->track_indentifiers.db_instance == nullptr ?
+            0 : ((DbInstance*)m_track_params->track_indentifiers.db_instance)->ProcessInstance();
+        return (process_instance << TOPOLOGY_INSTANCE_BIT_POS) | m_track_params->track_indentifiers.id[TRACK_ID_PID_OR_AGENT]; 
+    }
     // Returns tid or queue id
     rocprofvis_dm_process_id_t                          SubProcessId() { return m_track_params->track_indentifiers.id[TRACK_ID_TID_OR_QUEUE]; }
     // Returns pointer to process string

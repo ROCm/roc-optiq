@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_infinite_scroll_table.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_settings_manager.h"
@@ -584,20 +585,21 @@ InfiniteScrollTable::RenderContextMenu()
             m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
         if(target_track_id != INVALID_UINT64_INDEX)
         {
-            if(ImGui::MenuItem(m_table_type == TableType::kSampleTable ? "Go To Sample"
-                                                                       : "Go To Event",
-                               nullptr, false, target_track_id != INVALID_UINT64_INDEX))
+            if(IconMenuItem(ICON_ARROW_FORWARD,
+                            m_table_type == TableType::kSampleTable ? "Go To Sample"
+                                                                    : "Go To Event",
+                            target_track_id != INVALID_UINT64_INDEX))
             {
                 SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
                                          m_important_column_idxs[kStreamId]);
             }
             ImGui::Separator();
         }        
-        if(ImGui::MenuItem("Copy Row Data", nullptr, false))
+        if(IconMenuItem(ICON_COPY, "Copy Row Data"))
         {
             SelectedRowToClipboard();
         }
-        else if(ImGui::MenuItem("Copy Cell Data", nullptr, false))
+        else if(IconMenuItem(ICON_COPY, "Copy Cell Data"))
         {
             SelectedCellToClipboard(true);
         }
@@ -616,14 +618,14 @@ InfiniteScrollTable::RenderContextMenu()
         }
         if(show_copy_unformatted)
         {
-            if(ImGui::MenuItem("Copy Unformatted Cell Data", nullptr, false))
+            if(IconMenuItem(ICON_COPY, "Copy Unformatted Cell Data"))
             {
                 SelectedCellToClipboard(false);
             }
         }
         ImGui::Separator();
-        if(ImGui::MenuItem(
-               "Export To File", nullptr, false,
+        if(IconMenuItem(
+               ICON_ARCHIVE, "Export To File",
                !m_data_provider.IsRequestPending(DataProvider::TABLE_EXPORT_REQUEST_ID)))
         {
             ExportToFile();

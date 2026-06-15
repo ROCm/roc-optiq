@@ -193,14 +193,14 @@ MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
     (void) value_to_copy;
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem("Pin metric"))
+        if(IconMenuItem(ICON_CHAIN, "Pin metric"))
         {
             row.second.pinned = !row.second.pinned;
             m_pin_metric_clicked(
                 { row.first.category_id, row.first.table_id, row.first.entry_id });
         }
         if(!m_event_source_id.empty() &&
-           ImGui::MenuItem("Send metric to kernel details"))
+           IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
         {
             AddMetricToKernelDetails(row.first, m_columns[column_index]);
         }

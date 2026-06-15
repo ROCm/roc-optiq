@@ -130,6 +130,28 @@ private:
         kEnd
     };
 
+    // Per-type track counts shown in the histogram header strip. The label
+    // strings are built once when the trace is loaded (CalculateTrackCounts),
+    // not rebuilt every frame in RenderTrackStats.
+    struct TrackTypeCounts
+    {
+        uint64_t total                = 0;
+        uint64_t instrumented_threads = 0;
+        uint64_t sampled_threads      = 0;
+        uint64_t queues               = 0;
+        uint64_t streams              = 0;
+        uint64_t counters             = 0;
+        uint64_t other                = 0;
+
+        std::string              total_label;    // e.g. "12 Tracks"
+        std::string              breakdown;      // e.g. "3 threads, 2 queues"
+        std::vector<std::string> tooltip_lines;  // e.g. "Queues: 2" per non-zero type
+    };
+
+    void CalculateTrackCounts();
+    void BuildTrackCountLabels();
+    void RenderTrackStats(float available_width);
+
     void UpdateMaxMetaAreaSize(float new_size);
     void CalculateMaxMetaAreaSize();
     void UpdateAllMaxMetaAreaSizes();
@@ -204,6 +226,7 @@ private:
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;
+    TrackTypeCounts             m_track_counts;
 };
 
 }  // namespace View

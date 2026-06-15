@@ -68,7 +68,7 @@ protected:
     void  RenderMetaAreaScale() override;
     void  RenderMetaAreaOptions() override;
     void  RenderMetaAreaExpand() override;
-    float CalculateNewMetaAreaSize() override;
+    void  RenderSecondaryMetaPill(const ImVec2& content_size) override;
 
 private:
     struct ChildEventInfo
@@ -127,7 +127,7 @@ private:
     bool                     m_compact_mode;
 
     const AnalysisQueueUtilization* m_queue_utilization;
-    float                           m_queue_utilization_width;
+    Pill                            m_queue_utilization_pill;
 };
 
 }  // namespace View

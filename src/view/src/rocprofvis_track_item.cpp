@@ -201,6 +201,13 @@ TrackItem::RenderMetaAreaExpand()
 }
 
 void
+TrackItem::RenderSecondaryMetaPill(const ImVec2& content_size)
+{
+    (void) content_size;
+    // no-op
+}
+
+void
 TrackItem::RenderMetaArea()
 {
     // Shrink the meta data content area by one unit in the vertical direction so that the
@@ -324,6 +331,7 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaExpand();
 
         m_pill.RenderPillLabel(content_size, m_settings, m_reorder_grip_width);
+        RenderSecondaryMetaPill(content_size);
     }
     ImGui::EndChild();  // end metadata area
 
@@ -927,6 +935,13 @@ void
 Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
                       float reorder_grip_width)
 {
+    ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
+    RenderPillLabelAt(pillbox_pos, settings);
+}
+
+void
+Pill::RenderPillLabelAt(ImVec2 pillbox_pos, SettingsManager& settings)
+{
     if(m_show_pill_label == false)
     {
         m_was_last_hovered = false;
@@ -934,8 +949,6 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     }
     ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault),
                     settings.GetFontManager().GetFontSize(FontSize::kSmall));
-
-    ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
 
     if (m_active)
     {

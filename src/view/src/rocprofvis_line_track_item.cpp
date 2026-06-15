@@ -19,7 +19,6 @@ namespace View
 
 constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
-constexpr float SCALE_SEPERATOR_WIDTH    = 2.0f;
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
                              std::shared_ptr<TimePixelTransform> tpt)
@@ -290,24 +289,17 @@ void
 LineTrackItem::RenderMetaAreaScale()
 {
     ImVec2 content_region = ImGui::GetContentRegionMax();
-    ImVec2 window_pos     = ImGui::GetWindowPos();
 
     ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
-                                   m_metadata_padding.x + SCALE_SEPERATOR_WIDTH,
+                                   m_metadata_padding.x,
                                m_metadata_padding.y));
     m_max_y.Render();
 
     ImVec2 min_size = ImGui::CalcTextSize(m_min_y.CompactValue().c_str());
     ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
-                                   m_metadata_padding.x + SCALE_SEPERATOR_WIDTH,
+                                   m_metadata_padding.x,
                                content_region.y - min_size.y - m_metadata_padding.y));
     m_min_y.Render();
-
-    ImGui::GetWindowDrawList()->AddLine(
-        ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width, window_pos.y),
-        ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
-               window_pos.y + content_region.y),
-        m_settings.GetColor(Colors::kMetaDataSeparator), SCALE_SEPERATOR_WIDTH);
 }
 
 void

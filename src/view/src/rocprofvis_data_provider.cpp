@@ -4803,8 +4803,6 @@ DataProvider::LoadPcSamplingSourceLine(SourceLine& source_line, rocprofvis_handl
 inline void
 DataProvider::LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload_handle)
 {
-    uint64_t uint64_data = 0;
-
     rocprofvis_handle_t* roofline_handle = nullptr;
     rocprofvis_result_t result            = rocprofvis_controller_get_object(
         workload_handle, kRPVControllerWorkloadRoofline, 0, &roofline_handle);

@@ -246,8 +246,8 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 
     m_line_num_color = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
     m_comment_color  = { 0.34f, 0.65f, 0.29f, 1.0f };
-    m_table_flags =
-        ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoPadOuterX;
+    m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_NoPadOuterX |
+        ImGuiTableFlags_BordersInnerV;
 }
 
 void
@@ -350,14 +350,16 @@ SourceCodeWidget::Render()
     ImGui::TableSetupScrollFreeze(0, 0);
 
     if(IsStallShown())
-        ImGui::TableSetupColumn("##meta_data", ImGuiTableColumnFlags_WidthFixed,
+        ImGui::TableSetupColumn(
+            "Stalls", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::CalcTextSize("100.0%").x);
 
-    ImGui::TableSetupColumn("##line_number", ImGuiTableColumnFlags_WidthFixed,
-                            m_line_num_width);
+    ImGui::TableSetupColumn(
+        "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
+        m_line_num_width);
+    ImGui::TableSetupColumn("Source code", ImGuiTableColumnFlags_WidthStretch);
 
-    ImGui::TableSetupColumn("##source", ImGuiTableColumnFlags_WidthStretch);
-
+    ImGui::TableHeadersRow();
     PushStyles();
 
     ImGuiListClipper clipper;
@@ -485,17 +487,19 @@ IsaCodeWidget::Render()
         return;
 
     if(IsStallShown())
-        ImGui::TableSetupColumn("##stall", ImGuiTableColumnFlags_WidthFixed,
+        ImGui::TableSetupColumn(
+            "Stalls", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::CalcTextSize("100.0%").x);
 
-    ImGui::TableSetupColumn("##line_number", ImGuiTableColumnFlags_WidthFixed,
-                            m_line_num_width);
-
-    ImGui::TableSetupColumn("##instruction", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn(
+        "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
+        m_line_num_width);
+    ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
 
     if(m_show_comments)
-        ImGui::TableSetupColumn("##comment", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Comments", ImGuiTableColumnFlags_WidthStretch);
 
+    ImGui::TableHeadersRow();
     PushStyles();
 
     ImGuiListClipper clipper;

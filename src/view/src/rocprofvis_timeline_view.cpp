@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_timeline_view.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_click_manager.h"
@@ -425,7 +426,7 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         // right-click landed.
         if(m_timeline_selection->HasSelectedEvents())
         {
-            if(ImGui::MenuItem("Make Time Range Selection"))
+            if(IconMenuItem(ICON_EXPAND, "Make Time Range Selection"))
             {
                 double start_ts, end_ts;
                 if(m_timeline_selection->GetSelectedEventsTimeRange(start_ts, end_ts))
@@ -436,40 +437,37 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                                              m_tpt->NormalizeTime(end_ts) };
                     m_timeline_selection->SelectTimeRange(start_ts, end_ts);
                 }
-                ImGui::CloseCurrentPopup();
             }
 
             std::vector<uint64_t> selected_event_ids;
             m_timeline_selection->GetSelectedEvents(selected_event_ids);
             const bool multiple_events = selected_event_ids.size() > 1;
-            if(ImGui::MenuItem(multiple_events ? "Copy Event Names" : "Copy Event Name"))
+            if(IconMenuItem(ICON_COPY,
+                            multiple_events ? "Copy Event Names" : "Copy Event Name"))
             {
                 CopySelectedEventNames();
-                ImGui::CloseCurrentPopup();
             }
-            if(ImGui::MenuItem("Copy Event Details"))
+            if(IconMenuItem(ICON_COPY, "Copy Event Details"))
             {
                 CopySelectedEventDetails();
-                ImGui::CloseCurrentPopup();
             }
         }
         if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
            m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
         {
-            if(ImGui::MenuItem("Remove Time Range Selection"))
+            if(IconMenuItem(ICON_TRASH_CAN, "Remove Time Range Selection"))
             {
                 ClearTimeRangeSelection();
             }
         }
 
-        if(ImGui::MenuItem("Add Annotation"))
+        if(IconMenuItem(ICON_ADD_NOTE, "Add Annotation"))
         {
             float  x_in_chart = rel_mouse_pos.x;
             double time_ns    = m_tpt->PixelToTime(x_in_chart);
             float  y_offset   = rel_mouse_pos.y;
             m_annotations->OpenStickyNotePopup(time_ns, y_offset, m_tpt->GetVMinX(),
                                                m_tpt->GetVMaxX(), m_tpt->GetGraphSize());
-            ImGui::CloseCurrentPopup();
         }
 
         ImGui::Separator();
@@ -477,27 +475,24 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         MeasurementController& fm = *m_measurement;
         if(fm.IsMeasurementMode())
         {
-            if(ImGui::MenuItem("Exit Measurement Mode"))
+            if(IconMenuItem(ICON_CROP, "Exit Measurement Mode"))
             {
                 fm.ExitMeasurementMode();
-                ImGui::CloseCurrentPopup();
             }
         }
         else
         {
-            if(ImGui::MenuItem("Enter Measurement Mode"))
+            if(IconMenuItem(ICON_CROP, "Enter Measurement Mode"))
             {
                 fm.EnterMeasurementMode();
-                ImGui::CloseCurrentPopup();
             }
         }
         if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
         {
-            if(ImGui::MenuItem("Clear Measurement"))
+            if(IconMenuItem(ICON_TRASH_CAN, "Clear Measurement"))
             {
                 fm.ClearMeasurement();
                 m_timeline_selection->UnhighlightPersistentEvents();
-                ImGui::CloseCurrentPopup();
             }
         }
 

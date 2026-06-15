@@ -68,6 +68,8 @@ typedef union{
 #define TRACK_ID_STORE_ID 6
 #define TRACK_ID_RECORD_COUNT 7
 
+#define TOPOLOGY_INSTANCE_BIT_POS 54
+
 
 typedef struct
 {
@@ -309,7 +311,7 @@ class DbInstance
 {
 public:
     static constexpr const int NoGuidId = -1;
-    DbInstance() : m_file_index(0), m_guid_index(NoGuidId) {}
+    DbInstance() : m_file_index(0), m_guid_index(NoGuidId), m_process_instance(0) {}
     DbInstance(uint32_t file_index, uint32_t guid_index) : m_file_index(file_index), m_guid_index(guid_index) {}
     uint32_t FileIndex() { return m_file_index; };
     uint32_t GuidIndex() { 
@@ -318,8 +320,11 @@ public:
         }
         return m_guid_index; 
     };
+    void SetProcessInstance(uint32_t index) { m_process_instance = index; }
+    uint32_t ProcessInstance() { return m_process_instance; }
 private:
     uint32_t m_file_index;
     uint32_t m_guid_index;
+    uint32_t m_process_instance;
 };
 

@@ -67,7 +67,7 @@ public:
 
     virtual rocprofvis_dm_result_t  AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers) { return kRocProfVisDmResultSuccess; };
     virtual TopologyNode* FindNodeMatchingIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers);
-    rocprofvis_dm_result_t  SetBasicProperty(const char* name, uint64_t db_instance, rocprofvis_db_topology_data_type_t type, const char* value);
+    rocprofvis_dm_result_t  SetBasicProperty(const char* name, rocprofvis_db_instance_t db_instance, rocprofvis_db_topology_data_type_t type, const char* value);
     virtual rocprofvis_dm_result_t  ProcessProperty(const char* name, rocprofvis_db_topology_data_type_t type, void* value) {return kRocProfVisDmResultSuccess;};
     rocprofvis_controller_topology_node_type_t GetType() { return m_type; };
     virtual std::string GetNodeName() = 0;

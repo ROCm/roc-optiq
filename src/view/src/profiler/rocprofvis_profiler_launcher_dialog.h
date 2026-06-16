@@ -6,8 +6,7 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_profiler_session.h"
-#include "rocprofvis_remote_profiler_session.h"
+#include "rocprofvis_profiler_launch_orchestrator.h"
 #include "rocprofvis_launch_config.h"
 #include "rocprofvis_profiler_backend.h"
 #include "rocprofvis_launch_preset_manager.h"
@@ -52,12 +51,11 @@ private:
     };
 
     void OnLaunchClicked();
-    void OnLaunchLocal();
-    void OnLaunchRemote();
     void OnCancelClicked();
     void OnCloseClicked();
-    void OnProfilerStateChanged(rocprofvis_profiler_state_t new_state);
-    void UpdateOutput();
+    // Reacts to run-state edges reported by the orchestrator: appends the
+    // completion/failure/cancel epilogue lines and sets m_error_message.
+    void HandleStateTransition(rocprofvis_profiler_state_t new_state);
     void RebuildComposedOutput();
     void RefreshExecutionCache();
 
@@ -84,23 +82,27 @@ private:
     std::string GetProfilerPath() const;
 
     AppWindow* m_app_window;
-    ProfilerSession m_profiler_session;
-    EventManager::SubscriptionToken m_profiler_status_token;
 
-    // Remote (SSH) profiling. The connection config is owned here as a shared
-    // RemoteUri (edited via the on-demand SshSettingsDialog) and consumed by the
-    // spawned RemoteProfilerSession, mirroring the SshTestDialog pattern.
+    // Run engine: owns the local / remote sessions and the normalized run state.
+    // The dialog drives it (Launch/Cancel/Close/Update) and reads state back via
+    // its getters; it never touches the underlying sessions directly.
+    ProfilerLaunchOrchestrator m_orchestrator;
+
+    // Remote (SSH) connection authoring. The connection config is owned here as
+    // a shared RemoteUri (edited via the on-demand SshSettingsDialog) and handed
+    // to the orchestrator at launch, mirroring the SshTestDialog pattern.
     std::shared_ptr<RemoteUri>             m_remote_uri;
     SshConnectionStore                     m_connection_store;
     std::string                            m_selected_connection_id;
     std::unique_ptr<SshSettingsDialog>     m_ssh_settings_dialog;
-    std::unique_ptr<RemoteProfilerSession> m_remote_session;
     bool                                   m_remote_show_progress_popup;
     FileStat::Snapshot                     m_remote_last_progress;
 
     bool m_should_open;
     bool m_show_window;
-    bool m_is_running;
+    // Last run state the dialog has reacted to, so Update() can detect edges and
+    // append epilogue text once per transition.
+    rocprofvis_profiler_state_t m_last_seen_state;
 
     // Backend system
     std::vector<std::unique_ptr<IProfilerBackend>> m_backends;
@@ -116,8 +118,8 @@ private:
     LaunchPresetManager m_preset_manager;
     std::string m_current_preset_name;
 
-    // Profiler state
-    rocprofvis_profiler_state_t m_profiler_state;
+    // Composed console output. The run state itself lives in the orchestrator;
+    // these are the view-owned text pieces assembled for display.
     std::string m_output_text;
     std::string m_output_preamble;
     std::string m_output_epilogue;

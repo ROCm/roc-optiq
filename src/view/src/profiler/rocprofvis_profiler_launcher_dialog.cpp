@@ -11,7 +11,6 @@
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "imgui.h"
-#include <spdlog/spdlog.h>
 #include <cfloat>
 #include <algorithm>
 #include <cstdio>
@@ -26,16 +25,14 @@ namespace View
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     : m_app_window(app_window)
-    , m_profiler_session()
-    , m_profiler_status_token(EventManager::InvalidSubscriptionToken)
+    , m_orchestrator(app_window)
     , m_remote_uri(std::make_shared<RemoteUri>())
     , m_ssh_settings_dialog(nullptr)
-    , m_remote_session(nullptr)
     , m_remote_show_progress_popup(false)
     , m_remote_last_progress()
     , m_should_open(false)
     , m_show_window(false)
-    , m_is_running(false)
+    , m_last_seen_state(kRPVProfilerStateIdle)
     , m_backend_index(0)
     , m_tool_index(0)
     , m_config()
@@ -43,7 +40,6 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     , m_execution_cache()
     , m_preset_manager()
     , m_current_preset_name()
-    , m_profiler_state(kRPVProfilerStateIdle)
     , m_output_text()
     , m_error_message()
     , m_auto_scroll_output(true)
@@ -65,33 +61,11 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     }
     ApplySelectedConnection();
 
-    // Listen for profiler state transitions surfaced by the AppMonitor. Filter
-    // to events belonging to this dialog's LOCAL session by operation id (the
-    // remote session manages its own profiler op internally).
-    m_profiler_status_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kProfilerStatusChanged),
-        [this](std::shared_ptr<RocEvent> event)
-        {
-            auto* status_event = static_cast<ProfilerStatusEvent*>(event.get());
-            if(status_event->GetOperationId() == m_profiler_session.GetOperationId())
-            {
-                OnProfilerStateChanged(status_event->GetState());
-            }
-        });
+    // Run orchestration (sessions, profiler-state events, teardown) is owned by
+    // m_orchestrator; the dialog only authors config and renders.
 }
 
-ProfilerLauncherDialog::~ProfilerLauncherDialog()
-{
-    // Destroy the remote session (which owns the monitored SshSession) before
-    // the shared RemoteUri reference held here is released.
-    m_remote_session.reset();
-
-    if(m_profiler_status_token != EventManager::InvalidSubscriptionToken)
-    {
-        EventManager::GetInstance()->Unsubscribe(
-            static_cast<int>(RocEvents::kProfilerStatusChanged), m_profiler_status_token);
-    }
-}
+ProfilerLauncherDialog::~ProfilerLauncherDialog() = default;
 
 void ProfilerLauncherDialog::Show()
 {
@@ -182,7 +156,6 @@ void ProfilerLauncherDialog::Render()
                                 status_label, status_level, status_detail,
                                 m_auto_scroll_output))
         {
-            m_profiler_session.ClearOutput();
             m_output_text.clear();
             m_output_preamble.clear();
             m_output_epilogue.clear();
@@ -398,10 +371,6 @@ void ProfilerLauncherDialog::RenderRemoteSection()
                 ApplySelectedConnection();
             });
     }
-
-    // The remote workflow status (connecting/authenticating/profiling/
-    // downloading + any detail) is surfaced via the output console status badge
-    // (see ComputeConsoleStatus), so there is no separate status line here.
 }
 
 void ProfilerLauncherDialog::RenderRemotePopups()
@@ -415,7 +384,7 @@ void ProfilerLauncherDialog::RenderRemotePopups()
         }
     }
 
-    SshSession* ssh_session = m_remote_session ? m_remote_session->GetSession() : nullptr;
+    SshSession* ssh_session = m_orchestrator.GetRemoteSshSession();
 
     // Auth prompts / host-key requests.
     RenderSshAuthModal(ssh_session);
@@ -424,7 +393,7 @@ void ProfilerLauncherDialog::RenderRemotePopups()
     // phase. Whether/when individual FileStat progress snapshots arrive is
     // unreliable for small/fast transfers, so the popup is driven by the
     // session's phase, not by the progress reaching downloaded==size.
-    bool downloading = m_remote_session && m_remote_session->IsDownloading();
+    bool downloading = m_orchestrator.IsRemoteDownloading();
     if (downloading && !m_remote_show_progress_popup)
     {
         m_remote_show_progress_popup = true;
@@ -441,6 +410,7 @@ void ProfilerLauncherDialog::RenderRemotePopups()
         }
     }
 
+    // TODO: share this dialog with the SshTestDialog, which has a similar download progress popup.
     if (m_remote_show_progress_popup)
     {
         PopUpStyle popup_style;
@@ -472,8 +442,7 @@ void ProfilerLauncherDialog::RenderRemotePopups()
             }
 
             // Close as soon as the download phase ends (completed, failed, or the
-            // session was torn down). CloseCurrentPopup must be called inside the
-            // popup scope to take effect. This avoids hanging open when the final
+            // session was torn down). This avoids hanging open when the final
             // "downloaded == size" snapshot never arrives for fast transfers.
             if (!downloading)
             {
@@ -497,12 +466,14 @@ void ProfilerLauncherDialog::RenderButtonRow()
 {
     ImGui::Separator();
 
-    bool can_launch = !m_is_running &&
-        (m_profiler_state == kRPVProfilerStateIdle ||
-         m_profiler_state == kRPVProfilerStateCompleted ||
-         m_profiler_state == kRPVProfilerStateFailed ||
-         m_profiler_state == kRPVProfilerStateCancelled);
-    bool can_cancel = m_is_running && m_profiler_state == kRPVProfilerStateRunning;
+    bool is_running = m_orchestrator.IsRunning();
+    rocprofvis_profiler_state_t state = m_orchestrator.GetState();
+    bool can_launch = !is_running &&
+        (state == kRPVProfilerStateIdle ||
+         state == kRPVProfilerStateCompleted ||
+         state == kRPVProfilerStateFailed ||
+         state == kRPVProfilerStateCancelled);
+    bool can_cancel = is_running && state == kRPVProfilerStateRunning;
 
     if (can_launch)
     {
@@ -550,63 +521,24 @@ void ProfilerLauncherDialog::Update()
         RefreshExecutionCache();
     }
 
-    if (m_remote_session)
+    // Pump the run engine, then reflect its normalized state into the console.
+    m_orchestrator.Update();
+
+    // Re-strip / recompose only when new profiler output arrived.
+    if (m_orchestrator.ConsumeOutputDirty())
     {
-        // The remote session owns the connect -> auth -> profile -> download
-        // phase machine. The dialog reflects the overall workflow: it stays
-        // "running" (Launch disabled, Cancel enabled) until the whole workflow
-        // finishes, then shows Completed / Failed based on the remote profiler's
-        // final state. We never mirror the session's transient Idle back onto
-        // the dialog (that would regress the label to [Idle]).
-        rocprofvis_profiler_state_t remote_state = m_remote_session->GetProfilerState();
-
-        // Pull streamed remote profiler output into the console.
-        std::string remote_out = m_remote_session->GetOutput();
-        if (!remote_out.empty() && remote_out != m_process_output_raw)
-        {
-            m_process_output_raw = std::move(remote_out);
-            m_process_output_stripped = strip_ansi_for_display(m_process_output_raw);
-            RebuildComposedOutput();
-        }
-
-        if (m_remote_session->IsRunning())
-        {
-            // Whole workflow still in progress.
-            m_is_running = true;
-            m_profiler_state = kRPVProfilerStateRunning;
-        }
-        else
-        {
-            // Workflow finished (or failed). Settle the displayed state to the
-            // remote profiler's terminal result, then keep the session around
-            // only until output stops arriving (dropped on next Launch/Close).
-            m_is_running = false;
-            if (remote_state == kRPVProfilerStateCompleted)
-            {
-                m_profiler_state = kRPVProfilerStateCompleted;
-            }
-            else if (remote_state == kRPVProfilerStateCancelled)
-            {
-                m_profiler_state = kRPVProfilerStateCancelled;
-            }
-            else
-            {
-                m_profiler_state = kRPVProfilerStateFailed;
-            }
-        }
-        return;
+        m_process_output_raw = m_orchestrator.GetRawOutput();
+        m_process_output_stripped = strip_ansi_for_display(m_process_output_raw);
+        RebuildComposedOutput();
     }
 
-    // Local: profiler state transitions arrive via kProfilerStatusChanged events
-    // (see OnProfilerStateChanged), dispatched by the AppMonitor each frame.
-
-    // Always try to fetch output while there's an active profiler session,
-    // even after the process has completed (output may arrive asynchronously)
-    if (m_profiler_state == kRPVProfilerStateRunning ||
-        m_profiler_state == kRPVProfilerStateCompleted ||
-        m_profiler_state == kRPVProfilerStateFailed)
+    // Append epilogue text once per run-state transition (the orchestrator owns
+    // the state; the dialog owns the user-facing log composition).
+    rocprofvis_profiler_state_t state = m_orchestrator.GetState();
+    if (state != m_last_seen_state)
     {
-        UpdateOutput();
+        HandleStateTransition(state);
+        m_last_seen_state = state;
     }
 }
 
@@ -635,6 +567,20 @@ void ProfilerLauncherDialog::OnLaunchClicked()
         return;
     }
 
+    const bool is_remote = IsSshMode();
+
+    // Remote precheck: bind the selected connection and require host/user.
+    if (is_remote)
+    {
+        ApplySelectedConnection();
+        if (m_remote_uri->GetRemoteHostString().empty() ||
+            m_remote_uri->GetRemoteUserString().empty())
+        {
+            m_error_message = "Configure the SSH connection (host/user) before launching.";
+            return;
+        }
+    }
+
     // Clear previous state
     m_error_message.clear();
     m_output_preamble.clear();
@@ -645,105 +591,40 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
     RefreshExecutionCache();
 
-    if (IsSshMode())
+    // Assemble the run request from the config / execution cache, then hand off
+    // to the orchestrator. The backend scraper resolves the produced trace path
+    // from the profiler's stdout (local and remote).
+    ProfilerLaunchOrchestrator::LaunchRequest request;
+    request.profiler_type     = ResolveProfilerType();
+    request.profiler_path     = m_execution_cache.profiler_path;
+    request.target_executable = m_config.target.executable;
+    request.target_args       = m_config.target.arguments;
+    request.output_directory  = m_config.target.output_directory;
+    request.profiler_args     = m_execution_cache.profiler_args;
+    request.env_vars          = m_execution_cache.env_vars;
+    request.is_remote         = is_remote;
+    request.auto_load_trace   = m_config.target.auto_load_trace;
+    request.remote_uri        = is_remote ? m_remote_uri : nullptr;
+    request.parse_trace       = [backend](const std::string& profiler_stdout) -> std::string
     {
-        OnLaunchRemote();
-    }
-    else
-    {
-        OnLaunchLocal();
-    }
-}
+        return backend ? backend->ParseTraceOutputPath(profiler_stdout) : std::string();
+    };
 
-void ProfilerLauncherDialog::OnLaunchLocal()
-{
-    rocprofvis_profiler_type_t profiler_type = ResolveProfilerType();
-    std::string const& profiler_path = m_execution_cache.profiler_path;
-    std::string const& profiler_args_str = m_execution_cache.profiler_args;
+    m_remote_show_progress_popup = false;
+    m_last_seen_state            = kRPVProfilerStateIdle;
 
-    // Launch via the profiler session; state transitions are reported through
-    // kProfilerStatusChanged events handled in OnProfilerStateChanged().
-    bool success = m_profiler_session.Launch(
-        profiler_type,
-        profiler_path,
-        m_config.target.executable,
-        m_config.target.arguments,
-        m_config.target.output_directory,
-        profiler_args_str,
-        m_execution_cache.env_vars);
-
+    bool success = m_orchestrator.Launch(request);
     if (success)
     {
-        m_is_running = true;
-        m_profiler_state = kRPVProfilerStateRunning;
-
-        // Build preamble
+        // Build the command-preview preamble for the console.
         std::ostringstream preamble;
+        if (is_remote)
+        {
+            preamble << "[remote] ";
+        }
         preamble << m_execution_cache.command_preview << "\n\n";
         m_output_preamble = preamble.str();
-        RebuildComposedOutput();
-
-        // Save settings
-        SaveToSettings();
-        AddRecentTarget(m_config.target.executable);
-    }
-    else
-    {
-        m_error_message = "Failed to launch profiler";
-        m_profiler_state = kRPVProfilerStateFailed;
-    }
-}
-
-void ProfilerLauncherDialog::OnLaunchRemote()
-{
-    // Bind the selected connection profile in case it changed since last apply.
-    ApplySelectedConnection();
-
-    if (m_remote_uri->GetRemoteHostString().empty() ||
-        m_remote_uri->GetRemoteUserString().empty())
-    {
-        m_error_message = "Configure the SSH connection (host/user) before launching.";
-        return;
-    }
-
-    rocprofvis_profiler_type_t profiler_type = ResolveProfilerType();
-
-    // Spawn a RemoteProfilerSession that drives connect -> auth -> remote launch
-    // -> download -> open. Auth prompts / download progress surface via the SSH
-    // popups rendered in RenderRemotePopups().
-    m_remote_show_progress_popup = false;
-    IProfilerBackend* backend = m_backends[m_backend_index].get();
-    m_remote_session = std::make_unique<RemoteProfilerSession>(
-        m_remote_uri,
-        [this](const std::string& local_path)
-        {
-            if (m_app_window && !local_path.empty())
-            {
-                m_app_window->OpenFile(local_path);
-            }
-        },
-        [backend](const std::string& profiler_stdout) -> std::string
-        {
-            return backend ? backend->ParseTraceOutputPath(profiler_stdout) : std::string();
-        });
-
-    bool success = m_remote_session->Launch(
-        profiler_type,
-        m_execution_cache.profiler_path,
-        m_config.target.executable,
-        m_config.target.arguments,
-        m_config.target.output_directory,
-        m_execution_cache.profiler_args,
-        m_execution_cache.env_vars);
-
-    if (success)
-    {
-        m_is_running = true;
-        m_profiler_state = kRPVProfilerStateRunning;
-
-        std::ostringstream preamble;
-        preamble << "[remote] " << m_execution_cache.command_preview << "\n\n";
-        m_output_preamble = preamble.str();
+        m_last_seen_state = kRPVProfilerStateRunning;
         RebuildComposedOutput();
 
         SaveToSettings();
@@ -751,138 +632,79 @@ void ProfilerLauncherDialog::OnLaunchRemote()
     }
     else
     {
-        m_error_message = "Failed to start remote profiler: " +
-                          (m_remote_session ? m_remote_session->GetStatusMessage() : std::string());
-        m_profiler_state = kRPVProfilerStateFailed;
-        m_remote_session.reset();
+        m_error_message = m_orchestrator.GetLaunchError();
     }
 }
 
 void ProfilerLauncherDialog::OnCancelClicked()
 {
-    if (m_remote_session)
-    {
-        // Tearing down the remote session cancels the in-flight phase (SSH or
-        // remote profiler) via the AppMonitor's deferred teardown.
-        m_remote_session.reset();
-        m_output_epilogue += "\nRemote profiler cancelled by user.\n";
-        RebuildComposedOutput();
-        m_profiler_state = kRPVProfilerStateCancelled;
-        m_is_running = false;
-        return;
-    }
-
-    if (m_profiler_session.Cancel())
-    {
-        m_output_epilogue += "\nProfiler cancelled by user.\n";
-        RebuildComposedOutput();
-        m_profiler_state = kRPVProfilerStateCancelled;
-        m_is_running = false;
-    }
-    else
-    {
-        m_error_message = "Failed to cancel profiler";
-    }
+    // Cancelling sets the orchestrator state to Cancelled; the epilogue line is
+    // appended on the next Update() transition (HandleStateTransition).
+    m_orchestrator.Cancel();
 }
 
 void ProfilerLauncherDialog::OnCloseClicked()
 {
-    m_remote_session.reset();
-    m_profiler_session.Close();
-    m_is_running = false;
-    m_profiler_state = kRPVProfilerStateIdle;
+    m_orchestrator.Close();
+    m_last_seen_state = kRPVProfilerStateIdle;
 }
 
-void ProfilerLauncherDialog::OnProfilerStateChanged(rocprofvis_profiler_state_t new_state)
+void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t new_state)
 {
-    if (new_state == m_profiler_state)
-    {
-        return;
-    }
-
-    m_profiler_state = new_state;
-
-    // In remote mode the RemoteProfilerSession owns trace download + auto-load
-    // (via its on_open_file callback); the dialog only mirrors state/output and
-    // must not consult the local session's (empty) trace path.
-    if (m_remote_session)
-    {
-        if (new_state == kRPVProfilerStateCompleted)
-        {
-            m_output_epilogue += "\nRemote profiler completed; downloading trace...\n";
-            RebuildComposedOutput();
-        }
-        else if (new_state == kRPVProfilerStateFailed)
-        {
-            m_is_running = false;
-            m_output_epilogue += "\nRemote profiler failed.\n";
-            RebuildComposedOutput();
-        }
-        return;
-    }
+    const bool is_remote = m_orchestrator.IsRemote();
 
     if (new_state == kRPVProfilerStateCompleted)
     {
-        m_is_running = false;
-        m_output_epilogue += "\nProfiler completed successfully.\n";
-
-        // Prefer the path the profiler actually reported in its output (the
-        // backend knows how to scrape it). Fall back to the controller's
-        // newest-".db" filesystem scan if the parser can't find one.
-        IProfilerBackend* backend = m_backends[m_backend_index].get();
-        std::string       trace_path =
-            backend ? backend->ParseTraceOutputPath(m_process_output_raw) : std::string();
-        if(trace_path.empty())
+        if (is_remote)
         {
-            trace_path = m_profiler_session.GetTracePath();
-            spdlog::warn("ProfilerLauncherDialog: backend {} failed to parse trace path "
-                         "from output; falling back to filesystem scan result '{}'",
-                         backend ? backend->Id() : "(none)", trace_path);
+            // Remote completion here means the remote profiler finished; the
+            // trace download/open is driven by the orchestrator's session.
+            m_output_epilogue += "\nRemote profiler completed.\n";
         }
+        else
+        {
+            m_output_epilogue += "\nProfiler completed successfully.\n";
+        }
+
+        std::string trace_path = m_orchestrator.GetTracePath();
         if (!trace_path.empty())
         {
             m_output_epilogue += "Trace file: " + trace_path + "\n";
-
-            if (m_config.target.auto_load_trace && m_app_window)
-            {
-                m_app_window->OpenFile(trace_path);
-            }
         }
         RebuildComposedOutput();
     }
     else if (new_state == kRPVProfilerStateFailed)
     {
-        m_is_running = false;
-        int32_t exit_code = m_profiler_session.GetExitCode();
-        char exit_msg[128];
-        std::snprintf(exit_msg, sizeof(exit_msg),
-                      "\nProfiler failed (exit code %d).\n", exit_code);
-        m_output_epilogue += exit_msg;
-        RebuildComposedOutput();
-        if (exit_code == 127)
+        if (is_remote)
         {
-            m_error_message = "Profiler executable not found or could not be started (exit code 127)";
+            m_output_epilogue += "\nRemote profiler failed.\n";
+            RebuildComposedOutput();
         }
         else
         {
+            int32_t exit_code = m_orchestrator.GetExitCode();
+            char exit_msg[128];
             std::snprintf(exit_msg, sizeof(exit_msg),
-                          "Profiler execution failed (exit code %d)", exit_code);
-            m_error_message = exit_msg;
+                          "\nProfiler failed (exit code %d).\n", exit_code);
+            m_output_epilogue += exit_msg;
+            RebuildComposedOutput();
+            if (exit_code == 127)
+            {
+                m_error_message =
+                    "Profiler executable not found or could not be started (exit code 127)";
+            }
+            else
+            {
+                std::snprintf(exit_msg, sizeof(exit_msg),
+                              "Profiler execution failed (exit code %d)", exit_code);
+                m_error_message = exit_msg;
+            }
         }
     }
     else if (new_state == kRPVProfilerStateCancelled)
     {
-        m_is_running = false;
-    }
-}
-
-void ProfilerLauncherDialog::UpdateOutput()
-{
-    std::string new_raw = m_profiler_session.GetOutput();
-    if (new_raw != m_process_output_raw)
-    {
-        m_process_output_raw = std::move(new_raw);
-        m_process_output_stripped = strip_ansi_for_display(m_process_output_raw);
+        m_output_epilogue += is_remote ? "\nRemote profiler cancelled by user.\n"
+                                       : "\nProfiler cancelled by user.\n";
         RebuildComposedOutput();
     }
 }
@@ -900,49 +722,15 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
     out_level  = ConsoleStatusLevel::kIdle;
     out_detail.clear();
 
-    if (m_remote_session)
+    // Remote: the badge reflects the workflow phase (connect/auth/profile/
+    // download), provided by the orchestrator. Returns false when not remote.
+    if (m_orchestrator.GetRemotePhaseBadge(out_label, out_level, out_detail))
     {
-        // Remote: the badge reflects the workflow phase, not just the profiler
-        // state, so the user sees connect/auth/profile/download progress. The
-        // session's status message (e.g. "Downloading (/path)") is the detail.
-        out_detail = m_remote_session->GetStatusMessage();
-        switch (m_remote_session->GetPhase())
-        {
-            case RemoteProfilerSession::Phase::Connecting:
-                out_label = "Connecting";
-                out_level = ConsoleStatusLevel::kRunning;
-                break;
-            case RemoteProfilerSession::Phase::Authenticating:
-                out_label = "Authenticating";
-                out_level = ConsoleStatusLevel::kRunning;
-                break;
-            case RemoteProfilerSession::Phase::Profiling:
-                out_label = "Profiling";
-                out_level = ConsoleStatusLevel::kRunning;
-                break;
-            case RemoteProfilerSession::Phase::Downloading:
-                out_label = "Downloading";
-                out_level = ConsoleStatusLevel::kRunning;
-                break;
-            case RemoteProfilerSession::Phase::Done:
-                out_label = "Completed";
-                out_level = ConsoleStatusLevel::kSuccess;
-                break;
-            case RemoteProfilerSession::Phase::Failed:
-                out_label = "Failed";
-                out_level = ConsoleStatusLevel::kError;
-                break;
-            case RemoteProfilerSession::Phase::Idle:
-            default:
-                out_label = "Idle";
-                out_level = ConsoleStatusLevel::kIdle;
-                break;
-        }
         return;
     }
 
     // Local: map the profiler process state directly.
-    switch (m_profiler_state)
+    switch (m_orchestrator.GetState())
     {
         case kRPVProfilerStateRunning:
             out_label = "Running";

@@ -141,6 +141,8 @@ set(VIEW_FILES
     src/view/src/profiler/rocprofvis_profiler_session.h
     src/view/src/profiler/rocprofvis_remote_profiler_session.cpp
     src/view/src/profiler/rocprofvis_remote_profiler_session.h
+    src/view/src/profiler/rocprofvis_profiler_launch_orchestrator.cpp
+    src/view/src/profiler/rocprofvis_profiler_launch_orchestrator.h
     src/view/src/profiler/rocprofvis_launch_config.cpp
     src/view/src/profiler/rocprofvis_launch_config.h
     src/view/src/profiler/rocprofvis_profiler_backend.h

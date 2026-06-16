@@ -119,25 +119,17 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         return false;
     }
     SettingsManager& settings      = SettingsManager::GetInstance();
-    const bool       use_dark_mode = settings.GetUserSettings().display_settings.use_dark_mode;
-    ImU32            bg_color          = use_dark_mode ? IM_COL32(58, 53, 36, 245)
-                                                       : IM_COL32(255, 252, 228, 248);
-    ImU32            border_color      = use_dark_mode ? IM_COL32(62, 116, 168, 220)
-                                                       : IM_COL32(91, 139, 184, 205);
-    ImU32            header_color      = use_dark_mode ? IM_COL32(70, 62, 40, 248)
-                                                       : IM_COL32(255, 247, 204, 248);
-    ImU32            shadow_color      = use_dark_mode ? IM_COL32(0, 0, 0, 85)
-                                                       : IM_COL32(76, 95, 128, 35);
+    ImU32            bg_color          = settings.GetColor(Colors::kStickyNoteBg);
+    ImU32            border_color      = settings.GetColor(Colors::kStickyNoteBorder);
+    ImU32            header_color      = settings.GetColor(Colors::kStickyNoteHeader);
+    ImU32            shadow_color      = settings.GetColor(Colors::kStickyNoteShadow);
     ImU32            icon_hover_color =
         ApplyAlpha(settings.GetColor(Colors::kButtonHovered), 0.74f);
     ImU32 icon_active_color =
         ApplyAlpha(settings.GetColor(Colors::kButtonActive), 0.86f);
-    ImU32            text_color        = use_dark_mode ? IM_COL32(238, 243, 255, 255)
-                                                       : IM_COL32(25, 38, 56, 255);
-    ImU32            muted_text_color  = use_dark_mode ? IM_COL32(145, 156, 174, 255)
-                                                       : IM_COL32(92, 106, 126, 255);
-    ImU32            accent_color      = use_dark_mode ? IM_COL32(225, 203, 78, 235)
-                                                       : IM_COL32(168, 128, 0, 235);
+    ImU32            text_color        = settings.GetColor(Colors::kStickyNoteText);
+    ImU32            muted_text_color  = settings.GetColor(Colors::kStickyNoteTextMuted);
+    ImU32            accent_color      = settings.GetColor(Colors::kStickyNoteAccent);
 
     const float rounding      = settings.GetDefaultStyle().ChildRounding;
     const float margin        = 14.0f;
@@ -510,8 +502,10 @@ StickyNote::HandleResize(const ImVec2&                       window_position,
 
     // Draw resize handle (should be done in Render, but safe here for logic)
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    ImU32       handle_color =
-        m_resizing ? IM_COL32(200, 100, 100, 255) : IM_COL32(200, 200, 80, 255);
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImU32            handle_color =
+        m_resizing ? settings.GetColor(Colors::kStickyNoteResizeActive)
+                   : settings.GetColor(Colors::kStickyNoteResize);
     draw_list->AddRectFilled(handle_pos, handle_max, handle_color, 3.0f);
 
     if(!m_resizing && ImGui::IsMouseHoveringRect(handle_pos, handle_max) &&

@@ -85,6 +85,7 @@ class ProfileDatabase : public SqliteDatabase
         rocprofvis_dm_result_t  ReadTraceSlice(
                         rocprofvis_dm_timestamp_t start,
                         rocprofvis_dm_timestamp_t end,
+                        rocprofvis_dm_hashed_timestamp_tag_t tag,
                         rocprofvis_db_num_of_tracks_t num,
                         rocprofvis_db_track_selection_t tracks,
                         Future* object) override;
@@ -224,6 +225,10 @@ class ProfileDatabase : public SqliteDatabase
         rocprofvis_dm_result_t BuildComputeQuery(
             rocprofvis_db_compute_use_case_enum_t use_case, rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
             rocprofvis_dm_string_t& query) override {
+            (void) use_case;
+            (void) num;
+            (void) params;
+            (void) query;
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not build compute query", kRocProfVisDmResultNotSupported);
         }
 
@@ -231,6 +236,9 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_db_compute_use_case_enum_t use_case,
                             rocprofvis_dm_charptr_t query,
                             Future* future) override {
+            (void) use_case;
+            (void) query;
+            (void) future;
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not support compute query", kRocProfVisDmResultNotSupported);
         }
 

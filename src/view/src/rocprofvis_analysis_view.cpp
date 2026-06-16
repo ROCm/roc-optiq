@@ -4,13 +4,11 @@
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_annotation_view.h"
 #include "rocprofvis_annotations.h"
-#include "rocprofvis_controller_enums.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_multi_track_table.h"
+#include "rocprofvis_top_events_view.h"
 #include "rocprofvis_track_details.h"
-#include "spdlog/spdlog.h"
-#include "widgets/rocprofvis_debug_window.h"
 
 namespace RocProfVis
 {
@@ -21,15 +19,22 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotation_manager)
 : m_data_provider(dp)
-, m_event_table(
-      std::make_shared<MultiTrackTable>(dp, timeline_selection, TableType::kEventTable))
-, m_sample_table(
-      std::make_shared<MultiTrackTable>(dp, timeline_selection, TableType::kSampleTable))
+, m_event_table(std::make_shared<MultiTrackTable>(
+      dp, TableType::kEventTable, kRPVControllerTableTypeEvents,
+      DataProvider::EVENT_TABLE_REQUEST_ID,
+      [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
+      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, true,
+      timeline_selection))
+, m_sample_table(std::make_shared<MultiTrackTable>(
+      dp, TableType::kSampleTable, kRPVControllerTableTypeSamples,
+      DataProvider::SAMPLE_TABLE_REQUEST_ID,
+      [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
+      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, true,
+      timeline_selection))
 , m_events_view(std::make_shared<EventsView>(dp, timeline_selection))
-
 , m_annotation_view(std::make_shared<AnnotationView>(dp, annotation_manager))
 , m_track_details(std::make_shared<TrackDetails>(dp, topology, timeline_selection))
-
+, m_top_events_view(std::make_shared<TopEventsView>(dp, timeline_selection))
 {
     m_widget_name = GenUniqueName("Analysis View");
 
@@ -59,6 +64,12 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     tab_item.m_id        = "track_details";
     tab_item.m_can_close = false;
     tab_item.m_widget    = m_track_details;
+    m_tab_container->AddTab(tab_item);
+
+    tab_item.m_label     = "Top Events";
+    tab_item.m_id        = "top_events";
+    tab_item.m_can_close = false;
+    tab_item.m_widget    = m_top_events_view;
     m_tab_container->AddTab(tab_item);
 
     // Add Annotation View Tab
@@ -127,15 +138,25 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
             {
                 if(m_event_table)
                 {
-                    m_event_table->HandleTrackSelectionChanged();
+                    m_event_table->HandleTrackSelectionChanged(
+                        selection_changed_event->GetTrackID(),
+                        selection_changed_event->TrackSelected());
                 }
                 if(m_sample_table)
                 {
-                    m_sample_table->HandleTrackSelectionChanged();
+                    m_sample_table->HandleTrackSelectionChanged(
+                        selection_changed_event->GetTrackID(),
+                        selection_changed_event->TrackSelected());
                 }
                 if(m_track_details)
                 {
                     m_track_details->HandleTrackSelectionChanged(
+                        selection_changed_event->GetTrackID(),
+                        selection_changed_event->TrackSelected());
+                }
+                if(m_top_events_view)
+                {
+                    m_top_events_view->HandleTrackSelectionChanged(
                         selection_changed_event->GetTrackID(),
                         selection_changed_event->TrackSelected());
                 }
@@ -149,11 +170,21 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
             {
                 if(m_event_table)
                 {
-                    m_event_table->HandleTrackSelectionChanged();
+                    m_event_table->HandleTimeRangeSelectionChanged(
+                        selection_changed_event->GetStartNs(),
+                        selection_changed_event->GetEndNs());
                 }
                 if(m_sample_table)
                 {
-                    m_sample_table->HandleTrackSelectionChanged();
+                    m_sample_table->HandleTimeRangeSelectionChanged(
+                        selection_changed_event->GetStartNs(),
+                        selection_changed_event->GetEndNs());
+                }
+                if(m_top_events_view)
+                {
+                    m_top_events_view->HandleTimeRangeSelectionChanged(
+                        selection_changed_event->GetStartNs(),
+                        selection_changed_event->GetEndNs());
                 }
             }
         }

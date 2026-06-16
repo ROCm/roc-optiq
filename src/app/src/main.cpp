@@ -33,6 +33,11 @@ static rocprofvis_view_render_options_t g_render_options =
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 
+// Lazy rendering: after each OS event render a few frames so animations and the
+// deferred event dispatch settle, then sleep until the next event when idle.
+static int       g_frames_to_render        = 1;
+constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
+
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
 {
@@ -71,12 +76,14 @@ app_notification_callback(GLFWwindow* window, int notification)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+#ifndef __APPLE__
     else if(notification ==
             static_cast<int>(rocprofvis_view_notification_t::
                                  kRocProfVisViewNotification_Toggle_Fullscreen))
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
+#endif
 }
 
 static void
@@ -147,15 +154,20 @@ mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    // Unused parameters
     (void) scancode;
     (void) mods;
 
+#ifndef __APPLE__
     // Toggle fullscreen with F11
     if(key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
+#else
+    (void) window;
+    (void) key;
+    (void) action;
+#endif
 }
 
 static void
@@ -383,7 +395,31 @@ main(int argc, char** argv)
                         g_file_was_dropped = false;
                     }
 
-                    glfwPollEvents();
+                    // Async work/animation in flight: refill the budget so the
+                    // settle tail also covers the final frames after it finishes.
+                    if(rocprofvis_view_wants_continuous_render())
+                    {
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        // Busy: poll so per-frame controller/event work keeps
+                        // running. vsync in present() caps the frame rate.
+                        glfwPollEvents();
+                    }
+                    else
+                    {
+                        // Idle: sleep until an OS event, then render a few frames.
+                        glfwWaitEvents();
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
+
+#ifdef __APPLE__
+                    // Clear any phantom-stuck modifier (e.g. Control left down
+                    // after a Mission Control gesture) before the frame renders.
+                    sync_imgui_modifiers_with_os();
+#endif
 
 #ifdef __APPLE__
                     // Clear any phantom-stuck modifier (e.g. Control left down
@@ -417,6 +453,11 @@ main(int argc, char** argv)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
                         backend.m_present(&backend);
+                    }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        --g_frames_to_render;
                     }
                 }
 

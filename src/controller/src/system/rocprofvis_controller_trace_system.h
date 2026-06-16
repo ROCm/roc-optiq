@@ -10,6 +10,7 @@
 #include "rocprofvis_controller_mem_mgmt.h"
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_trace.h"
+#include <array>
 #include <string>
 #include <vector>
 
@@ -56,9 +57,6 @@ public:
     rocprofvis_result_t AsyncFetch(Event& event, Future& future, Array& array,
                                    rocprofvis_property_t property);
 
-    rocprofvis_result_t AsyncFetch(Table& table, Future& future, Array& array,
-                                   uint64_t index, uint64_t count);
-
     rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future,
                                    Array& array);
 
@@ -82,16 +80,19 @@ public:
 
     MemoryManager* GetMemoryManager();
 
+    std::mutex& GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case);
+
 private:
-    std::vector<Track*>   m_tracks;
-    std::vector<Node*>    m_nodes;
-    Timeline*             m_timeline;
-    SystemTable*          m_event_table;
-    SystemTable*          m_sample_table;
-    SystemTable*          m_search_table;
-    Summary*              m_summary;
-    MemoryManager*        m_mem_mgmt;
-    TopologyNode*         m_topology_root;
+    std::vector<Track*>                            m_tracks;
+    std::vector<Node*>                             m_nodes;
+    Timeline*                                      m_timeline;
+    SystemTable*                                   m_event_table;
+    SystemTable*                                   m_sample_table;
+    SystemTable*                                   m_search_table;
+    Summary*                                       m_summary;
+    MemoryManager*                                 m_mem_mgmt;
+    TopologyNode*                                  m_topology_root;
+    std::array<std::mutex, kRPVDMTableNumUsecases> m_table_mutex;
 
 private:
     rocprofvis_result_t LoadRocpd(Future* future);

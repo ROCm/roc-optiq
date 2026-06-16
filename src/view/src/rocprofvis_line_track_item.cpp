@@ -19,10 +19,8 @@ namespace View
 
 constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
-constexpr float SCALE_SEPERATOR_WIDTH    = 2.0f;
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
-                             float max_meta_area_width,
                              std::shared_ptr<TimePixelTransform> tpt)
 : TrackItem(dp, track_id, tpt)
 , m_data({})
@@ -41,7 +39,7 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
         spdlog::error("LineTrackItem: m_tpt shared_ptr is null, cannot construct");
         return;
     }
-    m_meta_area_scale_width = max_meta_area_width;
+    m_meta_area_scale_width = CalculateNewMetaAreaSize();
     UpdateMetadata();
 
     if(m_linetrack_project_settings.Valid())
@@ -122,7 +120,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImU32 alt_fill_color    = m_settings.GetColor(Colors::kLineChartColorAlt);
     ImU32 transparent_color = m_settings.GetColor(Colors::kTransparent);
     ImU32 outline_color     = alt_fill_color;
-    ImU32 accent_red        = m_settings.GetColor(Colors::kAccentRed);
+    ImU32 accent            = m_settings.GetColor(Colors::kAccent);
 
     int hovered_idx = -1;
     size_t data_len = m_data.size();
@@ -193,10 +191,10 @@ LineTrackItem::BoxPlotRender(float graph_width)
                                      cursor_position, content_size, scale_y);
 
         // Draw a circle at the start
-        draw_list->AddCircle(start_point, 4.0f, accent_red, 12, 3);
+        draw_list->AddCircle(start_point, 4.0f, accent, 12, 3);
 
         // Draw a line from start to end
-        draw_list->AddLine(start_point, end_point, accent_red,
+        draw_list->AddLine(start_point, end_point, accent,
                            DEFAULT_LINE_THICKNESS * 3);
     }
 
@@ -291,24 +289,17 @@ void
 LineTrackItem::RenderMetaAreaScale()
 {
     ImVec2 content_region = ImGui::GetContentRegionMax();
-    ImVec2 window_pos     = ImGui::GetWindowPos();
 
     ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
-                                   m_metadata_padding.x + SCALE_SEPERATOR_WIDTH,
+                                   m_metadata_padding.x,
                                m_metadata_padding.y));
     m_max_y.Render();
 
     ImVec2 min_size = ImGui::CalcTextSize(m_min_y.CompactValue().c_str());
     ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
-                                   m_metadata_padding.x + SCALE_SEPERATOR_WIDTH,
+                                   m_metadata_padding.x,
                                content_region.y - min_size.y - m_metadata_padding.y));
     m_min_y.Render();
-
-    ImGui::GetWindowDrawList()->AddLine(
-        ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width, window_pos.y),
-        ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
-               window_pos.y + content_region.y),
-        m_settings.GetColor(Colors::kMetaDataSeparator), SCALE_SEPERATOR_WIDTH);
 }
 
 void

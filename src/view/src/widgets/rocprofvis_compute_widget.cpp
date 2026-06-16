@@ -128,7 +128,7 @@ MetricTableBase::Render()
                                        settings.GetColor(Colors::kHighlightChart));
             }
 
-            for(auto column_index = 0; column_index < m_last_column_index;
+            for(uint32_t column_index = 0; column_index < m_last_column_index;
                 column_index++)
             {
                 if(column_index == 0 && !CanBePinned())
@@ -173,12 +173,14 @@ MetricTableBase::GetTableHeight() const
     uint32_t max_rows = 0;
     if(m_max_rows_in_table == 0)
     {
-        max_rows = m_rows.size();
+        max_rows = static_cast<uint32_t>(m_rows.size());
     }
     else
     {
         max_rows =
-            m_rows.size() < m_max_rows_in_table ? m_rows.size() : m_max_rows_in_table;
+            m_rows.size() < m_max_rows_in_table
+                ? static_cast<uint32_t>(m_rows.size())
+                : m_max_rows_in_table;
     }
         
     return style.ScrollbarSize + line_height + (max_rows * line_height);
@@ -188,16 +190,17 @@ void
 MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
                              std::pair<const MetricId, Row>& row)
 {
+    (void) value_to_copy;
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem("Pin metric"))
+        if(IconMenuItem(ICON_CHAIN, "Pin metric"))
         {
             row.second.pinned = !row.second.pinned;
             m_pin_metric_clicked(
                 { row.first.category_id, row.first.table_id, row.first.entry_id });
         }
         if(!m_event_source_id.empty() &&
-           ImGui::MenuItem("Send metric to kernel details"))
+           IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
         {
             AddMetricToKernelDetails(row.first, m_columns[column_index]);
         }
@@ -440,11 +443,11 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
                 {
                     snprintf(buf, sizeof(buf), "%.2f",
                              metric_value->values.at(value_name));
-                    row.values[value_index + 3].value = buf;
+                    row.values[static_cast<uint32_t>(value_index + 3)].value = buf;
                 }
                 else
                 {
-                    row.values[value_index + 3].value = "";
+                    row.values[static_cast<uint32_t>(value_index + 3)].value = "";
                 }
             }
         }

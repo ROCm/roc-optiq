@@ -21,6 +21,9 @@ constexpr ImGuiTableFlags TABLE_FLAGS = ImGuiTableFlags_BordersOuter |
                                         ImGuiTableFlags_Resizable |
                                         ImGuiTableFlags_SizingStretchProp;
 
+constexpr int kFlowColumnCount      = 6;
+constexpr int kCallStackColumnCount = 5;
+
 namespace
 {
 
@@ -59,6 +62,7 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_context_menu_flow_index(-1)
 , m_context_menu_flow_column(-1)
 , m_context_menu_callstack_index(-1)
+, m_context_menu_callstack_column(-1)
 {
     static_assert(CallStackHoverState::kInvalidId ==
                       TimelineSelection::INVALID_SELECTION_ID,
@@ -103,7 +107,9 @@ EventsView::Render()
                           m_settings.GetColor(Colors::kTableBorderInner));
     if(m_event_items.empty())
     {
-        ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f));
+        CenterNextTextItem("No data available for the selected events.");
+        ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
+                             0.5f);
         ImGui::TextDisabled("No data available for the selected events.");
     }
     else
@@ -324,7 +330,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("FlowInfoTable", 6, TABLE_FLAGS))
+            if(ImGui::BeginTable("FlowInfoTable", kFlowColumnCount, TABLE_FLAGS))
             {
                 ImGui::TableSetupColumn("ID");
                 ImGui::TableSetupColumn("Name");
@@ -400,8 +406,12 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                                 ImGuiHoveredFlags_AllowWhenOverlappedByItem);
                         if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
                         {
-                            m_context_menu_flow_index  = i;
-                            m_context_menu_flow_column = 0;
+                            m_context_menu_flow_index = i;
+                            int hovered_col           = ImGui::TableGetHoveredColumn();
+                            m_context_menu_flow_column =
+                                (hovered_col >= 0 && hovered_col < kFlowColumnCount)
+                                    ? hovered_col
+                                    : 0;
                             ImGui::OpenPopup("##FlowContextMenu");
                         }
                         ImGui::PopStyleColor(3);
@@ -455,7 +465,7 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                         const auto& ctx_flow =
                             event_data->flow_info[m_context_menu_flow_index];
 
-                        if(ImGui::MenuItem("Go To Event"))
+                        if(IconMenuItem(ICON_ARROW_FORWARD, "Go To Event"))
                         {
                             m_timeline_selection->NavigateToEvent(
                                 ctx_flow.track_id, ctx_flow.id.uuid,
@@ -474,20 +484,20 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
                             std::to_string(ctx_flow.level),
                             std::to_string(ctx_flow.direction)};
 
-                        if(ImGui::MenuItem("Copy Row Data"))
+                        if(IconMenuItem(ICON_COPY, "Copy Row Data"))
                         {
                             std::string row_text;
-                            for(int c = 0; c < 6; c++)
+                            for(int c = 0; c < kFlowColumnCount; c++)
                             {
                                 if(c > 0) row_text += '\t';
                                 row_text += cells[c];
                             }
                             ImGui::SetClipboardText(row_text.c_str());
                         }
-                        if(ImGui::MenuItem("Copy Cell Data"))
+                        if(IconMenuItem(ICON_COPY, "Copy Cell Data"))
                         {
                             int col = m_context_menu_flow_column;
-                            if(col >= 0 && col < 6)
+                            if(col >= 0 && col < kFlowColumnCount)
                                 ImGui::SetClipboardText(cells[col].c_str());
                         }
                     }
@@ -521,7 +531,7 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
         }
         else
         {
-            if(ImGui::BeginTable("CallStackTable", 5, TABLE_FLAGS))
+            if(ImGui::BeginTable("CallStackTable", kCallStackColumnCount, TABLE_FLAGS))
             {
                 ImGui::TableSetupColumn("ID");
                 ImGui::TableSetupColumn("Address");
@@ -556,8 +566,9 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
 
                     if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
                     {
-                        m_context_menu_callstack_index = row;
-                        open_callstack_context_menu    = true;
+                        m_context_menu_callstack_index  = row;
+                        m_context_menu_callstack_column = col;
+                        open_callstack_context_menu     = true;
                     }
                 };
 
@@ -616,7 +627,12 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                         if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
                         {
                             m_context_menu_callstack_index = i;
-                            open_callstack_context_menu    = true;
+                            int hovered_col                = ImGui::TableGetHoveredColumn();
+                            m_context_menu_callstack_column =
+                                (hovered_col >= 0 && hovered_col < kCallStackColumnCount)
+                                    ? hovered_col
+                                    : 0;
+                            open_callstack_context_menu = true;
                         }
                         ImGui::PopStyleColor(3);
 
@@ -665,9 +681,31 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
                         const auto& ctx_frame =
                             event_data->call_stack_info[m_context_menu_callstack_index];
 
-                        if(ImGui::MenuItem("Go To Event"))
+                        if(IconMenuItem(ICON_ARROW_FORWARD, "Go To Event"))
                         {
                             navigate_to_frame(ctx_frame.id.uuid);
+                        }
+
+                        std::string cells[] = {
+                            std::to_string(ctx_frame.id.bitfield.event_id),
+                            ctx_frame.address, ctx_frame.name, ctx_frame.file,
+                            ctx_frame.pc};
+
+                        if(IconMenuItem(ICON_COPY, "Copy Row Data"))
+                        {
+                            std::string row_text;
+                            for(int c = 0; c < kCallStackColumnCount; c++)
+                            {
+                                if(c > 0) row_text += '\t';
+                                row_text += cells[c];
+                            }
+                            ImGui::SetClipboardText(row_text.c_str());
+                        }
+                        if(IconMenuItem(ICON_COPY, "Copy Cell Data"))
+                        {
+                            int col = m_context_menu_callstack_column;
+                            if(col >= 0 && col < kCallStackColumnCount)
+                                ImGui::SetClipboardText(cells[col].c_str());
                         }
                     }
                     ImGui::EndPopup();

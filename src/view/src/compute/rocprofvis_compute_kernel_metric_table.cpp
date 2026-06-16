@@ -422,9 +422,9 @@ KernelMetricTable::Render()
                         if(index < static_cast<int>(m_metrics_column_names.size()))
                         {
                             // Calculate width based on name + padding for close button
-                            float column_size =
+                            float column_size = static_cast<float>(
                                 ImGui::CalcTextSize(m_metrics_column_names[index].c_str()).x +
-                                cell_padding + char_width * 2.0;
+                                cell_padding + char_width * 2.0);
 
                             column_size = std::max(column_size, default_min_width);
 
@@ -924,7 +924,7 @@ KernelMetricTable::RenderBarChartContextMenu(int col)
     if(ImGui::BeginPopupContextItem("##bar_ctx"))
     {
         bool has_bars = m_bar_chart_columns.count(col) > 0;
-        if(ImGui::MenuItem(has_bars ? "Hide Bar Chart" : "Show Bar Chart"))
+        if(IconMenuItem(ICON_CHART_BAR, has_bars ? "Hide Bar Chart" : "Show Bar Chart"))
         {
             if(has_bars)
             {
@@ -985,7 +985,8 @@ KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_co
         auto starts_with_like = [](const std::string& str) {
             if(str.length() < 4) return false;
             std::string prefix = str.substr(0, 4);
-            std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::tolower);
+            std::transform(prefix.begin(), prefix.end(), prefix.begin(),
+                [](unsigned char c) -> char { return static_cast<char>(std::tolower(c)); });
             return prefix == "like";
         };
         return starts_with_like(trimmed);

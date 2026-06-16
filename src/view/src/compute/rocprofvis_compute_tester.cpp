@@ -3,6 +3,7 @@
 
 #include "rocprofvis_compute_tester.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "implot/implot.h"
 #include "spdlog/spdlog.h"
@@ -955,7 +956,7 @@ ComputeTester::Render()
                     }
                     else
                     {
-                        ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1),
+                        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kTextError)),
                                            "Entry %u not found in table %u (table has %zu entries)",
                                            entry_id, tbl_id, tbl.entries.size());
                     }
@@ -974,13 +975,13 @@ ComputeTester::Render()
                 }
                 else
                 {
-                    ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1),
+                    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kTextError)),
                                        "Table %u not found in category %u", tbl_id, cat_id);
                 }
             }
             else
             {
-                ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1),
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(SettingsManager::GetInstance().GetColor(Colors::kTextError)),
                                    "Category %u not found", cat_id);
             }
         }

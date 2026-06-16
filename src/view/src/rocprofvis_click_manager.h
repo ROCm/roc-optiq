@@ -27,11 +27,6 @@ public:
     Layer GetFocusedLayer() const;
     Layer EvaluateFocusedLayer();
 
-    // Right-click context menu channel - persists until explicitly cleared
-    void  SetRightClickLayer(Layer layer);
-    Layer GetRightClickLayer() const;
-    void  ClearRightClickLayer();
-
 private:
     TimelineFocusManager();
     ~TimelineFocusManager()                                      = default;
@@ -40,7 +35,6 @@ private:
 
     Layer                 m_layer_focused;
     std::map<Layer, bool> m_all_layers_focused;
-    Layer                 m_right_click_layer;
 };
 
 }  // namespace View

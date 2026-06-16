@@ -53,6 +53,10 @@ public:
 
     void Update() override;
     void Render() override;
+    bool WantsContinuousRender() const override
+    {
+        return m_timeline_view && m_timeline_view->WantsContinuousRender();
+    }
 
     bool LoadTrace(rocprofvis_controller_t* controller, const std::string& file_path);
 

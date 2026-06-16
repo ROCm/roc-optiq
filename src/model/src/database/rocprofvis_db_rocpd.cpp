@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_rocpd.h"
+#include "rocprofvis_shared_types.h"
 #include <sstream>
 #include <string.h>
 #include <filesystem>
@@ -26,6 +27,8 @@ rocprofvis_dm_result_t RocpdDatabase::RemapStringIds(rocprofvis_db_flow_data_t &
 }
 
 rocprofvis_dm_result_t RocpdDatabase::RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) {
+    (void) type;
+    (void) node;
     result = id;
     RemapStringIdHelper(result);
     return kRocProfVisDmResultSuccess;
@@ -146,6 +149,8 @@ int RocpdDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocp
     }
     else
     {
+        // Streams merge several per-operation queries into one track; sum the counts.
+        it->get()->record_count += track_params.record_count;
         it->get()->load_id.insert(*track_params.load_id.begin());
     }
     return 0;
@@ -313,7 +318,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                    0,
                    kRPVQueryLevel,
                    "SELECT *, ", (std::string(" ORDER BY ")+Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
-                   [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
+                   [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string { (void) params; return query; },
                    [](rocprofvis_dm_track_params_t* params) {
                        params->m_active_events.clear();
                    },
@@ -366,8 +371,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                     kRPVQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ", 
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
-                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string {return query; },
+                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string { (void) params; return query; },
                     [](rocprofvis_dm_track_params_t* params) {
+                        (void) params;
                     },
                     { DbInstances() }))
             {

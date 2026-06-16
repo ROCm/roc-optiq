@@ -15,6 +15,7 @@ namespace View
 class DataProvider;
 class EventsView;
 class MultiTrackTable;
+class TopEventsView;
 class TrackTopology;
 class TrackDetails;
 class TimelineSelection;
@@ -41,6 +42,7 @@ private:
     std::shared_ptr<EventsView>     m_events_view;
     std::shared_ptr<TrackDetails>   m_track_details;
     std::shared_ptr<AnnotationView> m_annotation_view;
+    std::shared_ptr<TopEventsView>  m_top_events_view;
 
     EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_range_selection_changed_token;

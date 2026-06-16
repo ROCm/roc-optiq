@@ -47,6 +47,9 @@ public:
 
     void Start();
     bool IsStarted() const { return m_started; }
+    // Started and still counting down. Advances only via Tick() each frame, so
+    // callers keep rendering until it expires instead of stalling on it.
+    bool IsRunning() const { return m_started && m_timer < m_delay; }
     bool IsExpired();
     void Restart();
     void Tick();
@@ -84,6 +87,7 @@ public:
     ~TimelineView();
     virtual void                                     Render() override;
     void                                             Update() override;
+    bool                                             WantsContinuousRender() const;
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();
@@ -126,6 +130,28 @@ private:
         kEnd
     };
 
+    // Per-type track counts shown in the histogram header strip. The label
+    // strings are built once when the trace is loaded (CalculateTrackCounts),
+    // not rebuilt every frame in RenderTrackStats.
+    struct TrackTypeCounts
+    {
+        uint64_t total                = 0;
+        uint64_t instrumented_threads = 0;
+        uint64_t sampled_threads      = 0;
+        uint64_t queues               = 0;
+        uint64_t streams              = 0;
+        uint64_t counters             = 0;
+        uint64_t other                = 0;
+
+        std::string              total_label;    // e.g. "12 Tracks"
+        std::string              breakdown;      // e.g. "3 threads, 2 queues"
+        std::vector<std::string> tooltip_lines;  // e.g. "Queues: 2" per non-zero type
+    };
+
+    void CalculateTrackCounts();
+    void BuildTrackCountLabels();
+    void RenderTrackStats(float available_width);
+
     void UpdateMaxMetaAreaSize(float new_size);
     void CalculateMaxMetaAreaSize();
     void UpdateAllMaxMetaAreaSizes();
@@ -142,6 +168,8 @@ private:
     void RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size);
 
     void                            ClearTimeRangeSelection();
+    void                            CopySelectedEventNames();
+    void                            CopySelectedEventDetails();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
     EventManager::SubscriptionToken m_new_track_token;
@@ -198,6 +226,7 @@ private:
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;
+    TrackTypeCounts             m_track_counts;
 };
 
 }  // namespace View

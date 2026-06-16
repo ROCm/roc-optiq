@@ -48,11 +48,10 @@ public:
 
     void* GetRow(uint64_t row_index);
 
-    uint32_t NumColumns() { return m_columns.size(); }
+    uint32_t NumColumns() { return static_cast<uint32_t>(m_columns.size()); }
     size_t NumRows() { return m_rows.size(); }
 
 private:
-    std::string name;
     std::vector<std::pair<std::string, rocprofvis_db_data_type_t>> m_columns;
     std::vector<Row> m_rows;
     std::unordered_map<std::string, uint32_t> m_column_index;

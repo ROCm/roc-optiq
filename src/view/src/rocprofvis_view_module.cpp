@@ -98,3 +98,9 @@ rocprofvis_view_is_remote_display_session()
 {
     return is_remote_display_session();
 }
+
+bool
+rocprofvis_view_wants_continuous_render()
+{
+    return AppWindow::GetInstance()->WantsContinuousRender();
+}

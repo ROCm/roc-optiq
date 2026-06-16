@@ -25,7 +25,8 @@ rocprofvis_result_t Handle::GetStringImpl(char* value, uint32_t* length, char co
     }
     else if(value && length && *length > 0)
     {
-        strncpy(value, data, std::min(*length, data_len+1));
+        const size_t copy = std::min(static_cast<size_t>(data_len), static_cast<size_t>(*length));
+        if (copy > 0 && data) std::memcpy(value, data, copy);
         result = kRocProfVisResultSuccess;
     }
     return result;

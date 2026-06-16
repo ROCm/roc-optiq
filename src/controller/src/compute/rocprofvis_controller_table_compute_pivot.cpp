@@ -8,9 +8,12 @@
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_future.h"
+#include "rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
+#include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -26,6 +29,15 @@ ComputePivotTable::ComputePivotTable(const uint64_t id)
 }
 
 ComputePivotTable::~ComputePivotTable() {}
+
+rocprofvis_result_t
+ComputePivotTable::SetupAndFetch(Trace& controller, Arguments& args,
+                                 Array& array, Future* future)
+{
+    ComputeTrace* compute_controller = dynamic_cast<ComputeTrace*>(&controller);
+    ROCPROFVIS_ASSERT(compute_controller);
+    return Table::SetupAndFetch(controller, args, array, future);
+}
 
 rocprofvis_result_t
 ComputePivotTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future)
@@ -164,7 +176,8 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
     // Build query using model layer
     char*                  query     = nullptr;
     rocprofvis_dm_result_t dm_result = rocprofvis_db_build_compute_query(
-        db, kRPVComputeFetchKernelMetricsMatrix, params.size(), params.data(), &query);
+        db, kRPVComputeFetchKernelMetricsMatrix,
+        static_cast<rocprofvis_db_num_of_params_t>(params.size()), params.data(), &query);
 
     if(dm_result == kRocProfVisDmResultSuccess && query)
     {
@@ -360,12 +373,14 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
                 {
                     if(!value && length)
                     {
-                        *length = m_columns[index].m_name.size();
+                        *length = static_cast<uint32_t>(m_columns[index].m_name.size());
                         result  = kRocProfVisResultSuccess;
                     }
-                    else if(value && length)
+                    else if(value && length && *length > 0)
                     {
-                        strncpy(value, m_columns[index].m_name.c_str(), *length);
+                        const std::string& name = m_columns[index].m_name;
+                        const size_t copy = std::min(name.size(), static_cast<size_t>(*length));
+                        if (copy > 0) std::memcpy(value, name.data(), copy);
                         result = kRocProfVisResultSuccess;
                     }
                 }
@@ -376,12 +391,13 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
                 std::string title = "Kernel Metrics Matrix";
                 if(!value && length)
                 {
-                    *length = title.size();
+                    *length = static_cast<uint32_t>(title.size());
                     result  = kRocProfVisResultSuccess;
                 }
-                else if(value && length)
+                else if(value && length && *length > 0)
                 {
-                    strncpy(value, title.c_str(), *length);
+                    const size_t copy = std::min(title.size(), static_cast<size_t>(*length));
+                    if (copy > 0) std::memcpy(value, title.data(), copy);
                     result = kRocProfVisResultSuccess;
                 }
                 break;

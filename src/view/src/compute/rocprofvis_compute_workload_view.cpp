@@ -126,7 +126,7 @@ ComputeWorkloadView::RenderSystemInfo(const WorkloadInfo& workload_info)
             {
                 for(size_t i = 0; i < workload_info.system_info[0].size(); i++)
                 {
-                    ImGui::PushID(i);
+                    ImGui::PushID(static_cast<int>(i));
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                     CopyableTextUnformatted(workload_info.system_info[0][i].c_str(), "",
@@ -170,7 +170,7 @@ ComputeWorkloadView::RenderProfilingConfig(const WorkloadInfo& workload_info)
             {
                 for(size_t i = 0; i < workload_info.profiling_config[0].size(); i++)
                 {
-                    ImGui::PushID(i);
+                    ImGui::PushID(static_cast<int>(i));
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                     CopyableTextUnformatted(workload_info.profiling_config[0][i].c_str(),

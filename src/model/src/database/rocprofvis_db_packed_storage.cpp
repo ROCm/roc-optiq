@@ -20,6 +20,7 @@
 
 #include "rocprofvis_db_packed_storage.h"
 #include "rocprofvis_db_profile.h"
+#include "rocprofvis_shared_types.h"
 #include <numeric>
 #include <execution>
 #include <cfloat>
@@ -90,7 +91,7 @@ namespace DataModel
 
     void PackedTable::Validate(size_t col)
     {
-        if (m_currentRow == static_cast<size_t>(-1))
+        if (m_currentRow == static_cast<size_t>(INVALID_INDEX_64))
             throw std::runtime_error("AddRow() must be called before SetValue()");
         if (col >= m_columns.size())
             throw std::out_of_range("Column out of range");
@@ -109,13 +110,13 @@ namespace DataModel
         auto track_column_it = find_if(columns.rbegin(), columns.rend(), [op](MergedColumnDef& cd) {return cd.m_schema_index[op] == Builder::SCHEMA_INDEX_TRACK_ID; });
         ROCPROFVIS_ASSERT_MSG_RETURN(track_column_it != columns.rend(), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
         uint8_t size = ColumnTypeSize(Builder::TRACK_ID_TYPE);
-        uint32_t track = row->Get<uint64_t>(track_column_it->m_offset[op], size);
+        uint32_t track = static_cast<uint32_t>(row->Get<uint64_t>(track_column_it->m_offset[op], size));
         if (!db->IsTrackIndexValid(track))
         {
             track_column_it = std::find_if(columns.rbegin(), columns.rend(),
                 [](MergedColumnDef& cdef) { return cdef.m_name == Builder::STREAM_TRACK_ID_PUBLIC_NAME; });
             ROCPROFVIS_ASSERT_MSG_RETURN(track_column_it != columns.rend(), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
-            track = row->Get<uint64_t>(track_column_it->m_offset[op], size);
+            track = static_cast<uint32_t>(row->Get<uint64_t>(track_column_it->m_offset[op], size));
         }
         ROCPROFVIS_ASSERT_MSG_RETURN(db->IsTrackIndexValid(track), ERROR_NODE_KEY_CANNOT_BE_NULL, nullptr);
         return (DbInstance*)db->TrackPropertiesAt(track)->track_indentifiers.db_instance;
@@ -164,6 +165,7 @@ namespace DataModel
 
     Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col, ProfileDatabase* requestor) const
     {
+        (void) requestor;
         if (row >= m_rows.size() || col >= m_merged_columns.size())
             throw std::out_of_range("Row/Column out of range");
 
@@ -193,19 +195,19 @@ namespace DataModel
         if (column_index == Builder::SCHEMA_INDEX_NODE_ID)
         {
             numeric_string = true;
-            return db->CachedTables(node_id)->GetTableCellByIndex("Node", value, "id");
+            return db->CachedTables(node_id)->GetTableCellByIndex("Node", static_cast<uint32_t>(value), "id");
         } else
         if (column_index == Builder::SCHEMA_INDEX_CATEGORY || column_index == Builder::SCHEMA_INDEX_CATEGORY_RPD || 
             column_index == Builder::SCHEMA_INDEX_EVENT_NAME || column_index == Builder::SCHEMA_INDEX_EVENT_NAME_RPD)
         {
             if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, node_id, string_index))
             {
-                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, string_index);
+                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, static_cast<uint32_t>(string_index));
             }
         } else
         if (column_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD)
         {
-            return db->StringTableReference().ToString(value);
+            return db->StringTableReference().ToString(static_cast<uint32_t>(value));
         } else
         if (column_index == Builder::SCHEMA_INDEX_STREAM_NAME)
         {
@@ -219,7 +221,7 @@ namespace DataModel
         {
             if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeKernelSymbol, node_id, string_index))
             {
-                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, string_index);
+                return db->BindObject()->FuncGetString(db->BindObject()->trace_object, static_cast<uint32_t>(string_index));
             }
         } else
         if (column_index == Builder::SCHEMA_INDEX_AGENT_ABS_INDEX || column_index == Builder::SCHEMA_INDEX_AGENT_SRC_ABS_INDEX )
@@ -246,11 +248,11 @@ namespace DataModel
         } else 
         if (column_index == Builder::SCHEMA_INDEX_MEM_TYPE)
         {
-            return Builder::IntToTypeEnum(value,Builder::mem_alloc_types);
+            return Builder::IntToTypeEnum(static_cast<int>(value),Builder::mem_alloc_types);
         }else
         if (column_index == Builder::SCHEMA_INDEX_LEVEL)
         {
-            return Builder::IntToTypeEnum(value,Builder::mem_alloc_types);
+            return Builder::IntToTypeEnum(static_cast<int>(value),Builder::mem_alloc_types);
         }
         return nullptr;
     }
@@ -370,7 +372,7 @@ namespace DataModel
     }
 
     void PackedTable::SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order) {
-
+        (void) db;
 
         if (m_aggregation.agg_params[0].public_name == sort_column)
         {
@@ -419,7 +421,7 @@ namespace DataModel
             m_aggregation.aggregation_maps[map_index].insert({ value, {} });
             it = m_aggregation.aggregation_maps[map_index].find(value);
             bool numeric_string = false;
-            const char* str =  PackedTable::ConvertSqlStringReference(db, group_by_column_info.m_schema_index[op], value, db_instance->GuidIndex(), numeric_string);
+            const char* str =  PackedTable::ConvertSqlStringReference(db, group_by_column_info.m_schema_index[op], static_cast<uint64_t>(value), db_instance->GuidIndex(), numeric_string);
             if (str == nullptr){
                 if (group_by_column_info.m_type[op] == ColumnType::Double)
                 {
@@ -442,14 +444,14 @@ namespace DataModel
                     if (group_by == param.column) continue;
                     std::string column = param.column;
                     MergedColumnDef& column_info = m_aggregation.column_def[column];
-                    uint8_t size = ColumnTypeSize(column_info.m_type[op]);
-                    if (size > 0)
+                    uint8_t agg_size = ColumnTypeSize(column_info.m_type[op]);
+                    if (agg_size > 0)
                     {
-                        value = column_info.m_type[op] == ColumnType::Double ?  r->Get<double>(column_info.m_offset[op]) :  r->Get<uint64_t>(column_info.m_offset[op], size);
+                        value = column_info.m_type[op] == ColumnType::Double ?  r->Get<double>(column_info.m_offset[op]) :  r->Get<uint64_t>(column_info.m_offset[op], agg_size);
                     }
-                    bool numeric_string = false;
-                    const char* str =  PackedTable::ConvertSqlStringReference(db, column_info.m_schema_index[op], value, db_instance->GuidIndex(), numeric_string);
-                    if (str == nullptr){
+                    bool agg_numeric_string = false;
+                    const char* agg_str =  PackedTable::ConvertSqlStringReference(db, column_info.m_schema_index[op], static_cast<uint64_t>(value), db_instance->GuidIndex(), agg_numeric_string);
+                    if (agg_str == nullptr){
                         if (column_info.m_type[op] == ColumnType::Double)
                         {
                             it->second.result[param.public_name].numeric.data.d = value;
@@ -457,14 +459,14 @@ namespace DataModel
                         }
                         else
                         {
-                            it->second.result[param.public_name].numeric.data.u64 = value;
+                            it->second.result[param.public_name].numeric.data.u64 = static_cast<uint64_t>(value);
                             it->second.result[param.public_name].type = NumericUInt64;
                         }
                     }
                     else
                     {
                         it->second.result[param.public_name].type = NotNumeric;
-                        it->second.result[param.public_name].numeric.data.u64 = m_aggregation.m_string_data.ToInt(str);
+                        it->second.result[param.public_name].numeric.data.u64 = m_aggregation.m_string_data.ToInt(agg_str);
                     }
                 }
                 else
@@ -512,25 +514,25 @@ namespace DataModel
                 {
                     std::string column = param.column;
                     MergedColumnDef& column_info = m_aggregation.column_def[column];
-                    uint8_t size = ColumnTypeSize(column_info.m_type[op]);
-                    double value = 0;
-                    if (size > 0)
+                    uint8_t agg_size = ColumnTypeSize(column_info.m_type[op]);
+                    double agg_value = 0;
+                    if (agg_size > 0)
                     {
-                        value = column_info.m_type[op] == ColumnType::Double ? r->Get<double>(column_info.m_offset[op]) : r->Get<uint64_t>(column_info.m_offset[op], size);
+                        agg_value = column_info.m_type[op] == ColumnType::Double ? r->Get<double>(column_info.m_offset[op]) : r->Get<uint64_t>(column_info.m_offset[op], agg_size);
                     }
                     switch (param.command)
                     {
                     case FilterExpression::SqlCommand::Avg:
-                        it_val->second.numeric.data.d += (value - it_val->second.numeric.data.d) / it->second.count;
+                        it_val->second.numeric.data.d += (agg_value - it_val->second.numeric.data.d) / it->second.count;
                         break;
                     case FilterExpression::SqlCommand::Min:
-                        it_val->second.numeric.data.d = std::min(value, it_val->second.numeric.data.d);
+                        it_val->second.numeric.data.d = std::min(agg_value, it_val->second.numeric.data.d);
                         break;
                     case FilterExpression::SqlCommand::Max:
-                        it_val->second.numeric.data.d = std::max(value, it_val->second.numeric.data.d);
+                        it_val->second.numeric.data.d = std::max(agg_value, it_val->second.numeric.data.d);
                         break;
                     case FilterExpression::SqlCommand::Sum:
-                        it_val->second.numeric.data.d += value;
+                        it_val->second.numeric.data.d += agg_value;
                         break;
                     default:
                         break;
@@ -576,7 +578,7 @@ namespace DataModel
                         uint64_t string_index = 0;
                         if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, db_instance->GuidIndex(), string_index))
                         {
-                            value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, string_index);
+                            value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, static_cast<uint32_t>(string_index));
                         }
                         
                         sort_values.push_back(value);

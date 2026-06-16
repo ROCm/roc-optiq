@@ -4,6 +4,7 @@
 #include "rocprofvis_debug_window.h"
 #include "imgui.h"
 #include "rocprofvis_core.h"
+#include "rocprofvis_settings_manager.h"
 
 using namespace RocProfVis::View;
 
@@ -29,7 +30,8 @@ DebugWindow::DebugWindow()
     nav_bar.m_item = std::make_shared<RocCustomWidget>([this]() { this->RenderNav(); });
     nav_bar.m_window_padding = ImVec2(10, 2);
     nav_bar.m_item_spacing   = ImVec2(4, 4);
-    nav_bar.m_bg_color       = ImColor(228, 228, 228, 255);
+    nav_bar.m_bg_color       =
+        ImColor(SettingsManager::GetInstance().GetColor(Colors::kDebugNavBarBg));
 
     LayoutItem content(0, 0.0f);
 

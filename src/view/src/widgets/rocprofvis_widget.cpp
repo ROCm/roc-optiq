@@ -10,6 +10,8 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <sstream>
 
@@ -17,6 +19,10 @@ namespace RocProfVis
 {
 namespace View
 {
+
+// Menu icon spacing, in multiples of the font size.
+inline constexpr float MENU_ICON_GAP_EM       = 0.7f;
+inline constexpr float MENU_NO_ICON_INDENT_EM = 1.0f;
 
 RocWidget::~RocWidget() { spdlog::debug("RocWidget object destroyed"); }
 
@@ -101,27 +107,69 @@ WithPadding(float left, float right, float top, float bottom,
     if(bottom > 0.0f) ImGui::Dummy(ImVec2(0, bottom));
 }
 
-bool
-IconMenuItem(const char* icon, const char* label)
+static float
+MenuIconWidth(const char* icon)
 {
+    const float font_size = ImGui::GetFontSize();
+    if(!icon || icon[0] == '\0')
+        return font_size * MENU_NO_ICON_INDENT_EM;
+
     ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+    return icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon).x;
+}
 
-    bool clicked = ImGui::Selectable(("##menu_item" + std::string(label)).c_str(), false,
-                                     ImGuiSelectableFlags_SpanAllColumns,
-                                     ImVec2(0, ImGui::GetTextLineHeightWithSpacing()));
-    ImGui::SameLine(0.0f, 0.0f);
+// Pads the label with leading spaces to leave room for the left-aligned icon.
+static std::string
+MenuLabelWithIconPadding(const char* icon, const char* label)
+{
+    const float offset  = MenuIconWidth(icon) + ImGui::GetFontSize() * MENU_ICON_GAP_EM;
+    const float space_w = ImGui::CalcTextSize(" ").x;
+    const int   pad     = space_w > 0.0f ? static_cast<int>(std::ceil(offset / space_w)) : 1;
+    std::string padded(static_cast<size_t>(std::max(pad, 1)), ' ');
+    padded += label;
+    return padded;
+}
 
-    ImGui::BeginGroup();
-    ImGui::PushFont(icon_font);
-    ImGui::TextUnformatted(icon);
-    ImGui::PopFont();
-    ImGui::SameLine(0.f, ImGui::GetStyle().ItemSpacing.x);
-    ImGui::TextUnformatted(label);
-    ImGui::EndGroup();
+// row_start is the cursor screen position captured before the menu widget.
+static void
+DrawMenuItemIcon(const char* icon, const ImVec2& row_start, bool enabled)
+{
+    if(!icon || icon[0] == '\0')
+        return;
+
+    ImFont*      icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+    const float  font_size = ImGui::GetFontSize();
+    const ImVec2 icon_size = icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon);
+    const ImVec2 pos(row_start.x, row_start.y + (font_size - icon_size.y) * 0.5f);
+    const ImU32  color = ImGui::GetColorU32(enabled ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+
+    ImGui::GetWindowDrawList()->AddText(icon_font, font_size, pos, color, icon);
+}
+
+bool
+IconMenuItem(const char* icon, const char* label, bool enabled)
+{
+    const ImVec2 row_start    = ImGui::GetCursorScreenPos();
+    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+
+    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, false, enabled);
+    DrawMenuItemIcon(icon, row_start, enabled);
 
     if(clicked)
         ImGui::CloseCurrentPopup();
     return clicked;
+}
+
+bool
+IconBeginMenu(const char* icon, const char* label)
+{
+    const ImVec2 row_start    = ImGui::GetCursorScreenPos();
+    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+
+    bool open = ImGui::BeginMenu(padded_label.c_str());
+    DrawMenuItemIcon(icon, row_start, true);
+
+    return open;
 }
 
 bool

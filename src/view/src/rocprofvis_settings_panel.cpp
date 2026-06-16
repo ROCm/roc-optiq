@@ -10,12 +10,15 @@
 #include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_widget.h"
 
+#include <algorithm>
+
 // Layout constants
 constexpr float kCategorywidth            = 150.0f;
 constexpr float kContentwidth             = 550.0f;
 constexpr float kContentHeight            = 450.0f;
 constexpr float kHotkeyCategoryColWidth   = 90.0f;
 constexpr float kHotkeyBindingColWidth    = 120.0f;
+constexpr float kLogViewerInputWidth      = 160.0f;
 
 namespace RocProfVis
 {
@@ -345,6 +348,29 @@ SettingsPanel::RenderOtherSettings()
                     &m_usersettings.dont_ask_before_exit);
     ImGui::Checkbox("Don't ask before closing tabs",
                     &m_usersettings.dont_ask_before_tab_closing);
+
+    ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y));
+    ImGui::TextUnformatted("Log viewer");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Max cached entries");
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Number of recent log lines kept in the in-memory log viewer.\n"
+                         "Older lines fall off once the cap is reached - open the log\n"
+                         "file for the complete history. Range: %d to %d.",
+                         LOG_VIEWER_MAX_ENTRIES_MIN, LOG_VIEWER_MAX_ENTRIES_MAX);
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(kLogViewerInputWidth);
+    if(ImGui::InputInt("##log_viewer_max_entries", &m_usersettings.log_viewer_max_entries,
+                       LOG_VIEWER_MAX_ENTRIES_STEP, LOG_VIEWER_MAX_ENTRIES_STEP_FAST))
+    {
+        m_usersettings.log_viewer_max_entries =
+            std::clamp(m_usersettings.log_viewer_max_entries, LOG_VIEWER_MAX_ENTRIES_MIN,
+                       LOG_VIEWER_MAX_ENTRIES_MAX);
+    }
+
     m_settings_changed = true;
 }
 

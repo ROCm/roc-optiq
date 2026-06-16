@@ -16,7 +16,7 @@ namespace Controller
         Array& output)
     {
         std::array<char, 128> host{};
-        uint32_t host_length = host.size();
+        uint32_t host_length = static_cast<uint32_t>(host.size());
 
         uint64_t port;
         if (kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerRemoteTypePort, 0, &port))
@@ -85,13 +85,13 @@ namespace Controller
         rocprofvis_result_t   error = kRocProfVisResultInvalidArgument;
 
         std::array<char, 128> password{};
-        uint32_t password_length = password.size();
+        uint32_t password_length = static_cast<uint32_t>(password.size());
         std::array<char, 128> user{};
-        uint32_t user_length = user.size();
+        uint32_t user_length = static_cast<uint32_t>(user.size());
         std::array<char, 1024> key_path{};
-        uint32_t key_path_length = key_path.size();
+        uint32_t key_path_length = static_cast<uint32_t>(key_path.size());
         std::array<char, 128> key_passphrase{};
-        uint32_t key_passphrase_length = key_passphrase.size();
+        uint32_t key_passphrase_length = static_cast<uint32_t>(key_passphrase.size());
 
         if (kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeUser, 0, user.data(), &user_length) &&
             kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypePassword, 0, password.data(), &password_length) &&
@@ -145,7 +145,7 @@ namespace Controller
                 for (int i = 0; i < num_responses; i++)
                 {
                     std::array<char, 128> response{};
-                    uint32_t response_length = response.size();
+                    uint32_t response_length = static_cast<uint32_t>(response.size());
                     if (kRocProfVisResultSuccess == args.GetString(kRPVControllerUserResponseIndexed, i, response.data(), &response_length))
                     {
                         responses.push_back(response.data());
@@ -201,7 +201,7 @@ namespace Controller
 	{
         rocprofvis_result_t   error     = kRocProfVisResultInvalidArgument;
         std::array<char, 4096> command{};
-        uint32_t command_length = command.size();
+        uint32_t command_length = static_cast<uint32_t>(command.size());
 
         if (args.GetString(kRPVControllerRemoteTypeCommand, 0, command.data(), &command_length) == kRocProfVisResultSuccess)
         {
@@ -235,9 +235,9 @@ namespace Controller
     {
         rocprofvis_result_t   error = kRocProfVisResultInvalidArgument;
         std::array<char, 128> src_path{};
-        uint32_t src_path_length = src_path.size();
+        uint32_t src_path_length = static_cast<uint32_t>(src_path.size());
         std::array<char, 128> dst_path{};
-        uint32_t dst_path_length = dst_path.size();
+        uint32_t dst_path_length = static_cast<uint32_t>(dst_path.size());
         uint64_t direction = 0;
         if (args.GetString(kRPVControllerRemoteTypeFilePathSrc, 0, src_path.data(), &src_path_length) == kRocProfVisResultSuccess &&
             args.GetString(kRPVControllerRemoteTypeFilePathDst, 0, dst_path.data(), &dst_path_length) == kRocProfVisResultSuccess &&
@@ -281,7 +281,7 @@ namespace Controller
     {
         rocprofvis_result_t   error = kRocProfVisResultInvalidArgument;
         std::array<char, 128> path{};
-        uint32_t path_length = path.size();
+        uint32_t path_length = static_cast<uint32_t>(path.size());
         if (args.GetString(kRPVControllerRemoteTypeFilePathDst, 0, path.data(), &path_length) == kRocProfVisResultSuccess)
         {
 

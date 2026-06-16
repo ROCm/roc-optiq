@@ -237,6 +237,12 @@ AppMonitor::HasPendingOperations() const
     return !m_operations.empty();
 }
 
+size_t
+AppMonitor::GetActiveOperationCount() const
+{
+    return m_operations.size();
+}
+
 void
 AppMonitor::Update()
 {

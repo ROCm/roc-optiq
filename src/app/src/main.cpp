@@ -162,13 +162,6 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
-
-    if(key == GLFW_KEY_L && action == GLFW_PRESS && (mods & GLFW_MOD_CONTROL))
-    {
-        g_render_options = static_cast<rocprofvis_view_render_options_t>(
-            static_cast<int>(g_render_options) |
-            static_cast<int>(rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_ShowProfilerLauncher));
-    }
 #else
     (void) window;
     (void) key;

@@ -635,7 +635,8 @@ AppWindow::WantsContinuousRender()
 {
     if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
        m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents() ||
-       NotificationManager::GetInstance().HasActiveNotifications())
+       NotificationManager::GetInstance().HasActiveNotifications() ||
+       AppMonitor::GetInstance()->HasPendingOperations())
     {
         return true;
     }
@@ -1622,7 +1623,9 @@ AppWindow::UpdateStatusBar()
         }
         // also check if there are any cleanup jobs pending
         size_t clean_up_jobs = m_provider_cleanup_jobs.size();
-        if(pending_requests > 0 || clean_up_jobs > 0)
+        // background operations tracked by the monitor (SSH, profiler, etc.)
+        size_t monitor_ops = AppMonitor::GetInstance()->GetActiveOperationCount();
+        if(pending_requests > 0 || clean_up_jobs > 0 || monitor_ops > 0)
         {
             if(pending_requests > 0)
             {
@@ -1634,6 +1637,13 @@ AppWindow::UpdateStatusBar()
                 m_status_message = (pending_requests > 0 ? m_status_message + " | " : "") +
                                     ("Cleaning up: " + std::to_string(clean_up_jobs) +
                                      " pending job(s)");
+            }
+            if(monitor_ops > 0)
+            {
+                bool has_prefix = (pending_requests > 0 || clean_up_jobs > 0);
+                m_status_message = (has_prefix ? m_status_message + " | " : "") +
+                                   ("Background: " + std::to_string(monitor_ops) +
+                                    " operation(s)");
             }
             m_status_show_busy_indicator = true;
         }

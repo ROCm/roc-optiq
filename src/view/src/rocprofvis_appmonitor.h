@@ -144,6 +144,10 @@ public:
     // shutdown gate to defer process exit until the monitor has drained.
     bool HasPendingOperations() const;
 
+    // Number of operations currently tracked (active or cancelling). Used by the
+    // status bar to surface background activity to the user.
+    size_t GetActiveOperationCount() const;
+
     // Main thread only. Polls every tracked operation and queues status-change
     // events. Terminal / cancelling operations are reaped once their future
     // resolves.

@@ -11,6 +11,7 @@
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "imgui.h"
+#include <spdlog/spdlog.h>
 #include <cfloat>
 #include <algorithm>
 #include <cstdio>
@@ -169,9 +170,17 @@ void ProfilerLauncherDialog::Render()
         // Launch Button row
         RenderButtonRow();
 
-        // Output console
+        // Output console. Collapse the local profiler state / remote workflow
+        // phase into a single badge so remote runs show "Connecting",
+        // "Downloading", etc. (and only show "Completed" once the trace is
+        // local), with the phase detail rendered next to the badge.
+        std::string        status_label  = "Idle";
+        ConsoleStatusLevel status_level  = ConsoleStatusLevel::kIdle;
+        std::string        status_detail;
+        ComputeConsoleStatus(status_label, status_level, status_detail);
         if (RenderOutputConsole(m_output_text, m_error_message,
-                                static_cast<int>(m_profiler_state), m_auto_scroll_output))
+                                status_label, status_level, status_detail,
+                                m_auto_scroll_output))
         {
             m_profiler_session.ClearOutput();
             m_output_text.clear();
@@ -390,11 +399,9 @@ void ProfilerLauncherDialog::RenderRemoteSection()
             });
     }
 
-    if (m_remote_session && !m_remote_session->GetStatusMessage().empty())
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), "%s",
-                           m_remote_session->GetStatusMessage().c_str());
-    }
+    // The remote workflow status (connecting/authenticating/profiling/
+    // downloading + any detail) is surfaced via the output console status badge
+    // (see ComputeConsoleStatus), so there is no separate status line here.
 }
 
 void ProfilerLauncherDialog::RenderRemotePopups()
@@ -830,7 +837,7 @@ void ProfilerLauncherDialog::OnProfilerStateChanged(rocprofvis_profiler_state_t 
             trace_path = m_profiler_session.GetTracePath();
             spdlog::warn("ProfilerLauncherDialog: backend {} failed to parse trace path "
                          "from output; falling back to filesystem scan result '{}'",
-                         trace_path);
+                         backend ? backend->Id() : "(none)", trace_path);
         }
         if (!trace_path.empty())
         {
@@ -883,6 +890,81 @@ void ProfilerLauncherDialog::UpdateOutput()
 void ProfilerLauncherDialog::RebuildComposedOutput()
 {
     m_output_text = m_output_preamble + m_process_output_stripped + m_output_epilogue;
+}
+
+void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
+                                                  ConsoleStatusLevel& out_level,
+                                                  std::string&        out_detail) const
+{
+    out_label  = "Idle";
+    out_level  = ConsoleStatusLevel::kIdle;
+    out_detail.clear();
+
+    if (m_remote_session)
+    {
+        // Remote: the badge reflects the workflow phase, not just the profiler
+        // state, so the user sees connect/auth/profile/download progress. The
+        // session's status message (e.g. "Downloading (/path)") is the detail.
+        out_detail = m_remote_session->GetStatusMessage();
+        switch (m_remote_session->GetPhase())
+        {
+            case RemoteProfilerSession::Phase::Connecting:
+                out_label = "Connecting";
+                out_level = ConsoleStatusLevel::kRunning;
+                break;
+            case RemoteProfilerSession::Phase::Authenticating:
+                out_label = "Authenticating";
+                out_level = ConsoleStatusLevel::kRunning;
+                break;
+            case RemoteProfilerSession::Phase::Profiling:
+                out_label = "Profiling";
+                out_level = ConsoleStatusLevel::kRunning;
+                break;
+            case RemoteProfilerSession::Phase::Downloading:
+                out_label = "Downloading";
+                out_level = ConsoleStatusLevel::kRunning;
+                break;
+            case RemoteProfilerSession::Phase::Done:
+                out_label = "Completed";
+                out_level = ConsoleStatusLevel::kSuccess;
+                break;
+            case RemoteProfilerSession::Phase::Failed:
+                out_label = "Failed";
+                out_level = ConsoleStatusLevel::kError;
+                break;
+            case RemoteProfilerSession::Phase::Idle:
+            default:
+                out_label = "Idle";
+                out_level = ConsoleStatusLevel::kIdle;
+                break;
+        }
+        return;
+    }
+
+    // Local: map the profiler process state directly.
+    switch (m_profiler_state)
+    {
+        case kRPVProfilerStateRunning:
+            out_label = "Running";
+            out_level = ConsoleStatusLevel::kRunning;
+            break;
+        case kRPVProfilerStateCompleted:
+            out_label = "Completed";
+            out_level = ConsoleStatusLevel::kSuccess;
+            break;
+        case kRPVProfilerStateFailed:
+            out_label = "Failed";
+            out_level = ConsoleStatusLevel::kError;
+            break;
+        case kRPVProfilerStateCancelled:
+            out_label = "Cancelled";
+            out_level = ConsoleStatusLevel::kIdle;
+            break;
+        default:
+            out_label = "Idle";
+            out_level = ConsoleStatusLevel::kIdle;
+            break;
+    }
 }
 
 void ProfilerLauncherDialog::RefreshExecutionCache()

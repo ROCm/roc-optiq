@@ -324,41 +324,39 @@ void RenderCommandPreview(std::string const& preview_text)
 bool RenderOutputConsole(
     std::string const& output_text,
     std::string const& error_message,
-    int profiler_state,
-    bool& auto_scroll)
+    std::string const& state_label,
+    ConsoleStatusLevel state_level,
+    std::string const& detail,
+    bool&              auto_scroll)
 {
     bool clear_requested = false;
     ImGui::AlignTextToFramePadding();
     ImGui::Text("Output");
 
-    const char* state_text = "Idle";
-    ImVec4 state_color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-
-    switch (profiler_state)
+    // The badge color follows the semantic level, sourced from the theme so it
+    // stays consistent with the rest of the app (and tracks light/dark themes).
+    SettingsManager& settings = SettingsManager::Get();
+    Colors color_id = Colors::kTextMain;
+    switch (state_level)
     {
-        case kRPVProfilerStateRunning:
-            state_text = "Running";
-            state_color = ImVec4(0.0f, 0.8f, 0.0f, 1.0f);
-            break;
-        case kRPVProfilerStateCompleted:
-            state_text = "Completed";
-            state_color = ImVec4(0.0f, 0.6f, 1.0f, 1.0f);
-            break;
-        case kRPVProfilerStateFailed:
-            state_text = "Failed";
-            state_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
-            break;
-        case kRPVProfilerStateCancelled:
-            state_text = "Cancelled";
-            state_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
-            break;
-        default:
-            break;
+        case ConsoleStatusLevel::kSuccess: color_id = Colors::kTextSuccess; break;
+        case ConsoleStatusLevel::kError:   color_id = Colors::kTextError;   break;
+        case ConsoleStatusLevel::kIdle:
+        case ConsoleStatusLevel::kRunning:
+        default:                           color_id = Colors::kTextMain;    break;
     }
+    ImVec4 state_color = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color_id));
 
     float spacing = 4.0f;
     ImGui::SameLine(0.0f, spacing);
-    ImGui::TextColored(state_color, "[%s]", state_text);
+    ImGui::TextColored(state_color, "[%s]", state_label.c_str());
+
+    // Optional phase detail (e.g. the remote download path) next to the badge.
+    if (!detail.empty())
+    {
+        ImGui::SameLine(0.0f, spacing);
+        ImGui::TextDisabled("%s", detail.c_str());
+    }
 
     VerticalSeparator();
 

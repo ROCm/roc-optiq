@@ -49,14 +49,33 @@ std::string BuildCommandPreviewString(
 void RenderCommandPreview(std::string const& preview_text);
 
 /**
+ * Semantic severity of the console status badge. This lets
+ * local (profiler state) and remote (workflow phase) report a single,
+ * consistent badge.
+ */
+enum class ConsoleStatusLevel
+{
+    kIdle,     // idle / cancelled
+    kRunning,  // any in-progress phase
+    kSuccess,  // completed
+    kError,    // failed
+};
+
+/**
  * Renders the Output Console panel with status badge, auto-scroll, copy, and clear buttons.
+ * state_label is the badge text (e.g. "Running", "Downloading", "Completed");
+ * state_level selects the badge color from the theme palette. detail is an
+ * optional phase description shown next to the badge (e.g. the download path);
+ * pass an empty string to omit it.
  * Returns true if the user clicked "Clear".
  */
 bool RenderOutputConsole(
     std::string const& output_text,
     std::string const& error_message,
-    int profiler_state,
-    bool& auto_scroll);
+    std::string const& state_label,
+    ConsoleStatusLevel state_level,
+    std::string const& detail,
+    bool&              auto_scroll);
 
 /**
  * Renders the "Saved Profile" bar (Optiq JSON presets):

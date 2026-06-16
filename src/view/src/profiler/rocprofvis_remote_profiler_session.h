@@ -38,6 +38,20 @@ class RemoteUri;
 class RemoteProfilerSession : public ProfilerSessionBase
 {
 public:
+    // The remote workflow runs as a sequential phase machine. The dialog maps
+    // the current phase to the console status badge (so "Completed" only shows
+    // once the trace has been downloaded, not when remote profiling finishes).
+    enum class Phase
+    {
+        Idle,
+        Connecting,
+        Authenticating,
+        Profiling,
+        Downloading,
+        Done,
+        Failed,
+    };
+
     // on_open_file is invoked with the local trace path once downloaded.
     // parse_trace_path is invoked with the remote profiler's captured stdout
     // once profiling completes; it must return the remote trace file path the
@@ -71,21 +85,13 @@ public:
     // base GetState(), which reads the live controller state).
     rocprofvis_profiler_state_t GetProfilerState() const { return m_profiler_state; }
 
+    // Current workflow phase, used by the dialog to drive the status badge.
+    Phase GetPhase() const { return m_phase; }
+
     // Accessor used by the dialog to render the auth modal / download progress.
     SshSession* GetSession() { return m_session.get(); }
 
 private:
-    enum class Phase
-    {
-        Idle,
-        Connecting,
-        Authenticating,
-        Profiling,
-        Downloading,
-        Done,
-        Failed,
-    };
-
     void OnRemoteStatus(uint64_t operation_id, uint64_t status, rocprofvis_result_t result);
     void OnProfilerStatus(uint64_t operation_id, rocprofvis_profiler_state_t state);
 

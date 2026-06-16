@@ -11,6 +11,7 @@
 #include "rocprofvis_launch_config.h"
 #include "rocprofvis_profiler_backend.h"
 #include "rocprofvis_launch_preset_manager.h"
+#include "rocprofvis_launch_shared_tabs.h"
 #include "remote/rocprofvis_ssh_uri.h"
 #include "remote/rocprofvis_ssh_connection_store.h"
 #include "remote/rocprofvis_ssh_settings_dialog.h"
@@ -68,6 +69,12 @@ private:
     void RenderRemoteSection();
     void RenderButtonRow();
     void RenderRemotePopups();
+
+    // Collapses the local profiler state and the remote workflow phase into a
+    // single console status badge (label + semantic level) plus an optional
+    // detail line (e.g. the remote download path).
+    void ComputeConsoleStatus(std::string& out_label, ConsoleStatusLevel& out_level,
+                              std::string& out_detail) const;
 
     void SwitchBackend(int index);
     void LoadFromSettings();

@@ -312,25 +312,66 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
         CACHE FILEPATH "Entitlements plist used when codesigning the .app")
 
     if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY)
-        # Ad-hoc signing can't use --options runtime / --timestamp / --entitlements.
+        # Sign "inside-out": every nested dylib first, then the .app bundle
+        # last. We deliberately avoid `codesign --deep` here: --deep does not
+        # reliably apply --entitlements to the main executable when it is also
+        # re-signing nested dylibs in the same pass, which leaves the bundle
+        # without `disable-library-validation`. Under Hardened Runtime that
+        # makes dlopen of the LunarG-signed libMoltenVK.dylib fail at launch
+        # with a "signed by another team" library-validation error. Signing the
+        # main executable explicitly, last, guarantees the entitlements land on
+        # it. See resources/mac/roc-optiq.entitlements.plist.
+        #
+        # Ad-hoc signing ("-") can't use --options runtime / --timestamp /
+        # --entitlements, so those flags are dropped in that mode.
         if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY STREQUAL "-")
             set(_rocprofvis_codesign_runtime_args "")
+            set(_rocprofvis_codesign_lib_args "")
         else()
+            # Nested dylibs get Hardened Runtime + secure timestamp (required
+            # for notarization) but NOT the entitlements: entitlements apply to
+            # the running process, i.e. only to the main executable.
+            set(_rocprofvis_codesign_lib_args
+                --options runtime
+                --timestamp)
             set(_rocprofvis_codesign_runtime_args
                 --options runtime
                 --timestamp
                 --entitlements "${ROCPROFVIS_MACOS_ENTITLEMENTS}")
         endif()
 
+        # 1a. Sign the bundled GLFW dylib (signs the real file, not the symlink).
         add_custom_command(
             TARGET ${TARGET_NAME} POST_BUILD
-            COMMAND codesign --force --deep
+            COMMAND codesign --force
+                --sign "${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}"
+                ${_rocprofvis_codesign_lib_args}
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/$<TARGET_FILE_NAME:glfw>"
+            COMMENT "Codesigning bundled GLFW dylib"
+        )
+
+        # 1b. Sign the bundled Vulkan loader (when bundled).
+        if(ROCPROFVIS_BUNDLE_VULKAN)
+            add_custom_command(
+                TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND codesign --force
+                    --sign "${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}"
+                    ${_rocprofvis_codesign_lib_args}
+                    "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+                COMMENT "Codesigning bundled Vulkan loader"
+            )
+        endif()
+
+        # 2. Sign the .app bundle LAST, with entitlements on the main executable.
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND codesign --force
                 --sign "${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}"
                 ${_rocprofvis_codesign_runtime_args}
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
-            COMMAND codesign --verify --verbose=2
+            COMMAND codesign --verify --deep --strict --verbose=2
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
-            COMMENT "Codesigning bundle with identity '${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}'"
+            COMMENT "Codesigning .app bundle (inside-out) with identity '${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}'"
         )
     endif()
 endif()

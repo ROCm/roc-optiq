@@ -269,9 +269,7 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
         BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
         INSTALL_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
     )
-    # When GLFW is linked dynamically, stage its dylib into the bundle so dyld
-    # can resolve it at runtime. With GLFW_LINK_STATIC=ON (the default) GLFW is
-    # baked into the executable, so there is no dylib to stage or codesign.
+    # Stage the GLFW dylib only for a dynamic build; static GLFW has none.
     if(NOT GLFW_LINK_STATIC)
         add_custom_command(
             TARGET ${TARGET_NAME} POST_BUILD
@@ -317,25 +315,55 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
         CACHE FILEPATH "Entitlements plist used when codesigning the .app")
 
     if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY)
-        # Ad-hoc signing can't use --options runtime / --timestamp / --entitlements.
+        # Sign inside-out (nested dylibs first, .app last) rather than with
+        # --deep, so --entitlements reliably lands on the main executable.
+        # Ad-hoc ("-") can't use --options runtime / --timestamp / --entitlements.
         if(ROCPROFVIS_MACOS_CODESIGN_IDENTITY STREQUAL "-")
             set(_rocprofvis_codesign_runtime_args "")
+            set(_rocprofvis_codesign_lib_args "")
         else()
+            # Dylibs get Hardened Runtime + timestamp; entitlements go on the
+            # main executable only.
+            set(_rocprofvis_codesign_lib_args
+                --options runtime
+                --timestamp)
             set(_rocprofvis_codesign_runtime_args
                 --options runtime
                 --timestamp
                 --entitlements "${ROCPROFVIS_MACOS_ENTITLEMENTS}")
         endif()
 
+        if(NOT GLFW_LINK_STATIC)
+            add_custom_command(
+                TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND codesign --force
+                    --sign "${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}"
+                    ${_rocprofvis_codesign_lib_args}
+                    "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/$<TARGET_FILE_NAME:glfw>"
+                COMMENT "Codesigning bundled GLFW dylib"
+            )
+        endif()
+
+        if(ROCPROFVIS_BUNDLE_VULKAN)
+            add_custom_command(
+                TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND codesign --force
+                    --sign "${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}"
+                    ${_rocprofvis_codesign_lib_args}
+                    "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libvulkan.1.dylib"
+                COMMENT "Codesigning bundled Vulkan loader"
+            )
+        endif()
+
         add_custom_command(
             TARGET ${TARGET_NAME} POST_BUILD
-            COMMAND codesign --force --deep
+            COMMAND codesign --force
                 --sign "${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}"
                 ${_rocprofvis_codesign_runtime_args}
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
-            COMMAND codesign --verify --verbose=2
+            COMMAND codesign --verify --deep --strict --verbose=2
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
-            COMMENT "Codesigning bundle with identity '${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}'"
+            COMMENT "Codesigning .app bundle (inside-out) with identity '${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}'"
         )
     endif()
 endif()

@@ -376,7 +376,7 @@ TopologyNode::GetDouble(rocprofvis_property_t property, uint64_t index, double* 
         uint64_t dm_value;
         if (kRocProfVisDmResultSuccess == rocprofvis_dm_get_property_as_uint64(m_dm_topology_node, kRPVControllerTopologyNodePropertyValueKeyed, property, &dm_value))
         {
-            *value = dm_value;
+            *value = static_cast<double>(dm_value);
             result = kRocProfVisResultSuccess;
         }
         break;

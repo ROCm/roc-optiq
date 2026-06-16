@@ -9,6 +9,7 @@
 */
 
 #include "rocprofvis_c_interface_types.h"
+#include "rocprofvis_shared_types.h"
 #include "rocprofvis_error_handling.h"
 #include "rocprofvis_controller_enums.h"
 #include <algorithm>
@@ -68,6 +69,7 @@ typedef union{
 #define TRACK_ID_STORE_ID 6
 #define TRACK_ID_RECORD_COUNT 7
 
+#define TOPOLOGY_INSTANCE_BIT_POS 54
 
 typedef struct
 {
@@ -200,8 +202,9 @@ typedef struct {
 
 
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_track_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_track_params_t * params);
-typedef rocprofvis_dm_slice_t (*rocprofvis_dm_add_slice_func_t) (const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, 
-                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);
+typedef rocprofvis_dm_slice_t (*rocprofvis_dm_add_slice_func_t) (const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id,
+                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, 
+                                                                    const rocprofvis_dm_hashed_timestamp_tag_t tag);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_record_func_t) (const rocprofvis_dm_slice_t object, rocprofvis_db_record_data_t& data);
 typedef rocprofvis_dm_index_t (*rocprofvis_dm_add_string_func_t) (const rocprofvis_dm_trace_t object, const char* stringValue);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_flow_func_t) (const rocprofvis_dm_slice_t object, rocprofvis_db_flow_data_t& data);
@@ -212,6 +215,7 @@ typedef rocprofvis_dm_extdata_t (*rocprofvis_dm_add_extdata_func_t) (const rocpr
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_extdata_record_func_t) (const rocprofvis_dm_extdata_t object, rocprofvis_db_ext_data_t& data);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_argdata_record_func_t) (const rocprofvis_dm_extdata_t object, rocprofvis_db_argument_data_t& data);
 typedef rocprofvis_dm_table_t (*rocprofvis_dm_add_table_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query, rocprofvis_dm_charptr_t description);
+typedef rocprofvis_dm_result_t (*rocprofvis_dm_remove_table_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_charptr_t query);
 typedef rocprofvis_dm_table_row_t (*rocprofvis_dm_add_table_row_func_t) (const rocprofvis_dm_table_t object);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_func_t) (const rocprofvis_dm_table_t object, rocprofvis_dm_charptr_t column_name);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_table_column_enum_func_t) (const rocprofvis_dm_table_t object, rocprofvis_db_table_column_enum_t column_enum);
@@ -223,7 +227,7 @@ typedef size_t (*rocprofvis_db_get_cached_num_instances_func_t) (const rocprofvi
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_add_event_level_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_event_id_t event_id, uint8_t level);
 
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_slice_exists_t) (const rocprofvis_dm_trace_t object, 
-                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_db_num_of_tracks_t num, const rocprofvis_db_track_selection_t tracks);
+                                                                    const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_dm_hashed_timestamp_tag_t tag, const rocprofvis_db_num_of_tracks_t num, const rocprofvis_db_track_selection_t tracks);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_event_property_exists_t) (const rocprofvis_dm_trace_t object, 
                                                                     rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
 typedef rocprofvis_dm_result_t (*rocprofvis_dm_check_table_exists_t) (const rocprofvis_dm_trace_t object,  const rocprofvis_dm_table_id_t table_id);
@@ -266,6 +270,7 @@ typedef struct
         rocprofvis_dm_add_extdata_record_func_t FuncAddExtDataRecord;   // Called by database query callback to add ext data record to ext data object
         rocprofvis_dm_add_argdata_record_func_t FuncAddArgDataRecord;   // Called by database query callback to add argument data record to ext data object
         rocprofvis_dm_add_table_func_t FuncAddTable;                    // Called by database query to add a table object to a list located in trace object
+        rocprofvis_dm_remove_table_func_t FuncRemoveTable;              // Called by database query to remove a table object from a list located in trace object
         rocprofvis_dm_add_table_row_func_t FuncAddTableRow;             // Called by database query callback to add new row to a table object
         rocprofvis_dm_add_table_column_func_t FuncAddTableColumn;       // Called by database query callback to add new column name to a table object
         rocprofvis_dm_add_table_column_enum_func_t FuncAddTableColumnEnum; // Called by database query callback to add new column enumeration constant to a table object
@@ -298,17 +303,11 @@ typedef struct
 
 } rocprofvis_dm_db_bind_struct;
 
-inline uint64_t hash_combine(uint64_t a, uint64_t b)
-{
-    a ^= b + 0x9e3779b97f4a7c15 + (a << 12) + (a >> 4);
-    return a;
-}
-
 class DbInstance
 {
 public:
     static constexpr const int NoGuidId = -1;
-    DbInstance() : m_file_index(0), m_guid_index(NoGuidId) {}
+    DbInstance() : m_file_index(0), m_guid_index(NoGuidId), m_process_instance(0) {}
     DbInstance(uint32_t file_index, uint32_t guid_index) : m_file_index(file_index), m_guid_index(guid_index) {}
     uint32_t FileIndex() { return m_file_index; };
     uint32_t GuidIndex() { 
@@ -317,8 +316,11 @@ public:
         }
         return m_guid_index; 
     };
+    void SetProcessInstance(uint32_t index) { m_process_instance = index; }
+    uint32_t ProcessInstance() { return m_process_instance; }
 private:
     uint32_t m_file_index;
     uint32_t m_guid_index;
+    uint32_t m_process_instance;
 };
 

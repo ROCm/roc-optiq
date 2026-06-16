@@ -7,7 +7,7 @@ on:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
-        default: '[ "2025" ]'
+        default: '[ "2022" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -28,12 +28,25 @@ on:
         description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
+      s3_root_directory:
+        description: 'The root directory to use when uploading to the roc-optiq S3 bucket'
+        type: choice
+        default: 'test'
+        options: 
+          - test
+          - nightly
+          - rc
+          - release
+      release_version:
+        description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
+        type: string
+        default: ''
   workflow_call:
     inputs:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
-        default: '[ "2025" ]'
+        default: '[ "2022" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -54,6 +67,14 @@ on:
         description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
+      s3_root_directory:
+        description: 'The root directory to use when uploading to the roc-optiq S3 bucket'
+        type: string
+        default: 'test'
+      release_version:
+        description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
+        type: string
+        default: ''
 
 env:
   BUILD_DIR: "build"
@@ -61,12 +82,16 @@ env:
   BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || 'Release' }}
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
-  
+  S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
+  RELEASE_VERSION: ${{ inputs.release_version }}
 
 jobs:
   windows:
     name: Windows ${{ matrix.os-version }} • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
     runs-on: windows-${{ matrix.os-version }}
+    defaults:
+      run:
+        shell: pwsh
     permissions:
       id-token: write
       contents: read
@@ -88,7 +113,6 @@ jobs:
           ./vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
 
       - name: Set Vulkan SDK environment variables
-        shell: pwsh
         run: |
           $vulkanRoot = Get-ChildItem -Directory "C:\VulkanSDK" | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $vulkanRoot) { Write-Host "Vulkan SDK not found!"; exit 1 }
@@ -99,7 +123,7 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           mkdir build
-          cmake --preset "${{ inputs.cmake_config_preset }}" -G "Visual Studio 18 2026" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
           if (Test-Path "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"
@@ -109,12 +133,26 @@ jobs:
           }
 
       - name: Run Tests
+        id: run_tests
+        continue-on-error: true
+        timeout-minutes: 10
         run: |
           cd ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
           ctest `
             -C ${{ env.BINARY_DIR }} `
             --output-on-failure `
-            --no-tests=error
+            --no-tests=error `
+            --output-junit ctest-results.xml
+
+      - name: Upload Test Logs (on failure)
+        if: steps.run_tests.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-windows-${{ matrix.os-version }}
+          path: |
+            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/ctest-results.xml
+            ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/Testing/Temporary/**
+          retention-days: 7
 
       - name: Prepare Distribution Artifacts
         run: |
@@ -140,8 +178,20 @@ jobs:
 
       - name: Upload Build to S3
         if: ${{ inputs.upload_to_s3 }}
-        shell: pwsh
         run: |
           $timestamp = Get-Date -Format "yyyy_MM_dd"
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/test/$timeStamp/windows/ `
+          if (-not $env:RELEASE_VERSION) {
+              Write-Host "No release version provided, defaulting to using TIMESTAMP as S3_SECONDARY_DIRECTORY"
+              $S3_SECONDARY_DIRECTORY = Get-Date -Format "yyyy_MM_dd"
+          } else {
+              Write-Host "Release Version $env:RELEASE_VERSION provided, using $env:RELEASE_VERSION as S3_SECONDARY_DIRECTORY"
+              $S3_SECONDARY_DIRECTORY = $env:RELEASE_VERSION
+          }
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/windows/ `
             --no-progress
+      
+      - name: Announce Test Failure
+        if: steps.run_tests.outcome == 'failure'
+        run: |
+          echo "Tests have failed! Please see uploaded CTest logs for more information"
+          exit 1

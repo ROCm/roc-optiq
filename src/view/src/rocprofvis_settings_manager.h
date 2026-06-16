@@ -92,9 +92,9 @@ enum class Colors
     kBgPanel,
     kBgFrame,
     kComboFill,
-    kAccentRed,
-    kAccentRedHover,
-    kAccentRedActive,
+    kAccent,
+    kAccentHover,
+    kAccentActive,
     kTabAccent,
     kTabAccentHover,
     kTabAccentActive,
@@ -108,8 +108,12 @@ enum class Colors
     kTableBorderLight,
     kTableRowBg,
     kTableRowBgAlt,
+    kTableBorderInner,
+    kTableBorderOuter,
+    kPanelBorderSubtle,
     kEventHighlight,
     kEventSearchHighlight,
+    kAreaOfInterest,
     kLineChartColor,
     kButton,
     kButtonHovered,
@@ -140,11 +144,50 @@ enum class Colors
     kMinimapBg,
     kLoadingScreenColor,
     kTextOnAccent,
+    kMeasurementColor,
+    kMeasurementLabelBg,
+    kMeasurementLabelEdge,
+    kMeasurementLabelText,
+    kMeasurementNotch,
 
     kComparisonBase,
     kComparisonTarget,
     kComparisonLesser,
     kComparisonGreater,
+
+    // Memory chart (compute view) palette
+    kMemChartBg,
+    kMemChartPanel,
+    kMemChartPanelAlt,
+    kMemChartBorder,
+    kMemChartBorderHot,
+    kMemChartTextMain,
+    kMemChartTextDim,
+    kMemChartRead,
+    kMemChartWrite,
+    kMemChartAtomic,
+    kMemChartUtil,
+    kMemChartHit,
+    kMemChartStall,
+    kMemChartShadow,
+
+    // Sticky note annotation
+    kStickyNoteBg,
+    kStickyNoteBorder,
+    kStickyNoteHeader,
+    kStickyNoteShadow,
+    kStickyNoteText,
+    kStickyNoteTextMuted,
+    kStickyNoteAccent,
+    kStickyNoteResize,
+    kStickyNoteResizeActive,
+
+    // Internal build banner + debug nav bar
+    kBannerFill,
+    kBannerBorder,
+    kBannerText,
+    kDebugNavBarBg,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -193,6 +236,7 @@ public:
     // Styling
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel() const;
+    const std::vector<ImU32>& GetHighlightedEventColorWheel() const;
     const char*               GetFlameColormapName() const;
     const char*               GetContrastColormapName() const;
     /**

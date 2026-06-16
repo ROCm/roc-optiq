@@ -42,6 +42,7 @@ namespace DataModel
 		{"l1_cache_data", kRPVComputeColumnRooflineL1CacheData},
 		{"l2_cache_data", kRPVComputeColumnRooflineL2CacheData},
 		{"hbm_cache_data", kRPVComputeColumnRooflineHBMCacheData},
+		{"lds_cache_data", kRPVComputeColumnRooflineLDSCacheData},
 		{"table_id", kRPVComputeColumnTableId},
 		{"sub_table_id", kRPVComputeColumnSubTableId},
 		{"table_name", kRPVComputeColumnMetricTableName},
@@ -77,6 +78,8 @@ namespace DataModel
 	};
 
 	std::string ComputeQueryFactory::GetComputeListOfWorkloads(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		(void) num;
+		(void) params;
 		std::string query = "SELECT ";
 		query += "workload_id, ";
 		query += "name as workload_name, "; 
@@ -196,6 +199,10 @@ namespace DataModel
 			query += " l1_cache_data, ";
 			query += " l2_cache_data, ";
 			query += " hbm_cache_data ";
+			if (IsVersionGreaterOrEqual("1.4.0"))
+			{ 
+				query += ", lds_cache_data ";
+			}
 			if (IsVersionGreaterOrEqual("1.3.0"))
 			{
 				query += " FROM compute_kernel_roofline_data CRD ";	
@@ -293,7 +300,7 @@ namespace DataModel
 		result.reserve(temp.length());
 		for (unsigned char c : temp) {
           if (std::isalnum(c)) {
-				result += std::tolower(c);
+				result += static_cast<char>(std::tolower(c));
 			} else {
 				result += '_';
 			}
@@ -337,7 +344,7 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 
 				std::transform(value_name.begin(), value_name.end(),
 					value_name.begin(),
-					[](unsigned char c){ return std::tolower(c); });
+					[](unsigned char c) -> char { return static_cast<char>(std::tolower(c)); });
 
 				metric_selectors.emplace_back(metric_id, value_name);
 			}
@@ -352,7 +359,7 @@ std::string ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 
 			std::transform(order.begin(), order.end(),
 				order.begin(),
-				[](unsigned char c){ return std::toupper(c); });
+				[](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
 
 			sort_order = (order == "ASC") ? "ASC" : "DESC";
 		}
@@ -486,7 +493,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		std::set<std::string> kernel_ids;
 		uint32_t workload_id = 0;
 		bool workload_detected = false;
-		for (int i = 0; i < num; i++)
+		for (uint32_t i = 0; i < num; i++)
 		{
 			if (params[i].param_type == kRPVComputeParamKernelId)
 			{				
@@ -547,7 +554,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		std::set<std::string> workload_ids;
 		uint32_t workload_id = 0;
 		bool workload_detected = false;
-		for (int i = 0; i < num; i++)
+		for (uint32_t i = 0; i < num; i++)
 		{
 			if (params[i].param_type == kRPVComputeParamWorkloadId && !workload_detected)
 			{				
@@ -594,7 +601,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		uint32_t file_node_id = 0;
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
 		std::vector<std::thread> threads;
-		auto task = [&](std::vector<std::string> queries, uint32_t db_node_id) {   
+		auto task = [&](uint32_t db_node_id) {
 			result = ExecuteTransaction( vec, db_node_id);
 			};
 
@@ -609,7 +616,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			vec.push_back("CREATE INDEX IF NOT EXISTS idx_metric_value_metric_uuid ON compute_metric_value(metric_uuid);");
 		}
 		
-	    threads.emplace_back(task, vec, file_node_id);      
+	    threads.emplace_back(task, file_node_id);      
 
 		for (auto& t : threads)
 			t.join();
@@ -777,7 +784,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 					kernel_metrics_matrix_plan = plan;
 					rocprofvis_db_compute_param_t fetch_kernels_params;
 					fetch_kernels_params.param_type = kRPVComputeParamWorkloadId;
-					uint32_t workload_id = plan["workload_id"].getLong();
+					uint32_t workload_id = static_cast<uint32_t>(plan["workload_id"].getLong());
 					if (m_last_matrix_workload_id != workload_id)
 					{
 						std::string workload_id_str = std::to_string(workload_id);
@@ -894,6 +901,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 	}
 
 	int ComputeDatabase::CallbackGetComputeKernelWorkloadLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		(void) argc;
 		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
 		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
 		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
@@ -951,6 +959,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 	}
 
 	int ComputeDatabase::CallbackGetComputeRooflineCeiling(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
+		(void) argc;
 		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
 		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
 		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
@@ -1060,6 +1069,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
     }
 
 	int ComputeDatabase::CallbackGetComputeWorkloadTopKernels(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		(void) argc;
 		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
 		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
 		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
@@ -1081,6 +1091,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 	}
 
 	int ComputeDatabase::CallbackStoreMetricsLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		(void) argc;
 		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
 		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
 		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
@@ -1097,6 +1108,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 	}
 
 	int ComputeDatabase::CallbackGetComputeMetricsData(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		(void) argc;
 		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
 		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
 		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
@@ -1149,7 +1161,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				if (n % 2 == 0)
 					s.median = (s.durations[n / 2 - 1] + s.durations[n / 2]) / 2.0;
 				else
-					s.median = s.durations[n / 2];
+					s.median = static_cast<double>(s.durations[n / 2]);
 				rocprofvis_dm_table_row_t row = BindObject()->FuncAddTableRow(table);
 
 				result = BindObject()->FuncAddTableRowCell(row, std::to_string(kernel).c_str());
@@ -1211,7 +1223,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 
 		std::vector<column_data_t> columns;
 
-		uint32_t workload_id = plan["workload_id"].getLong();
+		uint32_t workload_id = static_cast<uint32_t>(plan["workload_id"].getLong());
 
 		if (plan.contains("column_names"))
 		{

@@ -8,6 +8,7 @@
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include <array>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -25,8 +26,16 @@ class InfiniteScrollTable : public RocWidget
 {
 public:
     InfiniteScrollTable(DataProvider& dp, TableType table_type,
-                        const std::string& no_data_text = "",
-                        std::shared_ptr<TimelineSelection> timeline_selection = nullptr);
+                        rocprofvis_controller_table_type_t        request_table_type,
+                        uint64_t                                  request_id,
+                        const std::function<const TablesModel&()> table_model,
+                        const std::function<TablesModel&()>       table_model_mutable,
+                        std::shared_ptr<TimelineSelection> timeline_selection = nullptr,
+                        uint64_t                           default_sort_column_index = 1,
+                        rocprofvis_controller_sort_order_t default_sort_order =
+                            kRPVControllerSortOrderAscending,
+                        const std::string& friendly_name = "",
+                        const std::string& no_data_text  = "");
     virtual ~InfiniteScrollTable();
 
     virtual void Update() override;
@@ -67,29 +76,37 @@ protected:
     virtual void IndexColumns();
     virtual void RowSelected(const ImGuiMouseButton mouse_button);
 
-    uint64_t                      GetRequestID() const;
     uint64_t                      SelectedRowToTrackID(size_t track_id_column_index,
                                                        size_t stream_id_column_index) const;
     std::pair<uint64_t, uint64_t> SelectedRowToTimeRange() const;
     void                          SelectedRowToClipboard() const;
-    void                          FormatTimeColumns() const;
+    void                          SelectedCellToClipboard(bool use_formatted_data) const;
     void                          SelectedRowNavigateEvent(size_t track_id_column_index,
                                                            size_t stream_id_column_index) const;
-    void                          ExportToFile() const;
+    void                          SelectedRowContextMenu();
 
-    FilterOptions            m_filter_options;
-    FilterOptions            m_pending_filter_options;
-    std::vector<size_t>      m_important_column_idxs;
+    void FormatTimeColumns() const;
+    void ExportToFile() const;
+
+    FilterOptions                      m_filter_options;
+    FilterOptions                      m_pending_filter_options;
+    uint64_t                           m_sort_column_index;
+    uint64_t                           m_default_sort_column_index;
+    rocprofvis_controller_sort_order_t m_sort_order;
+    rocprofvis_controller_sort_order_t m_default_sort_order;
+    std::vector<size_t>                m_important_column_idxs;
 
     std::vector<int> m_hidden_column_indices;  // This must be sorted in increasing order.
     std::array<size_t, kNumTimeColumns> m_time_column_indices;
 
     TableType m_table_type;  // Type of table (e.g., EventTable, SampleTable)
-    rocprofvis_controller_table_type_t m_req_table_type;
-
-    DataProvider&                      m_data_provider;
-    SettingsManager&                   m_settings;
-    std::shared_ptr<TimelineSelection> m_timeline_selection;
+    rocprofvis_controller_table_type_t  m_request_table_type;
+    uint64_t                            m_request_id;
+    std::function<const TablesModel&()> m_table_model;
+    std::function<TablesModel&()>       m_table_model_mutable;
+    DataProvider&                       m_data_provider;
+    SettingsManager&                    m_settings;
+    std::shared_ptr<TimelineSelection>  m_timeline_selection;
 
     uint64_t m_fetch_chunk_size;
 
@@ -105,14 +122,15 @@ protected:
 
 private:
     void RenderCell(const std::string* cell_text, int row, int column);
-    void RenderFirstColumnCell(const std::string* cell_text, int row);
+    void RenderContextMenu();
     void ProcessSortOrFilterRequest(rocprofvis_controller_sort_order_t sort_order,
-                            uint64_t sort_column_index, uint64_t frame_count);
+                                    uint64_t sort_column_index, uint64_t frame_count);
 
     int m_fetch_pad_items;
     int m_fetch_threshold_items;
 
     // Internal state flags below
+    bool     m_open_context_menu;
     bool     m_skip_data_fetch;
     uint64_t m_last_total_row_count;
     ImVec2   m_last_table_size;

@@ -1,0 +1,28 @@
+name: GHCR Docker Cleanup
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs every Monday at 6 AM UTC, 2 hours after the scheduled run
+    - cron: 0 6 * * 1
+  pull_request:
+    paths:
+      - '.github/workflows/docker-ghcr-cleanup.yml'
+
+jobs:
+  cleanup-ghcr-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        os: [ 'ubuntu', 'rhel' ]
+
+    steps:
+      - name: Clean up GHCR optiq-ci-${{ matrix.os }} Docker Images
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          package: optiq-ci-${{ matrix.os }}
+          dry-run: ${{ github.event_name == 'pull_request' }}

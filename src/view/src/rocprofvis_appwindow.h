@@ -8,6 +8,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_image_helpers.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
@@ -33,6 +34,7 @@ class ConfirmationDialog;
 class MessageDialog;
 class ProfilerLauncherDialog;
 class Project;
+class WelcomePage;
 
 struct FileFilter
 {
@@ -51,6 +53,10 @@ public:
 
     void Render() override;
     void Update() override;
+
+    // True when async work, queued events, or animations require redraws even
+    // without OS input. Drives the lazy render loop in the app shell.
+    bool WantsContinuousRender();
 
     const std::string& GetMainTabSourceName() const;
     void               SetTabLabel(const std::string& label, const std::string& id);
@@ -113,10 +119,12 @@ private:
 
     void RenderFileDialog();
     void RenderAboutDialog();
-    void RenderEmptyState();
+    void RenderStatusBar();
+    void UpdateStatusBar();
 
     void HandleTabClosed(std::shared_ptr<RocEvent> e);
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
+    void HandleFontChanged();
     void HandleOpenFile();
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
@@ -147,7 +155,6 @@ private:
 
     std::shared_ptr<VFixedContainer> m_main_view;
     std::shared_ptr<TabContainer>    m_tab_container;
-    EmbeddedImage                    m_amd_logo;
 
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;
@@ -156,6 +163,7 @@ private:
 
     EventManager::SubscriptionToken m_tabclosed_event_token;
     EventManager::SubscriptionToken m_tabselected_event_token;
+    EventManager::SubscriptionToken m_font_changed_token;
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();
@@ -189,6 +197,8 @@ private:
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
+    std::unique_ptr<WelcomePage>        m_welcome_page;
+
     std::unique_ptr<ProfilerLauncherDialog> m_profiler_launcher_dialog;
 
     int                              m_tool_bar_index;
@@ -200,6 +210,9 @@ private:
 #ifdef TEST_SSH_CONNECTION
     std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
 #endif
+
+    std::string m_status_message;
+    bool        m_status_show_busy_indicator;
 };
 
 }  // namespace View

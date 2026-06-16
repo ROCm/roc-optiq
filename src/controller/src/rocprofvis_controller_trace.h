@@ -27,6 +27,8 @@ public:
 
     virtual rocprofvis_result_t Load(Future& future) = 0;
 
+    rocprofvis_dm_handle_t GetDMHandle() const;
+
 protected:
     uint64_t              m_id;
     rocprofvis_dm_trace_t m_dm_handle;

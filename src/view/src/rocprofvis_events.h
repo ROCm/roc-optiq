@@ -20,6 +20,7 @@ enum class RocEvents
     kTabClosed,
     kTabSelected,
     kTimelineTrackSelectionChanged,
+    kTimelineTimeRangeChanged,
     kTimelineEventSelectionChanged,
     kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
@@ -48,6 +49,7 @@ enum class RocEventType
     kTableDataEvent,
     kTabEvent,
     kTimelineTrackSelectionChangedEvent,
+    kTimelineTimeRangeChangedEvent,
     kTimelineEventSelectionChangedEvent,
     kTimelineEventHighlightChangedEvent,
     kScrollToTrackEvent,
@@ -261,6 +263,19 @@ public:
 private:
     uint64_t m_track_id;
     bool     m_selected;
+};
+
+class TimeRangeSelectionChangedEvent : public RocEvent
+{
+public:
+    TimeRangeSelectionChangedEvent(double start_ns, double end_ns,
+                                  const std::string& source_id);
+    double GetStartNs() const;
+    double GetEndNs() const;
+
+private:
+    double m_start_ns;
+    double m_end_ns;
 };
 
 class EventSelectionChangedEvent : public RocEvent

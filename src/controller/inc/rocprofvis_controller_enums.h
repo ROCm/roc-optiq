@@ -298,11 +298,11 @@ typedef enum rocprofvis_controller_track_properties_t : uint32_t
     // Entries are actually loaded via an async call to prepare for RPC
     kRPVControllerTrackEntry,
     // Category of the track
-    kRPVControllerCategory,
+    kRPVControllerTrackCategory,
     // Track main process string (PID, GPUID, etc)
-    kRPVControllerMainName,
+    kRPVControllerTrackMainName,
     // Track sub process string (TID, QueueID, PMC name)
-    kRPVControllerSubName,
+    kRPVControllerTrackSubName,
     // Description
     kRPVControllerTrackDescription,
     // Min value for sample tracks
@@ -337,6 +337,10 @@ typedef enum rocprofvis_controller_track_properties_t : uint32_t
     kRPVControllerTrackAgentIdOrPid,
     // Get track queue id or TID
     kRPVControllerTrackQueueIdOrTid,
+    // Number of event operation types supported by the track
+    kRPVControllerTrackNumberOfOperationTypes,
+    // Event operation type at the given index, see rocprofvis_dm_event_operation_t
+    kRPVControllerTrackOperationTypeIndexed,
     __kRPVControllerTrackPropertiesLast
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack
@@ -648,15 +652,19 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
     kRPVControllerTableArgsOpTypesIndexed            = 0xE000000E,
     kRPVControllerTableArgsNumStringTableFilters     = 0xE000000F,
     kRPVControllerTableArgsStringTableFiltersIndexed = 0xE0000010,
-    kRPVControllerTableArgsSummary                   = 0xE0000011,   
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t
 {
-    kRPVControllerTableTypeEvents                 = 0xF0000000,
-    kRPVControllerTableTypeSamples                = 0xF0000001,
-    kRPVControllerTableTypeSearchResults          = 0xF0000002,
-    kRPVControllerTableTypeSummaryKernelInstances = 0xF0000003,
+    kRPVControllerTableTypeEvents                    = 0xF0000000,
+    kRPVControllerTableTypeSamples                   = 0xF0000001,
+    kRPVControllerTableTypeSearchResults             = 0xF0000002,
+    kRPVControllerTableTypeSummaryKernelInstances    = 0xF0000003,
+    kRPVControllerTableTypeInstrumentedEvents        = 0xF0000004,
+    kRPVControllerTableTypeDispatchEvents            = 0xF0000005,
+    kRPVControllerTableTypeMemoryAllocationEvents    = 0xF0000006,
+    kRPVControllerTableTypeMemoryCopyEvents          = 0xF0000007,
+    kRPVControllerTableTypeSampledEvents             = 0xF0000008,
 } rocprofvis_controller_table_type_t;
 
 
@@ -1142,6 +1150,7 @@ typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
     kRPVControllerRooflineKernelIntensityTypeHBM,
     kRPVControllerRooflineKernelIntensityTypeL2,
     kRPVControllerRooflineKernelIntensityTypeL1,
+    kRPVControllerRooflineKernelIntensityTypeLDS,
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
 #endif
 

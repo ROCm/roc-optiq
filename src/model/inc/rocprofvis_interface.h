@@ -123,15 +123,17 @@ rocprofvis_dm_result_t rocprofvis_db_cleanup_async(
  * @param num number of tracks in rocprofvis_db_track_selection_t array (uint32*)
  * @param track tracks selection array (uint32*)
  * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @param tag user tag given to the time slice
  * @return status of operation
  *
  * @note Object will stay in trace memory until deleted.
  *             Use rocprofvis_dm_delete_time_slice or rocprofvis_dm_delete_all_time_slices for deletion *
  ***************************************************************************************************/
-rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async( 
+rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                     rocprofvis_dm_database_t,
                                     rocprofvis_dm_timestamp_t,
                                     rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_hashed_timestamp_tag_t,
                                     rocprofvis_db_num_of_tracks_t,
                                     rocprofvis_db_track_selection_t,
                                     rocprofvis_db_future_t);    
@@ -158,7 +160,8 @@ rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
 * @note caller is responsible for freeing out_query
 * ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
-    rocprofvis_dm_database_t database, 
+    rocprofvis_dm_database_t database,
+    rocprofvis_dm_table_use_case_enum_t use_case,
     rocprofvis_dm_timestamp_t start,
     rocprofvis_dm_timestamp_t end, 
     rocprofvis_db_num_of_tracks_t num,
@@ -173,8 +176,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_string_table_filters_t string_table_filters,
     uint64_t max_count, 
     uint64_t offset, 
-    bool count_only, 
-    bool summary,
+    bool count_only,
     char** out_query);
 
 /****************************************************************************************************
@@ -414,6 +416,20 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_table_at(
  ***************************************************************************************************/
 rocprofvis_dm_result_t  rocprofvis_dm_delete_all_tables( 
                                     rocprofvis_dm_trace_t);  
+
+/****************************************************************************************************
+ * @brief Combine a (start, end) timestamp pair and a tag into a single hashed value
+ *
+ *
+ * @param start time slice start timestamp
+ * @param end end of the time slice
+ * @param tag user tag given to the time slice
+ * @return hashed timestamp
+ ***************************************************************************************************/
+rocprofvis_dm_hashed_timestamp rocprofvis_dm_hash_combine_timestamp(
+                                    rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_hashed_timestamp_tag_t);
 
 /***********************************Universal property getters**************************************
 *

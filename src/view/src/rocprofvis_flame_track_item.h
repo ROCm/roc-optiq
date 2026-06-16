@@ -19,6 +19,7 @@ namespace View
 class TimelineSelection;
 class FlameTrackItem;
 class TimePixelTransform;
+class MeasurementController;
 
 enum class EventColorMode
 {
@@ -48,10 +49,11 @@ class FlameTrackItem : public TrackItem
     friend FlameTrackProjectSettings;
 
 public:
-    FlameTrackItem(DataProvider&                      dp,
-                   std::shared_ptr<TimelineSelection> timeline_selection,
-                   uint64_t track_id,
-                   std::shared_ptr<TimePixelTransform> time_to_pixel_manager);
+    FlameTrackItem(DataProvider&                          dp,
+                   std::shared_ptr<TimelineSelection>     timeline_selection,
+                   std::shared_ptr<MeasurementController> measurement,
+                   uint64_t                               track_id,
+                   std::shared_ptr<TimePixelTransform>    time_to_pixel_manager);
     ~FlameTrackItem();
 
     bool ReleaseData() override;
@@ -62,10 +64,10 @@ public:
     bool        IsCompactMode() const override { return m_compact_mode; }
 
 protected:
-    void RenderChart(float graph_width) override;
-    void RenderMetaAreaScale() override;
-    void RenderMetaAreaOptions() override;
-    void RenderMetaAreaExpand() override;
+    void  RenderChart(float graph_width) override;
+    void  RenderMetaAreaOptions() override;
+    void  RenderMetaAreaExpand() override;
+    void  RenderSecondaryMetaPill(const ImVec2& content_size) override;
 
 private:
     struct ChildEventInfo
@@ -89,7 +91,7 @@ private:
     void HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e);
 
     void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
-                 float duration, ImDrawList* draw_list);
+                 float duration, ImDrawList* draw_list, bool use_highlight_color);
 
     bool ExtractPointsFromData();
     bool ExtractChildInfo(ChartItem& item);
@@ -97,6 +99,8 @@ private:
 
     void RenderTooltip(ChartItem& chart_item, int color_index);
     void RecalculateTrackHeight();
+    
+    void RequestAnalysis() override;
 
     std::vector<ChartItem>             m_chart_items;
     EventColorMode                     m_event_color_mode;
@@ -104,6 +108,7 @@ private:
     float                              m_level_height;
     std::vector<uint64_t>              m_selected_event_id;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
+    std::shared_ptr<MeasurementController> m_measurement;
     FlameTrackProjectSettings          m_flame_track_project_settings;
     float                              m_min_level;
     float                              m_max_level;
@@ -117,8 +122,11 @@ private:
 
     static float             s_max_event_label_width;
     static const std::string s_child_info_separator;
-    bool        m_is_expanded;
-    bool        m_compact_mode;
+    bool                     m_is_expanded;
+    bool                     m_compact_mode;
+
+    const AnalysisQueueUtilization* m_queue_utilization;
+    Pill                            m_queue_utilization_pill;
 };
 
 }  // namespace View

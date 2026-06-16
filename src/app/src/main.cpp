@@ -12,7 +12,10 @@
 #include "rocprofvis_cli_parser.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
-#include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_image_helpers.h"
+#ifdef __APPLE__
+#include "rocprofvis_platform_helpers.h"
+#endif
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <iostream>
@@ -29,6 +32,11 @@ static rocprofvis_view_render_options_t g_render_options =
 
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
+
+// Lazy rendering: after each OS event render a few frames so animations and the
+// deferred event dispatch settle, then sleep until the next event when idle.
+static int       g_frames_to_render        = 1;
+constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -68,12 +76,14 @@ app_notification_callback(GLFWwindow* window, int notification)
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+#ifndef __APPLE__
     else if(notification ==
             static_cast<int>(rocprofvis_view_notification_t::
                                  kRocProfVisViewNotification_Toggle_Fullscreen))
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
     }
+#endif
 }
 
 static void
@@ -88,12 +98,66 @@ glfw_error_callback(int error, const char* description)
     spdlog::error("GLFW Error {}: {}", error, description);
 }
 
+#ifdef __APPLE__
+// Reconcile ImGui's modifier state with the live OS modifier state.
+//
+// macOS system gestures (e.g. Mission Control via Ctrl+Up while dragging the
+// window to a new Space) can consume the modifier key-up before GLFW sees it,
+// leaving GLFW's cached key state stuck "down". Because ImGui enables
+// ConfigMacOSXBehaviors on macOS, a stuck Control key makes ImGui translate
+// every left-click into a right-click, so buttons and menus stop responding.
+// Feeding the true OS state back into ImGui clears the phantom modifier.
+static void
+sync_imgui_modifiers_with_os()
+{
+    ImGuiIO&                            io = ImGui::GetIO();
+    RocProfVis::Platform::ModifierState m  = RocProfVis::Platform::get_os_modifier_state();
+
+    if(io.KeyCtrl != m.ctrl)
+    {
+        io.AddKeyEvent(ImGuiMod_Ctrl, m.ctrl);
+    }
+    if(io.KeyShift != m.shift)
+    {
+        io.AddKeyEvent(ImGuiMod_Shift, m.shift);
+    }
+    if(io.KeyAlt != m.alt)
+    {
+        io.AddKeyEvent(ImGuiMod_Alt, m.alt);
+    }
+    if(io.KeySuper != m.super)
+    {
+        io.AddKeyEvent(ImGuiMod_Super, m.super);
+    }
+}
+
+// Replaces the ImGui GLFW backend's mouse-button callback on macOS so the
+// modifier state is corrected from the OS *before* the click is queued. This
+// guarantees a phantom-stuck Control key cannot turn a left-click into a
+// right-click for the very click that exposes the problem.
+static void
+mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    (void) window;
+    (void) mods;
+
+    sync_imgui_modifiers_with_os();
+
+    ImGuiIO& io = ImGui::GetIO();
+    if(button >= 0 && button < ImGuiMouseButton_COUNT)
+    {
+        io.AddMouseButtonEvent(button, action == GLFW_PRESS);
+    }
+}
+#endif
+
 static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    // Unused parameters
     (void) scancode;
 
+#ifndef __APPLE__
+    // Toggle fullscreen with F11
     if(key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
         RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
@@ -105,6 +169,11 @@ key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
             static_cast<int>(g_render_options) |
             static_cast<int>(rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_ShowProfilerLauncher));
     }
+#else
+    (void) window;
+    (void) key;
+    (void) action;
+#endif
 }
 
 static void
@@ -296,6 +365,14 @@ main(int argc, char** argv)
                 }, fd_pref);
 
                 backend.m_config(&backend, window);
+#ifdef __APPLE__
+                // Install after m_config so this overrides the ImGui GLFW
+                // backend's own mouse-button callback (set during m_config).
+                glfwSetMouseButtonCallback(window, mouse_button_callback);
+#endif
+                rocprofvis_view_set_texture_backend(
+                    rocprofvis_imgui_backend_create_gui_texture_rgba32,
+                    rocprofvis_imgui_backend_destroy_gui_texture, &backend);
 
                 if(cli_parser.WasOptionFound("file") &&
                    !cli_parser.GetOptionValue("file").empty())
@@ -324,7 +401,31 @@ main(int argc, char** argv)
                         g_file_was_dropped = false;
                     }
 
-                    glfwPollEvents();
+                    // Async work/animation in flight: refill the budget so the
+                    // settle tail also covers the final frames after it finishes.
+                    if(rocprofvis_view_wants_continuous_render())
+                    {
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        // Busy: poll so per-frame controller/event work keeps
+                        // running. vsync in present() caps the frame rate.
+                        glfwPollEvents();
+                    }
+                    else
+                    {
+                        // Idle: sleep until an OS event, then render a few frames.
+                        glfwWaitEvents();
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
+
+#ifdef __APPLE__
+                    // Clear any phantom-stuck modifier (e.g. Control left down
+                    // after a Mission Control gesture) before the frame renders.
+                    sync_imgui_modifiers_with_os();
+#endif
 
                     // Handle changes in the frame buffer size
                     int fb_width, fb_height;
@@ -353,11 +454,17 @@ main(int argc, char** argv)
                         backend.m_render(&backend, draw_data, &clear_color);
                         backend.m_present(&backend);
                     }
+
+                    if(g_frames_to_render > 0)
+                    {
+                        --g_frames_to_render;
+                    }
                 }
 
+                rocprofvis_view_destroy();
+                rocprofvis_view_set_texture_backend(nullptr, nullptr, nullptr);
                 backend.m_shutdown(&backend);
 
-                rocprofvis_view_destroy();
                 ImGui_ImplGlfw_Shutdown();
                 ImGui::DestroyContext();
 

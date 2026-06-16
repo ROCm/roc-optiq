@@ -74,7 +74,7 @@ PrintHeader(const char* fmt, ...)
     va_list     argptr;
     char        buffer[256];
     va_start(argptr, fmt);
-    vsprintf(buffer, fmt, argptr);
+    vsnprintf(buffer, sizeof(buffer), fmt, argptr);
     va_end(argptr);
     size_t text_len = strlen(buffer);
     if(HEADER_LEN > text_len) header.assign((HEADER_LEN - text_len) / 2, '*');
@@ -87,6 +87,8 @@ db_progress(rocprofvis_db_filename_t db_name, rocprofvis_db_future_id_t id,
             rocprofvis_db_progress_percent_t progress, rocprofvis_db_status_t status,
             rocprofvis_db_status_message_t msg, void* user_data)
 {
+    (void) id;
+    (void) user_data;
     const char* str   = " ERROR ";
     const char* color = "\x1b[31m";
     if(status == kRPVDbSuccess)
@@ -441,6 +443,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
 
                 REQUIRE(roofline.columns.count(kRPVComputeColumnKernelUUID) > 0);
                 REQUIRE(roofline.columns.count(kRPVComputeColumnRooflineTotalFlops) > 0);
+                REQUIRE(roofline.columns.count(kRPVComputeColumnRooflineL1CacheData) > 0);
+                REQUIRE(roofline.columns.count(kRPVComputeColumnRooflineL2CacheData) > 0);
+                REQUIRE(roofline.columns.count(kRPVComputeColumnRooflineHBMCacheData) > 0);
 
                 for(size_t i = 0; i < roofline.rows.size(); i++)
                 {

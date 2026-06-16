@@ -10,6 +10,7 @@
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
 
 namespace RocProfVis
 {
@@ -121,13 +122,13 @@ MetricTableBase::Render()
             const ImVec2 row_max(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
                                  row_min.y + row_hover_height);
             if(ImGui::IsWindowHovered() &&
-               ImGui::IsMouseHoveringRect(row_min, row_max, true))
+               ImGui::IsMouseHoveringRect(row_min, row_max, false))
             {
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
                                        settings.GetColor(Colors::kHighlightChart));
             }
 
-            for(auto column_index = 0; column_index < m_last_column_index;
+            for(uint32_t column_index = 0; column_index < m_last_column_index;
                 column_index++)
             {
                 if(column_index == 0 && !CanBePinned())
@@ -172,12 +173,14 @@ MetricTableBase::GetTableHeight() const
     uint32_t max_rows = 0;
     if(m_max_rows_in_table == 0)
     {
-        max_rows = m_rows.size();
+        max_rows = static_cast<uint32_t>(m_rows.size());
     }
     else
     {
         max_rows =
-            m_rows.size() < m_max_rows_in_table ? m_rows.size() : m_max_rows_in_table;
+            m_rows.size() < m_max_rows_in_table
+                ? static_cast<uint32_t>(m_rows.size())
+                : m_max_rows_in_table;
     }
         
     return style.ScrollbarSize + line_height + (max_rows * line_height);
@@ -187,16 +190,17 @@ void
 MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
                              std::pair<const MetricId, Row>& row)
 {
+    (void) value_to_copy;
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem("Pin metric"))
+        if(IconMenuItem(ICON_CHAIN, "Pin metric"))
         {
             row.second.pinned = !row.second.pinned;
             m_pin_metric_clicked(
                 { row.first.category_id, row.first.table_id, row.first.entry_id });
         }
         if(!m_event_source_id.empty() &&
-           ImGui::MenuItem("Send metric to kernel details"))
+           IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
         {
             AddMetricToKernelDetails(row.first, m_columns[column_index]);
         }
@@ -366,7 +370,7 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
 {
     if(ImGui::BeginPopupContextItem())
     {
-        if(ImGui::MenuItem("Copy"))
+        if(IconMenuItem(ICON_COPY, "Copy"))
         {
             ImGui::SetClipboardText(value_to_copy);
             NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -376,7 +380,7 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         // not equal pin column, MetricId, Metric Name and Metric Unit
         {
             if(!m_event_source_id.empty() &&
-               ImGui::MenuItem("Send metric to kernel details"))
+               IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }
@@ -439,11 +443,11 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
                 {
                     snprintf(buf, sizeof(buf), "%.2f",
                              metric_value->values.at(value_name));
-                    row.values[value_index + 3].value = buf;
+                    row.values[static_cast<uint32_t>(value_index + 3)].value = buf;
                 }
                 else
                 {
-                    row.values[value_index + 3].value = "";
+                    row.values[static_cast<uint32_t>(value_index + 3)].value = "";
                 }
             }
         }
@@ -523,7 +527,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
     {
         if(value_to_copy && std::string_view(value_to_copy) != "N/A")
         {
-            if(ImGui::MenuItem("Copy"))
+            if(IconMenuItem(ICON_COPY, "Copy"))
             {
                 ImGui::SetClipboardText(value_to_copy);
                 NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
@@ -534,7 +538,7 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         if(IsValueColumn(column_index))
         {
             if(!m_event_source_id.empty() &&
-               ImGui::MenuItem("Send metric to kernel details"))
+               IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
             {
                 AddMetricToKernelDetails(row.first, m_columns[column_index]);
             }

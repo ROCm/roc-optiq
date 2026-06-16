@@ -215,7 +215,7 @@ namespace DataModel
             if (pos != std::string::npos)
             {
                 std:: string column = params[i].substr(pos+strlen(SQL_AS_STATEMENT));
-                if (column != TRACK_CATEGORY_SERVICE_NAME && column != OPERATION_SERVICE_NAME && column != SPACESAVER_SERVICE_NAME)
+                if (column != TRACK_CATEGORY_SERVICE_NAME && column != SPACESAVER_SERVICE_NAME)
                 {
                     if(count++ > 0)
                     {
@@ -324,11 +324,11 @@ namespace DataModel
     }
 
     const uint8_t Builder::TypeEnumToInt(const char* type, std::vector<std::string>& lookup) {
-        for (int i=0; i < lookup.size(); i++)
+        for (size_t i = 0; i < lookup.size(); i++)
         {
             if (lookup[i] == type)
             {
-                return i;
+                return static_cast<uint8_t>(i);
             }
         }
         return 0;

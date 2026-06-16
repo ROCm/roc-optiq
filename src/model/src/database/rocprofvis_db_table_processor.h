@@ -33,6 +33,7 @@ namespace DataModel
         kRPVTableDataTypeEvent,
         kRPVTableDataTypeSample,
         kRPVTableDataTypeSearch,
+        kRPVTableDataTypeAnalysis,
         kRPVTableDataTypesNum
     } rocprofvis_db_compound_table_type;
 
@@ -41,11 +42,10 @@ namespace DataModel
         std::string parameter;
     } rocprofvis_db_compound_query_command;
 
-    typedef struct rocprofvis_db_compound_query {
-        std::string query;
+    typedef struct rocprofvis_db_compound_query_info {
         uint32_t track;
         uint32_t guid_id;
-    } rocprofvis_db_compound_query;
+    } rocprofvis_db_compound_query_info;
 
     class RestartableTimer {
     public:
@@ -151,19 +151,18 @@ namespace DataModel
 
         };
 
-        static bool IsCompoundQuery(const char* query, std::vector<rocprofvis_db_compound_query>& queries, std::set<uint32_t>& tracks, 
+        static bool IsCompoundQuery(const char* query, std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries, std::set<uint32_t>& tracks,
             std::vector<rocprofvis_db_compound_query_command>& commands);
-        static std::string QueryWithoutCommands(const char* query);
-        rocprofvis_dm_result_t ExecuteCompoundQuery(Future* future, 
-            std::vector<rocprofvis_db_compound_query>& queries, 
+        static std::string QueryWithoutCommands(const char* query); // Unused
+        rocprofvis_dm_result_t ExecuteCompoundQuery(Future* future,
+            std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries,
             std::set<uint32_t>& tracks,
-            std::vector<rocprofvis_db_compound_query_command> commands, 
-            rocprofvis_dm_handle_t handle, 
-            rocprofvis_db_compound_table_type type,
+            std::vector<rocprofvis_db_compound_query_command> commands,
+            rocprofvis_dm_handle_t handle,
             bool query_updated);
         std::string ParseSortCommand(std::string param, bool& order);
-        void SaveCurrentQuery(rocprofvis_dm_charptr_t query) { m_current_query = query; };
-        bool IsCurrentQuery(rocprofvis_dm_charptr_t query) { return m_current_query == query; };
+        void SaveCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries) { m_current_queries = queries; };
+        bool IsCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries);
         rocprofvis_dm_result_t ExportToCSV(rocprofvis_dm_charptr_t file_path);
 
     private:
@@ -187,7 +186,8 @@ namespace DataModel
         bool m_sort_order = true;
         std::string m_sort_column;
         std::mutex m_lock;
-        std::string m_current_query;
+        // track id, query string, query info.
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> m_current_queries;
 
         static constexpr const char* QUERY_COMMAND_TAG = "-- CMD:";
     };

@@ -314,7 +314,7 @@ PresetBrowser::Render()
     if(ImGui::IsPopupOpen("preset_browser"))
     {
         const ImGuiStyle& style = m_settings.GetDefaultStyle();
-        ImFont* icons = m_settings.GetFontManager().GetIconFont(FontType::kDefault);
+        ImFont* icons = m_settings.GetFontManager().GetFont(FontType::kIcon);
         ImGui::SetNextWindowSize(ImGui::GetWindowSize() * 0.2f);
         ImGui::SetNextWindowPos(
             ImVec2(m_pos_x - ImGui::GetWindowWidth() * 0.2f, m_pos_y));
@@ -322,7 +322,7 @@ PresetBrowser::Render()
         popup_style.PushPopupStyles();
         if(ImGui::BeginPopup("preset_browser"))
         {
-            ImGui::PushFont(icons);
+            ImGui::PushFont(icons, 0.0f);
             float manage_width =
                 ImGui::CalcTextSize(ICON_OPEN).x + ImGui::CalcTextSize(ICON_ARCHIVE).x +
                 ImGui::CalcTextSize(ICON_TRASH_CAN).x + 2.0f * style.ItemSpacing.x;

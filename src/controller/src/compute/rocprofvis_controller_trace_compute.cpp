@@ -87,6 +87,7 @@ rocprofvis_controller_object_type_t ComputeTrace::GetType(void)
 
 rocprofvis_result_t ComputeTrace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -295,18 +296,9 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
 rocprofvis_result_t ComputeTrace::AsyncFetch(Table& table, Arguments& args, Future& future, Array& array)
 {
     rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
 
-    future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, &array](Future* future) -> rocprofvis_result_t {
-            rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            result = table.Setup(dm_handle, args, future);
-            if (result == kRocProfVisResultSuccess)
-            {
-                uint64_t start_index = 0;
-                uint64_t start_count = 0;
-                result = table.Fetch(dm_handle, start_index, start_count, array, future);
-            }
-            return result;
+    future.Set(JobSystem::Get().IssueJob([this, &table, &args, &array](Future* future) -> rocprofvis_result_t {
+            return table.SetupAndFetch(*this, args, array, future);
         }, &future));
 
     if(future.IsValid())
@@ -503,7 +495,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 }
                                                 workload->SetObject(kRPVControllerWorkloadKernelIndexed, i, (rocprofvis_handle_t*)kernel);
                                                 uint64_t id = std::stoull(data_store.rows[i][data_store.columns.at(kRPVComputeColumnKernelUUID).value()]);
-                                                kernel_ids.push_back(id);
+                                                kernel_ids.push_back(static_cast<uint32_t>(id));
                                             }
                                         });
                                     }                                   
@@ -514,10 +506,10 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                         std::optional<double> min_intensity_x;
                                         std::optional<double> max_intensity_y;
                                         std::optional<double> min_intensity_y;
-                                        double uint_data = 0;
-                                        for(const uint32_t& id : kernel_ids)
+                                        uint64_t uint_data = 0;
+                                        for(const uint32_t& kernel_id : kernel_ids)
                                         {
-                                            m_query_arguments = { {kRPVComputeParamKernelId, std::to_string(id)} };
+                                            m_query_arguments = { {kRPVComputeParamKernelId, std::to_string(kernel_id)} };
                                             m_query_output = { 
                                                 { 
                                                     { kRPVComputeColumnKernelUUID, std::nullopt },
@@ -530,7 +522,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 {} 
                                             };
                                             future->ResetProgress();
-                                            dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelRooflineIntensities, m_query_arguments, m_query_output, [&roofline, &id, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
+                                            dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelRooflineIntensities, m_query_arguments, m_query_output, [&roofline, &kernel_id, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
                                                 if(data_store.rows.size() == 1)
                                                 {
                                                     const char* data = data_store.rows[0][data_store.columns.at(kRPVComputeColumnRooflineTotalFlops).value()];
@@ -551,7 +543,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                                         if(value > 0.0)
                                                                         {
                                                                             roofline->SetUInt64(kRPVControllerRooflineNumKernels, 0, uint_data + 1);
-                                                                            roofline->SetUInt64(kRPVControllerRooflineKernelIdIndexed, uint_data, id);
+                                                                            roofline->SetUInt64(kRPVControllerRooflineKernelIdIndexed, uint_data, kernel_id);
                                                                             roofline->SetUInt64(kRPVControllerRooflineKernelIntensityTypeIndexed, uint_data, type);
                                                                             roofline->SetDouble(kRPVControllerRooflineKernelIntensityXIndexed, uint_data, value);
                                                                             roofline->SetDouble(kRPVControllerRooflineKernelIntensityYIndexed, uint_data, flops);
@@ -667,7 +659,10 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t db, r
         {
             query_args[i] = {argument_store[i].first, argument_store[i].second.c_str()};
         }
-        result = rocprofvis_db_build_compute_query(db, use_case, query_args.size(), query_args.data(), &query);
+        result = rocprofvis_db_build_compute_query(
+            db, use_case,
+            static_cast<rocprofvis_db_num_of_params_t>(query_args.size()),
+            query_args.data(), &query);
         if(result == kRocProfVisDmResultSuccess)
         {
             if(allocate_db_future)

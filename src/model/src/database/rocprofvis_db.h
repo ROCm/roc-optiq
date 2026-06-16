@@ -65,7 +65,7 @@ class Database;
 // Helper class to lock processes in order of database instances
 class OrderedMutex {
 public:
-    void init(uint32_t num_instances) { for (int i = 0; i < num_instances; i++) { m_instances.insert(i); } }
+    void init(uint32_t num_instances) { for (uint32_t i = 0; i < num_instances; i++) { m_instances.insert(i); } }
 
     void lock(uint32_t id) {
         std::unique_lock<std::mutex> lock(m_lock);
@@ -136,6 +136,7 @@ class Database
         rocprofvis_dm_result_t          ReadTraceSliceAsync( 
                                                                 rocprofvis_dm_timestamp_t start,
                                                                 rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 rocprofvis_db_future_t object);
@@ -183,6 +184,7 @@ class Database
                                                                rocprofvis_dm_string_t& query) = 0;
 
        virtual rocprofvis_dm_result_t BuildTableQuery(
+                                                                rocprofvis_dm_table_use_case_enum_t use_case,
                                                                 rocprofvis_dm_timestamp_t start, 
                                                                 rocprofvis_dm_timestamp_t end,
                                                                 rocprofvis_db_num_of_tracks_t num, 
@@ -198,7 +200,6 @@ class Database
                                                                 uint64_t max_count, 
                                                                 uint64_t offset,
                                                                 bool count_only,
-                                                                bool summary,
                                                                 rocprofvis_dm_string_t& query) = 0;
 
 
@@ -226,7 +227,7 @@ class Database
                                                     rocprofvis_dm_timestamp_t end, 
                                                     rocprofvis_dm_string_t new_db_path,
                                                     Future* object);
-       virtual void InterruptQuery(void* connection) {};
+       virtual void InterruptQuery(void* connection) { (void) connection; };
 
        // returns pointer to cached tables map array
        DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
@@ -269,6 +270,7 @@ class Database
                                                                 Database* db,
                                                                 rocprofvis_dm_timestamp_t start,
                                                                 rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 Future* object);
@@ -350,6 +352,7 @@ class Database
         virtual rocprofvis_dm_result_t  ReadTraceSlice(
                                                                 rocprofvis_dm_timestamp_t start,
                                                                 rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 Future* object) = 0;
@@ -428,7 +431,7 @@ class Database
                                                                 rocprofvis_dm_charptr_t file_path,
                                                                 Future* future);
 
-        virtual rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) { return kRocProfVisDmResultSuccess; };
+        virtual rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) { (void) future; (void) rebuild; return kRocProfVisDmResultSuccess; };
 
     private:
         // pointer to a binding information structure physically located in Trace object and passed to Database object during binding
@@ -446,7 +449,7 @@ class Database
 
     protected:
         guid_list_t& DbInstances() { return m_db_instances; }
-        uint32_t NumDbInstances() { return m_db_instances.size(); }
+        uint32_t NumDbInstances() { return static_cast<uint32_t>(m_db_instances.size()); }
         std::string GuidAt(int index) { return index < m_db_instances.size() ? m_db_instances[index].second : std::string(); }
         std::string GuidSymAt(int index) { std::string s = GuidAt(index); std::replace(s.begin(), s.end(), '_', '-'); return s; }
         DbInstance* DbInstancePtrAt(int index) { return index < m_db_instances.size() ? &m_db_instances[index].first : nullptr; }
@@ -488,11 +491,11 @@ class Database
         // @param record - event data record
         // @return status of operation
         virtual rocprofvis_dm_result_t  RemapStringIds(
-                                                                rocprofvis_db_record_data_t & record) {return kRocProfVisDmResultSuccess;};
+                                                                rocprofvis_db_record_data_t & record) { (void) record; return kRocProfVisDmResultSuccess;};
         virtual rocprofvis_dm_result_t RemapStringIds(
-                                                                rocprofvis_db_flow_data_t& record) {return kRocProfVisDmResultSuccess;};
+                                                                rocprofvis_db_flow_data_t& record) { (void) record; return kRocProfVisDmResultSuccess;};
         virtual rocprofvis_dm_result_t  StringIndexToId(        
-                                                                rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) {return kRocProfVisDmResultSuccess;};
+                                                                rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) { (void) index; (void) id; return kRocProfVisDmResultSuccess;};
 
         // return suffix to process name for provided track category ('PID', 'Agent')
         // @param category - track category

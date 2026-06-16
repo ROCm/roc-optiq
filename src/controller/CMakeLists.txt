@@ -23,14 +23,7 @@ list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_table.cpp    
     src/rocprofvis_controller.cpp
     src/rocprofvis_controller_job_system.cpp
-    src/profiler/rocprofvis_controller_profiler_process.cpp
-    src/profiler/rocprofvis_controller_profiler_cmdline.cpp
-    src/profiler/rocprofvis_controller_ssh_profiler_executor.cpp
-    src/profiler/rocprofvis_profiler.cpp
-    src/remote/rocprofvis_controller_remote.cpp
-    src/remote/rocprofvis_controller_ssh_bridge.cpp
-    src/remote/rocprofvis_controller_ssh_client.cpp
-    src/remote/rocprofvis_controller_ssh_known_hosts.cpp
+	src/rocprofvis_controller_analysis.cpp
     src/system/rocprofvis_controller_event.cpp
     src/system/rocprofvis_controller_graph.cpp
     src/system/rocprofvis_controller_sample.cpp
@@ -47,6 +40,14 @@ list(APPEND rocprofvis_controller_source_files
     src/system/rocprofvis_controller_summary.cpp
     src/system/rocprofvis_controller_summary_metrics.cpp
     src/system/rocprofvis_controller_topology.cpp
+    src/profiler/rocprofvis_controller_profiler_process.cpp
+    src/profiler/rocprofvis_controller_profiler_cmdline.cpp
+    src/profiler/rocprofvis_controller_ssh_profiler_executor.cpp
+    src/profiler/rocprofvis_profiler.cpp
+    src/remote/rocprofvis_controller_remote.cpp
+    src/remote/rocprofvis_controller_ssh_bridge.cpp
+    src/remote/rocprofvis_controller_ssh_client.cpp
+    src/remote/rocprofvis_controller_ssh_known_hosts.cpp    
 )
 
 if(COMPUTE_UI_SUPPORT) 

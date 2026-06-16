@@ -38,7 +38,12 @@ public:
     // Returns node id
     rocprofvis_dm_node_id_t                             NodeId() { return m_track_params->track_indentifiers.id[TRACK_ID_NODE]; }
     // Returns pid or agent id
-    rocprofvis_dm_process_id_t                          ProcessId() { return m_track_params->track_indentifiers.id[TRACK_ID_PID_OR_AGENT]; }
+    rocprofvis_dm_process_id_t                          ProcessId() 
+    { 
+        uint64_t process_instance = m_track_params->track_indentifiers.db_instance == nullptr ?
+            0 : ((DbInstance*)m_track_params->track_indentifiers.db_instance)->ProcessInstance();
+        return (process_instance << TOPOLOGY_INSTANCE_BIT_POS) | m_track_params->track_indentifiers.id[TRACK_ID_PID_OR_AGENT]; 
+    }
     // Returns tid or queue id
     rocprofvis_dm_process_id_t                          SubProcessId() { return m_track_params->track_indentifiers.id[TRACK_ID_TID_OR_QUEUE]; }
     // Returns pointer to process string
@@ -71,11 +76,11 @@ public:
     // @param slice - handle to slice
     // @return status of operation 
     rocprofvis_dm_result_t                              GetSliceAtIndex(rocprofvis_dm_property_index_t index, rocprofvis_dm_slice_t & slice);
-    // Method to get slice handle for provided start timestamp only (for property getters, since property getter has only one input parameter)
-    // @param start - slice start timestamp
+    // Method to get slice handle for provided hashed timestamp only (for property getters, since property getter has only one input parameter)
+    // @param time - hashed (start, end, tag) timestamp of the slice
     // @param slice - handle to slice
-    // @return status of operation 
-    rocprofvis_dm_result_t                              GetSliceAtTime(rocprofvis_dm_timestamp_t time, rocprofvis_dm_slice_t & slice);
+    // @return status of operation
+    rocprofvis_dm_result_t                              GetSliceAtTime(rocprofvis_dm_hashed_timestamp time, rocprofvis_dm_slice_t & slice);
     // Method to get slice index for provided start and end timestamp
     // @param start - slice start timestamp
     // @param start - slice end timestamp
@@ -96,9 +101,10 @@ public:
     rocprofvis_dm_result_t                              DeleteAllSlices();
     // Method to add empty slice object
     // @param start - slice start timestamp
-    // @param start - slice end timestamp
-    // @return handle to slice 
-    rocprofvis_dm_slice_t                               AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
+    // @param end - slice end timestamp
+    // @param tag - caller tag used to keep slices in distinct cache namespaces
+    // @return handle to slice
+    rocprofvis_dm_slice_t                               AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_hashed_timestamp_tag_t tag);
     // Method to get amount of memory used by Track class object
     // @return used memory size
     rocprofvis_dm_size_t                                GetMemoryFootprint();

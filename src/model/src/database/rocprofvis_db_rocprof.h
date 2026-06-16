@@ -15,7 +15,7 @@ typedef struct rocprofvis_db_string_id_hash_t
 {
     size_t operator()(const rocprofvis_db_string_id_t& s) const noexcept
     {
-        size_t h1 = std::hash<uint32_t>{}(s.m_string_id);
+        size_t h1 = std::hash<uint64_t>{}(s.m_string_id);
         size_t h2 = std::hash<uint32_t>{}(s.m_guid_id);
         size_t h3 = std::hash<rocprofvis_db_string_type_t>{}(s.m_string_type);
 
@@ -132,11 +132,6 @@ public:
                                         rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) override;
 
     rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) override;
-
-    rocprofvis_dm_result_t BuildTableSummaryClause(
-                                        bool sample_query,
-                                        rocprofvis_dm_string_t& select,
-                                        rocprofvis_dm_string_t& group_by) override;
 
 private:
     // sqlite3_exec callback to process string list query and add string object to Trace container

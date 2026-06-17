@@ -188,6 +188,7 @@ private:
     double                              m_previous_scroll_position;
     bool                                m_meta_map_made;
     bool                                m_resize_activity;
+    bool                                m_reorder_auto_scrolling;
     double                              m_last_data_req_v_width;
     float                               m_unload_track_distance;
     DataProvider&                       m_data_provider;

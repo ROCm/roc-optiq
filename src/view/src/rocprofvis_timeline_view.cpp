@@ -74,6 +74,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_unload_track_distance(LOADING_TRACK_DISTANCE)
 , m_sidebar_size(SIDEBAR_DEFAULT_SIZE)
 , m_resize_activity(false)
+, m_reorder_auto_scrolling(false)
 , m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
                          TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(EventManager::InvalidSubscriptionToken)
@@ -1298,6 +1299,9 @@ TimelineView::RenderGraphView()
 
     bool request_data = IsRequestDataNeeded();
 
+    // Re-set each frame by RenderReorderingTrack while in the auto-scroll zone.
+    m_reorder_auto_scrolling = false;
+
     for(int index = 0; index < m_graphs->size(); index++)
     {
         RenderTrack(index, request_data, window_flags, container_size);
@@ -1313,7 +1317,8 @@ TimelineView::WantsContinuousRender() const
 {
     // The loading-timer debounce gates track-data requests and only advances
     // while rendering, so keep rendering until it expires or the load stalls.
-    return m_loading_timer.IsRunning();
+    // Reorder auto-scroll also advances per frame, so keep rendering while active.
+    return m_loading_timer.IsRunning() || m_reorder_auto_scrolling;
 }
 
 bool
@@ -1692,6 +1697,7 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
                 std::min(1.0f, (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD -
                                 mouse_relative_pos.y) /
                                    (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
+        m_reorder_auto_scrolling = true;
     }
     else if(mouse_relative_pos.y > container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD))
     {
@@ -1701,6 +1707,7 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
                 std::min(1.0f, (mouse_relative_pos.y -
                                 container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD)) /
                                    (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
+        m_reorder_auto_scrolling = true;
     }
     m_scroll_position_y = ImGui::GetScrollY();
 }

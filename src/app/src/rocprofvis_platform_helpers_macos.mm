@@ -4,6 +4,9 @@
 #include "rocprofvis_platform_helpers.h"
 
 #import <AppKit/AppKit.h>
+#import <Foundation/Foundation.h>
+
+#include <cstdlib>
 
 namespace RocProfVis
 {
@@ -24,6 +27,35 @@ get_os_modifier_state()
     state.alt   = (flags & NSEventModifierFlagOption) != 0;
     state.super = (flags & NSEventModifierFlagCommand) != 0;
     return state;
+}
+
+void
+configure_bundled_vulkan_icd()
+{
+    @autoreleasepool
+    {
+        if(getenv("VK_ICD_FILENAMES") != nullptr || getenv("VK_DRIVER_FILES") != nullptr)
+        {
+            return;
+        }
+
+        NSURL* icd = [[NSBundle mainBundle] URLForResource:@"MoltenVK_icd"
+                                             withExtension:@"json"
+                                              subdirectory:@"vulkan/icd.d"];
+        if(icd == nil)
+        {
+            return;
+        }
+
+        const char* path = [[icd path] fileSystemRepresentation];
+        if(path == nullptr)
+        {
+            return;
+        }
+
+        setenv("VK_ICD_FILENAMES", path, 1);
+        setenv("VK_DRIVER_FILES", path, 1);
+    }
 }
 
 }  // namespace Platform

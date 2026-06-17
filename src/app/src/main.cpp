@@ -300,6 +300,10 @@ main(int argc, char** argv)
         }
     }
 
+#ifdef __APPLE__
+    RocProfVis::Platform::configure_bundled_vulkan_icd();
+#endif
+
     glfwSetErrorCallback(glfw_error_callback);
 #ifdef __linux__
     // Force X11 on Linux for multi-viewport and window positioning support

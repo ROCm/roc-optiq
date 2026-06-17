@@ -1657,9 +1657,17 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
     ImVec2 mouse_pos          = ImGui::GetMousePos();
     ImVec2 mouse_relative_pos = mouse_pos - graph_view_pos;
 
-    ImGui::SetNextWindowPos(
-        ImVec2(graph_view_pos.x, mouse_pos.y - ImGui::GetFrameHeight() / 2),
-        ImGuiCond_Always);
+    // Clamp the preview within the track area so it never renders outside its
+    // box when the mouse moves above or below the visible track region.
+    const float track_height = track_item->GetTrackHeight();
+    const float view_height  = container_size.y - m_ruler_height;
+    const float preview_min_y = graph_view_pos.y;
+    const float preview_max_y =
+        std::max(preview_min_y, graph_view_pos.y + view_height - track_height);
+    const float preview_y = std::clamp(mouse_pos.y - ImGui::GetFrameHeight() / 2,
+                                       preview_min_y, preview_max_y);
+
+    ImGui::SetNextWindowPos(ImVec2(graph_view_pos.x, preview_y), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     if(ImGui::Begin(
            "##ReorderPreview", nullptr,

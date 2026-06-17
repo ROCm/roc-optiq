@@ -53,7 +53,9 @@ if (CRYPTO_BACKEND STREQUAL "OpenSSL")
     # OPENSSL_ROOT_DIR may be supplied by the user/CI as a hint (e.g. macOS
     # Homebrew openssl@3, or a Windows OpenSSL install root); FindOpenSSL honors
     # it when set. We intentionally do NOT force it to a repo-local path.
-    find_package(OpenSSL REQUIRED)
+    # Request both components explicitly: without this FindOpenSSL can report
+    # success after locating only libcrypto, leaving OpenSSL::SSL uncreated.
+    find_package(OpenSSL REQUIRED COMPONENTS SSL Crypto)
 
     	set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
     	set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)

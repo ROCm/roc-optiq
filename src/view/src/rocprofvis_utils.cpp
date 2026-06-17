@@ -419,6 +419,26 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
 }
 
 std::string
+RocProfVis::View::get_application_log_path(bool create_dirs)
+{
+#ifdef __APPLE__
+    std::filesystem::path home = sanitize_base_dir(safe_getenv("HOME"));
+    std::filesystem::path log_dir =
+        !home.empty() ? (home / "Library" / "Logs") : std::filesystem::current_path();
+    log_dir /= "ROCm-Optiq";
+    log_dir = log_dir.lexically_normal();
+    if(create_dirs)
+    {
+        std::filesystem::create_directories(log_dir);
+    }
+
+    return log_dir.string();
+#else
+    return get_application_config_path(create_dirs);
+#endif
+}
+
+std::string
 RocProfVis::View::compact_number_format(double number)
 {
     if(!std::isfinite(number))

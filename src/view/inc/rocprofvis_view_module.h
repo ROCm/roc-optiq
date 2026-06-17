@@ -61,6 +61,9 @@ rocprofvis_view_set_texture_backend(
 std::string
 rocprofvis_get_application_config_path();
 
+std::string
+rocprofvis_get_application_log_path();
+
 bool
 rocprofvis_view_is_remote_display_session();
 

@@ -14,6 +14,7 @@ env:
   ARTIFACT_NAME: roc-optiq-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
   BIN_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'RelWithDebInfo' || 'Release' }}
   ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  CRYPTO_BACKEND: ${{ github.event.client_payload.crypto_backend || 'mbedTLS' }}
 
 jobs:
   windows:
@@ -52,10 +53,23 @@ jobs:
           echo "PATH=$($vulkanRoot.FullName)\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Install OpenSSL
+        if: env.CRYPTO_BACKEND == 'OpenSSL'
+        shell: pwsh
+        run: |
+          choco install openssl --no-progress -y
+          $opensslRoot = "C:\Program Files\OpenSSL-Win64"
+          if (-not (Test-Path $opensslRoot)) {
+            $opensslRoot = (Get-ChildItem -Directory "C:\Program Files" -Filter "OpenSSL*" | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          }
+          if (-not $opensslRoot) { Write-Host "OpenSSL not found!"; exit 1 }
+          echo "OPENSSL_ROOT_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "PATH=$opensslRoot\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Build, Make, and Verify Installation
         run: |
           mkdir build
-          cmake --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ env.CRYPTO_BACKEND }}
           cmake --build ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_BUILD }}" --parallel 4
           if (Test-Path "${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/${env:VISUALIZER_FILE_NAME}.exe") {
             Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
@@ -72,4 +86,6 @@ jobs:
             ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/${{ env.VISUALIZER_FILE_NAME }}.exe
             ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/${{ env.VISUALIZER_FILE_NAME }}.pdb
             ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/glfw3.dll
+            ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/libssl*.dll
+            ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/libcrypto*.dll
           retention-days: 2

@@ -355,6 +355,58 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
         )
     endif()
 
+    # When the OpenSSL backend is opt-in enabled, stage libssl/libcrypto into the
+    # bundle's Frameworks so the .app is self-contained instead of relying on a
+    # Homebrew install at runtime. install_name_tool rewrites the dylib IDs and
+    # the executable's load paths to resolve via @executable_path/../Frameworks.
+    if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+        get_target_property(ROCPROFVIS_OPENSSL_SSL_LIB OpenSSL::SSL IMPORTED_LOCATION)
+        get_target_property(ROCPROFVIS_OPENSSL_CRYPTO_LIB OpenSSL::Crypto IMPORTED_LOCATION)
+        if(NOT ROCPROFVIS_OPENSSL_SSL_LIB OR NOT ROCPROFVIS_OPENSSL_CRYPTO_LIB)
+            message(FATAL_ERROR
+                "CRYPTO_BACKEND=OpenSSL on macOS requires shared OpenSSL libraries; "
+                "find_package(OpenSSL) did not resolve dylib locations. Install "
+                "openssl@3 and set OPENSSL_ROOT_DIR.")
+        endif()
+        get_filename_component(ROCPROFVIS_OPENSSL_SSL_NAME "${ROCPROFVIS_OPENSSL_SSL_LIB}" NAME)
+        get_filename_component(ROCPROFVIS_OPENSSL_CRYPTO_NAME "${ROCPROFVIS_OPENSSL_CRYPTO_LIB}" NAME)
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROCPROFVIS_OPENSSL_CRYPTO_LIB}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ROCPROFVIS_OPENSSL_SSL_LIB}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_SSL_NAME}"
+            COMMAND chmod u+w
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_SSL_NAME}"
+            COMMAND install_name_tool -id
+                "@rpath/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
+            COMMAND install_name_tool -id
+                "@rpath/${ROCPROFVIS_OPENSSL_SSL_NAME}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_SSL_NAME}"
+            # libssl depends on libcrypto; point it at the bundled copy.
+            COMMAND install_name_tool -change
+                "${ROCPROFVIS_OPENSSL_CRYPTO_LIB}"
+                "@rpath/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_SSL_NAME}"
+            # Rewrite the executable's references to the bundled dylibs.
+            COMMAND install_name_tool -change
+                "${ROCPROFVIS_OPENSSL_SSL_LIB}"
+                "@rpath/${ROCPROFVIS_OPENSSL_SSL_NAME}"
+                "$<TARGET_FILE:${TARGET_NAME}>"
+            COMMAND install_name_tool -change
+                "${ROCPROFVIS_OPENSSL_CRYPTO_LIB}"
+                "@rpath/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
+                "$<TARGET_FILE:${TARGET_NAME}>"
+            COMMENT "Staging OpenSSL libraries into the app bundle"
+        )
+    endif()
+
     set(ROCPROFVIS_MACOS_CODESIGN_IDENTITY "" CACHE STRING
         "codesign --sign identity. Empty=skip, '-'=ad-hoc, \
 'Developer ID Application: ... (TEAMID)' for notarization-ready release.")
@@ -496,6 +548,12 @@ set(DEB_DEPENDS_LIST "libvulkan1")
 if(NOT GLFW_LINK_STATIC)
     list(APPEND DEB_DEPENDS_LIST "libglfw3")
 endif()
+# DEB depends are explicit (unlike RPM AUTOREQPROV), so declare the system
+# OpenSSL runtime only when the OpenSSL backend is built. The default mbedTLS
+# backend links statically and needs no extra runtime dependency.
+if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+    list(APPEND DEB_DEPENDS_LIST "libssl3")
+endif()
 list(APPEND DEB_DEPENDS_LIST "libc6")
 string(JOIN ", " DEB_DEPENDS_STRING ${DEB_DEPENDS_LIST})
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
@@ -552,4 +610,25 @@ if(WIN32)
         COMMAND_EXPAND_LISTS
         COMMENT "Copying dependent DLLs to executable directory"
     )
+
+    # $<TARGET_RUNTIME_DLLS> only captures OpenSSL if find_package produced shared
+    # imported targets with the .dll as IMPORTED_LOCATION (distribution-dependent),
+    # so copy the resolved OpenSSL DLLs explicitly when that backend is enabled.
+    if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+        get_target_property(ROCPROFVIS_OPENSSL_SSL_DLL OpenSSL::SSL IMPORTED_LOCATION)
+        get_target_property(ROCPROFVIS_OPENSSL_CRYPTO_DLL OpenSSL::Crypto IMPORTED_LOCATION)
+        foreach(_ossl_dll
+                "${ROCPROFVIS_OPENSSL_SSL_DLL}"
+                "${ROCPROFVIS_OPENSSL_CRYPTO_DLL}")
+            if(_ossl_dll AND _ossl_dll MATCHES "\\.dll$")
+                add_custom_command(
+                    TARGET ${TARGET_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_ossl_dll}"
+                        "$<TARGET_FILE_DIR:${TARGET_NAME}>"
+                    COMMENT "Copying OpenSSL runtime DLL ${_ossl_dll} to executable directory"
+                )
+            endif()
+        endforeach()
+    endif()
 endif()

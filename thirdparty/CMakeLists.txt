@@ -12,7 +12,10 @@ set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Disable yaml-cpp tools")
 add_subdirectory(yaml-cpp)
 
 set(ENABLE_ZLIB_COMPRESSION OFF)
-set(CRYPTO_BACKEND "OpenSSL" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
+# Default to the vendored mbedTLS backend so the out-of-the-box build needs no
+# system OpenSSL. OpenSSL is opt-in via -DCRYPTO_BACKEND=OpenSSL and is then
+# resolved as an external dependency (find_package below), not vendored.
+set(CRYPTO_BACKEND "mbedTLS" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
 
 if (CRYPTO_BACKEND STREQUAL "mbedTLS")
 
@@ -46,56 +49,11 @@ if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 	set(BUILD_TESTING OFF)
 	set(BUILD_EXAMPLES OFF)
 
-    if (WIN32)
-        set(OPENSSL_ROOT_DIR "${CMAKE_SOURCE_DIR}/thirdparty/openssl/windows" CACHE FILEPATH "" FORCE)
-    elseif(APPLE)
-        set(OPENSSL_ROOT_DIR "${CMAKE_SOURCE_DIR}/thirdparty/openssl/macos" CACHE FILEPATH "" FORCE)
-    elseif(UNIX)
-        set(OPENSSL_ROOT_DIR "${CMAKE_SOURCE_DIR}/thirdparty/openssl/linux" CACHE FILEPATH "" FORCE)
-    endif()
-
-
-    add_library(OpenSSL::SSL SHARED IMPORTED GLOBAL)
-    add_library(OpenSSL::Crypto SHARED IMPORTED GLOBAL)
-
-    if (WIN32)
-	set_target_properties(OpenSSL::SSL PROPERTIES
-    	IMPORTED_IMPLIB "${OPENSSL_ROOT_DIR}/lib/libssl.lib"
-    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/bin/libssl-4-x64.dll"
-    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
-	)
-
-	set_target_properties(OpenSSL::Crypto PROPERTIES
-    	IMPORTED_IMPLIB "${OPENSSL_ROOT_DIR}/lib/libcrypto.lib"
-    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/bin/libcrypto-4-x64.dll"
-    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
-	)
-     endif()
-
-    if (LINUX)
-	set_target_properties(OpenSSL::SSL PROPERTIES
-    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/lib64/libssl.so.3"
-    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
-	)
-
-	set_target_properties(OpenSSL::Crypto PROPERTIES
-    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/lib64/libcrypto.so.3"
-    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
-	)
-     endif()
-
-    if (APPLE)
-	set_target_properties(OpenSSL::SSL PROPERTIES
-    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/lib/libssl.3.dylib"
-    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
-	)
-
-	set_target_properties(OpenSSL::Crypto PROPERTIES
-    	IMPORTED_LOCATION "${OPENSSL_ROOT_DIR}/lib/libcrypto.3.dylib"
-    	INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_ROOT_DIR}/include"
-	)
-     endif()
-
+    # Resolve OpenSSL as an external dependency (Vulkan-style), not vendored.
+    # OPENSSL_ROOT_DIR may be supplied by the user/CI as a hint (e.g. macOS
+    # Homebrew openssl@3, or a Windows OpenSSL install root); FindOpenSSL honors
+    # it when set. We intentionally do NOT force it to a repo-local path.
+    find_package(OpenSSL REQUIRED)
 
     	set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
     	set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)

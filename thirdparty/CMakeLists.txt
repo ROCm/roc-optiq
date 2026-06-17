@@ -57,6 +57,17 @@ if (CRYPTO_BACKEND STREQUAL "OpenSSL")
     # success after locating only libcrypto, leaving OpenSSL::SSL uncreated.
     find_package(OpenSSL REQUIRED COMPONENTS SSL Crypto)
 
+    # libssh2 (added below) runs its own find_package(OpenSSL) in its
+    # subdirectory scope, which would otherwise leave OpenSSL::SSL/::Crypto
+    # scoped below thirdparty and invisible to the root target that links them.
+    # Promote the imported targets to GLOBAL so every scope sees the same ones.
+    if(TARGET OpenSSL::SSL)
+        set_target_properties(OpenSSL::SSL PROPERTIES IMPORTED_GLOBAL TRUE)
+    endif()
+    if(TARGET OpenSSL::Crypto)
+        set_target_properties(OpenSSL::Crypto PROPERTIES IMPORTED_GLOBAL TRUE)
+    endif()
+
     	set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
     	set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
 

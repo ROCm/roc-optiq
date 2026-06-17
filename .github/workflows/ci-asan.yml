@@ -1,0 +1,113 @@
+name: Ubuntu ASAN
+run-name: roc-optiq-ubuntu-asan
+
+on:
+  workflow_dispatch:
+    inputs:
+      os_version:
+        description: 'JSON array of OS versions to test'
+        type: string
+        default: '[ "22.04", "24.04", "26.04" ]'
+      cmake_config_preset:
+        description: 'CMake Config Preset to Use'
+        type: string
+        default: 'linux-release'
+      cmake_build_preset:
+        description: 'CMake Build Preset to Use'
+        type: string
+        default: 'Linux Release Build'
+      enable_internal_banner:
+        description: 'Enable the internal banner?'
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      os_version:
+        description: 'JSON array of OS versions to test'
+        type: string
+        default: '[ "22.04", "24.04", "26.04" ]'
+      cmake_config_preset:
+        description: 'CMake Config Preset to Use'
+        type: string
+        default: 'linux-release'
+      cmake_build_preset:
+        description: 'CMake Build Preset to Use'
+        type: string
+        default: 'Linux Release Build'
+      enable_internal_banner:
+        description: 'Enable the internal banner?'
+        type: boolean
+        default: false
+
+env:
+  BUILD_DIR: "build"
+  DIST_DIR: "dist"
+  BUILD_FILE_NAME: "roc-optiq"
+  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+
+jobs:
+  ubuntu:
+    name: Ubuntu ${{ matrix.os-version }} • Optiq CI • ASAN
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      id-token: write
+      contents: read
+    container:
+      image: ghcr.io/rocm/optiq-ci-ubuntu:${{ matrix.os-version }}
+    strategy:
+      fail-fast: false
+      matrix: 
+        os-version: ${{ fromJson(inputs.os_version) }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+          submodules: true
+
+      - name: Build, Make, and Verify Installation
+        run: |
+          source /opt/vulkan/**/setup-env.sh
+          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} \
+            -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+            -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g"
+          cmake --build ${{ env.BUILD_DIR }} \
+            --parallel 4 \
+            --target package
+          if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
+            echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"
+          else
+            echo "❌ ${{ env.BUILD_FILE_NAME }} was not built!"
+            exit 1
+          fi
+
+      - name: Run Tests
+        id: run_tests
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          ctest \
+            --output-on-failure \
+            --no-tests=error \
+            --output-junit ctest-results.xml
+
+      - name: Upload Test Logs (on failure)
+        if: steps.run_tests.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-ubuntu-${{ matrix.os-version }}
+          path: |
+            ${{ env.BUILD_DIR }}/ctest-results.xml
+            ${{ env.BUILD_DIR }}/Testing/Temporary/**
+          retention-days: 7
+
+      - name: Announce Test Failure
+        if: steps.run_tests.outcome == 'failure'
+        run: |
+          echo "Tests have failed! Please see uploaded CTest logs for more information"
+          exit 1

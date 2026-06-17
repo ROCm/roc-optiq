@@ -41,12 +41,20 @@ on:
         description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
         type: string
         default: ''
+      crypto_backend:
+        description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
+        type: string
+        default: 'mbedTLS'
   workflow_call:
     inputs:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
         default: '[ "14", "15", "26" ]'
+      crypto_backend:
+        description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
+        type: string
+        default: 'mbedTLS'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -184,10 +192,17 @@ jobs:
           fi
           echo "✅ Vulkan SDK installed at ${SDK_ROOT} (VULKAN_SDK=${VULKAN_SDK_DIR}, Vulkan_LIBRARY=${VULKAN_LIB})"
 
+      - name: Install OpenSSL
+        if: inputs.crypto_backend == 'OpenSSL'
+        run: |
+          brew install openssl@3
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "${GITHUB_ENV}"
+          echo "✅ OpenSSL Installed!"
+
       - name: Build, Make, and Verify Installation
         run: |
           mkdir -p ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
-          cmake -B ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}  -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" -DVulkan_LIBRARY="$Vulkan_LIBRARY"
+          cmake -B ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" -DVulkan_LIBRARY="$Vulkan_LIBRARY"
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4 --target package
           ls -l ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
 

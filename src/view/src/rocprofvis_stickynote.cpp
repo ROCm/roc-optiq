@@ -71,6 +71,27 @@ StickyNote::ResolveAnchorY(const TrackLayout& layout) const
     return m_y_offset;
 }
 
+void
+StickyNote::RenderTimeIndicator(ImDrawList*                         draw_list,
+                                const ImVec2&                       window_position,
+                                std::shared_ptr<TimePixelTransform> tpt) const
+{
+    if(!draw_list || !tpt) return;
+
+    constexpr float kLineThickness = 1.5f;
+    constexpr float kLineAlpha     = 0.85f;
+
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImU32            color =
+        ApplyAlpha(settings.GetColor(Colors::kStickyNoteAccent), kLineAlpha);
+
+    const float line_x   = window_position.x + tpt->TimeToPixel(m_time_ns);
+    const float y_top    = window_position.y;
+    const float y_bottom = window_position.y + tpt->GetGraphSizeY();
+    draw_list->AddLine(ImVec2(line_x, y_top), ImVec2(line_x, y_bottom), color,
+                       kLineThickness);
+}
+
 double
 StickyNote::GetTimeNs() const
 {
@@ -186,6 +207,11 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
             std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
         ImVec2 btn_max = ImVec2(sticky_pos.x + minimized_btn_size,
                                 sticky_pos.y + minimized_btn_size);
+        bool hovered = ImGui::IsMouseHoveringRect(sticky_pos, btn_max);
+        if((hovered || m_dragging) && draw_list)
+        {
+            RenderTimeIndicator(draw_list, window_position, tpt);
+        }
         if(draw_list)
         {
             draw_list->AddRectFilled(ImVec2(sticky_pos.x + 2.0f, sticky_pos.y + 3.0f),
@@ -209,7 +235,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         ImGui::PopStyleColor(4);
         ImGui::PopFont();
 
-        bool blocks_timeline_input = ImGui::IsMouseHoveringRect(sticky_pos, btn_max);
+        bool blocks_timeline_input = hovered;
         if(blocks_timeline_input)
         {
             TimelineFocusManager::GetInstance().RequestLayerFocus(
@@ -255,6 +281,14 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 
         sticky_pos = ImVec2(window_position.x + adjusted_x, window_position.y + adjusted_y);
         ImGui::SetCursorPos(ImVec2(adjusted_x, adjusted_y));
+
+        ImVec2 expanded_max =
+            ImVec2(sticky_pos.x + sticky_size.x, sticky_pos.y + sticky_size.y);
+        if((ImGui::IsMouseHoveringRect(sticky_pos, expanded_max) || m_dragging) &&
+           draw_list)
+        {
+            RenderTimeIndicator(draw_list, window_position, tpt);
+        }
 
         if(draw_list)
         {

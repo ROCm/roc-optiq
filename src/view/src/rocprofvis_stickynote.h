@@ -77,6 +77,11 @@ private:
     // Absolute Y from the bound track top plus offset (raw offset if unbound).
     float ResolveAnchorY(const TrackLayout& layout) const;
 
+    // Vertical guide at the note's time, spanning the graph height.
+    void RenderTimeIndicator(ImDrawList*                         draw_list,
+                             const ImVec2&                       window_position,
+                             std::shared_ptr<TimePixelTransform> tpt) const;
+
     double      m_time_ns;
     float       m_y_offset;  // Relative to m_track_id's top.
     uint64_t    m_track_id;

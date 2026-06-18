@@ -58,11 +58,28 @@ jobs:
         shell: pwsh
         run: |
           choco install openssl --no-progress -y
-          $opensslRoot = "C:\Program Files\OpenSSL-Win64"
-          if (-not (Test-Path $opensslRoot)) {
-            $opensslRoot = (Get-ChildItem -Directory "C:\Program Files" -Filter "OpenSSL*" | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          # CI-owned resolution order: prefer Chocolatey's Win64 layout over the
+          # runner image copy under "OpenSSL". First match must have headers + bin DLLs.
+          $candidates = @(
+            "C:\Program Files\OpenSSL-Win64",
+            "C:\Program Files\OpenSSL"
+          )
+          $opensslRoot = $null
+          foreach ($c in $candidates) {
+            if (-not (Test-Path $c)) { continue }
+            $sslHeader = Join-Path $c "include\openssl\ssl.h"
+            $binDir = Join-Path $c "bin"
+            if (-not (Test-Path $sslHeader)) { continue }
+            $dlls = @(Get-ChildItem -Path $binDir -Filter "libcrypto*.dll" -ErrorAction SilentlyContinue)
+            if ($dlls.Count -eq 0) { continue }
+            $opensslRoot = $c
+            break
           }
-          if (-not $opensslRoot) { Write-Host "OpenSSL not found!"; exit 1 }
+          if (-not $opensslRoot) {
+            Write-Host "CI: OpenSSL not found in managed paths (checked: $($candidates -join ', '))"
+            exit 1
+          }
+          Write-Host "CI OPENSSL_ROOT_DIR=$opensslRoot"
           echo "OPENSSL_ROOT_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "PATH=$opensslRoot\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
           # Newer Shining Light / choco builds nest the MSVC import libs under

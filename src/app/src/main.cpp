@@ -413,8 +413,11 @@ main(int argc, char** argv)
                     {
                         g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
                     }
-
-                    if(g_frames_to_render > 0)
+                    bool tests_running = false;
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+                    tests_running = !ImGuiTestEngine_IsTestQueueEmpty(engine);
+#endif
+                    if(g_frames_to_render > 0 || tests_running)
                     {
                         // Busy: poll so per-frame controller/event work keeps
                         // running. vsync in present() caps the frame rate.

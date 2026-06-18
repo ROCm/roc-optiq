@@ -52,9 +52,19 @@ AnnotationsManagerProjectSettings::FromJson()
             is_minimized = note_json[JSON_KEY_ANNOTATION_IS_MINIMIZED].getBool();
         }
 
+        // Legacy projects have no track binding; load as unbound and re-anchor
+        // on first render.
+        uint64_t track_id = INVALID_TRACK_ID;
+        if(note_json.contains(JSON_KEY_ANNOTATION_TRACK_ID) &&
+           note_json[JSON_KEY_ANNOTATION_TRACK_ID].isNumber())
+        {
+            track_id = static_cast<uint64_t>(
+                note_json[JSON_KEY_ANNOTATION_TRACK_ID].getNumber());
+        }
+
         ImVec2 size(size_x, size_y);
         m_annotations_manager.AddSticky(time_ns, y_offset, size, text, title, v_min,
-                                        v_max, is_minimized);
+                                        v_max, track_id, is_minimized);
     }
 }
 
@@ -74,6 +84,8 @@ AnnotationsManagerProjectSettings::ToJson()
         sticky_json[JSON_KEY_ANNOTATION_TEXT]             = notes[i].GetText();
         sticky_json[JSON_KEY_ANNOTATION_TITLE]            = notes[i].GetTitle();
         sticky_json[JSON_KEY_ANNOTATION_ID]               = notes[i].GetID();
+        sticky_json[JSON_KEY_ANNOTATION_TRACK_ID] =
+            static_cast<double>(notes[i].GetTrackId());
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X] = notes[i].GetVMinX();
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X] = notes[i].GetVMaxX();
         sticky_json[JSON_KEY_ANNOTATION_IS_MINIMIZED]     = notes[i].IsMinimized();
@@ -177,10 +189,11 @@ AnnotationsManager::Clear()
 void
 AnnotationsManager::AddSticky(double time_ns, float y_offset, const ImVec2& size,
                               const std::string& text, const std::string& title,
-                              double v_min, double v_max, bool is_minimized)
+                              double v_min, double v_max, uint64_t track_id,
+                              bool is_minimized)
 {
     m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id, v_min,
-                                v_max, is_minimized);
+                                v_max, track_id, is_minimized);
 }
 
 bool
@@ -373,7 +386,7 @@ AnnotationsManager::ShowStickyNotePopup()
         {
             AddSticky(m_sticky_time_ns, m_sticky_y_offset, ImVec2(180, 80),
                       std::string(m_sticky_text), std::string(m_sticky_title), m_v_min_x,
-                      m_v_max_x);
+                      m_v_max_x, m_sticky_track_id);
             m_show_sticky_popup = false;
             ImGui::CloseCurrentPopup();
         }
@@ -391,7 +404,8 @@ AnnotationsManager::ShowStickyNotePopup()
 
 void
 AnnotationsManager::OpenStickyNotePopup(double time_ns, float y_offset, double v_min,
-                                        double v_max, ImVec2 graph_size)
+                                        double v_max, ImVec2 graph_size,
+                                        uint64_t track_id)
 {
     if(time_ns == INVALID_TIME_NS)
     {
@@ -411,6 +425,7 @@ AnnotationsManager::OpenStickyNotePopup(double time_ns, float y_offset, double v
     m_show_sticky_popup = true;
     m_v_min_x           = v_min;
     m_v_max_x           = v_max;
+    m_sticky_track_id   = track_id;
 }
 
 std::vector<StickyNote>&

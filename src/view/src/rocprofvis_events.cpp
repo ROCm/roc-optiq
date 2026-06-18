@@ -375,12 +375,14 @@ RangeEvent::GetEndNs() const
 {
     return m_end_ns;
 }
-NavigationEvent::NavigationEvent(double v_min, double v_max, double y_position, bool center )
+NavigationEvent::NavigationEvent(double v_min, double v_max, double y_position,
+                                 bool center, uint64_t track_id)
 : RocEvent(static_cast<int>(RocEvents::kGoToTimelineSpot))
 , m_v_min(v_min)
 , m_v_max(v_max)
 , m_y_position(y_position)
 , m_center(center)
+, m_track_id(track_id)
 {
     SetType(RocEventType::kNavigationEvent);
 }
@@ -406,6 +408,11 @@ bool
 NavigationEvent::GetCenter() const
 {
     return m_center;
+}
+uint64_t
+NavigationEvent::GetTrackId() const
+{
+    return m_track_id;
 }
 
 RequestProgressUpdateEvent::RequestProgressUpdateEvent(

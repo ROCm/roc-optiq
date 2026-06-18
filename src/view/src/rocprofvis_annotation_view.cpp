@@ -3,6 +3,7 @@
 
 #include "rocprofvis_annotation_view.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -38,13 +39,15 @@ AnnotationView::Render()
                              0.5f);
         ImGui::TextDisabled("No annotations.");
     }
-    else if(ImGui::BeginTable("StickyNotesTable", 4,
+    else if(ImGui::BeginTable("StickyNotesTable", 5,
                               ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
                                   ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
                                   ImGuiTableFlags_SizingStretchProp))
     {
         ImGui::TableSetupColumn("Title");
         ImGui::TableSetupColumn("Text");
+        ImGui::TableSetupColumn("Track", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFontSize() * 10.0f);
         ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::GetFontSize() * 12.0f);
         ImGui::TableSetupColumn("Visible", ImGuiTableColumnFlags_WidthFixed,
@@ -93,7 +96,8 @@ AnnotationView::Render()
             {
                 m_selected_note_id = note.GetID();
                 auto event         = std::make_shared<NavigationEvent>(
-                    note.GetVMinX(), note.GetVMaxX(), note.GetYOffset(), true);
+                    note.GetVMinX(), note.GetVMaxX(), note.GetYOffset(), true,
+                    note.GetTrackId());
                 EventManager::GetInstance()->AddEvent(event);
             }
             ImGui::PopStyleVar();
@@ -110,6 +114,23 @@ AnnotationView::Render()
             ImGui::PushID("note_preview");
             ElidedText(note_preview.c_str(), ImGui::GetContentRegionAvail().x);
             ImGui::PopID();
+
+            // Track column: the bound track's display name, or a placeholder
+            // for unbound legacy notes.
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            const std::string track_name =
+                m_data_provider.DataModel().BuildTrackName(note.GetTrackId());
+            if(track_name.empty())
+            {
+                ImGui::TextDisabled("Unbound");
+            }
+            else
+            {
+                ImGui::PushID("note_track");
+                ElidedText(track_name.c_str(), ImGui::GetContentRegionAvail().x);
+                ImGui::PopID();
+            }
 
             // Time column
             ImGui::TableNextColumn();

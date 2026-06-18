@@ -3,7 +3,10 @@
 
 #pragma once
 #include "imgui.h"
+#include "model/rocprofvis_common_defs.h"
 #include "rocprofvis_time_to_pixel.h"
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -14,21 +17,41 @@ namespace View
 
 class TimePixelTransform;
 
+// Sentinel for an unbound note (e.g. legacy project).
+inline constexpr uint64_t INVALID_TRACK_ID = INVALID_UINT64_INDEX;
+
+// Per-frame track layout used to anchor notes to their track.
+struct TrackLayout
+{
+    std::function<bool(uint64_t track_id, float& out_top_y)> top_of;
+
+    // track_at clamps to the first/last track so notes stay draggable anywhere.
+    std::function<bool(float abs_y, uint64_t& out_track_id, float& out_top_y)>
+        track_at;
+};
+
 class StickyNote
 {
 public:
     StickyNote(double time_ns, float y_offset, const ImVec2& size,
                const std::string& text, const std::string& title,
-               const std::string& project_id, double v_min, double v_max, bool is_minimized = true);
+               const std::string& project_id, double v_min, double v_max,
+               uint64_t track_id = INVALID_TRACK_ID, bool is_minimized = true);
 
     bool Render(ImDrawList* draw_list, const ImVec2& window_position,
-                std::shared_ptr<TimePixelTransform> conversion_manager);
-    bool HandleResize(const ImVec2&       window_position,
-                      std::shared_ptr<TimePixelTransform> conversion_manager);
+                std::shared_ptr<TimePixelTransform> conversion_manager,
+                const TrackLayout& layout);
+
+    // Draws a non-interactive marker, used above a track's reorder preview.
+    void RenderDragGhost(ImDrawList* draw_list, const ImVec2& screen_pos) const;
+    bool HandleResize(const ImVec2&                       window_position,
+                      std::shared_ptr<TimePixelTransform> conversion_manager,
+                      const TrackLayout&                  layout);
 
     // Drag interaction
-    bool HandleDrag(const ImVec2& window_position, std::shared_ptr<TimePixelTransform> conversion_manager,
-                    int& dragged_id);
+    bool HandleDrag(const ImVec2&                       window_position,
+                    std::shared_ptr<TimePixelTransform> conversion_manager,
+                    int& dragged_id, const TrackLayout& layout);
     void SetTitle(std::string title);
     void SetText(std::string title);
 
@@ -45,10 +68,18 @@ public:
     double             GetVMinX() const;
     double             GetVMaxX() const;
     bool               IsMinimized() const { return m_is_minimized; }
+    uint64_t           GetTrackId() const { return m_track_id; }
 
 private:
+    // Binds an unbound note to a track, making its offset track-relative.
+    void EnsureBound(const TrackLayout& layout);
+
+    // Absolute Y from the bound track top plus offset (raw offset if unbound).
+    float ResolveAnchorY(const TrackLayout& layout) const;
+
     double      m_time_ns;
-    float       m_y_offset;
+    float       m_y_offset;  // Relative to m_track_id's top.
+    uint64_t    m_track_id;
     int         m_id;
     ImVec2      m_size;
     std::string m_text;

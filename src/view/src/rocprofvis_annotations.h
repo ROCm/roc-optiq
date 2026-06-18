@@ -50,13 +50,15 @@ public:
     void SetCenter(const ImVec2& center);
     void AddSticky(double time_ns, float y_offset, const ImVec2& size,
                    const std::string& text, const std::string& title, double v_min,
-                   double v_max, bool is_minimized = true);
+                   double v_max, uint64_t track_id = INVALID_TRACK_ID,
+                   bool is_minimized = true);
     
 
     void                     ShowStickyNotePopup();
     void                     ShowStickyNoteEditPopup();
     std::vector<StickyNote>& GetStickyNotes();
-    void OpenStickyNotePopup(double time_ns, float y_offset, double v_min, double v_max, ImVec2 graph_size);
+    void OpenStickyNotePopup(double time_ns, float y_offset, double v_min, double v_max,
+                             ImVec2 graph_size, uint64_t track_id = INVALID_TRACK_ID);
 
 private:
     std::vector<StickyNote>           m_sticky_notes;
@@ -64,6 +66,7 @@ private:
     bool                              m_show_sticky_edit_popup = false;
     double                            m_sticky_time_ns         = 0.0;
     float                             m_sticky_y_offset        = 0.0f;
+    uint64_t                          m_sticky_track_id        = INVALID_TRACK_ID;
     char                              m_sticky_title[128]      = { 0 };
     char                              m_sticky_text[512]       = { 0 };
     int                               m_edit_sticky_id         = -1;

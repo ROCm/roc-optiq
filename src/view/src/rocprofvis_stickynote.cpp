@@ -27,9 +27,10 @@ static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
                        const std::string& text, const std::string& title,
                        const std::string& project_id, double v_min, double v_max,
-                       bool is_minimized)
+                       uint64_t track_id, bool is_minimized)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
+, m_track_id(track_id)
 , m_size(size)
 , m_text(text)
 , m_title(title)
@@ -41,6 +42,33 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 , m_is_minimized(is_minimized)
 {
     s_unique_id_counter = s_unique_id_counter + 1;
+}
+
+void
+StickyNote::EnsureBound(const TrackLayout& layout)
+{
+    if(m_track_id != INVALID_TRACK_ID || !layout.track_at) return;
+
+    // In the unbound state m_y_offset is an absolute Y; convert it to relative.
+    uint64_t track_id    = INVALID_TRACK_ID;
+    float    track_top_y = 0.0f;
+    if(layout.track_at(m_y_offset, track_id, track_top_y))
+    {
+        m_track_id = track_id;
+        m_y_offset -= track_top_y;
+    }
+}
+
+float
+StickyNote::ResolveAnchorY(const TrackLayout& layout) const
+{
+    float track_top_y = 0.0f;
+    if(m_track_id != INVALID_TRACK_ID && layout.top_of &&
+       layout.top_of(m_track_id, track_top_y))
+    {
+        return track_top_y + m_y_offset;
+    }
+    return m_y_offset;
 }
 
 double
@@ -110,7 +138,7 @@ StickyNote::SetTitle(std::string title)
 }
 bool
 StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
-                   std::shared_ptr<TimePixelTransform> tpt)
+                   std::shared_ptr<TimePixelTransform> tpt, const TrackLayout& layout)
 {
     if(!tpt)
     {
@@ -118,6 +146,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
             "StickyNote::Render: conversion_manager shared_ptr is null, cannot render");
         return false;
     }
+    EnsureBound(layout);
     SettingsManager& settings      = SettingsManager::GetInstance();
     ImU32            bg_color          = settings.GetColor(Colors::kStickyNoteBg);
     ImU32            border_color      = settings.GetColor(Colors::kStickyNoteBorder);
@@ -136,7 +165,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     const float icon_btn_gap  = 8.0f;
 
     float  x           = tpt->TimeToPixel(m_time_ns);
-    float  y           = m_y_offset;
+    float  y           = ResolveAnchorY(layout);
     ImVec2 sticky_pos  = ImVec2(window_position.x + x, window_position.y + y);
     ImVec2 sticky_size = m_size;
 
@@ -353,10 +382,52 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     }
 }
 
+void
+StickyNote::RenderDragGhost(ImDrawList* draw_list, const ImVec2& screen_pos) const
+{
+    if(!draw_list) return;
+
+    // Mirrors the minimized-note marker drawn in Render(): a drop shadow offset
+    // by a couple of pixels and corners at a fraction of the panel rounding.
+    constexpr float kShadowOffsetX = 2.0f;
+    constexpr float kShadowOffsetY = 3.0f;
+    constexpr float kRoundingScale = 0.6f;
+
+    SettingsManager& settings     = SettingsManager::GetInstance();
+    ImU32            bg_color     = settings.GetColor(Colors::kStickyNoteBg);
+    ImU32            border_color = settings.GetColor(Colors::kStickyNoteBorder);
+    ImU32            shadow_color = settings.GetColor(Colors::kStickyNoteShadow);
+    ImU32            text_color   = settings.GetColor(Colors::kStickyNoteText);
+    const float rounding = settings.GetDefaultStyle().ChildRounding * kRoundingScale;
+
+    ImFont* icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
+    ImGui::PushFont(icon_font);
+    ImVec2 icon_size      = ImGui::CalcTextSize(ICON_STICKY_NOTE);
+    float  icon_font_size = ImGui::GetFontSize();
+    ImGui::PopFont();
+
+    ImVec2      padding = ImGui::GetStyle().FramePadding;
+    const float btn_size =
+        std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
+    ImVec2 box_max = ImVec2(screen_pos.x + btn_size, screen_pos.y + btn_size);
+
+    draw_list->AddRectFilled(
+        ImVec2(screen_pos.x + kShadowOffsetX, screen_pos.y + kShadowOffsetY),
+        ImVec2(box_max.x + kShadowOffsetX, box_max.y + kShadowOffsetY), shadow_color,
+        rounding);
+    draw_list->AddRectFilled(screen_pos, box_max, bg_color, rounding);
+    draw_list->AddRect(screen_pos, box_max, border_color, rounding);
+
+    ImVec2 text_pos = ImVec2(screen_pos.x + (btn_size - icon_size.x) * 0.5f,
+                             screen_pos.y + (btn_size - icon_size.y) * 0.5f);
+    draw_list->AddText(icon_font, icon_font_size, text_pos, text_color,
+                       ICON_STICKY_NOTE);
+}
+
 bool
 StickyNote::HandleDrag(const ImVec2&                       window_position,
                        std::shared_ptr<TimePixelTransform> conversion_manager,
-                       int&                                dragged_id)
+                       int& dragged_id, const TrackLayout& layout)
 {
     if(!conversion_manager)
     {
@@ -365,13 +436,15 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     }
     if(m_resizing) return false;
 
+    EnsureBound(layout);
+
     ImVec2 drag_pos;
     ImVec2 drag_max;
-    float  drag_w;
-    float  drag_h;
+    float  drag_w = 0.0f;
+    float  drag_h = 0.0f;
 
     float x = conversion_manager->TimeToPixel(m_time_ns);
-    float y = m_y_offset;
+    float y = ResolveAnchorY(layout);
 
     if(m_is_minimized)
     {
@@ -443,8 +516,20 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
 
         if(m_is_minimized)
         {
-            m_time_ns  = conversion_manager->PixelToTime(new_x);
-            m_y_offset = new_y;
+            m_time_ns = conversion_manager->PixelToTime(new_x);
+            // Re-anchor to the track under the cursor, storing a track-relative
+            // offset so the note follows reorder / collapse / resize.
+            uint64_t track_id    = INVALID_TRACK_ID;
+            float    track_top_y = 0.0f;
+            if(layout.track_at && layout.track_at(new_y, track_id, track_top_y))
+            {
+                m_track_id = track_id;
+                m_y_offset = new_y - track_top_y;
+            }
+            else
+            {
+                m_y_offset = new_y;
+            }
             m_v_max_x  = conversion_manager->GetVMaxX();
             m_v_min_x  = conversion_manager->GetVMinX();
         }
@@ -468,7 +553,8 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
 
 bool
 StickyNote::HandleResize(const ImVec2&                       window_position,
-                         std::shared_ptr<TimePixelTransform> conversion_manager)
+                         std::shared_ptr<TimePixelTransform> conversion_manager,
+                         const TrackLayout&                  layout)
 {
     if(!conversion_manager)
     {
@@ -487,7 +573,7 @@ StickyNote::HandleResize(const ImVec2&                       window_position,
     else
     {
         float x = conversion_manager->TimeToPixel(m_time_ns);
-        float y = m_y_offset;
+        float y = ResolveAnchorY(layout);
         sticky_pos = ImVec2(window_position.x + x, window_position.y + y);
     }
     ImVec2 sticky_max = ImVec2(sticky_pos.x + m_size.x, sticky_pos.y + m_size.y);

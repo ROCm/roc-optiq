@@ -158,6 +158,7 @@ constexpr const char* JSON_KEY_ANNOTATION_SIZE_Y           = "size_y";
 constexpr const char* JSON_KEY_ANNOTATION_TEXT             = "text";
 constexpr const char* JSON_KEY_ANNOTATION_TITLE            = "title";
 constexpr const char* JSON_KEY_ANNOTATION_ID               = "id";
+constexpr const char* JSON_KEY_ANNOTATION_TRACK_ID         = "track_id";
 constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
 constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
 constexpr const char* JSON_KEY_ANNOTATION_IS_MINIMIZED     = "is_minimized";

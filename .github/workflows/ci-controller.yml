@@ -24,6 +24,10 @@ on:
         description: 'Run macOS CI?'
         type: boolean
         default: true
+      enable_ci_asan:
+        description: 'Run Ubuntu ASAN?'
+        type: boolean
+        default: true
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
@@ -132,3 +136,12 @@ jobs:
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
+
+  ci-asan:
+    name: Ubuntu ASAN
+    needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_asan }}
+    uses: ./.github/workflows/ci-asan.yml
+    secrets: inherit
+    with:
+      os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}

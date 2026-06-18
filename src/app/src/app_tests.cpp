@@ -50,18 +50,20 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(ev->GetEventItemCountForTest() == 0);
 
         // --- Drive a real event selection via the UI. ---
-        // The timeline graph is a canvas with no widget IDs, so events are hit
-        // by fractional-screen coordinate clicks (survives window resize). Event
-        // positions depend on the trace data + zoom, so a single click is
-        // unreliable; sweep a grid and stop as soon as a click lands an event
-        // (the accessor confirms selection registered in the model).
-        const ImVec2 size     = ImGui::GetIO().DisplaySize;
-        const float  graph_x0 = size.x * 0.42f;
-        const float  graph_x1 = size.x * 0.92f;
-        const float  graph_y0 = size.y * 0.22f;
-        const float  graph_y1 = size.y * 0.55f;
-        const int    rows     = 6;
-        const int    cols     = 12;
+        // The timeline is a canvas with no widget IDs, so events are hit by
+        // coordinate clicks. Anchor x in FIXED PIXELS, not screen fractions: the
+        // sidebar is a fixed ~400px, so the graph always starts at the same x
+        // regardless of window size. The vertical position varies, so sweep most
+        // of the window height and stop when a click lands an event (the
+        // accessor confirms selection registered in the model).
+        // WIP: coarse blind sweep; deterministic computed-coordinate click to come.
+        const ImVec2 size       = ImGui::GetIO().DisplaySize;
+        const float  graph_x0   = 400.0f + 10.0f;     // just past the 400px sidebar
+        const float  graph_x1   = size.x - 20.0f;     // to near the right edge
+        const float  graph_y0   = size.y * 0.10f;     // sweep most of the height to
+        const float  graph_y1   = size.y * 0.90f;     // find the track lane wherever it is
+        const int    rows       = 20;
+        const int    cols       = 30;
 
         bool landed = false;
         for (int r = 0; r < rows && !landed; ++r)

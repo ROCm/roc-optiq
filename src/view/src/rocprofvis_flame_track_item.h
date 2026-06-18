@@ -99,6 +99,7 @@ private:
 
     void RenderTooltip(ChartItem& chart_item, int color_index);
     void RecalculateTrackHeight();
+    void UpdateMinTrackHeight();
     
     void RequestAnalysis() override;
 

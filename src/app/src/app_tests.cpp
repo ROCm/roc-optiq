@@ -14,4 +14,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(ctx->ItemExists("##MenuBar/File"));
     
     };
+
+    t = IM_REGISTER_TEST(e, "app", "file_menu_opens");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ctx->SetRef("Main Window");
+        ctx->ItemClick("##MenuBar/File");
+        IM_CHECK(ctx->ItemExists("//Menu_00/Open"));
+    };
 }

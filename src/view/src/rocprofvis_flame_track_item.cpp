@@ -111,17 +111,25 @@ FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
         static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
         timeline_highlight_changed_handler);
 
+    auto font_size_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        this->HandleFontSizeChanged(e);
+    };
+
+    m_font_size_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), font_size_changed_handler);
+
     if(m_flame_track_project_settings.Valid())
     {
         m_event_color_mode = m_flame_track_project_settings.ColorEvents();
         m_compact_mode     = m_flame_track_project_settings.CompactMode();
-        if(m_compact_mode)
-        {
-            m_level_height = m_settings.GetEventLevelCompactHeight();
-        }
     }
 
-    UpdateMinTrackHeight();
+    RefreshLevelHeight();
+
+    if(!HasSavedTrackHeight())
+    {
+        m_track_height = DefaultTrackHeight();
+    }
 }
 
 void
@@ -138,14 +146,13 @@ FlameTrackItem::RenderMetaAreaExpand()
                       ImGui::GetTextLineHeight()));
     // Height that fully shows every event level (levels are 0-indexed), and the
     // natural resting height the expand action restores to.
-    const float     full_height   = (m_max_level + 1.0f) * m_level_height;
-    const float     target_height = std::max(full_height, DEFAULT_TRACK_HEIGHT);
+    const float     default_height = DefaultTrackHeight();
+    const float     full_height    = (m_max_level + 1.0f) * m_level_height;
+    const float     target_height  = std::max(full_height, default_height);
     constexpr float EXPAND_EPSILON = 1.0f;
 
     if(m_track_height + EXPAND_EPSILON < target_height)
     {
-        // Track is shorter than its natural size (events clipped or squished
-        // below default): offer to expand back open.
         ImGui::SetCursorPos(button_pos);
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
@@ -154,14 +161,12 @@ FlameTrackItem::RenderMetaAreaExpand()
         }
         if(ImGui::IsItemHovered()) SetTooltipStyled("Expand track to see all events");
     }
-    else if(m_track_height > DEFAULT_TRACK_HEIGHT + EXPAND_EPSILON)
+    else if(m_track_height > default_height + EXPAND_EPSILON)
     {
-        // Track is taller than the default: offer to contract back.
         ImGui::SetCursorPos(button_pos);
         if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
         {
-            m_track_height =
-                DEFAULT_TRACK_HEIGHT;  // Default track height defined in parent class.
+            m_track_height         = default_height;
             m_track_height_changed = true;
             m_is_expanded          = false;
         }
@@ -178,6 +183,8 @@ FlameTrackItem::~FlameTrackItem()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
         m_timeline_event_highlight_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), m_font_size_changed_token);
 }
 
 bool
@@ -350,14 +357,63 @@ FlameTrackItem::HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e)
 }
 
 void
+FlameTrackItem::HandleFontSizeChanged(std::shared_ptr<RocEvent> e)
+{
+    (void) e;
+    RefreshLevelHeight();
+    if(m_is_expanded)
+    {
+        RecalculateTrackHeight();
+    }
+}
+
+float
+FlameTrackItem::CalculateCenteredTextY(const std::string& label, float rect_min_y,
+                                       float box_height) const
+{
+    ImFontBaked* baked = ImGui::GetFontBaked();
+    float        min_y = std::numeric_limits<float>::max();
+    float        max_y = std::numeric_limits<float>::lowest();
+
+    if(baked != nullptr)
+    {
+        const float font_size = ImGui::GetFontSize();
+        const float scale = baked->Size > 0.0f ? font_size / baked->Size : 1.0f;
+
+        for(char c : label)
+        {
+            unsigned char codepoint = static_cast<unsigned char>(c);
+            if(codepoint == 0 || codepoint >= 0x80)
+            {
+                continue;
+            }
+
+            ImFontGlyph* glyph = baked->FindGlyph(codepoint);
+            if(glyph != nullptr && glyph->Visible)
+            {
+                min_y = std::min(min_y, glyph->Y0 * scale);
+                max_y = std::max(max_y, glyph->Y1 * scale);
+            }
+        }
+    }
+
+    if(min_y == std::numeric_limits<float>::max())
+    {
+        min_y = 0.0f;
+        max_y = ImGui::GetTextLineHeight();
+    }
+
+    const float glyph_center = (min_y + max_y) * 0.5f;
+    return rect_min_y + std::max(0.0f, box_height * 0.5f - glyph_center);
+}
+
+void
 FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart_item,
                         float duration, ImDrawList* draw_list, bool use_highlight_color)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
-    // Draw the box one spacing unit shorter than the row pitch so a small gap
-    // remains between vertically stacked events.
     const float box_height = std::max(1.0f, m_level_height - m_settings.GetEventLevelSpacing());
 
     ImVec2 rectMin = ImVec2(start_position.x, start_position.y + cursor_position.y);
@@ -385,16 +441,15 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
     if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH)
     {
         draw_list->PushClipRect(rectMin, rectMax, true);
-        // Center the label vertically so it stays balanced as the row height
-        // tracks the font size.
-        const float text_y =
-            rectMin.y + (box_height - ImGui::GetTextLineHeight()) * 0.5f;
+        const std::string label =
+            (chart_item.event.m_child_count > 1)
+                ? std::to_string(chart_item.event.m_child_count) + " events"
+                : chart_item.event.m_name;
+        const float text_y = CalculateCenteredTextY(label, rectMin.y, box_height);
         ImVec2 textPos = ImVec2(rectMin.x + m_text_padding.x, text_y);
 
         if(chart_item.event.m_child_count > 1)
         {
-            std::string label =
-                std::to_string(chart_item.event.m_child_count) + " events";
             draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
                                label.c_str());
         }
@@ -407,13 +462,13 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                 // the text at the viewport edge to maintain readability.
                 textPos = ImVec2(draw_list->GetClipRectMin().x + m_text_padding.x, text_y);
                 draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                                   chart_item.event.m_name.c_str());
+                                   label.c_str());
             }
             else
             {
                 // The rectangle is fully inside the viewport, render text normally.
                 draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                                   chart_item.event.m_name.c_str());
+                                   label.c_str());
             }
         }
         draw_list->PopClipRect();
@@ -665,16 +720,28 @@ void
 FlameTrackItem::RecalculateTrackHeight()
 {
     m_track_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
-                              DEFAULT_TRACK_HEIGHT);
+                              DefaultTrackHeight());
     m_track_height_changed = true;
 }
 
 void
 FlameTrackItem::UpdateMinTrackHeight()
 {
-    // Keep at least one full event row (plus the meta-area floor) so resizing
-    // can never squeeze the track small enough for its contents to collide.
     m_min_track_height = std::max(FLAME_MIN_TRACK_HEIGHT, m_level_height);
+}
+
+void
+FlameTrackItem::RefreshLevelHeight()
+{
+    m_level_height = m_compact_mode ? m_settings.GetEventLevelCompactHeight()
+                                    : m_settings.GetEventLevelHeight();
+    UpdateMinTrackHeight();
+}
+
+float
+FlameTrackItem::DefaultTrackHeight() const
+{
+    return 2.0f * m_level_height;
 }
 
 void
@@ -872,20 +939,13 @@ FlameTrackItem::RenderMetaAreaOptions()
 
     if(ImGui::Checkbox("Compact Mode", &m_compact_mode))
     {
-        if(m_compact_mode)
+        RefreshLevelHeight();
+        if(!m_compact_mode && m_is_expanded)
         {
-            m_level_height = m_settings.GetEventLevelCompactHeight();
+            RecalculateTrackHeight();
         }
-        else
-        {
-            m_level_height = m_settings.GetEventLevelHeight();
-            if(m_is_expanded)
-            {
-                RecalculateTrackHeight();
-            }
-        }
-        UpdateMinTrackHeight();
-        if(m_track_height > std::max(m_max_level * m_level_height + m_level_height, DEFAULT_TRACK_HEIGHT))
+        if(m_track_height >
+           std::max(m_max_level * m_level_height + m_level_height, DefaultTrackHeight()))
         {
             RecalculateTrackHeight();
         }

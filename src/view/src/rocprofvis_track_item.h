@@ -134,6 +134,9 @@ protected:
     void FetchHelper();
     void SetDefaultPillLabel(const TrackInfo* track_info);
     void SetMetaAreaLabel(const TrackInfo* track_info);
+    // True if this track has a persisted (user-chosen) height in the project,
+    // so subclasses can avoid clobbering it with their own default.
+    bool HasSavedTrackHeight() const;
 
     const TrackInfo*                    m_track_metadata;
     uint64_t                            m_track_id;

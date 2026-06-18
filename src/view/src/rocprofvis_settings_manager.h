@@ -251,7 +251,6 @@ public:
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
-    // Vertical gap drawn between stacked events; included in the row pitch.
     const float GetEventLevelSpacing() const;
 
 

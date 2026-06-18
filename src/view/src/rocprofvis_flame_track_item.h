@@ -89,6 +89,7 @@ private:
 
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e);
+    void HandleFontSizeChanged(std::shared_ptr<RocEvent> e);
 
     void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
                  float duration, ImDrawList* draw_list, bool use_highlight_color);
@@ -100,6 +101,10 @@ private:
     void RenderTooltip(ChartItem& chart_item, int color_index);
     void RecalculateTrackHeight();
     void UpdateMinTrackHeight();
+    void RefreshLevelHeight();
+    float DefaultTrackHeight() const;
+    float CalculateCenteredTextY(const std::string& label, float rect_min_y,
+                                 float box_height) const;
     
     void RequestAnalysis() override;
 
@@ -119,6 +124,7 @@ private:
     std::vector<ChartItem>          m_selected_chart_items;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_highlight_changed_token;
+    EventManager::SubscriptionToken m_font_size_changed_token;
     ImVec2                          m_tooltip_size;
 
     static float             s_max_event_label_width;

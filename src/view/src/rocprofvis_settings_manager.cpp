@@ -288,10 +288,7 @@ inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
 inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char* SETTINGS_FILE_NAME           = "settings_application.json";
 inline constexpr float       COMPACT_EVENT_HEIGHT         = 6.0f;
-// Vertical breathing room (top+bottom) added around an event label inside a
-// flame-chart row, on top of the font height itself.
-inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN  = 4.0f;
-// Gap drawn between vertically stacked events so adjacent boxes don't merge.
+inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN  = 6.0f;
 inline constexpr float       EVENT_LEVEL_SPACING          = 1.0f;
 
 SettingsManager&
@@ -829,9 +826,6 @@ SettingsManager::DeserializeUnitSettings(jt::Json& json)
 const float
 SettingsManager::GetEventLevelHeight() const
 {
-    // Scale the event row with the active text font so labels always fit while
-    // staying compact. The row pitch includes the inter-event spacing so the
-    // drawn box (pitch - spacing) leaves a gap between stacked events.
     const float font_size = m_font_manager.GetFontSize(FontSize::kDefault);
     return std::ceil(font_size + EVENT_LEVEL_VERTICAL_MARGIN + EVENT_LEVEL_SPACING);
 }

@@ -3,7 +3,8 @@
 
 #include "glfw_util.h"
 #include "imgui.h"
-#include "imgui_te_engine.h" 
+#include "imgui_te_engine.h"
+#include "app_tests.h"
 #include "imgui_te_ui.h"  
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
@@ -377,8 +378,9 @@ main(int argc, char** argv)
                     // If the user inputted a filepath open it here.
                     rocprofvis_view_open_files({ cli_parser.GetOptionValue("file") });
                 }
-                ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
 
+                ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
+                RegisterAppTests(engine);
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
                 RocProfVis::View::EmbeddedImage icon(AMD_LOGO_png,

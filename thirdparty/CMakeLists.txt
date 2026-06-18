@@ -20,27 +20,15 @@ add_library(imgui STATIC
     imgui/backends/imgui_impl_vulkan.cpp
     imgui/backends/imgui_impl_opengl3.cpp
 )
-target_compile_definitions(imgui PUBLIC IMGUI_DEFINE_MATH_OPERATORS IMGUI_ENABLE_TEST_ENGINE IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1)
+target_compile_definitions(imgui PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+if(ROCPROFVIS_ENABLE_UI_TESTS)
+    target_compile_definitions(imgui PUBLIC IMGUI_ENABLE_TEST_ENGINE)
+endif()
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends)
 target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIRS})
 target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIR})
-
-add_library(imgui_test_engine STATIC
-    imgui_test_engine/imgui_test_engine/imgui_capture_tool.cpp
-    imgui_test_engine/imgui_test_engine/imgui_te_context.cpp
-    imgui_test_engine/imgui_test_engine/imgui_te_coroutine.cpp
-    imgui_test_engine/imgui_test_engine/imgui_te_engine.cpp
-    imgui_test_engine/imgui_test_engine/imgui_te_exporters.cpp
-    imgui_test_engine/imgui_test_engine/imgui_te_perftool.cpp
-    imgui_test_engine/imgui_test_engine/imgui_te_ui.cpp
-    imgui_test_engine/imgui_test_engine/imgui_te_utils.cpp
-)
-
-target_link_libraries(imgui_test_engine PUBLIC imgui)
-target_include_directories(imgui_test_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui_test_engine/imgui_test_engine/)
-
 
 add_library(implot STATIC
     implot/implot.cpp

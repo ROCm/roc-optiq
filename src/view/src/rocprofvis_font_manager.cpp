@@ -25,23 +25,9 @@ constexpr std::array FONT_AVAILABLE_SIZES = { 9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
                                               19.0f, 20.0f, 21.0f, 22.0f, 23.0f,
                                               25.0f, 27.0f, 29.0f, 31.0f, 35.0f };
 
-// Step offsets applied to the user-selected base index. Indexed by FontSize:
-// kSmall is one step below the base, kMedium is the base (what the user
-// picks in Settings), and kMedLarge / kLarge bump up from there.
-static constexpr int kSizeOffsets[FontManager::kNumSizes] = {
-    -1,  // FontSize::kSmall
-     0,  // FontSize::kMedium (== FontSize::kDefault, == user base)
-     1,  // FontSize::kMedLarge
-     2,  // FontSize::kLarge
-};
-
-static_assert(static_cast<int>(FontSize::kSmall)    == 0, "FontSize order changed");
-static_assert(static_cast<int>(FontSize::kMedium)   == 1, "FontSize order changed");
-static_assert(static_cast<int>(FontSize::kMedLarge) == 2, "FontSize order changed");
-static_assert(static_cast<int>(FontSize::kLarge)    == 3, "FontSize order changed");
-static_assert(static_cast<int>(FontSize::kDefault)  ==
-                  static_cast<int>(FontSize::kMedium),
-              "FontSize::kDefault should map to the user's base size");
+// Offsets applied to the user-selected base index (kMedium) to produce
+// kSmall/kMedium/kMedLarge/kLarge.
+static constexpr int kSizeOffsets[FontManager::kNumSizes] = { -1, 0, 1, 2 };
 
 static int
 GetClosestFontSizeIndex(const std::vector<float>& available_sizes, float font_size)
@@ -124,9 +110,7 @@ FontManager::SetFontSize(int idx)
         m_sizes[i] = m_available_sizes[size_idx];
     }
 
-    // ImGui's default font and its base size for the next frame. Everything
-    // not pushing an explicit font/size renders at FontSize::kDefault, so the
-    // user's slider value matches what they see in the UI.
+    // Set the default font and its base size for the next frame.
     ImGui::GetIO().FontDefault               = m_text_font;
     ImGui::GetStyle()._NextFrameFontSizeBase = m_sizes[static_cast<int>(FontSize::kDefault)];
 

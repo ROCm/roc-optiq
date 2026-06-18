@@ -1187,9 +1187,8 @@ AppWindow::HandleFontChanged()
         return;
     }
 
-    // Fit the slot to one framed line plus the child border so the status bar
-    // content cannot overflow into a scrollbar. FramePadding matches
-    // RenderStatusBar().
+    // Size the slot to one framed text line plus the child border so the
+    // status bar content does not overflow into a scrollbar.
     const ImGuiStyle& default_style = SettingsManager::GetInstance().GetDefaultStyle();
     const float       content_height =
         ImGui::GetFontSize() + (default_style.FramePadding.y * 2.0f);
@@ -1485,9 +1484,8 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
 void
 AppWindow::UpdateStatusBar()
 {
-    // ImGui's auto-DPI font scaling changes the font size without firing
-    // kFontSizeChanged, so detect size changes here and resize the status bar
-    // slot accordingly. This also covers user-driven font size changes.
+    // Auto-DPI changes the font size without firing kFontSizeChanged, so
+    // resize the status bar slot whenever the font size changes.
     const float font_size = ImGui::GetFontSize();
     if(font_size != m_last_font_size)
     {

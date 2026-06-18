@@ -225,8 +225,7 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::TextUnformatted("Fonts");
     ImGui::Separator();
 
-    // Font size slider. Slider works in integer points, then snaps the
-    // pending index to the closest entry in the font manager's size table.
+    // Font size slider in points; snapped to the closest available size.
     m_pending_font_size_index = m_fonts.ClampFontSizeIndex(m_pending_font_size_index);
     int min_size  = static_cast<int>(m_fonts.GetMinUserFontSize());
     int max_size  = static_cast<int>(m_fonts.GetMaxUserFontSize());
@@ -245,7 +244,7 @@ SettingsPanel::RenderDisplayOptions()
         SetTooltipStyled("Adjust the UI font within the supported layout range.");
     }
 
-    // Font preview at the pending size.
+    // Font preview
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Preview");
     ImGui::SameLine();

@@ -53,7 +53,7 @@ private:
     UserSettings        m_usersettings_initial;
     UserSettings        m_usersettings_previous;
 
-    // Pending font size index applied to user settings only when OK is pressed.
+    // Pending font size index, applied to user settings on OK.
     int m_pending_font_size_index;
 
     HotkeyActionId m_rebinding_action  = HotkeyActionId::kCount;

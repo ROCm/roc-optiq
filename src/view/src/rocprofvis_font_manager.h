@@ -49,8 +49,7 @@ public:
     ImFont* GetFont(FontType font_type);
     float   GetFontSize(FontSize font_type) const;
 
-    // User-controllable font size range. Sizes are in points and snap to
-    // entries in the internal size table.
+    // User-controllable font size (points), snapped to the available sizes.
     float GetMinUserFontSize() const;
     float GetMaxUserFontSize() const;
     float GetFontSizeAt(int idx) const;

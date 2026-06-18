@@ -77,6 +77,9 @@ public:
     void                               RenderEditMenuOptions() override;
     std::optional<DataProviderCleanupWork> DetachProviderCleanup() override;
     void                               SetAnalysisViewVisibility(bool visibility); 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    AnalysisView* GetAnalysisViewForTest() const;
+#endif
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
 

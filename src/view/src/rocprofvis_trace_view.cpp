@@ -595,7 +595,16 @@ TraceView::GetTimelineSelection() const
 {
     return m_timeline_selection;
 }
-
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+AnalysisView* TraceView::GetAnalysisViewForTest() const
+{
+    if (m_analysis_item == nullptr)
+    {
+        return nullptr;
+    }
+    return dynamic_cast<AnalysisView*>(m_analysis_item->m_item.get());
+}
+#endif
 std::shared_ptr<RocWidget>
 TraceView::GetToolbar()
 {

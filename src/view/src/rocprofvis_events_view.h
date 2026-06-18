@@ -27,7 +27,9 @@ public:
     void Render() override;
 
     void HandleEventSelectionChanged(const uint64_t event_id, const bool selected);
-
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    size_t GetEventItemCountForTest() const { return m_event_items.size(); }
+#endif
 private:
     struct EventItem
     {

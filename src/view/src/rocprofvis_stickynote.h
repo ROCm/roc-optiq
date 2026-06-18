@@ -80,6 +80,25 @@ private:
                              const ImVec2&                       window_position,
                              std::shared_ptr<TimePixelTransform> tpt) const;
 
+    // Always-visible timeline anchor. Returns true if hovered; reports the
+    // marker's bottom-right corner via out_marker_max.
+    bool RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
+                            ImVec2& out_marker_max);
+
+    // Floating expanded window. Returns true if hovered. marker_hovered links
+    // the pair glow so hovering the marker also lights the window.
+    bool RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered);
+
+    // Soft accent halo drawn just outside the given rect.
+    void DrawGlow(ImDrawList* draw_list, const ImVec2& min, const ImVec2& max,
+                  float rounding) const;
+
+    // True once the floating window has a real stored position.
+    bool IsExpandedPlaced() const
+    {
+        return m_expanded_screen_pos.x >= 0.0f && m_expanded_screen_pos.y >= 0.0f;
+    }
+
     double      m_time_ns;
     float       m_y_offset;  // Relative to m_track_id's top.
     uint64_t    m_track_id;
@@ -94,6 +113,7 @@ private:
     double      m_v_min_x;
     double      m_v_max_x;
     bool        m_is_minimized;
+    bool        m_request_focus = false;  // Raise the expanded window next frame.
     // Absolute screen position of the floating expanded window; (-1, -1) until
     // first placed. Tracked live so the window stays where the user moved it.
     // Not persisted to the project.

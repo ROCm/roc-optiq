@@ -34,6 +34,14 @@ constexpr float kAccentStripeAlpha    = 0.78f;
 constexpr float kHeaderSeparatorAlpha = 0.42f;
 constexpr float kIconHoverAlpha       = 0.12f;
 constexpr float kIconActiveAlpha      = 0.22f;
+constexpr float kMarkerRoundingScale  = 0.6f;
+constexpr float kMarkerShadowOffsetX  = 2.0f;
+constexpr float kMarkerShadowOffsetY  = 3.0f;
+constexpr int   kGlowLayers           = 3;
+constexpr float kGlowSpread           = 2.5f;
+constexpr float kGlowAlpha            = 0.5f;
+constexpr float kGlowThickness        = 2.0f;
+constexpr float kUnplacedCoord        = -1.0f;
 }  // namespace
 
 static int s_unique_id_counter = 0;
@@ -181,13 +189,116 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         return false;
     }
     EnsureBound(layout);
+
+    float  x          = tpt->TimeToPixel(m_time_ns);
+    float  y          = ResolveAnchorY(layout);
+    ImVec2 anchor_pos = ImVec2(window_position.x + x, window_position.y + y);
+
+    // The anchor marker is always shown so the note's timeline location stays
+    // visible even when expanded.
+    ImVec2 marker_max;
+    bool   marker_hovered = RenderAnchorMarker(draw_list, anchor_pos, marker_max);
+
+    bool window_hovered = false;
+    if(!m_is_minimized)
+    {
+        window_hovered = RenderExpandedWindow(anchor_pos, marker_hovered);
+    }
+
+    // Hovering either half lights both so the pair is easy to spot.
+    bool pair_hovered = marker_hovered || window_hovered;
+    if(pair_hovered)
+    {
+        const float marker_rounding =
+            SettingsManager::GetInstance().GetDefaultStyle().ChildRounding *
+            kMarkerRoundingScale;
+        DrawGlow(ImGui::GetForegroundDrawList(), anchor_pos, marker_max, marker_rounding);
+    }
+
+    if((pair_hovered || m_dragging) && draw_list)
+    {
+        RenderTimeIndicator(draw_list, window_position, tpt);
+    }
+
+    TimelineFocusManager::GetInstance().RequestLayerFocus(
+        pair_hovered ? Layer::kInteractiveLayer : Layer::kNone);
+    return pair_hovered;
+}
+
+bool
+StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
+                               ImVec2& out_marker_max)
+{
+    SettingsManager& settings     = SettingsManager::GetInstance();
+    ImU32            bg_color     = settings.GetColor(Colors::kStickyNoteBg);
+    ImU32            border_color = settings.GetColor(Colors::kStickyNoteBorder);
+    ImU32            shadow_color = settings.GetColor(Colors::kStickyNoteShadow);
+    ImU32            text_color   = settings.GetColor(Colors::kStickyNoteText);
+    ImU32            icon_hover_color =
+        ApplyAlpha(settings.GetColor(Colors::kStickyNoteText), kIconHoverAlpha);
+    ImU32 icon_active_color =
+        ApplyAlpha(settings.GetColor(Colors::kStickyNoteText), kIconActiveAlpha);
+    const float rounding =
+        settings.GetDefaultStyle().ChildRounding * kMarkerRoundingScale;
+
+    ImGui::SetCursorScreenPos(marker_pos);
+    std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
+    ImGui::BeginChild(child_id.c_str(), m_size, false, ImGuiWindowFlags_None);
+
+    ImFont* icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
+    ImGui::PushFont(icon_font);
+    ImVec2      icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
+    ImVec2      padding   = ImGui::GetStyle().FramePadding;
+    const float btn_size =
+        std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
+    out_marker_max = ImVec2(marker_pos.x + btn_size, marker_pos.y + btn_size);
+    bool hovered   = ImGui::IsMouseHoveringRect(marker_pos, out_marker_max);
+
+    if(draw_list)
+    {
+        draw_list->AddRectFilled(
+            ImVec2(marker_pos.x + kMarkerShadowOffsetX,
+                   marker_pos.y + kMarkerShadowOffsetY),
+            ImVec2(out_marker_max.x + kMarkerShadowOffsetX,
+                   out_marker_max.y + kMarkerShadowOffsetY),
+            shadow_color, rounding);
+        draw_list->AddRectFilled(marker_pos, out_marker_max, bg_color, rounding);
+        draw_list->AddRect(marker_pos, out_marker_max, border_color, rounding);
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+    ImGui::Button((std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str(),
+                  ImVec2(btn_size, btn_size));
+    if(ImGui::IsItemHovered() && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
+    {
+        if(m_is_minimized)
+        {
+            m_expanded_screen_pos = ImVec2(kUnplacedCoord, kUnplacedCoord);
+            m_is_minimized        = false;
+        }
+        else
+        {
+            m_request_focus = true;
+        }
+    }
+    ImGui::PopStyleColor(4);
+    ImGui::PopFont();
+    ImGui::EndChild();
+
+    return hovered;
+}
+
+bool
+StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered)
+{
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kStickyNoteBg);
     ImU32            border_color = settings.GetColor(Colors::kStickyNoteBorder);
     ImU32            header_color = settings.GetColor(Colors::kStickyNoteHeader);
-    ImU32            shadow_color = settings.GetColor(Colors::kStickyNoteShadow);
-    // Overlay derived from the note text color so hover/active stays in palette.
-    ImU32 icon_hover_color =
+    ImU32            icon_hover_color =
         ApplyAlpha(settings.GetColor(Colors::kStickyNoteText), kIconHoverAlpha);
     ImU32 icon_active_color =
         ApplyAlpha(settings.GetColor(Colors::kStickyNoteText), kIconActiveAlpha);
@@ -195,205 +306,158 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     ImU32 muted_text_color = settings.GetColor(Colors::kStickyNoteTextMuted);
     ImU32 accent_color     = settings.GetColor(Colors::kStickyNoteAccent);
 
-    const float rounding = settings.GetDefaultStyle().ChildRounding;
+    const float  rounding    = settings.GetDefaultStyle().ChildRounding;
+    const ImVec2 sticky_size = m_size;
 
-    float  x           = tpt->TimeToPixel(m_time_ns);
-    float  y           = ResolveAnchorY(layout);
-    ImVec2 sticky_pos  = ImVec2(window_position.x + x, window_position.y + y);
-    ImVec2 sticky_size = m_size;
-
-    if(m_is_minimized)
+    // Seed the first position from the marker anchor, then ImGui owns it.
+    if(!IsExpandedPlaced())
     {
-        ImGui::SetCursorScreenPos(sticky_pos);
-        std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
-        ImGui::BeginChild(child_id.c_str(), m_size, false, ImGuiWindowFlags_None);
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImVec2               anchor   = anchor_pos;
+        anchor.x = std::clamp(anchor.x, viewport->WorkPos.x,
+                              viewport->WorkPos.x + viewport->WorkSize.x - sticky_size.x);
+        anchor.y = std::clamp(anchor.y, viewport->WorkPos.y,
+                              viewport->WorkPos.y + viewport->WorkSize.y - sticky_size.y);
+        m_expanded_screen_pos = anchor;
+    }
 
-        ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(
-            FontType::kIcon);
-        ImGui::PushFont(icon_font);
-        ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
-        ImVec2 padding   = ImGui::GetStyle().FramePadding;
-        const float minimized_btn_size =
-            std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
-        ImVec2 btn_max = ImVec2(sticky_pos.x + minimized_btn_size,
-                                sticky_pos.y + minimized_btn_size);
-        bool hovered = ImGui::IsMouseHoveringRect(sticky_pos, btn_max);
-        if((hovered || m_dragging) && draw_list)
-        {
-            RenderTimeIndicator(draw_list, window_position, tpt);
-        }
-        if(draw_list)
-        {
-            draw_list->AddRectFilled(ImVec2(sticky_pos.x + 2.0f, sticky_pos.y + 3.0f),
-                                     ImVec2(btn_max.x + 2.0f, btn_max.y + 3.0f),
-                                     shadow_color, rounding * 0.6f);
-            draw_list->AddRectFilled(sticky_pos, btn_max, bg_color, rounding * 0.6f);
-            draw_list->AddRect(sticky_pos, btn_max, border_color, rounding * 0.6f);
-        }
+    if(m_request_focus)
+    {
+        ImGui::SetNextWindowFocus();
+        m_request_focus = false;
+    }
+    ImGui::SetNextWindowPos(m_expanded_screen_pos, ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(sticky_size, ImGuiCond_Appearing);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(kExpandedMinWidth, kExpandedMinHeight),
+                                        ImVec2(FLT_MAX, FLT_MAX));
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, kWindowBorderSize);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, bg_color);
+    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
+
+    const ImGuiWindowFlags window_flags =
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+        ImGuiWindowFlags_NoSavedSettings;
+
+    std::string window_id = "StickyNoteWindow##" + std::to_string(m_id);
+    bool        visible   = ImGui::Begin(window_id.c_str(), nullptr, window_flags);
+
+    bool hovered = false;
+    if(visible)
+    {
+        const ImVec2 win_pos  = ImGui::GetWindowPos();
+        const ImVec2 win_size = ImGui::GetWindowSize();
+
+        ImDrawList*  note_draw_list = ImGui::GetWindowDrawList();
+        const ImVec2 header_max =
+            ImVec2(win_pos.x + win_size.x, win_pos.y + kExpandedHeaderHeight);
+        note_draw_list->AddRectFilled(win_pos, header_max, header_color, rounding,
+                                      ImDrawFlags_RoundCornersTop);
+        note_draw_list->AddRectFilled(
+            win_pos, ImVec2(win_pos.x + kAccentStripeWidth, win_pos.y + win_size.y),
+            ApplyAlpha(accent_color, kAccentStripeAlpha), rounding,
+            ImDrawFlags_RoundCornersLeft);
+        note_draw_list->AddLine(ImVec2(win_pos.x, header_max.y),
+                                ImVec2(win_pos.x + win_size.x, header_max.y),
+                                ApplyAlpha(border_color, kHeaderSeparatorAlpha));
+
+        ImGui::SetCursorPos(ImVec2(
+            kNoteMargin, (kExpandedHeaderHeight - ImGui::GetTextLineHeight()) * 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+        ImGui::TextUnformatted(m_title.c_str());
+        ImGui::PopStyleColor();
+
+        ImFont* action_icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
+        ImGui::PushFont(action_icon_font);
+        ImVec2      edit_icon_size  = ImGui::CalcTextSize(ICON_EDIT);
+        ImVec2      close_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
+        const float action_btn_size =
+            std::max({kHeaderButtonMinSize, edit_icon_size.x + kHeaderButtonPadding,
+                      close_icon_size.x + kHeaderButtonPadding});
+        const float action_btn_y = (kExpandedHeaderHeight - action_btn_size) * 0.5f;
+
+        ImGui::SetCursorPos(ImVec2(
+            win_size.x - action_btn_size * 2.0f - kNoteMargin - kHeaderButtonGap,
+            action_btn_y));
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
-        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-        ImGui::Button(
-            (std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str(),
-            ImVec2(minimized_btn_size, minimized_btn_size));
-        if(ImGui::IsItemHovered() && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
+        ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
+        if(ImGui::Button(
+               (std::string(ICON_EDIT) + "##edit_" + std::to_string(m_id)).c_str(),
+               ImVec2(action_btn_size, action_btn_size)))
         {
-            m_expanded_screen_pos = ImVec2(-1, -1);
-            m_is_minimized        = false;
+            EventManager::GetInstance()->AddEvent(
+                std::make_shared<StickyNoteEvent>(m_id, m_project_id));
+        }
+        ImGui::PopStyleColor(4);
+
+        ImGui::SetCursorPos(
+            ImVec2(win_size.x - action_btn_size - kNoteMargin, action_btn_y));
+        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
+        ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
+        if(ImGui::Button(
+               (std::string(ICON_X_CIRCLED) + "##close_" + std::to_string(m_id)).c_str(),
+               ImVec2(action_btn_size, action_btn_size)))
+        {
+            m_is_minimized = true;
         }
         ImGui::PopStyleColor(4);
         ImGui::PopFont();
 
-        bool blocks_timeline_input = hovered;
-        if(blocks_timeline_input)
-        {
-            TimelineFocusManager::GetInstance().RequestLayerFocus(
-                Layer::kInteractiveLayer);
-        }
-        else
-        {
-            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
-        }
-
+        // Scroll only the note body; the header/actions stay pinned.
+        const float body_y      = kExpandedHeaderHeight + kNoteMargin;
+        const float body_height = std::max(0.0f, win_size.y - body_y - kNoteMargin);
+        ImGui::SetCursorPos(ImVec2(kNoteMargin, body_y));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
+        ImGui::BeginChild("StickyNoteBody",
+                          ImVec2(win_size.x - kNoteMargin * 2.0f, body_height), false);
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
+        ImGui::TextUnformatted(m_text.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
         ImGui::EndChild();
-        return blocks_timeline_input;
+        ImGui::PopStyleColor();
+
+        hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+        if(marker_hovered || hovered)
+        {
+            DrawGlow(ImGui::GetForegroundDrawList(), win_pos,
+                     ImVec2(win_pos.x + win_size.x, win_pos.y + win_size.y), rounding);
+        }
+
+        m_expanded_screen_pos = win_pos;
+        m_size                = win_size;
     }
-    else
+    ImGui::End();
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
+    return hovered;
+}
+
+void
+StickyNote::DrawGlow(ImDrawList* draw_list, const ImVec2& min, const ImVec2& max,
+                     float rounding) const
+{
+    if(!draw_list) return;
+
+    ImU32 glow = SettingsManager::GetInstance().GetColor(Colors::kStickyNoteAccent);
+    for(int i = kGlowLayers; i >= 1; --i)
     {
-        // Floating window: ImGui owns move/resize; we only seed the first
-        // position from the marker anchor, then track it live.
-        if(m_expanded_screen_pos.x < 0 || m_expanded_screen_pos.y < 0)
-        {
-            const ImGuiViewport* viewport = ImGui::GetMainViewport();
-            ImVec2               anchor   = sticky_pos;
-            anchor.x = std::clamp(anchor.x, viewport->WorkPos.x,
-                                  viewport->WorkPos.x + viewport->WorkSize.x - sticky_size.x);
-            anchor.y = std::clamp(anchor.y, viewport->WorkPos.y,
-                                  viewport->WorkPos.y + viewport->WorkSize.y - sticky_size.y);
-            m_expanded_screen_pos = anchor;
-        }
-
-        ImGui::SetNextWindowPos(m_expanded_screen_pos, ImGuiCond_Appearing);
-        ImGui::SetNextWindowSize(sticky_size, ImGuiCond_Appearing);
-        ImGui::SetNextWindowSizeConstraints(
-            ImVec2(kExpandedMinWidth, kExpandedMinHeight), ImVec2(FLT_MAX, FLT_MAX));
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, kWindowBorderSize);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, bg_color);
-        ImGui::PushStyleColor(ImGuiCol_Border, border_color);
-
-        const ImGuiWindowFlags window_flags =
-            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
-            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-            ImGuiWindowFlags_NoSavedSettings;
-
-        std::string window_id = "StickyNoteWindow##" + std::to_string(m_id);
-        bool        visible   = ImGui::Begin(window_id.c_str(), nullptr, window_flags);
-
-        bool blocks_timeline_input = false;
-        if(visible)
-        {
-            const ImVec2 win_pos  = ImGui::GetWindowPos();
-            const ImVec2 win_size = ImGui::GetWindowSize();
-
-            ImDrawList*  note_draw_list = ImGui::GetWindowDrawList();
-            const ImVec2 header_max     = ImVec2(win_pos.x + win_size.x,
-                                                 win_pos.y + kExpandedHeaderHeight);
-            note_draw_list->AddRectFilled(win_pos, header_max, header_color, rounding,
-                                          ImDrawFlags_RoundCornersTop);
-            note_draw_list->AddRectFilled(
-                win_pos, ImVec2(win_pos.x + kAccentStripeWidth, win_pos.y + win_size.y),
-                ApplyAlpha(accent_color, kAccentStripeAlpha), rounding,
-                ImDrawFlags_RoundCornersLeft);
-            note_draw_list->AddLine(ImVec2(win_pos.x, header_max.y),
-                                    ImVec2(win_pos.x + win_size.x, header_max.y),
-                                    ApplyAlpha(border_color, kHeaderSeparatorAlpha));
-
-            ImGui::SetCursorPos(
-                ImVec2(kNoteMargin,
-                       (kExpandedHeaderHeight - ImGui::GetTextLineHeight()) * 0.5f));
-            ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-            ImGui::TextUnformatted(m_title.c_str());
-            ImGui::PopStyleColor();
-
-            ImFont* action_icon_font =
-                SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
-            ImGui::PushFont(action_icon_font);
-            ImVec2      edit_icon_size  = ImGui::CalcTextSize(ICON_EDIT);
-            ImVec2      close_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
-            const float action_btn_size =
-                std::max({kHeaderButtonMinSize, edit_icon_size.x + kHeaderButtonPadding,
-                          close_icon_size.x + kHeaderButtonPadding});
-            const float action_btn_y = (kExpandedHeaderHeight - action_btn_size) * 0.5f;
-
-            ImGui::SetCursorPos(ImVec2(win_size.x - action_btn_size * 2.0f - kNoteMargin -
-                                           kHeaderButtonGap,
-                                       action_btn_y));
-            ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
-            ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
-            if(ImGui::Button((std::string(ICON_EDIT) + "##edit_" + std::to_string(m_id))
-                                 .c_str(),
-                             ImVec2(action_btn_size, action_btn_size)))
-            {
-                EventManager::GetInstance()->AddEvent(
-                    std::make_shared<StickyNoteEvent>(m_id, m_project_id));
-            }
-            ImGui::PopStyleColor(4);
-
-            ImGui::SetCursorPos(
-                ImVec2(win_size.x - action_btn_size - kNoteMargin, action_btn_y));
-            ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
-            ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
-            if(ImGui::Button(
-                   (std::string(ICON_X_CIRCLED) + "##close_" + std::to_string(m_id)).c_str(),
-                   ImVec2(action_btn_size, action_btn_size)))
-            {
-                m_is_minimized = true;
-            }
-            ImGui::PopStyleColor(4);
-            ImGui::PopFont();
-
-            // Scroll only the note body; the header/actions stay pinned.
-            const float body_y      = kExpandedHeaderHeight + kNoteMargin;
-            const float body_height = std::max(0.0f, win_size.y - body_y - kNoteMargin);
-            ImGui::SetCursorPos(ImVec2(kNoteMargin, body_y));
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
-            ImGui::BeginChild("StickyNoteBody",
-                              ImVec2(win_size.x - kNoteMargin * 2.0f, body_height), false);
-            ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() +
-                                   ImGui::GetContentRegionAvail().x);
-            ImGui::TextUnformatted(m_text.c_str());
-            ImGui::PopTextWrapPos();
-            ImGui::PopStyleColor();
-            ImGui::EndChild();
-            ImGui::PopStyleColor();
-
-            blocks_timeline_input =
-                ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
-            if(blocks_timeline_input && draw_list)
-            {
-                RenderTimeIndicator(draw_list, window_position, tpt);
-            }
-
-            m_expanded_screen_pos = win_pos;
-            m_size                = win_size;
-        }
-        ImGui::End();
-
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(3);
-
-        TimelineFocusManager::GetInstance().RequestLayerFocus(
-            blocks_timeline_input ? Layer::kInteractiveLayer : Layer::kNone);
-        return blocks_timeline_input;
+        float spread = kGlowSpread * static_cast<float>(i);
+        float alpha  = kGlowAlpha *
+                      (1.0f - static_cast<float>(i - 1) / static_cast<float>(kGlowLayers));
+        draw_list->AddRect(ImVec2(min.x - spread, min.y - spread),
+                           ImVec2(max.x + spread, max.y + spread),
+                           ApplyAlpha(glow, alpha), rounding + spread, ImDrawFlags_None,
+                           kGlowThickness);
     }
 }
 
@@ -403,16 +467,13 @@ StickyNote::RenderDragGhost(ImDrawList* draw_list, const ImVec2& screen_pos) con
     if(!draw_list) return;
 
     // Mirrors the minimized-note marker drawn in Render().
-    constexpr float kShadowOffsetX = 2.0f;
-    constexpr float kShadowOffsetY = 3.0f;
-    constexpr float kRoundingScale = 0.6f;
-
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kStickyNoteBg);
     ImU32            border_color = settings.GetColor(Colors::kStickyNoteBorder);
     ImU32            shadow_color = settings.GetColor(Colors::kStickyNoteShadow);
     ImU32            text_color   = settings.GetColor(Colors::kStickyNoteText);
-    const float rounding = settings.GetDefaultStyle().ChildRounding * kRoundingScale;
+    const float rounding =
+        settings.GetDefaultStyle().ChildRounding * kMarkerRoundingScale;
 
     ImFont* icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
     ImGui::PushFont(icon_font);
@@ -426,9 +487,9 @@ StickyNote::RenderDragGhost(ImDrawList* draw_list, const ImVec2& screen_pos) con
     ImVec2 box_max = ImVec2(screen_pos.x + btn_size, screen_pos.y + btn_size);
 
     draw_list->AddRectFilled(
-        ImVec2(screen_pos.x + kShadowOffsetX, screen_pos.y + kShadowOffsetY),
-        ImVec2(box_max.x + kShadowOffsetX, box_max.y + kShadowOffsetY), shadow_color,
-        rounding);
+        ImVec2(screen_pos.x + kMarkerShadowOffsetX, screen_pos.y + kMarkerShadowOffsetY),
+        ImVec2(box_max.x + kMarkerShadowOffsetX, box_max.y + kMarkerShadowOffsetY),
+        shadow_color, rounding);
     draw_list->AddRectFilled(screen_pos, box_max, bg_color, rounding);
     draw_list->AddRect(screen_pos, box_max, border_color, rounding);
 

@@ -100,7 +100,7 @@ jobs:
         if: steps.run_tests.outcome == 'failure'
         uses: actions/upload-artifact@v7
         with:
-          name: test-logs-ubuntu-${{ matrix.os-version }}
+          name: asan-test-logs-ubuntu-${{ matrix.os-version }}
           path: |
             ${{ env.BUILD_DIR }}/ctest-results.xml
             ${{ env.BUILD_DIR }}/Testing/Temporary/**

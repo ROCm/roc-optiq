@@ -150,7 +150,11 @@ private:
 
     EventManager::SubscriptionToken m_tabclosed_event_token;
     EventManager::SubscriptionToken m_tabselected_event_token;
-    EventManager::SubscriptionToken m_font_changed_token;
+
+    // Last observed ImGui font size, used to detect DPI-driven font changes.
+    // ImGui's auto-DPI resizes fonts without firing kFontSizeChanged (e.g. when
+    // the window moves to a monitor with a different content scale).
+    float m_last_font_size;
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();

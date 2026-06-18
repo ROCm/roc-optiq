@@ -32,8 +32,7 @@ SettingsPanel::SettingsPanel(SettingsManager& settings)
 , m_usersettings_default(settings.GetDefaultUserSettings())
 , m_usersettings_initial(m_usersettings_default)
 , m_usersettings(settings.GetUserSettings())
-, m_font_settings({ m_usersettings.display_settings.dpi_based_scaling,
-                    m_usersettings.display_settings.font_size_index })
+, m_pending_font_size_index(m_usersettings.display_settings.font_size_index)
 {
 }
 
@@ -42,12 +41,11 @@ SettingsPanel::~SettingsPanel() {}
 void
 SettingsPanel::Show()
 {
-    m_should_open               = true;
-    m_category                  = Display;
-    m_usersettings_initial      = m_usersettings;
-    m_usersettings_previous     = m_usersettings;
-    m_font_settings.dpi_scaling = m_usersettings.display_settings.dpi_based_scaling;
-    m_font_settings.size_index  = m_usersettings.display_settings.font_size_index;
+    m_should_open             = true;
+    m_category                = Display;
+    m_usersettings_initial    = m_usersettings;
+    m_usersettings_previous   = m_usersettings;
+    m_pending_font_size_index = m_usersettings.display_settings.font_size_index;
 }
 
 void
@@ -157,10 +155,8 @@ SettingsPanel::Render()
                                  ImGui::GetStyle().ItemSpacing.x - 2 * button_width);
             if(ImGui::Button("OK", ImVec2(button_width, 0)))
             {
-                m_usersettings.display_settings.dpi_based_scaling =
-                    m_font_settings.dpi_scaling;
                 m_usersettings.display_settings.font_size_index =
-                    m_font_settings.size_index;
+                    m_pending_font_size_index;
 
                 m_settings_changed   = true;
                 m_settings_confirmed = true;
@@ -229,65 +225,32 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::TextUnformatted("Fonts");
     ImGui::Separator();
 
-    // DPI-based scaling toggle
-    ImGui::Checkbox("DPI-based Font Scaling", &m_font_settings.dpi_scaling);
-    if(ImGui::IsItemHovered())
-    {
-        SetTooltipStyled("Automatically scale font size based on display DPI.");
-    }
+    // Font size slider. Slider works in integer points, then snaps the
+    // pending index to the closest entry in the font manager's size table.
+    m_pending_font_size_index = m_fonts.ClampFontSizeIndex(m_pending_font_size_index);
+    int min_size  = static_cast<int>(m_fonts.GetMinUserFontSize());
+    int max_size  = static_cast<int>(m_fonts.GetMaxUserFontSize());
+    int font_size = static_cast<int>(m_fonts.GetFontSizeAt(m_pending_font_size_index));
 
-    // Font size section
-    float button_width = ImGui::CalcTextSize("+").x + 2 * style.FramePadding.x;
-    ImGui::BeginDisabled(m_font_settings.dpi_scaling);
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Font Size");
     ImGui::SameLine();
-    ImGui::BeginDisabled(m_font_settings.size_index < 1);
-    if(ImGui::Button("-", ImVec2(button_width, 0)))
+    ImGui::SetNextItemWidth(240.0f);
+    if(ImGui::SliderInt("##font_size", &font_size, min_size, max_size, "%d pt"))
     {
-        m_font_settings.size_index--;
+        m_pending_font_size_index = m_fonts.GetFontSizeIndex(static_cast<float>(font_size));
     }
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::CalcTextSize("00").x + 2 * style.FramePadding.x +
-                            ImGui::GetFrameHeightWithSpacing());
-    const auto& available_sizes   = m_fonts.GetAvailableSizes();
-    std::string current_label     = std::to_string(static_cast<int>(available_sizes[m_font_settings.size_index]));
-    if(ImGui::BeginCombo("##font_size", current_label.c_str()))
-    {
-        for(int i = 0; i < static_cast<int>(available_sizes.size()); ++i)
-        {
-            std::string label = std::to_string(static_cast<int>(available_sizes[i]));
-            if(ImGui::Selectable(label.c_str(), i == m_font_settings.size_index))
-                m_font_settings.size_index = i;
-            if(i == m_font_settings.size_index)
-                ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
-    ImGui::SameLine();
-    ImGui::BeginDisabled(m_font_settings.size_index >
-                         static_cast<int>(m_fonts.GetAvailableSizes().size()) - 2);
-    if(ImGui::Button("+", ImVec2(button_width, 0)))
-    {
-        m_font_settings.size_index++;
-    }
-    ImGui::EndDisabled();
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Increase or decrease the font size for the UI.");
+        SetTooltipStyled("Adjust the UI font within the supported layout range.");
     }
-    ImGui::EndDisabled();
-    // Font preview
+
+    // Font preview at the pending size.
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Preview");
     ImGui::SameLine();
     ImFont* preview_font = m_fonts.GetFont(FontType::kDefault);
-    int     preview_idx  = m_font_settings.dpi_scaling ? m_fonts.GetDPIScaledFontIndex()
-                                                        : m_font_settings.size_index;
-    float preview_size = available_sizes.empty() ? m_fonts.GetFontSize(FontSize::kDefault)
-                       : available_sizes[std::max(0, std::min(preview_idx,
-                             static_cast<int>(available_sizes.size()) - 1))];
+    float   preview_size = m_fonts.GetFontSizeAt(m_pending_font_size_index);
     if(preview_font)
     {
         ImGui::Spacing();
@@ -352,10 +315,8 @@ void
 SettingsPanel::ResetDisplayOptions()
 {
     m_usersettings.display_settings = m_usersettings_default.display_settings;
-    m_font_settings.dpi_scaling =
-        m_usersettings_default.display_settings.dpi_based_scaling;
-    m_font_settings.size_index = m_usersettings_default.display_settings.font_size_index;
-    m_settings_changed         = true;
+    m_pending_font_size_index       = m_usersettings_default.display_settings.font_size_index;
+    m_settings_changed              = true;
 }
 
 void

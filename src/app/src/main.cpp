@@ -51,15 +51,6 @@ drop_callback(GLFWwindow* window, int count, const char* paths[])
 }
 
 static void
-content_scale_callback(GLFWwindow* window, float xscale, float yscale)
-{
-    // Unused parameters
-    (void) window;
-    (void) yscale;
-    rocprofvis_view_set_dpi(xscale);
-}
-
-static void
 close_callback(GLFWwindow* window)
 {
     g_render_options =
@@ -333,12 +324,6 @@ main(int argc, char** argv)
             {
                 // After init: window may be recreated (e.g. Vulkan -> OpenGL fallback)
                 glfwSetDropCallback(window, drop_callback);
-                glfwSetWindowContentScaleCallback(window, content_scale_callback);
-                {
-                    float xs, ys;
-                    glfwGetWindowContentScale(window, &xs, &ys);
-                    content_scale_callback(window, xs, ys);
-                }
                 glfwSetWindowCloseCallback(window, close_callback);
                 glfwSetWindowSizeCallback(window, window_size_change_callback);
                 glfwSetKeyCallback(window, key_callback);
@@ -350,9 +335,14 @@ main(int argc, char** argv)
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+                io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+                io.ConfigDpiScaleFonts             = true;
+                io.ConfigDpiScaleViewports         = true;
+                io.ConfigViewportsNoTaskBarIcon    = false;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
 
                 ImGui::StyleColorsLight();
+                ImGui::GetStyle().FontScaleMain = 1.0f;
 
                 rocprofvis_view_init([window](int notification) -> void {
                     app_notification_callback(window, notification);
@@ -446,6 +436,16 @@ main(int argc, char** argv)
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
+                        if((io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
+                        {
+                            GLFWwindow* backup_current_context = glfwGetCurrentContext();
+                            ImGui::UpdatePlatformWindows();
+                            ImGui::RenderPlatformWindowsDefault();
+                            if(backup_current_context != nullptr)
+                            {
+                                glfwMakeContextCurrent(backup_current_context);
+                            }
+                        }
                         backend.m_present(&backend);
                     }
 

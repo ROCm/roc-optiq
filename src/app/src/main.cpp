@@ -3,6 +3,8 @@
 
 #include "glfw_util.h"
 #include "imgui.h"
+#include "imgui_te_engine.h" 
+#include "imgui_te_ui.h"  
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
@@ -348,6 +350,7 @@ main(int argc, char** argv)
 
                 IMGUI_CHECKVERSION();
                 ImGui::CreateContext();
+                ImGuiTestEngine* engine = ImGuiTestEngine_CreateContext(); 
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
@@ -374,6 +377,7 @@ main(int argc, char** argv)
                     // If the user inputted a filepath open it here.
                     rocprofvis_view_open_files({ cli_parser.GetOptionValue("file") });
                 }
+                ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -434,7 +438,7 @@ main(int argc, char** argv)
 
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
-
+                    ImGuiTestEngine_ShowTestEngineWindows(engine, nullptr);
                     rocprofvis_view_render(g_render_options);
                     g_render_options = rocprofvis_view_render_options_t::
                         kRocProfVisViewRenderOption_None;
@@ -443,25 +447,27 @@ main(int argc, char** argv)
                     ImDrawData* draw_data    = ImGui::GetDrawData();
                     const bool  is_minimized = (draw_data->DisplaySize.x <= 0.0f ||
                                                draw_data->DisplaySize.y <= 0.0f);
+                    ImGuiTestEngine_PreSwap(engine);
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
                         backend.m_present(&backend);
                     }
+                    ImGuiTestEngine_PostSwap(engine);
 
                     if(g_frames_to_render > 0)
                     {
                         --g_frames_to_render;
                     }
                 }
-
+                ImGuiTestEngine_Stop(engine);
                 rocprofvis_view_destroy();
                 rocprofvis_view_set_texture_backend(nullptr, nullptr, nullptr);
                 backend.m_shutdown(&backend);
 
                 ImGui_ImplGlfw_Shutdown();
                 ImGui::DestroyContext();
-
+                ImGuiTestEngine_DestroyContext(engine);
                 backend.m_destroy(&backend);
             }
             else

@@ -279,7 +279,7 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                             result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, entry_counter + 1);
                                             if(result == kRocProfVisResultSuccess)
                                             {
-                                                result = array.SetObject(kRPVControllerArrayEntryIndexed, entry_counter++, (rocprofvis_handle_t*) call_stack);
+                                                result = array.SetOwnedObject(kRPVControllerArrayEntryIndexed, entry_counter++, (rocprofvis_handle_t*) call_stack);
                                             }
                                             if(result != kRocProfVisResultSuccess)
                                             {
@@ -386,10 +386,14 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
 
                                         if(result == kRocProfVisResultSuccess)
                                         {
-                                            result = array.SetObject(
+                                            result = array.SetOwnedObject(
                                                 kRPVControllerArrayEntryIndexed,
                                                 entry_counter++,
                                                 (rocprofvis_handle_t*) ext_data);
+                                        }
+                                        if(result != kRocProfVisResultSuccess)
+                                        {
+                                            delete ext_data;
                                         }
                                     }
                                 }
@@ -426,10 +430,14 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
                                                 kRPVDataTypeString, kRocProfVisEventArgumentData, position, type);
                                         if(result == kRocProfVisResultSuccess)
                                         {
-                                            result = array.SetObject(
+                                            result = array.SetOwnedObject(
                                                 kRPVControllerArrayEntryIndexed,
                                                 entry_counter++,
                                                 (rocprofvis_handle_t*) arg_data);
+                                        }
+                                        if(result != kRocProfVisResultSuccess)
+                                        {
+                                            delete arg_data;
                                         }
                                     }
                                 }

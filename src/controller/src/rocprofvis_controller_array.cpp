@@ -277,6 +277,36 @@ rocprofvis_result_t Array::SetObject(rocprofvis_property_t property, uint64_t in
     }
     return result;
 }
+rocprofvis_result_t Array::SetOwnedObject(rocprofvis_property_t property, uint64_t index,
+                                rocprofvis_handle_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerArrayEntryIndexed:
+            {
+                if(index < m_array.size())
+                {
+                    m_array[index].SetType(kRPVControllerPrimitiveTypeObject);
+                    result = m_array[index].SetOwnedObject(value);
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
+            default:
+            {
+                result = UnhandledProperty(property);
+                break;
+            }
+        }
+    }
+    return result;
+}
 rocprofvis_result_t Array::SetString(rocprofvis_property_t property, uint64_t index,
                                 char const* value) 
 {

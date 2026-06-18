@@ -300,9 +300,7 @@ TimelineView::BuildTrackLayout()
 void
 TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 {
-    bool movement_drag   = false;
-    bool movement_resize = false;
-    // m_visible_center     = current_center;
+    bool movement_drag = false;
 
     TrackLayout layout = BuildTrackLayout();
 
@@ -326,7 +324,6 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 
             movement_drag |=
                 note.HandleDrag(window_position, m_tpt, m_dragged_sticky_id, layout);
-            movement_resize |= note.HandleResize(window_position, m_tpt, layout);
         }
 
         bool annotation_blocks_timeline_input = false;
@@ -355,7 +352,7 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         }
         m_stop_user_interaction |= annotation_blocks_timeline_input;
     }
-    m_stop_user_interaction |= movement_drag || movement_resize;
+    m_stop_user_interaction |= movement_drag;
 
     RenderTimelineViewOptionsMenu(window_position);
     m_annotations->ShowStickyNotePopup();

@@ -121,15 +121,15 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(231, 196, 65, 255),   // Colors::kMemChartHit
     IM_COL32(235, 82, 98, 255),    // Colors::kMemChartStall
     IM_COL32(0, 0, 0, 85),         // Colors::kMemChartShadow
-    IM_COL32(58, 53, 36, 245),     // Colors::kStickyNoteBg
-    IM_COL32(62, 116, 168, 220),   // Colors::kStickyNoteBorder
-    IM_COL32(70, 62, 40, 248),     // Colors::kStickyNoteHeader
-    IM_COL32(0, 0, 0, 85),         // Colors::kStickyNoteShadow
-    IM_COL32(238, 243, 255, 255),  // Colors::kStickyNoteText
-    IM_COL32(145, 156, 174, 255),  // Colors::kStickyNoteTextMuted
-    IM_COL32(225, 203, 78, 235),   // Colors::kStickyNoteAccent
-    IM_COL32(200, 200, 80, 255),   // Colors::kStickyNoteResize
-    IM_COL32(200, 100, 100, 255),  // Colors::kStickyNoteResizeActive
+    IM_COL32(240, 214, 92, 250),   // Colors::kStickyNoteBg
+    IM_COL32(193, 154, 40, 235),   // Colors::kStickyNoteBorder
+    IM_COL32(232, 200, 78, 252),   // Colors::kStickyNoteHeader
+    IM_COL32(0, 0, 0, 110),        // Colors::kStickyNoteShadow
+    IM_COL32(48, 40, 12, 255),     // Colors::kStickyNoteText
+    IM_COL32(112, 92, 40, 255),    // Colors::kStickyNoteTextMuted
+    IM_COL32(176, 130, 24, 235),   // Colors::kStickyNoteAccent
+    IM_COL32(176, 130, 24, 255),   // Colors::kStickyNoteResize
+    IM_COL32(150, 96, 24, 255),    // Colors::kStickyNoteResizeActive
     IM_COL32(200, 16, 32, 150),    // Colors::kBannerFill
     IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
     IM_COL32(255, 255, 255, 255),  // Colors::kBannerText
@@ -237,15 +237,15 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(177, 130, 0, 255),    // Colors::kMemChartHit
     IM_COL32(204, 55, 70, 255),    // Colors::kMemChartStall
     IM_COL32(76, 95, 128, 35),     // Colors::kMemChartShadow
-    IM_COL32(255, 252, 228, 248),  // Colors::kStickyNoteBg
-    IM_COL32(91, 139, 184, 205),   // Colors::kStickyNoteBorder
-    IM_COL32(255, 247, 204, 248),  // Colors::kStickyNoteHeader
+    IM_COL32(255, 245, 186, 250),  // Colors::kStickyNoteBg
+    IM_COL32(214, 176, 66, 230),   // Colors::kStickyNoteBorder
+    IM_COL32(255, 236, 158, 250),  // Colors::kStickyNoteHeader
     IM_COL32(76, 95, 128, 35),     // Colors::kStickyNoteShadow
-    IM_COL32(25, 38, 56, 255),     // Colors::kStickyNoteText
-    IM_COL32(92, 106, 126, 255),   // Colors::kStickyNoteTextMuted
-    IM_COL32(168, 128, 0, 235),    // Colors::kStickyNoteAccent
-    IM_COL32(200, 200, 80, 255),   // Colors::kStickyNoteResize
-    IM_COL32(200, 100, 100, 255),  // Colors::kStickyNoteResizeActive
+    IM_COL32(56, 46, 14, 255),     // Colors::kStickyNoteText
+    IM_COL32(120, 100, 50, 255),   // Colors::kStickyNoteTextMuted
+    IM_COL32(190, 146, 34, 235),   // Colors::kStickyNoteAccent
+    IM_COL32(190, 146, 34, 255),   // Colors::kStickyNoteResize
+    IM_COL32(150, 100, 24, 255),   // Colors::kStickyNoteResizeActive
     IM_COL32(200, 16, 32, 150),    // Colors::kBannerFill
     IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
     IM_COL32(255, 255, 255, 255),  // Colors::kBannerText

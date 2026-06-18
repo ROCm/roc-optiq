@@ -44,11 +44,9 @@ public:
 
     // Draws a non-interactive marker, used above a track's reorder preview.
     void RenderDragGhost(ImDrawList* draw_list, const ImVec2& screen_pos) const;
-    bool HandleResize(const ImVec2&                       window_position,
-                      std::shared_ptr<TimePixelTransform> conversion_manager,
-                      const TrackLayout&                  layout);
 
-    // Drag interaction
+    // Drag interaction (minimized marker only; the expanded note is a floating
+    // window that owns its own move/resize).
     bool HandleDrag(const ImVec2&                       window_position,
                     std::shared_ptr<TimePixelTransform> conversion_manager,
                     int& dragged_id, const TrackLayout& layout);
@@ -90,15 +88,16 @@ private:
     std::string m_text;
     std::string m_title;
     std::string m_project_id;
-    bool        m_dragging      = false;
-    ImVec2      m_drag_offset   = ImVec2(0, 0);
-    ImVec2      m_resize_offset = ImVec2(0, 0);
+    bool        m_dragging    = false;
+    ImVec2      m_drag_offset = ImVec2(0, 0);
     bool        m_is_visible;
     double      m_v_min_x;
     double      m_v_max_x;
-    bool        m_resizing = false;
     bool        m_is_minimized;
-    ImVec2      m_expanded_screen_pos = ImVec2(-1, -1);  // Temporary position for expanded note (not saved)
+    // Absolute screen position of the floating expanded window; (-1, -1) until
+    // first placed. Tracked live so the window stays where the user moved it.
+    // Not persisted to the project.
+    ImVec2      m_expanded_screen_pos = ImVec2(-1, -1);
 };
 
 }  // namespace View

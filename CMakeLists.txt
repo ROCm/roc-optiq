@@ -26,6 +26,7 @@ option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" O
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
+option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 
 if(COMPUTE_UI_SUPPORT) 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
@@ -164,7 +165,6 @@ if(APPLE)
         src/app/src/rocprofvis_imgui_vulkan.cpp
         src/app/src/rocprofvis_imgui_opengl.cpp
         src/app/src/main.cpp
-        src/app/src/app_tests.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
         src/app/src/rocprofvis_platform_helpers_macos.mm
@@ -175,7 +175,6 @@ else()
         src/app/src/rocprofvis_imgui_vulkan.cpp
         src/app/src/rocprofvis_imgui_opengl.cpp
         src/app/src/main.cpp
-        src/app/src/app_tests.cpp
         src/app/src/glfw_util.cpp
         src/app/src/rocprofvis_cli_parser.cpp
         ${VIEW_FILES})
@@ -225,7 +224,6 @@ target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
 target_link_libraries(${TARGET_NAME} PRIVATE imgui)
-target_link_libraries(${TARGET_NAME} PRIVATE imgui_test_engine)
 target_link_libraries(${TARGET_NAME} PRIVATE implot)
 target_link_libraries(${TARGET_NAME} PRIVATE glfw)
 target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-controller)
@@ -234,6 +232,34 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+
+if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
+    set(IMGUI_TEST_ENGINE_DIR
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui_test_engine/imgui_test_engine)
+    add_library(imgui_test_engine STATIC
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_capture_tool.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_context.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_coroutine.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_engine.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_exporters.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_perftool.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_ui.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_utils.cpp
+    )
+    target_compile_definitions(imgui_test_engine PUBLIC
+        IMGUI_ENABLE_TEST_ENGINE
+        IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1
+    )
+    target_include_directories(imgui_test_engine PUBLIC
+        ${IMGUI_TEST_ENGINE_DIR}
+        ${IMGUI_TEST_ENGINE_DIR}/thirdparty/Str
+    )
+    target_link_libraries(imgui_test_engine PUBLIC imgui)
+
+    target_sources(${TARGET_NAME} PRIVATE src/app/src/app_tests.cpp)
+    target_compile_definitions(${TARGET_NAME} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
+    target_link_libraries(${TARGET_NAME} PRIVATE imgui_test_engine)
+endif()
 
 if(APPLE)
     # rocprofvis_platform_helpers_macos.mm uses AppKit (+[NSEvent modifierFlags]).

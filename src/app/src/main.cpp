@@ -415,7 +415,7 @@ main(int argc, char** argv)
                     }
                     bool tests_running = false;
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-                    tests_running = !ImGuiTestEngine_IsTestQueueEmpty(engine);
+                    tests_running = ImGuiTestEngine_GetIO(engine).IsRunningTests;
 #endif
                     if(g_frames_to_render > 0 || tests_running)
                     {
@@ -450,7 +450,12 @@ main(int argc, char** argv)
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-                    ImGuiTestEngine_ShowTestEngineWindows(engine, nullptr);
+                    // Hide the panel while a test runs so it can't cover the UI
+                    // the test clicks on; it reappears when the run finishes.
+                    if(!ImGuiTestEngine_GetIO(engine).IsRunningTests)
+                    {
+                        ImGuiTestEngine_ShowTestEngineWindows(engine, nullptr);
+                    }
 #endif
                     rocprofvis_view_render(g_render_options);
                     g_render_options = rocprofvis_view_render_options_t::

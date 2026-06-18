@@ -450,8 +450,7 @@ main(int argc, char** argv)
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-                    // Hide the panel while a test runs so it can't cover the UI
-                    // the test clicks on; it reappears when the run finishes.
+                    // Hide the panel during a run so it can't cover the UI under test.
                     if(!ImGuiTestEngine_GetIO(engine).IsRunningTests)
                     {
                         ImGuiTestEngine_ShowTestEngineWindows(engine, nullptr);

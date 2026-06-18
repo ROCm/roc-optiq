@@ -31,10 +31,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "events_view_populates");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        // --- Reach the live EventsView through the singleton + view tree. ---
         AppWindow* app = AppWindow::GetInstance();
         Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);          // requires a trace to be open
+        IM_CHECK(project != nullptr);
         if (project == nullptr) return;
         TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
         IM_CHECK(tv != nullptr);
@@ -46,22 +45,17 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(ev != nullptr);
         if (ev == nullptr) return;
 
-        // Nothing selected yet, so the details panel should be empty.
         IM_CHECK(ev->GetEventItemCountForTest() == 0);
 
-        // --- Drive a real event selection via the UI. ---
-        // The timeline is a canvas with no widget IDs, so events are hit by
-        // coordinate clicks. Anchor x in FIXED PIXELS, not screen fractions: the
-        // sidebar is a fixed ~400px, so the graph always starts at the same x
-        // regardless of window size. The vertical position varies, so sweep most
-        // of the window height and stop when a click lands an event (the
-        // accessor confirms selection registered in the model).
-        // WIP: coarse blind sweep; deterministic computed-coordinate click to come.
+        // Timeline events are canvas-drawn (no widget IDs), so click by coordinate.
+        // Anchor x in fixed pixels past the fixed ~400px sidebar; the vertical
+        // position varies, so sweep the height and stop on the first hit.
+        // WIP: coarse blind sweep, deterministic computed-coordinate click to come.
         const ImVec2 size       = ImGui::GetIO().DisplaySize;
-        const float  graph_x0   = 400.0f + 10.0f;     // just past the 400px sidebar
-        const float  graph_x1   = size.x - 20.0f;     // to near the right edge
-        const float  graph_y0   = size.y * 0.10f;     // sweep most of the height to
-        const float  graph_y1   = size.y * 0.90f;     // find the track lane wherever it is
+        const float  graph_x0   = 400.0f + 10.0f;
+        const float  graph_x1   = size.x - 20.0f;
+        const float  graph_y0   = size.y * 0.10f;
+        const float  graph_y1   = size.y * 0.90f;
         const int    rows       = 20;
         const int    cols       = 30;
 
@@ -76,7 +70,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
                 const float px = graph_x0 + (graph_x1 - graph_x0) * xt;
                 ctx->MouseTeleportToPos(ImVec2(px, py));
                 ctx->MouseClick(0);
-                ctx->Yield(3);                 // let selection + FetchEvent settle
+                ctx->Yield(3);
                 if (ev->GetEventItemCountForTest() > 0)
                 {
                     landed = true;
@@ -84,7 +78,6 @@ void RegisterAppTests(ImGuiTestEngine* e)
             }
         }
 
-        // A click landed on an event and the details panel populated.
         IM_CHECK(ev->GetEventItemCountForTest() > 0);
     };
 }

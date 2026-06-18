@@ -625,16 +625,24 @@ if(WIN32)
                 endif()
             endif()
         endforeach()
-        # 2) Fallback: many Windows OpenSSL distributions (e.g. Shining Light /
-        #    choco) ship libssl-*/libcrypto-* DLLs in the install root or bin/
-        #    while the import .lib lives under lib/VC/...; IMPORTED_LOCATION is
-        #    then unset. Glob the install tree for the runtime DLLs.
-        if(NOT _ossl_dlls AND OPENSSL_ROOT_DIR)
+        # 2) Fallback: MSVC import libs live under lib/VC/... while DLLs are in
+        #    the install root or bin/. FindOpenSSL sets IMPORTED_LOCATION(_RELEASE)
+        #    to the .lib, not the .dll, and often does not set OPENSSL_ROOT_DIR at
+        #    all—derive the prefix from OPENSSL_INCLUDE_DIR (../include) or hints.
+        set(_ossl_install_prefix "")
+        if(DEFINED OPENSSL_ROOT_DIR AND OPENSSL_ROOT_DIR)
+            set(_ossl_install_prefix "${OPENSSL_ROOT_DIR}")
+        elseif(DEFINED OPENSSL_INCLUDE_DIR AND OPENSSL_INCLUDE_DIR)
+            get_filename_component(_ossl_install_prefix "${OPENSSL_INCLUDE_DIR}" DIRECTORY)
+        elseif(DEFINED ENV{OPENSSL_ROOT_DIR} AND NOT "$ENV{OPENSSL_ROOT_DIR}" STREQUAL "")
+            set(_ossl_install_prefix "$ENV{OPENSSL_ROOT_DIR}")
+        endif()
+        if(NOT _ossl_dlls AND _ossl_install_prefix)
             file(GLOB _ossl_dlls
-                "${OPENSSL_ROOT_DIR}/libssl*.dll"
-                "${OPENSSL_ROOT_DIR}/libcrypto*.dll"
-                "${OPENSSL_ROOT_DIR}/bin/libssl*.dll"
-                "${OPENSSL_ROOT_DIR}/bin/libcrypto*.dll")
+                "${_ossl_install_prefix}/libssl*.dll"
+                "${_ossl_install_prefix}/libcrypto*.dll"
+                "${_ossl_install_prefix}/bin/libssl*.dll"
+                "${_ossl_install_prefix}/bin/libcrypto*.dll")
         endif()
         if(_ossl_dlls)
             foreach(_ossl_dll ${_ossl_dlls})
@@ -649,8 +657,8 @@ if(WIN32)
         else()
             message(WARNING
                 "CRYPTO_BACKEND=OpenSSL: could not locate libssl/libcrypto DLLs to "
-                "stage next to the executable. Set OPENSSL_ROOT_DIR or place the DLLs "
-                "on PATH so roc-optiq can run.")
+                "stage next to the executable. Set OPENSSL_ROOT_DIR (or OPENSSL_INCLUDE_DIR) "
+                "so the install prefix is known, or place the DLLs on PATH so roc-optiq can run.")
         endif()
     endif()
 endif()

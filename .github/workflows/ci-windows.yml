@@ -153,8 +153,19 @@ jobs:
         run: |
           mkdir build
           $opensslArgs = @()
-          if ("${{ inputs.crypto_backend }}" -eq "OpenSSL" -and $env:OPENSSL_LIB_EAY_RELEASE) {
-            $opensslArgs = @("-DLIB_EAY_RELEASE=$env:OPENSSL_LIB_EAY_RELEASE", "-DSSL_EAY_RELEASE=$env:OPENSSL_SSL_EAY_RELEASE", "-DOPENSSL_INCLUDE_DIR=$env:OPENSSL_ROOT_DIR\include")
+          if ("${{ inputs.crypto_backend }}" -eq "OpenSSL") {
+            # Prefer the install tree we just configured (choco) over any other
+            # OpenSSL on the runner image (e.g. C:\Program Files\OpenSSL).
+            if ($env:OPENSSL_ROOT_DIR) {
+              $opensslArgs += "-DOPENSSL_ROOT_DIR=$($env:OPENSSL_ROOT_DIR)"
+            }
+            if ($env:OPENSSL_LIB_EAY_RELEASE) {
+              $opensslArgs += @(
+                "-DLIB_EAY_RELEASE=$env:OPENSSL_LIB_EAY_RELEASE",
+                "-DSSL_EAY_RELEASE=$env:OPENSSL_SSL_EAY_RELEASE",
+                "-DOPENSSL_INCLUDE_DIR=$env:OPENSSL_ROOT_DIR\include"
+              )
+            }
           }
           cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} @opensslArgs
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4

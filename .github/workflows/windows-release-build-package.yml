@@ -79,8 +79,17 @@ jobs:
         run: |
           mkdir build
           $opensslArgs = @()
-          if ("${{ env.CRYPTO_BACKEND }}" -eq "OpenSSL" -and $env:OPENSSL_LIB_EAY_RELEASE) {
-            $opensslArgs = @("-DLIB_EAY_RELEASE=$env:OPENSSL_LIB_EAY_RELEASE", "-DSSL_EAY_RELEASE=$env:OPENSSL_SSL_EAY_RELEASE", "-DOPENSSL_INCLUDE_DIR=$env:OPENSSL_ROOT_DIR\include")
+          if ("${{ env.CRYPTO_BACKEND }}" -eq "OpenSSL") {
+            if ($env:OPENSSL_ROOT_DIR) {
+              $opensslArgs += "-DOPENSSL_ROOT_DIR=$($env:OPENSSL_ROOT_DIR)"
+            }
+            if ($env:OPENSSL_LIB_EAY_RELEASE) {
+              $opensslArgs += @(
+                "-DLIB_EAY_RELEASE=$env:OPENSSL_LIB_EAY_RELEASE",
+                "-DSSL_EAY_RELEASE=$env:OPENSSL_SSL_EAY_RELEASE",
+                "-DOPENSSL_INCLUDE_DIR=$env:OPENSSL_ROOT_DIR\include"
+              )
+            }
           }
           cmake --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ env.CRYPTO_BACKEND }} @opensslArgs
           cmake --build ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_BUILD }}" --parallel 4

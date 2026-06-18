@@ -145,3 +145,4 @@ jobs:
     secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}

@@ -20,6 +20,10 @@ on:
         description: 'Enable the internal banner?'
         type: boolean
         default: false
+      upload_to_github:
+        description: 'Upload build artifacts to GitHub Artifacts?'
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       os_version:
@@ -36,6 +40,10 @@ on:
         default: 'Linux Release Build'
       enable_internal_banner:
         description: 'Enable the internal banner?'
+        type: boolean
+        default: false
+      upload_to_github:
+        description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
         default: false
 
@@ -105,6 +113,22 @@ jobs:
             ${{ env.BUILD_DIR }}/ctest-results.xml
             ${{ env.BUILD_DIR }}/Testing/Temporary/**
           retention-days: 7
+      
+      - name: Prepare Distribution Artifacts
+        run: |
+          mkdir ${{ env.DIST_DIR }}
+          cp ${{ env.BUILD_DIR }}/*.tar.gz ${{ env.DIST_DIR }}/
+          cp ${{ env.BUILD_DIR }}/*.deb ${{ env.DIST_DIR }}/
+          ls -l ${{ env.DIST_DIR }}/
+      
+      - name: Upload GitHub Artifacts
+        #if: ${{ inputs.upload_to_github }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: roc-optiq-asan-ubuntu-${{ matrix.os-version }}-release
+          path: |
+            ${{ env.DIST_DIR }}/
+          retention-days: 2
 
       - name: Announce Test Failure
         if: steps.run_tests.outcome == 'failure'

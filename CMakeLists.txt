@@ -638,13 +638,34 @@ if(WIN32)
             set(_ossl_install_prefix "$ENV{OPENSSL_ROOT_DIR}")
         endif()
         if(NOT _ossl_dlls AND _ossl_install_prefix)
+            # Match only the DLLs for the OpenSSL we linked against. Install trees
+            # (especially OpenSSL 4) may also ship older-generation names (e.g.
+            # libcrypto-3-x64.dll next to libcrypto-4-x64.dll); a broad libssl*
+            # glob would copy redundant runtimes.
+            set(_ossl_ssl_glob "libssl*.dll")
+            set(_ossl_crypto_glob "libcrypto*.dll")
+            set(_ossl_maj "")
+            if(DEFINED ROCPROFVIS_OPENSSL_VERSION_MAJOR AND NOT ROCPROFVIS_OPENSSL_VERSION_MAJOR STREQUAL "")
+                set(_ossl_maj "${ROCPROFVIS_OPENSSL_VERSION_MAJOR}")
+            elseif(DEFINED OPENSSL_VERSION_MAJOR AND NOT OPENSSL_VERSION_MAJOR STREQUAL "")
+                set(_ossl_maj "${OPENSSL_VERSION_MAJOR}")
+            endif()
+            if(_ossl_maj)
+                set(_ossl_ssl_glob "libssl-${_ossl_maj}*.dll")
+                set(_ossl_crypto_glob "libcrypto-${_ossl_maj}*.dll")
+            endif()
             file(GLOB _ossl_dlls
-                "${_ossl_install_prefix}/libssl*.dll"
-                "${_ossl_install_prefix}/libcrypto*.dll"
-                "${_ossl_install_prefix}/bin/libssl*.dll"
-                "${_ossl_install_prefix}/bin/libcrypto*.dll")
+                "${_ossl_install_prefix}/${_ossl_ssl_glob}"
+                "${_ossl_install_prefix}/${_ossl_crypto_glob}"
+                "${_ossl_install_prefix}/bin/${_ossl_ssl_glob}"
+                "${_ossl_install_prefix}/bin/${_ossl_crypto_glob}")
+        endif()
+        if(_ossl_install_prefix)
+            message(STATUS "OpenSSL Windows runtime staging prefix: ${_ossl_install_prefix}")
         endif()
         if(_ossl_dlls)
+            list(JOIN _ossl_dlls ", " _ossl_dlls_msg)
+            message(STATUS "OpenSSL Windows runtime DLLs (POST_BUILD): ${_ossl_dlls_msg}")
             foreach(_ossl_dll ${_ossl_dlls})
                 add_custom_command(
                     TARGET ${TARGET_NAME} POST_BUILD

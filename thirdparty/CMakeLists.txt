@@ -19,6 +19,8 @@ set(CRYPTO_BACKEND "mbedTLS" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
 
 if (CRYPTO_BACKEND STREQUAL "mbedTLS")
 
+	unset(ROCPROFVIS_OPENSSL_VERSION_MAJOR CACHE)
+
 	set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
 	set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 	set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
@@ -66,6 +68,13 @@ if (CRYPTO_BACKEND STREQUAL "OpenSSL")
     endif()
     if(TARGET OpenSSL::Crypto)
         set_target_properties(OpenSSL::Crypto PROPERTIES IMPORTED_GLOBAL TRUE)
+    endif()
+
+    # Root CMakeLists Windows DLL staging needs the linked major; FindOpenSSL
+    # sets OPENSSL_VERSION_MAJOR only in this directory scope.
+    if(WIN32 AND DEFINED OPENSSL_VERSION_MAJOR AND NOT OPENSSL_VERSION_MAJOR STREQUAL "")
+        set(ROCPROFVIS_OPENSSL_VERSION_MAJOR "${OPENSSL_VERSION_MAJOR}" CACHE INTERNAL
+            "OpenSSL major for Windows libssl/libcrypto DLL staging glob")
     endif()
 
     	set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)

@@ -615,12 +615,29 @@ if(WIN32)
     # imported targets with the .dll as IMPORTED_LOCATION (distribution-dependent),
     # so copy the resolved OpenSSL DLLs explicitly when that backend is enabled.
     if(CRYPTO_BACKEND STREQUAL "OpenSSL")
-        get_target_property(ROCPROFVIS_OPENSSL_SSL_DLL OpenSSL::SSL IMPORTED_LOCATION)
-        get_target_property(ROCPROFVIS_OPENSSL_CRYPTO_DLL OpenSSL::Crypto IMPORTED_LOCATION)
-        foreach(_ossl_dll
-                "${ROCPROFVIS_OPENSSL_SSL_DLL}"
-                "${ROCPROFVIS_OPENSSL_CRYPTO_DLL}")
-            if(_ossl_dll AND _ossl_dll MATCHES "\\.dll$")
+        set(_ossl_dlls "")
+        # 1) Preferred: the imported target's IMPORTED_LOCATION, when it is a DLL.
+        foreach(_ossl_target OpenSSL::SSL OpenSSL::Crypto)
+            if(TARGET ${_ossl_target})
+                get_target_property(_loc ${_ossl_target} IMPORTED_LOCATION)
+                if(_loc AND _loc MATCHES "\\.dll$")
+                    list(APPEND _ossl_dlls "${_loc}")
+                endif()
+            endif()
+        endforeach()
+        # 2) Fallback: many Windows OpenSSL distributions (e.g. Shining Light /
+        #    choco) ship libssl-*/libcrypto-* DLLs in the install root or bin/
+        #    while the import .lib lives under lib/VC/...; IMPORTED_LOCATION is
+        #    then unset. Glob the install tree for the runtime DLLs.
+        if(NOT _ossl_dlls AND OPENSSL_ROOT_DIR)
+            file(GLOB _ossl_dlls
+                "${OPENSSL_ROOT_DIR}/libssl*.dll"
+                "${OPENSSL_ROOT_DIR}/libcrypto*.dll"
+                "${OPENSSL_ROOT_DIR}/bin/libssl*.dll"
+                "${OPENSSL_ROOT_DIR}/bin/libcrypto*.dll")
+        endif()
+        if(_ossl_dlls)
+            foreach(_ossl_dll ${_ossl_dlls})
                 add_custom_command(
                     TARGET ${TARGET_NAME} POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -628,7 +645,12 @@ if(WIN32)
                         "$<TARGET_FILE_DIR:${TARGET_NAME}>"
                     COMMENT "Copying OpenSSL runtime DLL ${_ossl_dll} to executable directory"
                 )
-            endif()
-        endforeach()
+            endforeach()
+        else()
+            message(WARNING
+                "CRYPTO_BACKEND=OpenSSL: could not locate libssl/libcrypto DLLs to "
+                "stage next to the executable. Set OPENSSL_ROOT_DIR or place the DLLs "
+                "on PATH so roc-optiq can run.")
+        endif()
     endif()
 endif()

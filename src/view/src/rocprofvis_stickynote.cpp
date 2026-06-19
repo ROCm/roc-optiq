@@ -212,7 +212,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         const float marker_rounding =
             SettingsManager::GetInstance().GetDefaultStyle().ChildRounding *
             kMarkerRoundingScale;
-        DrawGlow(ImGui::GetForegroundDrawList(), anchor_pos, marker_max, marker_rounding);
+        DrawGlow(draw_list, anchor_pos, marker_max, marker_rounding);
     }
 
     if((pair_hovered || m_dragging) && draw_list)

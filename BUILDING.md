@@ -212,6 +212,8 @@ The SSH and remote-profiling features use `libssh2`, which needs a crypto backen
 
 When the OpenSSL backend is built, its runtime libraries are deployed automatically: DLLs are copied next to `roc-optiq.exe` on Windows, `libssl`/`libcrypto` dylibs are staged into the `.app` bundle's `Frameworks` on macOS, and the Linux `.deb`/`.rpm` declares the system OpenSSL runtime as a dependency.
 
+On macOS the staging step (`cmake/macos_openssl_fixup.sh.in`) resolves the **versioned** dylibs (e.g. `libssl.3.dylib`), copies them under their real names, and rewrites every recorded OpenSSL load command to `@rpath/<name>` using `otool`. This avoids the failure mode where the executable kept an absolute Homebrew reference (`Library not loaded: /opt/homebrew/.../libssl.3.dylib`) and crashed at launch on a clean machine.
+
 Example (OpenSSL backend on Linux):
 
 ```bash

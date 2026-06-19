@@ -357,8 +357,20 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
 
     # When the OpenSSL backend is opt-in enabled, stage libssl/libcrypto into the
     # bundle's Frameworks so the .app is self-contained instead of relying on a
-    # Homebrew install at runtime. install_name_tool rewrites the dylib IDs and
-    # the executable's load paths to resolve via @executable_path/../Frameworks.
+    # Homebrew install at runtime.
+    #
+    # IMPORTANT: the executable does not record OpenSSL::SSL's IMPORTED_LOCATION
+    # (often the unversioned `libssl.dylib` symlink). It records each dylib's own
+    # install name (LC_ID_DYLIB), which Homebrew sets to a VERSIONED, absolute
+    # path such as `/opt/homebrew/.../libssl.3.dylib`. Rewriting based on the
+    # unversioned IMPORTED_LOCATION therefore no-ops and the build leaks an
+    # absolute Homebrew reference, so a clean machine crashes at launch with
+    # "Library not loaded: /opt/homebrew/*/libssl.3.dylib".
+    #
+    # To be robust across OpenSSL layouts we resolve the real on-disk dylibs and
+    # the executable's actual dependency paths at build time with otool, then
+    # rewrite every OpenSSL reference to `@rpath/<versioned-name>`. The staged
+    # files keep their versioned names so the load commands match.
     if(CRYPTO_BACKEND STREQUAL "OpenSSL")
         get_target_property(ROCPROFVIS_OPENSSL_SSL_LIB OpenSSL::SSL IMPORTED_LOCATION)
         get_target_property(ROCPROFVIS_OPENSSL_CRYPTO_LIB OpenSSL::Crypto IMPORTED_LOCATION)
@@ -368,42 +380,19 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
                 "find_package(OpenSSL) did not resolve dylib locations. Install "
                 "openssl@3 and set OPENSSL_ROOT_DIR.")
         endif()
-        get_filename_component(ROCPROFVIS_OPENSSL_SSL_NAME "${ROCPROFVIS_OPENSSL_SSL_LIB}" NAME)
-        get_filename_component(ROCPROFVIS_OPENSSL_CRYPTO_NAME "${ROCPROFVIS_OPENSSL_CRYPTO_LIB}" NAME)
+        set(ROCPROFVIS_OPENSSL_FIXUP_SCRIPT
+            "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_macos_openssl_fixup.sh")
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos_openssl_fixup.sh.in"
+            "${ROCPROFVIS_OPENSSL_FIXUP_SCRIPT}"
+            @ONLY)
         add_custom_command(
             TARGET ${TARGET_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${ROCPROFVIS_OPENSSL_CRYPTO_LIB}"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${ROCPROFVIS_OPENSSL_SSL_LIB}"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_SSL_NAME}"
-            COMMAND chmod u+w
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_SSL_NAME}"
-            COMMAND install_name_tool -id
-                "@rpath/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
-            COMMAND install_name_tool -id
-                "@rpath/${ROCPROFVIS_OPENSSL_SSL_NAME}"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_SSL_NAME}"
-            # libssl depends on libcrypto; point it at the bundled copy.
-            COMMAND install_name_tool -change
-                "${ROCPROFVIS_OPENSSL_CRYPTO_LIB}"
-                "@rpath/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
-                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/${ROCPROFVIS_OPENSSL_SSL_NAME}"
-            # Rewrite the executable's references to the bundled dylibs.
-            COMMAND install_name_tool -change
-                "${ROCPROFVIS_OPENSSL_SSL_LIB}"
-                "@rpath/${ROCPROFVIS_OPENSSL_SSL_NAME}"
-                "$<TARGET_FILE:${TARGET_NAME}>"
-            COMMAND install_name_tool -change
-                "${ROCPROFVIS_OPENSSL_CRYPTO_LIB}"
-                "@rpath/${ROCPROFVIS_OPENSSL_CRYPTO_NAME}"
+            COMMAND /bin/bash "${ROCPROFVIS_OPENSSL_FIXUP_SCRIPT}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
                 "$<TARGET_FILE:${TARGET_NAME}>"
             COMMENT "Staging OpenSSL libraries into the app bundle"
+            VERBATIM
         )
     endif()
 

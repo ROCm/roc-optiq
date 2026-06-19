@@ -1,0 +1,114 @@
+#!/bin/bash
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# Stage Homebrew/system OpenSSL (libssl + libcrypto) into a macOS .app bundle and
+# rewrite all install names so the app is self-contained.
+#
+# Why this is not done inline with install_name_tool -change "<IMPORTED_LOCATION>":
+# find_package(OpenSSL) usually reports the UNVERSIONED symlink (libssl.dylib),
+# but the executable records each dylib's own install name (LC_ID_DYLIB), which
+# Homebrew sets to a VERSIONED absolute path (e.g. /opt/homebrew/.../libssl.3.dylib).
+# Rewriting by the unversioned path no-ops and leaves a hard Homebrew dependency,
+# so a clean machine crashes at launch ("Library not loaded: .../libssl.3.dylib").
+#
+# This script resolves the actual versioned dylibs, copies them under their real
+# names, and rewrites references discovered at build time via otool, so the load
+# commands always match the staged files.
+#
+# Args:
+#   $1 = path to the .app bundle
+#   $2 = path to the executable inside the bundle
+#
+# CMake-substituted values (@ONLY):
+#   OpenSSL::SSL    IMPORTED_LOCATION : @ROCPROFVIS_OPENSSL_SSL_LIB@
+#   OpenSSL::Crypto IMPORTED_LOCATION : @ROCPROFVIS_OPENSSL_CRYPTO_LIB@
+
+set -euo pipefail
+
+BUNDLE="$1"
+EXE="$2"
+FRAMEWORKS="${BUNDLE}/Contents/Frameworks"
+
+SSL_HINT="@ROCPROFVIS_OPENSSL_SSL_LIB@"
+CRYPTO_HINT="@ROCPROFVIS_OPENSSL_CRYPTO_LIB@"
+
+# Resolve a dylib hint (possibly an unversioned symlink) to the real on-disk file
+# that carries the version in its name, e.g. .../libssl.dylib -> .../libssl.3.dylib.
+resolve_real() {
+    local p="$1"
+    # Follow symlinks to the concrete file.
+    if command -v realpath >/dev/null 2>&1; then
+        p="$(realpath "$p" 2>/dev/null || echo "$p")"
+    else
+        # macOS bash lacks readlink -f historically; walk manually.
+        while [ -L "$p" ]; do
+            local t
+            t="$(readlink "$p")"
+            case "$t" in
+                /*) p="$t" ;;
+                *)  p="$(cd "$(dirname "$p")" && cd "$(dirname "$t")" && pwd)/$(basename "$t")" ;;
+            esac
+        done
+    fi
+    echo "$p"
+}
+
+SSL_REAL="$(resolve_real "$SSL_HINT")"
+CRYPTO_REAL="$(resolve_real "$CRYPTO_HINT")"
+
+if [ ! -f "$SSL_REAL" ] || [ ! -f "$CRYPTO_REAL" ]; then
+    echo "macos_openssl_fixup: could not resolve OpenSSL dylibs" >&2
+    echo "  ssl:    hint='$SSL_HINT' real='$SSL_REAL'" >&2
+    echo "  crypto: hint='$CRYPTO_HINT' real='$CRYPTO_REAL'" >&2
+    exit 1
+fi
+
+SSL_NAME="$(basename "$SSL_REAL")"
+CRYPTO_NAME="$(basename "$CRYPTO_REAL")"
+
+mkdir -p "$FRAMEWORKS"
+cp -f "$CRYPTO_REAL" "${FRAMEWORKS}/${CRYPTO_NAME}"
+cp -f "$SSL_REAL" "${FRAMEWORKS}/${SSL_NAME}"
+chmod u+w "${FRAMEWORKS}/${CRYPTO_NAME}" "${FRAMEWORKS}/${SSL_NAME}"
+
+# Set canonical bundle-relative IDs.
+install_name_tool -id "@rpath/${CRYPTO_NAME}" "${FRAMEWORKS}/${CRYPTO_NAME}"
+install_name_tool -id "@rpath/${SSL_NAME}" "${FRAMEWORKS}/${SSL_NAME}"
+
+# Rewrite every OpenSSL reference recorded in a binary to the bundled @rpath copy.
+# Matches whatever absolute/relative path the linker actually baked in (handles the
+# versioned Homebrew install name that the unversioned hint would miss).
+rewrite_openssl_refs() {
+    local target="$1"
+    local dep
+    while IFS= read -r dep; do
+        case "$dep" in
+            *"/${SSL_NAME}")
+                install_name_tool -change "$dep" "@rpath/${SSL_NAME}" "$target"
+                ;;
+            *"/${CRYPTO_NAME}")
+                install_name_tool -change "$dep" "@rpath/${CRYPTO_NAME}" "$target"
+                ;;
+            *libssl*.dylib)
+                install_name_tool -change "$dep" "@rpath/${SSL_NAME}" "$target"
+                ;;
+            *libcrypto*.dylib)
+                install_name_tool -change "$dep" "@rpath/${CRYPTO_NAME}" "$target"
+                ;;
+        esac
+    done < <(otool -L "$target" | tail -n +2 | awk '{print $1}')
+}
+
+# libssl depends on libcrypto; point it at the bundled copy.
+rewrite_openssl_refs "${FRAMEWORKS}/${SSL_NAME}"
+# Rewrite the executable's references to the bundled dylibs.
+rewrite_openssl_refs "$EXE"
+
+# Ensure the executable can find Contents/Frameworks via @rpath. Adding a duplicate
+# rpath is an error, so only add when absent.
+if ! otool -l "$EXE" | grep -A2 LC_RPATH | grep -q "@executable_path/../Frameworks"; then
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "$EXE"
+fi
+
+echo "macos_openssl_fixup: staged ${SSL_NAME} and ${CRYPTO_NAME} into ${FRAMEWORKS}"

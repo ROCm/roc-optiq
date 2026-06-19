@@ -335,14 +335,10 @@ main(int argc, char** argv)
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-                io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-                io.ConfigDpiScaleFonts             = true;
-                io.ConfigDpiScaleViewports         = true;
-                io.ConfigViewportsNoTaskBarIcon    = false;
+                io.ConfigDpiScaleFonts               = true;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
 
                 ImGui::StyleColorsLight();
-                ImGui::GetStyle().FontScaleMain = 1.0f;
 
                 rocprofvis_view_init([window](int notification) -> void {
                     app_notification_callback(window, notification);
@@ -436,16 +432,6 @@ main(int argc, char** argv)
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
-                        if((io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
-                        {
-                            GLFWwindow* backup_current_context = glfwGetCurrentContext();
-                            ImGui::UpdatePlatformWindows();
-                            ImGui::RenderPlatformWindowsDefault();
-                            if(backup_current_context != nullptr)
-                            {
-                                glfwMakeContextCurrent(backup_current_context);
-                            }
-                        }
                         backend.m_present(&backend);
                     }
 

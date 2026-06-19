@@ -503,20 +503,17 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 {
     if(!text || !*text) return;
 
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImDrawList*    dl       = ImGui::GetForegroundDrawList(viewport);
-    const ImVec2&  vp_pos   = viewport->Pos;
-    const ImVec2&  vp_size  = viewport->Size;
+    ImDrawList*   dl   = ImGui::GetForegroundDrawList();
+    const ImVec2& disp = ImGui::GetIO().DisplaySize;
 
-    // Parameters
-    static constexpr float BASE_FONT_SIZE   = 15.0f;
-    const float            ui_scale         = ImGui::GetFontSize() / BASE_FONT_SIZE;
+    // Parameters. Scale with the font so the banner tracks ImGui's DPI font scaling.
+    const float            ui_scale         = ImGui::GetFontSize() / 15.0f;
     const float            ribbon_thickness = 20.0f * ui_scale;
     const float            min_base_length  = 150.0f * ui_scale;
-    SettingsManager&       settings         = SettingsManager::GetInstance();
-    const ImU32            col_fill         = settings.GetColor(Colors::kBannerFill);
-    const ImU32            col_border       = settings.GetColor(Colors::kBannerBorder);
-    const ImU32            col_text         = settings.GetColor(Colors::kBannerText);
+    SettingsManager& settings    = SettingsManager::GetInstance();
+    const ImU32      col_fill     = settings.GetColor(Colors::kBannerFill);
+    const ImU32      col_border   = settings.GetColor(Colors::kBannerBorder);
+    const ImU32      col_text     = settings.GetColor(Colors::kBannerText);
 
     // use precomputed cos/sin for 45 degrees to avoid trig calls
     static constexpr float c_45 = 0.70710678118f;
@@ -534,10 +531,9 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     const float half_thick = ribbon_thickness * 0.5f;
 
     // Center a rotated rectangle so it visually emerges from the top-right corner
-    ImVec2 center =
-        ImVec2(vp_pos.x + vp_size.x - half_len * 0.5f, vp_pos.y + half_len * 0.5f);
+    ImVec2 center = ImVec2(disp.x - half_len * 0.5f, half_len * 0.5f);
 
-    // Axis-aligned rect (local space before rotation)
+    // Axis‑aligned rect (local space before rotation)
     ImVec2 local[4] = { ImVec2(-half_len, -half_thick), ImVec2(half_len, -half_thick),
                         ImVec2(half_len, half_thick), ImVec2(-half_len, half_thick) };
 
@@ -562,10 +558,10 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 
     for(int i = v_start; i < v_end; ++i)
     {
-        ImDrawVert&  v = dl->VtxBuffer[i];
-        const ImVec2 p = v.pos - center;
-        v.pos.x        = center.x + p.x * c_45 - p.y * s_45;
-        v.pos.y        = center.y + p.x * s_45 + p.y * c_45;
+        ImDrawVert&   v = dl->VtxBuffer[i];
+        const ImVec2  p = v.pos - center;
+        v.pos.x         = center.x + p.x * c_45 - p.y * s_45;
+        v.pos.y         = center.y + p.x * s_45 + p.y * c_45;
     }
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER

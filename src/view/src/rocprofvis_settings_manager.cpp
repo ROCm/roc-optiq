@@ -451,8 +451,7 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
         if(ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE].isLong())
         {
             m_usersettings.display_settings.font_size_index =
-                GetFontManager().ClampFontSizeIndex(
-                    static_cast<int>(ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE].getLong()));
+                static_cast<int>(ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE].getLong());
         }
     }
 }
@@ -529,8 +528,6 @@ SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
     }
     ApplyColorStyling();
 
-    m_usersettings.display_settings.font_size_index =
-        GetFontManager().ClampFontSizeIndex(m_usersettings.display_settings.font_size_index);
     GetFontManager().SetFontSize(m_usersettings.display_settings.font_size_index);
 }
 

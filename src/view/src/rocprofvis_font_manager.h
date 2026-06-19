@@ -46,17 +46,10 @@ public:
      */
     bool Init();
 
-    ImFont* GetFont(FontType font_type);
-    float   GetFontSize(FontSize font_type) const;
-
-    // User-controllable font size (points), snapped to the available sizes.
-    float GetMinUserFontSize() const;
-    float GetMaxUserFontSize() const;
-    float GetFontSizeAt(int idx) const;
-    int   GetFontSizeIndex(float font_size) const;
-    int   GetDefaultFontSizeIndex() const;
-    int   ClampFontSizeIndex(int idx) const;
-    void  SetFontSize(int idx);
+    const std::vector<float> GetAvailableSizes() const;
+    ImFont*                  GetFont(FontType font_type);
+    float                    GetFontSize(FontSize font_type) const;
+    void                     SetFontSize(int idx);
 
     static constexpr int kNumSizes = static_cast<int>(FontSize::__kLastSize);
 

@@ -83,6 +83,57 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(ev->GetEventItemCountForTest() > 0);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "timeline_zoom_hotkey");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = tv->GetTimelineViewForTest();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        // The W/S zoom hotkeys only fire while the timeline has pseudo-focus,
+        // which a mouse-down inside the graph sets. Park the cursor on the first
+        // rendered event (its captured center is a point known to be in-graph)
+        // and press the mouse to acquire focus.
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(2);
+
+        const float zoom_before = tv->GetTimelineViewForTest()->GetViewCoords().z;
+
+        // Zoom in: hotkey is consumed in the timeline's per-frame input handler,
+        // so keep the cursor parked in-graph while pressing.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+        const float zoom_in = tv->GetTimelineViewForTest()->GetViewCoords().z;
+        IM_CHECK(zoom_in > zoom_before);
+
+        // Zoom out returns toward the starting zoom.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_S);
+        ctx->Yield(3);
+        const float zoom_out = tv->GetTimelineViewForTest()->GetViewCoords().z;
+        IM_CHECK(zoom_out < zoom_in);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "minimap_toggle_drives_click");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

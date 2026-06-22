@@ -137,6 +137,74 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(zoom_out < zoom_in);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "bookmark_save_restore_hotkey");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = tv->GetTimelineViewForTest();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        // Ctrl+1 always writes bookmark slot 1, and m_bookmarks is a slot-keyed
+        // map, so a re-save overwrites rather than grows it. Clear first so the
+        // 0->1 assertion holds on every invocation in a persistent process (the
+        // interactive harness reuses one process; headless is fresh each run).
+        tv->ClearBookmarksForTest();
+        ctx->Yield(1);
+        IM_CHECK(tv->GetBookmarkCountForTest() == 0);
+
+        // HandleHotKeys is gated on IsWindowFocused(RootAndChildWindows) for
+        // "Main Window". Headless that focus is implicit, but interactively the
+        // Test Engine window holds it and the chord is dropped. Focus explicitly,
+        // then click an event to land the cursor in-graph.
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->WindowFocus("Main Window");
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseClick(0);
+        ctx->Yield(2);
+
+        // Save the current view, then record the coords the bookmark captured.
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_1);
+        ctx->Yield(3);
+        IM_CHECK(tv->GetBookmarkCountForTest() == 1);
+        const ViewCoords saved = tv->GetTimelineViewForTest()->GetViewCoords();
+        const double saved_span = saved.v_max_x - saved.v_min_x;
+        IM_CHECK(saved_span > 0.0);
+        if (saved_span <= 0.0) return;
+
+        // Zoom in so the view range changes away from the saved one.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+        const ViewCoords moved = tv->GetTimelineViewForTest()->GetViewCoords();
+        IM_CHECK((moved.v_max_x - moved.v_min_x) < saved_span);
+
+        // Restore: bare "1" moves the view back to the saved range. Restore
+        // reconstructs zoom/offset from the saved span through a float, so assert
+        // within a small relative tolerance rather than exact equality.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_1);
+        ctx->Yield(3);
+        const ViewCoords restored = tv->GetTimelineViewForTest()->GetViewCoords();
+        const double tol = saved_span * 0.01;
+        IM_CHECK(fabs(restored.v_min_x - saved.v_min_x) < tol);
+        IM_CHECK(fabs(restored.v_max_x - saved.v_max_x) < tol);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "minimap_toggle_drives_click");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

@@ -9,6 +9,8 @@
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_minimap.h"
+#include "compute/rocprofvis_compute_view.h"
+#include "widgets/rocprofvis_tab_container.h"
 using namespace RocProfVis::View;
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -29,6 +31,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->SetRef("Main Window");
         ctx->ItemClick("##MenuBar/File");
         IM_CHECK(ctx->ItemExists("//Menu_00/Open"));
+        // Close the menu so its popup doesn't intercept clicks in later tests.
+        ctx->PopupCloseAll();
     };
     t = IM_REGISTER_TEST(e, "app", "events_view_populates");
     t->TestFunc = [](ImGuiTestContext* ctx)
@@ -128,5 +132,48 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->MouseTeleportToPos(btn_center);
         ctx->MouseClick(0);
         ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_view_tab_switch");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        // Needs a compute profile loaded; with a trace this cast is null and the
+        // test logs a skip (Test Engine has no skip status, so a bare return
+        // would read as a green assertion).
+        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
+        if (cv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
+            return;
+        }
+        TabContainer* tc = cv->GetTabContainerForTest();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        IM_CHECK(tc->GetTabCountForTest() >= 2);
+        if (tc->GetTabCountForTest() < 2) return;
+
+        ctx->Yield(3);
+        const int start_idx = tc->GetActiveTabIndexForTest();
+        IM_CHECK(start_idx >= 0);
+
+        // Tab headers are wrapped in PushID (unstable path) and a raw mouse click
+        // does not reliably activate a tab, so drive it by the captured id.
+        const int target_idx = (start_idx == 0) ? 1 : 0;
+        ImGuiID tab_id = tc->GetTabHeaderIdForTest(target_idx);
+        IM_CHECK(tab_id != 0);
+        if (tab_id == 0) return;
+
+        ctx->ItemClick(tab_id);
+        ctx->Yield(3);
+
+        IM_CHECK(tc->GetActiveTabIndexForTest() == target_idx);
     };
 }

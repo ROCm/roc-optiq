@@ -32,6 +32,21 @@ public:
 
     const TabItem* GetActiveTab() const;
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    int GetActiveTabIndexForTest() const { return m_active_tab_index; }
+    int GetTabCountForTest() const { return static_cast<int>(m_tabs.size()); }
+    // ImGui item id of tab `index`'s header, captured at render. Drive the tab
+    // via ctx->ItemClick(this id): the tab is wrapped in PushID so its path is
+    // unstable, and a raw mouse click does not reliably activate it. 0 if not drawn.
+    unsigned int GetTabHeaderIdForTest(int index) const
+    {
+        if(index < 0 || index >= static_cast<int>(m_tab_header_rects_for_test.size()))
+            return 0;
+        if(!m_tab_header_rects_for_test[index].valid) return 0;
+        return m_tab_header_rects_for_test[index].id;
+    }
+#endif
+
     void SetAllowToolTips(bool allow_tool_tips);
     bool GetAllowToolTips() const;
 
@@ -60,6 +75,15 @@ private:
 
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     static constexpr int                s_invalid_index = -1;
+
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    struct TabHeaderRectForTest
+    {
+        bool         valid = false;
+        unsigned int id    = 0;
+    };
+    std::vector<TabHeaderRectForTest> m_tab_header_rects_for_test;
+#endif
 };
 
 }  // namespace View

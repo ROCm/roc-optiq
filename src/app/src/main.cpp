@@ -201,6 +201,9 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
         true);
     result &= cli_parser.AddOption("h", "help",
         "Show this help message and exit", false);
+    result &= cli_parser.AddOption(
+        "t", "run-tests",
+        "Run all registered UI tests headlessly, print results, and exit", false);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -386,6 +389,10 @@ main(int argc, char** argv)
 #ifdef IMGUI_ENABLE_TEST_ENGINE
                 ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
                 RegisterAppTests(engine);
+
+                const bool run_tests_headless =
+                    cli_parser.WasOptionFound("run-tests");
+                bool headless_tests_queued = false;
 #endif
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -415,7 +422,49 @@ main(int argc, char** argv)
                     }
                     bool tests_running = false;
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-                    tests_running = ImGuiTestEngine_GetIO(engine).IsRunningTests;
+                    // Poll the queue too: IsRunningTests flips false between
+                    // queued tests, which would let the loop sleep mid-run.
+                    tests_running = ImGuiTestEngine_GetIO(engine).IsRunningTests ||
+                                    !ImGuiTestEngine_IsTestQueueEmpty(engine);
+
+                    if(run_tests_headless)
+                    {
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                        if(!headless_tests_queued &&
+                           !rocprofvis_view_wants_continuous_render())
+                        {
+                            // File load settled: queue every registered test.
+                            ImGuiTestEngine_QueueTests(
+                                engine, ImGuiTestGroup_Tests, nullptr,
+                                ImGuiTestRunFlags_RunFromCommandLine);
+                            headless_tests_queued = true;
+                        }
+                        else if(headless_tests_queued && !tests_running)
+                        {
+                            ImVector<ImGuiTest*> tests;
+                            ImGuiTestEngine_GetTestList(engine, &tests);
+                            int failed = 0;
+                            std::cout << "\n=== headless UI test results ===\n";
+                            for(ImGuiTest* test : tests)
+                            {
+                                const char* status = "UNKNOWN";
+                                switch(test->Output.Status)
+                                {
+                                    case ImGuiTestStatus_Success: status = "PASS"; break;
+                                    case ImGuiTestStatus_Error:   status = "FAIL"; ++failed; break;
+                                    case ImGuiTestStatus_Queued:  status = "SKIPPED"; break;
+                                    default: break;
+                                }
+                                std::cout << "  [" << status << "] " << test->Category
+                                          << "/" << test->Name << "\n";
+                            }
+                            std::cout << "=== " << tests.Size << " tests, " << failed
+                                      << " failed ===\n";
+                            std::cout.flush();
+                            app_result_code = (failed > 0) ? 1 : 0;
+                            glfwSetWindowShouldClose(window, GLFW_TRUE);
+                        }
+                    }
 #endif
                     if(g_frames_to_render > 0 || tests_running)
                     {

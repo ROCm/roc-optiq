@@ -87,6 +87,8 @@ public:
     // Reset event selection so a test starts from an empty EventsView even when
     // a prior run left a selection behind.
     void          ClearEventSelectionForTest();
+    size_t        GetBookmarkCountForTest() const { return m_bookmarks.size(); }
+    void          ClearBookmarksForTest() { m_bookmarks.clear(); }
 #endif
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);

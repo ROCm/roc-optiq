@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -20,6 +21,12 @@ void Data::Reset()
     {
         case kRPVControllerPrimitiveTypeObject:
         {
+            if (m_owns_object && m_object)
+            {
+                delete reinterpret_cast<Handle*>(m_object);
+            }
+            m_owns_object = false;
+            m_object      = nullptr;
             break;
         }
         case kRPVControllerPrimitiveTypeString:
@@ -55,7 +62,8 @@ Data::Data(Data const& other)
 Data::Data(Data&& other)
 : m_type(other.m_type)
 {
-    operator=(other);
+    m_uint64 = 0;
+    operator=(std::move(other));
 }
 
 Data& Data::operator=(Data const& other)
@@ -63,10 +71,13 @@ Data& Data::operator=(Data const& other)
     if (this != &other)
     {
         Reset();
+        m_type = other.m_type;
         switch(m_type)
         {
             case kRPVControllerPrimitiveTypeObject:
             {
+                // A copy only borrows the object; ownership is never shared so
+                // that the owning Data remains the sole deleter.
                 SetObject(other.m_object);
                 break;
             }
@@ -96,14 +107,20 @@ Data& Data::operator=(Data const& other)
 
 Data& Data::operator=(Data&& other)
 {
+    if (this == &other)
+    {
+        return *this;
+    }
     Reset();
     m_type = other.m_type;
     switch(m_type)
     {
         case kRPVControllerPrimitiveTypeObject:
         {
-            m_object = other.m_object;
-            other.m_object = nullptr;
+            m_object             = other.m_object;
+            m_owns_object        = other.m_owns_object;
+            other.m_object       = nullptr;
+            other.m_owns_object  = false;
             break;
         }
         case kRPVControllerPrimitiveTypeString:
@@ -178,6 +195,10 @@ Data::~Data()
     {
         case kRPVControllerPrimitiveTypeObject:
         {
+            if (m_owns_object && m_object)
+            {
+                delete reinterpret_cast<Handle*>(m_object);
+            }
             break;
         }
         case kRPVControllerPrimitiveTypeString:
@@ -246,8 +267,44 @@ rocprofvis_result_t Data::SetObject(rocprofvis_handle_t* object)
         {
             case kRPVControllerPrimitiveTypeObject:
             {
-                m_object = object;
-                result = kRocProfVisResultSuccess;
+                m_object      = object;
+                m_owns_object = false;
+                result        = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerPrimitiveTypeString:
+            case kRPVControllerPrimitiveTypeUInt64:
+            case kRPVControllerPrimitiveTypeDouble:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Data::SetOwnedObject(rocprofvis_handle_t* object)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if (object)
+    {
+        switch(m_type)
+        {
+            case kRPVControllerPrimitiveTypeObject:
+            {
+                if (m_owns_object && m_object && m_object != object)
+                {
+                    delete reinterpret_cast<Handle*>(m_object);
+                }
+                m_object      = object;
+                m_owns_object = true;
+                result        = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerPrimitiveTypeString:

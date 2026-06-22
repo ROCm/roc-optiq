@@ -608,6 +608,19 @@ TimelineView* TraceView::GetTimelineViewForTest() const
 {
     return m_timeline_view.get();
 }
+Minimap* TraceView::GetMinimapForTest() const
+{
+    return m_minimap.get();
+}
+bool TraceView::GetMinimapButtonScreenCenterForTest(ImVec2& out_center) const
+{
+    if(!m_minimap_btn_rect_valid)
+    {
+        return false;
+    }
+    out_center = m_minimap_btn_center;
+    return true;
+}
 void TraceView::ClearEventSelectionForTest()
 {
     if(m_timeline_selection)
@@ -753,6 +766,15 @@ TraceView::RenderToolbar()
         {
             m_show_minimap_popup = !m_show_minimap_popup;
         }
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+        {
+            ImVec2 bmin          = ImGui::GetItemRectMin();
+            ImVec2 bmax          = ImGui::GetItemRectMax();
+            m_minimap_btn_center = ImVec2((bmin.x + bmax.x) * 0.5f,
+                                          (bmin.y + bmax.y) * 0.5f);
+            m_minimap_btn_rect_valid = true;
+        }
+#endif
         ImGui::PopFont();
         ImGui::PopStyleColor();
 

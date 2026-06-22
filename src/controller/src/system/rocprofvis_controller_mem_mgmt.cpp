@@ -516,7 +516,23 @@ void MemoryManager::CleanUp() {
     {
         for(auto it1 : it->second)
         {
-            delete it1.second;
+            MemoryPool* pool = it1.second;
+
+            // Objects are placement-new'd into the pool's raw storage, so the
+            // pool's destructor (which only frees the block) would not run them.
+            // Destroy any still-live residents first so their non-trivial members
+            // (e.g. SampleLOD::m_children) are released; ~Handle() is virtual and
+            // dispatches to the concrete type.
+            char* base = static_cast<char*>(pool->m_base);
+            for(size_t slot = 0; slot < pool->m_bitmask.Size(); ++slot)
+            {
+                if(pool->m_bitmask.Test(slot))
+                {
+                    reinterpret_cast<Handle*>(base + slot * pool->m_size)->~Handle();
+                }
+            }
+
+            delete pool;
         }
     }
 }

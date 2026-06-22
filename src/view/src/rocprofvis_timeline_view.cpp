@@ -2787,6 +2787,34 @@ TimelineView::GetTransform() const
     return m_tpt;
 }
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+bool
+TimelineView::GetFirstEventScreenCenterForTest(ImVec2& out_center) const
+{
+    if(!m_graphs)
+    {
+        return false;
+    }
+    for(const TrackGraph& graph : *m_graphs)
+    {
+        if(!graph.display || graph.chart == nullptr)
+        {
+            continue;
+        }
+        const FlameTrackItem* flame = dynamic_cast<const FlameTrackItem*>(graph.chart);
+        if(flame == nullptr)
+        {
+            continue;
+        }
+        if(flame->GetFirstEventScreenCenterForTest(out_center))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
 float
 TimelineView::GetTotalTrackHeight() const
 {

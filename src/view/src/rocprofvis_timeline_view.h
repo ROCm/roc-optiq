@@ -116,6 +116,11 @@ public:
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    // Screen-space center of the first event in the first displayed flame track,
+    // from the renderer's captured geometry. False if none drawn yet.
+    bool GetFirstEventScreenCenterForTest(ImVec2& out_center) const;
+#endif
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;

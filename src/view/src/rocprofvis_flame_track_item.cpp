@@ -348,6 +348,24 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
     ImVec2 rectMax = ImVec2(start_position.x + duration,
                             start_position.y + m_level_height + cursor_position.y);
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    // Track the widest box, not the first: the first can be a 1px rect under
+    // the resize handle, which a click would miss.
+    {
+        const float width = rectMax.x - rectMin.x;
+        const float best  = m_first_event_rect_valid_for_test
+                                ? (m_first_event_rect_max_for_test.x -
+                                   m_first_event_rect_min_for_test.x)
+                                : -1.0f;
+        if(width > best)
+        {
+            m_first_event_rect_min_for_test   = rectMin;
+            m_first_event_rect_max_for_test   = rectMax;
+            m_first_event_rect_valid_for_test = true;
+        }
+    }
+#endif
+
     ImU32 rectColor;
     if(use_highlight_color)
     {
@@ -663,6 +681,10 @@ FlameTrackItem::RenderChart(float graph_width)
 
     int color_index      = 0;
     m_has_drawn_tool_tip = false;
+
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    m_first_event_rect_valid_for_test = false;
+#endif
 
     double     range_start_ns           = TimelineSelection::INVALID_SELECTION_TIME;
     double     range_end_ns             = TimelineSelection::INVALID_SELECTION_TIME;

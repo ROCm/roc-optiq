@@ -8,6 +8,7 @@
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_timeline_view.h"
+#include "rocprofvis_minimap.h"
 using namespace RocProfVis::View;
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -76,5 +77,56 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(3);
 
         IM_CHECK(ev->GetEventItemCountForTest() > 0);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "minimap_toggle_drives_click");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        IM_CHECK(tv != nullptr);
+        if (tv == nullptr) return;
+        Minimap* mm = tv->GetMinimapForTest();
+        IM_CHECK(mm != nullptr);
+        if (mm == nullptr) return;
+
+        IM_CHECK(mm->GetShowEventsForTest() == true);
+
+        // The ICON_COMPASS toolbar button and the ##events checkbox are both
+        // canvas-styled / nested in a BeginChild, so neither has a stable widget
+        // path. Click each by the screen center its renderer captured.
+        ctx->Yield(3);
+        ImVec2 btn_center(0.0f, 0.0f);
+        bool have_btn = tv->GetMinimapButtonScreenCenterForTest(btn_center);
+        IM_CHECK(have_btn);
+        if (!have_btn) return;
+
+        ctx->MouseTeleportToPos(btn_center);
+        ctx->MouseClick(0);
+        ctx->Yield(3);
+
+        ImVec2 cb_center(0.0f, 0.0f);
+        bool have_cb = mm->GetEventsCheckboxScreenCenterForTest(cb_center);
+        IM_CHECK(have_cb);
+        if (!have_cb) return;
+
+        ctx->MouseTeleportToPos(cb_center);
+        ctx->MouseClick(0);
+        ctx->Yield(2);
+        IM_CHECK(mm->GetShowEventsForTest() == false);
+
+        // Toggle back to confirm the click is bidirectional.
+        ctx->MouseTeleportToPos(cb_center);
+        ctx->MouseClick(0);
+        ctx->Yield(2);
+        IM_CHECK(mm->GetShowEventsForTest() == true);
+
+        // Close the Minimap window so it doesn't cover later tests' widgets.
+        ctx->MouseTeleportToPos(btn_center);
+        ctx->MouseClick(0);
+        ctx->Yield(2);
     };
 }

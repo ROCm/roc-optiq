@@ -541,6 +541,11 @@ Minimap::RenderLegend(float w, float h)
     float chk_y = bar_y + bar_h + gap + text_height + gap;
     ImGui::SetCursorScreenPos(ImVec2(bar_x1 - (checkbox_sz - bar_w) * 0.5f, chk_y));
     ImGui::Checkbox("##events", &m_show_events);
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    m_events_checkbox_min_for_test        = ImGui::GetItemRectMin();
+    m_events_checkbox_max_for_test        = ImGui::GetItemRectMax();
+    m_events_checkbox_rect_valid_for_test = true;
+#endif
     if(ImGui::IsItemHovered())
         SetTooltipStyled("Show/Hide Event Tracks");
     ImGui::SetCursorScreenPos(ImVec2(bar_x2 - (checkbox_sz - bar_w) * 0.5f, chk_y));

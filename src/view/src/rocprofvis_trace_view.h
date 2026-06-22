@@ -80,6 +80,10 @@ public:
 #ifdef IMGUI_ENABLE_TEST_ENGINE
     AnalysisView* GetAnalysisViewForTest() const;
     TimelineView* GetTimelineViewForTest() const;
+    Minimap*      GetMinimapForTest() const;
+    // Screen center of the ICON_COMPASS toolbar button (no stable widget id),
+    // captured by RenderToolbar. False if the toolbar has not drawn it yet.
+    bool          GetMinimapButtonScreenCenterForTest(ImVec2& out_center) const;
     // Reset event selection so a test starts from an empty EventsView even when
     // a prior run left a selection behind.
     void          ClearEventSelectionForTest();
@@ -122,6 +126,10 @@ private:
 
     popup_info_t                        m_popup_info;
     bool                                m_show_minimap_popup;
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    bool   m_minimap_btn_rect_valid = false;
+    ImVec2 m_minimap_btn_center     = ImVec2(0.0f, 0.0f);
+#endif
     std::unordered_map<int, ViewCoords> m_bookmarks;
 
     std::shared_ptr<AnnotationsManager> m_annotations;

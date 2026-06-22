@@ -29,6 +29,7 @@ public:
 
 #ifdef IMGUI_ENABLE_TEST_ENGINE
     bool GetShowEventsForTest() const { return m_show_events; }
+    bool GetShowCountersForTest() const { return m_show_counters; }
     bool GetEventsCheckboxScreenCenterForTest(ImVec2& out) const
     {
         if(!m_events_checkbox_rect_valid_for_test) return false;

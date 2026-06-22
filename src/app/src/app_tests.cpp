@@ -224,6 +224,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         if (mm == nullptr) return;
 
         IM_CHECK(mm->GetShowEventsForTest() == true);
+        // Counter overlay state before touching events, to confirm the two
+        // layers toggle independently (checklist: "Layers independent").
+        const bool counters_before = mm->GetShowCountersForTest();
 
         // The ICON_COMPASS toolbar button and the ##events checkbox are both
         // canvas-styled / nested in a BeginChild, so neither has a stable widget
@@ -247,6 +250,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->MouseClick(0);
         ctx->Yield(2);
         IM_CHECK(mm->GetShowEventsForTest() == false);
+        // Toggling events must not disturb the counter overlay.
+        IM_CHECK(mm->GetShowCountersForTest() == counters_before);
 
         // Toggle back to confirm the click is bidirectional.
         ctx->MouseTeleportToPos(cb_center);

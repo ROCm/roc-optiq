@@ -1525,6 +1525,9 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
             m_settings.GetColor(Colors::kAccent));
     }
 
+    // Keep the track row square so the highlight fill reaches the corners; otherwise the
+    // rounded corners leave notches where the accent selection stripe bleeds through.
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
     ImGui::PushID(track_index);
     if(ImGui::BeginChild("", ImVec2(0, track_height), false,
@@ -1598,6 +1601,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     ImGui::EndChild();
     ImGui::PopID();
     ImGui::PopStyleColor();
+    ImGui::PopStyleVar();  // ImGuiStyleVar_ChildRounding
 
     // Draw border around the track
     // This is done after the child window to ensure it is on top

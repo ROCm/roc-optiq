@@ -289,6 +289,12 @@ LogViewer::Poll()
     SaveUiState();
 }
 
+bool
+LogViewer::IsLiveUpdating() const
+{
+    return m_visible && !m_paused;
+}
+
 void
 LogViewer::ProcessEntry(void* user_ptr, int level, char const* timestamp,
                         char const* message)

@@ -41,6 +41,11 @@ public:
 
     bool* VisiblePtr();
 
+    // True when the viewer should refresh live. Used to keep the app out of its
+    // idle sleep (glfwWaitEvents) so logs appear without needing mouse/keyboard
+    // input. False while hidden or paused, so the app can sleep normally.
+    bool IsLiveUpdating() const;
+
 private:
     LogViewer();
 

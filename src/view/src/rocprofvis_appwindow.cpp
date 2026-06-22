@@ -590,6 +590,13 @@ AppWindow::WantsContinuousRender()
         return true;
     }
 
+    // Keep rendering while the log viewer is open and unpaused so new log lines
+    // appear live instead of waiting for the next input to wake the idle loop.
+    if(LogViewer::GetInstance()->IsLiveUpdating())
+    {
+        return true;
+    }
+
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     if(m_test_data_provider.GetState() == ProviderState::kLoading ||
        m_test_data_provider.GetPendingRequestCount() > 0)

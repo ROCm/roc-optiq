@@ -74,10 +74,20 @@ protected:
     void sink_it_(const spdlog::details::log_msg &msg) override
     {
         m_elements.push_back(spdlog::details::log_msg_buffer{msg});
+
+        // Bound memory if nothing drains the sink (e.g. UI idle); keep newest.
+        if (m_elements.size() > MAX_BUFFERED_ENTRIES)
+        {
+            m_elements.erase(m_elements.begin(),
+                             m_elements.begin() + (m_elements.size() / 2));
+        }
     }
     void flush_() override {}
 
 private:
+    // Hard cap on retained records when the buffer is not being drained.
+    static constexpr size_t MAX_BUFFERED_ENTRIES = 100000;
+
     std::vector<spdlog::details::log_msg_buffer> m_elements;
 };
 

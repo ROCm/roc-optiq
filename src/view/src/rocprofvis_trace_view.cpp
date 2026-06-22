@@ -604,6 +604,17 @@ AnalysisView* TraceView::GetAnalysisViewForTest() const
     }
     return dynamic_cast<AnalysisView*>(m_analysis_item->m_item.get());
 }
+TimelineView* TraceView::GetTimelineViewForTest() const
+{
+    return m_timeline_view.get();
+}
+void TraceView::ClearEventSelectionForTest()
+{
+    if(m_timeline_selection)
+    {
+        m_timeline_selection->UnselectAllEvents();
+    }
+}
 #endif
 std::shared_ptr<RocWidget>
 TraceView::GetToolbar()

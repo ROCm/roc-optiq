@@ -63,6 +63,17 @@ public:
     static void CalculateMaxEventLabelWidth();
     bool        IsCompactMode() const override { return m_compact_mode; }
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    bool GetFirstEventScreenCenterForTest(ImVec2& out_center) const
+    {
+        if(!m_first_event_rect_valid_for_test) return false;
+        out_center = ImVec2(
+            (m_first_event_rect_min_for_test.x + m_first_event_rect_max_for_test.x) * 0.5f,
+            (m_first_event_rect_min_for_test.y + m_first_event_rect_max_for_test.y) * 0.5f);
+        return true;
+    }
+#endif
+
 protected:
     void  RenderChart(float graph_width) override;
     void  RenderMetaAreaOptions() override;
@@ -124,6 +135,13 @@ private:
     bool                      m_show_pill_analysis_queue;
     EventColorMode            m_event_color_mode;
     bool                      m_compact_mode;
+
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    // Reset at the top of RenderChart, updated per DrawBox.
+    bool   m_first_event_rect_valid_for_test = false;
+    ImVec2 m_first_event_rect_min_for_test{ 0.0f, 0.0f };
+    ImVec2 m_first_event_rect_max_for_test{ 0.0f, 0.0f };
+#endif
 };
 
 }  // namespace View

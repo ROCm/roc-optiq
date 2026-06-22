@@ -79,6 +79,10 @@ public:
     void                               SetAnalysisViewVisibility(bool visibility); 
 #ifdef IMGUI_ENABLE_TEST_ENGINE
     AnalysisView* GetAnalysisViewForTest() const;
+    TimelineView* GetTimelineViewForTest() const;
+    // Reset event selection so a test starts from an empty EventsView even when
+    // a prior run left a selection behind.
+    void          ClearEventSelectionForTest();
 #endif
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);

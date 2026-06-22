@@ -21,6 +21,7 @@
 #undef min
 #undef max
 #include <algorithm>
+#include <type_traits>
 
 
 namespace RocProfVis
@@ -500,6 +501,18 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
     throw std::runtime_error("Allocation problem!");
     return nullptr;
 }
+
+// The pool teardown below reinterpret_casts each live slot to Handle* and
+// invokes its virtual destructor. That is only valid because every type placed
+// into a pool (via the private Allocate(), used solely by New{Event,Sample,
+// SampleLOD}) derives from Handle, with Handle at offset 0 (single, non-virtual
+// inheritance). These asserts fail the build if that invariant ever breaks.
+static_assert(std::is_base_of<Handle, Event>::value,
+              "Pooled Event must derive from Handle");
+static_assert(std::is_base_of<Handle, Sample>::value,
+              "Pooled Sample must derive from Handle");
+static_assert(std::is_base_of<Handle, SampleLOD>::value,
+              "Pooled SampleLOD must derive from Handle");
 
 void MemoryManager::CleanUp() {
     std::lock_guard<std::mutex> lock(m_pool_mutex);

@@ -41,12 +41,20 @@ on:
         description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
         type: string
         default: ''
+      crypto_backend:
+        description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
+        type: string
+        default: 'mbedTLS'
   workflow_call:
     inputs:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
         default: '[ "2022" ]'
+      crypto_backend:
+        description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
+        type: string
+        default: 'mbedTLS'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -79,7 +87,7 @@ on:
 env:
   BUILD_DIR: "build"
   DIST_DIR: "dist"
-  BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || 'Release' }}
+  BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || inputs.cmake_config_preset == 'x64-release-symbols' && 'RelWithDebInfo' || 'Release' }}
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
@@ -119,11 +127,65 @@ jobs:
           echo "VULKAN_SDK=$($vulkanRoot.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "PATH=$($vulkanRoot.FullName)\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
-          
+
+      - name: Install OpenSSL
+        if: inputs.crypto_backend == 'OpenSSL'
+        run: |
+          choco install openssl --no-progress -y
+          # CI-owned resolution order: prefer Chocolatey's Win64 layout over the
+          # runner image copy under "OpenSSL" (ambiguous Get-ChildItem sort was
+          # picking the wrong tree). First match must have headers + bin DLLs.
+          $candidates = @(
+            "C:\Program Files\OpenSSL-Win64",
+            "C:\Program Files\OpenSSL"
+          )
+          $opensslRoot = $null
+          foreach ($c in $candidates) {
+            if (-not (Test-Path $c)) { continue }
+            $sslHeader = Join-Path $c "include\openssl\ssl.h"
+            $binDir = Join-Path $c "bin"
+            if (-not (Test-Path $sslHeader)) { continue }
+            $dlls = @(Get-ChildItem -Path $binDir -Filter "libcrypto*.dll" -ErrorAction SilentlyContinue)
+            if ($dlls.Count -eq 0) { continue }
+            $opensslRoot = $c
+            break
+          }
+          if (-not $opensslRoot) {
+            Write-Host "CI: OpenSSL not found in managed paths (checked: $($candidates -join ', '))"
+            exit 1
+          }
+          Write-Host "CI OPENSSL_ROOT_DIR=$opensslRoot"
+          echo "OPENSSL_ROOT_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "PATH=$opensslRoot\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Newer Shining Light / choco builds nest the MSVC import libs under
+          # lib\VC\x64\MD (dynamic CRT release). CMake's FindOpenSSL may not find
+          # them from OPENSSL_ROOT_DIR alone, so locate and export explicit hints.
+          $crypto = Get-ChildItem -Path $opensslRoot -Recurse -Filter "libcrypto.lib" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "x64\\MD\\" -and $_.FullName -notmatch "static" } | Select-Object -First 1
+          $ssl = Get-ChildItem -Path $opensslRoot -Recurse -Filter "libssl.lib" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "x64\\MD\\" -and $_.FullName -notmatch "static" } | Select-Object -First 1
+          if ($crypto -and $ssl) {
+            echo "OPENSSL_LIB_EAY_RELEASE=$($crypto.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+            echo "OPENSSL_SSL_EAY_RELEASE=$($ssl.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
       - name: Build, Make, and Verify Installation
         run: |
           mkdir build
-          cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          $opensslArgs = @()
+          if ("${{ inputs.crypto_backend }}" -eq "OpenSSL") {
+            # Prefer the install tree we just configured (choco) over any other
+            # OpenSSL on the runner image (e.g. C:\Program Files\OpenSSL).
+            if ($env:OPENSSL_ROOT_DIR) {
+              $opensslArgs += "-DOPENSSL_ROOT_DIR=$($env:OPENSSL_ROOT_DIR)"
+            }
+            if ($env:OPENSSL_LIB_EAY_RELEASE) {
+              $opensslArgs += @(
+                "-DLIB_EAY_RELEASE=$env:OPENSSL_LIB_EAY_RELEASE",
+                "-DSSL_EAY_RELEASE=$env:OPENSSL_SSL_EAY_RELEASE",
+                "-DOPENSSL_INCLUDE_DIR=$env:OPENSSL_ROOT_DIR\include"
+              )
+            }
+          }
+          cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} @opensslArgs
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
           if (Test-Path "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"
@@ -156,9 +218,12 @@ jobs:
 
       - name: Prepare Distribution Artifacts
         run: |
-          mkdir ${{ env.DIST_DIR }}
-          cp ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.exe ${{ env.DIST_DIR }}/
-          ls -l ${{ env.DIST_DIR }}/
+          mkdir ${{ env.DIST_DIR }} -Force
+          $Bin = "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}"
+          Copy-Item "$Bin/${{ env.BUILD_FILE_NAME }}.exe" "${{ env.DIST_DIR }}/"
+          Copy-Item "$Bin/*.dll" "${{ env.DIST_DIR }}/" -ErrorAction SilentlyContinue
+          Copy-Item "$Bin/${{ env.BUILD_FILE_NAME }}.pdb" "${{ env.DIST_DIR }}/" -ErrorAction SilentlyContinue
+          Get-ChildItem "${{ env.DIST_DIR }}"
       
       - name: Upload GitHub Artifacts
         if: ${{ inputs.upload_to_github }}

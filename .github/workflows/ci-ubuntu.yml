@@ -41,12 +41,20 @@ on:
         description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
         type: string
         default: ''
+      crypto_backend:
+        description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
+        type: string
+        default: 'mbedTLS'
   workflow_call:
     inputs:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
         default: '[ "22.04", "24.04", "26.04" ]'
+      crypto_backend:
+        description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
+        type: string
+        default: 'mbedTLS'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -107,10 +115,16 @@ jobs:
           lfs: true
           submodules: true
 
+      - name: Install OpenSSL
+        if: inputs.crypto_backend == 'OpenSSL'
+        run: |
+          apt-get update
+          apt-get install -y libssl-dev
+
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/**/setup-env.sh
-          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

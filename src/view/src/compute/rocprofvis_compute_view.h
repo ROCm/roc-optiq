@@ -33,6 +33,10 @@ public:
     std::shared_ptr<RocWidget> GetToolbar() override;
     std::optional<DataProviderCleanupWork> DetachProviderCleanup() override;
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    TabContainer* GetTabContainerForTest() { return m_tab_container.get(); }
+#endif
+
 private:
     void RenderToolbar();
     void RenderWorkloadSelection();

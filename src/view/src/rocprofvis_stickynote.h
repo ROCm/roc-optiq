@@ -80,18 +80,11 @@ private:
                              const ImVec2&                       window_position,
                              std::shared_ptr<TimePixelTransform> tpt) const;
 
-    // Always-visible timeline anchor. Returns true if hovered; reports the
-    // marker's bottom-right corner via out_marker_max.
-    bool RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
-                            ImVec2& out_marker_max);
+    // Always-visible timeline anchor. Returns true if hovered.
+    bool RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos);
 
-    // Floating expanded window. Returns true if hovered. marker_hovered links
-    // the pair glow so hovering the marker also lights the window.
-    bool RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered);
-
-    // Soft accent halo drawn just outside the given rect.
-    void DrawGlow(ImDrawList* draw_list, const ImVec2& min, const ImVec2& max,
-                  float rounding) const;
+    // Floating expanded window. Returns true if hovered.
+    bool RenderExpandedWindow(const ImVec2& anchor_pos);
 
     // True once the floating window has a real stored position.
     bool IsExpandedPlaced() const

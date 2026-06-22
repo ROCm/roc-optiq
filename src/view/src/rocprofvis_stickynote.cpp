@@ -37,10 +37,6 @@ constexpr float kIconActiveAlpha      = 0.22f;
 constexpr float kMarkerRoundingScale  = 0.6f;
 constexpr float kMarkerShadowOffsetX  = 2.0f;
 constexpr float kMarkerShadowOffsetY  = 3.0f;
-constexpr int   kGlowLayers           = 3;
-constexpr float kGlowSpread           = 2.5f;
-constexpr float kGlowAlpha            = 0.5f;
-constexpr float kGlowThickness        = 2.0f;
 constexpr float kUnplacedCoord        = -1.0f;
 }  // namespace
 
@@ -196,24 +192,15 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 
     // The anchor marker is always shown so the note's timeline location stays
     // visible even when expanded.
-    ImVec2 marker_max;
-    bool   marker_hovered = RenderAnchorMarker(draw_list, anchor_pos, marker_max);
+    bool marker_hovered = RenderAnchorMarker(draw_list, anchor_pos);
 
     bool window_hovered = false;
     if(!m_is_minimized)
     {
-        window_hovered = RenderExpandedWindow(anchor_pos, marker_hovered);
+        window_hovered = RenderExpandedWindow(anchor_pos);
     }
 
-    // Hovering either half lights both so the pair is easy to spot.
     bool pair_hovered = marker_hovered || window_hovered;
-    if(pair_hovered)
-    {
-        const float marker_rounding =
-            SettingsManager::GetInstance().GetDefaultStyle().ChildRounding *
-            kMarkerRoundingScale;
-        DrawGlow(draw_list, anchor_pos, marker_max, marker_rounding);
-    }
 
     if((pair_hovered || m_dragging) && draw_list)
     {
@@ -226,8 +213,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 }
 
 bool
-StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
-                               ImVec2& out_marker_max)
+StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
 {
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kStickyNoteBg);
@@ -251,19 +237,18 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
     ImVec2      padding   = ImGui::GetStyle().FramePadding;
     const float btn_size =
         std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
-    out_marker_max = ImVec2(marker_pos.x + btn_size, marker_pos.y + btn_size);
-    bool hovered   = ImGui::IsMouseHoveringRect(marker_pos, out_marker_max);
+    ImVec2 btn_max = ImVec2(marker_pos.x + btn_size, marker_pos.y + btn_size);
+    bool   hovered = ImGui::IsMouseHoveringRect(marker_pos, btn_max);
 
     if(draw_list)
     {
         draw_list->AddRectFilled(
             ImVec2(marker_pos.x + kMarkerShadowOffsetX,
                    marker_pos.y + kMarkerShadowOffsetY),
-            ImVec2(out_marker_max.x + kMarkerShadowOffsetX,
-                   out_marker_max.y + kMarkerShadowOffsetY),
+            ImVec2(btn_max.x + kMarkerShadowOffsetX, btn_max.y + kMarkerShadowOffsetY),
             shadow_color, rounding);
-        draw_list->AddRectFilled(marker_pos, out_marker_max, bg_color, rounding);
-        draw_list->AddRect(marker_pos, out_marker_max, border_color, rounding);
+        draw_list->AddRectFilled(marker_pos, btn_max, bg_color, rounding);
+        draw_list->AddRect(marker_pos, btn_max, border_color, rounding);
     }
 
     ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
@@ -292,7 +277,7 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
 }
 
 bool
-StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered)
+StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
 {
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kStickyNoteBg);
@@ -426,11 +411,6 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered)
         ImGui::PopStyleColor();
 
         hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
-        if(marker_hovered || hovered)
-        {
-            DrawGlow(ImGui::GetForegroundDrawList(), win_pos,
-                     ImVec2(win_pos.x + win_size.x, win_pos.y + win_size.y), rounding);
-        }
 
         m_expanded_screen_pos = win_pos;
         m_size                = win_size;
@@ -440,25 +420,6 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered)
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
     return hovered;
-}
-
-void
-StickyNote::DrawGlow(ImDrawList* draw_list, const ImVec2& min, const ImVec2& max,
-                     float rounding) const
-{
-    if(!draw_list) return;
-
-    ImU32 glow = SettingsManager::GetInstance().GetColor(Colors::kStickyNoteAccent);
-    for(int i = kGlowLayers; i >= 1; --i)
-    {
-        float spread = kGlowSpread * static_cast<float>(i);
-        float alpha  = kGlowAlpha *
-                      (1.0f - static_cast<float>(i - 1) / static_cast<float>(kGlowLayers));
-        draw_list->AddRect(ImVec2(min.x - spread, min.y - spread),
-                           ImVec2(max.x + spread, max.y + spread),
-                           ApplyAlpha(glow, alpha), rounding + spread, ImDrawFlags_None,
-                           kGlowThickness);
-    }
 }
 
 void

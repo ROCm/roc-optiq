@@ -10,6 +10,7 @@
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_minimap.h"
 #include "compute/rocprofvis_compute_view.h"
+#include "compute/rocprofvis_compute_selection.h"
 #include "widgets/rocprofvis_tab_container.h"
 using namespace RocProfVis::View;
 
@@ -300,5 +301,30 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(3);
 
         IM_CHECK(tc->GetActiveTabIndexForTest() == target_idx);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_workload_auto_selected");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
+        if (cv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
+            return;
+        }
+        ComputeSelection* sel = cv->GetComputeSelectionForTest();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Loading a compute profile auto-selects the first workload, which
+        // cascades to selecting that workload's first kernel. Both selection
+        // ids must therefore be valid (not the INVALID sentinel) once loaded.
+        ctx->Yield(3);
+        IM_CHECK(sel->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(sel->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID);
     };
 }

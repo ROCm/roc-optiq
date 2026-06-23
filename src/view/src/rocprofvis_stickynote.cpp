@@ -5,14 +5,13 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_click_manager.h"
-#include "rocprofvis_event_manager.h"
-#include "rocprofvis_events.h"
 #include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <algorithm>
 #include <cfloat>
 #include <spdlog/spdlog.h>
+#include <string>
 
 namespace RocProfVis
 {
@@ -38,27 +37,76 @@ constexpr float kMarkerRoundingScale  = 0.6f;
 constexpr float kMarkerShadowOffsetX  = 2.0f;
 constexpr float kMarkerShadowOffsetY  = 3.0f;
 constexpr float kUnplacedCoord        = -1.0f;
+constexpr float kTitleInputPadX       = 4.0f;
+
+// Grows the backing std::string on demand so ImGui input fields can edit it in
+// place without a fixed char buffer.
+int
+GrowStringCallback(ImGuiInputTextCallbackData* data)
+{
+    if(data->EventFlag == ImGuiInputTextFlags_CallbackResize)
+    {
+        std::string* str = static_cast<std::string*>(data->UserData);
+        str->resize(static_cast<size_t>(data->BufTextLen));
+        data->Buf = str->data();
+    }
+    return 0;
+}
+
+bool
+InlineInputText(const char* id, const char* hint, std::string& str,
+                ImGuiInputTextFlags flags)
+{
+    flags |= ImGuiInputTextFlags_CallbackResize;
+    return ImGui::InputTextWithHint(id, hint, str.data(), str.capacity() + 1, flags,
+                                    GrowStringCallback, &str);
+}
+
+bool
+InlineInputTextMultiline(const char* id, std::string& str, const ImVec2& size,
+                         ImGuiInputTextFlags flags)
+{
+    flags |= ImGuiInputTextFlags_CallbackResize;
+    return ImGui::InputTextMultiline(id, str.data(), str.capacity() + 1, size, flags,
+                                     GrowStringCallback, &str);
+}
+
+// Styles an input to read like plain text: no frame, no background.
+void
+PushPlainTextInputStyle(SettingsManager& settings)
+{
+    ImU32 transparent = settings.GetColor(Colors::kTransparent);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, transparent);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, transparent);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, transparent);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+}
+
+void
+PopPlainTextInputStyle()
+{
+    ImGui::PopStyleVar(1);
+    ImGui::PopStyleColor(3);
+}
 }  // namespace
 
 static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
-                       const std::string& text, const std::string& title,
-                       const std::string& project_id, double v_min, double v_max,
-                       uint64_t track_id, bool is_minimized)
+                       const std::string& text, const std::string& title, double v_min,
+                       double v_max, uint64_t track_id, bool is_minimized)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
 , m_track_id(track_id)
 , m_size(size)
 , m_text(text)
 , m_title(title)
-, m_project_id(project_id)
 , m_id(s_unique_id_counter)
 , m_is_visible(true)
 , m_v_min_x(v_min)
 , m_v_max_x(v_max)
 , m_is_minimized(is_minimized)
 {
-    s_unique_id_counter = s_unique_id_counter + 1;
+    ++s_unique_id_counter;
 }
 
 void
@@ -102,10 +150,12 @@ StickyNote::RenderTimeIndicator(ImDrawList*                         draw_list,
     ImU32            color =
         ApplyAlpha(settings.GetColor(Colors::kStickyNoteAccent), kLineAlpha);
 
-    const float line_x   = window_position.x + tpt->TimeToPixel(m_time_ns);
-    const float y_top    = window_position.y;
-    const float y_bottom = window_position.y + tpt->GetGraphSizeY();
-    draw_list->AddLine(ImVec2(line_x, y_top), ImVec2(line_x, y_bottom), color,
+    // Span the full visible track area (the draw list's clip rect) rather than
+    // keying off the scrolled content origin, which only covers the top sliver.
+    const float  line_x   = window_position.x + tpt->TimeToPixel(m_time_ns);
+    const ImVec2 clip_min = draw_list->GetClipRectMin();
+    const ImVec2 clip_max = draw_list->GetClipRectMax();
+    draw_list->AddLine(ImVec2(line_x, clip_min.y), ImVec2(line_x, clip_max.y), color,
                        kLineThickness);
 }
 
@@ -165,14 +215,25 @@ StickyNote::IsVisible() const
 }
 
 void
-StickyNote::SetText(std::string title)
+StickyNote::SetText(std::string text)
 {
-    m_text = title;
+    m_text = std::move(text);
 }
 void
 StickyNote::SetTitle(std::string title)
 {
-    m_title = title;
+    m_title = std::move(title);
+}
+void
+StickyNote::BeginInlineEdit()
+{
+    m_is_minimized        = false;
+    m_request_focus       = true;
+    m_focus_input         = true;
+    m_editing_title       = true;
+    m_provisional         = true;
+    m_seen_focus          = false;
+    m_expanded_screen_pos = ImVec2(kUnplacedCoord, kUnplacedCoord);
 }
 bool
 StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
@@ -257,17 +318,18 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
     ImGui::PushStyleColor(ImGuiCol_Text, text_color);
     ImGui::Button((std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str(),
                   ImVec2(btn_size, btn_size));
-    if(ImGui::IsItemHovered() && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
+    // Clicking a minimized marker expands the note; re-seed its window position.
+    if(m_is_minimized && ImGui::IsItemHovered() &&
+       IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
     {
-        if(m_is_minimized)
-        {
-            m_expanded_screen_pos = ImVec2(kUnplacedCoord, kUnplacedCoord);
-            m_is_minimized        = false;
-        }
-        else
-        {
-            m_request_focus = true;
-        }
+        m_expanded_screen_pos = ImVec2(kUnplacedCoord, kUnplacedCoord);
+        m_is_minimized        = false;
+    }
+    // Pressing an expanded note's marker steals window focus on mouse-down;
+    // request refocus while held so the empty-note auto-discard doesn't fire.
+    if(!m_is_minimized && ImGui::IsItemActive())
+    {
+        m_request_focus = true;
     }
     ImGui::PopStyleColor(4);
     ImGui::PopFont();
@@ -306,6 +368,9 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         m_expanded_screen_pos = anchor;
     }
 
+    // A pending focus request (e.g. clicking the note's own anchor) refocuses
+    // the window next frame, so it must not count as abandoning the note.
+    const bool refocusing = m_request_focus;
     if(m_request_focus)
     {
         ImGui::SetNextWindowFocus();
@@ -349,68 +414,147 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
                                 ImVec2(win_pos.x + win_size.x, header_max.y),
                                 ApplyAlpha(border_color, kHeaderSeparatorAlpha));
 
-        ImGui::SetCursorPos(ImVec2(
-            kNoteMargin, (kExpandedHeaderHeight - ImGui::GetTextLineHeight()) * 0.5f));
-        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-        ImGui::TextUnformatted(m_title.c_str());
-        ImGui::PopStyleColor();
-
         ImFont* action_icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
         ImGui::PushFont(action_icon_font);
-        ImVec2      edit_icon_size  = ImGui::CalcTextSize(ICON_EDIT);
-        ImVec2      close_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
-        const float action_btn_size =
-            std::max({kHeaderButtonMinSize, edit_icon_size.x + kHeaderButtonPadding,
-                      close_icon_size.x + kHeaderButtonPadding});
+        ImVec2 close_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
+        ImVec2 trash_icon_size = ImGui::CalcTextSize(ICON_TRASH_CAN);
+        ImGui::PopFont();
+        const float action_btn_size = std::max(
+            {kHeaderButtonMinSize, close_icon_size.x + kHeaderButtonPadding,
+             trash_icon_size.x + kHeaderButtonPadding});
         const float action_btn_y = (kExpandedHeaderHeight - action_btn_size) * 0.5f;
 
-        ImGui::SetCursorPos(ImVec2(
-            win_size.x - action_btn_size * 2.0f - kNoteMargin - kHeaderButtonGap,
-            action_btn_y));
+        // The title is plain text by default so the header stays draggable;
+        // a click (not a drag) on it switches to an inline input.
+        const float buttons_width = action_btn_size * 2.0f + kHeaderButtonGap;
+        const float title_width   = std::max(
+            0.0f, win_size.x - buttons_width - kHeaderButtonGap - kNoteMargin * 2.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+        if(m_editing_title)
+        {
+            ImGui::SetCursorPos(ImVec2(
+                kNoteMargin - kTitleInputPadX,
+                (kExpandedHeaderHeight - ImGui::GetFrameHeight()) * 0.5f));
+            ImGui::SetNextItemWidth(title_width + kTitleInputPadX);
+            PushPlainTextInputStyle(settings);
+            if(m_focus_input)
+            {
+                ImGui::SetKeyboardFocusHere();
+                m_focus_input = false;
+            }
+            InlineInputText(("##title_" + std::to_string(m_id)).c_str(), "Title", m_title,
+                            ImGuiInputTextFlags_EnterReturnsTrue);
+            if(ImGui::IsItemDeactivated())
+            {
+                m_editing_title = false;
+            }
+            PopPlainTextInputStyle();
+        }
+        else
+        {
+            ImGui::SetCursorPos(ImVec2(
+                kNoteMargin, (kExpandedHeaderHeight - ImGui::GetTextLineHeight()) * 0.5f));
+            if(m_title.empty())
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
+                ImGui::TextUnformatted("Title");
+                ImGui::PopStyleColor();
+            }
+            else
+            {
+                ElidedText(m_title.c_str(), title_width);
+            }
+
+            const ImVec2 title_min(win_pos.x + kNoteMargin, win_pos.y);
+            const ImVec2 title_max(title_min.x + title_width,
+                                   win_pos.y + kExpandedHeaderHeight);
+            if(ImGui::IsMouseHoveringRect(title_min, title_max) &&
+               IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
+            {
+                m_editing_title = true;
+                m_focus_input   = true;
+            }
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::PushFont(action_icon_font);
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
         ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
+
+        ImGui::SetCursorPos(ImVec2(
+            win_size.x - action_btn_size * 2.0f - kHeaderButtonGap - kNoteMargin,
+            action_btn_y));
         if(ImGui::Button(
-               (std::string(ICON_EDIT) + "##edit_" + std::to_string(m_id)).c_str(),
+               (std::string(ICON_TRASH_CAN) + "##delete_" + std::to_string(m_id)).c_str(),
                ImVec2(action_btn_size, action_btn_size)))
         {
-            EventManager::GetInstance()->AddEvent(
-                std::make_shared<StickyNoteEvent>(m_id, m_project_id));
+            m_pending_delete = true;
         }
-        ImGui::PopStyleColor(4);
 
         ImGui::SetCursorPos(
             ImVec2(win_size.x - action_btn_size - kNoteMargin, action_btn_y));
-        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
-        ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
         if(ImGui::Button(
                (std::string(ICON_X_CIRCLED) + "##close_" + std::to_string(m_id)).c_str(),
                ImVec2(action_btn_size, action_btn_size)))
         {
-            m_is_minimized = true;
+            if(m_provisional && m_title.empty() && m_text.empty())
+            {
+                m_pending_delete = true;
+            }
+            else
+            {
+                m_is_minimized = true;
+            }
         }
         ImGui::PopStyleColor(4);
         ImGui::PopFont();
 
-        // Scroll only the note body; the header/actions stay pinned.
+        // Inline-editable body filling the remaining space.
         const float body_y      = kExpandedHeaderHeight + kNoteMargin;
         const float body_height = std::max(0.0f, win_size.y - body_y - kNoteMargin);
         ImGui::SetCursorPos(ImVec2(kNoteMargin, body_y));
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
-        ImGui::BeginChild("StickyNoteBody",
-                          ImVec2(win_size.x - kNoteMargin * 2.0f, body_height), false);
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
-        ImGui::TextUnformatted(m_text.c_str());
-        ImGui::PopTextWrapPos();
-        ImGui::PopStyleColor();
-        ImGui::EndChild();
+        PushPlainTextInputStyle(settings);
+        InlineInputTextMultiline(
+            ("##body_" + std::to_string(m_id)).c_str(), m_text,
+            ImVec2(win_size.x - kNoteMargin * 2.0f, body_height),
+            ImGuiInputTextFlags_AllowTabInput);
+        bool body_active = ImGui::IsItemActive();
+        PopPlainTextInputStyle();
         ImGui::PopStyleColor();
 
+        // Placeholder hint while the body is empty and not being edited.
+        if(m_text.empty() && !body_active)
+        {
+            note_draw_list->AddText(
+                ImVec2(win_pos.x + kNoteMargin + ImGui::GetStyle().FramePadding.x,
+                       win_pos.y + body_y + ImGui::GetStyle().FramePadding.y),
+                muted_text_color, "Write a note...");
+        }
+
         hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+
+        // A provisional (just-created) note commits once anything is typed, and
+        // is discarded if the user clicks away while it is still empty.
+        if(m_provisional)
+        {
+            bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+            if(focused)
+            {
+                m_seen_focus = true;
+            }
+
+            if(!m_title.empty() || !m_text.empty())
+            {
+                m_provisional = false;
+            }
+            else if(m_seen_focus && !focused && !refocusing)
+            {
+                m_pending_delete = true;
+            }
+        }
 
         m_expanded_screen_pos = win_pos;
         m_size                = win_size;
@@ -470,9 +614,9 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         spdlog::error("StickyNote::HandleDrag: conversion_manager shared_ptr is null");
         return false;
     }
-    // Expanded notes live in their own floating window, which owns move/resize.
-    if(!m_is_minimized) return false;
-
+    // The anchor marker can be dragged whether the note is minimized or expanded;
+    // it moves the note's timeline position, independent of the expanded window's
+    // own screen position.
     EnsureBound(layout);
 
     float x = conversion_manager->TimeToPixel(m_time_ns);
@@ -494,7 +638,7 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     bool   mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     bool   mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
-    if((dragged_id == -1 || dragged_id == m_id) && !m_dragging &&
+    if((dragged_id == INVALID_STICKY_ID || dragged_id == m_id) && !m_dragging &&
        ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
        !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
@@ -511,7 +655,17 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         float  new_y       = mouse_pos.y - window_position.y - m_drag_offset.y;
         ImVec2 window_size = ImGui::GetWindowSize();
         new_x = std::clamp(new_x, 0.0f, window_size.x - drag_w);
-        new_y = std::clamp(new_y, 0.0f, window_size.y - drag_h);
+
+        // Keep the anchor inside the visible track viewport so it cannot be
+        // dragged off-screen; the timeline auto-scrolls to reveal more instead.
+        float min_y = 0.0f;
+        float max_y = window_size.y - drag_h;
+        if(layout.view_max_y > layout.view_min_y)
+        {
+            min_y = layout.view_min_y;
+            max_y = layout.view_max_y - drag_h;
+        }
+        new_y = std::clamp(new_y, min_y, std::max(min_y, max_y));
 
         m_time_ns = conversion_manager->PixelToTime(new_x);
         // Re-anchor to the track under the cursor, storing a track-relative
@@ -535,7 +689,7 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     if(m_dragging && mouse_released)
     {
         m_dragging = false;
-        dragged_id = -1;
+        dragged_id = INVALID_STICKY_ID;
         TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
     }
 

@@ -20,6 +20,9 @@ class TimePixelTransform;
 // Sentinel for an unbound note (e.g. legacy project).
 inline constexpr uint64_t INVALID_TRACK_ID = INVALID_UINT64_INDEX;
 
+// Sentinel for "no note is currently being dragged".
+inline constexpr int INVALID_STICKY_ID = -1;
+
 // Per-frame track layout used to anchor notes to their track.
 struct TrackLayout
 {
@@ -28,15 +31,20 @@ struct TrackLayout
     // track_at clamps to the first/last track so notes stay draggable anywhere.
     std::function<bool(float abs_y, uint64_t& out_track_id, float& out_top_y)>
         track_at;
+
+    // Visible track viewport in content-space Y; a dragged anchor is clamped to
+    // this range so it stays on-screen (auto-scroll reveals the rest).
+    float view_min_y = 0.0f;
+    float view_max_y = 0.0f;
 };
 
 class StickyNote
 {
 public:
     StickyNote(double time_ns, float y_offset, const ImVec2& size,
-               const std::string& text, const std::string& title,
-               const std::string& project_id, double v_min, double v_max,
-               uint64_t track_id = INVALID_TRACK_ID, bool is_minimized = true);
+               const std::string& text, const std::string& title, double v_min,
+               double v_max, uint64_t track_id = INVALID_TRACK_ID,
+               bool is_minimized = true);
 
     bool Render(ImDrawList* draw_list, const ImVec2& window_position,
                 std::shared_ptr<TimePixelTransform> conversion_manager,
@@ -45,13 +53,17 @@ public:
     // Draws a non-interactive marker, used above a track's reorder preview.
     void RenderDragGhost(ImDrawList* draw_list, const ImVec2& screen_pos) const;
 
-    // Drag interaction (minimized marker only; the expanded note is a floating
-    // window that owns its own move/resize).
+    // Drags the timeline anchor marker (minimized or expanded), moving the note's
+    // timeline position. The expanded window keeps its own screen position.
     bool HandleDrag(const ImVec2&                       window_position,
                     std::shared_ptr<TimePixelTransform> conversion_manager,
                     int& dragged_id, const TrackLayout& layout);
     void SetTitle(std::string title);
-    void SetText(std::string title);
+    void SetText(std::string text);
+
+    // Opens the note expanded and focused for inline creation. Provisional until
+    // the user types; an empty note abandoned this way is auto-discarded.
+    void BeginInlineEdit();
 
     double             GetTimeNs() const;
     float              GetYOffset() const;
@@ -67,6 +79,9 @@ public:
     double             GetVMaxX() const;
     bool               IsMinimized() const { return m_is_minimized; }
     uint64_t           GetTrackId() const { return m_track_id; }
+
+    // True after the user hit the delete button; the owner sweeps these notes.
+    bool               WantsDelete() const { return m_pending_delete; }
 
 private:
     // Binds an unbound note to a track, making its offset track-relative.
@@ -99,14 +114,18 @@ private:
     ImVec2      m_size;
     std::string m_text;
     std::string m_title;
-    std::string m_project_id;
     bool        m_dragging    = false;
     ImVec2      m_drag_offset = ImVec2(0, 0);
     bool        m_is_visible;
     double      m_v_min_x;
     double      m_v_max_x;
     bool        m_is_minimized;
-    bool        m_request_focus = false;  // Raise the expanded window next frame.
+    bool        m_pending_delete = false;
+    bool        m_request_focus  = false;
+    bool        m_focus_input    = false;  // Focus the title field next frame.
+    bool        m_editing_title  = false;
+    bool        m_provisional    = false;  // Freshly created; discard if left empty.
+    bool        m_seen_focus     = false;
     // Absolute screen position of the floating expanded window; (-1, -1) until
     // first placed. Tracked live so the window stays where the user moved it.
     // Not persisted to the project.

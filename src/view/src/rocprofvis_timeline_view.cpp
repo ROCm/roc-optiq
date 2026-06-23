@@ -97,7 +97,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_measurement(measurement)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_annotations(annotations)
-, m_dragged_sticky_id(-1)
+, m_dragged_sticky_id(INVALID_STICKY_ID)
 , m_reordering_track_id(INVALID_TRACK_ID)
 , m_reorder_preview_screen_top_y(0.0f)
 , m_histogram(nullptr)
@@ -294,6 +294,11 @@ TimelineView::BuildTrackLayout()
         return true;
     };
 
+    // Visible track viewport in content-space Y, used to keep a dragged anchor
+    // on-screen (see StickyNote::HandleDrag).
+    layout.view_min_y = m_scroll_position_y;
+    layout.view_max_y = m_scroll_position_y + GetTrackViewportHeight();
+
     return layout;
 }
 
@@ -326,6 +331,13 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
                 note.HandleDrag(window_position, m_tpt, m_dragged_sticky_id, layout);
         }
 
+        // While an anchor is dragged toward an edge, scroll the view that way so
+        // the note can be moved beyond the currently visible range.
+        if(m_dragged_sticky_id != INVALID_STICKY_ID)
+        {
+            AutoScrollForAnnotationDrag(window_position);
+        }
+
         bool annotation_blocks_timeline_input = false;
 
         // Rendering --> based on added order (old bottom new on top)
@@ -355,9 +367,66 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
     m_stop_user_interaction |= movement_drag;
 
     RenderTimelineViewOptionsMenu(window_position);
-    m_annotations->ShowStickyNotePopup();
-    m_annotations->ShowStickyNoteEditPopup();
+    m_annotations->RemoveNotesPendingDelete();
 }
+
+void
+TimelineView::AutoScrollForAnnotationDrag(ImVec2 content_origin)
+{
+    // Distance from a viewport edge that begins scrolling, and the maximum
+    // per-frame scroll applied right at the edge (scaled by how deep in we are).
+    constexpr float kEdgeMargin  = 36.0f;
+    constexpr float kMaxScrollPx = 16.0f;
+
+    const float graph_w = m_tpt->GetGraphSizeX();
+    if(graph_w <= 0.0f) return;
+
+    const ImVec2 mouse     = ImGui::GetMousePos();
+    const float  vp_left   = content_origin.x;
+    const float  vp_right  = content_origin.x + graph_w;
+    const float  vp_top    = content_origin.y + m_scroll_position_y;
+    const float  vp_bottom = vp_top + GetTrackViewportHeight();
+
+    // Scroll speed ramped by how far the cursor has crossed into the margin.
+    auto edge_speed = [kEdgeMargin, kMaxScrollPx](float distance_into_margin) {
+        return kMaxScrollPx * std::clamp(distance_into_margin / kEdgeMargin, 0.0f, 1.0f);
+    };
+
+    float horizontal_px = 0.0f;
+    if(mouse.x < vp_left + kEdgeMargin)
+    {
+        horizontal_px = -edge_speed(vp_left + kEdgeMargin - mouse.x);
+    }
+    else if(mouse.x > vp_right - kEdgeMargin)
+    {
+        horizontal_px = edge_speed(mouse.x - (vp_right - kEdgeMargin));
+    }
+    if(horizontal_px != 0.0f)
+    {
+        const double view_width = m_tpt->GetRangeX() / m_tpt->GetZoom();
+        const double move_ns    = (horizontal_px / graph_w) * view_width;
+        const double max_offset =
+            std::max(0.0, m_tpt->GetRangeX() - m_tpt->GetVWidth());
+        m_tpt->SetViewTimeOffsetNs(
+            std::clamp(m_tpt->GetViewTimeOffsetNs() + move_ns, 0.0, max_offset));
+    }
+
+    float vertical_px = 0.0f;
+    if(mouse.y < vp_top + kEdgeMargin)
+    {
+        vertical_px = -edge_speed(vp_top + kEdgeMargin - mouse.y);
+    }
+    else if(mouse.y > vp_bottom - kEdgeMargin)
+    {
+        vertical_px = edge_speed(mouse.y - (vp_bottom - kEdgeMargin));
+    }
+    if(vertical_px != 0.0f)
+    {
+        m_scroll_position_y = std::clamp(m_scroll_position_y + vertical_px, 0.0f,
+                                         m_content_max_y_scroll);
+    }
+}
+
 void
 TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 {
@@ -568,9 +637,9 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
             {
                 y_offset = rel_mouse_pos.y - track_top_y;
             }
-            m_annotations->OpenStickyNotePopup(time_ns, y_offset, m_tpt->GetVMinX(),
-                                               m_tpt->GetVMaxX(), m_tpt->GetGraphSize(),
-                                               track_id);
+            m_annotations->CreateStickyNote(time_ns, y_offset, m_tpt->GetVMinX(),
+                                            m_tpt->GetVMaxX(), m_tpt->GetGraphSize(),
+                                            track_id);
         }
 
         ImGui::Separator();
@@ -1419,7 +1488,9 @@ TimelineView::WantsContinuousRender() const
 {
     // The loading-timer debounce gates track-data requests and only advances
     // while rendering, so keep rendering until it expires or the load stalls.
-    return m_loading_timer.IsRunning();
+    // Dragging an anchor also needs frames so edge auto-scroll keeps advancing
+    // when the cursor is held still.
+    return m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID;
 }
 
 bool

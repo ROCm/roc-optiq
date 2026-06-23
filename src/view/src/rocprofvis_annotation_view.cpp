@@ -4,6 +4,7 @@
 #include "rocprofvis_annotation_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"

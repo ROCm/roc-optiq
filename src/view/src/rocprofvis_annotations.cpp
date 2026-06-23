@@ -3,13 +3,8 @@
 
 #include "rocprofvis_annotations.h"
 #include "json.h"
-#include "rocprofvis_events.h"
-#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_stickynote.h"
-#include "widgets/rocprofvis_gui_helpers.h"
-#include "widgets/rocprofvis_widget.h"
 #include <algorithm>
-#include <cstring>
 #include <vector>
 namespace RocProfVis
 {
@@ -136,48 +131,12 @@ AnnotationsManagerProjectSettings::Valid() const
 
 AnnotationsManager::AnnotationsManager(const std::string& project_id)
 : m_project_settings(project_id, *this)
-, m_project_id(project_id)
 , m_show_annotations(true)
-, m_visible_center(0.0f, 0.0f)
-, m_dragged_sticky_id(-1)
 {
     if(m_project_settings.Valid())
     {
         m_project_settings.FromJson();
     }
-
-    auto sticky_note_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto evt = std::dynamic_pointer_cast<StickyNoteEvent>(e);
-        if(evt && evt->GetSourceId() == m_project_id)
-        {
-            m_show_sticky_edit_popup = true;
-            m_edit_sticky_id         = evt->GetNoteId();
-
-            for(int i = 0; i < m_sticky_notes.size(); i++)
-            {
-                if(m_sticky_notes[i].GetID() == m_edit_sticky_id)
-                {
-                    const std::string& title = m_sticky_notes[i].GetTitle();
-                    size_t len_title = std::min(title.size(), sizeof(m_sticky_title) - 1);
-                    std::memcpy(m_sticky_title, title.c_str(), len_title);
-                    m_sticky_title[len_title] = '\0';
-                    // Copy the text string to m_sticky_text safely
-                    const std::string& text = m_sticky_notes[i].GetText();
-                    size_t len_text = std::min(text.size(), sizeof(m_sticky_text) - 1);
-                    std::memcpy(m_sticky_text, text.c_str(), len_text);
-                    m_sticky_text[len_text] = '\0';
-                    break;
-                }
-            }
-        }
-    };
-    m_edit_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kStickyNoteEdited), sticky_note_handler);
-}
-AnnotationsManager::~AnnotationsManager()
-{
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kStickyNoteEdited), m_edit_token);
 }
 
 void
@@ -192,8 +151,8 @@ AnnotationsManager::AddSticky(double time_ns, float y_offset, const ImVec2& size
                               double v_min, double v_max, uint64_t track_id,
                               bool is_minimized)
 {
-    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, m_project_id, v_min,
-                                v_max, track_id, is_minimized);
+    m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, v_min, v_max,
+                                track_id, is_minimized);
 }
 
 bool
@@ -209,223 +168,34 @@ AnnotationsManager::SetVisible(bool SetVisible)
 }
 
 void
-AnnotationsManager::ShowStickyNoteEditPopup()
+AnnotationsManager::CreateStickyNote(double time_ns, float y_offset, double v_min,
+                                     double v_max, ImVec2 graph_size, uint64_t track_id)
 {
-    if(!m_show_sticky_edit_popup) return;
+    constexpr ImVec2 kNewNoteSize(220.0f, 150.0f);
 
-    SettingsManager& settings   = SettingsManager::GetInstance();
-    ImU32            text_color = settings.GetColor(Colors::kTextMain);
-
-    PopUpStyle popup_style;
-    popup_style.PushPopupStyles();
-    popup_style.PushTitlebarColors();
-    popup_style.CenterPopup();
-    
-    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-
-    ImGui::OpenPopup("Edit Annotation");
-
-    ImGui::SetNextWindowSize(
-        GetResponsiveWindowSize(ImVec2(390.0f, 420.0f), ImVec2(320.0f, 320.0f)),
-        ImGuiCond_Once);  // Initial size, user can resize
-    if(ImGui::BeginPopupModal("Edit Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
-    {
-        ImGui::TextDisabled("Title");
-        ImGui::SetNextItemWidth(-FLT_MIN);  // Full width
-        ImGui::InputText("##StickyTitle", m_sticky_title, IM_ARRAYSIZE(m_sticky_title),
-                         ImGuiInputTextFlags_AutoSelectAll);
-
-        ImGui::Spacing();
-
-        ImGui::TextDisabled("Note");
-        ImVec2 text_box_size = ImVec2(ImGui::GetContentRegionAvail().x,
-                                      std::max(140.0f,
-                                               ImGui::GetContentRegionAvail().y -
-                                                   ImGui::GetFrameHeightWithSpacing() -
-                                                   ImGui::GetStyle().ItemSpacing.y * 2.0f));
-        ImGui::InputTextMultiline("##StickyText", m_sticky_text,
-                                  IM_ARRAYSIZE(m_sticky_text), text_box_size,
-                                  ImGuiInputTextFlags_AllowTabInput);
-
-        ImGui::Spacing();
-
-        float button_width       = 88.0f;
-        float spacing            = ImGui::GetStyle().ItemSpacing.x;
-        float total_button_width = button_width * 3 + spacing * 2;
-        float cursor_x           = ImGui::GetContentRegionAvail().x - total_button_width;
-        if(cursor_x > 0) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cursor_x);
-
-        bool save_clicked = ImGui::Button("Save", ImVec2(button_width, 0));
-        ImGui::SameLine();
-        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(button_width, 0));
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              settings.GetColor(Colors::kAccentHover));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              settings.GetColor(Colors::kAccentActive));
-        bool delete_clicked = ImGui::Button("Delete", ImVec2(button_width, 0));
-
-        ImGui::PopStyleColor(3);
-
-        if(save_clicked)
-        {
-            for(auto& note : m_sticky_notes)
-            {
-                if(note.GetID() == m_edit_sticky_id)
-                {
-                    note.SetText(std::string(m_sticky_text));
-                    note.SetTitle(std::string(m_sticky_title));
-                    m_edit_sticky_id         = -1;
-                    m_show_sticky_edit_popup = false;
-                    ImGui::CloseCurrentPopup();
-                    break;
-                }
-            }
-        }
-        if(cancel_clicked)
-        {
-            m_show_sticky_edit_popup = false;
-            m_edit_sticky_id         = -1;
-            ImGui::CloseCurrentPopup();
-        }
-        if(delete_clicked)
-        {
-            int count = 0;
-            for(auto& note : m_sticky_notes)
-            {
-                if(note.GetID() == m_edit_sticky_id)
-                {
-                    m_sticky_notes.erase(m_sticky_notes.begin() + count);
-                    break;
-                }
-                count++;
-            }
-            m_show_sticky_edit_popup = false;
-            m_edit_sticky_id         = -1;
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndPopup();
-    }
-    ImGui::PopStyleColor(1);  // Pop text color
-    // PopUpStyle destructor will automatically pop remaining styles
-}
-
-void
-AnnotationsManager::ShowStickyNotePopup()
-{
-    if(!m_show_sticky_popup) return;
-
-    int count = 0;
-    for(auto& note : m_sticky_notes)
-    {
-        if(note.GetID() == m_edit_sticky_id)
-        {
-            const std::string& title = note.GetTitle();
-            size_t len_title = std::min(title.size(), sizeof(m_sticky_title) - 1);
-            std::memcpy(m_sticky_title, title.c_str(), len_title);
-            m_sticky_title[len_title] = '\0';
-            // Copy the text string to m_sticky_text safely
-            const std::string& text = note.GetText();
-            size_t len_text = std::min(text.size(), sizeof(m_sticky_text) - 1);
-            std::memcpy(m_sticky_text, text.c_str(), len_text);
-            m_sticky_text[len_text] = '\0';
-        }
-        count++;
-    }
-
-    SettingsManager& settings   = SettingsManager::GetInstance();
-    ImU32            text_color = settings.GetColor(Colors::kTextMain);
-
-    PopUpStyle popup_style;
-    popup_style.PushPopupStyles();
-    popup_style.PushTitlebarColors();
-    popup_style.CenterPopup();
-    
-    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-
-    ImGui::OpenPopup("Add Annotation");
-
-    ImGui::SetNextWindowSize(
-        GetResponsiveWindowSize(ImVec2(390.0f, 420.0f), ImVec2(320.0f, 320.0f)),
-        ImGuiCond_Once);  // Initial size, user can resize
-    if(ImGui::BeginPopupModal("Add Annotation", nullptr, ImGuiWindowFlags_NoCollapse))
-    {
-        ImGui::TextDisabled("Title");
-        ImGui::SetNextItemWidth(-FLT_MIN);  // Make the input take the full width
-        ImGui::InputText("##StickyTitle", m_sticky_title, IM_ARRAYSIZE(m_sticky_title),
-                         ImGuiInputTextFlags_AutoSelectAll);
-
-        ImGui::Spacing();
-
-        ImGui::TextDisabled("Note");
-        ImVec2 text_box_size = ImVec2(ImGui::GetContentRegionAvail().x,
-                                      std::max(140.0f,
-                                               ImGui::GetContentRegionAvail().y -
-                                                   ImGui::GetFrameHeightWithSpacing() -
-                                                   ImGui::GetStyle().ItemSpacing.y * 2.0f));
-        ImGui::InputTextMultiline("##StickyText", m_sticky_text,
-                                  IM_ARRAYSIZE(m_sticky_text), text_box_size,
-                                  ImGuiInputTextFlags_AllowTabInput);
-
-        ImGui::Spacing();
-
-        // Button row, right-aligned
-        float button_width       = 100.0f;
-        float spacing            = ImGui::GetStyle().ItemSpacing.x;
-        float total_button_width = button_width * 2 + spacing;
-        float cursor_x           = ImGui::GetContentRegionAvail().x - total_button_width;
-        if(cursor_x > 0) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cursor_x);
-
-        bool save_clicked = ImGui::Button("Save", ImVec2(button_width, 0));
-        ImGui::SameLine();
-        bool cancel_clicked = ImGui::Button("Cancel", ImVec2(button_width, 0));
-
-        if(save_clicked)
-        {
-            AddSticky(m_sticky_time_ns, m_sticky_y_offset, ImVec2(180, 80),
-                      std::string(m_sticky_text), std::string(m_sticky_title), m_v_min_x,
-                      m_v_max_x, m_sticky_track_id);
-            m_show_sticky_popup = false;
-            ImGui::CloseCurrentPopup();
-        }
-        if(cancel_clicked)
-        {
-            m_show_sticky_popup = false;
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndPopup();
-    }
-    ImGui::PopStyleColor(1);  // Pop text color
-    // PopUpStyle destructor will automatically pop remaining styles
-}
-
-void
-AnnotationsManager::OpenStickyNotePopup(double time_ns, float y_offset, double v_min,
-                                        double v_max, ImVec2 graph_size,
-                                        uint64_t track_id)
-{
+    double note_time = time_ns;
+    float  note_y    = y_offset;
     if(time_ns == INVALID_TIME_NS)
     {
-        double center_time_ns  = v_min + (v_max - v_min) * 0.5;
-        float  center_y_offset = y_offset + graph_size.y * 0.5f;
-        m_sticky_time_ns       = center_time_ns;
-        m_sticky_y_offset      = center_y_offset;
-    }
-    else
-    {
-        m_sticky_time_ns  = time_ns;
-        m_sticky_y_offset = y_offset;
+        note_time = v_min + (v_max - v_min) * 0.5;
+        note_y    = y_offset + graph_size.y * 0.5f;
     }
 
-    m_sticky_title[0]   = '\0';
-    m_sticky_text[0]    = '\0';
-    m_show_sticky_popup = true;
-    m_v_min_x           = v_min;
-    m_v_max_x           = v_max;
-    m_sticky_track_id   = track_id;
+    AddSticky(note_time, note_y, kNewNoteSize, std::string(), std::string(), v_min, v_max,
+              track_id, /*is_minimized=*/false);
+    if(!m_sticky_notes.empty())
+    {
+        m_sticky_notes.back().BeginInlineEdit();
+    }
+}
+
+void
+AnnotationsManager::RemoveNotesPendingDelete()
+{
+    m_sticky_notes.erase(
+        std::remove_if(m_sticky_notes.begin(), m_sticky_notes.end(),
+                       [](const StickyNote& note) { return note.WantsDelete(); }),
+        m_sticky_notes.end());
 }
 
 std::vector<StickyNote>&

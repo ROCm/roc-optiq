@@ -939,13 +939,18 @@ counter) for the track, then renders an `InfoTable`.
 ### `Annotations` and `StickyNote`
 
 - `AnnotationsManager` (`rocprofvis_annotations.{h,cpp}`) - holds the
-  list of `StickyNote`s, the popup state for adding/editing, and the
-  visibility flag. Persisted via `AnnotationsManagerProjectSettings`.
+  list of `StickyNote`s and the visibility flag, creates new notes
+  inline via `CreateStickyNote`, and removes user-deleted notes via
+  `RemoveNotesPendingDelete`. Persisted via
+  `AnnotationsManagerProjectSettings`.
 - `StickyNote` (`rocprofvis_stickynote.{h,cpp}`) - one note. Carries
   position (time + y_offset), size, text/title, and view-range
-  metadata. `Render(draw_list, window_pos, tpt)`,
-  `HandleResize(...)`, `HandleDrag(...)`. Edit handled via
-  `kStickyNoteEdited` event.
+  metadata. `Render(draw_list, window_pos, tpt)` and `HandleDrag(...)`
+  drag the timeline anchor (minimized or expanded), and the timeline
+  auto-scrolls when the anchor nears a viewport edge. The expanded note
+  is a floating window with an inline-editable title (click to edit) and
+  body; `BeginInlineEdit()` opens a freshly created note focused for
+  typing.
 - `AnnotationView` (`rocprofvis_annotation_view.{h,cpp}`) - the
   sub-tab in `AnalysisView` that lists notes and lets the user
   select/hide them.

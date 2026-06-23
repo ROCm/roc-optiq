@@ -218,7 +218,7 @@ class ProfileDatabase : public SqliteDatabase
                             guid_list_t run_for_db_instances);
         rocprofvis_dm_result_t ExecuteQueriesAsync(
                             std::vector<std::pair<DbInstance*, std::string>>& queries,
-                            std::vector<Future*>& futures,
+                            std::vector<Future*>& sub_futures,
                             rocprofvis_dm_handle_t handle,
                             RpvSqliteExecuteQueryCallback callback);
 

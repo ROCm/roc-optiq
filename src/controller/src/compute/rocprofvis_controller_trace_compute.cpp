@@ -516,7 +516,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                             future->ResetProgress();
                                             ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelCodeObjects, m_query_arguments, m_query_output, [this, &kernel](const QueryDataStore& data_store){
                                                 rocprofvis_handle_t* pc_handle = nullptr;
-                                                if(kRocProfVisResultSuccess != kernel->GetObject(kRPVControllerKernelPcSamplingIndexed, 0, &pc_handle) || !pc_handle)
+                                                if(kRocProfVisResultSuccess != kernel->GetObject(kRPVControllerKernelPcSampling, 0, &pc_handle) || !pc_handle)
                                                     return;
                                                 ((PcSampling*)pc_handle)->SetUInt64(kRPVControllerPCSamplingNumCodeObjects, 0, data_store.rows.size());
                                                 rocprofvis_property_t property;
@@ -534,7 +534,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                             });
                                             {
                                                 rocprofvis_handle_t* pc_handle = nullptr;
-                                                if(kRocProfVisResultSuccess == kernel->GetObject(kRPVControllerKernelPcSamplingIndexed, 0, &pc_handle) && pc_handle)
+                                                if(kRocProfVisResultSuccess == kernel->GetObject(kRPVControllerKernelPcSampling, 0, &pc_handle) && pc_handle)
                                                 {
                                                     PcSampling* pc_sampling = (PcSampling*)pc_handle;
                                                     uint64_t num_code_objects = 0;
@@ -579,7 +579,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                             }
                                             {
                                                 rocprofvis_handle_t* pc_handle2 = nullptr;
-                                                if(kRocProfVisResultSuccess == kernel->GetObject(kRPVControllerKernelPcSamplingIndexed, 0, &pc_handle2) && pc_handle2)
+                                                if(kRocProfVisResultSuccess == kernel->GetObject(kRPVControllerKernelPcSampling, 0, &pc_handle2) && pc_handle2)
                                                 {
                                                     PcSampling* pc_sampling = (PcSampling*)pc_handle2;
                                                     uint64_t num_isa_lines = 0;
@@ -725,7 +725,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                             future->ResetProgress();
                                             ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelSourceFiles, m_query_arguments, m_query_output, [this, &kernel](const QueryDataStore& data_store){
                                                 rocprofvis_handle_t* pc_handle = nullptr;
-                                                if(kRocProfVisResultSuccess != kernel->GetObject(kRPVControllerKernelPcSamplingIndexed, 0, &pc_handle) || !pc_handle)
+                                                if(kRocProfVisResultSuccess != kernel->GetObject(kRPVControllerKernelPcSampling, 0, &pc_handle) || !pc_handle)
                                                     return;
                                                 ((PcSampling*)pc_handle)->SetUInt64(kRPVControllerPCSamplingNumSourceFiles, 0, data_store.rows.size());
                                                 rocprofvis_property_t property;
@@ -742,7 +742,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 }
                                             });
                                             rocprofvis_handle_t* pc_handle = nullptr;
-                                            if(kRocProfVisResultSuccess == kernel->GetObject(kRPVControllerKernelPcSamplingIndexed, 0, &pc_handle) && pc_handle)
+                                            if(kRocProfVisResultSuccess == kernel->GetObject(kRPVControllerKernelPcSampling, 0, &pc_handle) && pc_handle)
                                             {
                                                 PcSampling* pc_sampling = (PcSampling*)pc_handle;
                                                 uint64_t num_source_files = 0;

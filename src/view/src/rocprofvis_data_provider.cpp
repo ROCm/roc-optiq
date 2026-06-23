@@ -4591,7 +4591,7 @@ DataProvider::LoadPcSamplingData(KernelInfo& kernel, rocprofvis_handle_t* kernel
 {
     rocprofvis_handle_t* pc_handle = nullptr;
     if(kRocProfVisResultSuccess != rocprofvis_controller_get_object(
-           kernel_handle, kRPVControllerKernelPcSamplingIndexed, 0, &pc_handle) || !pc_handle)
+           kernel_handle, kRPVControllerKernelPcSampling, 0, &pc_handle) || !pc_handle)
         return;
 
     LoadPcSamplingCodeObjects(kernel, pc_handle);

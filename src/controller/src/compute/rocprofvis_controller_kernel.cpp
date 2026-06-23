@@ -96,7 +96,7 @@ rocprofvis_result_t Kernel::GetObject(rocprofvis_property_t property, uint64_t i
     {
         switch(property)
         {
-            case kRPVControllerKernelPcSamplingIndexed:
+            case kRPVControllerKernelPcSampling:
             {
                 *value = (rocprofvis_handle_t*)&m_pc_sampling_data;
                 result = kRocProfVisResultSuccess;

@@ -905,23 +905,19 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
 rocprofvis_dm_result_t
 ProfileDatabase::ExecuteQueriesAsync(
     std::vector<std::pair<DbInstance*, std::string>>& queries,
-    std::vector<Future*>& sub_futures,
+    Future* parent,
     rocprofvis_dm_handle_t handle,
     RpvSqliteExecuteQueryCallback callback)
 {
-    (void) sub_futures;
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    // These worker futures are local: allocate, run, wait, then free directly.
-    // We intentionally do NOT register them in the parent's sub-future list:
-    // ExecuteQueriesAsync runs on the parent future's own worker thread, and
-    // taking the parent's mutex (via AddSubFuture/DeleteSubFuture) from here
-    // can deadlock against other holders of that mutex. Each worker remains
-    // independently interruptible via its own future (LinkDatabase /
-    // Interrupted() checks in the callback).
+    // Register each worker as a sub-future of the parent so it is reachable by
+    // the parent's SetInterrupted() (cancellation) and is freed through the
+    // mutex-protected DeleteSubFuture() path. AddSubFuture() both allocates and
+    // registers; WaitAndDeleteSubFuture() waits, then unregisters and frees.
     std::vector<Future*> futures(queries.size(), nullptr);
     for(int i = 0; i < queries.size(); i++)
     {
-        futures[i] = (Future*)rocprofvis_db_future_alloc(nullptr);
+        futures[i] = parent->AddSubFuture();
         try
         {
             futures[i]->SetWorker(std::move(
@@ -931,10 +927,10 @@ ProfileDatabase::ExecuteQueriesAsync(
                     queries[i].second.c_str(), handle, i, callback)));
         } catch(std::exception ex)
         {
-            // The worker thread never started, so the future's promise will
-            // never be set; free it now to avoid a wait below that would block
-            // forever on an unfulfilled promise.
-            rocprofvis_db_future_free(futures[i]);
+            // The worker thread never started, so the sub-future's promise will
+            // never be set; unregister and free it now to avoid a wait below
+            // that would block forever on an unfulfilled promise.
+            parent->DeleteSubFuture(futures[i]);
             futures[i] = nullptr;
             result = kRocProfVisDmResultUnknownError;
             ROCPROFVIS_ASSERT_MSG_BREAK(false, ex.what());
@@ -945,11 +941,10 @@ ProfileDatabase::ExecuteQueriesAsync(
         if(futures[i] != nullptr)
         {
             if(kRocProfVisDmResultSuccess !=
-                rocprofvis_db_future_wait(futures[i], UINT64_MAX))
+                parent->WaitAndDeleteSubFuture(futures[i]))
             {
                 result = kRocProfVisDmResultUnknownError;
             }
-            rocprofvis_db_future_free(futures[i]);
             futures[i] = nullptr;
         }
     }

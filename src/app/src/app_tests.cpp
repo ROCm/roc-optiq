@@ -5,6 +5,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_trace_view.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_timeline_view.h"
@@ -204,6 +205,70 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const double tol = saved_span * 0.01;
         IM_CHECK(fabs(restored.v_min_x - saved.v_min_x) < tol);
         IM_CHECK(fabs(restored.v_max_x - saved.v_max_x) < tol);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "event_multi_select");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = tv->GetTimelineViewForTest();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Start from a clean selection.
+        tv->ClearEventSelectionForTest();
+        ctx->Yield(3);
+        std::vector<uint64_t> ids;
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.empty());
+
+        // Need two distinct, clickable events in one flame track.
+        ctx->Yield(3);
+        ImVec2 first(0.0f, 0.0f), second(0.0f, 0.0f);
+        bool have_two = tlv->GetTwoEventScreenCentersForTest(first, second);
+        if (!have_two)
+        {
+            ctx->LogWarning("SKIP: track lacks two distinct events to multi-select");
+            return;
+        }
+
+        // Plain click selects the first event.
+        ctx->MouseMoveToPos(first);
+        ctx->MouseClick(0);
+        ctx->Yield(3);
+        ids.clear();
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.size() == 1);
+
+        // Ctrl+click the second event adds to the selection (multi-select)
+        // rather than replacing it. KeyDown holds the modifier the flame track
+        // reads via HotkeyManager during click handling.
+        ctx->KeyDown(ImGuiMod_Ctrl);
+        ctx->MouseMoveToPos(second);
+        ctx->MouseClick(0);
+        ctx->Yield(3);
+        ctx->KeyUp(ImGuiMod_Ctrl);
+        ctx->Yield(2);
+
+        ids.clear();
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.size() == 2);
+
+        // Leave a clean selection for following tests.
+        tv->ClearEventSelectionForTest();
+        ctx->Yield(2);
     };
 
     t = IM_REGISTER_TEST(e, "app", "minimap_toggle_drives_click");

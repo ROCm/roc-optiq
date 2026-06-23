@@ -120,6 +120,9 @@ public:
     // Screen-space center of the first event in the first displayed flame track,
     // from the renderer's captured geometry. False if none drawn yet.
     bool GetFirstEventScreenCenterForTest(ImVec2& out_center) const;
+    // Screen-space centers of the two widest events in the first flame track
+    // with at least two drawn events. Returns false if fewer than two exist.
+    bool GetTwoEventScreenCentersForTest(ImVec2& out_first, ImVec2& out_second) const;
 #endif
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;

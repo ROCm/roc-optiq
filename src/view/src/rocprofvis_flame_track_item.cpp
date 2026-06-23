@@ -349,8 +349,10 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                             start_position.y + m_level_height + cursor_position.y);
 
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-    // Track the widest box, not the first: the first can be a 1px rect under
-    // the resize handle, which a click would miss.
+    // Track the two widest boxes, not the first: the first can be a 1px rect
+    // under the resize handle, which a click would miss. The widest drives
+    // single-event tests; the second widest gives multi-select tests a distinct,
+    // reliably clickable target.
     {
         const float width = rectMax.x - rectMin.x;
         const float best  = m_first_event_rect_valid_for_test
@@ -359,9 +361,26 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                                 : -1.0f;
         if(width > best)
         {
+            m_second_event_rect_min_for_test   = m_first_event_rect_min_for_test;
+            m_second_event_rect_max_for_test   = m_first_event_rect_max_for_test;
+            m_second_event_rect_valid_for_test = m_first_event_rect_valid_for_test;
+
             m_first_event_rect_min_for_test   = rectMin;
             m_first_event_rect_max_for_test   = rectMax;
             m_first_event_rect_valid_for_test = true;
+        }
+        else
+        {
+            const float second = m_second_event_rect_valid_for_test
+                                     ? (m_second_event_rect_max_for_test.x -
+                                        m_second_event_rect_min_for_test.x)
+                                     : -1.0f;
+            if(width > second)
+            {
+                m_second_event_rect_min_for_test   = rectMin;
+                m_second_event_rect_max_for_test   = rectMax;
+                m_second_event_rect_valid_for_test = true;
+            }
         }
     }
 #endif
@@ -683,7 +702,8 @@ FlameTrackItem::RenderChart(float graph_width)
     m_has_drawn_tool_tip = false;
 
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-    m_first_event_rect_valid_for_test = false;
+    m_first_event_rect_valid_for_test  = false;
+    m_second_event_rect_valid_for_test = false;
 #endif
 
     double     range_start_ns           = TimelineSelection::INVALID_SELECTION_TIME;

@@ -2813,6 +2813,35 @@ TimelineView::GetFirstEventScreenCenterForTest(ImVec2& out_center) const
     }
     return false;
 }
+
+bool
+TimelineView::GetTwoEventScreenCentersForTest(ImVec2& out_first, ImVec2& out_second) const
+{
+    if(!m_graphs)
+    {
+        return false;
+    }
+    for(const TrackGraph& graph : *m_graphs)
+    {
+        if(!graph.display || graph.chart == nullptr)
+        {
+            continue;
+        }
+        const FlameTrackItem* flame = dynamic_cast<const FlameTrackItem*>(graph.chart);
+        if(flame == nullptr)
+        {
+            continue;
+        }
+        // Both events from the same track so the multi-select click pair lands
+        // on a single flame lane.
+        if(flame->GetFirstEventScreenCenterForTest(out_first) &&
+           flame->GetSecondEventScreenCenterForTest(out_second))
+        {
+            return true;
+        }
+    }
+    return false;
+}
 #endif
 
 float

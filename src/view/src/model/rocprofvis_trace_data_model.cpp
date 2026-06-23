@@ -8,7 +8,9 @@ namespace RocProfVis
 namespace View
 {
 
-TraceDataModel::TraceDataModel() {}
+TraceDataModel::TraceDataModel()
+: m_analysis(m_topology)
+{}
 
 std::string
 TraceDataModel::BuildTrackName(uint64_t track_id) const

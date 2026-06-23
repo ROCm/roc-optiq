@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
-#include "widgets/rocprofvis_widget.h"
 #include "rocprofvis_time_to_pixel.h"
 #include <memory>
 #include "widgets/rocprofvis_editable_textfield.h"
@@ -20,6 +18,7 @@ namespace View
 
 class LineTrackItem;
 class TimePixelTransform;
+class TimelineSelection;
 
 struct HighlightYRange
 {
@@ -38,6 +37,7 @@ public:
     bool            BoxPlotStripes() const;
     bool            Highlight() const;
     HighlightYRange HighlightRange() const;
+    std::array<bool, AnalysisTrackStatistics::Counter::kCounterCount> ShowAnalysis() const;
 
 private:
     LineTrackItem& m_track_item;
@@ -78,11 +78,14 @@ class LineTrackItem : public TrackItem
 
 public:
     LineTrackItem(DataProvider& dp, uint64_t track_id,
-                  std::shared_ptr<TimePixelTransform> time_to_pixel_manager);
+                  std::shared_ptr<TimePixelTransform> time_to_pixel_manager,
+                  std::shared_ptr<TimelineSelection>  timeline_selection);
     ~LineTrackItem();
 
-    bool          ReleaseData() override;
-    virtual float CalculateNewMetaAreaSize() override;
+    void         Update() override;
+    bool         ReleaseData() override;
+    virtual void UpdateMetaScaleAreaSize() override;
+    virtual void UpdateMaxMetaScaleAreaSize() override;
 
 protected:
     virtual void RenderMetaAreaScale() override;
@@ -100,18 +103,23 @@ private:
                                const ImVec2& content_size, double scale_y);
 
     std::vector<TraceCounter> m_data;
-    HighlightYRange                         m_highlight_y_limits;
 
-    VerticalLimits           m_min_y;
-    VerticalLimits           m_max_y;
-    std::string              m_units;
-    bool                     m_highlight_y_range;
-    DataProvider&            m_dp;
-    bool                     m_show_boxplot;
-    bool                     m_show_boxplot_stripes;
+    VerticalLimits m_min_y;
+    VerticalLimits m_max_y;
+    std::string    m_units;
+
+    DataProvider& m_dp;
+    float         m_vertical_padding;
+
+    std::array<Pill*, AnalysisTrackStatistics::Counter::kCounterCount> m_pills_analysis;
+
     LineTrackProjectSettings m_linetrack_project_settings;
-    float                    m_vertical_padding;
- };
+    std::array<bool, AnalysisTrackStatistics::Counter::kCounterCount> m_show_analysis;
+    bool                                                              m_highlight_y_range;
+    HighlightYRange m_highlight_y_limits;
+    bool            m_show_boxplot;
+    bool            m_show_boxplot_stripes;
+};
 
 }  // namespace View
 }  // namespace RocProfVis

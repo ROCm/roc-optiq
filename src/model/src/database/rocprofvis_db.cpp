@@ -102,7 +102,35 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
     try {
         future->SetWorker(std::move(std::thread(Database::ReadTraceSliceStatic, this, start, end, tag, num, tracks, future)));
     }
-    catch (std::exception ex)
+    catch (const std::exception& ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t
+Database::ReadTracePMCSliceAsync(
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                    rocprofvis_db_track_selection_t track,
+                                                    bool left_neighbor, 
+                                                    bool right_neighbor,
+                                                    rocprofvis_db_future_t object){
+    Future* future = (Future*) object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end, tag, 1, track);
+    if(result != kRocProfVisDmResultNotLoaded)
+    {
+        spdlog::debug("Slice ({},{}) exists!", start, end);
+        return future->SetPromise(result);
+    }
+    try {
+        future->SetWorker(std::move(std::thread(Database::ReadTracePMCSliceStatic, this, start, end, tag, track, left_neighbor, right_neighbor, future)));
+    }
+    catch (const std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
@@ -298,6 +326,35 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceStatic(
     return db->ReadTraceSlice(start, end, tag, num, tracks, object);
 }
 
+rocprofvis_dm_result_t  Database::ReadTracePMCSliceStatic(
+                                                    Database* db, 
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t            end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                    rocprofvis_db_track_selection_t      track,
+                                                    bool left_neighbor, 
+                                                    bool right_neighbor, 
+                                                    Future* object){
+    return db->ReadTracePMCSlice(start, end, tag, track, left_neighbor, right_neighbor, object);
+}
+
+rocprofvis_dm_result_t  Database::ReadTracePMCSlice(
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                    rocprofvis_db_track_selection_t track, 
+                                                    bool left_neighbor,
+                                                    bool right_neighbor, 
+                                                    Future* object){
+    (void) start;
+    (void) end;
+    (void) tag;
+    (void) track;
+    (void) left_neighbor;
+    (void) right_neighbor;
+    object->SetPromise(kRocProfVisDmResultNotSupported);
+    return kRocProfVisDmResultNotSupported;
+}
 
 rocprofvis_dm_result_t   Database::ReadEventPropertyStatic(
                                                     Database* db, 

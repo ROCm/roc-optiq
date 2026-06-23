@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_track_details.h"
+#include "icons/rocprovfis_icon_defines.h"
+#include "model/rocprofvis_model_types.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
@@ -15,16 +17,20 @@ namespace RocProfVis
 namespace View
 {
 
+// TrackInfo::TrackType
+constexpr const char* TRACK_PREFIX[] = { "Unknown", "Queue",  "Stream",
+                                         "Thread",  "Thread", "Counter" };
+
 TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
                            std::shared_ptr<TimelineSelection> timeline_selection)
-: m_data_provider(dp)
-, m_track_topology(topology)
+: m_track_topology(topology)
+, m_data_provider(dp)
 , m_timeline_selection(timeline_selection)
+, m_settings(SettingsManager::GetInstance())
 , m_selection_dirty(false)
-, m_detail_item_id(0)
+, m_data_valid(false)
 , m_topology_changed_event_token(EventManager::InvalidSubscriptionToken)
 , m_track_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
-, m_data_valid(false)
 {
     auto topology_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
         if(event)
@@ -69,12 +75,11 @@ TrackDetails::Render()
 {
     if(m_data_valid && !m_selection_dirty && !m_track_topology->Dirty())
     {
-        const SettingsManager& settings = SettingsManager::GetInstance();
-        const ImGuiStyle&      style    = settings.GetDefaultStyle();
+        const ImGuiStyle& style = m_settings.GetDefaultStyle();
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
-        ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
         ImGui::BeginChild("track_details", ImVec2(0, 0),
                           ImGuiChildFlags_Borders |
                               ImGuiChildFlags_AlwaysUseWindowPadding);
@@ -87,55 +92,109 @@ TrackDetails::Render()
         }
         else
         {
+            ImFont* icons = m_settings.GetFontManager().GetFont(FontType::kIcon);
+            ImGui::PushFont(icons);
+            ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
+            ImGui::PopFont();
+            int id = 0;
             for(DetailItem& detail : m_track_details)
             {
-                ImGui::PushID(detail.id);
+                ImGui::PushID(id++);
                 if(ImGui::CollapsingHeader(detail.track_name.c_str(),
                                            ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    ImGui::TextUnformatted("Node: ");
-                    ImGui::SameLine();
-                    ImGui::TextUnformatted(detail.node->info->host_name.c_str());
-                    RenderTable(detail.node->info_table);
-                    ImGui::TextUnformatted("Process: ");
-                    ImGui::SameLine();
-                    ImGui::TextUnformatted(detail.process->header.c_str());
-                    RenderTable(detail.process->info_table);
-                    if(detail.queue)
+                    if(detail.parents.node || detail.parents.process || detail.track ||
+                       detail.stream_track)
                     {
-                        ImGui::TextUnformatted("Queue: ");
-                        ImGui::SameLine();
-                        ImGui::TextUnformatted(detail.queue->info->name.c_str());
-                        RenderTable(detail.queue->info_table);
+                        ImGui::BeginChild("topology", ImVec2(0.0f, 0.0f),
+                                          ImGuiChildFlags_Borders |
+                                              ImGuiChildFlags_AutoResizeY);
+                        ImGui::BeginGroup();
+                        IconButton(
+                            detail.parents.expand ? ICON_CHEVRON_DOWN
+                                                  : ICON_CHEVRON_RIGHT,
+                            icons,
+                            ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
+                                   icon_size.y + style.FramePadding.y * 2.0f),
+                            nullptr, false, style.FramePadding,
+                            SettingsManager::GetInstance().GetColor(Colors::kTransparent),
+                            SettingsManager::GetInstance().GetColor(
+                                Colors::kButtonHovered),
+                            SettingsManager::GetInstance().GetColor(
+                                Colors::kTransparent));
+                        if(detail.parents.node)
+                        {
+                            ImGui::SameLine();
+                            ImGui::TextUnformatted(
+                                detail.parents.node->info->host_name.c_str());
+                        }
+                        if(detail.parents.process)
+                        {
+                            ImGui::PushFont(icons);
+                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                            ImGui::TextUnformatted(ICON_ARROW_FORWARD);
+                            ImGui::PopFont();
+                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                            ImGui::TextUnformatted(
+                                detail.parents.process->header.c_str());
+                        }
+                        if(detail.track || detail.stream_track)
+                        {
+                            ImGui::PushFont(icons);
+                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                            ImGui::TextUnformatted(ICON_ARROW_FORWARD);
+                            ImGui::PopFont();
+                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                            if(detail.track)
+                            {
+                                ImGui::TextUnformatted(detail.track->info->name.c_str());
+                            }
+                            else if(detail.stream_track)
+                            {
+                                ImGui::TextUnformatted(
+                                    detail.stream_track->info->name.c_str());
+                            }
+                        }
+                        ImGui::EndGroup();
+                        if(ImGui::IsItemClicked())
+                        {
+                            detail.parents.expand = !detail.parents.expand;
+                        }
+                        if(detail.parents.expand)
+                        {
+                            if(detail.parents.node)
+                            {
+                                ImGui::Text("Node: %s",
+                                            detail.parents.node->info->host_name.c_str());
+                                RenderTable(detail.parents.node->info_table);
+                            }
+                            if(detail.parents.process)
+                            {
+                                ImGui::Text("Process: %s",
+                                            detail.parents.process->header.c_str());
+                                RenderTable(detail.parents.process->info_table);
+                            }
+                        }
+                        ImGui::EndChild();
                     }
-                    else if(detail.instrumented_thread)
+                    if(detail.track || detail.stream_track)
                     {
-                        ImGui::TextUnformatted("Thread: ");
-                        ImGui::SameLine();
-                        ImGui::TextUnformatted(
-                            detail.instrumented_thread->info->name.c_str());
-                        RenderTable(detail.instrumented_thread->info_table);
-                    }
-                    else if(detail.sampled_thread)
-                    {
-                        ImGui::TextUnformatted("Thread: ");
-                        ImGui::SameLine();
-                        ImGui::TextUnformatted(detail.sampled_thread->info->name.c_str());
-                        RenderTable(detail.sampled_thread->info_table);
-                    }
-                    else if(detail.counter)
-                    {
-                        ImGui::TextUnformatted("Counter: ");
-                        ImGui::SameLine();
-                        ImGui::TextUnformatted(detail.counter->info->name.c_str());
-                        RenderTable(detail.counter->info_table);
-                    }
-                    else if(detail.stream)
-                    {
-                        ImGui::TextUnformatted("Stream: ");
-                        ImGui::SameLine();
-                        ImGui::TextUnformatted(detail.stream->info->name.c_str());
-                        RenderTable(detail.stream->info_table);
+                        ImGui::BeginChild("track", ImVec2(0.0f, 0.0f),
+                                          ImGuiChildFlags_Borders |
+                                              ImGuiChildFlags_AutoResizeY);
+                        if(detail.track)
+                        {
+                            ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
+                                        detail.track->info->name.c_str());
+                            RenderTable(detail.track->info_table, detail.stats);
+                        }
+                        else if(detail.stream_track)
+                        {
+                            ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
+                                        detail.stream_track->info->name.c_str());
+                            RenderTable(detail.stream_track->info_table, detail.stats);
+                        }
+                        ImGui::EndChild();
                     }
                 }
                 ImGui::PopID();
@@ -162,26 +221,26 @@ TrackDetails::Update()
             {
                 item.track_name =
                     m_data_provider.DataModel().BuildTrackName(item.track_id);
-
-                const uint64_t& node_id    = metadata->topology.node_id;
-                const uint64_t& process_id = metadata->topology.process_id;
+                item.track_type              = metadata->topology.type;
+                const uint64_t& node_id      = metadata->topology.node_id;
+                const uint64_t& process_id   = metadata->topology.process_id;
                 const uint64_t& processor_id = metadata->topology.device_id;
-                const uint64_t& type_id    = metadata->topology.id.value;
+                const uint64_t& type_id      = metadata->topology.id.value;
                 if(topology.node_lut.count(node_id) > 0)
                 {
-                    NodeModel& node = *topology.node_lut.at(node_id);
-                    item.node       = &node;
+                    NodeModel& node   = *topology.node_lut.at(node_id);
+                    item.parents.node = &node;
                     if(node.process_lut.count(process_id) > 0)
                     {
                         ProcessModel& process = *node.process_lut.at(process_id);
-                        item.process          = &process;
+                        item.parents.process  = &process;
                         switch(metadata->topology.type)
                         {
                             case TrackInfo::TrackType::InstrumentedThread:
                             {
                                 if(process.instrumented_thread_lut.count(type_id) > 0)
                                 {
-                                    item.instrumented_thread =
+                                    item.track =
                                         process.instrumented_thread_lut.at(type_id);
                                 }
                                 break;
@@ -190,8 +249,7 @@ TrackDetails::Update()
                             {
                                 if(process.sampled_thread_lut.count(type_id) > 0)
                                 {
-                                    item.sampled_thread =
-                                        process.sampled_thread_lut.at(type_id);
+                                    item.track = process.sampled_thread_lut.at(type_id);
                                 }
                                 break;
                             }
@@ -199,7 +257,7 @@ TrackDetails::Update()
                             {
                                 if(process.stream_lut.count(type_id) > 0)
                                 {
-                                    item.stream = process.stream_lut.at(type_id);
+                                    item.stream_track = process.stream_lut.at(type_id);
                                 }
                                 break;
                             }
@@ -208,14 +266,13 @@ TrackDetails::Update()
                     if(node.processor_lut.count(processor_id) > 0)
                     {
                         ProcessorModel& processor = *node.processor_lut.at(processor_id);
-                        item.processor          = &processor;
                         switch(metadata->topology.type)
                         {
                             case TrackInfo::TrackType::Queue:
                             {
                                 if(processor.queue_lut.count(type_id) > 0)
                                 {
-                                    item.queue = processor.queue_lut.at(type_id);
+                                    item.track = processor.queue_lut.at(type_id);
                                 }
                                 break;
                             }
@@ -223,13 +280,15 @@ TrackDetails::Update()
                             {
                                 if(processor.counter_lut.count(type_id) > 0)
                                 {
-                                    item.counter = processor.counter_lut.at(type_id);
+                                    item.track = processor.counter_lut.at(type_id);
                                 }
                                 break;
                             }
                         }
                     }
                 }
+                item.stats =
+                    m_data_provider.DataModel().GetAnalysis().RegisterTrack(*metadata);
             }
             else
             {
@@ -246,16 +305,23 @@ TrackDetails::Update()
 }
 
 void
-TrackDetails::RenderTable(InfoTable& table)
+TrackDetails::RenderTable(InfoTable& table, const AnalysisTrackStatistics* stats)
 {
-    if(!table.cells.empty() && !table.cells[0].empty())
+    if((!table.cells.empty() && table.cells[0].size() == 2) || stats)
     {
-        const int& rows = static_cast<int>(table.cells.size());
-        const int& cols = static_cast<int>(table.cells[0].size());
+        SettingsManager& settings = SettingsManager::GetInstance();
+        const int        rows     = static_cast<int>(table.cells.size());
+        const int        cols =
+            table.cells.empty() ? 2 : static_cast<int>(table.cells[0].size());
 
         float table_x_min = ImGui::GetCursorScreenPos().x;
         float table_width = ImGui::GetContentRegionAvail().x;
         float table_x_max = table_x_min + table_width;
+
+        ImGui::PushStyleColor(ImGuiCol_TableRowBg,
+                              settings.GetColor(Colors::kFillerColor));
+        ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt,
+                              settings.GetColor(Colors::kFillerColor));
         if(ImGui::BeginTable("", cols,
                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
                                  ImGuiTableFlags_BordersV |
@@ -330,8 +396,46 @@ TrackDetails::RenderTable(InfoTable& table)
                 }
                 ImGui::PopID();
             }
+            if(stats)
+            {
+                ImGui::TableNextRow();
+                switch(stats->track->topology.type)
+                {
+                    case TrackInfo::TrackType::Queue:
+                    {
+                        for(size_t i = 0; i < AnalysisTrackStatistics::Queue::kQueueCount;
+                            i++)
+                        {
+                            ImGui::TableNextColumn();
+                            ImGui::TextUnformatted(stats->stats[i].name);
+                            ImGui::TableNextColumn();
+                            ImGui::BeginDisabled(stats->state !=
+                                                 AnalysisTrackStatistics::kReady);
+                            ImGui::Text("%.1f", stats->stats[i].value);
+                            ImGui::EndDisabled();
+                        }
+                        break;
+                    }
+                    case TrackInfo::TrackType::Counter:
+                    {
+                        for(size_t i = 0;
+                            i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
+                        {
+                            ImGui::TableNextColumn();
+                            ImGui::TextUnformatted(stats->stats[i].name);
+                            ImGui::TableNextColumn();
+                            ImGui::BeginDisabled(stats->state !=
+                                                 AnalysisTrackStatistics::kReady);
+                            ImGui::Text("%.1f", stats->stats[i].value);
+                            ImGui::EndDisabled();
+                        }
+                        break;
+                    }
+                }
+            }
             ImGui::EndTable();
         }
+        ImGui::PopStyleColor(2);
     }
 }
 
@@ -340,9 +444,7 @@ TrackDetails::HandleTrackSelectionChanged(const uint64_t track_id, const bool se
 {
     if(selected)
     {
-        m_track_details.emplace_front(DetailItem{ m_detail_item_id++, track_id, "",
-                                                  nullptr, nullptr, nullptr, nullptr,
-                                                  nullptr, nullptr, nullptr });
+        m_track_details.emplace_front(DetailItem{ track_id });
     }
     else if(track_id == TimelineSelection::INVALID_SELECTION_ID)
     {
@@ -350,8 +452,7 @@ TrackDetails::HandleTrackSelectionChanged(const uint64_t track_id, const bool se
     }
     else
     {
-        m_track_details.remove(DetailItem{ 0, track_id, "", nullptr, nullptr, nullptr,
-                                           nullptr, nullptr, nullptr, nullptr });
+        m_track_details.remove(DetailItem{ track_id });
     }
     m_selection_dirty = true;
 }

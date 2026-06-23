@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "rocprofvis_time_to_pixel.h"
 
 namespace RocProfVis
 {
@@ -39,6 +38,7 @@ public:
 
     EventColorMode ColorEvents() const;
     bool           CompactMode() const;
+    std::array<bool, AnalysisTrackStatistics::Queue::kQueueCount> ShowAnalysis() const;
 
 private:
     FlameTrackItem& m_track_item;
@@ -56,6 +56,7 @@ public:
                    std::shared_ptr<TimePixelTransform>    time_to_pixel_manager);
     ~FlameTrackItem();
 
+    void Update() override;
     bool ReleaseData() override;
 
     // Called to calculate max event label width for all flame track items.
@@ -67,7 +68,6 @@ protected:
     void  RenderChart(float graph_width) override;
     void  RenderMetaAreaOptions() override;
     void  RenderMetaAreaExpand() override;
-    void  RenderSecondaryMetaPill(const ImVec2& content_size) override;
 
 private:
     struct ChildEventInfo
@@ -99,19 +99,14 @@ private:
 
     void RenderTooltip(ChartItem& chart_item, int color_index);
     void RecalculateTrackHeight();
-    
-    void RequestAnalysis() override;
 
-    std::vector<ChartItem>             m_chart_items;
-    EventColorMode                     m_event_color_mode;
-    ImVec2                             m_text_padding;
-    float                              m_level_height;
-    std::vector<uint64_t>              m_selected_event_id;
-    std::shared_ptr<TimelineSelection> m_timeline_selection;
+    std::vector<ChartItem>                 m_chart_items;
+    ImVec2                                 m_text_padding;
+    float                                  m_level_height;
+    std::vector<uint64_t>                  m_selected_event_id;
     std::shared_ptr<MeasurementController> m_measurement;
-    FlameTrackProjectSettings          m_flame_track_project_settings;
-    float                              m_min_level;
-    float                              m_max_level;
+    float                                  m_min_level;
+    float                                  m_max_level;
     // Used to enforce one click handling per render cycle.
     bool                            m_deferred_click_handled;
     bool                            m_has_drawn_tool_tip;
@@ -123,10 +118,13 @@ private:
     static float             s_max_event_label_width;
     static const std::string s_child_info_separator;
     bool                     m_is_expanded;
-    bool                     m_compact_mode;
 
-    const AnalysisQueueUtilization* m_queue_utilization;
-    Pill                            m_queue_utilization_pill;
+    Pill* m_pill_analysis_queue;
+
+    FlameTrackProjectSettings m_flame_track_project_settings;
+    bool                      m_show_pill_analysis_queue;
+    EventColorMode            m_event_color_mode;
+    bool                      m_compact_mode;
 };
 
 }  // namespace View

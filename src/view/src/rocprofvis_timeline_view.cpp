@@ -102,7 +102,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_histogram(nullptr)
 , m_pseudo_focus(false)
 , m_histogram_pseudo_focus(false)
-, m_max_meta_area_size(0.0f)
+, m_max_meta_scale_area_size(0.0f)
 , m_tpt(std::make_shared<TimePixelTransform>())
 , m_dragging_selection_start(false)
 , m_dragging_selection_end(false)
@@ -149,13 +149,12 @@ TimelineView::TimelineView(DataProvider&                          dp,
         (void) e;
         m_recalculate_grid_interval = true;
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
-        CalculateMaxMetaAreaSize();
-        UpdateAllMaxMetaAreaSizes();
+        UpdateMaxMetaAreaSize(true);
         FlameTrackItem::CalculateMaxEventLabelWidth();
-        m_sidebar_size =
-            std::clamp(static_cast<float>(m_sidebar_size),
-                       m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(),
-                       SIDEBAR_WIDTH_MAX);
+        m_sidebar_size = std::clamp(static_cast<float>(m_sidebar_size),
+                                    m_max_meta_scale_area_size +
+                                        2 * ImGui::GetFrameHeightWithSpacing(),
+                                    SIDEBAR_WIDTH_MAX);
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
@@ -795,6 +794,10 @@ TimelineView::Update()
         }
         m_reorder_request.handled = true;
         m_resize_activity         = false;
+        for(const TrackGraph& track : *m_graphs)
+        {
+            track.chart->Update();
+        }
     }
 }
 
@@ -848,13 +851,13 @@ TimelineView::RenderSplitter()
             m_settings.GetColor(Colors::kAccent));
     }
 
-    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_sidebar_size =
-            std::clamp(m_sidebar_size + drag_delta.x,
-                       m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(),
-                       SIDEBAR_WIDTH_MAX);
+        m_sidebar_size    = std::clamp(m_sidebar_size + drag_delta.x,
+                                       m_max_meta_scale_area_size +
+                                           2 * ImGui::GetFrameHeightWithSpacing(),
+                                       SIDEBAR_WIDTH_MAX);
 
         m_tpt->SetViewTimeOffsetNs(
             m_tpt->GetViewTimeOffsetNs() -
@@ -1419,6 +1422,10 @@ TimelineView::RenderTrack(int track_index, bool request_data,
                 RequestDataIfEmpty(track_item, request_data);
                 track_item->RequestAnalysis();
             }
+            else if(track_item->IsSelected())
+            {
+                track_item->RequestAnalysis();
+            }
         }
 
         if(is_visible)
@@ -1534,10 +1541,6 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
                          window_flags | ImGuiWindowFlags_NoScrollbar |
                              ImGuiWindowFlags_NoMouseInputs))
     {
-        // call update function (TODO: move this to timeline's update
-        // function?)
-        track_item->Update();
-
         if(is_reordering)
         {
             // Empty space if the track is being reordered
@@ -1803,7 +1806,8 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                graph.chart = new LineTrackItem(m_data_provider, track_info->id, m_tpt);
+                graph.chart = new LineTrackItem(m_data_provider, track_info->id, m_tpt,
+                                                m_timeline_selection);
                 graph.graph_type = GraphType::TYPE_LINECHART;
                 break;
             }
@@ -1814,7 +1818,6 @@ TimelineView::MakeGraphView()
         }
         if(graph.chart)
         {
-            UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
             m_tpt->SetMinMaxX(std::min(track_info->min_ts, m_tpt->GetMinX()),
                               std::max(track_info->max_ts, m_tpt->GetMaxX()));
 
@@ -1823,8 +1826,7 @@ TimelineView::MakeGraphView()
     }
 
     m_data_provider.DataModel().GetTimeline().UpdateHistogram(hidden_tracks, false);
-
-    UpdateAllMaxMetaAreaSizes();
+    UpdateMaxMetaAreaSize();
     m_histogram       = &tlm.GetHistogram();
     m_meta_map_made   = true;
     m_resize_activity = true;
@@ -2864,39 +2866,20 @@ TimelineView::GetArrowLayer()
 }
 
 void
-TimelineView::UpdateMaxMetaAreaSize(float new_size)
+TimelineView::UpdateMaxMetaAreaSize(bool update_tracks)
 {
-    m_max_meta_area_size =
-        new_size > m_max_meta_area_size ? new_size : m_max_meta_area_size;
-}
-
-void
-TimelineView::CalculateMaxMetaAreaSize()
-{
-    m_max_meta_area_size = 0.0f;
-    std::vector<const TrackInfo*> track_list =
-        m_data_provider.DataModel().GetTimeline().GetTrackList();
-
-    for(size_t i = 0; i < track_list.size(); i++)
+    m_max_meta_scale_area_size = 0.0f;
+    for(TrackGraph& track : (*m_graphs))
     {
-        const TrackInfo* track_info = track_list[i];
-        auto             graph      = (*m_graphs)[track_info->index];
-        m_max_meta_area_size =
-            std::max(graph.chart->CalculateNewMetaAreaSize(), m_max_meta_area_size);
-    }
-}
-
-void
-TimelineView::UpdateAllMaxMetaAreaSizes()
-{
-    std::vector<const TrackInfo*> track_list =
-        m_data_provider.DataModel().GetTimeline().GetTrackList();
-
-    for(size_t i = 0; i < track_list.size(); i++)
-    {
-        const TrackInfo* track_info = track_list[i];
-        auto             graph      = (*m_graphs)[track_info->index];
-        graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
+        if(track.chart)
+        {
+            if(update_tracks)
+            {
+                track.chart->UpdateMaxMetaScaleAreaSize();
+            }
+            m_max_meta_scale_area_size = std::max(track.chart->GetMaxMetaAreaScaleWidth(),
+                                                  m_max_meta_scale_area_size);
+        }
     }
 }
 

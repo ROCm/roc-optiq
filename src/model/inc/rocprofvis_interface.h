@@ -138,6 +138,16 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                     rocprofvis_db_track_selection_t,
                                     rocprofvis_db_future_t);    
 
+rocprofvis_dm_result_t rocprofvis_db_read_trace_pmc_slice_async(
+                                    rocprofvis_dm_database_t,
+                                    rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_hashed_timestamp_tag_t,
+                                    rocprofvis_db_track_selection_t,
+                                    bool,
+                                    bool,
+                                    rocprofvis_db_future_t);  
+
 /****************************************************************************************************
 * @brief method to build compute database query based on use case and set of parameters
 *

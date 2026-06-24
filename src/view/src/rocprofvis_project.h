@@ -149,6 +149,11 @@ constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN = "color_min";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX = "color_max";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_BOX_PLOT        = "box_plot";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_STRIPES         = "box_plot_stripes";
+constexpr const char* JSON_KEY_TRACK_MIN                      = "min";
+constexpr const char* JSON_KEY_TRACK_MAX                      = "max";
+constexpr const char* JSON_KEY_TRACK_MEAN                     = "mean";
+constexpr const char* JSON_KEY_TRACK_STANDARD_DEVIATION       = "standard_deviation";
+constexpr const char* JSON_KEY_TRACK_QUEUE_UTILIZATION        = "queue_utilization";
 
 constexpr const char* JSON_KEY_ANNOTATIONS                 = "annotations";
 constexpr const char* JSON_KEY_ANNOTATION_TIME_NS          = "time_ns";

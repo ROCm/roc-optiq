@@ -40,6 +40,8 @@ private:
     void SubscribeToEvents();
     void LoadData(uint32_t kernel_id);
     void LoadSourceFileList(const PcSamplingData& data);
+    void FetchPcSamplingForCurrentFile();
+    void OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id, bool success);
 
     SettingsManager&                  m_settings;
     DataProvider&                     m_data_provider;
@@ -52,6 +54,7 @@ private:
     uint32_t                        m_current_source_file_id = 0;
     uint32_t                        m_current_code_object_id = 0;
     uint32_t                        m_current_kernel_id      = 0;
+    uint32_t                        m_current_workload_id    = 0;
 
     std::map<std::string /*file_path*/, uint32_t /*file_id*/> m_source_files;
     LineSelection                   m_line_selection;

@@ -6,6 +6,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_font_manager.h"
+#include "rocprofvis_requests.h"
 
 #include <algorithm>
 #include <string>
@@ -37,6 +38,11 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
     m_horizontal_split_container->ShowSplitter(true);
 
     SubscribeToEvents();
+
+    m_data_provider.SetFetchPcSamplingCallback(
+        [this](const std::string&, uint32_t kernel_id, uint32_t source_file_id, bool success) {
+            OnPcSamplingReady(kernel_id, source_file_id, success);
+        });
 }
 
 ComputeCodeView::~ComputeCodeView()
@@ -62,32 +68,62 @@ void
 ComputeCodeView::LoadData(uint32_t kernel_id)
 {
     m_current_kernel_id = kernel_id;
-    uint32_t workload_id = ComputeSelection::INVALID_SELECTION_ID;
+
     for(const WorkloadInfo* workload : m_data_provider.ComputeModel().GetWorkloadList())
     {
         if(workload->kernels.count(kernel_id))
         {
-            workload_id = workload->id;
+            m_current_workload_id = workload->id;
             break;
         }
     }
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    if(m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
         return;
 
-    const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id);
+    const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
+        m_current_workload_id, kernel_id);
+    if(!kernel_info)
+        return;
+
+    // Source file list is already populated eagerly — just refresh the selection.
+    LoadSourceFileList(kernel_info->pc_sampling_data);
+
+    // Clear stale widget data and kick off the async fetch for the selected file.
+    m_source_code->Load({}, 0);
+    m_isa_code->Load({}, 0);
+    FetchPcSamplingForCurrentFile();
+}
+
+void
+ComputeCodeView::FetchPcSamplingForCurrentFile()
+{
+    if(m_current_kernel_id == 0 || m_current_source_file_id == 0)
+        return;
+    m_data_provider.FetchPcSampling(
+        PcSamplingRequestParams(m_current_workload_id, m_current_kernel_id, m_current_source_file_id));
+}
+
+void
+ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id, bool success)
+{
+    if(!success || kernel_id != m_current_kernel_id || source_file_id != m_current_source_file_id)
+        return;
+
+    const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
+        m_current_workload_id, m_current_kernel_id);
     if(!kernel_info)
         return;
 
     const PcSamplingData& data = kernel_info->pc_sampling_data;
 
-    LoadSourceFileList(data);
-
-    if(m_current_source_file_id != 0) m_source_code->Load(data, m_current_source_file_id);
+    if(m_current_source_file_id != 0)
+        m_source_code->Load(data, m_current_source_file_id);
 
     if(!data.code_objects.empty())
-        m_current_code_object_id = data.code_objects[0].id; //Now we always use first code object
+        m_current_code_object_id = data.code_objects[0].id;
 
-    if(m_current_code_object_id != 0) m_isa_code->Load(data, m_current_code_object_id);
+    if(m_current_code_object_id != 0)
+        m_isa_code->Load(data, m_current_code_object_id);
 }
 
 void
@@ -223,8 +259,9 @@ ComputeCodeView::RenderSourceFileDropdown()
             if(ImGui::Selectable(filename_of(path), selected) && !selected)
             {
                 m_current_source_file_id = id;
-                if(m_current_kernel_id != 0)
-                    LoadData(m_current_kernel_id);
+                m_source_code->Load({}, 0);
+                m_isa_code->Load({}, 0);
+                FetchPcSamplingForCurrentFile();
             }
             if(selected)
                 ImGui::SetItemDefaultFocus();

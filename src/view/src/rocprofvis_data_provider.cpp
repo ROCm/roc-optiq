@@ -2954,6 +2954,11 @@ DataProvider::ProcessRequest(RequestInfo& req)
             ProcessMetricPivotTable(req);
             break;
         }
+        case RequestType::kFetchPcSampling:
+        {
+            ProcessPcSamplingRequest(req);
+            break;
+        }
 #endif
         default:
         {
@@ -4349,6 +4354,108 @@ void DataProvider::SetFetchMetricsCallback(
     m_metrics_fetch_callback = callback;
 }
 
+void DataProvider::SetFetchPcSamplingCallback(
+    const std::function<void(const std::string&, uint32_t, uint32_t, bool)>& callback)
+{
+    m_pc_sampling_fetch_callback = callback;
+}
+
+bool
+DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
+{
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::debug("Cannot fetch PC sampling, provider not ready, state: {}",
+                      static_cast<int>(m_state));
+        return false;
+    }
+
+    // Use kernel_id + source_file_id as the unique request key.
+    uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
+        RequestType::kFetchPcSampling,
+        (static_cast<uint64_t>(params.m_kernel_id) << 32) | params.m_source_file_id);
+
+    // Cancel any in-flight request for the same kernel (different source file selection).
+    for(auto it = m_requests.begin(); it != m_requests.end(); )
+    {
+        if(it->second.request_type == RequestType::kFetchPcSampling)
+        {
+            if(it->second.request_future)
+                rocprofvis_controller_future_cancel(it->second.request_future);
+            it = m_requests.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    rocprofvis_controller_future_t*    future = rocprofvis_controller_future_alloc();
+    rocprofvis_controller_arguments_t* args   = rocprofvis_controller_arguments_alloc();
+
+    // Get the PcSampling handle for this kernel by iterating workloads on the controller.
+    rocprofvis_handle_t* pc_handle = nullptr;
+    {
+        uint64_t num_workloads = 0;
+        rocprofvis_controller_get_uint64(m_trace_controller, kRPVControllerNumWorkloads, 0, &num_workloads);
+        for(uint64_t wi = 0; wi < num_workloads && !pc_handle; wi++)
+        {
+            rocprofvis_handle_t* workload_handle = nullptr;
+            rocprofvis_controller_get_object(m_trace_controller, kRPVControllerWorkloadIndexed, wi, &workload_handle);
+            if(!workload_handle) continue;
+
+            uint64_t workload_id = 0;
+            rocprofvis_controller_get_uint64(workload_handle, kRPVControllerWorkloadId, 0, &workload_id);
+            if(static_cast<uint32_t>(workload_id) != params.m_workload_id) continue;
+
+            uint64_t num_kernels = 0;
+            rocprofvis_controller_get_uint64(workload_handle, kRPVControllerWorkloadNumKernels, 0, &num_kernels);
+            for(uint64_t ki = 0; ki < num_kernels; ki++)
+            {
+                rocprofvis_handle_t* kernel_handle = nullptr;
+                rocprofvis_controller_get_object(workload_handle, kRPVControllerWorkloadKernelIndexed, ki, &kernel_handle);
+                if(!kernel_handle) continue;
+
+                uint64_t kernel_id = 0;
+                rocprofvis_controller_get_uint64(kernel_handle, kRPVControllerKernelId, 0, &kernel_id);
+                if(static_cast<uint32_t>(kernel_id) != params.m_kernel_id) continue;
+
+                rocprofvis_controller_get_object(kernel_handle, kRPVControllerKernelPcSampling, 0, &pc_handle);
+                break;
+            }
+        }
+    }
+
+    if(!future || !args || !pc_handle)
+    {
+        if(future) rocprofvis_controller_future_free(future);
+        if(args)   rocprofvis_controller_arguments_free(args);
+        return false;
+    }
+
+    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsWorkloadId,   0, params.m_workload_id);
+    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsKernelId,     0, params.m_kernel_id);
+    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsSourceFileId, 0, params.m_source_file_id);
+
+    rocprofvis_result_t result = rocprofvis_controller_pc_sampling_fetch_async(
+        m_trace_controller, args, future, pc_handle);
+
+    if(result == kRocProfVisResultSuccess)
+    {
+        m_requests.emplace(
+            request_id,
+            RequestInfo{ request_id, future, nullptr, pc_handle, args,
+                         RequestState::kLoading, RequestType::kFetchPcSampling,
+                         std::make_shared<PcSamplingRequestParams>(params) });
+        return true;
+    }
+
+    rocprofvis_controller_future_free(future);
+    rocprofvis_controller_arguments_free(args);
+    spdlog::error("Failed to fetch PC sampling, result: {}", static_cast<int>(result));
+    return false;
+}
+
 void
 DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
 {
@@ -4581,7 +4688,16 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         kernel.dispatch_metrics[KernelInfo::DurationMedian] =
             static_cast<uint32_t>(uint64_data);
-        LoadPcSamplingData(kernel, kernel_handle);
+        // Load only the source file list eagerly (for the dropdown).
+        // Full ISA/source/stall data is loaded on-demand via FetchPcSampling.
+        {
+            rocprofvis_handle_t* pc_handle = nullptr;
+            if(kRocProfVisResultSuccess == rocprofvis_controller_get_object(
+                   kernel_handle, kRPVControllerKernelPcSampling, 0, &pc_handle) && pc_handle)
+            {
+                LoadPcSamplingSourceFiles(kernel, pc_handle);
+            }
+        }
         workload.kernels[kernel.id] = std::move(kernel);
     }
 }
@@ -5219,6 +5335,61 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
         rocprofvis_controller_array_free(array);
         req.request_array = nullptr;
     }
+}
+
+void
+DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
+{
+    if(req.request_args)
+    {
+        rocprofvis_controller_arguments_free(req.request_args);
+        req.request_args = nullptr;
+    }
+
+    std::shared_ptr<PcSamplingRequestParams> params =
+        std::dynamic_pointer_cast<PcSamplingRequestParams>(req.custom_params);
+
+    if(!params)
+        return;
+
+    const bool success = (req.response_code == kRocProfVisResultSuccess);
+
+    if(success)
+    {
+        // The PcSampling handle (req.request_obj_handle) was written to by the async job.
+        // Now read the data out of it and populate the KernelInfo in the model.
+        rocprofvis_handle_t* pc_handle = req.request_obj_handle;
+        if(pc_handle)
+        {
+            uint32_t workload_id = params->m_workload_id;
+            uint32_t kernel_id   = params->m_kernel_id;
+
+            KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(workload_id, kernel_id);
+            if(kernel)
+            {
+                kernel->pc_sampling_data = {};
+                LoadPcSamplingCodeObjects(*kernel, pc_handle);
+                LoadPcSamplingJunctions(*kernel, pc_handle);
+                LoadPcSamplingStallRecords(*kernel, pc_handle);
+                LoadPcSamplingStallReasonCounts(*kernel, pc_handle);
+                LoadPcSamplingSourceFiles(*kernel, pc_handle);
+            }
+        }
+    }
+    else
+    {
+        spdlog::debug("PC sampling request failed with code {}", req.response_code);
+    }
+
+    if(m_pc_sampling_fetch_callback)
+    {
+        m_pc_sampling_fetch_callback(m_model.GetTraceFilePath(),
+                                     params->m_kernel_id,
+                                     params->m_source_file_id,
+                                     success);
+    }
+
+    req.request_obj_handle = nullptr;
 }
 
 #endif

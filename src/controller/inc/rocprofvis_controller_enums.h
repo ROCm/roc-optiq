@@ -967,6 +967,16 @@ typedef enum rocprofvis_controller_metric_arguments_t : uint32_t
 } rocprofvis_controller_metric_arguments_t;
 
 /*
+ * Arguments for fetching PC sampling data for a specific source file.
+ */
+typedef enum rocprofvis_controller_pc_sampling_arguments_t : uint32_t
+{
+    kRPVControllerPcSamplingArgsWorkloadId,
+    kRPVControllerPcSamplingArgsKernelId,
+    kRPVControllerPcSamplingArgsSourceFileId,
+} rocprofvis_controller_pc_sampling_arguments_t;
+
+/*
  * Arguments for fetching dynamic metrics matrix (pivot table).
  */
 typedef enum rocprofvis_controller_compute_pivot_table_arguments_t : uint32_t

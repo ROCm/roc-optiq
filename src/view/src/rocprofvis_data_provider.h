@@ -358,9 +358,12 @@ public:
 
     bool FetchMetrics(const MetricsRequestParams& metrics_params);
     bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
+    bool FetchPcSampling(const PcSamplingRequestParams& params);
 
     void SetFetchMetricsCallback(
         const std::function<void(const std::string&, uint64_t, bool)>& callback);
+    void SetFetchPcSamplingCallback(
+        const std::function<void(const std::string&, uint32_t, uint32_t, bool)>& callback);
 
 private:
     void ProcessLoadComputeTrace(RequestInfo& req);
@@ -427,10 +430,12 @@ private:
 
     void ProcessMetricsRequest(RequestInfo& req);
     void ProcessMetricPivotTable(RequestInfo& req);
+    void ProcessPcSamplingRequest(RequestInfo& req);
 
     ComputeDataModel m_compute_model;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
+    std::function<void(const std::string&, uint32_t, uint32_t, bool)> m_pc_sampling_fetch_callback;
 
 #endif
 };

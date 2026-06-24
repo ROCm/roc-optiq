@@ -45,6 +45,7 @@ enum class RequestType
     kFetchComputeTrace,
     kFetchMetrics,
     kFetchMetricPivotTable,
+    kFetchPcSampling,
 #endif
 };
 
@@ -263,6 +264,23 @@ public:
     , m_kernel_ids(kernel_ids)
     , m_metric_ids(metric_ids)
     , m_client_id(client_id)
+    {}
+};
+
+class PcSamplingRequestParams : public RequestParamsBase
+{
+public:
+    uint32_t m_workload_id;
+    uint32_t m_kernel_id;
+    uint32_t m_source_file_id;
+
+    PcSamplingRequestParams(const PcSamplingRequestParams&)            = default;
+    PcSamplingRequestParams& operator=(const PcSamplingRequestParams&) = default;
+
+    PcSamplingRequestParams(uint32_t workload_id, uint32_t kernel_id, uint32_t source_file_id)
+    : m_workload_id(workload_id)
+    , m_kernel_id(kernel_id)
+    , m_source_file_id(source_file_id)
     {}
 };
 

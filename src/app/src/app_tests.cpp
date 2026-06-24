@@ -11,6 +11,7 @@
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_minimap.h"
+#include "rocprofvis_settings_manager.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_selection.h"
 #include "widgets/rocprofvis_tab_container.h"
@@ -701,5 +702,34 @@ void RegisterAppTests(ImGuiTestEngine* e)
         flame->SetEventColorModeForTest(orig);
         ctx->Yield(2);
         IM_CHECK(flame->GetEventColorModeForTest() == orig);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "settings_theme_toggle");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        SettingsManager& sm = SettingsManager::GetInstance();
+
+        // Flip the theme the same way the Preferences combo does: mutate the live
+        // user settings then ApplyUserSettings(old, save_json=false). The false
+        // keeps it off the on-disk settings json. The applied palette (GetColor)
+        // must follow, not just the bool, so assert a theme color changes too.
+        // Restore at the end so later tests / a 2nd run see the original theme.
+        const bool   orig_dark = sm.GetUserSettings().display_settings.use_dark_mode;
+        const ImU32  orig_bg   = sm.GetColor(Colors::kBgMain);
+
+        UserSettings before = sm.GetUserSettings();
+        sm.GetUserSettings().display_settings.use_dark_mode = !orig_dark;
+        sm.ApplyUserSettings(before, false);
+        ctx->Yield(2);
+
+        IM_CHECK(sm.GetUserSettings().display_settings.use_dark_mode != orig_dark);
+        IM_CHECK(sm.GetColor(Colors::kBgMain) != orig_bg);
+
+        UserSettings flipped = sm.GetUserSettings();
+        sm.GetUserSettings().display_settings.use_dark_mode = orig_dark;
+        sm.ApplyUserSettings(flipped, false);
+        ctx->Yield(2);
+        IM_CHECK(sm.GetUserSettings().display_settings.use_dark_mode == orig_dark);
+        IM_CHECK(sm.GetColor(Colors::kBgMain) == orig_bg);
     };
 }

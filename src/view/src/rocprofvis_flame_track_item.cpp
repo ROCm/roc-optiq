@@ -360,10 +360,17 @@ void
 FlameTrackItem::HandleFontSizeChanged(std::shared_ptr<RocEvent> e)
 {
     (void) e;
+    const float previous_level_height = m_level_height;
     RefreshLevelHeight();
     if(m_is_expanded)
     {
         RecalculateTrackHeight();
+    }
+    else if(previous_level_height > 0.0f && m_level_height != previous_level_height)
+    {
+        const float scale     = m_level_height / previous_level_height;
+        m_track_height         = std::max(m_min_track_height, m_track_height * scale);
+        m_track_height_changed = true;
     }
 }
 

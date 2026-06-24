@@ -13,6 +13,9 @@
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
+#include "rocprofvis_data_provider.h"
+#include "model/rocprofvis_trace_data_model.h"
+#include "model/rocprofvis_timeline_model.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_selection.h"
 #include "widgets/rocprofvis_tab_container.h"
@@ -756,5 +759,37 @@ void RegisterAppTests(ImGuiTestEngine* e)
         sm.ApplyUserSettings(changed, false);
         ctx->Yield(2);
         IM_CHECK(sm.GetUserSettings().unit_settings.time_format == orig);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "histogram_normalization_toggle");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineModel& tl = tv->GetDataProvider()->DataModel().GetTimeline();
+
+        // The All Tracks / Visible Tracks normalization toggle lives in the
+        // histogram right-click popup (no stable path), so drive it through the
+        // same model calls the menu items make. Assert the flag flips, then
+        // restore the original so later tests / a 2nd run see the default.
+        const bool orig_global = tl.IsNormalizeGlobal();
+
+        tl.ToggleNormalization();
+        tl.UpdateHistogram({}, false);
+        ctx->Yield(2);
+        IM_CHECK(tl.IsNormalizeGlobal() != orig_global);
+
+        tl.ToggleNormalization();
+        tl.UpdateHistogram({}, false);
+        ctx->Yield(2);
+        IM_CHECK(tl.IsNormalizeGlobal() == orig_global);
     };
 }

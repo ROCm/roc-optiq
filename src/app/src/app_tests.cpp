@@ -12,6 +12,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_selection.h"
 #include "widgets/rocprofvis_tab_container.h"
@@ -731,5 +732,29 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
         IM_CHECK(sm.GetUserSettings().display_settings.use_dark_mode == orig_dark);
         IM_CHECK(sm.GetColor(Colors::kBgMain) == orig_bg);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "settings_time_unit_change");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        SettingsManager& sm = SettingsManager::GetInstance();
+
+        // Change the timeline time unit via the same path the Units combo uses,
+        // then restore the original so later tests / a 2nd run see the default.
+        const TimeFormat orig = sm.GetUserSettings().unit_settings.time_format;
+        const TimeFormat other =
+            (orig == TimeFormat::kNanoseconds) ? TimeFormat::kSeconds : TimeFormat::kNanoseconds;
+
+        UserSettings before = sm.GetUserSettings();
+        sm.GetUserSettings().unit_settings.time_format = other;
+        sm.ApplyUserSettings(before, false);
+        ctx->Yield(2);
+        IM_CHECK(sm.GetUserSettings().unit_settings.time_format == other);
+
+        UserSettings changed = sm.GetUserSettings();
+        sm.GetUserSettings().unit_settings.time_format = orig;
+        sm.ApplyUserSettings(changed, false);
+        ctx->Yield(2);
+        IM_CHECK(sm.GetUserSettings().unit_settings.time_format == orig);
     };
 }

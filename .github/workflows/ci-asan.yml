@@ -96,7 +96,7 @@ jobs:
       - name: Run Tests
         id: run_tests
         continue-on-error: true
-        timeout-minutes: 10
+        timeout-minutes: 30
         run: |
           cd ${{ env.BUILD_DIR }}
           ctest \

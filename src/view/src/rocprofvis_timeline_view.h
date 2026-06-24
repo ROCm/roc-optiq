@@ -123,6 +123,9 @@ public:
     // Screen-space centers of the two widest events in the first flame track
     // with at least two drawn events. Returns false if fewer than two exist.
     bool GetTwoEventScreenCentersForTest(ImVec2& out_first, ImVec2& out_second) const;
+    // Max vertical scroll offset; 0 when all tracks fit the viewport, in which
+    // case Up/Down scroll is a no-op (lets a test skip instead of false-fail).
+    float GetMaxYScrollForTest() const { return m_content_max_y_scroll; }
 #endif
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;

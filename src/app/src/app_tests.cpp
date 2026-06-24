@@ -457,4 +457,58 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const double v_min_left = tlv->GetViewCoords().v_min_x;
         IM_CHECK(v_min_left < v_min_right);
     };
+
+    t = IM_REGISTER_TEST(e, "app", "timeline_vscroll");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = tv->GetTimelineViewForTest();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(2);
+
+        // Scroll step is a fraction of the max scroll offset, which is 0 when all
+        // tracks fit the viewport; Up/Down then no-op and the assertion would
+        // false-fail. Skip rather than assert on a trace with no headroom.
+        if (tlv->GetMaxYScrollForTest() <= 0.0f)
+        {
+            ctx->LogWarning("SKIP: all tracks fit the viewport, no vertical scroll headroom");
+            return;
+        }
+
+        const double y_before = tlv->GetViewCoords().y;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_DownArrow);
+        ctx->Yield(3);
+        const double y_down = tlv->GetViewCoords().y;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_UpArrow);
+        ctx->Yield(3);
+        const double y_up = tlv->GetViewCoords().y;
+
+        IM_CHECK(y_down > y_before);
+        IM_CHECK(y_up < y_down);
+    };
 }

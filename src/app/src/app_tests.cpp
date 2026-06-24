@@ -511,4 +511,56 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(y_down > y_before);
         IM_CHECK(y_up < y_down);
     };
+
+    t = IM_REGISTER_TEST(e, "app", "reset_view_button");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = tv->GetTimelineViewForTest();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        // Dirty the view via zoom alone; vertical scroll can no-op when all
+        // tracks fit the viewport, so it is not a reliable way off default.
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(2);
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+
+        const float zoom_dirty = tlv->GetViewCoords().z;
+        IM_CHECK(zoom_dirty > 1.0f);
+
+        // "Reset View" lives inside BeginChild("Toolbar") (no stable top-level
+        // path), so reach it with a recursive wildcard search.
+        ctx->SetRef("Main Window");
+        ctx->ItemClick("**/Reset View");
+        ctx->Yield(3);
+
+        // Reset restores the full range (zoom ~1.0), not merely a smaller zoom;
+        // pin to the default so a partial reset (e.g. still 2x) fails.
+        const float  zoom_after = tlv->GetViewCoords().z;
+        const double y_after    = tlv->GetViewCoords().y;
+        IM_CHECK(zoom_after <= 1.0f + 0.01f);
+        IM_CHECK(y_after == 0.0);
+    };
 }

@@ -638,8 +638,21 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     bool   mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     bool   mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
+    // A click inside the expanded window must move only the window, not the
+    // anchor it overlaps.
+    bool over_expanded_window = false;
+    if(!m_is_minimized && IsExpandedPlaced())
+    {
+        const ImVec2 win_max = ImVec2(m_expanded_screen_pos.x + m_size.x,
+                                      m_expanded_screen_pos.y + m_size.y);
+        over_expanded_window = mouse_pos.x >= m_expanded_screen_pos.x &&
+                               mouse_pos.x <= win_max.x &&
+                               mouse_pos.y >= m_expanded_screen_pos.y &&
+                               mouse_pos.y <= win_max.y;
+    }
+
     if((dragged_id == INVALID_STICKY_ID || dragged_id == m_id) && !m_dragging &&
-       ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
+       !over_expanded_window && ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
        !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
     {

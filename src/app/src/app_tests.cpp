@@ -18,6 +18,7 @@
 #include "model/rocprofvis_timeline_model.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_selection.h"
+#include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_tab_container.h"
 using namespace RocProfVis::View;
 
@@ -791,5 +792,53 @@ void RegisterAppTests(ImGuiTestEngine* e)
         tl.UpdateHistogram({}, false);
         ctx->Yield(2);
         IM_CHECK(tl.IsNormalizeGlobal() == orig_global);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_select_changes");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
+        if (cv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
+            return;
+        }
+        ComputeSelection* sel = cv->GetComputeSelectionForTest();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        ctx->Yield(3);
+        const uint32_t workload = sel->GetSelectedWorkload();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        const uint32_t auto_kernel = sel->GetSelectedKernel();
+        IM_CHECK(auto_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(workload);
+        if (kernels.size() < 2)
+        {
+            ctx->LogWarning("SKIP: workload has fewer than two kernels to switch between");
+            return;
+        }
+
+        uint32_t other = ComputeSelection::INVALID_SELECTION_ID;
+        for (const KernelInfo* k : kernels)
+        {
+            if (k != nullptr && k->id != auto_kernel) { other = k->id; break; }
+        }
+        IM_CHECK(other != ComputeSelection::INVALID_SELECTION_ID);
+
+        sel->SelectKernel(other);
+        ctx->Yield(3);
+        IM_CHECK(sel->GetSelectedKernel() == other);
+        IM_CHECK(sel->GetSelectedKernel() != auto_kernel);
+
+        // Restore the auto-selected kernel for following tests.
+        sel->SelectKernel(auto_kernel);
+        ctx->Yield(2);
     };
 }

@@ -601,15 +601,23 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const bool  orig_compact = flame->IsCompactMode();
         const float orig_height  = flame->GetLevelHeightForTest();
 
+        // Capture observations, restore, THEN assert: IM_CHECK early-returns on
+        // failure, so asserting before the restore would leak the flipped state
+        // (per-track flag, shared across the process) into later tests.
         flame->SetCompactModeForTest(!orig_compact);
         ctx->Yield(2);
-        IM_CHECK(flame->IsCompactMode() != orig_compact);
-        IM_CHECK(flame->GetLevelHeightForTest() != orig_height);
+        const bool  on_compact = flame->IsCompactMode();
+        const float on_height  = flame->GetLevelHeightForTest();
 
         flame->SetCompactModeForTest(orig_compact);
         ctx->Yield(2);
-        IM_CHECK(flame->IsCompactMode() == orig_compact);
-        IM_CHECK(flame->GetLevelHeightForTest() == orig_height);
+        const bool  back_compact = flame->IsCompactMode();
+        const float back_height  = flame->GetLevelHeightForTest();
+
+        IM_CHECK(on_compact != orig_compact);
+        IM_CHECK(on_height != orig_height);
+        IM_CHECK(back_compact == orig_compact);
+        IM_CHECK(back_height == orig_height);
     };
 
     t = IM_REGISTER_TEST(e, "app", "timeline_mark_time_range");
@@ -700,14 +708,20 @@ void RegisterAppTests(ImGuiTestEngine* e)
             (orig == EventColorMode::kByTimeLevel) ? EventColorMode::kByEventName
                                                    : EventColorMode::kByTimeLevel;
 
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so
+        // asserting before the restore would leak the changed color mode (shared
+        // per-track state) into later tests in the same process.
         flame->SetEventColorModeForTest(other);
         ctx->Yield(2);
-        IM_CHECK(flame->GetEventColorModeForTest() == other);
-        IM_CHECK(flame->GetEventColorModeForTest() != orig);
+        const EventColorMode changed = flame->GetEventColorModeForTest();
 
         flame->SetEventColorModeForTest(orig);
         ctx->Yield(2);
-        IM_CHECK(flame->GetEventColorModeForTest() == orig);
+        const EventColorMode restored = flame->GetEventColorModeForTest();
+
+        IM_CHECK(changed == other);
+        IM_CHECK(changed != orig);
+        IM_CHECK(restored == orig);
     };
 
     t = IM_REGISTER_TEST(e, "app", "settings_theme_toggle");
@@ -723,20 +737,27 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const bool   orig_dark = sm.GetUserSettings().display_settings.use_dark_mode;
         const ImU32  orig_bg   = sm.GetColor(Colors::kBgMain);
 
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, and
+        // SettingsManager is a process-global singleton, so asserting before the
+        // restore would leak a flipped theme into every later test and the next run.
         UserSettings before = sm.GetUserSettings();
         sm.GetUserSettings().display_settings.use_dark_mode = !orig_dark;
         sm.ApplyUserSettings(before, false);
         ctx->Yield(2);
-
-        IM_CHECK(sm.GetUserSettings().display_settings.use_dark_mode != orig_dark);
-        IM_CHECK(sm.GetColor(Colors::kBgMain) != orig_bg);
+        const bool  flipped_dark = sm.GetUserSettings().display_settings.use_dark_mode;
+        const ImU32 flipped_bg   = sm.GetColor(Colors::kBgMain);
 
         UserSettings flipped = sm.GetUserSettings();
         sm.GetUserSettings().display_settings.use_dark_mode = orig_dark;
         sm.ApplyUserSettings(flipped, false);
         ctx->Yield(2);
-        IM_CHECK(sm.GetUserSettings().display_settings.use_dark_mode == orig_dark);
-        IM_CHECK(sm.GetColor(Colors::kBgMain) == orig_bg);
+        const bool  back_dark = sm.GetUserSettings().display_settings.use_dark_mode;
+        const ImU32 back_bg   = sm.GetColor(Colors::kBgMain);
+
+        IM_CHECK(flipped_dark != orig_dark);
+        IM_CHECK(flipped_bg != orig_bg);
+        IM_CHECK(back_dark == orig_dark);
+        IM_CHECK(back_bg == orig_bg);
     };
 
     t = IM_REGISTER_TEST(e, "app", "settings_time_unit_change");
@@ -750,17 +771,23 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const TimeFormat other =
             (orig == TimeFormat::kNanoseconds) ? TimeFormat::kSeconds : TimeFormat::kNanoseconds;
 
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, and
+        // SettingsManager is a process-global singleton, so asserting before the
+        // restore would leak the changed time unit into later tests / the next run.
         UserSettings before = sm.GetUserSettings();
         sm.GetUserSettings().unit_settings.time_format = other;
         sm.ApplyUserSettings(before, false);
         ctx->Yield(2);
-        IM_CHECK(sm.GetUserSettings().unit_settings.time_format == other);
+        const TimeFormat changed_fmt = sm.GetUserSettings().unit_settings.time_format;
 
         UserSettings changed = sm.GetUserSettings();
         sm.GetUserSettings().unit_settings.time_format = orig;
         sm.ApplyUserSettings(changed, false);
         ctx->Yield(2);
-        IM_CHECK(sm.GetUserSettings().unit_settings.time_format == orig);
+        const TimeFormat back_fmt = sm.GetUserSettings().unit_settings.time_format;
+
+        IM_CHECK(changed_fmt == other);
+        IM_CHECK(back_fmt == orig);
     };
 
     t = IM_REGISTER_TEST(e, "app", "histogram_normalization_toggle");
@@ -784,15 +811,21 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // restore the original so later tests / a 2nd run see the default.
         const bool orig_global = tl.IsNormalizeGlobal();
 
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, and the
+        // TimelineModel is shared across every timeline test in the process, so
+        // asserting before the restore would leak the flipped mode into later tests.
         tl.ToggleNormalization();
         tl.UpdateHistogram({}, false);
         ctx->Yield(2);
-        IM_CHECK(tl.IsNormalizeGlobal() != orig_global);
+        const bool toggled_global = tl.IsNormalizeGlobal();
 
         tl.ToggleNormalization();
         tl.UpdateHistogram({}, false);
         ctx->Yield(2);
-        IM_CHECK(tl.IsNormalizeGlobal() == orig_global);
+        const bool back_global = tl.IsNormalizeGlobal();
+
+        IM_CHECK(toggled_global != orig_global);
+        IM_CHECK(back_global == orig_global);
     };
 
     t = IM_REGISTER_TEST(e, "app", "compute_kernel_select_changes");
@@ -833,14 +866,18 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
         IM_CHECK(other != ComputeSelection::INVALID_SELECTION_ID);
 
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, and
+        // ComputeSelection is shared across compute tests, so asserting before the
+        // restore would leak the non-auto kernel into later tests / the next run.
         sel->SelectKernel(other);
         ctx->Yield(3);
-        IM_CHECK(sel->GetSelectedKernel() == other);
-        IM_CHECK(sel->GetSelectedKernel() != auto_kernel);
+        const uint32_t selected = sel->GetSelectedKernel();
 
-        // Restore the auto-selected kernel for following tests.
         sel->SelectKernel(auto_kernel);
         ctx->Yield(2);
+
+        IM_CHECK(selected == other);
+        IM_CHECK(selected != auto_kernel);
     };
 
     t = IM_REGISTER_TEST(e, "app", "event_search_finds_results");

@@ -662,4 +662,44 @@ void RegisterAppTests(ImGuiTestEngine* e)
         tv->ClearEventSelectionForTest();
         ctx->Yield(2);
     };
+
+    t = IM_REGISTER_TEST(e, "app", "timeline_event_color_mode");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = tv->GetTimelineViewForTest();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+        FlameTrackItem* flame = tlv->GetFirstFlameTrackForTest();
+        IM_CHECK(flame != nullptr);
+        if (flame == nullptr) return;
+
+        // "Color by Name / Time Level / No Color" are gear-menu radio buttons in
+        // a popup with no stable path; each sets the track's event color mode.
+        // Drive that field directly and assert it changes, then restore.
+        const EventColorMode orig = flame->GetEventColorModeForTest();
+        const EventColorMode other =
+            (orig == EventColorMode::kByTimeLevel) ? EventColorMode::kByEventName
+                                                   : EventColorMode::kByTimeLevel;
+
+        flame->SetEventColorModeForTest(other);
+        ctx->Yield(2);
+        IM_CHECK(flame->GetEventColorModeForTest() == other);
+        IM_CHECK(flame->GetEventColorModeForTest() != orig);
+
+        flame->SetEventColorModeForTest(orig);
+        ctx->Yield(2);
+        IM_CHECK(flame->GetEventColorModeForTest() == orig);
+    };
 }

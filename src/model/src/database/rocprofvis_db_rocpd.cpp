@@ -816,7 +816,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadFlowTraceInfo(
         } else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
-            query << "select 1, rocpd_api_ops.op_id, rocpd_api_ops.api_id, 0, pid, tid, rocpd_api.apiName_id, rocpd_api.args_id, " << Builder::LevelTable("api") << ".level, rocpd_api.end "
+            query << "select 1, rocpd_api_ops.op_id, rocpd_api_ops.api_id, 0, pid, tid, rocpd_api.start, rocpd_api.apiName_id, rocpd_api.args_id, " << Builder::LevelTable("api") << ".level, rocpd_api.end "
                 "from rocpd_api_ops "
                 "INNER JOIN rocpd_api on rocpd_api_ops.api_id = rocpd_api.id "
                 "INNER JOIN rocpd_op on rocpd_api_ops.op_id = rocpd_op.id "

@@ -604,4 +604,62 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(flame->IsCompactMode() == orig_compact);
         IM_CHECK(flame->GetLevelHeightForTest() == orig_height);
     };
+
+    t = IM_REGISTER_TEST(e, "app", "timeline_mark_time_range");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = tv->GetTimelineViewForTest();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Start from no event selection and no marked range.
+        tv->ClearEventSelectionForTest();
+        sel->ClearTimeRange();
+        ctx->Yield(3);
+        IM_CHECK(!sel->HasValidTimeRangeSelection());
+
+        // The M (Toggle Mark) hotkey builds a time-range from the selected
+        // events, so select one first. The hotkey shares the timeline's
+        // pseudo-focus gate (set by a mouse-down in the graph), same as W/S/A/D.
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseClick(0);
+        ctx->Yield(3);
+        std::vector<uint64_t> ids;
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.size() >= 1);
+
+        // M marks the selected events' time range.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_M);
+        ctx->Yield(3);
+        IM_CHECK(sel->HasValidTimeRangeSelection());
+
+        // M again clears the marked range (toggle).
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_M);
+        ctx->Yield(3);
+        IM_CHECK(!sel->HasValidTimeRangeSelection());
+
+        // Leave a clean selection state for following tests.
+        tv->ClearEventSelectionForTest();
+        ctx->Yield(2);
+    };
 }

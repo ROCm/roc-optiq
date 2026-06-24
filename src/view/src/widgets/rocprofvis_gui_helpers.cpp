@@ -506,9 +506,10 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     ImDrawList*   dl   = ImGui::GetForegroundDrawList();
     const ImVec2& disp = ImGui::GetIO().DisplaySize;
 
-    // Parameters
-    static constexpr float ribbon_thickness = 20.0f;
-    static constexpr float min_base_length  = 150.0f;
+    // Parameters. Scale with the font so the banner tracks ImGui's DPI font scaling.
+    const float            ui_scale         = ImGui::GetFontSize() / 15.0f;
+    const float            ribbon_thickness = 20.0f * ui_scale;
+    const float            min_base_length  = 150.0f * ui_scale;
     SettingsManager& settings    = SettingsManager::GetInstance();
     const ImU32      col_fill     = settings.GetColor(Colors::kBannerFill);
     const ImU32      col_border   = settings.GetColor(Colors::kBannerBorder);

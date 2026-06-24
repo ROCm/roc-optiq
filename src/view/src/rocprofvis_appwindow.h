@@ -150,7 +150,10 @@ private:
 
     EventManager::SubscriptionToken m_tabclosed_event_token;
     EventManager::SubscriptionToken m_tabselected_event_token;
-    EventManager::SubscriptionToken m_font_changed_token;
+
+    // Last observed font size, used to detect auto-DPI changes that do not
+    // fire kFontSizeChanged.
+    float m_last_font_size;
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();

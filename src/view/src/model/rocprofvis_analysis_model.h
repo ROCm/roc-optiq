@@ -29,9 +29,6 @@ public:
     void SetCounterStatistics(uint64_t                                        track_id,
                               const rocprofvis_analysis_counter_statistics_t& stats);
 
-    const std::unordered_map<uint64_t, AnalysisTrackStatistics>& GetTrackStatistics()
-        const;
-
     const TablesModel& GetTables() const;
     TablesModel&       GetTables();
 

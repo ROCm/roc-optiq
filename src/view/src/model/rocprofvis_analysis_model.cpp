@@ -187,12 +187,6 @@ AnalysisModel::SetCounterStatistics(uint64_t track_id,
     }
 }
 
-const std::unordered_map<uint64_t, AnalysisTrackStatistics>&
-AnalysisModel::GetTrackStatistics() const
-{
-    return m_track_stats;
-}
-
 const TablesModel&
 AnalysisModel::GetTables() const
 {

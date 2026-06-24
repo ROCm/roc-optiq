@@ -48,7 +48,12 @@ rocprofvis_result_t ComputeTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_
                 row_data[c].SetType(m_rows[r][c].GetType());
                 row_data[c] = m_rows[r][c];
             }
-            result = array.SetObject(kRPVControllerArrayEntryIndexed, r, (rocprofvis_handle_t*)row_array);
+            result = array.SetOwnedObject(kRPVControllerArrayEntryIndexed, r, (rocprofvis_handle_t*)row_array);
+            if (result != kRocProfVisResultSuccess)
+            {
+                // Ownership was not transferred to the outer array; reclaim it.
+                delete row_array;
+            }
         }
     }
     return result;

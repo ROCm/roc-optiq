@@ -116,9 +116,10 @@ void SplitContainerBase::Render()
     if(m_first && m_first->m_visible && m_second && m_second->m_visible)
     {
         bool fill_active = false;
-        ImGui::Selectable(m_handle_name.c_str(), false,
-                          ImGuiSelectableFlags_AllowDoubleClick,
-                          GetSplitterSize(total_size));
+        // Use an invisible button instead of a Selectable so ImGui does not draw its
+        // own (rounded) hover / nav-focus highlight, which bled past the corners of the
+        // splitter fill we draw manually below.
+        ImGui::InvisibleButton(m_handle_name.c_str(), GetSplitterSize(total_size));
         ImVec2 splitter_min = ImGui::GetItemRectMin();
         ImVec2 splitter_max = ImGui::GetItemRectMax();
         if(ImGui::IsItemHovered())

@@ -74,6 +74,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_unload_track_distance(LOADING_TRACK_DISTANCE)
 , m_sidebar_size(SIDEBAR_DEFAULT_SIZE)
 , m_resize_activity(false)
+, m_reorder_auto_scrolling(false)
 , m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
                          TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(EventManager::InvalidSubscriptionToken)
@@ -1472,6 +1473,8 @@ TimelineView::RenderGraphView()
 
     // Reset per frame; set by RenderReorderingTrack while a track drag is active.
     m_reordering_track_id = INVALID_TRACK_ID;
+    // Re-set each frame by RenderReorderingTrack while in the auto-scroll zone.
+    m_reorder_auto_scrolling = false;
 
     for(int index = 0; index < m_graphs->size(); index++)
     {
@@ -1488,9 +1491,10 @@ TimelineView::WantsContinuousRender() const
 {
     // The loading-timer debounce gates track-data requests and only advances
     // while rendering, so keep rendering until it expires or the load stalls.
-    // Dragging an anchor also needs frames so edge auto-scroll keeps advancing
-    // when the cursor is held still.
-    return m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID;
+    // Anchor drag and reorder auto-scroll both advance per frame, so keep
+    // rendering while either is active.
+    return m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID ||
+           m_reorder_auto_scrolling;
 }
 
 bool
@@ -1697,6 +1701,9 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
             m_settings.GetColor(Colors::kAccent));
     }
 
+    // Keep the track row square so the highlight fill reaches the corners; otherwise the
+    // rounded corners leave notches where the accent selection stripe bleeds through.
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
     ImGui::PushID(track_index);
     if(ImGui::BeginChild("", ImVec2(0, track_height), false,
@@ -1770,6 +1777,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     ImGui::EndChild();
     ImGui::PopID();
     ImGui::PopStyleColor();
+    ImGui::PopStyleVar();  // ImGuiStyleVar_ChildRounding
 
     // Draw border around the track
     // This is done after the child window to ensure it is on top
@@ -1834,13 +1842,21 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
     ImVec2 mouse_pos          = ImGui::GetMousePos();
     ImVec2 mouse_relative_pos = mouse_pos - graph_view_pos;
 
-    const float preview_top_y = mouse_pos.y - ImGui::GetFrameHeight() / 2;
+    // Clamp the preview within the track area so it never renders outside its
+    // box when the mouse moves above or below the visible track region.
+    const float track_height  = track_item->GetTrackHeight();
+    const float view_height   = container_size.y - m_ruler_height;
+    const float preview_min_y = graph_view_pos.y;
+    const float preview_max_y =
+        std::max(preview_min_y, graph_view_pos.y + view_height - track_height);
+    const float preview_y = std::clamp(mouse_pos.y - ImGui::GetFrameHeight() / 2,
+                                       preview_min_y, preview_max_y);
 
     // Expose the live preview top so annotations on this track follow it.
     m_reordering_track_id          = track_item->GetID();
-    m_reorder_preview_screen_top_y = preview_top_y;
+    m_reorder_preview_screen_top_y = preview_y;
 
-    ImGui::SetNextWindowPos(ImVec2(graph_view_pos.x, preview_top_y), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(graph_view_pos.x, preview_y), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     if(ImGui::Begin(
            "##ReorderPreview", nullptr,
@@ -1865,6 +1881,7 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
                 std::min(1.0f, (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD -
                                 mouse_relative_pos.y) /
                                    (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
+        m_reorder_auto_scrolling = true;
     }
     else if(mouse_relative_pos.y > container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD))
     {
@@ -1874,6 +1891,7 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
                 std::min(1.0f, (mouse_relative_pos.y -
                                 container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD)) /
                                    (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
+        m_reorder_auto_scrolling = true;
     }
     m_scroll_position_y = ImGui::GetScrollY();
 }

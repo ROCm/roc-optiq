@@ -905,16 +905,19 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
 rocprofvis_dm_result_t
 ProfileDatabase::ExecuteQueriesAsync(
     std::vector<std::pair<DbInstance*, std::string>>& queries,
-    std::vector<Future*> & sub_futures,
+    Future* parent,
     rocprofvis_dm_handle_t handle,
     RpvSqliteExecuteQueryCallback callback)
 {
-    std::vector<Future*> futures = sub_futures;
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    futures.resize(queries.size());
+    // Register each worker as a sub-future of the parent so it is reachable by
+    // the parent's SetInterrupted() (cancellation) and is freed through the
+    // mutex-protected DeleteSubFuture() path. AddSubFuture() both allocates and
+    // registers; WaitAndDeleteSubFuture() waits, then unregisters and frees.
+    std::vector<Future*> futures(queries.size(), nullptr);
     for(int i = 0; i < queries.size(); i++)
     {
-        futures[i]     = (Future*)rocprofvis_db_future_alloc(nullptr);
+        futures[i] = parent->AddSubFuture();
         try
         {
             futures[i]->SetWorker(std::move(
@@ -924,6 +927,11 @@ ProfileDatabase::ExecuteQueriesAsync(
                     queries[i].second.c_str(), handle, i, callback)));
         } catch(std::exception ex)
         {
+            // The worker thread never started, so the sub-future's promise will
+            // never be set; unregister and free it now to avoid a wait below
+            // that would block forever on an unfulfilled promise.
+            parent->DeleteSubFuture(futures[i]);
+            futures[i] = nullptr;
             result = kRocProfVisDmResultUnknownError;
             ROCPROFVIS_ASSERT_MSG_BREAK(false, ex.what());
         }       
@@ -933,20 +941,13 @@ ProfileDatabase::ExecuteQueriesAsync(
         if(futures[i] != nullptr)
         {
             if(kRocProfVisDmResultSuccess !=
-                rocprofvis_db_future_wait(futures[i], UINT64_MAX))
+                parent->WaitAndDeleteSubFuture(futures[i]))
             {
                 result = kRocProfVisDmResultUnknownError;
             }
-            auto it = std::find_if(sub_futures.begin(), sub_futures.end(), [&](Future* f) { return f == futures[i]; });
-            if (it != sub_futures.end())
-            {
-                sub_futures.erase(it);
-                rocprofvis_db_future_free(*it);
-                futures[i] = nullptr;
-            }
+            futures[i] = nullptr;
         }
     }
-    futures.clear();
     return result;
 }
 

@@ -117,7 +117,7 @@ namespace DataModel
 
                 if (new_queries.size())
                 {
-                    result = m_db->ExecuteQueriesAsync(new_queries, future->SubFeatures(), (rocprofvis_dm_handle_t)this, &CallbackRunCompoundQuery);
+                    result = m_db->ExecuteQueriesAsync(new_queries, future, (rocprofvis_dm_handle_t)this, &CallbackRunCompoundQuery);
                     if (kRocProfVisDmResultSuccess == result)
                     {
                         try {

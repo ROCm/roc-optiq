@@ -21,6 +21,7 @@
 #undef min
 #undef max
 #include <algorithm>
+#include <type_traits>
 
 
 namespace RocProfVis
@@ -501,6 +502,18 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
     return nullptr;
 }
 
+// The pool teardown below reinterpret_casts each live slot to Handle* and
+// invokes its virtual destructor. That is only valid because every type placed
+// into a pool (via the private Allocate(), used solely by New{Event,Sample,
+// SampleLOD}) derives from Handle, with Handle at offset 0 (single, non-virtual
+// inheritance). These asserts fail the build if that invariant ever breaks.
+static_assert(std::is_base_of<Handle, Event>::value,
+              "Pooled Event must derive from Handle");
+static_assert(std::is_base_of<Handle, Sample>::value,
+              "Pooled Sample must derive from Handle");
+static_assert(std::is_base_of<Handle, SampleLOD>::value,
+              "Pooled SampleLOD must derive from Handle");
+
 void MemoryManager::CleanUp() {
     std::lock_guard<std::mutex> lock(m_pool_mutex);
 
@@ -516,7 +529,23 @@ void MemoryManager::CleanUp() {
     {
         for(auto it1 : it->second)
         {
-            delete it1.second;
+            MemoryPool* pool = it1.second;
+
+            // Objects are placement-new'd into the pool's raw storage, so the
+            // pool's destructor (which only frees the block) would not run them.
+            // Destroy any still-live residents first so their non-trivial members
+            // (e.g. SampleLOD::m_children) are released; ~Handle() is virtual and
+            // dispatches to the concrete type.
+            char* base = static_cast<char*>(pool->m_base);
+            for(size_t slot = 0; slot < pool->m_bitmask.Size(); ++slot)
+            {
+                if(pool->m_bitmask.Test(slot))
+                {
+                    reinterpret_cast<Handle*>(base + slot * pool->m_size)->~Handle();
+                }
+            }
+
+            delete pool;
         }
     }
 }

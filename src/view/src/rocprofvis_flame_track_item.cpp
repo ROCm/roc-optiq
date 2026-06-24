@@ -14,6 +14,7 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <cmath>
+#include <cstdio>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -30,7 +31,7 @@ inline constexpr float HIGHLIGHT_THICKNESS_HALF  = HIGHLIGHT_THICKNESS / 2;
 inline constexpr float TOOLTIP_OFFSET            = 16.0f;
 inline constexpr int   MAX_CHARACTERS_PER_LINE   = 40;
 inline constexpr float MAX_TABLE_HEIGHT          = 300.0f;
-inline constexpr float SCALE_SEPERATOR_WIDTH     = 2.0f;
+inline constexpr float PILL_SPACING              = 4.0f;
 
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
@@ -67,7 +68,7 @@ FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
 , m_is_expanded(false)
 , m_compact_mode(false)
 , m_queue_utilization(nullptr)
-, m_queue_utilization_width(0.0f)
+, m_queue_utilization_pill("", false, false)
 {
     if(!m_tpt)
     {
@@ -82,7 +83,6 @@ FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
 
         if(m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
         {
-            m_meta_area_scale_width = CalculateNewMetaAreaSize();
             m_queue_utilization =
                 m_data_provider.DataModel().GetAnalysis().GetPerTrackQueueUtilization(
                     *m_track_metadata);
@@ -782,50 +782,47 @@ FlameTrackItem::RenderChart(float graph_width)
 }
 
 void
-FlameTrackItem::RenderMetaAreaScale()
+FlameTrackItem::RenderSecondaryMetaPill(const ImVec2& content_size)
 {
-    if(m_track_metadata &&
-       m_track_metadata->topology.type == TrackInfo::TrackType::Queue &&
-       m_queue_utilization)
+    if(!(m_track_metadata &&
+         m_track_metadata->topology.type == TrackInfo::TrackType::Queue &&
+         m_queue_utilization))
     {
-        ImVec2 content_region = ImGui::GetContentRegionMax();
-        ImVec2 window_pos     = ImGui::GetWindowPos();
-        ImGui::SetCursorPos(ImVec2(
-            content_region.x - m_queue_utilization_width - m_metadata_padding.x,
-            (content_region.y - m_metadata_padding.y - ImGui::GetTextLineHeight()) *
-                0.5f));
-        ImGui::BeginDisabled(m_queue_utilization->state !=
-                             AnalysisQueueUtilization::kReady);
-        ImGui::Text("%.1f %%", m_queue_utilization->util_pct);
-        m_queue_utilization_width = ImGui::GetItemRectSize().x;
-        if(ImGui::IsItemHovered())
-        {
-            BeginTooltipStyled();
-            ImGui::Text("Queue Utilization: %.1f %%", m_queue_utilization->util_pct);
-            EndTooltipStyled();        
-        }
-        ImGui::EndDisabled();
-        ImGui::GetWindowDrawList()->AddLine(
-            ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
-                   window_pos.y),
-            ImVec2(window_pos.x + content_region.x - m_meta_area_scale_width,
-                   window_pos.y + content_region.y),
-            m_settings.GetColor(Colors::kMetaDataSeparator), SCALE_SEPERATOR_WIDTH);
+        return;
     }
-}
 
-float
-FlameTrackItem::CalculateNewMetaAreaSize()
-{
-    if(m_track_metadata && m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
+    // Keep the two pills grouped: only show utilization when the QUEUE pill is
+    // visible, so a cramped meta area never shows a lone, overflowing pill.
+    if(!m_pill.IsShown())
     {
-        return ImGui::CalcTextSize("100.0 %").x + 2.0f * m_metadata_padding.x +
-               SCALE_SEPERATOR_WIDTH;
+        m_queue_utilization_pill.Hide();
+        return;
+    }
+
+    char util_text[16];
+    std::snprintf(util_text, sizeof(util_text), "%.1f %%",
+                  m_queue_utilization->util_pct);
+    m_queue_utilization_pill.SetLabel(util_text);
+    m_queue_utilization_pill.SetTooltipLabel(std::string("Queue Utilization: ") +
+                                             util_text);
+
+    // A ready value is shown as an active (prominent) pill; a stale/pending
+    // value is shown dimmed until the analysis fetch completes.
+    if(m_queue_utilization->state == AnalysisQueueUtilization::kReady)
+    {
+        m_queue_utilization_pill.Activate();
     }
     else
     {
-        return 0.0f;
+        m_queue_utilization_pill.Deactivate();
     }
+    m_queue_utilization_pill.Show();
+
+    // Sit immediately to the right of the QUEUE pill, sharing its bottom row.
+    ImVec2 util_pill_size = m_queue_utilization_pill.GetPillSize();
+    ImVec2 pill_pos(m_reorder_grip_width + m_pill.GetPillSize().x + PILL_SPACING,
+                    content_size.y - util_pill_size.y - 2.0f);
+    m_queue_utilization_pill.RenderPillLabelAt(pill_pos, m_settings);
 }
 
 void

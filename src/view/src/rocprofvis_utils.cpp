@@ -393,6 +393,12 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
     std::filesystem::path base                = sanitize_base_dir(safe_getenv("LOCALAPPDATA"));
     std::filesystem::path config_dir =
         !base.empty() ? base : std::filesystem::current_path();
+#elif defined(__APPLE__)
+    const char*           app_config_dir_name = "ROCm-Optiq";
+    std::filesystem::path home                = sanitize_base_dir(safe_getenv("HOME"));
+    std::filesystem::path config_dir =
+        !home.empty() ? (home / "Library" / "Application Support")
+                       : std::filesystem::current_path();
 #else
     const char*           app_config_dir_name = "rocm-optiq";
     std::filesystem::path config_dir          = sanitize_base_dir(safe_getenv("XDG_CONFIG_HOME"));
@@ -410,6 +416,26 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
     }
 
     return config_dir.string();
+}
+
+std::string
+RocProfVis::View::get_application_log_path(bool create_dirs)
+{
+#ifdef __APPLE__
+    std::filesystem::path home = sanitize_base_dir(safe_getenv("HOME"));
+    std::filesystem::path log_dir =
+        !home.empty() ? (home / "Library" / "Logs") : std::filesystem::current_path();
+    log_dir /= "ROCm-Optiq";
+    log_dir = log_dir.lexically_normal();
+    if(create_dirs)
+    {
+        std::filesystem::create_directories(log_dir);
+    }
+
+    return log_dir.string();
+#else
+    return get_application_config_path(create_dirs);
+#endif
 }
 
 std::string

@@ -593,9 +593,10 @@ MenuLabelWithIconPadding(const char* icon, const char* label)
     return padded;
 }
 
-// row_start is the cursor screen position captured before the menu widget.
+// Pass the parent menu's draw list, captured before BeginMenu opens a submenu
+// and retargets the current window's draw list.
 static void
-DrawMenuItemIcon(const char* icon, const ImVec2& row_start, bool enabled)
+DrawMenuItemIcon(ImDrawList* draw_list, const char* icon, const ImVec2& row_start, bool enabled)
 {
     if(!icon || icon[0] == '\0')
         return;
@@ -606,17 +607,18 @@ DrawMenuItemIcon(const char* icon, const ImVec2& row_start, bool enabled)
     const ImVec2 pos(row_start.x, row_start.y + (font_size - icon_size.y) * 0.5f);
     const ImU32  color = ImGui::GetColorU32(enabled ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
-    ImGui::GetWindowDrawList()->AddText(icon_font, font_size, pos, color, icon);
+    draw_list->AddText(icon_font, font_size, pos, color, icon);
 }
 
 bool
 IconMenuItem(const char* icon, const char* label, bool enabled)
 {
+    ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
     std::string  padded_label = MenuLabelWithIconPadding(icon, label);
 
     bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, false, enabled);
-    DrawMenuItemIcon(icon, row_start, enabled);
+    DrawMenuItemIcon(draw_list, icon, row_start, enabled);
 
     if(clicked)
         ImGui::CloseCurrentPopup();
@@ -626,11 +628,12 @@ IconMenuItem(const char* icon, const char* label, bool enabled)
 bool
 IconBeginMenu(const char* icon, const char* label)
 {
+    ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
     std::string  padded_label = MenuLabelWithIconPadding(icon, label);
 
     bool open = ImGui::BeginMenu(padded_label.c_str());
-    DrawMenuItemIcon(icon, row_start, true);
+    DrawMenuItemIcon(draw_list, icon, row_start, true);
 
     return open;
 }

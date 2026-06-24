@@ -233,6 +233,9 @@ constexpr uint64_t minute_in_ns = minute_in_s * ns_per_s;
 std::string 
 get_application_config_path(bool create_dirs);
 
+std::string 
+get_application_log_path(bool create_dirs);
+
 std::string
 compact_number_format(double number);
 

@@ -201,14 +201,23 @@ TrackItem::RenderMetaAreaExpand()
 }
 
 void
+TrackItem::RenderMetaAreaScale()
+{
+    // no-op
+}
+
+void
+TrackItem::RenderSecondaryMetaPill(const ImVec2& content_size)
+{
+    (void) content_size;
+    // no-op
+}
+
+void
 TrackItem::RenderMetaArea()
 {
-    // Shrink the meta data content area by one unit in the vertical direction so that the
-    // borders rendered by the parent are visible other wise the bg fill will cover them
-    // up.
-    ImVec2 metadata_shrink_padding(0.0f, 1.0f);
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
-    m_track_content_height      = m_track_height - metadata_shrink_padding.y * 2.0f;
+    m_track_content_height      = m_track_height;
 
     ImVec2 name_label_min(0.0f, 0.0f);
     ImVec2 name_label_max(0.0f, 0.0f);
@@ -218,8 +227,9 @@ TrackItem::RenderMetaArea()
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 3));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 5));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
-                        m_settings.GetDefaultStyle().ChildRounding);
+    // Keep the meta-area square so the selection highlight fill reaches the corners
+    // instead of bleeding through rounded edges.
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           m_selected
@@ -227,10 +237,9 @@ TrackItem::RenderMetaArea()
                               : (m_request_state == TrackDataRequestState::kError
                                      ? m_settings.GetColor(Colors::kGridRed)
                                      : m_settings.GetColor(Colors::kMetaDataColor)));
-    ImGui::SetCursorPos(metadata_shrink_padding);
+    ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
     if(ImGui::BeginChild("MetaData Area",
-                         ImVec2(s_metadata_width, outer_container_size.y -
-                                                      metadata_shrink_padding.y * 2.0f),
+                         ImVec2(s_metadata_width, outer_container_size.y),
                          ImGuiChildFlags_None,
                          ImGuiWindowFlags_NoScrollbar |
                              ImGuiWindowFlags_NoScrollWithMouse))
@@ -324,6 +333,7 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaExpand();
 
         m_pill.RenderPillLabel(content_size, m_settings, m_reorder_grip_width);
+        RenderSecondaryMetaPill(content_size);
     }
     ImGui::EndChild();  // end metadata area
 
@@ -927,6 +937,13 @@ void
 Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
                       float reorder_grip_width)
 {
+    ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
+    RenderPillLabelAt(pillbox_pos, settings);
+}
+
+void
+Pill::RenderPillLabelAt(ImVec2 pillbox_pos, SettingsManager& settings)
+{
     if(m_show_pill_label == false)
     {
         m_was_last_hovered = false;
@@ -934,8 +951,6 @@ Pill::RenderPillLabel(ImVec2 container_size, SettingsManager& settings,
     }
     ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault),
                     settings.GetFontManager().GetFontSize(FontSize::kSmall));
-
-    ImVec2 pillbox_pos(reorder_grip_width, container_size.y - m_pillbox_size.y - 2.0f);
 
     if (m_active)
     {

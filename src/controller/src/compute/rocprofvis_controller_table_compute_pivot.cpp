@@ -276,10 +276,11 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
 
     for(size_t i = 0; i < m_rows.size(); i++)
     {
+        Array* row_array = nullptr;
         try
         {
-            Array* row_array = new Array();
-        
+            row_array = new Array();
+
             auto& row_vec = row_array->GetVector();
             row_vec.resize(m_rows[i].size());
             for(uint32_t j = 0; j < m_rows[i].size(); j++)
@@ -287,12 +288,18 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
                 row_vec[j].SetType(m_rows[i][j].GetType());
                 row_vec[j] = m_rows[i][j];
             }
-            result = array.SetObject(kRPVControllerArrayEntryIndexed, i,
+            result = array.SetOwnedObject(kRPVControllerArrayEntryIndexed, i,
                                         (rocprofvis_handle_t*) row_array);
-        
+
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            if(result != kRocProfVisResultSuccess)
+            {
+                // Ownership was not transferred to the outer array; reclaim it.
+                delete row_array;
+            }
         } catch(const std::exception&)
         {
+            delete row_array;
             result = kRocProfVisResultMemoryAllocError;
         }
     }

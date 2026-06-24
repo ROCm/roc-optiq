@@ -884,22 +884,28 @@ FlameTrackItem::RenderMetaAreaOptions()
 
     if(ImGui::Checkbox("Compact Mode", &m_compact_mode))
     {
-        if(m_compact_mode)
-        {
-            m_level_height = m_settings.GetEventLevelCompactHeight();
-        }
-        else
-        {
-            m_level_height = m_settings.GetEventLevelHeight();
-            if(m_is_expanded)
-            {
-                RecalculateTrackHeight();
-            }
-        }
-        if(m_track_height > std::max(m_max_level * m_level_height + m_level_height, DEFAULT_TRACK_HEIGHT))
+        ApplyCompactMode();
+    }
+}
+
+void
+FlameTrackItem::ApplyCompactMode()
+{
+    if(m_compact_mode)
+    {
+        m_level_height = m_settings.GetEventLevelCompactHeight();
+    }
+    else
+    {
+        m_level_height = m_settings.GetEventLevelHeight();
+        if(m_is_expanded)
         {
             RecalculateTrackHeight();
         }
+    }
+    if(m_track_height > std::max(m_max_level * m_level_height + m_level_height, DEFAULT_TRACK_HEIGHT))
+    {
+        RecalculateTrackHeight();
     }
 }
 

@@ -2788,6 +2788,19 @@ TimelineView::GetTransform() const
 }
 
 #ifdef IMGUI_ENABLE_TEST_ENGINE
+FlameTrackItem*
+TimelineView::GetFirstFlameTrackForTest() const
+{
+    if(!m_graphs) return nullptr;
+    for(const TrackGraph& graph : *m_graphs)
+    {
+        if(!graph.display || graph.chart == nullptr) continue;
+        FlameTrackItem* flame = dynamic_cast<FlameTrackItem*>(graph.chart);
+        if(flame != nullptr) return flame;
+    }
+    return nullptr;
+}
+
 bool
 TimelineView::GetFirstEventScreenCenterForTest(ImVec2& out_center) const
 {

@@ -80,6 +80,14 @@ public:
             (m_second_event_rect_min_for_test.y + m_second_event_rect_max_for_test.y) * 0.5f);
         return true;
     }
+    // Drive Compact Mode through the same side-effecting path the gear-menu
+    // checkbox uses (the checkbox lives in a popup with no stable widget id).
+    void SetCompactModeForTest(bool on)
+    {
+        m_compact_mode = on;
+        ApplyCompactMode();
+    }
+    float GetLevelHeightForTest() const { return m_level_height; }
 #endif
 
 protected:
@@ -118,7 +126,8 @@ private:
 
     void RenderTooltip(ChartItem& chart_item, int color_index);
     void RecalculateTrackHeight();
-    
+    void ApplyCompactMode();
+
     void RequestAnalysis() override;
 
     std::vector<ChartItem>             m_chart_items;

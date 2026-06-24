@@ -29,6 +29,7 @@ namespace View
 class TimelineSelection;
 class TimelineView;
 class MeasurementController;
+class FlameTrackItem;
  
 typedef struct ViewCoords
 {
@@ -126,6 +127,9 @@ public:
     // Max vertical scroll offset; 0 when all tracks fit the viewport, in which
     // case Up/Down scroll is a no-op (lets a test skip instead of false-fail).
     float GetMaxYScrollForTest() const { return m_content_max_y_scroll; }
+    // First displayed flame track, or nullptr if none. Lets a test drive
+    // per-track display options (e.g. Compact Mode) without the gear popup.
+    FlameTrackItem* GetFirstFlameTrackForTest() const;
 #endif
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;

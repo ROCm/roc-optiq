@@ -94,19 +94,14 @@ rocprofvis_result_t Kernel::GetObject(rocprofvis_property_t property, uint64_t i
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
-        switch(property)
+        if(property == kRPVControllerKernelPcSampling)
         {
-            case kRPVControllerKernelPcSampling:
-            {
-                *value = (rocprofvis_handle_t*)&m_pc_sampling_data;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
+            *value = (rocprofvis_handle_t*)&m_pc_sampling_data;
+            result = kRocProfVisResultSuccess;
+        }
+        else
+        {
+            result = UnhandledProperty(property);
         }
     }
     return result;

@@ -980,6 +980,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
                         Builder::LeftJoin(Builder::LevelTable("op"), "L", "id = L.eid", MultiNode::No) },
                       { Builder::Where(
                           "id", "==", std::to_string(event_id.bitfield.event_id)) } }));
+            if(kRocProfVisDmResultSuccess !=
+                ExecuteSQLQuery(future, DbInstancePtrAt(0), level_query.c_str(), extdata, &CallbackAddEssentialInfo))
+                break;
         } else    
         {
             ShowProgress(0, "Extended data not available for specified operation type!", kRPVDbError, future );

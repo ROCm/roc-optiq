@@ -195,7 +195,8 @@ TopologyNode::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t
                 }
                 else
                 {
-                    result = kRocProfVisResultUnknownError;
+                    *value = kRPVControllerProcessorTypeUndefined;
+                    result = kRocProfVisResultSuccess;
                 }
             }
             else

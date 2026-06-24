@@ -9,6 +9,7 @@
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_timeline_view.h"
+#include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_minimap.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_selection.h"
@@ -562,5 +563,45 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const double y_after    = tlv->GetViewCoords().y;
         IM_CHECK(zoom_after <= 1.0f + 0.01f);
         IM_CHECK(y_after == 0.0);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "timeline_compact_mode_toggle");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = tv->GetTimelineViewForTest();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+        FlameTrackItem* flame = tlv->GetFirstFlameTrackForTest();
+        IM_CHECK(flame != nullptr);
+        if (flame == nullptr) return;
+
+        // Compact Mode is a per-track gear option whose checkbox lives in a popup
+        // with no stable widget id, so drive it through the same side-effecting
+        // path the checkbox uses. Turning it on shrinks the per-event level
+        // height; assert both the flag and the height follow, then restore.
+        const bool  orig_compact = flame->IsCompactMode();
+        const float orig_height  = flame->GetLevelHeightForTest();
+
+        flame->SetCompactModeForTest(!orig_compact);
+        ctx->Yield(2);
+        IM_CHECK(flame->IsCompactMode() != orig_compact);
+        IM_CHECK(flame->GetLevelHeightForTest() != orig_height);
+
+        flame->SetCompactModeForTest(orig_compact);
+        ctx->Yield(2);
+        IM_CHECK(flame->IsCompactMode() == orig_compact);
+        IM_CHECK(flame->GetLevelHeightForTest() == orig_height);
     };
 }

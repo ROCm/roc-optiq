@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include <cstdint>
 #include <limits>
@@ -17,14 +18,6 @@ class DataProvider;
 class SettingsManager;
 class TimelineSelection;
 struct EventInfo;
-
-// Identifies the row/column of the cell whose right-click opened a table's
-// copy context menu. Shared by every Event Details table.
-struct CellMenuTarget
-{
-    int row    = -1;
-    int column = -1;
-};
 
 class EventsView : public RocWidget
 {

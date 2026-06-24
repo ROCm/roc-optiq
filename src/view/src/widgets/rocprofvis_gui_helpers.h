@@ -3,6 +3,7 @@
 
 #pragma once
 #include "imgui.h"
+#include <string>
 #include <utility>
 
 namespace RocProfVis
@@ -124,6 +125,48 @@ VerticalSeparator(SettingsManager* settings = nullptr);
 
 float
 TableRowHeight();
+
+// Identifies the row/column of the cell whose right-click opened a table's copy
+// context menu. Reusable by any table that wants the shared full-row right-click
+// hit-box plus copy menu (see RenderRowHitbox / AddCopyRowCellMenuItems).
+struct CellMenuTarget
+{
+    int row    = -1;
+    int column = -1;
+};
+
+// Positions the cursor for a cell: column 0 shares the row with the hit-box via
+// SameLine(), later columns move to their own column.
+void
+PositionCell(int col);
+
+// Renders the transparent, full-row selectable that acts as the right-click
+// hit-box for the empty areas of a table row. Cells drawn on top capture
+// right-clicks that land directly on their text (see CaptureCellRightClick).
+// On a right-click, records the row and hovered column into target and raises
+// open. Returns whether the row is hovered (for double-click / highlight use).
+bool
+RenderRowHitbox(const char* hitbox_id, int row, int column_count,
+                CellMenuTarget& target, bool& open);
+
+// Records a right-click that landed on the cell content just submitted (the
+// copyable text/button steals hover from the row hit-box over its own area).
+// Call immediately after rendering a cell's content.
+void
+CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open);
+
+// Opens the shared cell context-menu popup with consistent styling. When true is
+// returned, the caller fills in menu items and must call EndCellContextMenu().
+bool
+BeginCellContextMenu(const char* popup_id);
+
+void
+EndCellContextMenu();
+
+// Adds the shared "Copy Row Data" / "Copy Cell Data" items for the given row,
+// copying to the clipboard and raising the copy notification.
+void
+AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column);
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void

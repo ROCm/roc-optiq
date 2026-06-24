@@ -6,6 +6,8 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_notification_manager.h"
+#include "widgets/rocprofvis_widget.h"
 #include <algorithm>
 #include <cmath>
 
@@ -564,6 +566,97 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     }
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER
+
+void
+PositionCell(int col)
+{
+    if(col > 0)
+        ImGui::TableSetColumnIndex(col);
+    else
+        ImGui::SameLine();
+}
+
+bool
+RenderRowHitbox(const char* hitbox_id, int row, int column_count,
+                CellMenuTarget& target, bool& open)
+{
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+    bool clicked = ImGui::Selectable(hitbox_id, false,
+                                     ImGuiSelectableFlags_SpanAllColumns |
+                                         ImGuiSelectableFlags_AllowOverlap,
+                                     ImVec2(0.0f, 0.0f));
+    bool hovered = clicked ||
+                   ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
+                                        ImGuiHoveredFlags_AllowWhenOverlappedByItem);
+    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+    {
+        int hovered_col = ImGui::TableGetHoveredColumn();
+        target.row      = row;
+        target.column =
+            (hovered_col >= 0 && hovered_col < column_count) ? hovered_col : 0;
+        open = true;
+    }
+    ImGui::PopStyleColor(3);
+    return hovered;
+}
+
+void
+CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open)
+{
+    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+    {
+        target.row    = row;
+        target.column = col;
+        open          = true;
+    }
+}
+
+bool
+BeginCellContextMenu(const char* popup_id)
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    bool open = ImGui::BeginPopup(popup_id);
+    if(!open)
+        ImGui::PopStyleVar(2);
+    return open;
+}
+
+void
+EndCellContextMenu()
+{
+    ImGui::EndPopup();
+    ImGui::PopStyleVar(2);
+}
+
+void
+AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column)
+{
+    if(IconMenuItem(ICON_COPY, "Copy Row Data"))
+    {
+        std::string row_text;
+        for(int c = 0; c < column_count; c++)
+        {
+            if(c > 0) row_text += '\t';
+            row_text += cells[c];
+        }
+        ImGui::SetClipboardText(row_text.c_str());
+        NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+                                                NotificationLevel::Info);
+    }
+    if(IconMenuItem(ICON_COPY, "Copy Cell Data"))
+    {
+        if(column >= 0 && column < column_count)
+        {
+            ImGui::SetClipboardText(cells[column].c_str());
+            NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+                                                    NotificationLevel::Info);
+        }
+    }
+}
 
 }   // namespace View
 }   // namespace RocProfVis

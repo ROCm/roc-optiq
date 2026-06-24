@@ -9,7 +9,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
-#include "widgets/rocprofvis_notification_manager.h"
 
 #include <array>
 #include <string_view>
@@ -42,104 +41,6 @@ PushSectionHeaderStyle(SettingsManager& settings)
                           settings.GetColor(Colors::kButtonHovered));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                           settings.GetColor(Colors::kButtonActive));
-}
-
-// Positions the cursor for a cell: column 0 shares the row with the hit-box via
-// SameLine(), later columns move to their own column.
-void
-PositionCell(int col)
-{
-    if(col > 0)
-        ImGui::TableSetColumnIndex(col);
-    else
-        ImGui::SameLine();
-}
-
-// Renders the transparent, full-row selectable that acts as the right-click
-// hit-box for the empty areas of a table row. Cells drawn on top capture
-// right-clicks that land directly on their text (see CaptureCellRightClick).
-// On a right-click, records the row and hovered column into target and raises
-// open. Returns whether the row is hovered (for double-click / highlight use).
-bool
-RenderRowHitbox(const char* hitbox_id, int row, int column_count,
-                CellMenuTarget& target, bool& open)
-{
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
-    bool clicked = ImGui::Selectable(hitbox_id, false,
-                                     ImGuiSelectableFlags_SpanAllColumns |
-                                         ImGuiSelectableFlags_AllowOverlap,
-                                     ImVec2(0.0f, 0.0f));
-    bool hovered = clicked ||
-                   ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
-                                        ImGuiHoveredFlags_AllowWhenOverlappedByItem);
-    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-    {
-        int hovered_col = ImGui::TableGetHoveredColumn();
-        target.row      = row;
-        target.column =
-            (hovered_col >= 0 && hovered_col < column_count) ? hovered_col : 0;
-        open = true;
-    }
-    ImGui::PopStyleColor(3);
-    return hovered;
-}
-
-// Records a right-click that landed on the cell content just submitted (the
-// copyable text/button steals hover from the row hit-box over its own area).
-// Call immediately after rendering a cell's content.
-void
-CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open)
-{
-    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-    {
-        target.row    = row;
-        target.column = col;
-        open          = true;
-    }
-}
-
-// Opens the shared cell context-menu popup with consistent styling. When true is
-// returned, the caller fills in menu items and must call EndCellContextMenu().
-bool
-BeginCellContextMenu(const char* popup_id)
-{
-    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-    bool open = ImGui::BeginPopup(popup_id);
-    if(!open)
-        ImGui::PopStyleVar(2);
-    return open;
-}
-
-void
-EndCellContextMenu()
-{
-    ImGui::EndPopup();
-    ImGui::PopStyleVar(2);
-}
-
-// Adds the shared "Copy Row Data" / "Copy Cell Data" items for the given row.
-void
-AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column)
-{
-    if(IconMenuItem(ICON_COPY, "Copy Row Data"))
-    {
-        std::string row_text;
-        for(int c = 0; c < column_count; c++)
-        {
-            if(c > 0) row_text += '\t';
-            row_text += cells[c];
-        }
-        ImGui::SetClipboardText(row_text.c_str());
-    }
-    if(IconMenuItem(ICON_COPY, "Copy Cell Data"))
-    {
-        if(column >= 0 && column < column_count)
-            ImGui::SetClipboardText(cells[column].c_str());
-    }
 }
 
 }  // namespace

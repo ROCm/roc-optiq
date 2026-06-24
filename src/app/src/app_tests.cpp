@@ -397,4 +397,64 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(sel->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID);
         IM_CHECK(sel->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID);
     };
+
+    t = IM_REGISTER_TEST(e, "app", "timeline_pan_hotkey");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = tv->GetTimelineViewForTest();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        // Pan (A/D) shares the timeline's m_pseudo_focus gate, set by a mouse-down
+        // in the graph; park on the first event to acquire it.
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(2);
+
+        // At zoom 1 the view spans the full range, so pan is clamped with no
+        // headroom; zoom in first to make room to move.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+
+        // Pan left first so the subsequent D pan always has right-headroom
+        // regardless of where the zoom centered the view.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_A);
+        ctx->KeyPress(ImGuiKey_A);
+        ctx->Yield(3);
+
+        const double v_min_before = tlv->GetViewCoords().v_min_x;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_D);
+        ctx->Yield(3);
+        const double v_min_right = tlv->GetViewCoords().v_min_x;
+        IM_CHECK(v_min_right > v_min_before);
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_A);
+        ctx->Yield(3);
+        const double v_min_left = tlv->GetViewCoords().v_min_x;
+        IM_CHECK(v_min_left < v_min_right);
+    };
 }

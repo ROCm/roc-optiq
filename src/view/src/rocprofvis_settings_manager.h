@@ -289,6 +289,7 @@ public:
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
+    const float GetEventLevelSpacing() const;
 
 
 private:

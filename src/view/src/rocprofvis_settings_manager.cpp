@@ -12,6 +12,7 @@
 #include "rocprofvis_utils.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 
@@ -298,8 +299,9 @@ inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
 inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
 inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char* SETTINGS_FILE_NAME           = "settings_application.json";
-inline constexpr float       EVENT_LEVEL_HEIGHT           = 40.0f;
 inline constexpr float       COMPACT_EVENT_HEIGHT         = 6.0f;
+inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN  = 6.0f;
+inline constexpr float       EVENT_LEVEL_SPACING          = 1.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -876,13 +878,20 @@ SettingsManager::DeserializeUnitSettings(jt::Json& json)
 const float
 SettingsManager::GetEventLevelHeight() const
 {
-    return EVENT_LEVEL_HEIGHT;
+    const float font_size = m_font_manager.GetFontSize(FontSize::kDefault);
+    return std::ceil(font_size + EVENT_LEVEL_VERTICAL_MARGIN + EVENT_LEVEL_SPACING);
 }
 
 const float
 SettingsManager::GetEventLevelCompactHeight() const
 {
     return COMPACT_EVENT_HEIGHT;
+}
+
+const float
+SettingsManager::GetEventLevelSpacing() const
+{
+    return EVENT_LEVEL_SPACING;
 }
 
 void

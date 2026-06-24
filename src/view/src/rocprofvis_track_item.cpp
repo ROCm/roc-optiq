@@ -76,6 +76,12 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 }
 
 bool
+TrackItem::HasSavedTrackHeight() const
+{
+    return m_track_project_settings.Valid();
+}
+
+bool
 TrackItem::TrackHeightChanged()
 {
     bool height_changed    = m_track_height_changed;

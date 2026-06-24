@@ -29,6 +29,10 @@ public:
     bool   FocusTextInput();
     bool   Searched() const;
     float  Width() const;
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    size_t GetResultCountForTest() const { return m_table_model().GetTableTotalRowCount(m_table_type); }
+    bool   RequestPendingForTest() const { return m_data_provider.IsRequestPending(m_request_id); }
+#endif
 
 private:
     void FormatData() const override;

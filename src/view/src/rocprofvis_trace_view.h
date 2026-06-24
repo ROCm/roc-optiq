@@ -81,6 +81,7 @@ public:
     AnalysisView* GetAnalysisViewForTest() const;
     TimelineView* GetTimelineViewForTest() const;
     Minimap*      GetMinimapForTest() const;
+    EventSearch*  GetEventSearchForTest() const;
     // Screen center of the ICON_COMPASS toolbar button (no stable widget id),
     // captured by RenderToolbar. False if the toolbar has not drawn it yet.
     bool          GetMinimapButtonScreenCenterForTest(ImVec2& out_center) const;

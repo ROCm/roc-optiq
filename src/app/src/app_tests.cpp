@@ -11,6 +11,7 @@
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_minimap.h"
+#include "rocprofvis_event_search.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -839,6 +840,50 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // Restore the auto-selected kernel for following tests.
         sel->SelectKernel(auto_kernel);
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "event_search_finds_results");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        EventSearch* es = tv->GetEventSearchForTest();
+        IM_CHECK(es != nullptr);
+        if (es == nullptr) return;
+
+        // Clear so the searched flag starts from a known baseline (the harness
+        // reuses one process interactively).
+        es->Clear();
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == false);
+
+        // hipLaunchKernel is a launch region present in the trace; write it into
+        // the production search buffer and run the search the same way the input
+        // field's submit does.
+        char* buf = es->TextInput();
+        IM_CHECK(buf != nullptr);
+        if (buf == nullptr) return;
+        snprintf(buf, es->TextInputLimit(), "%s", "hipLaunchKernel");
+        es->Search();
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == true);
+
+        // The fetch is deferred; let it drain (Update re-runs Search when the
+        // request completes) before reading the result count.
+        for (int i = 0; i < 60 && es->RequestPendingForTest(); i++) ctx->Yield(2);
+        ctx->Yield(5);
+        IM_CHECK(es->GetResultCountForTest() > 0);
+
+        es->Clear();
         ctx->Yield(2);
     };
 }

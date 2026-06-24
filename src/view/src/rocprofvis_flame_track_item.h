@@ -88,6 +88,10 @@ public:
         ApplyCompactMode();
     }
     float GetLevelHeightForTest() const { return m_level_height; }
+    // Event color mode is set by the gear-menu radio buttons (a plain field
+    // assignment); expose it so a test can drive and read it without the popup.
+    EventColorMode GetEventColorModeForTest() const { return m_event_color_mode; }
+    void SetEventColorModeForTest(EventColorMode mode) { m_event_color_mode = mode; }
 #endif
 
 protected:

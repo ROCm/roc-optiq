@@ -115,6 +115,7 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_tab_container.cpp
     src/view/src/widgets/rocprofvis_editable_textfield.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
+    src/view/src/widgets/rocprofvis_log_viewer.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
     src/view/src/widgets/rocprofvis_image_helpers.cpp
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp

@@ -205,9 +205,13 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
             ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
             future->AddDependentFuture(object2wait);
             dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
-            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
-            rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMSliceHandleTimed, rocprofvis_dm_hash_combine_timestamp(range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis));
-            ROCPROFVIS_ASSERT(slice);
+            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess || dm_result == kRocProfVisDmResultDbAbort);
+            rocprofvis_dm_slice_t slice = nullptr;
+            if (dm_result == kRocProfVisDmResultSuccess)
+            {
+                slice = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMSliceHandleTimed, rocprofvis_dm_hash_combine_timestamp(range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis));
+                ROCPROFVIS_ASSERT(slice);
+            }         
             if(slice && !future->IsCancelled())
             {
                 uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
@@ -265,9 +269,9 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
                 {
                     *output = (double)busy_duration / (double)(range_end - range_start) * 100.0;
                 }
+                dm_result = rocprofvis_dm_delete_time_slice_handle(trace->GetDMHandle(), track_id, slice);
+                ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
             }
-            dm_result = rocprofvis_dm_delete_time_slice_handle(trace->GetDMHandle(), track_id, slice);
-            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
             future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
         }

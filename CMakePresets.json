@@ -203,6 +203,14 @@
             "description": "Build ROCm Optiq for macOS in Release mode with debug symbols",
             "displayName": "macOS Release Build with Symbols",
             "configurePreset": "macos-release-symbols"
+        },
+        {
+            "name": "Windows Installer",
+            "description": "Build the NSIS Windows installer (requires NSIS to be installed)",
+            "displayName": "Windows Installer",
+            "configurePreset": "x64-release",
+            "configuration": "Release",
+            "targets": ["package-nsis"]
         }
     ]
 }

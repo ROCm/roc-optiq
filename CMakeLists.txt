@@ -532,6 +532,42 @@ endif()
 # Include packaging
 include(CPack)
 
+# === Windows NSIS Installer ===
+# Build with:  cmake --build <dir> --target package-nsis
+# Or via preset: cmake --build --preset "Windows Installer"
+if(WIN32)
+    find_program(MAKENSIS_EXECUTABLE makensis
+        HINTS
+            "C:/Program Files (x86)/NSIS"
+            "C:/Program Files/NSIS"
+        DOC "Path to the NSIS makensis compiler")
+
+    if(MAKENSIS_EXECUTABLE)
+        set(NSIS_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/Installer/Installation/Scripts/roc-optiq.nsi")
+        set(NSIS_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+
+        # Generator expression resolves the per-config output directory at build time
+        add_custom_target(package-nsis
+            COMMAND "${MAKENSIS_EXECUTABLE}"
+                /DPRODUCT_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+                /DPRODUCT_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+                /DPRODUCT_VERSION_PATCH=${PROJECT_VERSION_PATCH}
+                /DPRODUCT_VERSION_BUILD=${PROJECT_VERSION_BUILD}
+                /DBUILD_BIN_DIR=$<TARGET_FILE_DIR:${TARGET_NAME}>
+                /DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                /DOUTPUT_DIR=${NSIS_OUTPUT_DIR}
+                ${NSIS_SCRIPT}
+            DEPENDS ${TARGET_NAME}
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Installer/Installation/Scripts"
+            COMMENT "Building NSIS installer with makensis"
+            VERBATIM
+        )
+        message(STATUS "NSIS found: ${MAKENSIS_EXECUTABLE}. Target 'package-nsis' is available.")
+    else()
+        message(STATUS "NSIS (makensis) not found. Install NSIS to enable the 'package-nsis' target.")
+    endif()
+endif()
+
 # Copy runtime files to target folder
 # Uses a no-op (cmake -E true) when there are no runtime DLLs (e.g. GLFW_LINK_STATIC=ON)
 if(WIN32)

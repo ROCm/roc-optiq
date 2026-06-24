@@ -612,6 +612,10 @@ Minimap* TraceView::GetMinimapForTest() const
 {
     return m_minimap.get();
 }
+EventSearch* TraceView::GetEventSearchForTest() const
+{
+    return m_event_search.get();
+}
 bool TraceView::GetMinimapButtonScreenCenterForTest(ImVec2& out_center) const
 {
     if(!m_minimap_btn_rect_valid)

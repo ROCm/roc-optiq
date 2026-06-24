@@ -490,12 +490,6 @@ reusable types they expose.
   defining a one-off `RocWidget` subclass for trivial content.
 - `struct TabItem` - `{ label, id, widget, can_close }`, the shape of a
   tab.
-- Free functions:
-  - `WithPadding(left, right, top, bottom, content_fn)` - RAII padding.
-  - `CopyableTextUnformatted(text, unique_id, ...)` - clickable copy-to-
-    clipboard text. Use this for any cell whose value the user may want
-    to copy (events, args, paths).
-  - `COPY_DATA_NOTIFICATION` - canonical "data was copied" toast text.
 - `class PopUpStyle` - RAII helper that pushes consistent popup colors,
   borders, and centering. Use this around `BeginPopupModal` instead of
   hand-rolling style pushes.
@@ -557,6 +551,15 @@ Use these instead of inlining their logic anywhere new.
   make ImGui combo boxes visually distinct from plain text inputs.
 - `IconButton(icon, icon_font, size, tooltip, frameless, ...)` - the
   canonical glyph button. Must use the icon font from `FontManager`.
+- `CopyableTextUnformatted(text, unique_id, ...)` - clickable copy-to-
+  clipboard text. Use this for any cell whose value the user may want
+  to copy (events, args, paths).
+- `IconMenuItem(icon, label, enabled)` / `IconBeginMenu(icon, label)` -
+  menu entries with a leading icon-font glyph. Use inside
+  `BeginPopup`/`BeginPopupContextItem` blocks instead of plain
+  `ImGui::MenuItem` / `ImGui::BeginMenu` when you want an icon.
+- `COPY_DATA_NOTIFICATION` / `COPY_ROW_DATA_NOTIFICATION` - canonical
+  "data was copied" toast strings for a single cell / a whole row.
 - `IsMouseReleasedWithDragCheck(button, drag_threshold)` - "click
   vs drag" disambiguator.
 - `InputTextWithClear(id, hint, buf, buf_size, icon_font, bg_color,
@@ -1895,17 +1898,18 @@ For fast lookup. Each entry: class -> file -> one-line role.
 ### Widget library (`src/view/src/widgets/`)
 
 - `RocWidget`, `LayoutItem`, `RocCustomWidget`, `TabItem`,
-  `PopUpStyle`, `WithPadding`, `CopyableTextUnformatted`,
-  `COPY_DATA_NOTIFICATION` -> `rocprofvis_widget.h`.
+  `PopUpStyle` -> `rocprofvis_widget.h`.
 - `ConfirmationDialog`, `MessageDialog` -> `rocprofvis_dialog.h`.
 - `VFixedContainer`, `SplitContainerBase`, `HSplitContainer`,
   `VSplitContainer` -> `rocprofvis_split_containers.h`.
 - `FlexItem`, `FlexContainer` -> `rocprofvis_flex_container.h`.
 - `TabContainer` -> `rocprofvis_tab_container.h`.
 - `RenderLoadingIndicator`, `LoadingIndicatorCentering`,
-  `IconButton`, `XButton`, `SectionTitle`, `VerticalSeparator`,
-  `ElidedText`, `Alignment`, `CenterNextItem`, `InputTextWithClear`,
-  `BeginTooltipStyled`, `BeginItemTooltipStyled`,
+  `IconButton`, `CopyableTextUnformatted`, `IconMenuItem`,
+  `IconBeginMenu`, `COPY_DATA_NOTIFICATION`,
+  `COPY_ROW_DATA_NOTIFICATION`, `XButton`, `SectionTitle`,
+  `VerticalSeparator`, `ElidedText`, `Alignment`, `CenterNextItem`,
+  `InputTextWithClear`, `BeginTooltipStyled`, `BeginItemTooltipStyled`,
   `EndTooltipStyled`, `SetTooltipStyled`, `ApplyAlpha`, `ThemeColor`,
   `GetResponsiveWindowSize`, `PushComboStyles/PopComboStyles`,
   `TableRowHeight`, `IsMouseReleasedWithDragCheck`,

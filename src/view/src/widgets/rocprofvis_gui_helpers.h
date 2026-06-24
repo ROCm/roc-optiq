@@ -3,7 +3,9 @@
 
 #pragma once
 #include "imgui.h"
+#include <functional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace RocProfVis
@@ -125,6 +127,31 @@ VerticalSeparator(SettingsManager* settings = nullptr);
 
 float
 TableRowHeight();
+
+// Toast text shown after copying a single cell / a whole row to the clipboard.
+inline constexpr std::string_view COPY_DATA_NOTIFICATION     = "Cell data was copied";
+inline constexpr std::string_view COPY_ROW_DATA_NOTIFICATION = "Row data copied to clipboard";
+
+// Similar to ImGui::TextUnformatted(), but allows copying the text to the clipboard
+// via left-click or a context menu.
+// If multiple instances with the same text can appear within the same frame,
+// the caller must provide a unique, stable identifier to avoid ID collisions.
+// For items created in loops, the loop index or iterator is typically sufficient.
+bool
+CopyableTextUnformatted(
+    const char* text, std::string_view unique_id = "", std::string_view notification = "",
+    bool one_click_copy = false, bool context_menu = false,
+    std::function<void(const char* value_to_copy)> menu_func = nullptr);
+
+// Renders a selectable menu item with an icon (from the icon font) followed by a text label.
+// Returns true when clicked. Intended for use inside BeginPopup/BeginPopupContextItem blocks.
+bool
+IconMenuItem(const char* icon, const char* label, bool enabled = true);
+
+// Opens a submenu entry with a leading icon (from the icon font) before the label.
+// Returns true when the submenu is open; call ImGui::EndMenu() only when it returns true.
+bool
+IconBeginMenu(const char* icon, const char* label);
 
 // Identifies the row/column of the cell whose right-click opened a table's copy
 // context menu. Reusable by any table that wants the shared full-row right-click

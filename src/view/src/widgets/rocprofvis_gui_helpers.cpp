@@ -7,7 +7,6 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "widgets/rocprofvis_widget.h"
 #include <algorithm>
 #include <cmath>
 
@@ -567,6 +566,147 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
+// Menu icon spacing, in multiples of the font size.
+inline constexpr float MENU_ICON_GAP_EM       = 0.7f;
+inline constexpr float MENU_NO_ICON_INDENT_EM = 1.0f;
+
+static float
+MenuIconWidth(const char* icon)
+{
+    const float font_size = ImGui::GetFontSize();
+    if(!icon || icon[0] == '\0')
+        return font_size * MENU_NO_ICON_INDENT_EM;
+
+    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+    return icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon).x;
+}
+
+// Pads the label with leading spaces to leave room for the left-aligned icon.
+static std::string
+MenuLabelWithIconPadding(const char* icon, const char* label)
+{
+    const float offset  = MenuIconWidth(icon) + ImGui::GetFontSize() * MENU_ICON_GAP_EM;
+    const float space_w = ImGui::CalcTextSize(" ").x;
+    const int   pad     = space_w > 0.0f ? static_cast<int>(std::ceil(offset / space_w)) : 1;
+    std::string padded(static_cast<size_t>(std::max(pad, 1)), ' ');
+    padded += label;
+    return padded;
+}
+
+// row_start is the cursor screen position captured before the menu widget.
+static void
+DrawMenuItemIcon(const char* icon, const ImVec2& row_start, bool enabled)
+{
+    if(!icon || icon[0] == '\0')
+        return;
+
+    ImFont*      icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+    const float  font_size = ImGui::GetFontSize();
+    const ImVec2 icon_size = icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon);
+    const ImVec2 pos(row_start.x, row_start.y + (font_size - icon_size.y) * 0.5f);
+    const ImU32  color = ImGui::GetColorU32(enabled ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+
+    ImGui::GetWindowDrawList()->AddText(icon_font, font_size, pos, color, icon);
+}
+
+bool
+IconMenuItem(const char* icon, const char* label, bool enabled)
+{
+    const ImVec2 row_start    = ImGui::GetCursorScreenPos();
+    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+
+    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, false, enabled);
+    DrawMenuItemIcon(icon, row_start, enabled);
+
+    if(clicked)
+        ImGui::CloseCurrentPopup();
+    return clicked;
+}
+
+bool
+IconBeginMenu(const char* icon, const char* label)
+{
+    const ImVec2 row_start    = ImGui::GetCursorScreenPos();
+    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+
+    bool open = ImGui::BeginMenu(padded_label.c_str());
+    DrawMenuItemIcon(icon, row_start, true);
+
+    return open;
+}
+
+bool
+CopyableTextUnformatted(
+    const char* text, std::string_view unique_id, std::string_view notification,
+    bool one_click_copy, bool context_menu,
+    std::function<void(const char* value_to_copy)> menu_func)
+{
+    bool clicked = false;
+    if(!unique_id.empty())
+        ImGui::PushID(unique_id.data());
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+
+    if(ImGui::Button(text, ImVec2(0, 0)))
+    {
+        clicked = true;
+        if(one_click_copy)
+        {
+            ImGui::SetClipboardText(text);
+            if(!notification.empty())
+            {
+                NotificationManager::GetInstance().Show(notification.data(),
+                                                        NotificationLevel::Info);
+            }
+        }
+    }
+
+    if(context_menu)
+    {
+        auto style = SettingsManager::GetInstance().GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+        if(menu_func)
+        {
+            menu_func(text);
+        }
+        else if(ImGui::BeginPopupContextItem())
+        {
+            if(IconMenuItem(ICON_COPY, "Copy"))
+            {
+                ImGui::SetClipboardText(text);
+                if(!notification.empty())
+                {
+                    NotificationManager::GetInstance().Show(notification.data(),
+                                                            NotificationLevel::Info);
+                }
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
+    }
+
+    if(one_click_copy)
+    {
+        if(ImGui::IsItemHovered())
+        {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+
+    if(!unique_id.empty())
+    {
+        ImGui::PopID();
+    }
+    return clicked;
+}
+
 void
 PositionCell(int col)
 {
@@ -644,7 +784,7 @@ AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column)
             row_text += cells[c];
         }
         ImGui::SetClipboardText(row_text.c_str());
-        NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+        NotificationManager::GetInstance().Show(COPY_ROW_DATA_NOTIFICATION.data(),
                                                 NotificationLevel::Info);
     }
     if(IconMenuItem(ICON_COPY, "Copy Cell Data"))

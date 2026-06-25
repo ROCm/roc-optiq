@@ -892,7 +892,7 @@ ComputeMemoryChartView::DrawVectorL1(ImDrawList* draw_list, ImVec2 origin)
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
                              "Coalescing:", VL1_COALESCE, "%");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Stall:", VL1_STALL, "%");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Stall:", VL1_STALL, "cycles");
 }
 
 void

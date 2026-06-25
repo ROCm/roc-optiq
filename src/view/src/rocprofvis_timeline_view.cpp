@@ -839,7 +839,7 @@ TimelineView::RenderSplitter()
                       ImVec2(SIDEBAR_SPLITTER_WIDTH, display_size.y));
 
     const bool sidebar_splitter_hovered = ImGui::IsItemHovered();
-    if(sidebar_splitter_hovered)
+    if(sidebar_splitter_hovered || ImGui::IsItemActive())
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
     }
@@ -851,7 +851,9 @@ TimelineView::RenderSplitter()
             m_settings.GetColor(Colors::kAccent));
     }
 
-    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
+    // Drag via IsItemActive()+IsMouseDragging(); the old BeginDragDropSource
+    // hack collides with imgui's window-move drag when docking is enabled.
+    if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
         m_sidebar_size    = std::clamp(m_sidebar_size + drag_delta.x,
@@ -864,12 +866,7 @@ TimelineView::RenderSplitter()
             (drag_delta.x / display_size.x) *
                 m_tpt->GetVWidth());  // Prevents chart from moving in unexpected way.
         ImGui::ResetMouseDragDelta();
-        ImGui::EndDragDropSource();
         m_resize_activity |= true;
-    }
-    if(ImGui::BeginDragDropTarget())
-    {
-        ImGui::EndDragDropTarget();
     }
 
     ImGui::EndChild();
@@ -1401,9 +1398,12 @@ TimelineView::RenderTrack(int track_index, bool request_data,
         // Save distance for book keeping
         track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
 
-        // This item is being reordered if there is an active payload and its id
-        // matches the payload's id.
-        bool is_reordering = ImGui::GetDragDropPayload() &&
+        // Match on payload type: any active drag (incl. docking window-move)
+        // makes GetDragDropPayload() non-null, which with the default track_id
+        // of 0 would falsely flag the first track as reordering.
+        const ImGuiPayload* payload      = ImGui::GetDragDropPayload();
+        bool                is_reordering = payload &&
+                             payload->IsDataType("reorder_request") &&
                              m_reorder_request.track_id == track_item->GetID();
 
         // Check if the track is visible

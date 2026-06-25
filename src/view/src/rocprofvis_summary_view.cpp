@@ -128,13 +128,16 @@ SummaryView::Render()
         m_top_kernels_item->m_bg_color           = m_settings.GetColor(Colors::kBgPanel);
         m_kernel_instance_table_item->m_bg_color = m_settings.GetColor(Colors::kBgPanel);
         m_hw_utilization_item->m_bg_color        = m_settings.GetColor(Colors::kBgPanel);
-        ImGui::SetNextWindowPos(ImGui::GetWindowSize() * INITIAL_RELATIVE_POS,
+        // Multi-viewport uses absolute screen coords; seed from the main
+        // viewport work area. NoSavedSettings dropped so the position persists.
+        const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(main_viewport->WorkPos +
+                                    main_viewport->WorkSize * INITIAL_RELATIVE_POS,
                                 ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImGui::GetWindowSize() * INITIAL_RELATIVE_SIZE,
+        ImGui::SetNextWindowSize(main_viewport->WorkSize * INITIAL_RELATIVE_SIZE,
                                  ImGuiCond_FirstUseEver);
         ImGui::Begin("Summary", &m_settings.GetAppWindowSettings().show_summary,
-                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoScrollbar |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar |
                          ImGuiWindowFlags_NoScrollWithMouse);
         if(m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID) ||
            m_data_provider.GetState() == ProviderState::kLoading)

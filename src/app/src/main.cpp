@@ -354,9 +354,26 @@ main(int argc, char** argv)
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+                // Dock panels together and pop them out into their own OS window.
+                io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+                io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+                io.ConfigViewportsNoTaskBarIcon = true;
+                // Rebuild a popped-out viewport's swapchain on a DPI/resolution
+                // change, else the uncovered region renders black.
+                io.ConfigDpiScaleViewports           = true;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
 
                 ImGui::StyleColorsLight();
+
+                if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+                {
+                    // Popped-out OS windows need square, opaque backgrounds.
+                    ImGuiStyle& style                 = ImGui::GetStyle();
+                    style.WindowRounding              = 0.0f;
+                    style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+                    // Avoid a near-zero viewport swapchain that can crash the renderer.
+                    style.WindowMinSize = ImVec2(220.0f, 150.0f);
+                }
 
                 rocprofvis_view_init([window](int notification) -> void {
                     app_notification_callback(window, notification);
@@ -450,6 +467,20 @@ main(int argc, char** argv)
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
+                    }
+
+                    // Render popped-out viewports between render and present;
+                    // back up/restore the GL context for the OpenGL path.
+                    if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+                    {
+                        GLFWwindow* backup_current_context = glfwGetCurrentContext();
+                        ImGui::UpdatePlatformWindows();
+                        ImGui::RenderPlatformWindowsDefault();
+                        glfwMakeContextCurrent(backup_current_context);
+                    }
+
+                    if(!is_minimized)
+                    {
                         backend.m_present(&backend);
                     }
 

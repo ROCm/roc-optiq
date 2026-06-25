@@ -385,10 +385,11 @@ TraceView::Render()
             popup_style.PushPopupStyles();
             popup_style.PushTitlebarColors();
 
+            // Seed the initial size only; the window is freely resizable after.
             float dpi = SettingsManager::GetInstance().GetDPI();
-            ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
-            if(ImGui::Begin("Minimap", &m_show_minimap_popup,
-                            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
+            ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi),
+                                     ImGuiCond_FirstUseEver);
+            if(ImGui::Begin("Minimap", &m_show_minimap_popup, ImGuiWindowFlags_NoCollapse))
             {
                 m_minimap->Render();
             }

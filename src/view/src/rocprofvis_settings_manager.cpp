@@ -667,6 +667,8 @@ SettingsManager::InitStyling()
     style.CellPadding       = ImVec2(12, 8);
     style.FrameBorderSize   = 0.0f;
     style.WindowBorderSize  = 1.0f;
+    // Widen the resize hit-zone; the 4px default is hard to grab on floating windows.
+    style.WindowBorderHoverPadding = 8.0f;
     style.TabBorderSize     = 0.0f;
     style.FrameRounding     = 6.0f;
     style.GrabRounding      = 6.0f;

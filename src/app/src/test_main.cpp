@@ -456,6 +456,7 @@ main(int argc, char** argv)
                             ImVector<ImGuiTest*> tests;
                             ImGuiTestEngine_GetTestList(engine, &tests);
                             int failed = 0;
+                            int never_ran = 0;
                             std::cout << "\n=== headless UI test results ===\n";
                             for(ImGuiTest* test : tests)
                             {
@@ -464,16 +465,18 @@ main(int argc, char** argv)
                                 {
                                     case ImGuiTestStatus_Success: status = "PASS"; break;
                                     case ImGuiTestStatus_Error:   status = "FAIL"; ++failed; break;
-                                    case ImGuiTestStatus_Queued:  status = "SKIPPED"; break;
+                                    // By-design skips run + LogWarning + return -> Success/PASS.
+                                    // A test still Queued here means the engine never ran it.
+                                    case ImGuiTestStatus_Queued:  status = "NOT RUN"; ++never_ran; break;
                                     default: break;
                                 }
                                 std::cout << "  [" << status << "] " << test->Category
                                           << "/" << test->Name << "\n";
                             }
                             std::cout << "=== " << tests.Size << " tests, " << failed
-                                      << " failed ===\n";
+                                      << " failed, " << never_ran << " not run ===\n";
                             std::cout.flush();
-                            app_result_code = (failed > 0) ? 1 : 0;
+                            app_result_code = (failed > 0 || never_ran > 0) ? 1 : 0;
                             glfwSetWindowShouldClose(window, GLFW_TRUE);
                         }
                     }

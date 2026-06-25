@@ -4933,12 +4933,39 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
                 row_values.resize(num_columns);
                 for (uint64_t col = 0; col < num_columns; col++)
                 {
-                    if (column_types[col] == kRPVControllerPrimitiveTypeString)
+                    std::string value;
+                    switch(column_types[col])
                     {
-                        std::string value =
-                            GetString(row_handle, kRPVControllerArrayEntryIndexed, col);
-                        row_values[col] = value;
+                        case kRPVControllerPrimitiveTypeUInt64:
+                        {
+                            uint64_t cell_value = 0;
+                            result = rocprofvis_controller_get_uint64(
+                                row_handle, kRPVControllerArrayEntryIndexed, col,
+                                &cell_value);
+                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                            value = std::to_string(cell_value);
+                            break;
+                        }
+                        case kRPVControllerPrimitiveTypeDouble:
+                        {
+                            double cell_value = 0;
+                            result = rocprofvis_controller_get_double(
+                                row_handle, kRPVControllerArrayEntryIndexed, col,
+                                &cell_value);
+                            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                            value = std::to_string(cell_value);
+                            break;
+                        }
+                        case kRPVControllerPrimitiveTypeString:
+                        {
+                            value =
+                                GetString(row_handle, kRPVControllerArrayEntryIndexed, col);
+                            break;
+                        }
+                        default:
+                            break;
                     }
+                    row_values[col] = std::move(value);
                 }
 
                 kernel_pivot_table.table_data.push_back(row_values);

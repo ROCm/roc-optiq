@@ -86,7 +86,7 @@ AppWindow::AppWindow()
 , m_open_about_dialog(false)
 , m_tabclosed_event_token(EventManager::InvalidSubscriptionToken)
 , m_tabselected_event_token(EventManager::InvalidSubscriptionToken)
-, m_last_font_size(0.0f)
+, m_font_changed_token(EventManager::InvalidSubscriptionToken)
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 , m_show_debug_window(false)
 , m_show_provider_test_widow(false)
@@ -117,6 +117,8 @@ AppWindow::~AppWindow()
                                              m_tabclosed_event_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kFontSizeChanged),
+                                             m_font_changed_token);
 
     for(auto& job : m_provider_cleanup_jobs)
     {
@@ -206,6 +208,14 @@ AppWindow::Init()
 
     m_tabselected_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
+
+    auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
+        (void) e;
+        HandleFontChanged();
+    };
+
+    m_font_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
 
     ConfigureFileDialogBackend();
     HandleFontChanged();
@@ -557,6 +567,7 @@ AppWindow::Update()
     }
 
     HotkeyManager::GetInstance().ProcessInput();
+    SettingsManager::GetInstance().GetFontManager().Update();
     EventManager::GetInstance()->DispatchEvents();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
@@ -1484,15 +1495,6 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
 void
 AppWindow::UpdateStatusBar()
 {
-    // Auto-DPI changes the font size without firing kFontSizeChanged, so
-    // resize the status bar slot whenever the font size changes.
-    const float font_size = ImGui::GetFontSize();
-    if(font_size != m_last_font_size)
-    {
-        m_last_font_size = font_size;
-        HandleFontChanged();
-    }
-
     // Update status message every N frames
     const int UPDATE_STEP = 4;
     if(ImGui::GetFrameCount() % UPDATE_STEP == 0)

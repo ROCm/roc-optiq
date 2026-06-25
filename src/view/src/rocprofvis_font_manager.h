@@ -46,6 +46,13 @@ public:
      */
     bool Init();
 
+    /*
+     * Called once per frame. ImGui applies font-size changes (user-selected or
+     * automatic DPI scaling) on the following frame, so this detects the
+     * effective size change and fires kFontSizeChanged for all subscribers.
+     */
+    void Update();
+
     ImFont* GetFont(FontType font_type);
     float   GetFontSize(FontSize font_type) const;
 
@@ -66,6 +73,10 @@ private:
     ImFont* m_icon_font = nullptr;
     std::array<float, kNumSizes> m_sizes{};
     std::vector<float> m_available_sizes;
+
+    // Last effective ImGui font size, used to detect both user-selected and
+    // auto-DPI font-size changes.
+    float m_last_font_size = 0.0f;
 };
 
 }  // namespace View

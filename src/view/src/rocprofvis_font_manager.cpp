@@ -110,12 +110,27 @@ FontManager::SetFontSize(int idx)
         m_sizes[i] = m_available_sizes[size_idx];
     }
 
-    // Set the default font and its base size for the next frame.
+    // Set the default font and its base size for the next frame. The
+    // kFontSizeChanged event is fired from Update() once the new size takes
+    // effect, so subscribers recalculate against the applied font size.
     ImGui::GetIO().FontDefault               = m_text_font;
     ImGui::GetStyle()._NextFrameFontSizeBase = m_sizes[static_cast<int>(FontSize::kDefault)];
+}
 
-    EventManager::GetInstance()->AddEvent(
-        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kFontSizeChanged)));
+void
+FontManager::Update()
+{
+    // Both user-selected sizes (applied next frame via _NextFrameFontSizeBase)
+    // and ImGui's automatic DPI scaling change the font size without notifying
+    // anyone. Detect the effective change here and fire a single event so every
+    // subscriber stays in sync.
+    const float font_size = ImGui::GetFontSize();
+    if(font_size != m_last_font_size)
+    {
+        m_last_font_size = font_size;
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<RocEvent>(static_cast<int>(RocEvents::kFontSizeChanged)));
+    }
 }
 
 bool

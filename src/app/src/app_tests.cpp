@@ -304,13 +304,15 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // The ICON_COMPASS toolbar button and the ##events checkbox are both real
         // ImGui widgets nested under unknown layout child-windows. The "**/"
-        // wildcard ref locates them past those intermediates by trailing label;
-        // $FOCUSED targets the Minimap popup once the compass opens it.
+        // wildcard ref locates them past those intermediates by trailing label.
+        // The Minimap is a plain Begin("Minimap") window, not a popup, so ref it
+        // by title rather than $FOCUSED (which the window does not reliably own).
         ctx->Yield(3);
         ctx->ItemClick("//Main Window/**/\uF273");  // \uF273 = ICON_COMPASS
         ctx->Yield(3);
 
-        ctx->SetRef("//$FOCUSED");
+        ctx->SetRef("//Minimap");
+        IM_CHECK(ctx->ItemExists("**/##events"));
         ctx->ItemClick("**/##events");
         ctx->Yield(2);
         IM_CHECK(MinimapTestPeer{*mm}.ShowEvents() == false);

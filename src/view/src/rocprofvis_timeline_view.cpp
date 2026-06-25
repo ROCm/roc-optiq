@@ -303,6 +303,26 @@ TimelineView::BuildTrackLayout()
     return layout;
 }
 
+bool
+TimelineView::IsAnnotationTrackVisible(uint64_t track_id) const
+{
+    // Notes that aren't bound to a track (legacy / free-floating) always show.
+    if(track_id == INVALID_TRACK_ID || !m_graphs) return true;
+
+    for(const TrackGraph& graph : *m_graphs)
+    {
+        if(graph.chart && graph.chart->GetID() == track_id)
+        {
+            // A note follows its track's eye-toggle: hidden track, hidden note.
+            return graph.display;
+        }
+    }
+
+    // Bound track is no longer present in the current view; keep the note so it
+    // isn't silently lost.
+    return true;
+}
+
 void
 TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 {
@@ -321,6 +341,10 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
                TimelineFocusManager::GetInstance().GetFocusedLayer() ==
                    Layer::kScrubberLayer)
                 continue;
+
+            // A note whose track is hidden is hidden too: don't let it grab
+            // input over whatever visible track now occupies that row.
+            if(!IsAnnotationTrackVisible(note.GetTrackId())) continue;
 
             // The note on the reordering track is drawn as a foreground ghost
             // below; skip its interaction so it doesn't fight the track drag.
@@ -346,6 +370,9 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         {
             StickyNote& note = m_annotations->GetStickyNotes()[i];
             if(!note.IsVisible()) continue;
+
+            // Hide the note on the timeline when its bound track is hidden.
+            if(!IsAnnotationTrackVisible(note.GetTrackId())) continue;
 
             // A note on the reordering track rides the floating preview, which
             // is an opaque foreground window, so draw it on the foreground draw

@@ -257,11 +257,13 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     # against imgui_te (not the clean imgui). Uses test_main.cpp (the engine-wired copy of
     # main.cpp) so production main.cpp stays pristine and free of any test references.
     set(TEST_TARGET ${TARGET_NAME}-tests)
-    add_executable(${TEST_TARGET} ${APP_FILES} src/app/src/test_main.cpp ${VIEW_FILES} src/app/src/app_tests.cpp)
+    add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
     add_dependencies(${TEST_TARGET} generate_icon_header)
     target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
     target_include_directories(${TEST_TARGET} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/test
         ${CMAKE_CURRENT_SOURCE_DIR}/resources
         ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc

@@ -59,6 +59,7 @@ public:
     // GetCompareSource maps a track's source instance index back to its file.
     void SetCompareSources(const std::vector<CompareSourceInfo>& sources);
     const CompareSourceInfo* GetCompareSource(size_t index) const;
+    bool HasCompareSources() const { return !m_compare_sources.empty(); }
 
     // Build display name for a track from topology/timeline data
     std::string BuildTrackName(uint64_t track_id) const;

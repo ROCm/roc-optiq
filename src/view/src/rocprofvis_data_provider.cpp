@@ -537,6 +537,7 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
                       min_ts, max_ts);
 
         HandleLoadTrackMetaData();
+        ApplyTrackOrderRanking();
     }
     else
     {
@@ -1222,6 +1223,51 @@ DataProvider::HandleLoadTrackMetaData()
     }
 
     spdlog::info("Track meta data loaded");
+}
+
+void
+DataProvider::ApplyTrackOrderRanking()
+{
+    // Only reorder compare traces. Normal single-file traces keep their natural load
+    // order; the ranking is what makes counterpart tracks from each compared file (A,
+    // B, ...) sit next to each other on the timeline.
+    if(!m_model.HasCompareSources())
+    {
+        return;
+    }
+
+    TimelineModel&                           tlm      = m_model.GetTimeline();
+    std::unordered_map<uint64_t, TrackInfo>& metadata = tlm.GetMutableTrackMetadata();
+
+    std::vector<const TrackInfo*> ordered;
+    ordered.reserve(metadata.size());
+    for(const auto& [id, info] : metadata)
+    {
+        ordered.push_back(&info);
+    }
+
+    // Sort by the precomputed order ranking; tie-break on track id for determinism.
+    std::stable_sort(ordered.begin(), ordered.end(),
+                     [](const TrackInfo* a, const TrackInfo* b) {
+                         if(a->order_rank != b->order_rank)
+                         {
+                             return a->order_rank < b->order_rank;
+                         }
+                         return a->id < b->id;
+                     });
+
+    // Apply the new order to the controller timeline (move-to-index semantics) and
+    // resync each track's display index so graph building picks up the new order.
+    for(size_t i = 0; i < ordered.size(); i++)
+    {
+        rocprofvis_result_t result = rocprofvis_controller_set_object(
+            m_trace_timeline, kRPVControllerTimelineGraphIndexed, i,
+            ordered[i]->graph_handle);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        metadata[ordered[i]->id].index = i;
+    }
+
+    spdlog::info("Applied compare track order ranking to {} tracks", ordered.size());
 }
 
 bool

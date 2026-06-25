@@ -393,6 +393,11 @@ main(int argc, char** argv)
                 const bool run_tests_headless =
                     cli_parser.WasOptionFound("run-tests");
                 bool headless_tests_queued = false;
+                int headless_settle_frames = 0;
+                // Upper bound (~50s @60fps), not a tuned value: a view that never
+                // settles would otherwise hang the loop forever. Queue anyway at
+                // the cap so the run terminates instead of spinning.
+                constexpr int kHeadlessSettleFrameCap = 3000;
 #endif
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -431,9 +436,16 @@ main(int argc, char** argv)
                     {
                         g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
                         if(!headless_tests_queued &&
-                           !rocprofvis_view_wants_continuous_render())
+                           (!rocprofvis_view_wants_continuous_render() ||
+                            ++headless_settle_frames >= kHeadlessSettleFrameCap))
                         {
-                            // File load settled: queue every registered test.
+                            if(headless_settle_frames >= kHeadlessSettleFrameCap)
+                            {
+                                spdlog::warn("Headless: view never settled after "
+                                             "{} frames; queueing tests anyway",
+                                             kHeadlessSettleFrameCap);
+                            }
+                            // File load settled (or cap hit): queue every registered test.
                             ImGuiTestEngine_QueueTests(
                                 engine, ImGuiTestGroup_Tests, nullptr,
                                 ImGuiTestRunFlags_RunFromCommandLine);

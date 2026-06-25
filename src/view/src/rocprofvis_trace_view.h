@@ -76,18 +76,9 @@ public:
     std::shared_ptr<RocWidget>         GetToolbar() override;
     void                               RenderEditMenuOptions() override;
     std::optional<DataProviderCleanupWork> DetachProviderCleanup() override;
-    void                               SetAnalysisViewVisibility(bool visibility); 
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-    AnalysisView* GetAnalysisViewForTest() const;
-    TimelineView* GetTimelineViewForTest() const;
-    Minimap*      GetMinimapForTest() const;
-    EventSearch*  GetEventSearchForTest() const;
-    // Reset event selection so a test starts from an empty EventsView even when
-    // a prior run left a selection behind.
-    void          ClearEventSelectionForTest();
-    size_t        GetBookmarkCountForTest() const { return m_bookmarks.size(); }
-    void          ClearBookmarksForTest() { m_bookmarks.clear(); }
-#endif
+    void                               SetAnalysisViewVisibility(bool visibility);
+
+    friend struct TraceViewTestPeer;
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
 

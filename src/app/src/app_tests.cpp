@@ -21,6 +21,7 @@
 #include "compute/rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_tab_container.h"
+#include "rocprofvis_view_test_access.h"
 using namespace RocProfVis::View;
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -57,31 +58,31 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        AnalysisView* av = tv->GetAnalysisViewForTest();
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
         IM_CHECK(av != nullptr);
         if (av == nullptr) return;
-        EventsView* ev = av->GetEventsViewForTest();
+        EventsView* ev = AnalysisViewTestPeer{*av}.EventsViewPtr();
         IM_CHECK(ev != nullptr);
         if (ev == nullptr) return;
 
         // A prior run may have left an event selected; the clear is dispatched
         // through EventManager, so yield before asserting the empty baseline.
-        tv->ClearEventSelectionForTest();
+        TraceViewTestPeer{*tv}.ClearEventSelection();
         ctx->Yield(3);
-        IM_CHECK(ev->GetEventItemCountForTest() == 0);
+        IM_CHECK(EventsViewTestPeer{*ev}.EventItemCount() == 0);
 
         // Timeline events are canvas-drawn (no widget IDs). Click the screen
         // center of the first rendered event box, captured by the renderer with
         // the geometry it draws/hit-tests with, so the click is window- and
         // trace-independent (no hard-coded sidebar/track offsets).
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
 
         ctx->Yield(3);
 
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -93,7 +94,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->MouseUp(0);
         ctx->Yield(3);
 
-        IM_CHECK(ev->GetEventItemCountForTest() > 0);
+        IM_CHECK(EventsViewTestPeer{*ev}.EventItemCount() > 0);
     };
 
     t = IM_REGISTER_TEST(e, "app", "timeline_zoom_hotkey");
@@ -109,7 +110,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
 
@@ -119,7 +120,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // and press the mouse to acquire focus.
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -129,21 +130,21 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->MouseUp(0);
         ctx->Yield(2);
 
-        const float zoom_before = tv->GetTimelineViewForTest()->GetViewCoords().z;
+        const float zoom_before = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords().z;
 
         // Zoom in: hotkey is consumed in the timeline's per-frame input handler,
         // so keep the cursor parked in-graph while pressing.
         ctx->MouseMoveToPos(event_center);
         ctx->KeyPress(ImGuiKey_W);
         ctx->Yield(3);
-        const float zoom_in = tv->GetTimelineViewForTest()->GetViewCoords().z;
+        const float zoom_in = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords().z;
         IM_CHECK(zoom_in > zoom_before);
 
         // Zoom out returns toward the starting zoom.
         ctx->MouseMoveToPos(event_center);
         ctx->KeyPress(ImGuiKey_S);
         ctx->Yield(3);
-        const float zoom_out = tv->GetTimelineViewForTest()->GetViewCoords().z;
+        const float zoom_out = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords().z;
         IM_CHECK(zoom_out < zoom_in);
     };
 
@@ -160,7 +161,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
 
@@ -168,9 +169,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // map, so a re-save overwrites rather than grows it. Clear first so the
         // 0->1 assertion holds on every invocation in a persistent process (the
         // interactive harness reuses one process; headless is fresh each run).
-        tv->ClearBookmarksForTest();
+        TraceViewTestPeer{*tv}.ClearBookmarks();
         ctx->Yield(1);
-        IM_CHECK(tv->GetBookmarkCountForTest() == 0);
+        IM_CHECK(TraceViewTestPeer{*tv}.BookmarkCount() == 0);
 
         // HandleHotKeys is gated on IsWindowFocused(RootAndChildWindows) for
         // "Main Window". Headless that focus is implicit, but interactively the
@@ -178,7 +179,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // then click an event to land the cursor in-graph.
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -190,8 +191,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Save the current view, then record the coords the bookmark captured.
         ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_1);
         ctx->Yield(3);
-        IM_CHECK(tv->GetBookmarkCountForTest() == 1);
-        const ViewCoords saved = tv->GetTimelineViewForTest()->GetViewCoords();
+        IM_CHECK(TraceViewTestPeer{*tv}.BookmarkCount() == 1);
+        const ViewCoords saved = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords();
         const double saved_span = saved.v_max_x - saved.v_min_x;
         IM_CHECK(saved_span > 0.0);
         if (saved_span <= 0.0) return;
@@ -200,7 +201,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->MouseMoveToPos(event_center);
         ctx->KeyPress(ImGuiKey_W);
         ctx->Yield(3);
-        const ViewCoords moved = tv->GetTimelineViewForTest()->GetViewCoords();
+        const ViewCoords moved = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords();
         IM_CHECK((moved.v_max_x - moved.v_min_x) < saved_span);
 
         // Restore: bare "1" moves the view back to the saved range. Restore
@@ -209,7 +210,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->MouseMoveToPos(event_center);
         ctx->KeyPress(ImGuiKey_1);
         ctx->Yield(3);
-        const ViewCoords restored = tv->GetTimelineViewForTest()->GetViewCoords();
+        const ViewCoords restored = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords();
         const double tol = saved_span * 0.01;
         IM_CHECK(fabs(restored.v_min_x - saved.v_min_x) < tol);
         IM_CHECK(fabs(restored.v_max_x - saved.v_max_x) < tol);
@@ -228,7 +229,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
         std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
@@ -236,7 +237,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         if (sel == nullptr) return;
 
         // Start from a clean selection.
-        tv->ClearEventSelectionForTest();
+        TraceViewTestPeer{*tv}.ClearEventSelection();
         ctx->Yield(3);
         std::vector<uint64_t> ids;
         sel->GetSelectedEvents(ids);
@@ -245,7 +246,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Need two distinct, clickable events in one flame track.
         ctx->Yield(3);
         ImVec2 first(0.0f, 0.0f), second(0.0f, 0.0f);
-        bool have_two = tlv->GetTwoEventScreenCentersForTest(first, second);
+        bool have_two = TimelineViewTestPeer{*tlv}.TwoEventScreenCenters(first, second);
         if (!have_two)
         {
             ctx->LogWarning("SKIP: track lacks two distinct events to multi-select");
@@ -275,7 +276,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(ids.size() == 2);
 
         // Leave a clean selection for following tests.
-        tv->ClearEventSelectionForTest();
+        TraceViewTestPeer{*tv}.ClearEventSelection();
         ctx->Yield(2);
     };
 
@@ -292,14 +293,14 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        Minimap* mm = tv->GetMinimapForTest();
+        Minimap* mm = TraceViewTestPeer{*tv}.MinimapPtr();
         IM_CHECK(mm != nullptr);
         if (mm == nullptr) return;
 
-        IM_CHECK(mm->GetShowEventsForTest() == true);
+        IM_CHECK(MinimapTestPeer{*mm}.ShowEvents() == true);
         // Counter overlay state before touching events, to confirm the two
         // layers toggle independently (checklist: "Layers independent").
-        const bool counters_before = mm->GetShowCountersForTest();
+        const bool counters_before = MinimapTestPeer{*mm}.ShowCounters();
 
         // The ICON_COMPASS toolbar button and the ##events checkbox are both real
         // ImGui widgets nested under unknown layout child-windows. The "**/"
@@ -312,14 +313,14 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->SetRef("//$FOCUSED");
         ctx->ItemClick("**/##events");
         ctx->Yield(2);
-        IM_CHECK(mm->GetShowEventsForTest() == false);
+        IM_CHECK(MinimapTestPeer{*mm}.ShowEvents() == false);
         // Toggling events must not disturb the counter overlay.
-        IM_CHECK(mm->GetShowCountersForTest() == counters_before);
+        IM_CHECK(MinimapTestPeer{*mm}.ShowCounters() == counters_before);
 
         // Toggle back to confirm the click is bidirectional.
         ctx->ItemClick("**/##events");
         ctx->Yield(2);
-        IM_CHECK(mm->GetShowEventsForTest() == true);
+        IM_CHECK(MinimapTestPeer{*mm}.ShowEvents() == true);
 
         // Close the Minimap popup so it doesn't cover later tests' widgets.
         ctx->ItemClick("//Main Window/**/\uF273");  // \uF273 = ICON_COMPASS
@@ -342,18 +343,18 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
             return;
         }
-        TabContainer* tc = cv->GetTabContainerForTest();
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
         if (tc == nullptr)
         {
             ctx->LogWarning("SKIP: compute view has no tab container");
             return;
         }
 
-        IM_CHECK(tc->GetTabCountForTest() >= 2);
-        if (tc->GetTabCountForTest() < 2) return;
+        IM_CHECK(TabContainerTestPeer{*tc}.TabCount() >= 2);
+        if (TabContainerTestPeer{*tc}.TabCount() < 2) return;
 
         ctx->Yield(3);
-        const int start_idx = tc->GetActiveTabIndexForTest();
+        const int start_idx = TabContainerTestPeer{*tc}.ActiveTabIndex();
         IM_CHECK(start_idx >= 0);
 
         // Each tab is submitted as BeginTabItem(label) under PushID(id), nested in
@@ -368,7 +369,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick(("//Main Window/**/" + target_label).c_str());
         ctx->Yield(3);
 
-        IM_CHECK(tc->GetActiveTabIndexForTest() == target_idx);
+        IM_CHECK(TabContainerTestPeer{*tc}.ActiveTabIndex() == target_idx);
     };
 
     t = IM_REGISTER_TEST(e, "app", "compute_workload_auto_selected");
@@ -384,7 +385,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
             return;
         }
-        ComputeSelection* sel = cv->GetComputeSelectionForTest();
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
         IM_CHECK(sel != nullptr);
         if (sel == nullptr) return;
 
@@ -409,7 +410,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
 
@@ -417,7 +418,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // in the graph; park on the first event to acquire it.
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -469,13 +470,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
 
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -488,7 +489,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Scroll step is a fraction of the max scroll offset, which is 0 when all
         // tracks fit the viewport; Up/Down then no-op and the assertion would
         // false-fail. Skip rather than assert on a trace with no headroom.
-        if (tlv->GetMaxYScrollForTest() <= 0.0f)
+        if (TimelineViewTestPeer{*tlv}.MaxYScroll() <= 0.0f)
         {
             ctx->LogWarning("SKIP: all tracks fit the viewport, no vertical scroll headroom");
             return;
@@ -523,13 +524,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
 
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -575,12 +576,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
 
         ctx->Yield(3);
-        FlameTrackItem* flame = tlv->GetFirstFlameTrackForTest();
+        FlameTrackItem* flame = TimelineViewTestPeer{*tlv}.FirstFlameTrack();
         IM_CHECK(flame != nullptr);
         if (flame == nullptr) return;
 
@@ -589,20 +590,20 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // path the checkbox uses. Turning it on shrinks the per-event level
         // height; assert both the flag and the height follow, then restore.
         const bool  orig_compact = flame->IsCompactMode();
-        const float orig_height  = flame->GetLevelHeightForTest();
+        const float orig_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
         // Capture observations, restore, THEN assert: IM_CHECK early-returns on
         // failure, so asserting before the restore would leak the flipped state
         // (per-track flag, shared across the process) into later tests.
-        flame->SetCompactModeForTest(!orig_compact);
+        FlameTrackItemTestPeer{*flame}.SetCompactMode(!orig_compact);
         ctx->Yield(2);
         const bool  on_compact = flame->IsCompactMode();
-        const float on_height  = flame->GetLevelHeightForTest();
+        const float on_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
-        flame->SetCompactModeForTest(orig_compact);
+        FlameTrackItemTestPeer{*flame}.SetCompactMode(orig_compact);
         ctx->Yield(2);
         const bool  back_compact = flame->IsCompactMode();
-        const float back_height  = flame->GetLevelHeightForTest();
+        const float back_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
         IM_CHECK(on_compact != orig_compact);
         IM_CHECK(on_height != orig_height);
@@ -623,7 +624,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
         std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
@@ -631,7 +632,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         if (sel == nullptr) return;
 
         // Start from no event selection and no marked range.
-        tv->ClearEventSelectionForTest();
+        TraceViewTestPeer{*tv}.ClearEventSelection();
         sel->ClearTimeRange();
         ctx->Yield(3);
         IM_CHECK(!sel->HasValidTimeRangeSelection());
@@ -640,7 +641,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // events, so select one first. The hotkey shares the timeline's
         // pseudo-focus gate (set by a mouse-down in the graph), same as W/S/A/D.
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = tlv->GetFirstEventScreenCenterForTest(event_center);
+        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -664,7 +665,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(!sel->HasValidTimeRangeSelection());
 
         // Leave a clean selection state for following tests.
-        tv->ClearEventSelectionForTest();
+        TraceViewTestPeer{*tv}.ClearEventSelection();
         ctx->Yield(2);
     };
 
@@ -681,19 +682,19 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        TimelineView* tlv = tv->GetTimelineViewForTest();
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
 
         ctx->Yield(3);
-        FlameTrackItem* flame = tlv->GetFirstFlameTrackForTest();
+        FlameTrackItem* flame = TimelineViewTestPeer{*tlv}.FirstFlameTrack();
         IM_CHECK(flame != nullptr);
         if (flame == nullptr) return;
 
         // "Color by Name / Time Level / No Color" are gear-menu radio buttons in
         // a popup with no stable path; each sets the track's event color mode.
         // Drive that field directly and assert it changes, then restore.
-        const EventColorMode orig = flame->GetEventColorModeForTest();
+        const EventColorMode orig = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
         const EventColorMode other =
             (orig == EventColorMode::kByTimeLevel) ? EventColorMode::kByEventName
                                                    : EventColorMode::kByTimeLevel;
@@ -701,13 +702,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so
         // asserting before the restore would leak the changed color mode (shared
         // per-track state) into later tests in the same process.
-        flame->SetEventColorModeForTest(other);
+        FlameTrackItemTestPeer{*flame}.SetEventColorMode(other);
         ctx->Yield(2);
-        const EventColorMode changed = flame->GetEventColorModeForTest();
+        const EventColorMode changed = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
 
-        flame->SetEventColorModeForTest(orig);
+        FlameTrackItemTestPeer{*flame}.SetEventColorMode(orig);
         ctx->Yield(2);
-        const EventColorMode restored = flame->GetEventColorModeForTest();
+        const EventColorMode restored = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
 
         IM_CHECK(changed == other);
         IM_CHECK(changed != orig);
@@ -831,7 +832,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
             return;
         }
-        ComputeSelection* sel = cv->GetComputeSelectionForTest();
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
         IM_CHECK(sel != nullptr);
         if (sel == nullptr) return;
 
@@ -883,7 +884,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
             return;
         }
-        EventSearch* es = tv->GetEventSearchForTest();
+        EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
         IM_CHECK(es != nullptr);
         if (es == nullptr) return;
 
@@ -906,9 +907,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // The fetch is deferred; let it drain (Update re-runs Search when the
         // request completes) before reading the result count.
-        for (int i = 0; i < 60 && es->RequestPendingForTest(); i++) ctx->Yield(2);
+        for (int i = 0; i < 60 && EventSearchTestPeer{*es}.RequestPending(); i++) ctx->Yield(2);
         ctx->Yield(5);
-        IM_CHECK(es->GetResultCountForTest() > 0);
+        IM_CHECK(EventSearchTestPeer{*es}.ResultCount() > 0);
 
         es->Clear();
         ctx->Yield(2);

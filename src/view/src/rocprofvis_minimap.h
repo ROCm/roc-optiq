@@ -27,10 +27,7 @@ public:
 
     void SetData(const std::vector<std::vector<double>>& data);
 
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-    bool GetShowEventsForTest() const { return m_show_events; }
-    bool GetShowCountersForTest() const { return m_show_counters; }
-#endif
+    friend struct MinimapTestPeer;
 
 private:
     static constexpr size_t MINIMAP_SIZE = 500;

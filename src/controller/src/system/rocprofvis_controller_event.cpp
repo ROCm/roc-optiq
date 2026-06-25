@@ -226,7 +226,12 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
-                                for(int index = 0; index < records_count; index++)
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0,
+                                                         records_count);
+                                for(int index = 0;
+                                    result == kRocProfVisResultSuccess &&
+                                    index < records_count;
+                                    index++)
                                 {
                                     char* symbol = nullptr;
                                     char* codeline    = nullptr;
@@ -276,17 +281,25 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                         if(!name.empty())
                                         {
                                             CallStack* call_stack = new CallStack(id, depth, file.c_str(), pc.c_str(), name.c_str(), line_name.c_str(), line_address.c_str());
-                                            result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, entry_counter + 1);
+                                            result = array.SetOwnedObject(
+                                                kRPVControllerArrayEntryIndexed, entry_counter,
+                                                (rocprofvis_handle_t*) call_stack);
                                             if(result == kRocProfVisResultSuccess)
                                             {
-                                                result = array.SetOwnedObject(kRPVControllerArrayEntryIndexed, entry_counter++, (rocprofvis_handle_t*) call_stack);
+                                                entry_counter++;
                                             }
-                                            if(result != kRocProfVisResultSuccess)
+                                            else
                                             {
                                                 delete call_stack;
                                             }
                                         }
                                     }
+                                }
+                                if(result == kRocProfVisResultSuccess &&
+                                   entry_counter != records_count)
+                                {
+                                    result = array.SetUInt64(kRPVControllerArrayNumEntries, 0,
+                                                             entry_counter);
                                 }
                             }
                             result = kRocProfVisResultSuccess;

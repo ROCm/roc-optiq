@@ -301,40 +301,28 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // layers toggle independently (checklist: "Layers independent").
         const bool counters_before = mm->GetShowCountersForTest();
 
-        // The ICON_COMPASS toolbar button and the ##events checkbox are both
-        // canvas-styled / nested in a BeginChild, so neither has a stable widget
-        // path. Click each by the screen center its renderer captured.
+        // The ICON_COMPASS toolbar button and the ##events checkbox are both real
+        // ImGui widgets nested under unknown layout child-windows. The "**/"
+        // wildcard ref locates them past those intermediates by trailing label;
+        // $FOCUSED targets the Minimap popup once the compass opens it.
         ctx->Yield(3);
-        ImVec2 btn_center(0.0f, 0.0f);
-        bool have_btn = tv->GetMinimapButtonScreenCenterForTest(btn_center);
-        IM_CHECK(have_btn);
-        if (!have_btn) return;
-
-        ctx->MouseTeleportToPos(btn_center);
-        ctx->MouseClick(0);
+        ctx->ItemClick("//Main Window/**/\uF273");  // \uF273 = ICON_COMPASS
         ctx->Yield(3);
 
-        ImVec2 cb_center(0.0f, 0.0f);
-        bool have_cb = mm->GetEventsCheckboxScreenCenterForTest(cb_center);
-        IM_CHECK(have_cb);
-        if (!have_cb) return;
-
-        ctx->MouseTeleportToPos(cb_center);
-        ctx->MouseClick(0);
+        ctx->SetRef("//$FOCUSED");
+        ctx->ItemClick("**/##events");
         ctx->Yield(2);
         IM_CHECK(mm->GetShowEventsForTest() == false);
         // Toggling events must not disturb the counter overlay.
         IM_CHECK(mm->GetShowCountersForTest() == counters_before);
 
         // Toggle back to confirm the click is bidirectional.
-        ctx->MouseTeleportToPos(cb_center);
-        ctx->MouseClick(0);
+        ctx->ItemClick("**/##events");
         ctx->Yield(2);
         IM_CHECK(mm->GetShowEventsForTest() == true);
 
-        // Close the Minimap window so it doesn't cover later tests' widgets.
-        ctx->MouseTeleportToPos(btn_center);
-        ctx->MouseClick(0);
+        // Close the Minimap popup so it doesn't cover later tests' widgets.
+        ctx->ItemClick("//Main Window/**/\uF273");  // \uF273 = ICON_COMPASS
         ctx->Yield(2);
     };
 
@@ -368,14 +356,16 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const int start_idx = tc->GetActiveTabIndexForTest();
         IM_CHECK(start_idx >= 0);
 
-        // Tab headers are wrapped in PushID (unstable path) and a raw mouse click
-        // does not reliably activate a tab, so drive it by the captured id.
+        // Each tab is submitted as BeginTabItem(label) under PushID(id), nested in
+        // unknown layout child-windows. The "**/" wildcard locates the tab header
+        // by its trailing label past those intermediates and the id seed.
         const int target_idx = (start_idx == 0) ? 1 : 0;
-        ImGuiID tab_id = tc->GetTabHeaderIdForTest(target_idx);
-        IM_CHECK(tab_id != 0);
-        if (tab_id == 0) return;
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        IM_CHECK(target_idx < static_cast<int>(tabs.size()));
+        if (target_idx >= static_cast<int>(tabs.size())) return;
+        const std::string target_label = tabs[target_idx]->m_label;
 
-        ctx->ItemClick(tab_id);
+        ctx->ItemClick(("//Main Window/**/" + target_label).c_str());
         ctx->Yield(3);
 
         IM_CHECK(tc->GetActiveTabIndexForTest() == target_idx);

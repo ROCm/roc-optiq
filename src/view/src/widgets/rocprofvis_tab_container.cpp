@@ -120,9 +120,6 @@ TabContainer::Render()
                               settings.GetColor(Colors::kButton));
         ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive,
                               settings.GetColor(Colors::kBgPanel));
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-        m_tab_header_rects_for_test.assign(m_tabs.size(), TabHeaderRectForTest{});
-#endif
         if(ImGui::BeginTabBar("Tabs", ImGuiTabBarFlags_NoTabListScrollingButtons |
                                           ImGuiTabBarFlags_FittingPolicyResizeDown))
         {
@@ -153,13 +150,6 @@ TabContainer::Render()
                 bool tab_visible = false;
                 ImGui::PushID(tab.m_id.c_str());
                 bool tab_selected = ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags);
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-                if(i < m_tab_header_rects_for_test.size())
-                {
-                    m_tab_header_rects_for_test[i].id    = ImGui::GetItemID();
-                    m_tab_header_rects_for_test[i].valid = true;
-                }
-#endif
 
                 ImGui::PopStyleColor();
 

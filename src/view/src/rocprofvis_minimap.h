@@ -30,13 +30,6 @@ public:
 #ifdef IMGUI_ENABLE_TEST_ENGINE
     bool GetShowEventsForTest() const { return m_show_events; }
     bool GetShowCountersForTest() const { return m_show_counters; }
-    bool GetEventsCheckboxScreenCenterForTest(ImVec2& out) const
-    {
-        if(!m_events_checkbox_rect_valid_for_test) return false;
-        out = ImVec2((m_events_checkbox_min_for_test.x + m_events_checkbox_max_for_test.x) * 0.5f,
-                     (m_events_checkbox_min_for_test.y + m_events_checkbox_max_for_test.y) * 0.5f);
-        return true;
-    }
 #endif
 
 private:
@@ -69,12 +62,6 @@ private:
     TimelineView* m_timeline_view;
     double        m_event_global_max;
     bool          m_last_normalize_global;
-
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-    bool   m_events_checkbox_rect_valid_for_test = false;
-    ImVec2 m_events_checkbox_min_for_test{ 0.0f, 0.0f };
-    ImVec2 m_events_checkbox_max_for_test{ 0.0f, 0.0f };
-#endif
 };
 
 }  // namespace View

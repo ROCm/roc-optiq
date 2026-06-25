@@ -563,7 +563,8 @@ void Database::CreateTracksOrderRanking() {
 
         for (auto* t : partition_tracks) {
             DbInstance* db_instance = (DbInstance*)t->track_indentifiers.db_instance;
-            groups[db_instance->FileIndex()].push_back(t);
+            uint32_t file_index = db_instance ? db_instance->FileIndex() : 0;
+            groups[file_index].push_back(t);
         }
 
         for (auto& [db, vec] : groups) {

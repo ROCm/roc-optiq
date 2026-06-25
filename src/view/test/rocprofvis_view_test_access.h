@@ -87,6 +87,9 @@ struct FlameTrackItemTestPeer
     float          LevelHeight() const { return v.m_level_height; }
     EventColorMode GetEventColorMode() const { return v.m_event_color_mode; }
     void           SetEventColorMode(EventColorMode mode) { v.m_event_color_mode = mode; }
+    // ImGui ID of the "FV" child window the bars register under; tests gather
+    // bars by this parent. 0 until the track has rendered at least once.
+    unsigned int   FlameWindowId() const { return v.m_test_flame_window_id; }
 };
 
 struct TimelineViewTestPeer
@@ -107,34 +110,21 @@ struct TimelineViewTestPeer
         return nullptr;
     }
 
-    bool FirstEventScreenCenter(ImVec2& out_center) const
+    // ImGui ID of the first visible flame track's "FV" child window, the parent
+    // tests pass to ctx->GatherItems() to enumerate that track's event bars.
+    // Returns 0 if no flame track is present or it hasn't rendered yet.
+    unsigned int FirstFlameWindowId() const
     {
-        if(!v.m_graphs) return false;
+        if(!v.m_graphs) return 0;
         for(const TrackGraph& graph : *v.m_graphs)
         {
             if(!graph.display || graph.chart == nullptr) continue;
-            const FlameTrackItem* flame = dynamic_cast<const FlameTrackItem*>(graph.chart);
+            FlameTrackItem* flame = dynamic_cast<FlameTrackItem*>(graph.chart);
             if(flame == nullptr) continue;
-            if(flame->GetFirstEventScreenCenterForTest(out_center)) return true;
+            unsigned int id = FlameTrackItemTestPeer{ *flame }.FlameWindowId();
+            if(id != 0) return id;
         }
-        return false;
-    }
-
-    bool TwoEventScreenCenters(ImVec2& out_first, ImVec2& out_second) const
-    {
-        if(!v.m_graphs) return false;
-        for(const TrackGraph& graph : *v.m_graphs)
-        {
-            if(!graph.display || graph.chart == nullptr) continue;
-            const FlameTrackItem* flame = dynamic_cast<const FlameTrackItem*>(graph.chart);
-            if(flame == nullptr) continue;
-            // Both events from the same track so the multi-select click pair
-            // lands on a single flame lane.
-            if(flame->GetFirstEventScreenCenterForTest(out_first) &&
-               flame->GetSecondEventScreenCenterForTest(out_second))
-                return true;
-        }
-        return false;
+        return 0;
     }
 };
 

@@ -45,6 +45,66 @@ static constexpr float LEGEND_HEIGHT     = 28.0f;
 // Helpers
 static constexpr const char* UNAVAILABLE_METRIC_TEXT = "N/A";
 
+// Metric name to enum
+static const std::unordered_map<std::string, MemChartMetric> METRIC_NAME_MAP = {
+    {"Wavefront Occupancy", WAVEFRONT_OCCUPANCY},
+    {"Wave Life", WAVE_LIFE},
+    {"SALU", SALU},
+    {"SMEM", SMEM},
+    {"VALU", VALU},
+    {"Matrix Ops", MATRIX_OPS},
+    {"MFMA", MATRIX_OPS},
+    {"VMEM", VMEM},
+    {"LDS", LDS},
+    {"GWS", GWS},
+    {"BR", BR},
+    {"Active CUs (deprecated)", ACTIVE_CUS_DEPRECATED},
+    {"Num CUs", NUM_CUS},
+    {"VGPR", VGPR},
+    {"SGPR", SGPR},
+    {"LDS Allocation", LDS_ALLOCATION},
+    {"Scratch Allocation", SCRATCH_ALLOCATION},
+    {"Wavefronts", WAVEFRONTS},
+    {"Workgroups", WORKGROUPS},
+    {"LDS Req", LDS_REQ},
+    {"LDS Util", LDS_UTIL},
+    {"LDS Latency", LDS_LATENCY},
+    {"VL1 Rd", VL1_RD},
+    {"VL1 Wr", VL1_WR},
+    {"VL1 Atomic", VL1_ATOMIC},
+    {"VL1 Hit", VL1_HIT},
+    {"VL1 Lat", VL1_LAT},
+    {"VL1 Coalesce", VL1_COALESCE},
+    {"VL1 Stall", VL1_STALL},
+    {"VL1_L2 Rd", VL1_L2_RD},
+    {"VL1_L2 Wr", VL1_L2_WR},
+    {"VL1_L2 Atomic", VL1_L2_ATOMIC},
+    {"sL1D Rd", SL1D_RD},
+    {"sL1D Hit", SL1D_HIT},
+    {"sL1D Lat", SL1D_LAT},
+    {"sL1D_L2 Rd", SL1D_L2_RD},
+    {"sL1D_L2 Wr", SL1D_L2_WR},
+    {"sL1D_L2 Atomic", SL1D_L2_ATOMIC},
+    {"IL1 Fetch", IL1_FETCH},
+    {"IL1 Hit", IL1_HIT},
+    {"IL1 Lat", IL1_LAT},
+    {"IL1_L2 Rd", IL1_L2_RD},
+    {"L2 Rd", L2_RD},
+    {"L2 Wr", L2_WR},
+    {"L2 Atomic", L2_ATOMIC},
+    {"L2 Hit", L2_HIT},
+    {"L2 Rd Lat", L2_RD_LAT},
+    {"L2 Wr Lat", L2_WR_LAT},
+    {"Fabric_L2 Rd", FABRIC_L2_RD},
+    {"Fabric_L2 Wr", FABRIC_L2_WR},
+    {"Fabric_L2 Atomic", FABRIC_L2_ATOMIC},
+    {"Fabric Rd Lat", FABRIC_RD_LAT},
+    {"Fabric Wr Lat", FABRIC_WR_LAT},
+    {"Fabric Atomic Lat", FABRIC_ATOMIC_LAT},
+    {"HBM Rd", HBM_RD},
+    {"HBM Wr", HBM_WR},
+};
+
 struct ChartColors
 {
     ImU32 bg;
@@ -384,10 +444,9 @@ ComputeMemoryChartView::UpdateMetrics()
         if(metric->entry->category_id != MEMCHART_CATEGORY_ID) continue;
         if(metric->entry->table_id != MEMCHART_TABLE_ID) continue;
 
-        uint32_t id = metric->entry->id;
-        if(id < MEMCHART_METRIC_COUNT)
+        if(METRIC_NAME_MAP.count(metric->entry->name))
         {
-            m_metric_ptrs[id] = metric.get();
+            m_metric_ptrs[METRIC_NAME_MAP.at(metric->entry->name)] = metric.get();
         }
     }
 
@@ -829,7 +888,7 @@ ComputeMemoryChartView::DrawVectorL1(ImDrawList* draw_list, ImVec2 origin)
 
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Hit:", VL1_HIT, "%");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", MEMCHART_METRIC_NA, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Latency:", VL1_LAT, "cycles");
     cursor_y = DrawMetricRow(draw_list, block_x, cursor_y, block.w,
                              "Coalescing:", VL1_COALESCE, "%");
     cursor_y =
@@ -892,9 +951,9 @@ ComputeMemoryChartView::DrawL2(ImDrawList* draw_list, ImVec2 origin)
     cursor_y = DrawBlockHeader(draw_list, "Latency",
                                block_x, cursor_y - BLOCK_TEXT_PAD, block.w);
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", MEMCHART_METRIC_NA, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Rd:", L2_RD_LAT, "cycles");
     cursor_y =
-        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", MEMCHART_METRIC_NA, "cycles");
+        DrawMetricRow(draw_list, block_x, cursor_y, block.w, "Wr:", L2_WR_LAT, "cycles");
 }
 
 void

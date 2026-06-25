@@ -159,25 +159,21 @@ if(WIN32)
         )
 endif(WIN32)
 
+# Shared app sources (no main): the prod exe adds main.cpp, the test exe adds test_main.cpp.
+set(APP_FILES
+    src/app/src/rocprofvis_imgui_backend.cpp
+    src/app/src/rocprofvis_imgui_vulkan.cpp
+    src/app/src/rocprofvis_imgui_opengl.cpp
+    src/app/src/glfw_util.cpp
+    src/app/src/rocprofvis_cli_parser.cpp)
 if(APPLE)
-    add_executable(${TARGET_NAME} MACOSX_BUNDLE
-        src/app/src/rocprofvis_imgui_backend.cpp
-        src/app/src/rocprofvis_imgui_vulkan.cpp
-        src/app/src/rocprofvis_imgui_opengl.cpp
-        src/app/src/main.cpp
-        src/app/src/glfw_util.cpp
-        src/app/src/rocprofvis_cli_parser.cpp
-        src/app/src/rocprofvis_platform_helpers_macos.mm
-        ${VIEW_FILES})
+    list(APPEND APP_FILES src/app/src/rocprofvis_platform_helpers_macos.mm)
+endif()
+
+if(APPLE)
+    add_executable(${TARGET_NAME} MACOSX_BUNDLE ${APP_FILES} src/app/src/main.cpp ${VIEW_FILES})
 else()
-    add_executable(${TARGET_NAME}
-        src/app/src/rocprofvis_imgui_backend.cpp
-        src/app/src/rocprofvis_imgui_vulkan.cpp
-        src/app/src/rocprofvis_imgui_opengl.cpp
-        src/app/src/main.cpp
-        src/app/src/glfw_util.cpp
-        src/app/src/rocprofvis_cli_parser.cpp
-        ${VIEW_FILES})
+    add_executable(${TARGET_NAME} ${APP_FILES} src/app/src/main.cpp ${VIEW_FILES})
 endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
@@ -254,11 +250,51 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         ${IMGUI_TEST_ENGINE_DIR}
         ${IMGUI_TEST_ENGINE_DIR}/thirdparty/Str
     )
-    target_link_libraries(imgui_test_engine PUBLIC imgui)
+    # Engine links the WITH-define imgui variant so its hook bodies match the callsites.
+    target_link_libraries(imgui_test_engine PUBLIC imgui_te)
 
-    target_sources(${TARGET_NAME} PRIVATE src/app/src/app_tests.cpp)
-    target_compile_definitions(${TARGET_NAME} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
-    target_link_libraries(${TARGET_NAME} PRIVATE imgui_test_engine)
+    # Separate test executable: same app+view sources, compiled WITH the define, linked
+    # against imgui_te (not the clean imgui). Uses test_main.cpp (the engine-wired copy of
+    # main.cpp) so production main.cpp stays pristine and free of any test references.
+    set(TEST_TARGET ${TARGET_NAME}-tests)
+    add_executable(${TEST_TARGET} ${APP_FILES} src/app/src/test_main.cpp ${VIEW_FILES} src/app/src/app_tests.cpp)
+    add_dependencies(${TEST_TARGET} generate_icon_header)
+    target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
+    target_include_directories(${TEST_TARGET} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons
+        ${Vulkan_INCLUDE_DIRS}
+        ${Vulkan_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
+    )
+    target_link_libraries(${TEST_TARGET} PRIVATE
+        imgui_te
+        imgui_test_engine
+        implot
+        glfw
+        ${TARGET_NAME}-controller
+        datamodel
+        ${TARGET_NAME}-core
+        spdlog
+        sqlite3
+        json
+        ImGuiFileDialog
+        "${Vulkan_LIBRARIES}"
+        OpenGL::GL
+    )
+    if(USE_NATIVE_FILE_DIALOG)
+        target_link_libraries(${TEST_TARGET} PRIVATE nfd)
+        target_compile_definitions(${TEST_TARGET} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
+    endif()
+    if(APPLE)
+        target_link_libraries(${TEST_TARGET} PRIVATE "-framework AppKit")
+    endif()
 endif()
 
 if(APPLE)

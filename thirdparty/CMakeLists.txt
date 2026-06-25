@@ -21,14 +21,35 @@ add_library(imgui STATIC
     imgui/backends/imgui_impl_opengl3.cpp
 )
 target_compile_definitions(imgui PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
-if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
-    target_compile_definitions(imgui PUBLIC IMGUI_ENABLE_TEST_ENGINE)
-endif()
+# Base imgui is now ALWAYS clean (no test-engine define) -> production app links this.
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends)
 target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIRS})
 target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIR})
+
+# Second imgui built from the SAME sources WITH the test-engine define.
+# Only the test exe links this; production never sees it.
+if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
+    add_library(imgui_te STATIC
+        imgui/imgui.cpp
+        imgui/imgui_draw.cpp
+        imgui/imgui_tables.cpp
+        imgui/imgui_widgets.cpp
+        imgui/backends/imgui_impl_glfw.cpp
+        imgui/backends/imgui_impl_vulkan.cpp
+        imgui/backends/imgui_impl_opengl3.cpp
+    )
+    target_compile_definitions(imgui_te PUBLIC
+        IMGUI_DEFINE_MATH_OPERATORS
+        IMGUI_ENABLE_TEST_ENGINE
+    )
+    target_include_directories(imgui_te PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(imgui_te PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
+    target_include_directories(imgui_te PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends)
+    target_include_directories(imgui_te PUBLIC ${Vulkan_INCLUDE_DIRS})
+    target_include_directories(imgui_te PUBLIC ${Vulkan_INCLUDE_DIR})
+endif()
 
 add_library(implot STATIC
     implot/implot.cpp

@@ -73,7 +73,7 @@ private:
     std::string                     m_tooltip_label;
     ImVec2                          m_pillbox_size;
     const float                     m_padding_x = 8.0f;
-    const float                     m_padding_y = 2.0f;
+    const float                     m_padding_y = 1.0f;
     EventManager::SubscriptionToken m_font_changed_token;
 };
 

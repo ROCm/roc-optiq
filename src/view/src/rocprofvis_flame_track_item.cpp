@@ -34,7 +34,7 @@ inline constexpr float MAX_TABLE_HEIGHT          = 300.0f;
 inline constexpr float PILL_SPACING              = 4.0f;
 // Absolute floor for flame-track height so the meta area never collapses far
 // enough for its controls to collide, regardless of the event row height.
-inline constexpr float FLAME_MIN_TRACK_HEIGHT    = 16.0f;
+inline constexpr float FLAME_MIN_TRACK_HEIGHT    = 28.0f;
 
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing

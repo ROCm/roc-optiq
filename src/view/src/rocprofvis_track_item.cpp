@@ -25,6 +25,8 @@ inline constexpr float    META_TOOLTIP_MAX_WIDTH         = 320.0f;
 inline constexpr uint64_t META_TOOLTIP_COMPACT_COUNT_MIN = 1000;
 inline constexpr float    NAME_LABEL_HITBOX_PADDING_X    = 4.0f;
 inline constexpr float    NAME_LABEL_HITBOX_PADDING_Y    = 3.0f;
+inline constexpr float    PILL_BOTTOM_INSET              = 2.0f;
+inline constexpr float    PILL_TITLE_MIN_GAP             = 2.0f;
 constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -38,7 +40,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 , m_track_content_height(0.0f)
 , m_min_track_height(DEFAULT_MIN_TRACK_HEIGHT)
 , m_is_in_view_vertical(false)
-, m_metadata_padding(ImVec2(8.0f, 5.0f))
+, m_metadata_padding(ImVec2(8.0f, 2.0f))
 , m_resize_grip_thickness(4.0f)
 , m_request_state(TrackDataRequestState::kIdle)
 , m_track_height_changed(false)
@@ -236,7 +238,7 @@ TrackItem::RenderMetaArea()
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 5));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 2));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         m_settings.GetDefaultStyle().ChildRounding);
 
@@ -312,10 +314,18 @@ TrackItem::RenderMetaArea()
         float available_for_text =
             content_size.x - m_meta_area_scale_width - m_reorder_grip_width;
 
+        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kDefault),
+                        m_settings.GetFontManager().GetFontSize(FontSize::kSmall));
+
         ImVec2 text_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
 
+        const float pill_vertical_budget = content_size.y - text_size.y;
+        const float pill_vertical_needed = m_pill.GetPillSize().y +
+                                           m_metadata_padding.y + PILL_BOTTOM_INSET +
+                                           PILL_TITLE_MIN_GAP;
+
         if(available_for_text < m_pill.GetPillSize().x ||
-           content_size.y - text_size.y < m_pill.GetPillSize().y)
+           pill_vertical_budget < pill_vertical_needed)
             m_pill.Hide();
         else
             m_pill.Show();
@@ -338,6 +348,7 @@ TrackItem::RenderMetaArea()
         }
         ImGui::PopStyleColor();
         ImGui::EndGroup();
+        ImGui::PopFont();
 
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
@@ -1010,7 +1021,11 @@ Pill::GetPillSize()
 void
 Pill::CalculatePillSize()
 {
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault),
+                    settings.GetFontManager().GetFontSize(FontSize::kSmall));
     ImVec2 text_size = ImGui::CalcTextSize(m_pill_label.c_str());
+    ImGui::PopFont();
     m_pillbox_size = ImVec2(text_size.x + 2 * m_padding_x, text_size.y + 2 * m_padding_y);
 }
 

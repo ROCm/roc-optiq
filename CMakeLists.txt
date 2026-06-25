@@ -268,6 +268,7 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/test
         ${Vulkan_INCLUDE_DIRS}
         ${Vulkan_INCLUDE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc

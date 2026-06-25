@@ -54,6 +54,8 @@ public:
         kNumImportantColumns
     };
 
+    friend struct EventSearchTestPeer;
+
 protected:
     enum TimeColumns
     {

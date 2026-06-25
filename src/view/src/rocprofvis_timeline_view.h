@@ -117,20 +117,8 @@ public:
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-    // Screen-space center of the first event in the first displayed flame track,
-    // from the renderer's captured geometry. False if none drawn yet.
-    bool GetFirstEventScreenCenterForTest(ImVec2& out_center) const;
-    // Screen-space centers of the two widest events in the first flame track
-    // with at least two drawn events. Returns false if fewer than two exist.
-    bool GetTwoEventScreenCentersForTest(ImVec2& out_first, ImVec2& out_second) const;
-    // Max vertical scroll offset; 0 when all tracks fit the viewport, in which
-    // case Up/Down scroll is a no-op (lets a test skip instead of false-fail).
-    float GetMaxYScrollForTest() const { return m_content_max_y_scroll; }
-    // First displayed flame track, or nullptr if none. Lets a test drive
-    // per-track display options (e.g. Compact Mode) without the gear popup.
-    FlameTrackItem* GetFirstFlameTrackForTest() const;
-#endif
+
+    friend struct TimelineViewTestPeer;
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;

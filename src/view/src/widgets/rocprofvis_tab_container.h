@@ -32,10 +32,7 @@ public:
 
     const TabItem* GetActiveTab() const;
 
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-    int GetActiveTabIndexForTest() const { return m_active_tab_index; }
-    int GetTabCountForTest() const { return static_cast<int>(m_tabs.size()); }
-#endif
+    friend struct TabContainerTestPeer;
 
     void SetAllowToolTips(bool allow_tool_tips);
     bool GetAllowToolTips() const;

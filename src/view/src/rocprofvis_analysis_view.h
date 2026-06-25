@@ -29,9 +29,9 @@ public:
     ~AnalysisView();
     void Render() override;
     void Update() override;
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-    EventsView* GetEventsViewForTest() const { return m_events_view.get(); }
-#endif
+
+    friend struct AnalysisViewTestPeer;
+
 private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
 

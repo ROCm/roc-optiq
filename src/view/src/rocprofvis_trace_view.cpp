@@ -595,35 +595,6 @@ TraceView::GetTimelineSelection() const
 {
     return m_timeline_selection;
 }
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-AnalysisView* TraceView::GetAnalysisViewForTest() const
-{
-    if (m_analysis_item == nullptr)
-    {
-        return nullptr;
-    }
-    return dynamic_cast<AnalysisView*>(m_analysis_item->m_item.get());
-}
-TimelineView* TraceView::GetTimelineViewForTest() const
-{
-    return m_timeline_view.get();
-}
-Minimap* TraceView::GetMinimapForTest() const
-{
-    return m_minimap.get();
-}
-EventSearch* TraceView::GetEventSearchForTest() const
-{
-    return m_event_search.get();
-}
-void TraceView::ClearEventSelectionForTest()
-{
-    if(m_timeline_selection)
-    {
-        m_timeline_selection->UnselectAllEvents();
-    }
-}
-#endif
 std::shared_ptr<RocWidget>
 TraceView::GetToolbar()
 {

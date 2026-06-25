@@ -80,19 +80,9 @@ public:
             (m_second_event_rect_min_for_test.y + m_second_event_rect_max_for_test.y) * 0.5f);
         return true;
     }
-    // Drive Compact Mode through the same side-effecting path the gear-menu
-    // checkbox uses (the checkbox lives in a popup with no stable widget id).
-    void SetCompactModeForTest(bool on)
-    {
-        m_compact_mode = on;
-        ApplyCompactMode();
-    }
-    float GetLevelHeightForTest() const { return m_level_height; }
-    // Event color mode is set by the gear-menu radio buttons (a plain field
-    // assignment); expose it so a test can drive and read it without the popup.
-    EventColorMode GetEventColorModeForTest() const { return m_event_color_mode; }
-    void SetEventColorModeForTest(EventColorMode mode) { m_event_color_mode = mode; }
 #endif
+
+    friend struct FlameTrackItemTestPeer;
 
 protected:
     void  RenderChart(float graph_width) override;

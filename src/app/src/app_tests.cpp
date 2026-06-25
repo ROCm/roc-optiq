@@ -24,6 +24,66 @@
 #include "rocprofvis_view_test_access.h"
 using namespace RocProfVis::View;
 
+namespace
+{
+// Flame-graph event bars are raw draw_list rects registered with the Test
+// Engine via IMGUI_TEST_ENGINE_ITEM_ADD under the track's "FV" child window.
+// These helpers gather that window's bars and pick reliably clickable targets
+// by width: the widest two avoid 1px slivers a click would miss, and give
+// multi-select tests two distinct targets on the same lane.
+
+// Finds the two widest bars under `flame_window_id`. out_second may stay empty
+// if fewer than two bars exist. Returns the number found (0, 1, or 2).
+int WidestFlameBars(ImGuiTestContext* ctx, unsigned int flame_window_id,
+                    ImGuiTestItemInfo& out_first, ImGuiTestItemInfo& out_second)
+{
+    if(flame_window_id == 0) return 0;
+    ImGuiTestItemList bars;
+    ctx->GatherItems(&bars, ImGuiTestRef(flame_window_id));
+
+    int   found        = 0;
+    float first_width  = -1.0f;
+    float second_width = -1.0f;
+    for(const ImGuiTestItemInfo& bar : bars)
+    {
+        const float width = bar.RectFull.GetWidth();
+        if(width > first_width)
+        {
+            out_second   = out_first;
+            second_width = first_width;
+            out_first    = bar;
+            first_width  = width;
+        }
+        else if(width > second_width)
+        {
+            out_second   = bar;
+            second_width = width;
+        }
+        found = found < 2 ? found + 1 : 2;
+    }
+    return found;
+}
+
+bool FirstEventScreenCenter(ImGuiTestContext* ctx, unsigned int flame_window_id,
+                            ImVec2& out_center)
+{
+    ImGuiTestItemInfo first, second;
+    if(WidestFlameBars(ctx, flame_window_id, first, second) < 1) return false;
+    out_center = first.RectFull.GetCenter();
+    return true;
+}
+
+bool TwoEventScreenCenters(ImGuiTestContext* ctx, unsigned int flame_window_id,
+                           ImVec2& out_first, ImVec2& out_second)
+{
+    ImGuiTestItemInfo first, second;
+    if(WidestFlameBars(ctx, flame_window_id, first, second) < 2) return false;
+    out_first  = first.RectFull.GetCenter();
+    out_second = second.RectFull.GetCenter();
+    return true;
+}
+}  // namespace
+
 void RegisterAppTests(ImGuiTestEngine* e)
 {
     ImGuiTest* t = nullptr;
@@ -82,7 +142,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(3);
 
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -120,7 +181,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // and press the mouse to acquire focus.
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -179,7 +241,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // then click an event to land the cursor in-graph.
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -246,7 +309,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Need two distinct, clickable events in one flame track.
         ctx->Yield(3);
         ImVec2 first(0.0f, 0.0f), second(0.0f, 0.0f);
-        bool have_two = TimelineViewTestPeer{*tlv}.TwoEventScreenCenters(first, second);
+        bool have_two = TwoEventScreenCenters(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), first, second);
         if (!have_two)
         {
             ctx->LogWarning("SKIP: track lacks two distinct events to multi-select");
@@ -420,7 +484,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // in the graph; park on the first event to acquire it.
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -478,7 +543,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -532,7 +598,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         ctx->Yield(3);
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 
@@ -643,7 +710,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // events, so select one first. The hotkey shares the timeline's
         // pseudo-focus gate (set by a mouse-down in the graph), same as W/S/A/D.
         ImVec2 event_center(0.0f, 0.0f);
-        bool   have_center = TimelineViewTestPeer{*tlv}.FirstEventScreenCenter(event_center);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
         IM_CHECK(have_center);
         if (!have_center) return;
 

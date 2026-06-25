@@ -63,25 +63,6 @@ public:
     static void CalculateMaxEventLabelWidth();
     bool        IsCompactMode() const override { return m_compact_mode; }
 
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-    bool GetFirstEventScreenCenterForTest(ImVec2& out_center) const
-    {
-        if(!m_first_event_rect_valid_for_test) return false;
-        out_center = ImVec2(
-            (m_first_event_rect_min_for_test.x + m_first_event_rect_max_for_test.x) * 0.5f,
-            (m_first_event_rect_min_for_test.y + m_first_event_rect_max_for_test.y) * 0.5f);
-        return true;
-    }
-    bool GetSecondEventScreenCenterForTest(ImVec2& out_center) const
-    {
-        if(!m_second_event_rect_valid_for_test) return false;
-        out_center = ImVec2(
-            (m_second_event_rect_min_for_test.x + m_second_event_rect_max_for_test.x) * 0.5f,
-            (m_second_event_rect_min_for_test.y + m_second_event_rect_max_for_test.y) * 0.5f);
-        return true;
-    }
-#endif
-
     friend struct FlameTrackItemTestPeer;
 
 protected:
@@ -151,13 +132,9 @@ private:
     Pill                            m_queue_utilization_pill;
 
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-    // Reset at the top of RenderChart, updated per DrawBox.
-    bool   m_first_event_rect_valid_for_test = false;
-    ImVec2 m_first_event_rect_min_for_test{ 0.0f, 0.0f };
-    ImVec2 m_first_event_rect_max_for_test{ 0.0f, 0.0f };
-    bool   m_second_event_rect_valid_for_test = false;
-    ImVec2 m_second_event_rect_min_for_test{ 0.0f, 0.0f };
-    ImVec2 m_second_event_rect_max_for_test{ 0.0f, 0.0f };
+    // ID of the "FV" child window the bars are registered under; tests gather
+    // bars by this parent and pick targets by width. Captured during render.
+    unsigned int m_test_flame_window_id = 0;
 #endif
 };
 

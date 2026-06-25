@@ -13,7 +13,11 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+#include "imgui_internal.h"
+#endif
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <limits>
 #include <sstream>
@@ -349,39 +353,17 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
                             start_position.y + m_level_height + cursor_position.y);
 
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-    // Track the two widest boxes, not the first: the first can be a 1px rect
-    // under the resize handle, which a click would miss. The widest drives
-    // single-event tests; the second widest gives multi-select tests a distinct,
-    // reliably clickable target.
+    // Bars are raw draw_list rects with no ImGui ID, so the Test Engine can't
+    // find them by ref. Register each bar's bounding box with the engine under a
+    // stable per-event ID; tests then locate bars via GatherItems/ItemInfo. This
+    // compiles out of production and adds no widget.
     {
-        const float width = rectMax.x - rectMin.x;
-        const float best  = m_first_event_rect_valid_for_test
-                                ? (m_first_event_rect_max_for_test.x -
-                                   m_first_event_rect_min_for_test.x)
-                                : -1.0f;
-        if(width > best)
-        {
-            m_second_event_rect_min_for_test   = m_first_event_rect_min_for_test;
-            m_second_event_rect_max_for_test   = m_first_event_rect_max_for_test;
-            m_second_event_rect_valid_for_test = m_first_event_rect_valid_for_test;
-
-            m_first_event_rect_min_for_test   = rectMin;
-            m_first_event_rect_max_for_test   = rectMax;
-            m_first_event_rect_valid_for_test = true;
-        }
-        else
-        {
-            const float second = m_second_event_rect_valid_for_test
-                                     ? (m_second_event_rect_max_for_test.x -
-                                        m_second_event_rect_min_for_test.x)
-                                     : -1.0f;
-            if(width > second)
-            {
-                m_second_event_rect_min_for_test   = rectMin;
-                m_second_event_rect_max_for_test   = rectMax;
-                m_second_event_rect_valid_for_test = true;
-            }
-        }
+        ImGuiContext& g           = *GImGui;
+        ImGuiWindow*  test_window = ImGui::GetCurrentWindow();
+        ImGuiID       bar_id      = test_window->GetID(
+            reinterpret_cast<const void*>(
+                static_cast<uintptr_t>(chart_item.event.m_id.uuid)));
+        IMGUI_TEST_ENGINE_ITEM_ADD(bar_id, ImRect(rectMin, rectMax), nullptr);
     }
 #endif
 
@@ -695,16 +677,15 @@ FlameTrackItem::RenderChart(float graph_width)
                       ImGuiWindowFlags_NoMouseInputs);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    m_test_flame_window_id = ImGui::GetCurrentWindow()->ID;
+#endif
+
     int colorCount = static_cast<int>(m_settings.GetColorWheel().size());
     ROCPROFVIS_ASSERT(colorCount > 0);
 
     int color_index      = 0;
     m_has_drawn_tool_tip = false;
-
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-    m_first_event_rect_valid_for_test  = false;
-    m_second_event_rect_valid_for_test = false;
-#endif
 
     double     range_start_ns           = TimelineSelection::INVALID_SELECTION_TIME;
     double     range_end_ns             = TimelineSelection::INVALID_SELECTION_TIME;

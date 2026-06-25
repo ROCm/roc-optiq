@@ -5,8 +5,8 @@
 **Timeline and measurement**
 - Measure Mode: measure the time delta between events or any two points on the timeline. Includes a measurement toolbar (edge toggle, freehand drag, reset), click-to-place freehand rulers, draggable ruler lines with grab cursors, viewport-clamped labels, and theme-aware highlighting. Measurement state is per-trace so it no longer leaks between loaded traces.
 - Queue Utilization: per-queue utilization is computed and surfaced on the timeline, shown as a pill in the track meta area.
+- Sample counter track statistics (min, max, average, standard deviation) displayed in track meta data, shown as user selectable pills.
 - Top Events view: a new view summarizing the most significant events.
-- Categorized event tables.
 - Recolor events that overlap a time-range selection using the main flame color ramp, and draw the translucent selection fill per-track behind events so highlighted colors stay legible.
 - Right-click copy for timeline event names and details (mirrors the hover tooltip fields: name, start, duration, ID), gated on the current selection.
 
@@ -68,6 +68,7 @@
 - Fixed annotation scroll interactions so annotation scrollbars no longer drive timeline navigation and note dragging is limited to the header.
 - Various redesign polish fixes (event details styling, annotation row alignment, metric table row hover, settings table controls, aggregate clear button).
 - Fix flow rendering for `.rpd` traces.
+- Fix Compute chart metric mapping.
 
 ## Optiq Beta 0.4.0
 

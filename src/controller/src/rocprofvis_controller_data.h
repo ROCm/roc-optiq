@@ -19,11 +19,11 @@ public:
 
     Data(Data const& other);
 
-    Data(Data&& other);
+    Data(Data&& other) noexcept;
 
     Data& operator=(Data const& other);
 
-    Data& operator=(Data&& other);
+    Data& operator=(Data&& other) noexcept;
 
     Data(rocprofvis_controller_primitive_type_t type);
 

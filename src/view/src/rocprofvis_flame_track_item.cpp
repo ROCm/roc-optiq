@@ -14,11 +14,9 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <cmath>
-#include <cstdio>
 #include <limits>
 #include <sstream>
 #include <string>
-#include <unordered_set>
 
 namespace RocProfVis
 {
@@ -31,7 +29,6 @@ inline constexpr float HIGHLIGHT_THICKNESS_HALF  = HIGHLIGHT_THICKNESS / 2;
 inline constexpr float TOOLTIP_OFFSET            = 16.0f;
 inline constexpr int   MAX_CHARACTERS_PER_LINE   = 40;
 inline constexpr float MAX_TABLE_HEIGHT          = 300.0f;
-inline constexpr float PILL_SPACING              = 4.0f;
 
 /*
 For IMGUI rectangle borders ANTI_ALIASING_WORKAROUND is needed to avoid anti-aliasing
@@ -52,23 +49,21 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
 FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
                                std::shared_ptr<TimelineSelection>     timeline_selection,
                                std::shared_ptr<MeasurementController> measurement,
-                               uint64_t                               track_id,
-                               std::shared_ptr<TimePixelTransform>    tpt)
-: TrackItem(dp, track_id, tpt)
-, m_event_color_mode(EventColorMode::kByEventName)
+                               uint64_t track_id, std::shared_ptr<TimePixelTransform> tpt)
+: TrackItem(dp, track_id, tpt, timeline_selection)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
-, m_timeline_selection(timeline_selection)
 , m_measurement(measurement)
 , m_deferred_click_handled(false)
 , m_has_drawn_tool_tip(false)
-, m_flame_track_project_settings(dp.GetTraceFilePath(), *this)
 , m_selected_chart_items({})
 , m_tooltip_size(0.0f, 0.0f)
 , m_is_expanded(false)
+, m_pill_analysis_queue(nullptr)
+, m_flame_track_project_settings(dp.GetTraceFilePath(), *this)
+, m_show_pill_analysis_queue(true)
+, m_event_color_mode(EventColorMode::kByEventName)
 , m_compact_mode(false)
-, m_queue_utilization(nullptr)
-, m_queue_utilization_pill("", false, false)
 {
     if(!m_tpt)
     {
@@ -80,12 +75,16 @@ FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
     {
         m_min_level = static_cast<float>(m_track_metadata->min_value);
         m_max_level = static_cast<float>(m_track_metadata->max_value);
-
+        m_track_statistics =
+            m_data_provider.DataModel().GetAnalysis().RegisterTrack(*m_track_metadata);
         if(m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
         {
-            m_queue_utilization =
-                m_data_provider.DataModel().GetAnalysis().GetPerTrackQueueUtilization(
-                    *m_track_metadata);
+            m_pill_analysis_queue = AddPill();
+            m_pill_analysis_queue->SetVisible(m_show_pill_analysis_queue);
+            m_pill_analysis_queue->SetAccentColor(
+                m_track_statistics
+                    ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
+                    .accent_color);
         }
     }
 
@@ -113,6 +112,13 @@ FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
         if(m_compact_mode)
         {
             m_level_height = m_settings.GetEventLevelCompactHeight();
+        }
+        m_show_pill_analysis_queue =
+            m_flame_track_project_settings
+                .ShowAnalysis()[AnalysisTrackStatistics::Queue::kQueueUtilization];
+        if(m_pill_analysis_queue)
+        {
+            m_pill_analysis_queue->SetVisible(m_show_pill_analysis_queue);
         }
     }
 }
@@ -166,6 +172,38 @@ FlameTrackItem::~FlameTrackItem()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
         m_timeline_event_highlight_changed_token);
+}
+
+void
+FlameTrackItem::Update()
+{
+    if(m_track_statistics && m_pill_analysis_queue)
+    {
+        if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
+           m_track_statistics_dirty)
+        {
+            m_pill_analysis_queue->Activate();
+            m_pill_analysis_queue->SetLabel(
+                m_track_statistics
+                    ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
+                    .compact,
+                Pill::kCompact);
+            m_pill_analysis_queue->SetLabel(
+                m_track_statistics
+                    ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
+                    .extended,
+                Pill::kExtended);
+            m_pill_analysis_queue->SetTooltip(
+                m_track_statistics
+                    ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
+                    .full);
+        }
+        else if(m_track_statistics->state < AnalysisTrackStatistics::kReady)
+        {
+            m_pill_analysis_queue->Deactivate();
+        }
+    }
+    TrackItem::Update();
 }
 
 bool
@@ -782,64 +820,40 @@ FlameTrackItem::RenderChart(float graph_width)
 }
 
 void
-FlameTrackItem::RenderSecondaryMetaPill(const ImVec2& content_size)
-{
-    if(!(m_track_metadata &&
-         m_track_metadata->topology.type == TrackInfo::TrackType::Queue &&
-         m_queue_utilization))
-    {
-        return;
-    }
-
-    // Keep the two pills grouped: only show utilization when the QUEUE pill is
-    // visible, so a cramped meta area never shows a lone, overflowing pill.
-    if(!m_pill.IsShown())
-    {
-        m_queue_utilization_pill.Hide();
-        return;
-    }
-
-    char util_text[16];
-    std::snprintf(util_text, sizeof(util_text), "%.1f %%",
-                  m_queue_utilization->util_pct);
-    m_queue_utilization_pill.SetLabel(util_text);
-    m_queue_utilization_pill.SetTooltipLabel(std::string("Queue Utilization: ") +
-                                             util_text);
-
-    // A ready value is shown as an active (prominent) pill; a stale/pending
-    // value is shown dimmed until the analysis fetch completes.
-    if(m_queue_utilization->state == AnalysisQueueUtilization::kReady)
-    {
-        m_queue_utilization_pill.Activate();
-    }
-    else
-    {
-        m_queue_utilization_pill.Deactivate();
-    }
-    m_queue_utilization_pill.Show();
-
-    // Sit immediately to the right of the QUEUE pill, sharing its bottom row.
-    ImVec2 util_pill_size = m_queue_utilization_pill.GetPillSize();
-    ImVec2 pill_pos(m_reorder_grip_width + m_pill.GetPillSize().x + PILL_SPACING,
-                    content_size.y - util_pill_size.y - 2.0f);
-    m_queue_utilization_pill.RenderPillLabelAt(pill_pos, m_settings);
-}
-
-void
 FlameTrackItem::RenderMetaAreaOptions()
 {
+    if(m_track_statistics &&
+       m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
+    {
+        ImGui::SeparatorText("Metrics");
+        ImGui::PushStyleColor(
+            ImGuiCol_CheckMark,
+            (m_settings.GetColorWheel()
+                 [m_track_statistics
+                      ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
+                      .accent_color]) |
+                IM_COL32_A_MASK);
+        if(ImGui::Checkbox("##queue_util", &m_show_pill_analysis_queue))
+        {
+            m_pill_analysis_queue->SetVisible(m_show_pill_analysis_queue);
+        }
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::Text(
+            "Show %s",
+            m_track_statistics->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
+                .name);
+    }
+    ImGui::SeparatorText("Appearance");
     EventColorMode mode = m_event_color_mode;
-
     if(ImGui::RadioButton("Color by Name", mode == EventColorMode::kByEventName))
         mode = EventColorMode::kByEventName;
-    ImGui::SameLine();
     if(ImGui::RadioButton("Color by Time Level", mode == EventColorMode::kByTimeLevel))
         mode = EventColorMode::kByTimeLevel;
-    ImGui::SameLine();
     if(ImGui::RadioButton("No Color", mode == EventColorMode::kNone))
         mode = EventColorMode::kNone;
     m_event_color_mode = mode;
-
+    ImGui::Separator();
     if(ImGui::Checkbox("Compact Mode", &m_compact_mode))
     {
         if(m_compact_mode)
@@ -857,46 +871,6 @@ FlameTrackItem::RenderMetaAreaOptions()
         if(m_track_height > std::max(m_max_level * m_level_height + m_level_height, DEFAULT_TRACK_HEIGHT))
         {
             RecalculateTrackHeight();
-        }
-    }
-}
-
-void
-FlameTrackItem::RequestAnalysis()
-{
-    if(m_track_metadata &&
-       m_track_metadata->topology.type == TrackInfo::TrackType::Queue &&
-       m_queue_utilization &&
-       (m_queue_utilization->state == AnalysisQueueUtilization::kStale ||
-        m_queue_utilization->state == AnalysisQueueUtilization::kPending))
-    {
-        uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
-            static_cast<uint32_t>(m_track_id), 0, 0,
-            RequestType::kFetchAnalysisQueueUtilization);
-        if(m_data_provider.IsRequestPending(request_id))
-        {
-            m_data_provider.CancelRequest(request_id);
-            m_queue_utilization->state = AnalysisQueueUtilization::kPending;
-        }
-        else
-        {
-            double start_ts;
-            double end_ts;
-            if(m_timeline_selection && m_timeline_selection->HasValidTimeRangeSelection())
-            {
-                m_timeline_selection->GetSelectedTimeRange(start_ts, end_ts);
-            }
-            else
-            {
-                start_ts = m_tpt->GetVMinX();
-                end_ts   = m_tpt->GetVMaxX();
-            }
-            m_queue_utilization->state =
-                (start_ts < end_ts &&
-                 m_data_provider.FetchAnalysisQueueUtilization(
-                     AnalysisQueueUtilizationRequestParams(m_track_id, start_ts, end_ts)))
-                    ? AnalysisQueueUtilization::kRequested
-                    : AnalysisQueueUtilization::kPending;
         }
     }
 }
@@ -919,6 +893,10 @@ FlameTrackProjectSettings::ToJson()
     m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                    [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE] =
                        m_track_item.m_compact_mode;
+
+    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                   [m_track_item.GetID()][JSON_KEY_TRACK_QUEUE_UTILIZATION] =
+                       m_track_item.m_show_pill_analysis_queue;
 }
 
 bool
@@ -933,6 +911,13 @@ FlameTrackProjectSettings::Valid() const
 
     if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                        [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
+                           .isBool())
+    {
+        return false;
+    }
+
+    if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                       [m_track_item.GetID()][JSON_KEY_TRACK_QUEUE_UTILIZATION]
                            .isBool())
     {
         return false;
@@ -963,6 +948,17 @@ FlameTrackProjectSettings::CompactMode() const
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                           [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
                               .getBool();
+}
+
+std::array<bool, AnalysisTrackStatistics::Queue::kQueueCount>
+FlameTrackProjectSettings::ShowAnalysis() const
+{
+    std::array<bool, AnalysisTrackStatistics::Queue::kQueueCount> show_analysis;
+    show_analysis[AnalysisTrackStatistics::Queue::kQueueUtilization] =
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                       [m_track_item.GetID()][JSON_KEY_TRACK_QUEUE_UTILIZATION]
+                           .getBool();
+    return show_analysis;
 }
 
 }  // namespace View

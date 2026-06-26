@@ -296,6 +296,24 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
     return db->ReadTraceSliceAsync(start,end,tag,num,tracks,object);
 }
 
+rocprofvis_dm_result_t
+rocprofvis_db_read_trace_pmc_slice_async(                                        
+                                        rocprofvis_dm_database_t database,
+                                        rocprofvis_dm_timestamp_t start,
+                                        rocprofvis_dm_timestamp_t end,
+                                        rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                        rocprofvis_db_track_selection_t track,
+                                        bool left_neighbor,
+                                        bool right_neighbor,
+                                        rocprofvis_db_future_t object){
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+                                 RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    return db->ReadTracePMCSliceAsync(start,end,tag,track,left_neighbor,right_neighbor,object);
+}
+
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_database_t database, rocprofvis_dm_table_use_case_enum_t use_case,
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 

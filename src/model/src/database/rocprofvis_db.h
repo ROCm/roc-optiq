@@ -140,6 +140,24 @@ class Database
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 rocprofvis_db_future_t object);
+
+        // Asynchronously read a PMC time slice (records from specified track for specified time frame) from database  
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param track - track ID  
+        // @param left_neighbor - include the left neighbor of the time range
+        // @param right_neighbor - include the right neighbor of the time range
+        // @param object - future object providing asynchronous execution mechanism         
+        // @return status of operation
+        rocprofvis_dm_result_t          ReadTracePMCSliceAsync( 
+                                                                rocprofvis_dm_timestamp_t start,
+                                                                rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                                rocprofvis_db_track_selection_t track,
+                                                                bool left_neighbor,
+                                                                bool right_neighbor,
+                                                                rocprofvis_db_future_t object);
+
         // Asynchronously read different types of event properties (flowtrace, stacktrace, extdata) for event ID
         // @param type - event property type (flowtrace, stacktrace, extdata) 
         // @param event_id - 60-bit event id and 4-bit operation type  
@@ -274,6 +292,25 @@ class Database
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 Future* object);
+
+        //static method to read PMC time slice. Required to launch a unique thread for asynchronous time slice read
+        // @param db - pointer to database object 
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param track - track ID
+        // @param left_neighbor - include the left neighbor of the time range
+        // @param right_neighbor - include the right neighbor of the time range 
+        // @param object - future object providing asynchronous execution mechanism   
+        // @return status of operation
+        static rocprofvis_dm_result_t   ReadTracePMCSliceStatic(
+                                                                Database* db,
+                                                                rocprofvis_dm_timestamp_t start,
+                                                                rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                                rocprofvis_db_track_selection_t track,
+                                                                bool left_neighbor,
+                                                                bool right_neighbor,
+                                                                Future* object);
         //static method to read Event properties. Required to launch a unique thread for asynchronous event properties read
         // @param db - pointer to database object
         // @param type - event property type (flowtrace, stacktrace, extdata) 
@@ -356,6 +393,16 @@ class Database
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 Future* object) = 0;
+
+        virtual rocprofvis_dm_result_t  ReadTracePMCSlice(
+                                                                rocprofvis_dm_timestamp_t start,
+                                                                rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                                rocprofvis_db_track_selection_t track,
+                                                                bool left_neighbor,
+                                                                bool right_neighbor,
+                                                                Future* object);
+
         // worker method to read flow trace info, called from ReadEventPropertyStatic
         // @param event_id - 60-bit event id and 4-bit operation type  
         // @param object - future object providing asynchronous execution mechanism 

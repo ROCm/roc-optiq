@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include <cstdint>
 #include <limits>
 #include <list>
 #include <string>
-#include <string_view>
 
 namespace RocProfVis
 {
@@ -76,15 +76,15 @@ private:
     std::shared_ptr<TimelineSelection>       m_timeline_selection;
     std::list<EventItem>                     m_event_items;
     int                                      m_event_item_id;
-    int                                      m_context_menu_flow_index;
-    int                                      m_context_menu_flow_column;
-    int                                      m_context_menu_callstack_index;
-    int                                      m_context_menu_callstack_column;
+    CellMenuTarget                           m_flow_menu;
+    CellMenuTarget                           m_callstack_menu;
+    CellMenuTarget                           m_arg_menu;
+    CellMenuTarget                           m_basic_menu;
+    CellMenuTarget                           m_ext_menu;
     FlowHighlightState                       m_flow_hover;
     FlowHighlightState                       m_frame_flow_hover;
     CallStackHoverState                      m_callstack_hover;
     CallStackHoverState                      m_frame_callstack_hover;
-    const std::string_view DATA_COPIED_NOTIFICATION = "Data was copied";
 };
 
 }  // namespace View

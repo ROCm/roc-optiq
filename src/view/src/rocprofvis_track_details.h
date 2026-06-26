@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "model/rocprofvis_model_types.h"
 #include "rocprofvis_event_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include <list>
 #include <string>
@@ -13,13 +15,14 @@ namespace View
 {
 
 class DataProvider;
+class SettingsManager;
 class TrackTopology;
+class TimelineSelection;
 struct NodeModel;
 struct ProcessModel;
 struct ProcessorModel;
 struct IterableModel;
 struct StreamModel;
-class TimelineSelection;
 struct InfoTable;
 
 class TrackDetails : public RocWidget
@@ -36,17 +39,20 @@ public:
 private:
     struct DetailItem
     {
-        const int          id;
-        const uint64_t     track_id;
-        std::string        track_name;
-        NodeModel*         node;
-        ProcessModel*      process;
-        ProcessorModel*    processor;
-        IterableModel*     queue;
-        IterableModel*     instrumented_thread;
-        IterableModel*     sampled_thread;
-        IterableModel*     counter;
-        StreamModel*       stream;
+        struct Parents
+        {
+            NodeModel*    node;
+            ProcessModel* process;
+            bool          expand;
+        };
+
+        const uint64_t                 track_id;
+        TrackInfo::TrackType           track_type;
+        std::string                    track_name;
+        Parents                        parents;
+        IterableModel*                 track;
+        StreamModel*                   stream_track;
+        const AnalysisTrackStatistics* stats;
 
         bool operator==(const DetailItem& other) const
         {
@@ -54,15 +60,17 @@ private:
         }
     };
 
-    void RenderTable(InfoTable& table);
+    void RenderTable(InfoTable& table, const char* table_id,
+                     const AnalysisTrackStatistics* = nullptr);
 
     std::shared_ptr<TrackTopology>     m_track_topology;
     DataProvider&                      m_data_provider;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
+    SettingsManager&                   m_settings;
     bool                               m_selection_dirty;
     std::list<DetailItem>              m_track_details;
-    int                                m_detail_item_id;
     bool                               m_data_valid;
+    CellMenuTarget                     m_cell_menu;
 
     EventManager::SubscriptionToken m_topology_changed_event_token;
     EventManager::SubscriptionToken m_track_metadata_changed_event_token;

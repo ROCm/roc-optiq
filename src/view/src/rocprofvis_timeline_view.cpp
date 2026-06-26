@@ -330,6 +330,14 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 
     TrackLayout layout = BuildTrackLayout();
 
+    // Refresh every note's cached track-hidden state (even when annotations are
+    // globally hidden) so the annotation table can grey out the visibility
+    // toggle for notes whose track is hidden.
+    for(StickyNote& note : m_annotations->GetStickyNotes())
+    {
+        note.SetTrackHidden(!IsAnnotationTrackVisible(note.GetTrackId()));
+    }
+
     if(m_annotations->IsVisibile())
     {
         // Interaction --> top-most gets priority

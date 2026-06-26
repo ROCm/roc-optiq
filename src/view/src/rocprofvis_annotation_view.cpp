@@ -117,9 +117,11 @@ AnnotationView::Render()
             ImGui::PopID();
 
             // Track column: the bound track's display name, or a placeholder
-            // for unbound legacy notes.
+            // for unbound legacy notes. Match the Text column's vertical offset
+            // so ElidedText lines up with the other columns.
             ImGui::TableNextColumn();
-            ImGui::AlignTextToFramePadding();
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
+                                 ImGui::GetStyle().FramePadding.y);
             const std::string track_name =
                 m_data_provider.DataModel().BuildTrackName(note.GetTrackId());
             if(track_name.empty())
@@ -140,12 +142,16 @@ AnnotationView::Render()
                                         true);
             ImGui::TextUnformatted(time_label.c_str());
 
-            // Visibility column
+            // Visibility column. When the bound track is hidden the note is
+            // force-hidden on the timeline, so disable (grey out) the toggle.
             ImGui::TableNextColumn();
-            bool        visible     = note.IsVisible();
-            std::string checkbox_id = "##visible_" + std::to_string(note.GetID());
+            bool        visible       = note.IsVisible();
+            const bool  track_hidden  = note.IsTrackHidden();
+            std::string checkbox_id   = "##visible_" + std::to_string(note.GetID());
+            if(track_hidden) ImGui::BeginDisabled();
             ImGui::Checkbox(checkbox_id.c_str(), &visible);
-            if(visible != note.IsVisible()) note.SetVisibility(visible);
+            if(track_hidden) ImGui::EndDisabled();
+            if(!track_hidden && visible != note.IsVisible()) note.SetVisibility(visible);
 
             ImGui::PopID();
         }

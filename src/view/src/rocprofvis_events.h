@@ -25,7 +25,6 @@ enum class RocEvents
     kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
-    kStickyNoteEdited,
     kFontSizeChanged,
     kSetViewRange,
     kGoToTimelineSpot,
@@ -51,7 +50,6 @@ enum class RocEventType
     kTimelineEventSelectionChangedEvent,
     kTimelineEventHighlightChangedEvent,
     kScrollToTrackEvent,
-    kStickyNoteEvent,
     kRangeEvent,
     kNavigationEvent,
     kRequestProgressUpdateEvent,
@@ -180,16 +178,6 @@ public:
 private:
     uint64_t    m_request_id;
     uint64_t    m_response_code;
-};
-
-class StickyNoteEvent : public RocEvent
-{
-public:
-    StickyNoteEvent(int id, const std::string& source_id);
-    const int GetNoteId() const;
-
-private:
-    int m_id;
 };
 
 class ScrollToTrackEvent : public RocEvent

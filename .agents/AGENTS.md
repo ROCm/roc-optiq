@@ -1232,7 +1232,7 @@ EventManager::GetInstance()->AddEvent(
   same-frame ordering with the dispatcher.
 - Use the typed `RocEvent` subclasses in `rocprofvis_events.h`:
   `NavigationEvent`, `TrackDataEvent`, `TableDataEvent`,
-  `StickyNoteEvent`, `ScrollToTrackEvent`, `TabEvent`,
+  `ScrollToTrackEvent`, `TabEvent`,
   `TrackSelectionChangedEvent`, `TimeRangeSelectionChangedEvent`,
   `EventSelectionChangedEvent`, `EventHighlightChangedEvent`,
   `RangeEvent`, `RequestProgressUpdateEvent`,
@@ -1249,7 +1249,7 @@ The full list is in `rocprofvis_events.h`. Examples used widely:
 `kTimelineTrackSelectionChanged`, `kTimelineTimeRangeChanged`,
 `kTimelineEventSelectionChanged`, `kTimelineEventHighlightChanged`,
 `kHandleUserGraphNavigationEvent`, `kTrackMetadataChanged`,
-`kStickyNoteEdited`, `kFontSizeChanged`, `kSetViewRange`,
+`kFontSizeChanged`, `kSetViewRange`,
 `kGoToTimelineSpot`, `kTimeFormatChanged`, `kTopologyChanged`,
 `kRequestProgressUpdate`. Compute-only:
 `kComputeWorkloadSelectionChanged`,
@@ -1829,7 +1829,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `RocEvent`, `RocEvents` (enum), `RocEventType` (enum) ->
   `rocprofvis_events.h`.
 - Typed events in same file: `NavigationEvent`, `TrackDataEvent`,
-  `TableDataEvent`, `StickyNoteEvent`, `ScrollToTrackEvent`,
+  `TableDataEvent`, `ScrollToTrackEvent`,
   `TabEvent`, `TrackSelectionChangedEvent`,
   `TimeRangeSelectionChangedEvent`, `EventSelectionChangedEvent`,
   `EventHighlightChangedEvent`, `RangeEvent`,

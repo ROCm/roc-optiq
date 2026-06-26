@@ -477,27 +477,29 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         }
         ImGui::PopStyleColor();
 
-        ImGui::PushFont(action_icon_font);
-        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
+        // Glyph color for the header buttons; IconButton handles the (transparent)
+        // frame and hover/active backgrounds, with zero frame padding so the icon
+        // stays centered as the font scales.
         ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
+        const ImU32 transparent = settings.GetColor(Colors::kTransparent);
+        const ImVec2 action_btn(action_btn_size, action_btn_size);
 
         ImGui::SetCursorPos(ImVec2(
             win_size.x - action_btn_size * 2.0f - kHeaderButtonGap - kNoteMargin,
             action_btn_y));
-        if(ImGui::Button(
-               (std::string(ICON_TRASH_CAN) + "##delete_" + std::to_string(m_id)).c_str(),
-               ImVec2(action_btn_size, action_btn_size)))
+        if(IconButton(ICON_TRASH_CAN, action_icon_font, action_btn, nullptr, false,
+                      ImVec2(0.0f, 0.0f), transparent, icon_hover_color,
+                      icon_active_color,
+                      ("delete_" + std::to_string(m_id)).c_str()))
         {
             m_pending_delete = true;
         }
 
         ImGui::SetCursorPos(
             ImVec2(win_size.x - action_btn_size - kNoteMargin, action_btn_y));
-        if(ImGui::Button(
-               (std::string(ICON_X_CIRCLED) + "##close_" + std::to_string(m_id)).c_str(),
-               ImVec2(action_btn_size, action_btn_size)))
+        if(IconButton(ICON_X_CIRCLED, action_icon_font, action_btn, nullptr, false,
+                      ImVec2(0.0f, 0.0f), transparent, icon_hover_color,
+                      icon_active_color, ("close_" + std::to_string(m_id)).c_str()))
         {
             if(m_provisional && m_title.empty() && m_text.empty())
             {
@@ -508,8 +510,7 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
                 m_is_minimized = true;
             }
         }
-        ImGui::PopStyleColor(4);
-        ImGui::PopFont();
+        ImGui::PopStyleColor();
 
         // Inline-editable body filling the remaining space.
         const float body_y      = kExpandedHeaderHeight + kNoteMargin;

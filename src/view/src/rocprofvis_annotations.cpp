@@ -50,11 +50,17 @@ AnnotationsManagerProjectSettings::FromJson()
         // Legacy projects have no track binding; load as unbound and re-anchor
         // on first render.
         uint64_t track_id = INVALID_TRACK_ID;
-        if(note_json.contains(JSON_KEY_ANNOTATION_TRACK_ID) &&
-           note_json[JSON_KEY_ANNOTATION_TRACK_ID].isNumber())
+        if(note_json.contains(JSON_KEY_ANNOTATION_TRACK_ID))
         {
-            track_id = static_cast<uint64_t>(
-                note_json[JSON_KEY_ANNOTATION_TRACK_ID].getNumber());
+            const jt::Json& track_id_json = note_json[JSON_KEY_ANNOTATION_TRACK_ID];
+            if(track_id_json.isLong())
+            {
+                track_id = static_cast<uint64_t>(track_id_json.getLong());
+            }
+            else if(track_id_json.isNumber())
+            {
+                track_id = static_cast<uint64_t>(track_id_json.getNumber());
+            }
         }
 
         ImVec2 size(size_x, size_y);
@@ -80,7 +86,7 @@ AnnotationsManagerProjectSettings::ToJson()
         sticky_json[JSON_KEY_ANNOTATION_TITLE]            = notes[i].GetTitle();
         sticky_json[JSON_KEY_ANNOTATION_ID]               = notes[i].GetID();
         sticky_json[JSON_KEY_ANNOTATION_TRACK_ID] =
-            static_cast<double>(notes[i].GetTrackId());
+            static_cast<long long>(notes[i].GetTrackId());
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X] = notes[i].GetVMinX();
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X] = notes[i].GetVMaxX();
         sticky_json[JSON_KEY_ANNOTATION_IS_MINIMIZED]     = notes[i].IsMinimized();

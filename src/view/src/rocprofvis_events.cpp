@@ -342,19 +342,6 @@ EventHighlightChangedEvent::IsBatch() const
     return m_is_batch;
 }
 
-StickyNoteEvent::StickyNoteEvent(int id, const std::string& source_id)
-: RocEvent(static_cast<int>(RocEvents::kStickyNoteEdited), source_id)
-, m_id(id)
-{
-    SetType(RocEventType::kStickyNoteEvent);
-}
-
-const int
-StickyNoteEvent::GetNoteId() const
-{
-    return m_id;
-}
-
 RangeEvent::RangeEvent(int event_id, double start_ns, double end_ns,
                        const std::string& source_id)
 : RocEvent(event_id, source_id)

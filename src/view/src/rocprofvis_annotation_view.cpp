@@ -124,6 +124,9 @@ AnnotationView::Render()
                                  ImGui::GetStyle().FramePadding.y);
             const std::string track_name =
                 m_data_provider.DataModel().BuildTrackName(note.GetTrackId());
+            // Binding finalizes on drop; grey the column and keep the value.
+            const bool note_dragging = note.IsDragging();
+            if(note_dragging) ImGui::BeginDisabled();
             if(track_name.empty())
             {
                 ImGui::TextDisabled("Unbound");
@@ -134,6 +137,7 @@ AnnotationView::Render()
                 ElidedText(track_name.c_str(), ImGui::GetContentRegionAvail().x);
                 ImGui::PopID();
             }
+            if(note_dragging) ImGui::EndDisabled();
 
             // Time column
             ImGui::TableNextColumn();

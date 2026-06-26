@@ -127,6 +127,8 @@ StickyNote::EnsureBound(const TrackLayout& layout)
 float
 StickyNote::ResolveAnchorY(const TrackLayout& layout) const
 {
+    if(m_dragging) return m_drag_abs_y;
+
     float track_top_y = 0.0f;
     if(m_track_id != INVALID_TRACK_ID && layout.top_of &&
        layout.top_of(m_track_id, track_top_y))
@@ -639,6 +641,11 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     bool   mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     bool   mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
+    // The anchor draws straight to the draw list, so modals on top don't shield
+    // it; don't start a drag while a popup is open.
+    const bool blocked_by_popup = ImGui::IsPopupOpen(
+        nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+
     // A click inside the expanded window must move only the window, not the
     // anchor it overlaps.
     bool over_expanded_window = false;
@@ -653,12 +660,14 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     }
 
     if((dragged_id == INVALID_STICKY_ID || dragged_id == m_id) && !m_dragging &&
-       !over_expanded_window && ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
+       !over_expanded_window && !blocked_by_popup &&
+       ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
        !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
     {
         m_dragging    = true;
         m_drag_offset = ImVec2(mouse_pos.x - icon_pos.x, mouse_pos.y - icon_pos.y);
+        m_drag_abs_y  = y;
         dragged_id    = m_id;
         TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
     }
@@ -682,26 +691,28 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         new_y = std::clamp(new_y, min_y, std::max(min_y, max_y));
 
         m_time_ns = conversion_manager->PixelToTime(new_x);
-        // Re-anchor to the track under the cursor, storing a track-relative
-        // offset so the note follows reorder / collapse / resize.
-        uint64_t track_id    = INVALID_TRACK_ID;
-        float    track_top_y = 0.0f;
-        if(layout.track_at && layout.track_at(new_y, track_id, track_top_y))
-        {
-            m_track_id = track_id;
-            m_y_offset = new_y - track_top_y;
-        }
-        else
-        {
-            m_y_offset = new_y;
-        }
-        m_v_max_x = conversion_manager->GetVMaxX();
-        m_v_min_x = conversion_manager->GetVMinX();
+        // Re-anchor only on drop (track_at scans every graph); hold an absolute Y.
+        m_drag_abs_y = new_y;
+        m_v_max_x    = conversion_manager->GetVMaxX();
+        m_v_min_x    = conversion_manager->GetVMinX();
         return true;
     }
 
     if(m_dragging && mouse_released)
     {
+        // Bind to the track under the drop, keeping a track-relative offset.
+        uint64_t track_id    = INVALID_TRACK_ID;
+        float    track_top_y = 0.0f;
+        if(layout.track_at && layout.track_at(m_drag_abs_y, track_id, track_top_y))
+        {
+            m_track_id = track_id;
+            m_y_offset = m_drag_abs_y - track_top_y;
+        }
+        else
+        {
+            m_y_offset = m_drag_abs_y;
+        }
+
         m_dragging = false;
         dragged_id = INVALID_STICKY_ID;
         TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);

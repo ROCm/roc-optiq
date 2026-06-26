@@ -81,6 +81,7 @@ public:
     uint64_t           GetTrackId() const { return m_track_id; }
     void               SetTrackHidden(bool hidden) { m_track_hidden = hidden; }
     bool               IsTrackHidden() const { return m_track_hidden; }
+    bool               IsDragging() const { return m_dragging; }
 
     // True after the user hit the delete button; the owner sweeps these notes.
     bool               WantsDelete() const { return m_pending_delete; }
@@ -118,6 +119,7 @@ private:
     std::string m_title;
     bool        m_dragging     = false;
     bool        m_track_hidden = false;
+    float       m_drag_abs_y   = 0.0f;  // Anchor Y during a drag; bound on drop.
     ImVec2      m_drag_offset  = ImVec2(0, 0);
     bool        m_is_visible;
     double      m_v_min_x;

@@ -783,7 +783,7 @@ AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column)
         std::string row_text;
         for(int c = 0; c < column_count; c++)
         {
-            if(c > 0) row_text += '\t';
+            if(c > 0) row_text += ',';
             row_text += cells[c];
         }
         ImGui::SetClipboardText(row_text.c_str());

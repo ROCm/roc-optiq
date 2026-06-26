@@ -4,6 +4,7 @@
 #pragma once
 #include "model/rocprofvis_model_types.h"
 #include "rocprofvis_event_manager.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include <list>
 #include <string>
@@ -59,7 +60,8 @@ private:
         }
     };
 
-    void RenderTable(InfoTable& table, const AnalysisTrackStatistics* = nullptr);
+    void RenderTable(InfoTable& table, const char* table_id,
+                     const AnalysisTrackStatistics* = nullptr);
 
     std::shared_ptr<TrackTopology>     m_track_topology;
     DataProvider&                      m_data_provider;
@@ -68,6 +70,7 @@ private:
     bool                               m_selection_dirty;
     std::list<DetailItem>              m_track_details;
     bool                               m_data_valid;
+    CellMenuTarget                     m_cell_menu;
 
     EventManager::SubscriptionToken m_topology_changed_event_token;
     EventManager::SubscriptionToken m_track_metadata_changed_event_token;

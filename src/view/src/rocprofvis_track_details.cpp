@@ -12,6 +12,10 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 
+#include <cstdio>
+#include <string>
+#include <vector>
+
 namespace RocProfVis
 {
 namespace View
@@ -20,6 +24,10 @@ namespace View
 // TrackInfo::TrackType
 constexpr const char* TRACK_PREFIX[] = { "Unknown", "Queue",  "Stream",
                                          "Thread",  "Thread", "Counter" };
+
+// Shared cell context-menu popup id. Only one cell menu is open at a time, and
+// BeginTable scopes ids per table, so a single constant is unambiguous.
+constexpr const char* CELL_CONTEXT_MENU_ID = "##track_details_cell_menu";
 
 TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
                            std::shared_ptr<TimelineSelection> timeline_selection)
@@ -166,13 +174,15 @@ TrackDetails::Render()
                             {
                                 ImGui::Text("Node: %s",
                                             detail.parents.node->info->host_name.c_str());
-                                RenderTable(detail.parents.node->info_table);
+                                RenderTable(detail.parents.node->info_table,
+                                            "##td_node_table");
                             }
                             if(detail.parents.process)
                             {
                                 ImGui::Text("Process: %s",
                                             detail.parents.process->header.c_str());
-                                RenderTable(detail.parents.process->info_table);
+                                RenderTable(detail.parents.process->info_table,
+                                            "##td_process_table");
                             }
                         }
                         ImGui::EndChild();
@@ -186,13 +196,15 @@ TrackDetails::Render()
                         {
                             ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
                                         detail.track->info->name.c_str());
-                            RenderTable(detail.track->info_table, detail.stats);
+                            RenderTable(detail.track->info_table, "##td_track_table",
+                                        detail.stats);
                         }
                         else if(detail.stream_track)
                         {
                             ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
                                         detail.stream_track->info->name.c_str());
-                            RenderTable(detail.stream_track->info_table, detail.stats);
+                            RenderTable(detail.stream_track->info_table,
+                                        "##td_stream_table", detail.stats);
                         }
                         ImGui::EndChild();
                     }
@@ -304,8 +316,19 @@ TrackDetails::Update()
     }
 }
 
+/*
+ * Renders a two-column info table for the selected track details.
+ *
+ * Each row carries a full-row right-click hit-box plus per-cell capture so the
+ * shared copy context menu (Copy Row / Copy Cell) can be shown. When stats are
+ * provided they are appended as extra rows; their row indices are offset by the
+ * info-table row count so they can share the single m_cell_menu target. The
+ * table_id gives each table a stable, unique ImGui id (required so its context
+ * menu popup does not collide with the other tables drawn in the same pane).
+ */
 void
-TrackDetails::RenderTable(InfoTable& table, const AnalysisTrackStatistics* stats)
+TrackDetails::RenderTable(InfoTable& table, const char* table_id,
+                          const AnalysisTrackStatistics* stats)
 {
     if((!table.cells.empty() && table.cells[0].size() == 2) || stats)
     {
@@ -313,6 +336,22 @@ TrackDetails::RenderTable(InfoTable& table, const AnalysisTrackStatistics* stats
         const int        rows     = static_cast<int>(table.cells.size());
         const int        cols =
             table.cells.empty() ? 2 : static_cast<int>(table.cells[0].size());
+
+        int stat_count = 0;
+        if(stats)
+        {
+            switch(stats->track->topology.type)
+            {
+                case TrackInfo::TrackType::Queue:
+                    stat_count = static_cast<int>(
+                        AnalysisTrackStatistics::Queue::kQueueCount);
+                    break;
+                case TrackInfo::TrackType::Counter:
+                    stat_count = static_cast<int>(
+                        AnalysisTrackStatistics::Counter::kCounterCount);
+                    break;
+            }
+        }
 
         float table_x_min = ImGui::GetCursorScreenPos().x;
         float table_width = ImGui::GetContentRegionAvail().x;
@@ -322,7 +361,8 @@ TrackDetails::RenderTable(InfoTable& table, const AnalysisTrackStatistics* stats
                               settings.GetColor(Colors::kFillerColor));
         ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt,
                               settings.GetColor(Colors::kFillerColor));
-        if(ImGui::BeginTable("", cols,
+        bool open_menu = false;
+        if(ImGui::BeginTable(table_id, cols,
                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
                                  ImGuiTableFlags_BordersV |
                                  ImGuiTableFlags_SizingFixedFit |
@@ -333,10 +373,12 @@ TrackDetails::RenderTable(InfoTable& table, const AnalysisTrackStatistics* stats
             {
                 ImGui::PushID(r);
                 ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                RenderRowHitbox("##td_row_sel", r, cols, m_cell_menu, open_menu);
                 for(int c = 0; c < cols; c++)
                 {
                     ImGui::PushID(c);
-                    ImGui::TableSetColumnIndex(c);
+                    PositionCell(c);
                     const char* data             = table.cells[r][c].data.c_str();
                     if(table.cells[r][c].needs_format) {
                         data = table.cells[r][c].formatted.c_str();
@@ -392,46 +434,65 @@ TrackDetails::RenderTable(InfoTable& table, const AnalysisTrackStatistics* stats
                             expand = !expand;
                         }
                     }
+                    CaptureCellRightClick(c, r, m_cell_menu, open_menu);
                     ImGui::PopID();
                 }
                 ImGui::PopID();
             }
             if(stats)
             {
-                ImGui::TableNextRow();
-                switch(stats->track->topology.type)
+                const bool stats_ready =
+                    stats->state == AnalysisTrackStatistics::kReady;
+                for(int i = 0; i < stat_count; i++)
                 {
-                    case TrackInfo::TrackType::Queue:
-                    {
-                        for(size_t i = 0; i < AnalysisTrackStatistics::Queue::kQueueCount;
-                            i++)
-                        {
-                            ImGui::TableNextColumn();
-                            ImGui::TextUnformatted(stats->stats[i].name);
-                            ImGui::TableNextColumn();
-                            ImGui::BeginDisabled(stats->state !=
-                                                 AnalysisTrackStatistics::kReady);
-                            ImGui::Text("%.1f", stats->stats[i].value);
-                            ImGui::EndDisabled();
-                        }
-                        break;
-                    }
-                    case TrackInfo::TrackType::Counter:
-                    {
-                        for(size_t i = 0;
-                            i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
-                        {
-                            ImGui::TableNextColumn();
-                            ImGui::TextUnformatted(stats->stats[i].name);
-                            ImGui::TableNextColumn();
-                            ImGui::BeginDisabled(stats->state !=
-                                                 AnalysisTrackStatistics::kReady);
-                            ImGui::Text("%.1f", stats->stats[i].value);
-                            ImGui::EndDisabled();
-                        }
-                        break;
-                    }
+                    const int stat_row = rows + i;
+                    ImGui::PushID(stat_row);
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    RenderRowHitbox("##td_stat_sel", stat_row, cols, m_cell_menu,
+                                    open_menu);
+                    PositionCell(0);
+                    ImGui::TextUnformatted(stats->stats[i].name);
+                    CaptureCellRightClick(0, stat_row, m_cell_menu, open_menu);
+                    PositionCell(1);
+                    ImGui::BeginDisabled(!stats_ready);
+                    ImGui::Text("%.1f", stats->stats[i].value);
+                    ImGui::EndDisabled();
+                    CaptureCellRightClick(1, stat_row, m_cell_menu, open_menu);
+                    ImGui::PopID();
                 }
+            }
+
+            if(open_menu)
+            {
+                ImGui::OpenPopup(CELL_CONTEXT_MENU_ID);
+            }
+            if(BeginCellContextMenu(CELL_CONTEXT_MENU_ID))
+            {
+                if(m_cell_menu.row >= 0 && m_cell_menu.row < rows)
+                {
+                    std::vector<std::string> row_cells;
+                    row_cells.reserve(cols);
+                    for(int c = 0; c < cols; c++)
+                    {
+                        const InfoTable::Cell& cell = table.cells[m_cell_menu.row][c];
+                        row_cells.push_back(cell.needs_format ? cell.formatted
+                                                              : cell.data);
+                    }
+                    AddCopyRowCellMenuItems(row_cells.data(), cols, m_cell_menu.column);
+                }
+                else if(stats && m_cell_menu.row >= rows &&
+                        m_cell_menu.row < rows + stat_count)
+                {
+                    const AnalysisTrackStatistics::Stat& stat =
+                        stats->stats[m_cell_menu.row - rows];
+                    char value_buf[32];
+                    std::snprintf(value_buf, sizeof(value_buf), "%.1f", stat.value);
+                    std::string stat_cells[2] = { std::string(stat.name),
+                                                  std::string(value_buf) };
+                    AddCopyRowCellMenuItems(stat_cells, 2, m_cell_menu.column);
+                }
+                EndCellContextMenu();
             }
             ImGui::EndTable();
         }

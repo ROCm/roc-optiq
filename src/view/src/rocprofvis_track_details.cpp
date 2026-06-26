@@ -25,6 +25,10 @@ namespace View
 constexpr const char* TRACK_PREFIX[] = { "Unknown", "Queue",  "Stream",
                                          "Thread",  "Thread", "Counter" };
 
+// Shared cell context-menu popup id. Only one cell menu is open at a time, and
+// BeginTable scopes ids per table, so a single constant is unambiguous.
+constexpr const char* CELL_CONTEXT_MENU_ID = "##track_details_cell_menu";
+
 TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
                            std::shared_ptr<TimelineSelection> timeline_selection)
 : m_track_topology(topology)
@@ -312,6 +316,16 @@ TrackDetails::Update()
     }
 }
 
+/*
+ * Renders a two-column info table for the selected track details.
+ *
+ * Each row carries a full-row right-click hit-box plus per-cell capture so the
+ * shared copy context menu (Copy Row / Copy Cell) can be shown. When stats are
+ * provided they are appended as extra rows; their row indices are offset by the
+ * info-table row count so they can share the single m_cell_menu target. The
+ * table_id gives each table a stable, unique ImGui id (required so its context
+ * menu popup does not collide with the other tables drawn in the same pane).
+ */
 void
 TrackDetails::RenderTable(InfoTable& table, const char* table_id,
                           const AnalysisTrackStatistics* stats)
@@ -449,12 +463,11 @@ TrackDetails::RenderTable(InfoTable& table, const char* table_id,
                 }
             }
 
-            const std::string ctx_menu_id = std::string(table_id) + "_ctx";
             if(open_menu)
             {
-                ImGui::OpenPopup(ctx_menu_id.c_str());
+                ImGui::OpenPopup(CELL_CONTEXT_MENU_ID);
             }
-            if(BeginCellContextMenu(ctx_menu_id.c_str()))
+            if(BeginCellContextMenu(CELL_CONTEXT_MENU_ID))
             {
                 if(m_cell_menu.row >= 0 && m_cell_menu.row < rows)
                 {

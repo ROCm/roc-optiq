@@ -15,3 +15,7 @@ sqlite3.c
 
 CLAUDE.md
 .claude/
+
+# Installer build artifacts
+*.msi
+*.wixpdb

@@ -470,7 +470,9 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
             const ImVec2 title_min(win_pos.x + kNoteMargin, win_pos.y);
             const ImVec2 title_max(title_min.x + title_width,
                                    win_pos.y + kExpandedHeaderHeight);
-            if(ImGui::IsMouseHoveringRect(title_min, title_max) &&
+            // IsWindowHovered ignores clicks landing on a window drawn on top.
+            if(ImGui::IsWindowHovered() &&
+               ImGui::IsMouseHoveringRect(title_min, title_max) &&
                IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
             {
                 m_editing_title = true;
@@ -641,27 +643,13 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     bool   mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     bool   mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
-    // The anchor draws straight to the draw list, so modals on top don't shield
-    // it; don't start a drag while a popup is open.
-    const bool blocked_by_popup = ImGui::IsPopupOpen(
-        nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
-
-    // A click inside the expanded window must move only the window, not the
-    // anchor it overlaps.
-    bool over_expanded_window = false;
-    if(!m_is_minimized && IsExpandedPlaced())
-    {
-        const ImVec2 win_max = ImVec2(m_expanded_screen_pos.x + m_size.x,
-                                      m_expanded_screen_pos.y + m_size.y);
-        over_expanded_window = mouse_pos.x >= m_expanded_screen_pos.x &&
-                               mouse_pos.x <= win_max.x &&
-                               mouse_pos.y >= m_expanded_screen_pos.y &&
-                               mouse_pos.y <= win_max.y;
-    }
+    // The anchor draws to the timeline draw list, so gate it on the timeline
+    // being hovered; this is false when a window or popup covers the cursor.
+    const bool timeline_hovered =
+        ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
 
     if((dragged_id == INVALID_STICKY_ID || dragged_id == m_id) && !m_dragging &&
-       !over_expanded_window && !blocked_by_popup &&
-       ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
+       timeline_hovered && ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
        !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
     {

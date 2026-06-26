@@ -280,9 +280,9 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
         ImGui::GetColorU32(m_settings.GetColor(Colors::kSelection));
     m_hovered_colour  =
         ImGui::GetColorU32(m_settings.GetColor(Colors::kHighlightChart));
-
     m_line_num_color = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
     m_comment_color  = { 0.34f, 0.65f, 0.29f, 1.0f };
+
     m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_NoPadOuterX |
         ImGuiTableFlags_BordersInnerV;
 }
@@ -335,36 +335,13 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint32_t source_file_id)
     if(!source_file)
         return;
 
-    // Build a map: source_line_id -> max total_sample_count from linked ISA lines
-    // so we can normalise the metadata column per source line.
-    std::unordered_map<uint32_t, uint32_t> samples_by_source_line_id;
-    for(const auto& depend : data.isa_to_source_deps)
-    {
-        for(const auto& code_object : data.code_objects)
-        {
-            for(const auto& isa_line : code_object.isa_lines)
-            {
-                if(isa_line.id == depend.isa_line_id && depend.depth == 0)
-                {
-                    auto& stall = samples_by_source_line_id[depend.source_line_id];
-                    stall = std::max(stall, isa_line.stall_record.total_sample_count);
-                }
-            }
-        }
-    }
-
-    uint32_t max_samples = 1;
-    for(const auto& kv : samples_by_source_line_id)
-        max_samples = std::max(max_samples, kv.second);
-
+    // STUB: summarised_stalls not yet derived from real stall data.
+    uint32_t stub_counter = 0;
     for(const auto& source_line : source_file->source_lines)
     {
-        float stall = 0.0f;
-        auto it = samples_by_source_line_id.find(source_line.id);
-        if(it != samples_by_source_line_id.end())
-            stall =
-                static_cast<float>(it->second) / static_cast<float>(max_samples) * 100.0f;
-        m_lines.push_back({ source_line.id, source_line.content, stall });
+        const float stub_stall = static_cast<float>((stub_counter * 7 + 13) % 101);
+        stub_counter++;
+        m_lines.push_back({ source_line.content, source_line.id, stub_stall });
     }
 
     CalcutlateLineNumberWidth(m_lines.size());
@@ -386,14 +363,15 @@ SourceCodeWidget::Render()
 
     ImGui::TableSetupScrollFreeze(0, 0);
 
+    ImGui::TableSetupColumn(
+        "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
+        m_line_num_width);
+
     if(IsStallShown())
         ImGui::TableSetupColumn(
             "Stalls", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::CalcTextSize("100.0%").x);
 
-    ImGui::TableSetupColumn(
-        "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
-        m_line_num_width);
     ImGui::TableSetupColumn("Source code", ImGuiTableColumnFlags_WidthStretch);
 
     ImGui::TableHeadersRow();
@@ -443,15 +421,16 @@ SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::PopID();
 
-    if(IsStallShown())
-    {
-        ImGui::TextDisabled("%.1f%%", source_row.metadata);
-        ImGui::TableSetColumnIndex(1);
-    }
-
     ImGui::TextColored(m_line_num_color, "%*u", m_line_num_digits, display_num);
 
-    ImGui::TableSetColumnIndex(columns_count - 1);
+    int col = 1;
+    if(IsStallShown())
+    {
+        ImGui::TableSetColumnIndex(col++);
+        ImGui::TextDisabled("%.1f%%", source_row.summarised_stalls);
+    }
+
+    ImGui::TableSetColumnIndex(col);
     ImGui::TextUnformatted(source_row.content.c_str());
 }
 
@@ -488,22 +467,21 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint32_t code_object_id)
             source_by_isa.emplace(dep.isa_line_id, dep.source_line_id);
     }
 
-    // Find max sample count across this code object's ISA lines for normalisation
-    uint32_t max_samples = 1;
-    for(const auto& il : code_object->isa_lines)
-        max_samples = std::max(max_samples, il.stall_record.total_sample_count);
-
     for(const auto& il : code_object->isa_lines)
     {
         uint32_t source_line_id = 0;
-        auto sit = source_by_isa.find(il.id);
-        if(sit != source_by_isa.end())
+        if(const auto sit = source_by_isa.find(il.id); sit != source_by_isa.end())
             source_line_id = sit->second;
 
-        float metadata = static_cast<float>(il.stall_record.total_sample_count) /
-                         static_cast<float>(max_samples) * 100.0f;
-
-        m_entries.push_back({il.id, source_line_id, il.instruction, il.comment, metadata});
+        m_entries.push_back({
+            il.instruction,
+            il.comment,
+            il.id,
+            source_line_id,
+            il.stall_record.wave_issued_count,
+            il.stall_record.total_sample_count,
+            il.stall_record.avg_active_lanes
+        });
     }
 
     CalcutlateLineNumberWidth(m_entries.size());
@@ -518,19 +496,26 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const int columns_count = 2 + (IsStallShown() ? 1 : 0) + (m_show_comments ? 1 : 0);
+    const int stall_columns   = IsStallShown() ? 3 : 0;
+    const int comment_columns = m_show_comments ? 1 : 0;
+    const int columns_count   = 2 + stall_columns + comment_columns;
 
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
         return;
 
-    if(IsStallShown())
-        ImGui::TableSetupColumn(
-            "Stalls", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
-                                ImGui::CalcTextSize("100.0%").x);
-
     ImGui::TableSetupColumn(
         "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
         m_line_num_width);
+
+    if(IsStallShown())
+    {
+        const float num_col_width = ImGui::CalcTextSize("999999").x;
+        const float flt_col_width = ImGui::CalcTextSize("99.99").x;
+        ImGui::TableSetupColumn("Samples",   ImGuiTableColumnFlags_WidthFixed, num_col_width);
+        ImGui::TableSetupColumn("Waves",     ImGuiTableColumnFlags_WidthFixed, num_col_width);
+        ImGui::TableSetupColumn("Avg Lanes", ImGuiTableColumnFlags_WidthFixed, flt_col_width);
+    }
+
     ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
 
     if(m_show_comments)
@@ -586,13 +571,17 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::PopID();
 
+    ImGui::TextColored(m_line_num_color, "%*u", m_line_num_digits, index + 1);
+
     if(IsStallShown())
     {
-        ImGui::TextDisabled("%.1f%%", isa_row.stall);
         ImGui::TableSetColumnIndex(++column);
+        ImGui::TextDisabled("%u", isa_row.total_sample_count);
+        ImGui::TableSetColumnIndex(++column);
+        ImGui::TextDisabled("%u", isa_row.wave_issued_count);
+        ImGui::TableSetColumnIndex(++column);
+        ImGui::TextDisabled("%.2f", isa_row.avg_active_lanes);
     }
-
-    ImGui::TextColored(m_line_num_color, "%*u", m_line_num_digits, index + 1);
 
     ImGui::TableSetColumnIndex(++column);
     ImGui::TextUnformatted(isa_row.instruction.c_str());

@@ -4858,8 +4858,8 @@ DataProvider::LoadPcSamplingStallReasonCounts(KernelInfo& kernel, rocprofvis_han
                     continue;
 
                 isa_line.stall_record.stall_reasons.push_back({
-                    static_cast<int32_t>(type_id),
                     {},
+                    static_cast<int32_t>(type_id),
                     static_cast<int32_t>(count)
                 });
                 break;

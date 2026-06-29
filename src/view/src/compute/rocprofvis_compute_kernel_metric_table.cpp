@@ -692,18 +692,6 @@ KernelMetricTable::Render()
                     ImGui::EndDisabled();
                 }
 
-                // Collect visible columns here; TableGetColumnFlags is invalid once
-                // the popup window is open.
-                std::vector<int> visible_cols;
-                visible_cols.reserve(column_count);
-                for(int c = 0; c < column_count; c++)
-                {
-                    if(ImGui::TableGetColumnFlags(c) & ImGuiTableColumnFlags_IsEnabled)
-                    {
-                        visible_cols.push_back(c);
-                    }
-                }
-
                 if(open_menu)
                 {
                     ImGui::OpenPopup(CELL_CONTEXT_MENU_ID);
@@ -715,21 +703,24 @@ KernelMetricTable::Render()
                     {
                         const std::vector<std::string>& menu_row = data[m_cell_menu.row];
                         std::vector<std::string>        row_cells;
-                        row_cells.reserve(visible_cols.size());
-                        // Remap the data-column index to its visible-list position.
+                        row_cells.reserve(header.size());
+                        // Hidden columns have a header name starting with '_'. Remap
+                        // the data-column index to its visible-list position.
                         int cell_index = 0;
-                        for(int c : visible_cols)
+                        for(int col = 0; col < static_cast<int>(header.size()) &&
+                                         col < static_cast<int>(menu_row.size());
+                            col++)
                         {
-                            if(c >= static_cast<int>(menu_row.size()))
+                            if(!header[col].empty() && header[col][0] == '_')
                             {
                                 continue;
                             }
-                            if(c == m_cell_menu.column)
+                            if(col == m_cell_menu.column)
                             {
                                 cell_index = static_cast<int>(row_cells.size());
                             }
-                            row_cells.push_back(menu_row[c].empty() ? "N/A"
-                                                                    : menu_row[c]);
+                            row_cells.push_back(menu_row[col].empty() ? "N/A"
+                                                                      : menu_row[col]);
                         }
                         AddCopyRowCellMenuItems(row_cells.data(),
                                                 static_cast<int>(row_cells.size()),

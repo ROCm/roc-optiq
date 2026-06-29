@@ -37,7 +37,10 @@ EventManager::EventManager(): m_next_token(0) {};
 
 EventManager::~EventManager()
 {
-    m_event_queue.clear();
+    {
+        std::lock_guard<std::mutex> lock(m_queue_mutex);
+        m_event_queue.clear();
+    }
     m_subscriptions.clear();
     m_next_token = 0;
 }
@@ -45,7 +48,8 @@ EventManager::~EventManager()
 void
 EventManager::AddEvent(std::shared_ptr<RocEvent> event)
 {
-    m_event_queue.push_back(event);
+    std::lock_guard<std::mutex> lock(m_queue_mutex);
+    m_event_queue.push_back(std::move(event));
 }
 
 EventManager::SubscriptionToken
@@ -98,13 +102,17 @@ EventManager::Unsubscribe(int event_id, SubscriptionToken token)
 void
 EventManager::DispatchEvents()
 {
-    while(!m_event_queue.empty())
+    std::list<std::shared_ptr<RocEvent>> pending;
     {
-        auto event = m_event_queue.front();
+        std::lock_guard<std::mutex> lock(m_queue_mutex);
+        pending.swap(m_event_queue);
+    }
+
+    for(auto& event : pending)
+    {
         if(!event)
         {
-            m_event_queue.pop_front();
-            continue;  // Skip null events
+            continue;
         }
 
         auto it = m_subscriptions.find(event->GetId());
@@ -116,11 +124,9 @@ EventManager::DispatchEvents()
                 handler.second(event);
                 if(!event->CanPropagate())
                 {
-                    break;  // Stop propagation if indicated
+                    break;
                 }
             }
         }
-        // Remove the event from the queue after processing
-        m_event_queue.pop_front();
     }
 }

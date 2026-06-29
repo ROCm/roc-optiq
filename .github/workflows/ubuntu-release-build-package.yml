@@ -12,6 +12,7 @@ env:
   PRESET_BUILD: ${{ github.event.client_payload.enable_symbols == 'true' && 'Linux Release Build with Symbols' || 'Linux Release Build' }}
   BUILD_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'build/linux-release-symbols' || 'build/linux-release' }}
   ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  CRYPTO_BACKEND: ${{ github.event.client_payload.crypto_backend || 'mbedTLS' }}
 
 jobs:
   ubuntu:
@@ -64,10 +65,17 @@ jobs:
           sudo apt install -y vulkan-sdk xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
           echo "✅ Vulkan SDK Installed!"
 
+      - name: Install OpenSSL
+        if: env.CRYPTO_BACKEND == 'OpenSSL'
+        run: |
+          sudo apt-get update
+          sudo apt install -y libssl-dev
+          echo "✅ OpenSSL Installed!"
+
       - name: Build, Make, and Verify Installation
         run: |
           mkdir -p ${{ env.BUILD_DIR }}
-          cmake -B ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          cmake -B ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ env.CRYPTO_BACKEND }}
           cmake --build ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_BUILD }}" --parallel 4 --target package
           
           if [ -e ${{ env.BUILD_DIR }}/${{ env.VISUALIZER_FILE_NAME }} ]; then

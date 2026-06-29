@@ -38,6 +38,8 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultPending = 12,
     // Operation failed as a value is duplicated
     kRocProfVisResultDuplicate = 13,
+    // SSH authentication failed
+    kRocProfVisResultFailedSshCommunication = 14,
 } rocprofvis_result_t;
 
 /*
@@ -117,6 +119,14 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeMetricsContainer = 103,
     // Roofline object
     kRPVControllerObjectTypeRoofline = 104,
+    // Roofline object
+    kRPVControllerObjectTypeRemoteConnection = 105,
+    // Profiler configuration
+    kRPVProfilerConfig = 106,
+    // Profiler session (owns ProfilerProcessController)
+    kRPVProfiler = 107,
+    // Ssh intercomponent bridge
+    kRPVSshBridge = 108,
 #endif
 
 } rocprofvis_controller_object_type_t;
@@ -657,6 +667,97 @@ typedef enum rocprofvis_controller_table_type_t
     kRPVControllerTableTypeSampledEvents             = 0xF0000008,
 } rocprofvis_controller_table_type_t;
 
+
+typedef enum rocprofvis_controller_remote_param_type_t : uint32_t
+{
+    kRPVControllerRemoteTypeHost                 = 0xF1000000,
+    kRPVControllerRemoteTypeUser                 = 0xF1000001,
+    kRPVControllerRemoteTypePort                 = 0xF1000002,
+    kRPVControllerRemoteTypePassword             = 0xF1000003,
+    kRPVControllerRemoteTypeKeyPath              = 0xF1000004,
+    kRPVControllerRemoteTypeCommand              = 0xF1000005,
+    kRPVControllerRemoteTypeFilePathSrc          = 0xF1000006,
+    kRPVControllerRemoteTypeFilePathDst          = 0xF1000007,
+    kRPVControllerRemoteTypeDirection            = 0xF1000008,
+    kRPVControllerRemoteTypeKeyPassphrase        = 0xF1000009,
+
+} rocprofvis_controller_remote_param_type_t;
+
+typedef enum rocprofvis_controller_user_prompt_type_t : uint32_t
+{
+    kRPVControllerUserPromptTypeGeneric          = 0xF2000000,
+    kRPVControllerUserPromptTypeHostKey          = 0xF2000001,
+} rocprofvis_controller_user_prompt_type_t;
+
+typedef enum rocprofvis_controller_user_response_t : uint32_t
+{
+    kRPVControllerUserNumResponses               = 0xF3000000,
+    kRPVControllerUserResponseIndexed            = 0xF3000001,
+} rocprofvis_controller_user_response_t;
+
+typedef enum rocprofvis_controller_remote_status_t : uint32_t
+{
+    kRPVControllerSshIdle                        = 0xF4000000,
+    kRPVControllerSshConnecting,
+    kRPVControllerSshAuthenticating,
+    kRPVControllerSshDownloading,
+    kRPVControllerSshExecuting,
+    kRPVControllerSshBrowsing,
+    kRPVControllerSshAuthRequest,
+    kRPVControllerSshExecuteStdOut,
+    kRPVControllerSshDownloadStarted,
+    kRPVControllerSshDownloadProgress,
+    kRPVControllerSshBrowsingProgress,
+    kRPVControllerSshFailed,
+    kRPVControllerSshCompleted
+} rocprofvis_controller_remote_status_t;
+
+typedef enum rocprofvis_controller_remote_properties_t : uint32_t
+{
+    __kRPVControllerRemotePropertiesFirst        = 0xF5000000,
+    // Callback from remote back end to UI
+    kRPVControllerRemoteStatus = __kRPVControllerRemotePropertiesFirst,
+    // User prompt type
+    kRPVControllerRemoteUserPromptType,
+    // User generic prompt title
+    kRPVControllerRemoteUserGenericPromptName,
+    // User generic prompt instruction
+    kRPVControllerRemoteUserGenericPromptInstruction,
+    // User generic prompt instruction
+    kRPVControllerRemoteUserGenericNumPrompts,
+    // User generic prompt text
+    kRPVControllerRemoteUserGenericPromptTextIndexed,
+    // User generic prompt echo (hide prompt)
+    kRPVControllerRemoteUserGenericPromptEchoIndexed,
+    // User host key prompt host
+    kRPVControllerRemoteUserHostKeyPromptHost,
+    // User host key prompt port
+    kRPVControllerRemoteUserHostKeyPromptPort,
+    // User host key prompt fingerprint
+    kRPVControllerRemoteUserHostKeyPromptFinderprint,
+    // User host key prompt key encryption type
+    kRPVControllerRemoteUserHostKeyPromptEncryptType,
+    // User host key prompt key state
+    kRPVControllerRemoteUserHostKeyPromptState,
+    // Remote execute std out
+    kRPVControllerRemoteExecuteStdOut,
+    // Remote file name
+    kRPVControllerRemoteFileName,
+    // Remote file size
+    kRPVControllerRemoteFileSize,
+    // Remote file time
+    kRPVControllerRemoteFileTime,
+    // Remote downloaded file bytes
+    kRPVControllerRemoteDownloaded,
+    // Remote last error
+    kRPVControllerRemoteLastError,
+    // Number of files properties collected from remote directory
+    kRPVControllerRemoteDirNumFiles,
+    // Remote file attributes
+    kRPVControllerRemoteFileAttrs,
+    __kRPVControllerRemotePropertiesLast
+}rocprofvis_controller_remote_properties_t;
+
 /*
  * Properties for a future object
  */
@@ -670,6 +771,7 @@ typedef enum rocprofvis_controller_future_properties_t : uint32_t
     // Progress message
     kRPVControllerFutureProgressMessage,
     __kRPVControllerFuturePropertiesLast
+   
 } rocprofvis_controller_future_properties_t;
 
 /*
@@ -837,6 +939,16 @@ typedef enum rocprofvis_event_data_category_enum_t
     kRocProfVisEventArgumentData,
 
 } rocprofvis_event_data_category_enum_t;
+
+/*
+* Properties for the controller which manages a compute trace.
+*/
+typedef enum rocprofvis_controller_ssh_connection_properties_t : uint32_t
+{
+    __kRPVControllerSshConnectionPropertiesFirst,
+    __kRPVControllerSshConnectionPropertiesLast
+} rocprofvis_controller_ssh_connection_properties_t;
+
 
 #ifdef COMPUTE_UI_SUPPORT
 /*
@@ -1041,3 +1153,35 @@ typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
     kRPVControllerRooflineKernelIntensityTypeLDS,
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
 #endif
+
+/*
+ * Profiler types supported by the profiler launcher
+ */
+typedef enum rocprofvis_profiler_type_t
+{
+    // ROCm Systems Profiler - sampling mode (single-stage)
+    kRPVProfilerTypeRocprofSysRun = 0,
+    // ROCm Systems Profiler - instrumentation mode (two-stage: instrument + run)
+    kRPVProfilerTypeRocprofSysInstrument = 1,
+    // ROCm Compute Profiler v2 (rocprof)
+    kRPVProfilerTypeRocprofCompute = 2,
+    // ROCm Compute Profiler v3 (rocprofv3)
+    kRPVProfilerTypeRocprofV3 = 3,
+} rocprofvis_profiler_type_t;
+
+/*
+ * Profiler execution state
+ */
+typedef enum rocprofvis_profiler_state_t
+{
+    // Profiler has not been launched yet
+    kRPVProfilerStateIdle = 0,
+    // Profiler is currently running
+    kRPVProfilerStateRunning = 1,
+    // Profiler completed successfully
+    kRPVProfilerStateCompleted = 2,
+    // Profiler failed with an error
+    kRPVProfilerStateFailed = 3,
+    // Profiler was cancelled by user
+    kRPVProfilerStateCancelled = 4,
+} rocprofvis_profiler_state_t;

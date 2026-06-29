@@ -12,6 +12,11 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
+#define TEST_SSH_CONNECTION
+
+#ifdef TEST_SSH_CONNECTION
+#include "remote/rocprofvis_ssh_test_dialog.h"
+#endif
 
 #include <atomic>
 #include <chrono>
@@ -27,6 +32,7 @@ namespace View
 
 class ConfirmationDialog;
 class MessageDialog;
+class ProfilerLauncherDialog;
 class Project;
 class WelcomePage;
 
@@ -69,13 +75,18 @@ public:
                             const std::string&               initial_path,
                             std::function<void(std::string)> callback);
 
+    void ShowPathPickerDialog(const std::string&               title,
+                            const std::string&               initial_path,
+                            std::function<void(std::string)> callback);
+                            
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();
 
     void OpenFile(std::string file_path);
 
     void ShowCloseConfirm();
-    
+    void ShowProfilerLauncher();
+
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;
 
@@ -126,13 +137,15 @@ private:
     void UpdateProviderCleanups();
     void RequestExitIfProviderCleanupsComplete();
 
+
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
 
     void ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback,
-                              bool                             save_dialog);
+                              bool                             save_dialog,
+                              bool                             path_picker = false);
 #endif
     void ShowImGuiFileDialog(const std::string&             title,
                         const std::vector<FileFilter>& file_filters,
@@ -155,7 +168,9 @@ private:
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();
     void RenderDeveloperMenu();
-
+#ifdef TEST_SSH_CONNECTION
+    void HandleTestRemoteSSH();
+#endif
     bool         m_show_metrics;
     bool         m_show_debug_window;
     DataProvider m_test_data_provider;
@@ -184,12 +199,17 @@ private:
     std::unique_ptr<SettingsPanel>      m_settings_panel;
     std::unique_ptr<WelcomePage>        m_welcome_page;
 
+    std::unique_ptr<ProfilerLauncherDialog> m_profiler_launcher_dialog;
+
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
     bool                             m_is_fullscreen;
     bool                             m_restore_fullscreen_later;
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
+#ifdef TEST_SSH_CONNECTION
+    std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
+#endif
 
     std::string m_status_message;
     bool        m_status_show_busy_indicator;

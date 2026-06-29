@@ -19,6 +19,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
+set(BUILD_SHARED_LIBS OFF)
 
 option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute" ON)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
@@ -109,6 +110,24 @@ set(VIEW_FILES
     src/view/src/rocprofvis_time_to_pixel.cpp
     src/view/src/rocprofvis_minimap.cpp
     src/view/src/rocprofvis_presets.cpp
+    src/view/src/rocprofvis_json_utils.cpp
+    src/view/src/rocprofvis_json_utils.h
+    src/view/src/rocprofvis_profiles_document.cpp
+    src/view/src/rocprofvis_profiles_document.h
+    src/view/src/remote/rocprofvis_ssh_uri.cpp
+    src/view/src/remote/rocprofvis_ssh_connection_config.cpp
+    src/view/src/remote/rocprofvis_ssh_connection_config.h
+    src/view/src/remote/rocprofvis_ssh_connection_store.cpp
+    src/view/src/remote/rocprofvis_ssh_connection_store.h
+    src/view/src/remote/rocprofvis_ssh_fetch.cpp
+    src/view/src/remote/rocprofvis_ssh_session.cpp
+    src/view/src/remote/rocprofvis_ssh_auth_modal.cpp
+    src/view/src/remote/rocprofvis_remote_trace_orchestrator.cpp
+    src/view/src/remote/rocprofvis_remote_trace_orchestrator.h
+    src/view/src/remote/rocprofvis_ssh_settings_dialog.cpp
+    src/view/src/remote/rocprofvis_ssh_settings_dialog.h
+    src/view/src/remote/rocprofvis_ssh_test_dialog.cpp
+    src/view/src/remote/rocprofvis_ssh_test_dialog.h
     src/view/src/widgets/rocprofvis_widget.cpp
     src/view/src/widgets/rocprofvis_split_containers.cpp
     src/view/src/widgets/rocprofvis_flex_container.cpp
@@ -121,6 +140,27 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
     src/view/src/widgets/rocprofvis_dialog.cpp
     src/view/src/widgets/rocprofvis_notification_manager.cpp
+    src/view/src/profiler/rocprofvis_profiler_launcher_dialog.cpp
+    src/view/src/profiler/rocprofvis_profiler_launcher_dialog.h
+    src/view/src/profiler/rocprofvis_profiler_session_base.cpp
+    src/view/src/profiler/rocprofvis_profiler_session_base.h
+    src/view/src/profiler/rocprofvis_profiler_session.cpp
+    src/view/src/profiler/rocprofvis_profiler_session.h
+    src/view/src/profiler/rocprofvis_remote_profiler_session.cpp
+    src/view/src/profiler/rocprofvis_remote_profiler_session.h
+    src/view/src/profiler/rocprofvis_profiler_launch_orchestrator.cpp
+    src/view/src/profiler/rocprofvis_profiler_launch_orchestrator.h
+    src/view/src/profiler/rocprofvis_launch_config.cpp
+    src/view/src/profiler/rocprofvis_launch_config.h
+    src/view/src/profiler/rocprofvis_profiler_backend.h
+    src/view/src/profiler/rocprofvis_rocprof_sys_backend.cpp
+    src/view/src/profiler/rocprofvis_rocprof_sys_backend.h
+    src/view/src/profiler/rocprofvis_launch_preset_manager.cpp
+    src/view/src/profiler/rocprofvis_launch_preset_manager.h
+    src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp
+    src/view/src/profiler/rocprofvis_launch_shared_tabs.h
+    src/view/src/rocprofvis_appmonitor.cpp
+    src/view/src/rocprofvis_appmonitor.h
     )
 
 if(COMPUTE_UI_SUPPORT) 
@@ -219,6 +259,8 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
@@ -232,6 +274,14 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+
+if (CRYPTO_BACKEND STREQUAL "mbedTLS")
+target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static)
+endif()
+
+if (CRYPTO_BACKEND STREQUAL "OpenSSL")
+target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static OpenSSL::SSL OpenSSL::Crypto)
+endif()
 
 if(APPLE)
     # rocprofvis_platform_helpers_macos.mm uses AppKit (+[NSEvent modifierFlags]).
@@ -344,6 +394,47 @@ Auto-detected from the Vulkan SDK / Homebrew when empty.")
                 COMMENT "Staging MoltenVK driver and ICD manifest into the app bundle"
             )
         endif()
+    endif()
+
+    # When the OpenSSL backend is opt-in enabled, stage libssl/libcrypto into the
+    # bundle's Frameworks so the .app is self-contained instead of relying on a
+    # Homebrew install at runtime.
+    #
+    # IMPORTANT: the executable does not record OpenSSL::SSL's IMPORTED_LOCATION
+    # (often the unversioned `libssl.dylib` symlink). It records each dylib's own
+    # install name (LC_ID_DYLIB), which Homebrew sets to a VERSIONED, absolute
+    # path such as `/opt/homebrew/.../libssl.3.dylib`. Rewriting based on the
+    # unversioned IMPORTED_LOCATION therefore no-ops and the build leaks an
+    # absolute Homebrew reference, so a clean machine crashes at launch with
+    # "Library not loaded: /opt/homebrew/*/libssl.3.dylib".
+    #
+    # To be robust across OpenSSL layouts we resolve the real on-disk dylibs and
+    # the executable's actual dependency paths at build time with otool, then
+    # rewrite every OpenSSL reference to `@rpath/<versioned-name>`. The staged
+    # files keep their versioned names so the load commands match.
+    if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+        get_target_property(ROCPROFVIS_OPENSSL_SSL_LIB OpenSSL::SSL IMPORTED_LOCATION)
+        get_target_property(ROCPROFVIS_OPENSSL_CRYPTO_LIB OpenSSL::Crypto IMPORTED_LOCATION)
+        if(NOT ROCPROFVIS_OPENSSL_SSL_LIB OR NOT ROCPROFVIS_OPENSSL_CRYPTO_LIB)
+            message(FATAL_ERROR
+                "CRYPTO_BACKEND=OpenSSL on macOS requires shared OpenSSL libraries; "
+                "find_package(OpenSSL) did not resolve dylib locations. Install "
+                "openssl@3 and set OPENSSL_ROOT_DIR.")
+        endif()
+        set(ROCPROFVIS_OPENSSL_FIXUP_SCRIPT
+            "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_macos_openssl_fixup.sh")
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos_openssl_fixup.sh.in"
+            "${ROCPROFVIS_OPENSSL_FIXUP_SCRIPT}"
+            @ONLY)
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND /bin/bash "${ROCPROFVIS_OPENSSL_FIXUP_SCRIPT}"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
+                "$<TARGET_FILE:${TARGET_NAME}>"
+            COMMENT "Staging OpenSSL libraries into the app bundle"
+            VERBATIM
+        )
     endif()
 
     set(ROCPROFVIS_MACOS_CODESIGN_IDENTITY "" CACHE STRING
@@ -488,6 +579,12 @@ set(DEB_DEPENDS_LIST "libvulkan1")
 if(NOT GLFW_LINK_STATIC)
     list(APPEND DEB_DEPENDS_LIST "libglfw3")
 endif()
+# DEB depends are explicit (unlike RPM AUTOREQPROV), so declare the system
+# OpenSSL runtime only when the OpenSSL backend is built. The default mbedTLS
+# backend links statically and needs no extra runtime dependency.
+if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+    list(APPEND DEB_DEPENDS_LIST "libssl3")
+endif()
 list(APPEND DEB_DEPENDS_LIST "libc6")
 string(JOIN ", " DEB_DEPENDS_STRING ${DEB_DEPENDS_LIST})
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
@@ -544,4 +641,76 @@ if(WIN32)
         COMMAND_EXPAND_LISTS
         COMMENT "Copying dependent DLLs to executable directory"
     )
+
+    # $<TARGET_RUNTIME_DLLS> only captures OpenSSL if find_package produced shared
+    # imported targets with the .dll as IMPORTED_LOCATION (distribution-dependent),
+    # so copy the resolved OpenSSL DLLs explicitly when that backend is enabled.
+    if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+        set(_ossl_dlls "")
+        # 1) Preferred: the imported target's IMPORTED_LOCATION, when it is a DLL.
+        foreach(_ossl_target OpenSSL::SSL OpenSSL::Crypto)
+            if(TARGET ${_ossl_target})
+                get_target_property(_loc ${_ossl_target} IMPORTED_LOCATION)
+                if(_loc AND _loc MATCHES "\\.dll$")
+                    list(APPEND _ossl_dlls "${_loc}")
+                endif()
+            endif()
+        endforeach()
+        # 2) Fallback: MSVC import libs live under lib/VC/... while DLLs are in
+        #    the install root or bin/. FindOpenSSL sets IMPORTED_LOCATION(_RELEASE)
+        #    to the .lib, not the .dll, and often does not set OPENSSL_ROOT_DIR at
+        #    all—derive the prefix from OPENSSL_INCLUDE_DIR (../include) or hints.
+        set(_ossl_install_prefix "")
+        if(DEFINED OPENSSL_ROOT_DIR AND OPENSSL_ROOT_DIR)
+            set(_ossl_install_prefix "${OPENSSL_ROOT_DIR}")
+        elseif(DEFINED OPENSSL_INCLUDE_DIR AND OPENSSL_INCLUDE_DIR)
+            get_filename_component(_ossl_install_prefix "${OPENSSL_INCLUDE_DIR}" DIRECTORY)
+        elseif(DEFINED ENV{OPENSSL_ROOT_DIR} AND NOT "$ENV{OPENSSL_ROOT_DIR}" STREQUAL "")
+            set(_ossl_install_prefix "$ENV{OPENSSL_ROOT_DIR}")
+        endif()
+        if(NOT _ossl_dlls AND _ossl_install_prefix)
+            # Match only the DLLs for the OpenSSL we linked against. Install trees
+            # (especially OpenSSL 4) may also ship older-generation names (e.g.
+            # libcrypto-3-x64.dll next to libcrypto-4-x64.dll); a broad libssl*
+            # glob would copy redundant runtimes.
+            set(_ossl_ssl_glob "libssl*.dll")
+            set(_ossl_crypto_glob "libcrypto*.dll")
+            set(_ossl_maj "")
+            if(DEFINED ROCPROFVIS_OPENSSL_VERSION_MAJOR AND NOT ROCPROFVIS_OPENSSL_VERSION_MAJOR STREQUAL "")
+                set(_ossl_maj "${ROCPROFVIS_OPENSSL_VERSION_MAJOR}")
+            elseif(DEFINED OPENSSL_VERSION_MAJOR AND NOT OPENSSL_VERSION_MAJOR STREQUAL "")
+                set(_ossl_maj "${OPENSSL_VERSION_MAJOR}")
+            endif()
+            if(_ossl_maj)
+                set(_ossl_ssl_glob "libssl-${_ossl_maj}*.dll")
+                set(_ossl_crypto_glob "libcrypto-${_ossl_maj}*.dll")
+            endif()
+            file(GLOB _ossl_dlls
+                "${_ossl_install_prefix}/${_ossl_ssl_glob}"
+                "${_ossl_install_prefix}/${_ossl_crypto_glob}"
+                "${_ossl_install_prefix}/bin/${_ossl_ssl_glob}"
+                "${_ossl_install_prefix}/bin/${_ossl_crypto_glob}")
+        endif()
+        if(_ossl_install_prefix)
+            message(STATUS "OpenSSL Windows runtime staging prefix: ${_ossl_install_prefix}")
+        endif()
+        if(_ossl_dlls)
+            list(JOIN _ossl_dlls ", " _ossl_dlls_msg)
+            message(STATUS "OpenSSL Windows runtime DLLs (POST_BUILD): ${_ossl_dlls_msg}")
+            foreach(_ossl_dll ${_ossl_dlls})
+                add_custom_command(
+                    TARGET ${TARGET_NAME} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_ossl_dll}"
+                        "$<TARGET_FILE_DIR:${TARGET_NAME}>"
+                    COMMENT "Copying OpenSSL runtime DLL ${_ossl_dll} to executable directory"
+                )
+            endforeach()
+        else()
+            message(WARNING
+                "CRYPTO_BACKEND=OpenSSL: could not locate libssl/libcrypto DLLs to "
+                "stage next to the executable. Set OPENSSL_ROOT_DIR (or OPENSSL_INCLUDE_DIR) "
+                "so the install prefix is known, or place the DLLs on PATH so roc-optiq can run.")
+        endif()
+    endif()
 endif()

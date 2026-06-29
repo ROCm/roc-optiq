@@ -9,6 +9,7 @@
 #endif
 #include "ImGuiFileDialog.h"
 
+#include "rocprofvis_appmonitor.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
@@ -26,6 +27,10 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "rocprofvis_profiler_launcher_dialog.h"
+#ifdef TEST_SSH_CONNECTION
+#include "remote/rocprofvis_ssh_auth_modal.h"
+#endif
 #include "welcome/rocprofvis_welcome_page.h"
 #include <algorithm>
 #include <filesystem>
@@ -130,6 +135,15 @@ AppWindow::~AppWindow()
     }
     m_provider_cleanup_jobs.clear();
     m_projects.clear();
+    // Destroy owners of monitored sessions (e.g. the profiler dialog and the
+    // remote-trace orchestrator) before tearing down the monitor so they
+    // unregister cleanly instead of lazily re-creating the singleton during
+    // their own destruction.
+    m_profiler_launcher_dialog.reset();
+#ifdef TEST_SSH_CONNECTION
+    m_ssh_test_dialog.reset();
+#endif
+    AppMonitor::DestroyInstance();
 
     LogViewer::DestroyInstance();
 }
@@ -384,6 +398,26 @@ AppWindow::ShowOpenFileDialog(const std::string& title, const std::vector<FileFi
     ShowImGuiFileDialog(title, file_filters, initial_path, false, callback);
 }
 
+void
+AppWindow::ShowPathPickerDialog(const std::string& title, const std::string& initial_path,
+                                std::function<void(std::string)> callback)
+{
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_use_native_file_dialog.load())
+    {
+        (void)title;
+        ShowNativeFileDialog({}, initial_path, callback, false, true);
+        return;
+    }
+#endif
+    m_file_dialog_callback = callback;
+    m_init_file_dialog     = true;
+    IGFD::FileDialogConfig config;
+    config.path = initial_path;
+    config.flags = ImGuiFileDialogFlags_Modal;
+    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, nullptr, config);
+}
+
 Project*
 AppWindow::GetProject(const std::string& id)
 {
@@ -446,6 +480,15 @@ AppWindow::BeginAppShutdown()
     {
         m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
     }
+
+    // Release the profiler dialog and remote-trace orchestrator now so their
+    // sessions transfer any in-flight work to the AppMonitor (non-blocking).
+    // Subsequent Update() frames drain the monitor; the exit gate waits until it
+    // is empty.
+    m_profiler_launcher_dialog.reset();
+#ifdef TEST_SSH_CONNECTION
+    m_ssh_test_dialog.reset();
+#endif
 
     if(!m_provider_cleanup_jobs.empty())
     {
@@ -543,7 +586,8 @@ void
 AppWindow::RequestExitIfProviderCleanupsComplete()
 {
     if(!m_shutdown_requested || m_exit_notification_sent ||
-       !m_provider_cleanup_jobs.empty())
+       !m_provider_cleanup_jobs.empty() ||
+       AppMonitor::GetInstance()->HasPendingOperations())
     {
         return;
     }
@@ -566,14 +610,24 @@ AppWindow::Update()
     UpdateProviderCleanups();
     if(m_shutdown_requested)
     {
+        // Keep draining cancelling/in-flight monitored operations so their
+        // resources are freed (non-blocking) before the app exits.
+        AppMonitor::GetInstance()->Update();
         return;
     }
 
     HotkeyManager::GetInstance().ProcessInput();
+    // Poll long-running operations (profiler sessions, SSH) and queue any
+    // status-change events before they are dispatched below this frame.
+    AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
     LogViewer::GetInstance()->Poll();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
+    if (m_profiler_launcher_dialog)
+    {
+        m_profiler_launcher_dialog->Update();
+    }
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
@@ -585,7 +639,8 @@ AppWindow::WantsContinuousRender()
 {
     if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
        m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents() ||
-       NotificationManager::GetInstance().HasActiveNotifications())
+       NotificationManager::GetInstance().HasActiveNotifications() ||
+       AppMonitor::GetInstance()->HasPendingOperations())
     {
         return true;
     }
@@ -693,9 +748,19 @@ AppWindow::Render()
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
+#ifdef TEST_SSH_CONNECTION
+    if(m_ssh_test_dialog)
+    {
+        m_ssh_test_dialog->Render();
+    }
+#endif
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
     m_settings_panel->Render();
+    if (m_profiler_launcher_dialog)
+    {
+        m_profiler_launcher_dialog->Render();
+    }
 
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
@@ -909,8 +974,12 @@ AppWindow::RenderFileMenu(Project* project)
         {
             HandleSaveAsFile();
         }
+        
+        if(ImGui::MenuItem("Launch Profiler..."))
+        {
+            ShowProfilerLauncher();
+        }
         ImGui::Separator();
-
         {
             TraceView* trace_view = nullptr;
             bool       has_trace  = false;
@@ -954,7 +1023,7 @@ AppWindow::RenderFileMenu(Project* project)
                 ImGui::EndMenu();
             }
         }
-
+        
         ImGui::Separator();
         const std::list<std::string>& recent_files =
             SettingsManager::GetInstance().GetInternalSettings().recent_files;
@@ -1349,7 +1418,8 @@ void
 AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                                 const std::string&               initial_path,
                                 std::function<void(std::string)> callback,
-                                bool                             save_dialog)
+                                bool                             save_dialog,
+                                bool                             path_picker)
 {
     if(m_is_native_file_dialog_open)
     {
@@ -1383,28 +1453,41 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
         nfdu8char_t* outPath = nullptr;
 
-        nfdu8filteritem_t*       filters = new nfdu8filteritem_t[file_filters.size()];
+        nfdu8filteritem_t*       filters = nullptr;
         std::vector<std::string> extension_stings;
-        for(size_t i = 0; i < file_filters.size(); ++i)
+        if(!file_filters.empty())
         {
-            std::string extensions_str;
-            for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
+            filters = new nfdu8filteritem_t[file_filters.size()];
+            for(size_t i = 0; i < file_filters.size(); ++i)
             {
-                extensions_str += file_filters[i].m_extensions[j];
-                if(j < file_filters[i].m_extensions.size() - 1)
+                std::string extensions_str;
+                for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
                 {
-                    extensions_str += ",";
+                    extensions_str += file_filters[i].m_extensions[j];
+                    if(j < file_filters[i].m_extensions.size() - 1)
+                    {
+                        extensions_str += ",";
+                    }
                 }
+                extension_stings.push_back(std::move(extensions_str));
             }
-            extension_stings.push_back(std::move(extensions_str));
-        }
-        for(size_t i = 0; i < file_filters.size(); ++i)
-        {
-            filters[i] = { file_filters[i].m_name.c_str(), extension_stings[i].c_str() };
+            for(size_t i = 0; i < file_filters.size(); ++i)
+            {
+                filters[i] = { file_filters[i].m_name.c_str(), extension_stings[i].c_str() };
+            }
         }
 
         nfdresult_t result;
-        if(save_dialog)
+        if(path_picker)
+        {
+            nfdpickfolderu8args_t args = {};
+            if(!initial_path.empty())
+            {
+                args.defaultPath = initial_path.c_str();
+            }
+            result = NFD_PickFolderU8_With(&outPath, &args);
+        }
+        else if(save_dialog)
         {
             nfdsavedialogu8args_t args = {};
             args.filterList            = filters;
@@ -1418,7 +1501,7 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         else
         {
             nfdopendialogu8args_t args = {};
-            args.filterList            = filters;
+            args.filterList  = filters;
             args.filterCount = static_cast<nfdfiltersize_t>(file_filters.size());
             if(!initial_path.empty())
             {
@@ -1426,15 +1509,21 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
             }
             result = NFD_OpenDialogU8_With(&outPath, &args);
         }
-        delete[] filters;
+        if(filters != nullptr)
+        {
+            delete[] filters;
+        }
         std::string file_path;
         if(result == NFD_OKAY)
         {
             file_path = outPath;
             if(outPath)
             {
+                // Save dialog only: append default extension when the name has none (e.g. Linux save).
+                // Open dialog must not do this — extensionless executables would get ".*/.exe" appended
+                // from the filter list (e.g. "transpose" + "."" + ".*" -> "transpose..*").
                 std::filesystem::path p(file_path);
-                if(!p.has_extension())
+                if(save_dialog && !path_picker && !file_filters.empty() && !p.has_extension())
                 {
                     file_path += "." + file_filters[0].m_extensions[0];
                 }
@@ -1498,6 +1587,14 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
         }
     }
 
+    // Empty filter list would leave ImGuiFileDialog with no dLGFilters, which rejects every file.
+    // Regex form matches any file name including extensionless executables (Linux/macOS).
+    std::string filter_string = filter_stream.str();
+    if(filter_string.empty())
+    {
+        filter_string = "All files{((.*))}";
+    }
+
     IGFD::FileDialogConfig config;
     config.path  = initial_path;
     config.flags = confirm_overwrite
@@ -1507,6 +1604,19 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
                                             filter_stream.str().c_str(), config);
 }
 
+#if defined(ROCPROFVIS_DEVELOPER_MODE) && defined(TEST_SSH_CONNECTION)
+
+void
+AppWindow::HandleTestRemoteSSH()
+{
+    if(!m_ssh_test_dialog)
+    {
+        m_ssh_test_dialog = std::make_unique<SshTestDialog>(this);
+    }
+    m_ssh_test_dialog->Show();
+}
+
+#endif // ROCPROFVIS_DEVELOPER_MODE && TEST_SSH_CONNECTION
 void
 AppWindow::UpdateStatusBar()
 {
@@ -1530,7 +1640,9 @@ AppWindow::UpdateStatusBar()
         }
         // also check if there are any cleanup jobs pending
         size_t clean_up_jobs = m_provider_cleanup_jobs.size();
-        if(pending_requests > 0 || clean_up_jobs > 0)
+        // background operations tracked by the monitor (SSH, profiler, etc.)
+        size_t monitor_ops = AppMonitor::GetInstance()->GetActiveOperationCount();
+        if(pending_requests > 0 || clean_up_jobs > 0 || monitor_ops > 0)
         {
             if(pending_requests > 0)
             {
@@ -1542,6 +1654,13 @@ AppWindow::UpdateStatusBar()
                 m_status_message = (pending_requests > 0 ? m_status_message + " | " : "") +
                                     ("Cleaning up: " + std::to_string(clean_up_jobs) +
                                      " pending job(s)");
+            }
+            if(monitor_ops > 0)
+            {
+                bool has_prefix = (pending_requests > 0 || clean_up_jobs > 0);
+                m_status_message = (has_prefix ? m_status_message + " | " : "") +
+                                   ("Background: " + std::to_string(monitor_ops) +
+                                    " operation(s)");
             }
             m_status_show_busy_indicator = true;
         }
@@ -1619,6 +1738,12 @@ AppWindow::RenderDeveloperMenu()
                                    }
                                });
         }
+#ifdef TEST_SSH_CONNECTION
+        if(ImGui::MenuItem("Open Remote...", nullptr, false))
+        {
+            HandleTestRemoteSSH();
+        }
+#endif        
         ImGui::EndMenu();
     }
 }
@@ -1761,6 +1886,19 @@ AppWindow::RenderDebugOuput()
     }
 }
 #endif  // ROCPROFVIS_DEVELOPER_MODE
+
+void
+AppWindow::ShowProfilerLauncher()
+{
+    // Create dialog if it doesn't exist (lazy initialization)
+    // Dialog owns its own DataProvider - not tied to any specific trace
+    if (!m_profiler_launcher_dialog)
+    {
+        m_profiler_launcher_dialog = std::make_unique<ProfilerLauncherDialog>(this);
+    }
+
+    m_profiler_launcher_dialog->Show();
+}
 
 }  // namespace View
 }  // namespace RocProfVis

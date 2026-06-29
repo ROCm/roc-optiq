@@ -4966,5 +4966,9 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
 }
 #endif
 
+// Profiler launching has moved to RocProfVis::View::ProfilerSession
+// (src/view/src/profiler/rocprofvis_profiler_session.{h,cpp}), monitored via
+// the AppMonitor. DataProvider no longer owns any profiler state.
+
 }  // namespace View
 }  // namespace RocProfVis

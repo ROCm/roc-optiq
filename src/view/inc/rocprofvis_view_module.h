@@ -10,8 +10,8 @@
 
 typedef enum rocprofvis_view_render_options_t
 {
-    kRocProfVisViewRenderOption_None        = 0,
-    kRocProfVisViewRenderOption_RequestExit = 1,
+    kRocProfVisViewRenderOption_None                = 0,
+    kRocProfVisViewRenderOption_RequestExit         = 1,
 } rocprofvis_view_render_options_t;
 
 typedef enum rocprofvis_view_notification_t

@@ -155,7 +155,6 @@ static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     (void) scancode;
-    (void) mods;
 
 #ifndef __APPLE__
     // Toggle fullscreen with F11

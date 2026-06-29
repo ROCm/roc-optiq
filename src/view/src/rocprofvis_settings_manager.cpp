@@ -486,6 +486,7 @@ SettingsManager::SaveSettingsJson()
     SerializeUnitSettings(settings_json);
     SerializeOtherSettings(settings_json);
     SerializeHotkeySettings(settings_json);
+    SerializeProfilerSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -515,6 +516,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeUnitSettings(result.second);
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
+        DeserializeProfilerSettings(result.second);
     }
     else
     {
@@ -946,6 +948,77 @@ void
 SettingsManager::SaveHotkeySettings()
 {
     SaveSettingsJson();
+}
+
+void
+SettingsManager::SaveProfilerSettings()
+{
+    SaveSettingsJson();
+}
+
+ProfilerSettings&
+SettingsManager::GetProfilerSettings()
+{
+    return m_profilersettings;
+}
+
+void
+SettingsManager::SerializeProfilerSettings(jt::Json& json)
+{
+    jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
+    ps[JSON_KEY_SETTINGS_PROFILER_PATH] = m_profilersettings.profiler_path;
+    ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR] = m_profilersettings.profiler_output_directory;
+    ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD] = m_profilersettings.auto_load_trace;
+    ps["last_preset_name"] = m_profilersettings.last_preset_name;
+    ps["last_profiler_id"] = m_profilersettings.last_profiler_id;
+    ps["last_ssh_connection_id"] = m_profilersettings.last_ssh_connection_id;
+
+    int rt_idx = 0;
+    for (auto const& t : m_profilersettings.recent_targets)
+    {
+        ps["recent_targets"][rt_idx++] = t;
+    }
+}
+
+void
+SettingsManager::DeserializeProfilerSettings(jt::Json& json)
+{
+    jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
+    if(ps[JSON_KEY_SETTINGS_PROFILER_PATH].isString())
+    {
+        m_profilersettings.profiler_path = ps[JSON_KEY_SETTINGS_PROFILER_PATH].getString();
+    }
+    if(ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].isString())
+    {
+        m_profilersettings.profiler_output_directory = ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].getString();
+    }
+    if(ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].isBool())
+    {
+        m_profilersettings.auto_load_trace = ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].getBool();
+    }
+    if(ps["last_preset_name"].isString())
+    {
+        m_profilersettings.last_preset_name = ps["last_preset_name"].getString();
+    }
+    if(ps["last_profiler_id"].isString())
+    {
+        m_profilersettings.last_profiler_id = ps["last_profiler_id"].getString();
+    }
+    if(ps["last_ssh_connection_id"].isString())
+    {
+        m_profilersettings.last_ssh_connection_id = ps["last_ssh_connection_id"].getString();
+    }
+    if(ps["recent_targets"].isArray())
+    {
+        m_profilersettings.recent_targets.clear();
+        for (jt::Json& item : ps["recent_targets"].getArray())
+        {
+            if (item.isString())
+            {
+                m_profilersettings.recent_targets.push_back(item.getString());
+            }
+        }
+    }
 }
 
 }  // namespace View

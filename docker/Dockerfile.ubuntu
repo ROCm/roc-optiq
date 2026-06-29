@@ -10,7 +10,7 @@ SHELL [ "/bin/bash", "-c" ]
 RUN apt update -y && \
     apt install -y apt-utils build-essential cmake curl git git-lfs libncurses-dev libwayland-dev \
     libx11-dev libxcursor-dev libxi-dev libxinerama-dev libxkbcommon-dev \
-    libxrandr-dev pkg-config wget xorg-dev libdbus-1-dev unzip
+    libxrandr-dev pkg-config wget xorg-dev libdbus-1-dev unzip libssl-dev
 
 # Install Vulkan SDK
 RUN mkdir -p /opt/vulkan && \

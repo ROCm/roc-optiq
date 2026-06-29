@@ -832,6 +832,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         std::filesystem::remove(csv_path);
 
+        spdlog::info("Free Future");
+        rocprofvis_controller_future_free(future);
+
         spdlog::info("Free Args");
         rocprofvis_controller_arguments_free(args);
     }
@@ -1132,6 +1135,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(file_size > 0);
 
         std::filesystem::remove(csv_path);
+
+        spdlog::info("Free Future");
+        rocprofvis_controller_future_free(future);
 
         spdlog::info("Free Args");
         rocprofvis_controller_arguments_free(args);

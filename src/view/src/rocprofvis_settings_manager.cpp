@@ -134,6 +134,12 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
     IM_COL32(255, 255, 255, 255),  // Colors::kBannerText
     IM_COL32(228, 228, 228, 255),  // Colors::kDebugNavBarBg
+    IM_COL32(150, 150, 150, 255),  // Colors::kLogTrace
+    IM_COL32(150, 180, 210, 255),  // Colors::kLogDebug
+    IM_COL32(220, 220, 220, 255),  // Colors::kLogInfo
+    IM_COL32(235, 195, 90, 255),   // Colors::kLogWarning
+    IM_COL32(235, 110, 110, 255),  // Colors::kLogError
+    IM_COL32(255, 80, 80, 255),    // Colors::kLogCritical
     // This must follow the ordering of Colors enum.
 };
 
@@ -250,6 +256,12 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
     IM_COL32(255, 255, 255, 255),  // Colors::kBannerText
     IM_COL32(228, 228, 228, 255),  // Colors::kDebugNavBarBg
+    IM_COL32(120, 120, 120, 255),  // Colors::kLogTrace
+    IM_COL32(60, 110, 160, 255),   // Colors::kLogDebug
+    IM_COL32(40, 40, 40, 255),     // Colors::kLogInfo
+    IM_COL32(170, 120, 0, 255),    // Colors::kLogWarning
+    IM_COL32(190, 40, 40, 255),    // Colors::kLogError
+    IM_COL32(200, 0, 0, 255),      // Colors::kLogCritical
     // This must follow the ordering of Colors enum.
 };
 // Same hue order as origin/main, desaturated for the redesign.
@@ -602,7 +614,9 @@ SettingsManager::GetContrastColormapName() const
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
-      { DisplaySettings{ false, true, 6 }, UnitSettings{ TimeFormat::kTimecode } })
+      { DisplaySettings{ false, true, 6 }, UnitSettings{ TimeFormat::kTimecode }, false,
+        false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
+        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_display_dpi(1.5f)
@@ -786,6 +800,13 @@ SettingsManager::SerializeOtherSettings(jt::Json& json)
 
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT] = m_usersettings.dont_ask_before_exit;
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE] = m_usersettings.dont_ask_before_tab_closing;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES] = m_usersettings.log_viewer_max_entries;
+
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK]    = m_usersettings.log_viewer.level_mask;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL]   = m_usersettings.log_viewer.auto_scroll;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX]     = m_usersettings.log_viewer.use_regex;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME] = m_usersettings.log_viewer.relative_time;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE]       = m_usersettings.log_viewer.visible;
 }
 
 void
@@ -801,6 +822,37 @@ SettingsManager::DeserializeOtherSettings(jt::Json& json)
     {
         m_usersettings.dont_ask_before_tab_closing =
             static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].isLong())
+    {
+        int value = static_cast<int>(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].getLong());
+        m_usersettings.log_viewer_max_entries =
+            std::clamp(value, LOG_VIEWER_MAX_ENTRIES_MIN, LOG_VIEWER_MAX_ENTRIES_MAX);
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK].isLong())
+    {
+        m_usersettings.log_viewer.level_mask =
+            static_cast<int>(os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK].getLong());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL].isBool())
+    {
+        m_usersettings.log_viewer.auto_scroll =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX].isBool())
+    {
+        m_usersettings.log_viewer.use_regex =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME].isBool())
+    {
+        m_usersettings.log_viewer.relative_time =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE].isBool())
+    {
+        m_usersettings.log_viewer.visible =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE].getBool());
     }
 }
 

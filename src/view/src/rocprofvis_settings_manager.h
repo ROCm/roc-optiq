@@ -32,12 +32,25 @@ typedef struct UnitSettings
     TimeFormat time_format;
 } UnitSettings;
 
+// Persisted UI state for the log viewer window. level_mask packs one bit per
+// spdlog severity level (bit i => level i enabled).
+typedef struct LogViewerSettings
+{
+    int  level_mask;
+    bool auto_scroll;
+    bool use_regex;
+    bool relative_time;
+    bool visible;
+} LogViewerSettings;
+
 typedef struct UserSettings
 {
-    DisplaySettings display_settings;
-    UnitSettings    unit_settings;
-    bool            dont_ask_before_tab_closing;
-    bool            dont_ask_before_exit;
+    DisplaySettings   display_settings;
+    UnitSettings      unit_settings;
+    bool              dont_ask_before_tab_closing;
+    bool              dont_ask_before_exit;
+    int               log_viewer_max_entries;
+    LogViewerSettings log_viewer;
 } UserSettings;
 
 typedef struct InternalSettings
@@ -188,6 +201,14 @@ enum class Colors
     kBannerText,
     kDebugNavBarBg,
 
+    // Log viewer per-level text colors
+    kLogTrace,
+    kLogDebug,
+    kLogInfo,
+    kLogWarning,
+    kLogError,
+    kLogCritical,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -211,6 +232,23 @@ constexpr size_t      MAX_RECENT_FILES                       = 5;
 
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
+
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES = "log_viewer_max_entries";
+// Bounds for the log viewer's in-memory cache size. Older lines fall off the
+// ring buffer once the cap is reached; the full history lives in the log file.
+constexpr int LOG_VIEWER_MAX_ENTRIES_DEFAULT   = 512;
+constexpr int LOG_VIEWER_MAX_ENTRIES_MIN       = 64;
+constexpr int LOG_VIEWER_MAX_ENTRIES_MAX       = 100000;
+constexpr int LOG_VIEWER_MAX_ENTRIES_STEP      = 64;
+constexpr int LOG_VIEWER_MAX_ENTRIES_STEP_FAST = 512;
+
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK    = "log_viewer_level_mask";
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL   = "log_viewer_auto_scroll";
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX     = "log_viewer_use_regex";
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME = "log_viewer_relative_time";
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE       = "log_viewer_visible";
+// All six severity levels enabled (bits 0..5).
+constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";

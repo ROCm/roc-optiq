@@ -704,7 +704,7 @@ rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
 
     std::vector<std::pair<std::string, std::string>> info_table_list = {
         {"Node", "SELECT * from rocpd_info_node_%GUID%;"},
-        {"Agent", "SELECT id,guid,nid,pid,coalesce(type,'NIC') as type,absolute_index,logical_index,type_index,uuid,name,model_name,vendor_name,product_name,extdata from rocpd_info_agent_%GUID%;"},
+        {"Agent", "SELECT id,guid,nid,pid,type,absolute_index,logical_index,type_index,uuid,name,model_name,vendor_name,product_name,extdata from rocpd_info_agent_%GUID%;"},
         {"Queue", "SELECT * from rocpd_info_queue_%GUID%;"},
         {"Stream", "SELECT * from rocpd_info_stream_%GUID%;"},
         {"Process", "SELECT * from rocpd_info_process_%GUID%;"},

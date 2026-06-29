@@ -195,8 +195,7 @@ public:
 
     bool FetchSummary();
 
-    bool FetchAnalysisQueueUtilization(
-        const AnalysisQueueUtilizationRequestParams& params);
+    bool FetchAnalysisTrackStatistics(const AnalysisTrackStatisticsRequestParams& params);
 
     bool IsRequestPending(uint64_t request_id) const;
 
@@ -297,7 +296,7 @@ private:
     void ProcessSaveTrimmedTraceRequest(RequestInfo& req);
     void ProcessCleanupDatabaseRequest(RequestInfo& req);
     void ProcessSummaryRequest(RequestInfo& req);
-    void ProcessAnalysisQueueUtilizationRequest(RequestInfo& req);
+    void ProcessAnalysisTrackStatisticsRequest(RequestInfo& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);

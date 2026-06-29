@@ -74,6 +74,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_unload_track_distance(LOADING_TRACK_DISTANCE)
 , m_sidebar_size(SIDEBAR_DEFAULT_SIZE)
 , m_resize_activity(false)
+, m_reorder_auto_scrolling(false)
 , m_highlighted_region({ TimelineSelection::INVALID_SELECTION_TIME,
                          TimelineSelection::INVALID_SELECTION_TIME })
 , m_new_track_token(EventManager::InvalidSubscriptionToken)
@@ -101,7 +102,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_histogram(nullptr)
 , m_pseudo_focus(false)
 , m_histogram_pseudo_focus(false)
-, m_max_meta_area_size(0.0f)
+, m_max_meta_scale_area_size(0.0f)
 , m_tpt(std::make_shared<TimePixelTransform>())
 , m_dragging_selection_start(false)
 , m_dragging_selection_end(false)
@@ -148,13 +149,12 @@ TimelineView::TimelineView(DataProvider&                          dp,
         (void) e;
         m_recalculate_grid_interval = true;
         m_ruler_height              = ImGui::GetTextLineHeightWithSpacing();
-        CalculateMaxMetaAreaSize();
-        UpdateAllMaxMetaAreaSizes();
+        UpdateMaxMetaAreaSize(true);
         FlameTrackItem::CalculateMaxEventLabelWidth();
-        m_sidebar_size =
-            std::clamp(static_cast<float>(m_sidebar_size),
-                       m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(),
-                       SIDEBAR_WIDTH_MAX);
+        m_sidebar_size = std::clamp(static_cast<float>(m_sidebar_size),
+                                    m_max_meta_scale_area_size +
+                                        2 * ImGui::GetFrameHeightWithSpacing(),
+                                    SIDEBAR_WIDTH_MAX);
     };
     m_font_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
@@ -794,6 +794,10 @@ TimelineView::Update()
         }
         m_reorder_request.handled = true;
         m_resize_activity         = false;
+        for(const TrackGraph& track : *m_graphs)
+        {
+            track.chart->Update();
+        }
     }
 }
 
@@ -847,13 +851,13 @@ TimelineView::RenderSplitter()
             m_settings.GetColor(Colors::kAccent));
     }
 
-    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_sidebar_size =
-            std::clamp(m_sidebar_size + drag_delta.x,
-                       m_max_meta_area_size + 2 * ImGui::GetFrameHeightWithSpacing(),
-                       SIDEBAR_WIDTH_MAX);
+        m_sidebar_size    = std::clamp(m_sidebar_size + drag_delta.x,
+                                       m_max_meta_scale_area_size +
+                                           2 * ImGui::GetFrameHeightWithSpacing(),
+                                       SIDEBAR_WIDTH_MAX);
 
         m_tpt->SetViewTimeOffsetNs(
             m_tpt->GetViewTimeOffsetNs() -
@@ -1298,6 +1302,9 @@ TimelineView::RenderGraphView()
 
     bool request_data = IsRequestDataNeeded();
 
+    // Re-set each frame by RenderReorderingTrack while in the auto-scroll zone.
+    m_reorder_auto_scrolling = false;
+
     for(int index = 0; index < m_graphs->size(); index++)
     {
         RenderTrack(index, request_data, window_flags, container_size);
@@ -1313,7 +1320,8 @@ TimelineView::WantsContinuousRender() const
 {
     // The loading-timer debounce gates track-data requests and only advances
     // while rendering, so keep rendering until it expires or the load stalls.
-    return m_loading_timer.IsRunning();
+    // Reorder auto-scroll also advances per frame, so keep rendering while active.
+    return m_loading_timer.IsRunning() || m_reorder_auto_scrolling;
 }
 
 bool
@@ -1412,6 +1420,10 @@ TimelineView::RenderTrack(int track_index, bool request_data,
             if(is_visible || track_item->GetDistanceToView() <= m_unload_track_distance)
             {
                 RequestDataIfEmpty(track_item, request_data);
+                track_item->RequestAnalysis();
+            }
+            else if(track_item->IsSelected())
+            {
                 track_item->RequestAnalysis();
             }
         }
@@ -1520,16 +1532,15 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
             m_settings.GetColor(Colors::kAccent));
     }
 
+    // Keep the track row square so the highlight fill reaches the corners; otherwise the
+    // rounded corners leave notches where the accent selection stripe bleeds through.
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, selection_color);
     ImGui::PushID(track_index);
     if(ImGui::BeginChild("", ImVec2(0, track_height), false,
                          window_flags | ImGuiWindowFlags_NoScrollbar |
                              ImGuiWindowFlags_NoMouseInputs))
     {
-        // call update function (TODO: move this to timeline's update
-        // function?)
-        track_item->Update();
-
         if(is_reordering)
         {
             // Empty space if the track is being reordered
@@ -1593,6 +1604,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
     ImGui::EndChild();
     ImGui::PopID();
     ImGui::PopStyleColor();
+    ImGui::PopStyleVar();  // ImGuiStyleVar_ChildRounding
 
     // Draw border around the track
     // This is done after the child window to ensure it is on top
@@ -1657,9 +1669,17 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
     ImVec2 mouse_pos          = ImGui::GetMousePos();
     ImVec2 mouse_relative_pos = mouse_pos - graph_view_pos;
 
-    ImGui::SetNextWindowPos(
-        ImVec2(graph_view_pos.x, mouse_pos.y - ImGui::GetFrameHeight() / 2),
-        ImGuiCond_Always);
+    // Clamp the preview within the track area so it never renders outside its
+    // box when the mouse moves above or below the visible track region.
+    const float track_height = track_item->GetTrackHeight();
+    const float view_height  = container_size.y - m_ruler_height;
+    const float preview_min_y = graph_view_pos.y;
+    const float preview_max_y =
+        std::max(preview_min_y, graph_view_pos.y + view_height - track_height);
+    const float preview_y = std::clamp(mouse_pos.y - ImGui::GetFrameHeight() / 2,
+                                       preview_min_y, preview_max_y);
+
+    ImGui::SetNextWindowPos(ImVec2(graph_view_pos.x, preview_y), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     if(ImGui::Begin(
            "##ReorderPreview", nullptr,
@@ -1684,6 +1704,7 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
                 std::min(1.0f, (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD -
                                 mouse_relative_pos.y) /
                                    (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
+        m_reorder_auto_scrolling = true;
     }
     else if(mouse_relative_pos.y > container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD))
     {
@@ -1693,6 +1714,7 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
                 std::min(1.0f, (mouse_relative_pos.y -
                                 container_size.y * (1 - REORDER_AUTO_SCROLL_THRESHOLD)) /
                                    (container_size.y * REORDER_AUTO_SCROLL_THRESHOLD)));
+        m_reorder_auto_scrolling = true;
     }
     m_scroll_position_y = ImGui::GetScrollY();
 }
@@ -1784,7 +1806,8 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                graph.chart = new LineTrackItem(m_data_provider, track_info->id, m_tpt);
+                graph.chart = new LineTrackItem(m_data_provider, track_info->id, m_tpt,
+                                                m_timeline_selection);
                 graph.graph_type = GraphType::TYPE_LINECHART;
                 break;
             }
@@ -1795,7 +1818,6 @@ TimelineView::MakeGraphView()
         }
         if(graph.chart)
         {
-            UpdateMaxMetaAreaSize(graph.chart->GetMetaAreaScaleWidth());
             m_tpt->SetMinMaxX(std::min(track_info->min_ts, m_tpt->GetMinX()),
                               std::max(track_info->max_ts, m_tpt->GetMaxX()));
 
@@ -1804,8 +1826,7 @@ TimelineView::MakeGraphView()
     }
 
     m_data_provider.DataModel().GetTimeline().UpdateHistogram(hidden_tracks, false);
-
-    UpdateAllMaxMetaAreaSizes();
+    UpdateMaxMetaAreaSize();
     m_histogram       = &tlm.GetHistogram();
     m_meta_map_made   = true;
     m_resize_activity = true;
@@ -2845,39 +2866,20 @@ TimelineView::GetArrowLayer()
 }
 
 void
-TimelineView::UpdateMaxMetaAreaSize(float new_size)
+TimelineView::UpdateMaxMetaAreaSize(bool update_tracks)
 {
-    m_max_meta_area_size =
-        new_size > m_max_meta_area_size ? new_size : m_max_meta_area_size;
-}
-
-void
-TimelineView::CalculateMaxMetaAreaSize()
-{
-    m_max_meta_area_size = 0.0f;
-    std::vector<const TrackInfo*> track_list =
-        m_data_provider.DataModel().GetTimeline().GetTrackList();
-
-    for(size_t i = 0; i < track_list.size(); i++)
+    m_max_meta_scale_area_size = 0.0f;
+    for(TrackGraph& track : (*m_graphs))
     {
-        const TrackInfo* track_info = track_list[i];
-        auto             graph      = (*m_graphs)[track_info->index];
-        m_max_meta_area_size =
-            std::max(graph.chart->CalculateNewMetaAreaSize(), m_max_meta_area_size);
-    }
-}
-
-void
-TimelineView::UpdateAllMaxMetaAreaSizes()
-{
-    std::vector<const TrackInfo*> track_list =
-        m_data_provider.DataModel().GetTimeline().GetTrackList();
-
-    for(size_t i = 0; i < track_list.size(); i++)
-    {
-        const TrackInfo* track_info = track_list[i];
-        auto             graph      = (*m_graphs)[track_info->index];
-        graph.chart->UpdateMaxMetaAreaSize(m_max_meta_area_size);
+        if(track.chart)
+        {
+            if(update_tracks)
+            {
+                track.chart->UpdateMaxMetaScaleAreaSize();
+            }
+            m_max_meta_scale_area_size = std::max(track.chart->GetMaxMetaAreaScaleWidth(),
+                                                  m_max_meta_scale_area_size);
+        }
     }
 }
 

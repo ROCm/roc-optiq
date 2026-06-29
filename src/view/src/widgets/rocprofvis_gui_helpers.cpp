@@ -6,6 +6,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_notification_manager.h"
 #include <algorithm>
 #include <cmath>
 
@@ -598,6 +599,241 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     }
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER
+
+// Menu icon spacing, in multiples of the font size.
+inline constexpr float MENU_ICON_GAP_EM       = 0.7f;
+inline constexpr float MENU_NO_ICON_INDENT_EM = 1.0f;
+
+static float
+MenuIconWidth(const char* icon)
+{
+    const float font_size = ImGui::GetFontSize();
+    if(!icon || icon[0] == '\0')
+        return font_size * MENU_NO_ICON_INDENT_EM;
+
+    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+    return icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon).x;
+}
+
+// Pads the label with leading spaces to leave room for the left-aligned icon.
+static std::string
+MenuLabelWithIconPadding(const char* icon, const char* label)
+{
+    const float offset  = MenuIconWidth(icon) + ImGui::GetFontSize() * MENU_ICON_GAP_EM;
+    const float space_w = ImGui::CalcTextSize(" ").x;
+    const int   pad     = space_w > 0.0f ? static_cast<int>(std::ceil(offset / space_w)) : 1;
+    std::string padded(static_cast<size_t>(std::max(pad, 1)), ' ');
+    padded += label;
+    return padded;
+}
+
+// Pass the parent menu's draw list, captured before BeginMenu opens a submenu
+// and retargets the current window's draw list.
+static void
+DrawMenuItemIcon(ImDrawList* draw_list, const char* icon, const ImVec2& row_start, bool enabled)
+{
+    if(!icon || icon[0] == '\0')
+        return;
+
+    ImFont*      icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+    const float  font_size = ImGui::GetFontSize();
+    const ImVec2 icon_size = icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon);
+    const ImVec2 pos(row_start.x, row_start.y + (font_size - icon_size.y) * 0.5f);
+    const ImU32  color = ImGui::GetColorU32(enabled ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+
+    draw_list->AddText(icon_font, font_size, pos, color, icon);
+}
+
+bool
+IconMenuItem(const char* icon, const char* label, bool enabled)
+{
+    ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
+    const ImVec2 row_start    = ImGui::GetCursorScreenPos();
+    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+
+    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, false, enabled);
+    DrawMenuItemIcon(draw_list, icon, row_start, enabled);
+
+    if(clicked)
+        ImGui::CloseCurrentPopup();
+    return clicked;
+}
+
+bool
+IconBeginMenu(const char* icon, const char* label)
+{
+    ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
+    const ImVec2 row_start    = ImGui::GetCursorScreenPos();
+    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+
+    bool open = ImGui::BeginMenu(padded_label.c_str());
+    DrawMenuItemIcon(draw_list, icon, row_start, true);
+
+    return open;
+}
+
+bool
+CopyableTextUnformatted(
+    const char* text, std::string_view unique_id, std::string_view notification,
+    bool one_click_copy, bool context_menu,
+    std::function<void(const char* value_to_copy)> menu_func)
+{
+    bool clicked = false;
+    if(!unique_id.empty())
+        ImGui::PushID(unique_id.data());
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+
+    if(ImGui::Button(text, ImVec2(0, 0)))
+    {
+        clicked = true;
+        if(one_click_copy)
+        {
+            ImGui::SetClipboardText(text);
+            if(!notification.empty())
+            {
+                NotificationManager::GetInstance().Show(notification.data(),
+                                                        NotificationLevel::Info);
+            }
+        }
+    }
+
+    if(context_menu)
+    {
+        auto style = SettingsManager::GetInstance().GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+        if(menu_func)
+        {
+            menu_func(text);
+        }
+        else if(ImGui::BeginPopupContextItem())
+        {
+            if(IconMenuItem(ICON_COPY, "Copy"))
+            {
+                ImGui::SetClipboardText(text);
+                if(!notification.empty())
+                {
+                    NotificationManager::GetInstance().Show(notification.data(),
+                                                            NotificationLevel::Info);
+                }
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(2);
+    }
+
+    if(one_click_copy)
+    {
+        if(ImGui::IsItemHovered())
+        {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+
+    if(!unique_id.empty())
+    {
+        ImGui::PopID();
+    }
+    return clicked;
+}
+
+void
+PositionCell(int col)
+{
+    if(col > 0)
+        ImGui::TableSetColumnIndex(col);
+    else
+        ImGui::SameLine();
+}
+
+bool
+RenderRowHitbox(const char* hitbox_id, int row, int column_count,
+                CellMenuTarget& target, bool& open)
+{
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+    bool clicked = ImGui::Selectable(hitbox_id, false,
+                                     ImGuiSelectableFlags_SpanAllColumns |
+                                         ImGuiSelectableFlags_AllowOverlap,
+                                     ImVec2(0.0f, 0.0f));
+    bool hovered = clicked ||
+                   ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
+                                        ImGuiHoveredFlags_AllowWhenOverlappedByItem);
+    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+    {
+        int hovered_col = ImGui::TableGetHoveredColumn();
+        target.row      = row;
+        target.column =
+            (hovered_col >= 0 && hovered_col < column_count) ? hovered_col : 0;
+        open = true;
+    }
+    ImGui::PopStyleColor(3);
+    return hovered;
+}
+
+void
+CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open)
+{
+    if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+    {
+        target.row    = row;
+        target.column = col;
+        open          = true;
+    }
+}
+
+bool
+BeginCellContextMenu(const char* popup_id)
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    bool open = ImGui::BeginPopup(popup_id);
+    if(!open)
+        ImGui::PopStyleVar(2);
+    return open;
+}
+
+void
+EndCellContextMenu()
+{
+    ImGui::EndPopup();
+    ImGui::PopStyleVar(2);
+}
+
+void
+AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column)
+{
+    if(IconMenuItem(ICON_COPY, "Copy Row Data"))
+    {
+        std::string row_text;
+        for(int c = 0; c < column_count; c++)
+        {
+            if(c > 0) row_text += ',';
+            row_text += cells[c];
+        }
+        ImGui::SetClipboardText(row_text.c_str());
+        NotificationManager::GetInstance().Show(COPY_ROW_DATA_NOTIFICATION.data(),
+                                                NotificationLevel::Info);
+    }
+    if(IconMenuItem(ICON_COPY, "Copy Cell Data"))
+    {
+        if(column >= 0 && column < column_count)
+        {
+            ImGui::SetClipboardText(cells[column].c_str());
+            NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+                                                    NotificationLevel::Info);
+        }
+    }
+}
 
 }   // namespace View
 }   // namespace RocProfVis

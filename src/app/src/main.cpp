@@ -239,14 +239,14 @@ main(int argc, char** argv)
         return app_result_code;
     }
 
-    std::string config_path = rocprofvis_get_application_config_path();
+    std::string log_dir = rocprofvis_get_application_log_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "roc-optiq.debug.log";
+        std::filesystem::path(log_dir) / "roc-optiq.debug.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::debug);
 #else
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "roc-optiq.log";
+        std::filesystem::path(log_dir) / "roc-optiq.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
 
@@ -298,6 +298,10 @@ main(int argc, char** argv)
             return 1;
         }
     }
+
+#ifdef __APPLE__
+    RocProfVis::Platform::configure_bundled_vulkan_icd();
+#endif
 
     glfwSetErrorCallback(glfw_error_callback);
 #ifdef __linux__

@@ -16,11 +16,12 @@
 #include "spdlog/details/circular_q.h"
 #include "spdlog/details/log_msg_buffer.h"
 #include "spdlog/details/null_mutex.h"
+#include "spdlog/pattern_formatter.h"
 #include "spdlog/sinks/base_sink.h"
 
 #include <mutex>
 #include <string>
-#include <vector>
+#include <utility>
 
 namespace RocProfVis {
 namespace Core {
@@ -39,16 +40,31 @@ public:
         return output;
     }
 
-    std::vector<std::string> Formatted()
+    struct StructuredEntry
+    {
+        int         level;
+        std::string timestamp;
+        std::string message;
+    };
+
+    std::vector<StructuredEntry> Structured()
     {
         std::lock_guard<Mutex> lock(spdlog::sinks::base_sink<Mutex>::mutex_);
-        std::vector<std::string> ret;
+        // Time-only pattern with an empty end-of-line so the timestamp column is
+        // clean; the message body comes straight from the record payload, so it
+        // carries no level/logger prefix.
+        spdlog::pattern_formatter time_formatter("%H:%M:%S.%e",
+                                                 spdlog::pattern_time_type::local,
+                                                 std::string());
+        std::vector<StructuredEntry> ret;
         ret.reserve(m_elements.size());
         for (auto& entry : m_elements)
         {
-            spdlog::memory_buf_t formatted;
-            spdlog::sinks::base_sink<Mutex>::formatter_->format(entry, formatted);
-            ret.push_back(SPDLOG_BUF_TO_STRING(formatted));
+            spdlog::memory_buf_t time_buf;
+            time_formatter.format(entry, time_buf);
+            ret.push_back(StructuredEntry{
+                static_cast<int>(entry.level), SPDLOG_BUF_TO_STRING(time_buf),
+                std::string(entry.payload.data(), entry.payload.size()) });
         }
         m_elements.clear();
         return ret;
@@ -58,10 +74,20 @@ protected:
     void sink_it_(const spdlog::details::log_msg &msg) override
     {
         m_elements.push_back(spdlog::details::log_msg_buffer{msg});
+
+        // Bound memory if nothing drains the sink (e.g. UI idle); keep newest.
+        if (m_elements.size() > MAX_BUFFERED_ENTRIES)
+        {
+            m_elements.erase(m_elements.begin(),
+                             m_elements.begin() + (m_elements.size() / 2));
+        }
     }
     void flush_() override {}
 
 private:
+    // Hard cap on retained records when the buffer is not being drained.
+    static constexpr size_t MAX_BUFFERED_ENTRIES = 100000;
+
     std::vector<spdlog::details::log_msg_buffer> m_elements;
 };
 
@@ -70,6 +96,7 @@ using BufferSinkMT = BufferSink<std::mutex>;
 }
 
 static std::weak_ptr<RocProfVis::Core::BufferSinkMT> g_rpv_log_ringbuffer;
+static std::string                                   g_rpv_log_path;
 
 extern "C"
 {
@@ -79,6 +106,11 @@ extern "C"
         if (!is_inited)
         {
             is_inited = true;
+
+            if (log_path)
+            {
+                g_rpv_log_path = log_path;
+            }
 
             std::vector<std::shared_ptr<spdlog::sinks::sink>> sinks;
             auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_path, true);
@@ -115,16 +147,23 @@ extern "C"
         }
     }
 
-    void rocprofvis_core_get_log_entries(void* user_ptr, rocprofvis_core_process_log_t handler)
+    void rocprofvis_core_get_log_entries_ex(void*                               user_ptr,
+                                            rocprofvis_core_process_log_entry_t handler)
     {
         auto sink = g_rpv_log_ringbuffer.lock();
         if(handler && sink)
         {
-            auto array = sink->Formatted();
-            for (auto entry : array)
+            auto array = sink->Structured();
+            for (auto& entry : array)
             {
-                handler(user_ptr, entry.c_str());
+                handler(user_ptr, entry.level, entry.timestamp.c_str(),
+                        entry.message.c_str());
             }
         }
+    }
+
+    const char* rocprofvis_core_get_log_path(void)
+    {
+        return g_rpv_log_path.c_str();
     }
 }

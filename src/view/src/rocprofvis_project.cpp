@@ -12,6 +12,8 @@
 #include "widgets/rocprofvis_notification_manager.h"
 #include <fstream>
 
+constexpr const char* PROJECT_VERSION = "1.0";
+
 namespace RocProfVis
 {
 namespace View
@@ -267,12 +269,9 @@ Project::GetSettingsJson()
 bool
 Project::SaveSetttingsJson()
 {
-    bool result     = false;
-    m_settings_json = "";
-    m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_VERSION] =
-        std::to_string(ROCPROFVIS_VERSION_MAJOR) + "." +
-        std::to_string(ROCPROFVIS_VERSION_MINOR) + "." +
-        std::to_string(ROCPROFVIS_VERSION_PATCH);
+    bool result                                                       = false;
+    m_settings_json                                                   = "";
+    m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_VERSION] = PROJECT_VERSION;
     m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_TRACE_PATH] =
         std::filesystem::proximate(
             m_trace_file_path, std::filesystem::path(m_project_file_path).parent_path())

@@ -8,9 +8,9 @@ project(${TARGET_NAME})
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
-set(PROJECT_VERSION_MINOR 4)
+set(PROJECT_VERSION_MINOR 5)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 3)
+set(PROJECT_VERSION_BUILD 0)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -134,6 +134,7 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_tab_container.cpp
     src/view/src/widgets/rocprofvis_editable_textfield.cpp
     src/view/src/widgets/rocprofvis_debug_window.cpp
+    src/view/src/widgets/rocprofvis_log_viewer.cpp
     src/view/src/widgets/rocprofvis_gui_helpers.cpp
     src/view/src/widgets/rocprofvis_image_helpers.cpp
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
@@ -314,6 +315,31 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
                 "was not found. Set Vulkan_LIBRARY to the SDK libvulkan.dylib.")
         endif()
 
+        set(ROCPROFVIS_MOLTENVK_LIBRARY "" CACHE FILEPATH
+            "Path to libMoltenVK.dylib to bundle into the macOS app. \
+Auto-detected from the Vulkan SDK / Homebrew when empty.")
+        if(NOT ROCPROFVIS_MOLTENVK_LIBRARY)
+            foreach(_mvk_dir
+                    "${ROCPROFVIS_VULKAN_LOADER_DIR}"
+                    "$ENV{VULKAN_SDK}/lib"
+                    "/opt/homebrew/lib"
+                    "/usr/local/lib")
+                if(_mvk_dir AND EXISTS "${_mvk_dir}/libMoltenVK.dylib")
+                    set(ROCPROFVIS_MOLTENVK_LIBRARY "${_mvk_dir}/libMoltenVK.dylib")
+                    break()
+                endif()
+            endforeach()
+        endif()
+        if(ROCPROFVIS_MOLTENVK_LIBRARY AND EXISTS "${ROCPROFVIS_MOLTENVK_LIBRARY}")
+            message(STATUS "Bundling MoltenVK from ${ROCPROFVIS_MOLTENVK_LIBRARY}")
+        else()
+            message(WARNING
+                "MoltenVK (libMoltenVK.dylib) was not found, so the bundled app "
+                "will rely on a system Vulkan driver at runtime (LunarG SDK or "
+                "'brew install molten-vk') or fall back to OpenGL. Set "
+                "ROCPROFVIS_MOLTENVK_LIBRARY to bundle the driver.")
+        endif()
+
     endif()
 
     set_target_properties(${TARGET_NAME} PROPERTIES
@@ -353,6 +379,21 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/Licenses/Vulkan-Loader-LICENSE.txt"
             COMMENT "Staging Vulkan loader and license into the app bundle"
         )
+        if(ROCPROFVIS_MOLTENVK_LIBRARY AND EXISTS "${ROCPROFVIS_MOLTENVK_LIBRARY}")
+            add_custom_command(
+                TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                    "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+                    "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/vulkan/icd.d"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${ROCPROFVIS_MOLTENVK_LIBRARY}"
+                    "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libMoltenVK.dylib"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_CURRENT_SOURCE_DIR}/resources/mac/MoltenVK_icd.json"
+                    "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json"
+                COMMENT "Staging MoltenVK driver and ICD manifest into the app bundle"
+            )
+        endif()
     endif()
 
     # When the OpenSSL backend is opt-in enabled, stage libssl/libcrypto into the
@@ -423,6 +464,7 @@ plist allows dlopen of the LunarG-signed dylib under Hardened Runtime.")
             COMMAND codesign --verify --verbose=2
                 "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>"
             COMMENT "Codesigning bundle with identity '${ROCPROFVIS_MACOS_CODESIGN_IDENTITY}'"
+            VERBATIM
         )
     endif()
 endif()

@@ -22,6 +22,7 @@
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
+#include "widgets/rocprofvis_log_viewer.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
@@ -143,6 +144,8 @@ AppWindow::~AppWindow()
     m_ssh_test_dialog.reset();
 #endif
     AppMonitor::DestroyInstance();
+
+    LogViewer::DestroyInstance();
 }
 
 bool
@@ -618,6 +621,7 @@ AppWindow::Update()
     // status-change events before they are dispatched below this frame.
     AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
+    LogViewer::GetInstance()->Poll();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
     if (m_profiler_launcher_dialog)
@@ -637,6 +641,13 @@ AppWindow::WantsContinuousRender()
        m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents() ||
        NotificationManager::GetInstance().HasActiveNotifications() ||
        AppMonitor::GetInstance()->HasPendingOperations())
+    {
+        return true;
+    }
+
+    // Keep rendering while the log viewer is open and unpaused so new log lines
+    // appear live instead of waiting for the next input to wake the idle loop.
+    if(LogViewer::GetInstance()->IsLiveUpdating())
     {
         return true;
     }
@@ -757,6 +768,8 @@ AppWindow::Render()
     ImGui::PopStyleVar(3);
 
     RenderFileDialog();
+
+    LogViewer::GetInstance()->Render();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
@@ -1124,6 +1137,10 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
+
+        ImGui::Separator();
+        ImGui::MenuItem("Show Log Viewer", nullptr,
+                        LogViewer::GetInstance()->VisiblePtr());
         ImGui::EndMenu();
     }
 }

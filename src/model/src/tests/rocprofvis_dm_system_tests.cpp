@@ -483,6 +483,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
             rocprofvis_db_future_wait(object2wait, UINT64_MAX);
         REQUIRE(kRocProfVisDmResultSuccess == read_wait);
         std::filesystem::remove("sample/trimmed.db");
+
+        rocprofvis_db_future_free(object2wait);
     }
 
     // Reads each selected track's full time range one at a time, measuring read

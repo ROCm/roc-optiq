@@ -905,16 +905,19 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
 rocprofvis_dm_result_t
 ProfileDatabase::ExecuteQueriesAsync(
     std::vector<std::pair<DbInstance*, std::string>>& queries,
-    std::vector<Future*> & sub_futures,
+    Future* parent,
     rocprofvis_dm_handle_t handle,
     RpvSqliteExecuteQueryCallback callback)
 {
-    std::vector<Future*> futures = sub_futures;
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    futures.resize(queries.size());
+    // Register each worker as a sub-future of the parent so it is reachable by
+    // the parent's SetInterrupted() (cancellation) and is freed through the
+    // mutex-protected DeleteSubFuture() path. AddSubFuture() both allocates and
+    // registers; WaitAndDeleteSubFuture() waits, then unregisters and frees.
+    std::vector<Future*> futures(queries.size(), nullptr);
     for(int i = 0; i < queries.size(); i++)
     {
-        futures[i]     = (Future*)rocprofvis_db_future_alloc(nullptr);
+        futures[i] = parent->AddSubFuture();
         try
         {
             futures[i]->SetWorker(std::move(
@@ -924,6 +927,11 @@ ProfileDatabase::ExecuteQueriesAsync(
                     queries[i].second.c_str(), handle, i, callback)));
         } catch(std::exception ex)
         {
+            // The worker thread never started, so the sub-future's promise will
+            // never be set; unregister and free it now to avoid a wait below
+            // that would block forever on an unfulfilled promise.
+            parent->DeleteSubFuture(futures[i]);
+            futures[i] = nullptr;
             result = kRocProfVisDmResultUnknownError;
             ROCPROFVIS_ASSERT_MSG_BREAK(false, ex.what());
         }       
@@ -933,20 +941,13 @@ ProfileDatabase::ExecuteQueriesAsync(
         if(futures[i] != nullptr)
         {
             if(kRocProfVisDmResultSuccess !=
-                rocprofvis_db_future_wait(futures[i], UINT64_MAX))
+                parent->WaitAndDeleteSubFuture(futures[i]))
             {
                 result = kRocProfVisDmResultUnknownError;
             }
-            auto it = std::find_if(sub_futures.begin(), sub_futures.end(), [&](Future* f) { return f == futures[i]; });
-            if (it != sub_futures.end())
-            {
-                sub_futures.erase(it);
-                rocprofvis_db_future_free(*it);
-                futures[i] = nullptr;
-            }
+            futures[i] = nullptr;
         }
     }
-    futures.clear();
     return result;
 }
 
@@ -1427,80 +1428,124 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
                                                     rocprofvis_db_track_selection_t tracks,
                                                     Future* future) {
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    while (true)
+    ROCPROFVIS_ASSERT_MSG(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+    ROCPROFVIS_ASSERT_MSG(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
+    // We never used multiple tracks request for single slice. And with multinode support it becomes very cumbersome. 
+    // Disabling this feature, but leave the interface untouched for now
+    ROCPROFVIS_ASSERT_MSG(num == 1, ERROR_UNSUPPORTED_FEATURE);
+    
+    rocprofvis_dm_track_params_t* props = TrackPropertiesAt(*tracks);
+    if(props->track_indentifiers.category == kRocProfVisDmPmcTrack)
     {
-        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
-        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
-        // We never used multiple tracks request for single slice. And with multinode support it becomes very cumbersome. 
-        // Disabling this feature, but leave the interface untouched for now
-        ROCPROFVIS_ASSERT_MSG_BREAK(num == 1, ERROR_UNSUPPORTED_FEATURE);
-
-        std::string slice_query;
-        slice_array_t slices;
-
-        slices[*tracks]=BindObject()->FuncAddSlice(BindObject()->trace_object, *tracks, start, end, tag);
-        rocprofvis_dm_result_t result = BuildSliceQuery(start, end, num, tracks, slice_query, slices);
-        std::string query;
-
-        if (result == kRocProfVisDmResultSuccess)
+        return ReadTracePMCSlice(start, end, tag, tracks, true, true, future);
+    }
+    else
+    {
+        while (true)
         {
-            rocprofvis_dm_track_params_t* props = TrackPropertiesAt(*tracks);
-            if (props->track_indentifiers.category == kRocProfVisDmPmcTrack)
-            {
-                result = BuildCounterSliceLeftNeighbourQuery(start, end, *tracks, query);
-                if (result != kRocProfVisDmResultSuccess) break;
-                result = ExecuteSQLQuery(future,(DbInstance*)props->track_indentifiers.db_instance, query.c_str(), &slices, &CallbackAddAnyRecord);
-                if (result != kRocProfVisDmResultSuccess) break;
-            }
+            std::string slice_query;
+            slice_array_t slices;
+
+            slices[*tracks]=BindObject()->FuncAddSlice(BindObject()->trace_object, *tracks, start, end, tag);
+            rocprofvis_dm_result_t result = BuildSliceQuery(start, end, num, tracks, slice_query, slices);
+            std::string query;
 
             if (result == kRocProfVisDmResultSuccess)
             {
                 result = ExecuteSQLQuery(future, (DbInstance*)props->track_indentifiers.db_instance, slice_query.c_str(), &slices, &CallbackAddAnyRecord);
+                BindObject()->FuncCompleteSlice(slices[*tracks]);
+            }
+
+            if(kRocProfVisDmResultSuccess != result)
+            {
+                BindObject()->FuncRemoveSlice(BindObject()->trace_object, *tracks, slices[*tracks]);
+                break;
+            }
+            ShowProgress(100 - future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);
+            return future->SetPromise(kRocProfVisDmResultSuccess);
+        }
+    }
+    
+    ShowProgress(0, "Not all tracks are loaded!", kRPVDbError, future );
+    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);    
+}
+
+rocprofvis_dm_result_t
+ProfileDatabase::ReadTracePMCSlice(rocprofvis_dm_timestamp_t            start,
+                                   rocprofvis_dm_timestamp_t            end,
+                                   rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                   rocprofvis_db_track_selection_t      track,
+                                   bool left_neighbor, bool right_neighbor,
+                                   Future* future){
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
+    ROCPROFVIS_ASSERT_MSG(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
+    
+    rocprofvis_dm_track_params_t* props = TrackPropertiesAt(*track);
+    if(props->track_indentifiers.category == kRocProfVisDmPmcTrack)
+    {
+        while (true)
+        {
+            std::string slice_query;
+            slice_array_t slices;
+
+            slices[*track]=BindObject()->FuncAddSlice(BindObject()->trace_object, *track, start, end, tag);
+            rocprofvis_dm_result_t result = BuildSliceQuery(start, end, 1, track, slice_query, slices);
+            std::string query;
+
+            if (result == kRocProfVisDmResultSuccess)
+            {
+                if (left_neighbor)
+                {
+                    result = BuildCounterSliceLeftNeighbourQuery(start, end, *track, query);
+                    if (result != kRocProfVisDmResultSuccess) break;
+                    result = ExecuteSQLQuery(future,(DbInstance*)props->track_indentifiers.db_instance, query.c_str(), &slices, &CallbackAddAnyRecord);
+                    if (result != kRocProfVisDmResultSuccess) break;
+                }
 
                 if (result == kRocProfVisDmResultSuccess)
                 {
-                    query = "";
-                    if (props->track_indentifiers.category == kRocProfVisDmPmcTrack)
+                    result = ExecuteSQLQuery(future, (DbInstance*)props->track_indentifiers.db_instance, slice_query.c_str(), &slices, &CallbackAddAnyRecord);
+
+                    if (result == kRocProfVisDmResultSuccess && right_neighbor)
                     {
-                        if (props->track_indentifiers.category == kRocProfVisDmPmcTrack)
+                        query = "";
+                        future->ResetRowCount();
+                        if (BuildCounterSliceRightNeighbourQuery(start, end, *track, query) != kRocProfVisDmResultSuccess) break;
+                        if (ExecuteSQLQuery(future, (DbInstance*)props->track_indentifiers.db_instance, query.c_str(), &slices, &CallbackAddAnyRecord) != kRocProfVisDmResultSuccess) break;
+
+                        if (future->GetProcessedRowsCount() == 0)
                         {
-                            future->ResetRowCount();
-                            if (BuildCounterSliceRightNeighbourQuery(start, end, *tracks, query) != kRocProfVisDmResultSuccess) break;
-                            if (ExecuteSQLQuery(future, (DbInstance*)props->track_indentifiers.db_instance, query.c_str(), &slices, &CallbackAddAnyRecord) != kRocProfVisDmResultSuccess) break;
+                            rocprofvis_db_record_data_t record; 
+                            auto db_instance = (DbInstance*)props->track_indentifiers.db_instance;
+                            record.pmc.timestamp = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()]-TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
+                            record.pmc.value = future->GetRuntimeStorageValue<double>(kRPVFutureStorageSampleValue,0);
 
-                            if (future->GetProcessedRowsCount() == 0)
-                            {
-                                rocprofvis_db_record_data_t record; 
-                                auto db_instance = (DbInstance*)props->track_indentifiers.db_instance;
-                                record.pmc.timestamp = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()]-TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
-                                record.pmc.value = future->GetRuntimeStorageValue<double>(kRPVFutureStorageSampleValue,0);
+                            if (BindObject()->FuncAddRecord(slices[*track], record) != kRocProfVisDmResultSuccess)
+                            break;
 
-                                if (BindObject()->FuncAddRecord(slices[*tracks], record) != kRocProfVisDmResultSuccess)
-                                break;
-
-                            }
                         }
                     }
+
+
+                    BindObject()->FuncCompleteSlice(slices[*track]);
+
                 }
-
-
-                BindObject()->FuncCompleteSlice(slices[*tracks]);
-
             }
-        }
 
-        if(kRocProfVisDmResultSuccess != result)
-        {
-            BindObject()->FuncRemoveSlice(BindObject()->trace_object, *tracks, slices[*tracks]);
-            break;
-        }
-        ShowProgress(100 - future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);
-        return future->SetPromise(kRocProfVisDmResultSuccess);
-
+            if(kRocProfVisDmResultSuccess != result)
+            {
+                BindObject()->FuncRemoveSlice(BindObject()->trace_object, *track, slices[*track]);
+                break;
+            }
+            ShowProgress(100 - future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);
+            return future->SetPromise(kRocProfVisDmResultSuccess);
+        }    
     }
 
     ShowProgress(0, "Not all tracks are loaded!", kRPVDbError, future );
     return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
+    
 }
 
 rocprofvis_dm_result_t  ProfileDatabase::ExecuteQuery(

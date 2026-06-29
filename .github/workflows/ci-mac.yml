@@ -181,9 +181,20 @@ jobs:
             exit 1
           fi
 
+          MOLTENVK_LIB="${VULKAN_SDK_DIR}/lib/libMoltenVK.dylib"
+          if [ ! -f "${MOLTENVK_LIB}" ]; then
+            MOLTENVK_LIB=$(find "${VULKAN_SDK_DIR}/lib" -maxdepth 1 -name 'libMoltenVK*.dylib' | sort | head -1)
+          fi
+          if [ -z "${MOLTENVK_LIB}" ] || [ ! -f "${MOLTENVK_LIB}" ]; then
+            echo "MoltenVK library not found under ${VULKAN_SDK_DIR}/lib"
+            ls -la "${VULKAN_SDK_DIR}/lib" || true
+            exit 1
+          fi
+
           echo "VULKAN_SDK=${VULKAN_SDK_DIR}" >> "${GITHUB_ENV}"
           echo "Vulkan_INCLUDE_DIR=${VULKAN_SDK_DIR}/include" >> "${GITHUB_ENV}"
           echo "Vulkan_LIBRARY=${VULKAN_LIB}" >> "${GITHUB_ENV}"
+          echo "MoltenVK_LIBRARY=${MOLTENVK_LIB}" >> "${GITHUB_ENV}"
           if [ -d "${VULKAN_SDK_DIR}/bin" ]; then
             echo "PATH=${VULKAN_SDK_DIR}/bin:${PATH}" >> "${GITHUB_ENV}"
           fi
@@ -202,14 +213,24 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           mkdir -p ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
-          cmake -B ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" -DVulkan_LIBRARY="$Vulkan_LIBRARY"
+          cmake -B ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}  -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" -DVulkan_LIBRARY="$Vulkan_LIBRARY" -DROCPROFVIS_MOLTENVK_LIBRARY="$MoltenVK_LIBRARY"
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4 --target package
           ls -l ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
 
-          if [ -d "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BUILD_FILE_NAME }}.app" ]; then
+          APP="${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BUILD_FILE_NAME }}.app"
+          if [ -d "${APP}" ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }}.app has been successfully built!"
           else
             echo "❌ ${{ env.BUILD_FILE_NAME }}.app was not built!"
+            exit 1
+          fi
+
+          MVK="${APP}/Contents/Frameworks/libMoltenVK.dylib"
+          ICD="${APP}/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json"
+          if [ -f "${MVK}" ] && [ -f "${ICD}" ]; then
+            echo "MoltenVK driver and ICD manifest bundled into the app"
+          else
+            echo "MoltenVK was not bundled (missing ${MVK} or ${ICD})"
             exit 1
           fi
 

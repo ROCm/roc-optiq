@@ -285,7 +285,7 @@ struct TableInfo
     uint64_t                              total_row_count;
 };
 
-struct AnalysisQueueUtilization
+struct AnalysisTrackStatistics
 {
     enum State
     {
@@ -294,9 +294,32 @@ struct AnalysisQueueUtilization
         kRequested,  // Pending fetch completion
         kReady,
     };
-    const TrackInfo* track;
-    double           util_pct;
-    mutable State    state;
+    struct Stat
+    {
+        const char* name;
+        const char* compact_name;
+        size_t      accent_color;
+        double      value;
+        std::string compact;
+        std::string extended;
+        std::string full;
+    };
+    enum Queue : size_t
+    {
+        kQueueUtilization = 0,
+        kQueueCount,
+    };
+    enum Counter : size_t
+    {
+        kCounterMin = 0,
+        kCounterMax,
+        kCounterMean,
+        kCounterStandardDeviation,
+        kCounterCount
+    };
+    const TrackInfo*  track;
+    mutable State     state;
+    std::vector<Stat> stats;
 };
 
 }  // namespace View

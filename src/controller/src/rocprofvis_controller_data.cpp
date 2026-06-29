@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -20,6 +21,12 @@ void Data::Reset()
     {
         case kRPVControllerPrimitiveTypeObject:
         {
+            if (m_owns_object && m_object)
+            {
+                delete reinterpret_cast<Handle*>(m_object);
+            }
+            m_owns_object = false;
+            m_object      = nullptr;
             break;
         }
         case kRPVControllerPrimitiveTypeString:
@@ -52,10 +59,11 @@ Data::Data(Data const& other)
     operator=(other);
 }
 
-Data::Data(Data&& other)
+Data::Data(Data&& other) noexcept
 : m_type(other.m_type)
 {
-    operator=(other);
+    m_uint64 = 0;
+    operator=(std::move(other));
 }
 
 Data& Data::operator=(Data const& other)
@@ -63,10 +71,13 @@ Data& Data::operator=(Data const& other)
     if (this != &other)
     {
         Reset();
+        m_type = other.m_type;
         switch(m_type)
         {
             case kRPVControllerPrimitiveTypeObject:
             {
+                // A copy only borrows the object; ownership is never shared so
+                // that the owning Data remains the sole deleter.
                 SetObject(other.m_object);
                 break;
             }
@@ -94,16 +105,22 @@ Data& Data::operator=(Data const& other)
     return *this;
 }
 
-Data& Data::operator=(Data&& other)
+Data& Data::operator=(Data&& other) noexcept
 {
+    if (this == &other)
+    {
+        return *this;
+    }
     Reset();
     m_type = other.m_type;
     switch(m_type)
     {
         case kRPVControllerPrimitiveTypeObject:
         {
-            m_object = other.m_object;
-            other.m_object = nullptr;
+            m_object             = other.m_object;
+            m_owns_object        = other.m_owns_object;
+            other.m_object       = nullptr;
+            other.m_owns_object  = false;
             break;
         }
         case kRPVControllerPrimitiveTypeString:
@@ -178,6 +195,10 @@ Data::~Data()
     {
         case kRPVControllerPrimitiveTypeObject:
         {
+            if (m_owns_object && m_object)
+            {
+                delete reinterpret_cast<Handle*>(m_object);
+            }
             break;
         }
         case kRPVControllerPrimitiveTypeString:
@@ -246,8 +267,44 @@ rocprofvis_result_t Data::SetObject(rocprofvis_handle_t* object)
         {
             case kRPVControllerPrimitiveTypeObject:
             {
-                m_object = object;
-                result = kRocProfVisResultSuccess;
+                m_object      = object;
+                m_owns_object = false;
+                result        = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerPrimitiveTypeString:
+            case kRPVControllerPrimitiveTypeUInt64:
+            case kRPVControllerPrimitiveTypeDouble:
+            {
+                result = kRocProfVisResultInvalidType;
+                break;
+            }
+            default:
+            {
+                result = kRocProfVisResultInvalidEnum;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Data::SetOwnedObject(rocprofvis_handle_t* object)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if (object)
+    {
+        switch(m_type)
+        {
+            case kRPVControllerPrimitiveTypeObject:
+            {
+                if (m_owns_object && m_object && m_object != object)
+                {
+                    delete reinterpret_cast<Handle*>(m_object);
+                }
+                m_object      = object;
+                m_owns_object = true;
+                result        = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerPrimitiveTypeString:
@@ -281,10 +338,19 @@ rocprofvis_result_t Data::GetString(char* string, uint32_t* length)
             }
             else if (length && string && (*length > 0))
             {
-                const size_t src_len = m_string ? strlen(m_string) : 0;
-                const size_t copy    = std::min(src_len, static_cast<size_t>(*length));
+                // *length is the capacity of the caller's buffer. Copy as many bytes
+                // as fit, and null-terminate only when there is spare room. This keeps
+                // the exact-fit caller (resize(strlen) then pass strlen) working while
+                // ensuring oversized buffers (e.g. a fixed char buf[256] later wrapped
+                // in std::string(buffer)) get a terminator instead of reading past the
+                // copied data into uninitialized memory.
+                const size_t src_len  = m_string ? strlen(m_string) : 0;
+                const size_t capacity = static_cast<size_t>(*length);
+                const size_t copy     = std::min(src_len, capacity);
                 if (copy > 0) std::memcpy(string, m_string, copy);
-                result = kRocProfVisResultSuccess;
+                if (copy < capacity) string[copy] = '\0';
+                *length = static_cast<uint32_t>(copy);
+                result  = kRocProfVisResultSuccess;
             }
             break;
         }

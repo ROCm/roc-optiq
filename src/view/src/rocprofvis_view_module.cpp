@@ -93,6 +93,12 @@ rocprofvis_get_application_config_path()
     return get_application_config_path(true);
 }
 
+std::string
+rocprofvis_get_application_log_path()
+{
+    return get_application_log_path(true);
+}
+
 bool
 rocprofvis_view_is_remote_display_session()
 {

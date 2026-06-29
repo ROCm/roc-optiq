@@ -23,56 +23,42 @@ TimelineSelection::TimelineSelection(DataProvider& dp)
 TimelineSelection::~TimelineSelection() {}
 
 void
-TimelineSelection::SelectTrack(TrackGraph& graph)
+TimelineSelection::SelectTrack(TrackItem& track)
 {
-    if(!graph.selected && graph.chart && !graph.chart->IsSelected() &&
-       m_selected_track_ids.count(graph.chart->GetID()) == 0)
+    if(!IsTrackSelected(track))
     {
-        graph.selected = true;
-        graph.chart->SetSelected(true);
-        m_selected_track_ids.insert(graph.chart->GetID());
-        SendTrackSelectionChanged(graph.chart->GetID(), true);
+        m_selected_track_ids.insert(track.GetID());
+        SendTrackSelectionChanged(track.GetID(), true);
     }
 }
 
 void
-TimelineSelection::UnselectTrack(TrackGraph& graph)
+TimelineSelection::UnselectTrack(TrackItem& track)
 {
-    if(graph.selected && graph.chart && graph.chart->IsSelected() &&
-       m_selected_track_ids.count(graph.chart->GetID()) > 0)
+    if(IsTrackSelected(track))
     {
-        graph.selected = false;
-        graph.chart->SetSelected(false);
-        m_selected_track_ids.erase(graph.chart->GetID());
-        SendTrackSelectionChanged(graph.chart->GetID(), false);
+        m_selected_track_ids.erase(track.GetID());
+        SendTrackSelectionChanged(track.GetID(), false);
     }
 }
 
 void
-TimelineSelection::UnselectAllTracks(std::vector<TrackGraph>& graphs)
+TimelineSelection::UnselectAllTracks()
 {
-    for(auto& graph : graphs)
-    {
-        graph.selected = false;
-        if(graph.chart)
-        {
-            graph.chart->SetSelected(false);
-        }
-    }
     m_selected_track_ids.clear();
     SendTrackSelectionChanged(INVALID_SELECTION_ID, false);
 }
 
 void
-TimelineSelection::ToggleSelectTrack(TrackGraph& graph)
+TimelineSelection::ToggleSelectTrack(TrackItem& track)
 {
-    if(graph.selected)
+    if(IsTrackSelected(track))
     {
-        UnselectTrack(graph);
+        UnselectTrack(track);
     }
     else
     {
-        SelectTrack(graph);
+        SelectTrack(track);
     }
 }
 
@@ -93,6 +79,12 @@ bool
 TimelineSelection::HasSelectedTracks() const
 {
     return !m_selected_track_ids.empty();
+}
+
+bool
+TimelineSelection::IsTrackSelected(TrackItem& track) const
+{
+    return m_selected_track_ids.count(track.GetID()) > 0;
 }
 
 void

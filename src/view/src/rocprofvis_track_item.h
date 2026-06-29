@@ -91,23 +91,26 @@ private:
 class TrackItem
 {
 public:
-    TrackItem(DataProvider& dp, uint64_t id, std::shared_ptr<TimePixelTransform> tpt,
+    TrackItem(DataProvider& dp, uint64_t id, bool diplay, 
+              std::shared_ptr<TimePixelTransform> tpt,
               std::shared_ptr<TimelineSelection> timeline_selection = nullptr);
-    virtual ~TrackItem() {}
+    virtual ~TrackItem();
     void               SetID(uint64_t id);
-    uint64_t           GetID();
-    virtual float      GetTrackHeight();
+    uint64_t           GetID() const;
+    virtual float      GetTrackHeight() const;
     virtual void       Render(float width);
     virtual void       Update();
     const std::string& GetName();
-    bool IsInViewVertical();
+    bool IsInViewVertical() const;
     void SetInViewVertical(bool in_view);
 
     bool  IsSelected() const;
-    void  SetSelected(bool selected);
-    void  SetDistanceToView(float distance);
 
-    float GetDistanceToView();
+    bool IsDisplayed() const;
+    void SetDisplay(bool display);
+
+    void  SetDistanceToView(float distance);
+    float GetDistanceToView() const;
 
     bool        TrackHeightChanged();
     static void SetSidebarSize(float sidebar_size);
@@ -163,7 +166,7 @@ protected:
     bool                                m_meta_area_clicked;
     float                               m_meta_area_scale_width;
     float                               m_max_meta_area_scale_width;
-    bool                                m_selected;
+    bool                                m_display;
     float                               m_reorder_grip_width;
     std::shared_ptr<TimePixelTransform> m_tpt;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
@@ -178,6 +181,9 @@ protected:
 
 private:
     void RenderPills(ImVec2 region);
+
+    bool                            m_selected;
+    EventManager::SubscriptionToken m_selected_changed_token;
 
     std::vector<std::unique_ptr<Pill>> m_pills;
     TrackProjectSettings               m_track_project_settings;

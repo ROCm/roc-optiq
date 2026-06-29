@@ -7,7 +7,6 @@
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_click_manager.h"
 #include "rocprofvis_hotkey_manager.h"
-#include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_font_manager.h"
@@ -18,9 +17,7 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_gui_helpers.h"
-#include <GLFW/glfw3.h>
 #include <algorithm>
 #include <sstream>
 
@@ -180,7 +177,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
     m_timeline_time_range_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimelineTimeRangeChanged), time_range_changed_handler);
 
-    m_graphs = std::make_shared<std::vector<TrackGraph>>();
+    m_tracks = std::make_shared<std::vector<TrackItem*>>();
 
     // force initial calculation of flame track label width
     FlameTrackItem::CalculateMaxEventLabelWidth();
@@ -212,7 +209,7 @@ TimelineView::RenderInteractiveUI()
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetWindowPos();
 
-    m_arrow_layer.Render(draw_list, window_position, m_track_position_y, m_graphs, m_tpt);
+    m_arrow_layer.Render(draw_list, window_position, m_track_position_y, m_tracks, m_tpt);
 
     RenderMeasurement(draw_list, window_position);
 
@@ -731,11 +728,11 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
         }
 
         uint64_t track_index = metadata->index;
-        if(track_index < m_graphs->size())
+        if(track_index < m_tracks->size())
         {
-            if((*m_graphs)[track_index].chart)
+            if((*m_tracks)[track_index])
             {
-                (*m_graphs)[track_index].chart->HandleTrackDataChanged(
+                (*m_tracks)[track_index]->HandleTrackDataChanged(
                     tde->GetRequestID(), tde->GetResponseCode());
             }
             else
@@ -764,16 +761,19 @@ TimelineView::Update()
             if(m_data_provider.SetGraphIndex(m_reorder_request.track_id,
                                              m_reorder_request.new_index))
             {
-                std::vector<TrackGraph> graphs_reordered;
+                std::vector<TrackItem*> tracks_reordered;
                 TimelineModel&          tlm = m_data_provider.DataModel().GetTimeline();
-                graphs_reordered.resize(tlm.GetTrackCount());
-                for(TrackGraph& graph : *m_graphs)
+                tracks_reordered.resize(tlm.GetTrackCount());
+                for(TrackItem* track : *m_tracks)
                 {
-                    const TrackInfo* metadata = tlm.GetTrack(graph.chart->GetID());
-                    ROCPROFVIS_ASSERT(metadata);
-                    graphs_reordered[metadata->index] = std::move(graph);
+                    if(track)
+                    {
+                        const TrackInfo* metadata = tlm.GetTrack(track->GetID());
+                        ROCPROFVIS_ASSERT(metadata);
+                        tracks_reordered[metadata->index] = track;
+                    }
                 }
-                *m_graphs = std::move(graphs_reordered);
+                *m_tracks = std::move(tracks_reordered);
             }
         }
         // Rebuild the positioning map.
@@ -781,22 +781,27 @@ TimelineView::Update()
         {
             m_track_position_y.clear();
             m_track_height_sum = 0;
-            for(int i = 0; i < m_graphs->size(); i++)
+            for(int i = 0; i < m_tracks->size(); i++)
             {
-                m_track_position_y[(*m_graphs)[i].chart->GetID()] = m_track_height_sum;
-                m_track_height_sum +=
-                    (*m_graphs)[i].display
-                        ? (*m_graphs)[i]
-                              .chart->GetTrackHeight()  // Get the height of the track.
-                        : 0;
-                (*m_graphs)[i].display_changed = false;
+                if((*m_tracks)[i])
+                {
+                    m_track_position_y[(*m_tracks)[i]->GetID()] = m_track_height_sum;
+                    m_track_height_sum +=
+                        (*m_tracks)[i]->IsDisplayed()
+                            ? (*m_tracks)[i]
+                                  ->GetTrackHeight()  // Get the height of the track.
+                            : 0;
+                }
             }
         }
         m_reorder_request.handled = true;
         m_resize_activity         = false;
-        for(const TrackGraph& track : *m_graphs)
+        for(TrackItem* track : *m_tracks)
         {
-            track.chart->Update();
+            if(track)
+            {
+                track->Update();
+            }
         }
     }
 }
@@ -1155,10 +1160,10 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
     ImGui::PopStyleColor();
 }
 
-std::shared_ptr<std::vector<TrackGraph>>
-TimelineView::GetGraphs()
+std::shared_ptr<std::vector<TrackItem*>>
+TimelineView::GetTracks()
 {
-    return m_graphs;
+    return m_tracks;
 }
 
 void
@@ -1305,7 +1310,7 @@ TimelineView::RenderGraphView()
     // Re-set each frame by RenderReorderingTrack while in the auto-scroll zone.
     m_reorder_auto_scrolling = false;
 
-    for(int index = 0; index < m_graphs->size(); index++)
+    for(int index = 0; index < m_tracks->size(); index++)
     {
         RenderTrack(index, request_data, window_flags, container_size);
     }
@@ -1374,72 +1379,70 @@ void
 TimelineView::RenderTrack(int track_index, bool request_data,
                           ImGuiWindowFlags window_flags, ImVec2 container_size)
 {
-    TrackGraph& track_graph = (*m_graphs)[track_index];
-    m_resize_activity |= track_graph.display_changed;
-
-    if(track_graph.display)
+    TrackItem* track_item = (*m_tracks)[track_index];
+    if(track_item)
     {
-        TrackItem* track_item = track_graph.chart;
-        ROCPROFVIS_ASSERT(track_item);
-
-        // Get track height and position to check if the track is in view
-        float  track_height = track_item->GetTrackHeight();
-        ImVec2 track_pos    = ImGui::GetCursorPos();
-
-        // Calculate the track's position in the scrollable area
-        float track_top    = track_pos.y;
-        float track_bottom = track_top + track_height;
-
-        // Calculate deltas for out-of-view tracks
-        float delta_top = m_scroll_position_y -
-                          track_bottom;  // Positive if the track is above the view
-        float delta_bottom =
-            track_top -
-            (m_scroll_position_y +
-             m_tpt->GetGraphSizeY());  // Positive if the track is below the view
-
-        // Save distance for book keeping
-        track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
-
-        // This item is being reordered if there is an active payload and its id
-        // matches the payload's id.
-        bool is_reordering = ImGui::GetDragDropPayload() &&
-                             m_reorder_request.track_id == track_item->GetID();
-
-        // Check if the track is visible
-        bool is_visible = (track_bottom >= m_scroll_position_y &&
-                           track_top <= m_scroll_position_y + m_tpt->GetGraphSizeY()) ||
-                          is_reordering;
-
-        track_item->SetInViewVertical(is_visible);
-
         m_resize_activity |= track_item->TrackHeightChanged();
 
-        if(m_loading_timer.IsExpired())
+        if(track_item->IsDisplayed())
         {
-            if(is_visible || track_item->GetDistanceToView() <= m_unload_track_distance)
-            {
-                RequestDataIfEmpty(track_item, request_data);
-                track_item->RequestAnalysis();
-            }
-            else if(track_item->IsSelected())
-            {
-                track_item->RequestAnalysis();
-            }
-        }
+            // Get track height and position to check if the track is in view
+            float  track_height = track_item->GetTrackHeight();
+            ImVec2 track_pos    = ImGui::GetCursorPos();
 
-        if(is_visible)
-        {
-            RenderNormalTrack(track_graph, track_index, window_flags, is_reordering);
-        }
-        else
-        {
-            RenderEmptyTrack(track_item);
-        }
+            // Calculate the track's position in the scrollable area
+            float track_top    = track_pos.y;
+            float track_bottom = track_top + track_height;
 
-        if(is_reordering)
-        {
-            RenderReorderingTrack(track_item, container_size);
+            // Calculate deltas for out-of-view tracks
+            float delta_top = m_scroll_position_y -
+                              track_bottom;  // Positive if the track is above the view
+            float delta_bottom =
+                track_top -
+                (m_scroll_position_y +
+                 m_tpt->GetGraphSizeY());  // Positive if the track is below the view
+
+            // Save distance for book keeping
+            track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
+
+            // This item is being reordered if there is an active payload and its id
+            // matches the payload's id.
+            bool is_reordering = ImGui::GetDragDropPayload() &&
+                                 m_reorder_request.track_id == track_item->GetID();
+
+            // Check if the track is visible
+            bool is_visible = (track_bottom >= m_scroll_position_y &&
+                               track_top <= m_scroll_position_y + m_tpt->GetGraphSizeY()) ||
+                              is_reordering;
+
+            track_item->SetInViewVertical(is_visible);
+
+            if(m_loading_timer.IsExpired())
+            {
+                if(is_visible || track_item->GetDistanceToView() <= m_unload_track_distance)
+                {
+                    RequestDataIfEmpty(track_item, request_data);
+                    track_item->RequestAnalysis();
+                }
+                else if(track_item->IsSelected())
+                {
+                    track_item->RequestAnalysis();
+                }
+            }
+
+            if(is_visible)
+            {
+                RenderNormalTrack(track_item, track_index, window_flags, is_reordering);
+            }
+            else
+            {
+                RenderEmptyTrack(track_item);
+            }
+
+            if(is_reordering)
+            {
+                RenderReorderingTrack(track_item, container_size);
+            }
         }
     }
 }
@@ -1465,15 +1468,13 @@ TimelineView::RequestDataIfEmpty(TrackItem* track_item, bool request_data)
 }
 
 void
-TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
+TimelineView::RenderNormalTrack(TrackItem* track_item, int track_index,
                         ImGuiWindowFlags window_flags, bool is_reordering)
 {
-    TrackItem* track_item = track_graph.chart;
-    ROCPROFVIS_ASSERT(track_item);
     float track_height = track_item->GetTrackHeight();
 
     ImU32 selection_color = m_settings.GetColor(Colors::kTransparent);
-    if(track_graph.selected)
+    if(track_item->IsSelected())
     {
         selection_color = m_settings.GetColor(Colors::kHighlightChart);
     }
@@ -1523,7 +1524,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
 
     RenderTimeRangeSelectionFill(lane_dl, lane_min, lane_max);
 
-    if(track_graph.selected)
+    if(track_item->IsSelected())
     {
         // Mark the selected lane without covering the track contents.
         lane_dl->AddRectFilled(
@@ -1598,7 +1599,7 @@ TimelineView::RenderNormalTrack(TrackGraph& track_graph, int track_index,
         // check for mouse click
         if(track_item->IsMetaAreaClicked())
         {
-            m_timeline_selection->ToggleSelectTrack(track_graph);
+            m_timeline_selection->ToggleSelectTrack(*track_item);
         }
     }
     ImGui::EndChild();
@@ -1722,14 +1723,13 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
 void
 TimelineView::DestroyGraphs()
 {
-    if(m_graphs)
+    if(m_tracks)
     {
-        for(TrackGraph& graph : *m_graphs)
+        for(TrackItem* track : *m_tracks)
         {
-            delete graph.chart;
+            delete track;
         }
-
-        m_graphs->clear();
+        m_tracks->clear();
     }
     m_meta_map_made = false;
 }
@@ -1754,7 +1754,7 @@ TimelineView::MakeGraphView()
 
     /*This section makes the charts both line and flamechart are constructed here*/
     uint64_t num_graphs = tlm.GetTrackCount();
-    m_graphs->resize(num_graphs);
+    m_tracks->resize(num_graphs);
 
     std::vector<const TrackInfo*> track_list    = tlm.GetTrackList();
     bool                          project_valid = m_project_settings.Valid();
@@ -1791,24 +1791,21 @@ TimelineView::MakeGraphView()
             continue;
         }
 
-        TrackGraph graph = { GraphType::TYPE_FLAMECHART, display, false, nullptr, false };
+        TrackItem* track = nullptr;
         switch(track_info->track_type)
         {
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                graph.chart = new FlameTrackItem(
-                    m_data_provider, m_timeline_selection, m_measurement,
-                    track_info->id, m_tpt);
-                graph.graph_type = GraphType::TYPE_FLAMECHART;
+                track = new FlameTrackItem(m_data_provider, track_info->id, display,
+                                           m_tpt, m_timeline_selection, m_measurement);
                 break;
             }
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                graph.chart = new LineTrackItem(m_data_provider, track_info->id, m_tpt,
-                                                m_timeline_selection);
-                graph.graph_type = GraphType::TYPE_LINECHART;
+                track = new LineTrackItem(m_data_provider, track_info->id, display, m_tpt,
+                                          m_timeline_selection);
                 break;
             }
             default:
@@ -1816,12 +1813,12 @@ TimelineView::MakeGraphView()
                 break;
             }
         }
-        if(graph.chart)
+        if(track)
         {
             m_tpt->SetMinMaxX(std::min(track_info->min_ts, m_tpt->GetMinX()),
                               std::max(track_info->max_ts, m_tpt->GetMaxX()));
 
-            (*m_graphs)[track_info->index] = std::move(graph);
+            (*m_tracks)[track_info->index] = track;
         }
     }
 
@@ -2811,7 +2808,7 @@ TimelineView::GetVisibleTrackFractions(float& start_fraction, float& end_fractio
     start_fraction = 0.0f;
     end_fraction   = 1.0f;
 
-    if(!m_graphs || m_graphs->empty()) return;
+    if(!m_tracks || m_tracks->empty()) return;
 
     // Count displayed tracks and find visible range
     int   displayed_count = 0;
@@ -2821,12 +2818,12 @@ TimelineView::GetVisibleTrackFractions(float& start_fraction, float& end_fractio
     float view_bottom     = view_top + GetTrackViewportHeight();
     float cumulative_y    = 0.0f;
 
-    for(int i = 0; i < static_cast<int>(m_graphs->size()); i++)
+    for(int i = 0; i < static_cast<int>(m_tracks->size()); i++)
     {
-        const auto& graph = (*m_graphs)[i];
-        if(!graph.display) continue;
+        const auto& track = (*m_tracks)[i];
+        if(!track || !track->IsDisplayed()) continue;
 
-        float track_height = graph.chart->GetTrackHeight();
+        float track_height = track->GetTrackHeight();
         float track_top    = cumulative_y;
         float track_bottom = cumulative_y + track_height;
 
@@ -2869,15 +2866,15 @@ void
 TimelineView::UpdateMaxMetaAreaSize(bool update_tracks)
 {
     m_max_meta_scale_area_size = 0.0f;
-    for(TrackGraph& track : (*m_graphs))
+    for(TrackItem* track : (*m_tracks))
     {
-        if(track.chart)
+        if(track)
         {
             if(update_tracks)
             {
-                track.chart->UpdateMaxMetaScaleAreaSize();
+                track->UpdateMaxMetaScaleAreaSize();
             }
-            m_max_meta_scale_area_size = std::max(track.chart->GetMaxMetaAreaScaleWidth(),
+            m_max_meta_scale_area_size = std::max(track->GetMaxMetaAreaScaleWidth(),
                                                   m_max_meta_scale_area_size);
         }
     }
@@ -2894,13 +2891,13 @@ TimelineViewProjectSettings::~TimelineViewProjectSettings() {}
 void
 TimelineViewProjectSettings::ToJson()
 {
-    const std::vector<TrackGraph>& graphs = *m_timeline_view.GetGraphs();
-    for(int i = 0; i < graphs.size(); i++)
+    const std::vector<TrackItem*>& tracks = *m_timeline_view.GetTracks();
+    for(int i = 0; i < tracks.size(); i++)
     {
-        uint64_t id = graphs[i].chart->GetID();
+        uint64_t id = tracks[i]->GetID();
         m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][i] = id;
         m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK][id]
-                       [JSON_KEY_TIMELINE_TRACK_DISPLAY] = graphs[i].display;
+                       [JSON_KEY_TIMELINE_TRACK_DISPLAY] = tracks[i]->IsDisplayed();
     }
 }
 
@@ -2913,7 +2910,7 @@ TimelineViewProjectSettings::Valid() const
         std::vector<jt::Json>& track_order =
             m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER]
                 .getArray();
-        if(track_order.size() == m_timeline_view.m_graphs->size())
+        if(track_order.size() == m_timeline_view.m_tracks->size())
         {
             int valid_count = 0;
             for(jt::Json& track_id : track_order)
@@ -2938,7 +2935,7 @@ TimelineViewProjectSettings::Valid() const
             std::vector<jt::Json>& tracks =
                 m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
                     .getArray();
-            if(tracks.size() == m_timeline_view.m_graphs->size())
+            if(tracks.size() == m_timeline_view.m_tracks->size())
             {
                 int valid_count = 0;
                 for(jt::Json& track_id : tracks)

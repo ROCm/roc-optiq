@@ -164,10 +164,14 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                                 category, symbol);
                                         if(result == kRocProfVisResultSuccess)
                                         {
-                                            result = array.SetObject(
+                                            result = array.SetOwnedObject(
                                                 kRPVControllerArrayEntryIndexed,
                                                 entry_counter++,
                                                 (rocprofvis_handle_t*) flow_control);
+                                        }
+                                        if(result != kRocProfVisResultSuccess)
+                                        {
+                                            delete flow_control;
                                         }
                                     }
                                 }

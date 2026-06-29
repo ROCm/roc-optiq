@@ -399,6 +399,11 @@ target_link_libraries(${TARGET_NAME} PRIVATE "${Vulkan_LIBRARIES}")
 find_package(OpenGL REQUIRED)
 target_link_libraries(${TARGET_NAME} PRIVATE OpenGL::GL)
 
+# View-layer unit tests (no live ImGui/GLFW/Vulkan context required).
+if(BUILD_TESTING)
+    add_subdirectory(src/view/tests)
+endif()
+
 # CPACK Packaging Enabling
 set(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
 if( NOT DEFINED BUILD_ID )

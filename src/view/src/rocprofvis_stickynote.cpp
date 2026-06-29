@@ -301,7 +301,6 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
     const float btn_size =
         std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
     ImVec2 btn_max = ImVec2(marker_pos.x + btn_size, marker_pos.y + btn_size);
-    bool   hovered = ImGui::IsMouseHoveringRect(marker_pos, btn_max);
 
     if(draw_list)
     {
@@ -320,6 +319,8 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
     ImGui::PushStyleColor(ImGuiCol_Text, text_color);
     ImGui::Button((std::string(ICON_STICKY_NOTE) + "##" + std::to_string(m_id)).c_str(),
                   ImVec2(btn_size, btn_size));
+    // IsItemHovered respects z-order, so a covered marker won't show the time line.
+    bool hovered = ImGui::IsItemHovered();
     // Clicking a minimized marker expands the note; re-seed its window position.
     if(m_is_minimized && ImGui::IsItemHovered() &&
        IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))

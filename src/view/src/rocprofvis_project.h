@@ -167,6 +167,18 @@ constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
 constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
 constexpr const char* JSON_KEY_ANNOTATION_IS_MINIMIZED     = "is_minimized";
 
+constexpr const char* JSON_KEY_MEASUREMENTS               = "measurements";
+constexpr const char* JSON_KEY_MEASUREMENT_POINTS         = "points";
+constexpr const char* JSON_KEY_MEASUREMENT_PT_TIMESTAMP   = "timestamp";
+constexpr const char* JSON_KEY_MEASUREMENT_PT_DURATION    = "duration";
+constexpr const char* JSON_KEY_MEASUREMENT_PT_TRACK_ID    = "track_id";
+constexpr const char* JSON_KEY_MEASUREMENT_PT_LEVEL       = "level";
+constexpr const char* JSON_KEY_MEASUREMENT_PT_EVENT_UUID  = "event_uuid";
+constexpr const char* JSON_KEY_MEASUREMENT_PT_NAME        = "name";
+constexpr const char* JSON_KEY_MEASUREMENT_PT_FREEHAND    = "freehand";
+constexpr const char* JSON_KEY_MEASUREMENT_PT_EDGE        = "edge";
+constexpr const char* JSON_KEY_MEASUREMENT_PT_OFFSET      = "offset";
+
 class ProjectSetting
 {
 public:

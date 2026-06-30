@@ -114,6 +114,9 @@ public:
     ImVec2         GetGraphSize();
     void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
+    void           CopyMeasurement(int index);
+    int            MeasurementAtPixel(float rel_x) const;
+    void           ResyncMeasurementHighlights();
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
     float          GetTotalTrackHeight() const;
@@ -222,6 +225,8 @@ private:
     bool m_dragging_selection_end;
     bool m_is_selecting_region;
     MeasurementRulerDragTarget m_dragging_measurement_ruler;
+    // Measurement targeted by the timeline right-click context menu (-1 = none).
+    int                        m_context_menu_measurement;
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;

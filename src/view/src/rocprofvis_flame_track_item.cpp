@@ -13,6 +13,7 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
 #include <cmath>
 #include <limits>
 #include <sstream>
@@ -459,19 +460,24 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
 
             if(measure.IsMeasurementMode() && !measure.IsFreehandMode())
             {
-                // Clicking after a complete measurement starts a new one.
-                if(measure.GetMeasurementState() == MeasurementState::kComplete)
+                // Adding a point after a complete measurement starts a new one;
+                // AddEventPoint refuses (returns false) once the cap is reached.
+                if(measure.AddEventPoint(chart_item.event.m_start_ts,
+                                         chart_item.event.m_duration, m_track_id,
+                                         chart_item.event.m_level,
+                                         chart_item.event.m_name,
+                                         chart_item.event.m_id.uuid))
                 {
-                    m_timeline_selection->UnhighlightPersistentEvents();
-                    measure.ClearMeasurement();
+                    m_timeline_selection->HighlightTrackEventPersistent(
+                        m_track_id, chart_item.event.m_id.uuid);
                 }
-                measure.SetMeasurementPoint(chart_item.event.m_start_ts,
-                                            chart_item.event.m_duration, m_track_id,
-                                            chart_item.event.m_level,
-                                            chart_item.event.m_name,
-                                            chart_item.event.m_id.uuid);
-                m_timeline_selection->HighlightTrackEventPersistent(
-                    m_track_id, chart_item.event.m_id.uuid);
+                else
+                {
+                    NotificationManager::GetInstance().Show(
+                        "Measurement limit reached (max " +
+                            std::to_string(MeasurementController::MAX_MEASUREMENTS) + ")",
+                        NotificationLevel::Warning);
+                }
             }
             else if(!measure.IsMeasurementMode())
             {

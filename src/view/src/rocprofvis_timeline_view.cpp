@@ -108,6 +108,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_dragging_selection_end(false)
 , m_is_selecting_region(false)
 , m_dragging_measurement_ruler(MeasurementRulerDragTarget::kNone)
+, m_context_menu_measurement(-1)
 , m_loading_timer(DEFAULT_LOADING_TIMER)
 {
     // Subscribe to events
@@ -269,27 +270,29 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 void
 TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 {
-    MeasurementController& fm = *m_measurement;
-    const auto& p1 = fm.GetPoint(0);
-    const auto& p2 = fm.GetPoint(1);
-    if(!p1.valid && !p2.valid) return;
+    MeasurementController& fm    = *m_measurement;
+    int                    count = fm.GetMeasurementCount();
+    if(count == 0) return;
 
-    SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            color        = settings.GetColor(Colors::kMeasurementColor);
-    float            level_height = settings.GetEventLevelHeight();
-    const auto&      time_format  = settings.GetUserSettings().unit_settings.time_format;
+    SettingsManager& settings    = SettingsManager::GetInstance();
+    ImU32            color       = settings.GetColor(Colors::kMeasurementColor);
+    const auto&      time_format = settings.GetUserSettings().unit_settings.time_format;
 
-    constexpr float CURVE_THICK         = 2.5f;
-    constexpr float VLINE_THICK         = 1.5f;
-    constexpr float LABEL_PAD           = 8.0f;
-    constexpr float LABEL_ROUND         = 6.0f;
-    constexpr float RULER_LABEL_PAD_X   = 4.0f;
-    constexpr float RULER_LABEL_PAD_Y   = 2.0f;
-    constexpr float RULER_LABEL_ROUND   = 3.0f;
-    constexpr float DELTA_LABEL_OFFSET  = 20.0f;
+    constexpr float CURVE_THICK       = 2.5f;
+    constexpr float VLINE_THICK       = 1.5f;
+    constexpr float LABEL_PAD         = 8.0f;
+    constexpr float LABEL_ROUND       = 6.0f;
+    constexpr float RULER_LABEL_PAD_X = 4.0f;
+    constexpr float RULER_LABEL_PAD_Y = 2.0f;
+    constexpr float RULER_LABEL_ROUND = 3.0f;
+    constexpr float DELTA_LABEL_OFFSET = 20.0f;
+    // Vertical stagger so multiple connecting lines/labels do not overlap.
+    constexpr float ROW_STAGGER       = 26.0f;
+    constexpr float NOTCH_H           = 10.0f;
     ImU32 label_bg   = settings.GetColor(Colors::kMeasurementLabelBg);
     ImU32 label_edge = settings.GetColor(Colors::kMeasurementLabelEdge);
     ImU32 label_text = settings.GetColor(Colors::kMeasurementLabelText);
+    ImU32 notch_col  = settings.GetColor(Colors::kMeasurementNotch);
 
     float top = window_position.y;
     float bot = window_position.y + m_track_height_sum;
@@ -327,46 +330,38 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         draw_list->AddText(ImVec2(lx, ly), label_text, text);
     };
 
-    // Resolves Y position for a measurement point
-    auto point_y = [&](const MeasurementPoint& pt) -> float {
-        if(pt.freehand) return visible_center_y;
-        auto it = m_track_position_y.find(pt.track_id);
-        if(it != m_track_position_y.end())
-            return it->second + level_height * pt.level + level_height * 0.5f;
-        return visible_center_y;
-    };
-
-    // Draw ruler + label for each valid point
-    int valid_count = 0;
-    float px[2]     = {};
-    for(int i = 0; i < 2; ++i)
+    for(int mi = 0; mi < count; ++mi)
     {
-        const auto& pt = fm.GetPoint(i);
-        if(!pt.valid) continue;
-        ++valid_count;
+        const Measurement& m = fm.GetMeasurement(mi);
 
-        double eff     = fm.GetEffectiveTimestamp(i);
-        px[i]          = window_position.x + m_tpt->RawTimeToPixel(eff);
-        draw_list->AddLine(ImVec2(px[i], top), ImVec2(px[i], bot), color, VLINE_THICK);
-
-        std::string ts_str =
-            nanosecond_to_formatted_str(eff - m_tpt->GetMinX(), time_format, true);
-        draw_ruler_label(px[i], ts_str.c_str());
-    }
-
-    if(valid_count < 2) return;
-
-    // Freehand notch markers at original event edges
-    if(fm.IsFreehandMode())
-    {
-        constexpr float NOTCH_H   = 10.0f;
-        ImU32           notch_col = settings.GetColor(Colors::kMeasurementNotch);
-        float           mid_y     = window_position.y + visible_center_y;
-
+        // Draw ruler + timestamp label for each valid point
+        int   valid_count = 0;
+        float px[2]       = {};
         for(int i = 0; i < 2; ++i)
         {
-            const auto& pt = fm.GetPoint(i);
-            if(pt.freehand) continue;
+            const MeasurementPoint& pt = m.points[i];
+            if(!pt.valid) continue;
+            ++valid_count;
+
+            double eff = MeasurementController::EffectiveTimestamp(m, i);
+            px[i]      = window_position.x + m_tpt->RawTimeToPixel(eff);
+            draw_list->AddLine(ImVec2(px[i], top), ImVec2(px[i], bot), color, VLINE_THICK);
+
+            std::string ts_str =
+                nanosecond_to_formatted_str(eff - m_tpt->GetMinX(), time_format, true);
+            draw_ruler_label(px[i], ts_str.c_str());
+        }
+
+        if(valid_count < 2) continue;
+
+        float line_y = window_position.y + visible_center_y + ROW_STAGGER * mi;
+
+        // Notch markers at original event edges for any ruler dragged off its anchor.
+        float mid_y = window_position.y + visible_center_y;
+        for(int i = 0; i < 2; ++i)
+        {
+            const MeasurementPoint& pt = m.points[i];
+            if(pt.freehand || m.freehand_offsets[i] == 0.0) continue;
             for(double ts : { pt.timestamp, pt.timestamp + pt.duration })
             {
                 float nx = window_position.x + m_tpt->RawTimeToPixel(ts);
@@ -374,16 +369,18 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
                                    ImVec2(nx, mid_y + NOTCH_H), notch_col, 1.0f);
             }
         }
+
+        // Straight horizontal line connecting the two rulers
+        draw_list->AddLine(ImVec2(px[0], line_y), ImVec2(px[1], line_y), color, CURVE_THICK);
+
+        // Delta label at midpoint, prefixed with the measurement number when >1.
+        double delta = std::abs(MeasurementController::EffectiveTimestamp(m, 1) -
+                                MeasurementController::EffectiveTimestamp(m, 0));
+        std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
+        if(count > 1)
+            delta_str = "#" + std::to_string(mi + 1) + ": " + delta_str;
+        draw_label((px[0] + px[1]) * 0.5f, line_y + DELTA_LABEL_OFFSET, delta_str.c_str());
     }
-
-    // Straight horizontal line connecting the two rulers
-    float line_y = window_position.y + visible_center_y;
-    draw_list->AddLine(ImVec2(px[0], line_y), ImVec2(px[1], line_y), color, CURVE_THICK);
-
-    // Delta label at midpoint
-    double      delta     = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
-    std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
-    draw_label((px[0] + px[1]) * 0.5f, line_y + DELTA_LABEL_OFFSET, delta_str.c_str());
 }
 
 ImVec2
@@ -410,6 +407,9 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                               ImGuiHoveredFlags_NoPopupHierarchy) &&
        ImGui::IsMouseHoveringRect(win_min, win_max))
     {
+        // Remember which measurement the click landed on so the context menu copies
+        // only that one.
+        m_context_menu_measurement = MeasurementAtPixel(rel_mouse_pos.x);
         ImGui::OpenPopup("TimelineContextMenu");
     }
 
@@ -487,11 +487,18 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                 fm.EnterMeasurementMode();
             }
         }
-        if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
+        if(fm.GetMeasurementCount() > 0)
         {
-            if(IconMenuItem(ICON_TRASH_CAN, "Clear Measurement"))
+            if(m_context_menu_measurement >= 0 &&
+               IconMenuItem(ICON_COPY, "Copy Measurement"))
             {
-                fm.ClearMeasurement();
+                CopyMeasurement(m_context_menu_measurement);
+            }
+            const bool multiple = fm.GetMeasurementCount() > 1;
+            if(IconMenuItem(ICON_TRASH_CAN,
+                            multiple ? "Clear Measurements" : "Clear Measurement"))
+            {
+                fm.ClearAll();
                 m_timeline_selection->UnhighlightPersistentEvents();
             }
         }
@@ -603,6 +610,91 @@ TimelineView::CopySelectedEventDetails()
     ImGui::SetClipboardText(out.str().c_str());
     NotificationManager::GetInstance().Show("Event details were copied",
                                             NotificationLevel::Info);
+}
+
+void
+TimelineView::CopyMeasurement(int index)
+{
+    MeasurementController& fm = *m_measurement;
+    if(index < 0 || index >= fm.GetMeasurementCount()) return;
+
+    const Measurement& m = fm.GetMeasurement(index);
+    if(!m.Complete()) return;
+
+    const TimeFormat time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    const double     trace_start = m_tpt->GetMinX();
+
+    double start_eff = MeasurementController::EffectiveTimestamp(m, 0);
+    double end_eff   = MeasurementController::EffectiveTimestamp(m, 1);
+    double delta     = std::abs(end_eff - start_eff);
+
+    std::ostringstream out;
+    auto write_point = [&](const char* label, const MeasurementPoint& pt, double eff) {
+        out << label << ": "
+            << nanosecond_to_formatted_str(eff - trace_start, time_format, true);
+        if(!pt.freehand && !pt.name.empty()) out << " (" << pt.name << ")";
+        out << "\n";
+    };
+    write_point("Start", m.points[0], start_eff);
+    write_point("End", m.points[1], end_eff);
+    out << "Duration: " << nanosecond_to_formatted_str(delta, time_format, true);
+
+    ImGui::SetClipboardText(out.str().c_str());
+    NotificationManager::GetInstance().Show("Measurement was copied",
+                                            NotificationLevel::Info);
+}
+
+int
+TimelineView::MeasurementAtPixel(float rel_x) const
+{
+    // Only treat a click as "on" a measurement if it lands inside the span between
+    // the two rulers or within this many pixels of a ruler. Avoids the context menu
+    // copying an unrelated measurement when right-clicking empty timeline space.
+    constexpr float HIT_THRESHOLD = 8.0f;
+
+    const MeasurementController& fm    = *m_measurement;
+    int                          count = fm.GetMeasurementCount();
+    int                          best  = -1;
+    float                        best_dist = std::numeric_limits<float>::max();
+    for(int mi = 0; mi < count; ++mi)
+    {
+        const Measurement& m = fm.GetMeasurement(mi);
+        if(!m.Complete()) continue;
+
+        float px0 = static_cast<float>(
+            m_tpt->RawTimeToPixel(MeasurementController::EffectiveTimestamp(m, 0)));
+        float px1 = static_cast<float>(
+            m_tpt->RawTimeToPixel(MeasurementController::EffectiveTimestamp(m, 1)));
+        float lo = std::min(px0, px1);
+        float hi = std::max(px0, px1);
+
+        // Distance is zero inside the measurement span, otherwise to the nearest ruler.
+        float dist = (rel_x < lo) ? (lo - rel_x) : (rel_x > hi) ? (rel_x - hi) : 0.0f;
+        if(dist < best_dist)
+        {
+            best_dist = dist;
+            best      = mi;
+        }
+    }
+    return (best_dist <= HIT_THRESHOLD) ? best : -1;
+}
+
+void
+TimelineView::ResyncMeasurementHighlights()
+{
+    if(!m_timeline_selection) return;
+    m_timeline_selection->UnhighlightPersistentEvents();
+    const MeasurementController& fm = *m_measurement;
+    for(const Measurement& m : fm.Measurements())
+    {
+        for(int i = 0; i < 2; ++i)
+        {
+            const MeasurementPoint& pt = m.points[i];
+            if(pt.valid && !pt.freehand)
+                m_timeline_selection->HighlightTrackEventPersistent(pt.track_id,
+                                                                    pt.event_uuid);
+        }
+    }
 }
 
 float
@@ -2508,17 +2600,22 @@ TimelineView::HandleTopSurfaceTouch()
                 state == MeasurementState::kWaitingForSecond ||
                 state == MeasurementState::kComplete))
             {
-                // Clicking after a complete measurement resets and starts a new one,
-                // matching event-anchored behavior in FlameTrackItem::DrawBox.
-                if(state == MeasurementState::kComplete)
-                {
-                    m_timeline_selection->UnhighlightPersistentEvents();
-                    fm_touch.ClearMeasurement();
-                }
+                // Clicking after a complete measurement starts a new one; AddFreehandPoint
+                // refuses (returns false) once the cap is reached.
                 float  clamped_x  = std::clamp(mouse_x, 0.0f, m_tpt->GetGraphSizeX());
                 double click_time = m_tpt->PixelToTime(clamped_x) + m_tpt->GetMinX();
-                fm_touch.SetFreehandMeasurementPoint(click_time);
-                TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
+                if(fm_touch.AddFreehandPoint(click_time))
+                {
+                    TimelineFocusManager::GetInstance().RequestLayerFocus(
+                        Layer::kInteractiveLayer);
+                }
+                else
+                {
+                    NotificationManager::GetInstance().Show(
+                        "Measurement limit reached (max " +
+                            std::to_string(MeasurementController::MAX_MEASUREMENTS) + ")",
+                        NotificationLevel::Warning);
+                }
             }
         }
 
@@ -2686,8 +2783,8 @@ TimelineView::HandleTopSurfaceTouch()
             {
                 if(fm_esc.GetMeasurementState() == MeasurementState::kWaitingForSecond)
                 {
-                    fm_esc.ClearMeasurement();
-                    m_timeline_selection->UnhighlightPersistentEvents();
+                    fm_esc.ClearActiveMeasurement();
+                    ResyncMeasurementHighlights();
                 }
                 else
                 {

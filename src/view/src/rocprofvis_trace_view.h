@@ -5,11 +5,13 @@
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_timeline_view.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include <unordered_map>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -38,6 +40,7 @@ public:
     bool Valid() const override;
 
     std::unordered_map<int, ViewCoords> Bookmarks();
+    std::vector<Measurement>            Measurements();
 
 private:
     TraceView& m_view;

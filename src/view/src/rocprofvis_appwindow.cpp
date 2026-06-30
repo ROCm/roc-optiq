@@ -597,13 +597,6 @@ AppWindow::WantsContinuousRender()
         return true;
     }
 
-    // Keep rendering while an item is hovered so the tooltip hover-delay timer
-    // can elapse instead of the idle loop sleeping before tooltips appear.
-    if(ImGui::IsAnyItemHovered())
-    {
-        return true;
-    }
-
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     if(m_test_data_provider.GetState() == ProviderState::kLoading ||
        m_test_data_provider.GetPendingRequestCount() > 0)

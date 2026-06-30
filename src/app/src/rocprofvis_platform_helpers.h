@@ -37,5 +37,12 @@ get_os_modifier_state();
 void
 configure_bundled_vulkan_icd();
 
+// macOS only. Returns true when running on supported hardware (Apple Silicon).
+// On an Intel Mac it presents a blocking native alert explaining that the app
+// is not compatible or tested on Intel and returns false; the caller should
+// then exit. Call once at startup, before creating any windows.
+bool
+check_supported_mac_hardware();
+
 }  // namespace Platform
 }  // namespace RocProfVis

@@ -240,6 +240,16 @@ main(int argc, char** argv)
         return app_result_code;
     }
 
+#ifdef __APPLE__
+    // Bail out early on Intel Macs: the app is built for / tested on Apple
+    // Silicon only. This shows a native alert and exits before any GLFW/Vulkan
+    // init that would otherwise fail or behave unpredictably.
+    if(!RocProfVis::Platform::check_supported_mac_hardware())
+    {
+        return 1;
+    }
+#endif
+
     std::string log_dir = rocprofvis_get_application_log_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =

@@ -108,6 +108,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_dragging_selection_end(false)
 , m_is_selecting_region(false)
 , m_dragging_measurement_ruler(MeasurementRulerDragTarget::kNone)
+, m_measure_copy_target(MeasurementCopyTarget::kNone)
 , m_loading_timer(DEFAULT_LOADING_TIMER)
 {
     // Subscribe to events
@@ -270,6 +271,13 @@ void
 TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 {
     MeasurementController& fm = *m_measurement;
+
+    // Reset captured label rects each frame; they are re-set below as labels are
+    // drawn, and consumed by the right-click context menu hit-test.
+    m_measure_label_start.valid    = false;
+    m_measure_label_end.valid      = false;
+    m_measure_label_duration.valid = false;
+
     const auto& p1 = fm.GetPoint(0);
     const auto& p2 = fm.GetPoint(1);
     if(!p1.valid && !p2.valid) return;
@@ -302,18 +310,24 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
                               ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
     float label_y = visible_bot - ImGui::CalcTextSize("0").y - LABEL_PAD;
 
-    // Draws a small timestamp label centered on a ruler line
-    auto draw_ruler_label = [&](float x, const char* text) {
+    // Draws a small timestamp label centered on a ruler line, capturing its rect
+    // (index 0 = start ruler, 1 = end ruler) for the context-menu hit-test.
+    auto draw_ruler_label = [&](int index, float x, const char* text) {
         ImVec2 sz = ImGui::CalcTextSize(text);
         float  lx = x - sz.x * 0.5f;
-        draw_list->AddRectFilled(
-            ImVec2(lx - RULER_LABEL_PAD_X, label_y - RULER_LABEL_PAD_Y),
-            ImVec2(lx + sz.x + RULER_LABEL_PAD_X, label_y + sz.y + RULER_LABEL_PAD_Y),
-            label_bg, RULER_LABEL_ROUND);
+        ImVec2 mn(lx - RULER_LABEL_PAD_X, label_y - RULER_LABEL_PAD_Y);
+        ImVec2 mx(lx + sz.x + RULER_LABEL_PAD_X, label_y + sz.y + RULER_LABEL_PAD_Y);
+        draw_list->AddRectFilled(mn, mx, label_bg, RULER_LABEL_ROUND);
         draw_list->AddText(ImVec2(lx, label_y), label_text, text);
+
+        MeasurementLabelRect& rect = (index == 0) ? m_measure_label_start : m_measure_label_end;
+        rect.min   = mn;
+        rect.max   = mx;
+        rect.valid = true;
     };
 
-    // Draws a boxed label, Y-clamped to stay within visible area
+    // Draws a boxed label, Y-clamped to stay within visible area, capturing its
+    // rect as the duration label for the context-menu hit-test.
     auto draw_label = [&](float cx, float cy, const char* text) {
         ImVec2 sz     = ImGui::CalcTextSize(text);
         float  half_h = sz.y * 0.5f + LABEL_PAD;
@@ -325,6 +339,10 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         draw_list->AddRectFilled(mn, mx, label_bg, LABEL_ROUND);
         draw_list->AddRect(mn, mx, label_edge, LABEL_ROUND, 0, 1.0f);
         draw_list->AddText(ImVec2(lx, ly), label_text, text);
+
+        m_measure_label_duration.min   = mn;
+        m_measure_label_duration.max   = mx;
+        m_measure_label_duration.valid = true;
     };
 
     // Resolves Y position for a measurement point
@@ -351,7 +369,7 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 
         std::string ts_str =
             nanosecond_to_formatted_str(eff - m_tpt->GetMinX(), time_format, true);
-        draw_ruler_label(px[i], ts_str.c_str());
+        draw_ruler_label(i, px[i], ts_str.c_str());
     }
 
     if(valid_count < 2) return;
@@ -410,6 +428,28 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                               ImGuiHoveredFlags_NoPopupHierarchy) &&
        ImGui::IsMouseHoveringRect(win_min, win_max))
     {
+        // Capture which measurement label (if any) was right-clicked so the menu
+        // can offer a copy action only for that label.
+        m_measure_copy_target = MeasurementCopyTarget::kNone;
+        if(m_measure_label_duration.valid &&
+           ImGui::IsMouseHoveringRect(m_measure_label_duration.min,
+                                      m_measure_label_duration.max))
+        {
+            m_measure_copy_target = MeasurementCopyTarget::kDuration;
+        }
+        else if(m_measure_label_start.valid &&
+                ImGui::IsMouseHoveringRect(m_measure_label_start.min,
+                                           m_measure_label_start.max))
+        {
+            m_measure_copy_target = MeasurementCopyTarget::kStart;
+        }
+        else if(m_measure_label_end.valid &&
+                ImGui::IsMouseHoveringRect(m_measure_label_end.min,
+                                           m_measure_label_end.max))
+        {
+            m_measure_copy_target = MeasurementCopyTarget::kEnd;
+        }
+
         ImGui::OpenPopup("TimelineContextMenu");
     }
 
@@ -487,8 +527,55 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                 fm.EnterMeasurementMode();
             }
         }
-        if(fm.GetPoint(0).valid || fm.GetPoint(1).valid)
+        const bool has_start = fm.GetPoint(0).valid;
+        const bool has_end   = fm.GetPoint(1).valid;
+        if(has_start || has_end)
         {
+            const TimeFormat& time_format =
+                m_settings.GetUserSettings().unit_settings.time_format;
+
+            // Copy options are shown only for the specific measurement label the
+            // user right-clicked (resolved when the popup opened).
+            if(m_measure_copy_target == MeasurementCopyTarget::kDuration && has_start &&
+               has_end)
+            {
+                double delta =
+                    std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
+                if(IconMenuItem(ICON_COPY, "Copy Measurement Duration"))
+                {
+                    ImGui::SetClipboardText(
+                        nanosecond_to_formatted_str(delta, time_format, true).c_str());
+                    NotificationManager::GetInstance().Show(
+                        "Measurement duration was copied", NotificationLevel::Info);
+                }
+            }
+            else if(m_measure_copy_target == MeasurementCopyTarget::kStart && has_start)
+            {
+                if(IconMenuItem(ICON_COPY, "Copy Start Timestamp"))
+                {
+                    ImGui::SetClipboardText(
+                        nanosecond_to_formatted_str(
+                            fm.GetEffectiveTimestamp(0) - m_tpt->GetMinX(), time_format,
+                            true)
+                            .c_str());
+                    NotificationManager::GetInstance().Show("Start timestamp was copied",
+                                                            NotificationLevel::Info);
+                }
+            }
+            else if(m_measure_copy_target == MeasurementCopyTarget::kEnd && has_end)
+            {
+                if(IconMenuItem(ICON_COPY, "Copy End Timestamp"))
+                {
+                    ImGui::SetClipboardText(
+                        nanosecond_to_formatted_str(
+                            fm.GetEffectiveTimestamp(1) - m_tpt->GetMinX(), time_format,
+                            true)
+                            .c_str());
+                    NotificationManager::GetInstance().Show("End timestamp was copied",
+                                                            NotificationLevel::Info);
+                }
+            }
+
             if(IconMenuItem(ICON_TRASH_CAN, "Clear Measurement"))
             {
                 fm.ClearMeasurement();

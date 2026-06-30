@@ -47,7 +47,7 @@ constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
 const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml" };
 const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
 const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
-const std::vector<std::string> COMPARE_EXTENSIONS = { "db", "rpd" };
+const std::vector<std::string> COMPARE_EXTENSIONS = { "db" };
 
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
 constexpr const char* CLOSING_MESSAGE = "Closing...";

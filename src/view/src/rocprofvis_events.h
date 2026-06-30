@@ -4,6 +4,7 @@
 #pragma once
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 namespace RocProfVis
@@ -24,7 +25,6 @@ enum class RocEvents
     kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
-    kStickyNoteEdited,
     kFontSizeChanged,
     kSetViewRange,
     kGoToTimelineSpot,
@@ -50,7 +50,6 @@ enum class RocEventType
     kTimelineEventSelectionChangedEvent,
     kTimelineEventHighlightChangedEvent,
     kScrollToTrackEvent,
-    kStickyNoteEvent,
     kRangeEvent,
     kNavigationEvent,
     kRequestProgressUpdateEvent,
@@ -135,18 +134,23 @@ private:
 class NavigationEvent : public RocEvent
 {
 public:
-    NavigationEvent(double v_min, double v_max, double y_position, bool center);
+    // For a valid track_id, y_position is relative to that track's top;
+    // otherwise it is an absolute content-space Y.
+    NavigationEvent(double v_min, double v_max, double y_position, bool center,
+                    uint64_t track_id = std::numeric_limits<uint64_t>::max());
 
-    double GetVMin() const;
-    double GetVMax() const;
-    double GetYPosition() const;
-    bool   GetCenter() const;   
+    double   GetVMin() const;
+    double   GetVMax() const;
+    double   GetYPosition() const;
+    bool     GetCenter() const;
+    uint64_t GetTrackId() const;
 
 private:
-    double m_v_min;
-    double m_v_max;
-    double m_y_position;
-    bool m_center;
+    double   m_v_min;
+    double   m_v_max;
+    double   m_y_position;
+    bool     m_center;
+    uint64_t m_track_id;
 };
 
 class TrackDataEvent : public RocEvent
@@ -174,16 +178,6 @@ public:
 private:
     uint64_t    m_request_id;
     uint64_t    m_response_code;
-};
-
-class StickyNoteEvent : public RocEvent
-{
-public:
-    StickyNoteEvent(int id, const std::string& source_id);
-    const int GetNoteId() const;
-
-private:
-    int m_id;
 };
 
 class ScrollToTrackEvent : public RocEvent

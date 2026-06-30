@@ -98,7 +98,9 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_measurement(measurement)
 , m_project_settings(m_data_provider.GetTraceFilePath(), *this)
 , m_annotations(annotations)
-, m_dragged_sticky_id(-1)
+, m_dragged_sticky_id(INVALID_STICKY_ID)
+, m_reordering_track_id(INVALID_TRACK_ID)
+, m_reorder_preview_screen_top_y(0.0f)
 , m_histogram(nullptr)
 , m_pseudo_focus(false)
 , m_histogram_pseudo_focus(false)
@@ -162,8 +164,20 @@ TimelineView::TimelineView(DataProvider&                          dp,
     // This is used for navigation from other views like the annotation view.
     auto navigation_handler = [this](std::shared_ptr<RocEvent> e) {
         auto evt = std::dynamic_pointer_cast<NavigationEvent>(e);
-        MoveToPosition(evt->GetVMin(), evt->GetVMax(), evt->GetYPosition(),
-                       evt->GetCenter());
+        if(!evt) return;
+        // Track-bound annotations pass a track-relative y; resolve it to an
+        // absolute Y. Other sources already pass an absolute Y.
+        double y_position = evt->GetYPosition();
+        if(evt->GetTrackId() != INVALID_TRACK_ID)
+        {
+            TrackLayout layout      = BuildTrackLayout();
+            float       track_top_y = 0.0f;
+            if(layout.top_of && layout.top_of(evt->GetTrackId(), track_top_y))
+            {
+                y_position = track_top_y + evt->GetYPosition();
+            }
+        }
+        MoveToPosition(evt->GetVMin(), evt->GetVMax(), y_position, evt->GetCenter());
     };
     m_navigation_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kGoToTimelineSpot), navigation_handler);
@@ -223,12 +237,118 @@ TimelineView::RenderInteractiveUI()
     ImGui::EndChild();
 }
 
+TrackLayout
+TimelineView::BuildTrackLayout()
+{
+    TrackLayout layout;
+
+    layout.top_of = [this](uint64_t track_id, float& out_top_y) -> bool {
+        auto it = m_track_position_y.find(track_id);
+        if(it == m_track_position_y.end()) return false;
+        out_top_y = it->second;
+        return true;
+    };
+
+    layout.height_of = [this](uint64_t track_id, float& out_height) -> bool {
+        if(!m_graphs) return false;
+        for(const TrackGraph& graph : *m_graphs)
+        {
+            if(graph.chart && graph.chart->GetID() == track_id)
+            {
+                out_height = graph.chart->GetTrackHeight();
+                return true;
+            }
+        }
+        return false;
+    };
+
+    layout.track_at = [this](float abs_y, uint64_t& out_track_id,
+                             float& out_top_y) -> bool {
+        if(!m_graphs || m_graphs->empty()) return false;
+
+        bool     have_first = false;
+        uint64_t first_id   = 0;
+        float    first_top  = 0.0f;
+        uint64_t last_id    = 0;
+        float    last_top   = 0.0f;
+
+        for(const TrackGraph& graph : *m_graphs)
+        {
+            if(!graph.display) continue;
+            const uint64_t track_id = graph.chart->GetID();
+            auto           pos      = m_track_position_y.find(track_id);
+            if(pos == m_track_position_y.end()) continue;
+            const float top    = pos->second;
+            const float height = graph.chart->GetTrackHeight();
+
+            if(!have_first)
+            {
+                have_first = true;
+                first_id   = track_id;
+                first_top  = top;
+            }
+            last_id  = track_id;
+            last_top = top;
+
+            if(abs_y >= top && abs_y < top + height)
+            {
+                out_track_id = track_id;
+                out_top_y    = top;
+                return true;
+            }
+        }
+
+        if(!have_first) return false;
+
+        // Outside all tracks: clamp to the nearest end so the note stays
+        // anchored while keeping the user's vertical offset.
+        out_track_id = (abs_y < first_top) ? first_id : last_id;
+        out_top_y    = (abs_y < first_top) ? first_top : last_top;
+        return true;
+    };
+
+    // Visible track viewport in content-space Y, used to keep a dragged anchor
+    // on-screen (see StickyNote::HandleDrag).
+    layout.view_min_y = m_scroll_position_y;
+    layout.view_max_y = m_scroll_position_y + GetTrackViewportHeight();
+
+    return layout;
+}
+
+bool
+TimelineView::IsAnnotationTrackVisible(uint64_t track_id) const
+{
+    // Notes that aren't bound to a track (legacy / free-floating) always show.
+    if(track_id == INVALID_TRACK_ID || !m_graphs) return true;
+
+    for(const TrackGraph& graph : *m_graphs)
+    {
+        if(graph.chart && graph.chart->GetID() == track_id)
+        {
+            // A note follows its track's eye-toggle: hidden track, hidden note.
+            return graph.display;
+        }
+    }
+
+    // Bound track is no longer present in the current view; keep the note so it
+    // isn't silently lost.
+    return true;
+}
+
 void
 TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 {
-    bool movement_drag   = false;
-    bool movement_resize = false;
-    // m_visible_center     = current_center;
+    bool movement_drag = false;
+
+    TrackLayout layout = BuildTrackLayout();
+
+    // Refresh every note's cached track-hidden state (even when annotations are
+    // globally hidden) so the annotation table can grey out the visibility
+    // toggle for notes whose track is hidden.
+    for(StickyNote& note : m_annotations->GetStickyNotes())
+    {
+        note.SetTrackHidden(!IsAnnotationTrackVisible(note.GetTrackId()));
+    }
 
     if(m_annotations->IsVisibile())
     {
@@ -236,15 +356,31 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         for(int i = static_cast<int>(m_annotations->GetStickyNotes().size()) - 1; i >= 0;
             --i)
         {
-            if(!m_annotations->GetStickyNotes()[i].IsVisible() ||
+            StickyNote& note = m_annotations->GetStickyNotes()[i];
+            if(!note.IsVisible() ||
                TimelineFocusManager::GetInstance().GetFocusedLayer() ==
                    Layer::kScrubberLayer)
                 continue;
 
-            movement_drag |= m_annotations->GetStickyNotes()[i].HandleDrag(
-                window_position, m_tpt, m_dragged_sticky_id);
-            movement_resize |=
-                m_annotations->GetStickyNotes()[i].HandleResize(window_position, m_tpt);
+            // A note whose track is hidden is hidden too: don't let it grab
+            // input over whatever visible track now occupies that row.
+            if(!IsAnnotationTrackVisible(note.GetTrackId())) continue;
+
+            // The note on the reordering track is drawn as a foreground ghost
+            // below; skip its interaction so it doesn't fight the track drag.
+            if(m_reordering_track_id != INVALID_TRACK_ID &&
+               note.GetTrackId() == m_reordering_track_id)
+                continue;
+
+            movement_drag |=
+                note.HandleDrag(window_position, m_tpt, m_dragged_sticky_id, layout);
+        }
+
+        // While an anchor is dragged toward an edge, scroll the view that way so
+        // the note can be moved beyond the currently visible range.
+        if(m_dragged_sticky_id != INVALID_STICKY_ID)
+        {
+            AutoScrollForAnnotationDrag(window_position);
         }
 
         bool annotation_blocks_timeline_input = false;
@@ -252,20 +388,93 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
         // Rendering --> based on added order (old bottom new on top)
         for(size_t i = 0; i < m_annotations->GetStickyNotes().size(); ++i)
         {
-            if(!m_annotations->GetStickyNotes()[i].IsVisible()) continue;
+            StickyNote& note = m_annotations->GetStickyNotes()[i];
+            if(!note.IsVisible()) continue;
+
+            // Hide the note on the timeline when its bound track is hidden.
+            if(!IsAnnotationTrackVisible(note.GetTrackId())) continue;
+
+            // A note on the reordering track rides the floating preview, which
+            // is an opaque foreground window, so draw it on the foreground draw
+            // list to keep it visible above the preview.
+            if(m_reordering_track_id != INVALID_TRACK_ID &&
+               note.GetTrackId() == m_reordering_track_id)
+            {
+                ImVec2 ghost_pos = ImVec2(
+                    window_position.x + m_tpt->TimeToPixel(note.GetTimeNs()),
+                    m_reorder_preview_screen_top_y + note.GetYOffset());
+                note.RenderDragGhost(ImGui::GetForegroundDrawList(), ghost_pos);
+                continue;
+            }
 
             annotation_blocks_timeline_input |=
-                m_annotations->GetStickyNotes()[i].Render(draw_list, window_position,
-                                                          m_tpt);
+                note.Render(draw_list, window_position, m_tpt, layout);
         }
         m_stop_user_interaction |= annotation_blocks_timeline_input;
     }
-    m_stop_user_interaction |= movement_drag || movement_resize;
+    m_stop_user_interaction |= movement_drag;
 
     RenderTimelineViewOptionsMenu(window_position);
-    m_annotations->ShowStickyNotePopup();
-    m_annotations->ShowStickyNoteEditPopup();
+    m_annotations->RemoveNotesPendingDelete();
 }
+
+void
+TimelineView::AutoScrollForAnnotationDrag(ImVec2 content_origin)
+{
+    // Distance from a viewport edge that begins scrolling, and the maximum
+    // per-frame scroll applied right at the edge (scaled by how deep in we are).
+    constexpr float kEdgeMargin  = 36.0f;
+    constexpr float kMaxScrollPx = 16.0f;
+
+    const float graph_w = m_tpt->GetGraphSizeX();
+    if(graph_w <= 0.0f) return;
+
+    const ImVec2 mouse     = ImGui::GetMousePos();
+    const float  vp_left   = content_origin.x;
+    const float  vp_right  = content_origin.x + graph_w;
+    const float  vp_top    = content_origin.y + m_scroll_position_y;
+    const float  vp_bottom = vp_top + GetTrackViewportHeight();
+
+    // Scroll speed ramped by how far the cursor has crossed into the margin.
+    auto edge_speed = [kEdgeMargin, kMaxScrollPx](float distance_into_margin) {
+        return kMaxScrollPx * std::clamp(distance_into_margin / kEdgeMargin, 0.0f, 1.0f);
+    };
+
+    float horizontal_px = 0.0f;
+    if(mouse.x < vp_left + kEdgeMargin)
+    {
+        horizontal_px = -edge_speed(vp_left + kEdgeMargin - mouse.x);
+    }
+    else if(mouse.x > vp_right - kEdgeMargin)
+    {
+        horizontal_px = edge_speed(mouse.x - (vp_right - kEdgeMargin));
+    }
+    if(horizontal_px != 0.0f)
+    {
+        const double view_width = m_tpt->GetRangeX() / m_tpt->GetZoom();
+        const double move_ns    = (horizontal_px / graph_w) * view_width;
+        const double max_offset =
+            std::max(0.0, m_tpt->GetRangeX() - m_tpt->GetVWidth());
+        m_tpt->SetViewTimeOffsetNs(
+            std::clamp(m_tpt->GetViewTimeOffsetNs() + move_ns, 0.0, max_offset));
+    }
+
+    float vertical_px = 0.0f;
+    if(mouse.y < vp_top + kEdgeMargin)
+    {
+        vertical_px = -edge_speed(vp_top + kEdgeMargin - mouse.y);
+    }
+    else if(mouse.y > vp_bottom - kEdgeMargin)
+    {
+        vertical_px = edge_speed(mouse.y - (vp_bottom - kEdgeMargin));
+    }
+    if(vertical_px != 0.0f)
+    {
+        m_scroll_position_y = std::clamp(m_scroll_position_y + vertical_px, 0.0f,
+                                         m_content_max_y_scroll);
+    }
+}
+
 void
 TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 {
@@ -465,9 +674,20 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         {
             float  x_in_chart = rel_mouse_pos.x;
             double time_ns    = m_tpt->PixelToTime(x_in_chart);
-            float  y_offset   = rel_mouse_pos.y;
-            m_annotations->OpenStickyNotePopup(time_ns, y_offset, m_tpt->GetVMinX(),
-                                               m_tpt->GetVMaxX(), m_tpt->GetGraphSize());
+            // Anchor the new note to the track under the cursor, storing a
+            // track-relative click offset.
+            TrackLayout layout      = BuildTrackLayout();
+            uint64_t    track_id    = INVALID_TRACK_ID;
+            float       track_top_y = 0.0f;
+            float       y_offset    = rel_mouse_pos.y;
+            if(layout.track_at &&
+               layout.track_at(rel_mouse_pos.y, track_id, track_top_y))
+            {
+                y_offset = rel_mouse_pos.y - track_top_y;
+            }
+            m_annotations->CreateStickyNote(time_ns, y_offset, m_tpt->GetVMinX(),
+                                            m_tpt->GetVMaxX(), m_tpt->GetGraphSize(),
+                                            track_id);
         }
 
         ImGui::Separator();
@@ -1302,6 +1522,8 @@ TimelineView::RenderGraphView()
 
     bool request_data = IsRequestDataNeeded();
 
+    // Reset per frame; set by RenderReorderingTrack while a track drag is active.
+    m_reordering_track_id = INVALID_TRACK_ID;
     // Re-set each frame by RenderReorderingTrack while in the auto-scroll zone.
     m_reorder_auto_scrolling = false;
 
@@ -1320,8 +1542,10 @@ TimelineView::WantsContinuousRender() const
 {
     // The loading-timer debounce gates track-data requests and only advances
     // while rendering, so keep rendering until it expires or the load stalls.
-    // Reorder auto-scroll also advances per frame, so keep rendering while active.
-    return m_loading_timer.IsRunning() || m_reorder_auto_scrolling;
+    // Anchor drag and reorder auto-scroll both advance per frame, so keep
+    // rendering while either is active.
+    return m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID ||
+           m_reorder_auto_scrolling;
 }
 
 bool
@@ -1671,13 +1895,17 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
 
     // Clamp the preview within the track area so it never renders outside its
     // box when the mouse moves above or below the visible track region.
-    const float track_height = track_item->GetTrackHeight();
-    const float view_height  = container_size.y - m_ruler_height;
+    const float track_height  = track_item->GetTrackHeight();
+    const float view_height   = container_size.y - m_ruler_height;
     const float preview_min_y = graph_view_pos.y;
     const float preview_max_y =
         std::max(preview_min_y, graph_view_pos.y + view_height - track_height);
     const float preview_y = std::clamp(mouse_pos.y - ImGui::GetFrameHeight() / 2,
                                        preview_min_y, preview_max_y);
+
+    // Expose the live preview top so annotations on this track follow it.
+    m_reordering_track_id          = track_item->GetID();
+    m_reorder_preview_screen_top_y = preview_y;
 
     ImGui::SetNextWindowPos(ImVec2(graph_view_pos.x, preview_y), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));

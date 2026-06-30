@@ -884,10 +884,8 @@ TraceView::RenderAnnotationControls()
             ImVec2     graph_size   = m_timeline_view->GetGraphSize();
             double     center_time  = tpt->PixelToTime(graph_size.x * 0.5f);
             float      center_y     = m_timeline_view->GetScrollPosition() + graph_size.y * 0.5f;
-            m_annotations->OpenStickyNotePopup(
-                center_time, center_y, coords.v_min_x,
-                coords.v_max_x, graph_size);
-            m_annotations->ShowStickyNotePopup();
+            m_annotations->CreateStickyNote(center_time, center_y, coords.v_min_x,
+                                            coords.v_max_x, graph_size);
         }
     }
     ImGui::PopStyleColor();

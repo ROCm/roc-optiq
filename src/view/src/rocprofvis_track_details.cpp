@@ -12,7 +12,6 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 
-#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -456,7 +455,8 @@ TrackDetails::RenderTable(InfoTable& table, const char* table_id,
                     CaptureCellRightClick(0, stat_row, m_cell_menu, open_menu);
                     PositionCell(1);
                     ImGui::BeginDisabled(!stats_ready);
-                    ImGui::Text("%.1f", stats->stats[i].value);
+                    ImGui::TextUnformatted(stats_ready ? stats->stats[i].compact.c_str()
+                                                       : "--");
                     ImGui::EndDisabled();
                     CaptureCellRightClick(1, stat_row, m_cell_menu, open_menu);
                     ImGui::PopID();
@@ -486,10 +486,7 @@ TrackDetails::RenderTable(InfoTable& table, const char* table_id,
                 {
                     const AnalysisTrackStatistics::Stat& stat =
                         stats->stats[m_cell_menu.row - rows];
-                    char value_buf[32];
-                    std::snprintf(value_buf, sizeof(value_buf), "%.1f", stat.value);
-                    std::string stat_cells[2] = { std::string(stat.name),
-                                                  std::string(value_buf) };
+                    std::string stat_cells[2] = { std::string(stat.name), stat.compact };
                     AddCopyRowCellMenuItems(stat_cells, 2, m_cell_menu.column);
                 }
                 EndCellContextMenu();

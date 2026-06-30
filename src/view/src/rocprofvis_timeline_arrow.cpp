@@ -44,7 +44,7 @@ TimelineArrow::SetRenderStyle(RenderStyle style)
 void
 TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                       const std::unordered_map<uint64_t, float>& track_position_y,
-                      const std::shared_ptr<std::vector<TrackGraph>> graphs,
+                      const std::shared_ptr<std::vector<TrackItem*>> tracks,
                       std::shared_ptr<TimePixelTransform>                    tpt) const
 {
     if(m_flow_display_mode == FlowDisplayMode::kHide) return;
@@ -72,13 +72,13 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
             // True view: origin + multiple targets
             const EventFlowData& origin = flows[0];
             const TrackInfo*      origin_track_info = tlm.GetTrack(origin.track_id);
-            if(!origin_track_info) continue;
-            const TrackGraph& origin_track = (*graphs)[origin_track_info->index];
-            if(!origin_track.display)
+            if(!origin_track_info || !(*tracks)[origin_track_info->index]) continue;
+            const TrackItem& origin_track = *(*tracks)[origin_track_info->index];
+            if(!origin_track.IsDisplayed())
             {
                 continue;
             }
-            if(origin_track.chart->IsCompactMode())
+            if(origin_track.IsCompactMode())
             {
                 level_height = settings.GetEventLevelCompactHeight();
             }
@@ -90,19 +90,19 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
             float origin_x = tpt->RawTimeToPixel(static_cast<double>(origin.end_timestamp));
             float origin_y = track_position_y.at(origin.track_id) +
                              std::min(level_height * origin.level + level_height / 2,
-                                      origin_track.chart->GetTrackHeight());
+                                      origin_track.GetTrackHeight());
             ImVec2 p_origin = ImVec2(window.x + origin_x, window.y + origin_y);
 
             for(size_t i = 1; i < flows.size(); ++i)
             {
                 const EventFlowData& target = flows[i];
                 const TrackInfo*     target_track_info = tlm.GetTrack(target.track_id);
-                if(!target_track_info) continue;
-                const TrackGraph& target_track =
-                    (*graphs)[target_track_info->index];
-                if(!target_track.display) continue;
+                if(!target_track_info || !(*tracks)[target_track_info->index]) continue;
+                const TrackItem& target_track =
+                    *(*tracks)[target_track_info->index];
+                if(!target_track.IsDisplayed()) continue;
 
-                if(target_track.chart->IsCompactMode())
+                if(target_track.IsCompactMode())
                 {
                     level_height = settings.GetEventLevelCompactHeight();
                 }
@@ -114,7 +114,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                 float target_x = tpt->RawTimeToPixel(static_cast<double>(target.start_timestamp));
                 float target_y = track_position_y.at(target.track_id) +
                                  std::min(level_height * target.level + level_height / 2,
-                                          target_track.chart->GetTrackHeight());
+                                          target_track.GetTrackHeight());
                 ImVec2 p_target = ImVec2(window.x + target_x, window.y + target_y);
 
                 if(p_origin.x == p_target.x && p_origin.y == p_target.y) continue;
@@ -169,14 +169,14 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
 
                 const TrackInfo* from_track_info = tlm.GetTrack(from.track_id);
                 const TrackInfo* to_track_info   = tlm.GetTrack(to.track_id);
-                if(!from_track_info || !to_track_info) continue;
+                if(!from_track_info || !(*tracks)[from_track_info->index] || !to_track_info || !(*tracks)[to_track_info->index]) continue;
 
-                const TrackGraph& from_track = (*graphs)[from_track_info->index];
-                const TrackGraph& to_track   = (*graphs)[to_track_info->index];
+                const TrackItem& from_track = *(*tracks)[from_track_info->index];
+                const TrackItem& to_track   = *(*tracks)[to_track_info->index];
 
-                if(!from_track.display || !to_track.display) continue;
+                if(!from_track.IsDisplayed() || !to_track.IsDisplayed()) continue;
 
-                if(from_track.chart->IsCompactMode())
+                if(from_track.IsCompactMode())
                 {
                     level_height = settings.GetEventLevelCompactHeight();
                 }
@@ -188,10 +188,10 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                 float from_x = tpt->RawTimeToPixel(static_cast<double>(from.end_timestamp));
                 float from_y = track_position_y.at(from.track_id) +
                                std::min(level_height * from.level + level_height / 2,
-                                        from_track.chart->GetTrackHeight());
+                                        from_track.GetTrackHeight());
                 ImVec2 p_from = ImVec2(window.x + from_x, window.y + from_y);
 
-                if(to_track.chart->IsCompactMode())
+                if(to_track.IsCompactMode())
                 {
                     level_height = settings.GetEventLevelCompactHeight();
                 }
@@ -203,7 +203,7 @@ TimelineArrow::Render(ImDrawList* draw_list, const ImVec2 window,
                 float to_x = tpt->RawTimeToPixel(static_cast<double>(to.start_timestamp));
                 float to_y = track_position_y.at(to.track_id) +
                              std::min(level_height * to.level + level_height / 2,
-                                      to_track.chart->GetTrackHeight());
+                                      to_track.GetTrackHeight());
                 ImVec2 p_to = ImVec2(window.x + to_x, window.y + to_y);
 
                 if(p_from.x == p_to.x && p_from.y == p_to.y) continue;

@@ -87,9 +87,11 @@ Project::Open(std::string& file_path)
     }
     else
     {
-        AppWindow::GetInstance()->ShowMessageDialog("Error",
-                                                    "File does not exist: " + file_path);
-        spdlog::error("Failed to open file: {}, file does not exist", file_path);                                                    
+        AppWindow::GetInstance()->ShowMessageDialog(
+            "Recent File Not Found",
+            "This recent file could not be found and was removed from the list:\n\n" +
+                file_path);
+        spdlog::error("Failed to open file: {}, file does not exist", file_path);
     }
     return result;
 }
@@ -99,6 +101,7 @@ Project::Save()
 {
     if(IsProject() && SaveSetttingsJson())
     {
+        SettingsManager::GetInstance().AddRecentFile(m_project_file_path);
         NotificationManager::GetInstance().Show("Saved " + m_project_file_path + ".",
                                                 NotificationLevel::Success);
     }

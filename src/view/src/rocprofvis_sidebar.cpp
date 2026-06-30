@@ -54,12 +54,12 @@ private:
 
 SideBar::SideBar(std::shared_ptr<TrackTopology>         topology,
                  std::shared_ptr<TimelineSelection>     timeline_selection,
-                 std::shared_ptr<std::vector<TrackGraph>> graphs,
+                 std::shared_ptr<std::vector<TrackItem*>> tracks,
                  DataProvider&                          dp)
 : m_settings(SettingsManager::GetInstance())
 , m_track_topology(topology)
 , m_timeline_selection(timeline_selection)
-, m_graphs(graphs)
+, m_tracks(tracks)
 , m_data_provider(dp)
 {}
 
@@ -132,30 +132,29 @@ SideBar::Update()
 void
 SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 {
-    if(!m_graphs || index >= m_graphs->size())
+    if(!m_tracks || index >= m_tracks->size() || !(*m_tracks)[index])
     {
         return;
     }
 
-    TrackGraph& graph = (*m_graphs)[index];
+    TrackItem& track = *(*m_tracks)[index];
 
-    ImGui::PushID(static_cast<int>(graph.chart->GetID()));
+    ImGui::PushID(static_cast<int>(track.GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_settings.GetColor(Colors::kHighlightChart));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, m_settings.GetColor(Colors::kHighlightChart));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
 
-    bool display = graph.display;
+    bool display = track.IsDisplayed();
     if(show_eye_button)
     {
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
         if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
         {
-            graph.display         = !graph.display;
-            graph.display_changed = true;
+            track.SetDisplay(!track.IsDisplayed());
             m_eye_state_dirty     = true;
             m_data_provider.DataModel().GetTimeline().UpdateHistogram(
-                { graph.chart->GetID() }, graph.display);
+                { track.GetID() }, track.IsDisplayed());
         }
         ImGui::PopFont();
         if(ImGui::IsItemHovered())
@@ -167,7 +166,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         {
             EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
                 static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                graph.chart->GetID(), m_data_provider.GetTraceFilePath()));
+                track.GetID(), m_data_provider.GetTraceFilePath()));
         }
         ImGui::PopFont();
         if(ImGui::IsItemHovered())
@@ -183,15 +182,15 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 
     ImGui::PushStyleColor(
         ImGuiCol_Button,
-        m_settings.GetColor(graph.selected ? Colors::kSelection : Colors::kTransparent));
+        m_settings.GetColor(track.IsSelected() ? Colors::kSelection : Colors::kTransparent));
     if(!display)
     {
         ImGui::PushStyleColor(ImGuiCol_Text,
                               ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
     }
-    if(ImGui::Button(graph.chart->GetName().c_str()))
+    if(ImGui::Button(track.GetName().c_str()))
     {
-        m_timeline_selection->ToggleSelectTrack(graph);
+        m_timeline_selection->ToggleSelectTrack(track);
     }
     if(!display)
     {
@@ -215,12 +214,12 @@ SideBar::MergeEyeButtonState(EyeButtonState lhs, EyeButtonState rhs) const
 SideBar::EyeButtonState
 SideBar::GetLeafState(const LeafNode& leaf) const
 {
-    if(!m_graphs || leaf.graph_index >= m_graphs->size())
+    if(!m_tracks || leaf.graph_index >= m_tracks->size())
     {
         return EyeButtonState::kAllHidden;
     }
 
-    return (*m_graphs)[leaf.graph_index].display
+    return (*m_tracks)[leaf.graph_index]->IsDisplayed()
                ? EyeButtonState::kAllVisible
                : EyeButtonState::kAllHidden;
 }
@@ -278,7 +277,7 @@ SideBar::GetSubtreeEyeState(const TreeNode& node, bool cross_boundaries) const
 void
 SideBar::ApplyVisibility(const TreeNode& node, bool visible)
 {
-    if(!m_graphs || m_graphs->empty())
+    if(!m_tracks || m_tracks->empty())
     {
         return;
     }
@@ -306,15 +305,14 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
         if(current->IsLeaf())
         {
             const LeafNode& leaf = static_cast<const LeafNode&>(*current);
-            if(leaf.graph_index < m_graphs->size() &&
+            if(leaf.graph_index < m_tracks->size() &&
                visited_graphs.insert(leaf.graph_index).second)
             {
-                TrackGraph& graph = (*m_graphs)[leaf.graph_index];
-                if(graph.display != visible)
+                TrackItem* track = (*m_tracks)[leaf.graph_index];
+                if(track && track->IsDisplayed() != visible)
                 {
-                    graph.display         = visible;
-                    graph.display_changed = true;
-                    chart_ids.push_back(graph.chart->GetID());
+                    track->SetDisplay(visible);
+                    chart_ids.push_back(track->GetID());
                 }
             }
         }

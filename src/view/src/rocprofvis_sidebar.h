@@ -16,13 +16,14 @@ class SettingsManager;
 class TrackTopology;
 class TimelineSelection;
 class DataProvider;
+class TrackItem;
 
 class SideBar : public RocWidget
 {
 public:
     SideBar(std::shared_ptr<TrackTopology>         topology,
             std::shared_ptr<TimelineSelection>     timeline_selection,
-            std::shared_ptr<std::vector<TrackGraph>> graphs,
+            std::shared_ptr<std::vector<TrackItem*>> tracks,
             DataProvider&                          dp);
     ~SideBar();
     virtual void Render() override;
@@ -57,7 +58,7 @@ private:
     SettingsManager&                         m_settings;
     std::shared_ptr<TrackTopology>           m_track_topology;
     std::shared_ptr<TimelineSelection>       m_timeline_selection;
-    std::shared_ptr<std::vector<TrackGraph>> m_graphs;
+    std::shared_ptr<std::vector<TrackItem*>> m_tracks;
     DataProvider&                            m_data_provider;
     bool                                     m_eye_state_dirty = false;
 };

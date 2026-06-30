@@ -10,21 +10,21 @@ namespace View
 
 MeasurementController::MeasurementController()
 : m_measurement_state(MeasurementState::kInactive)
-, m_points{}
-, m_edges{ MeasureEdge::kStart, MeasureEdge::kStart }
+, m_measurements()
 , m_freehand_mode(false)
-, m_freehand_offsets{ 0.0, 0.0 }
 {}
 
 void
 MeasurementController::EnterMeasurementMode()
 {
-    if(m_points[0].valid && m_points[1].valid)
-        m_measurement_state = MeasurementState::kComplete;
-    else if(m_points[0].valid)
-        m_measurement_state = MeasurementState::kWaitingForSecond;
-    else
+    // Resume based on the most recent measurement: a complete one keeps showing and
+    // the next click starts a new measurement; a partial one waits for its end.
+    if(m_measurements.empty())
         m_measurement_state = MeasurementState::kWaitingForFirst;
+    else if(m_measurements.back().Complete())
+        m_measurement_state = MeasurementState::kComplete;
+    else
+        m_measurement_state = MeasurementState::kWaitingForSecond;
 }
 
 void
@@ -45,109 +45,189 @@ MeasurementController::GetMeasurementState() const
     return m_measurement_state;
 }
 
-void
-MeasurementController::SetMeasurementPoint(double timestamp, double duration,
-                                           uint64_t track_id, uint32_t level,
-                                           const std::string& name, uint64_t event_uuid)
+Measurement*
+MeasurementController::BeginMeasurement()
 {
-    if(m_measurement_state == MeasurementState::kWaitingForFirst)
+    bool needs_new_slot = m_measurements.empty() || m_measurements.back().Complete();
+    if(needs_new_slot)
     {
-        m_points[0]         = { timestamp, duration, track_id, level, name, event_uuid, true, false };
-        m_measurement_state = MeasurementState::kWaitingForSecond;
-    }
-    else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
-            m_measurement_state == MeasurementState::kComplete)
-    {
-        m_points[1]         = { timestamp, duration, track_id, level, name, event_uuid, true, false };
-        m_measurement_state = MeasurementState::kComplete;
-    }
-}
-
-void
-MeasurementController::SetFreehandMeasurementPoint(double timestamp)
-{
-    int slot = 0;
-    if(m_measurement_state == MeasurementState::kWaitingForFirst)
-    {
-        slot                = 0;
-        m_measurement_state = MeasurementState::kWaitingForSecond;
-    }
-    else if(m_measurement_state == MeasurementState::kWaitingForSecond ||
-            m_measurement_state == MeasurementState::kComplete)
-    {
-        slot                = 1;
-        m_measurement_state = MeasurementState::kComplete;
+        if(static_cast<int>(m_measurements.size()) >= MAX_MEASUREMENTS)
+        {
+            return nullptr;
+        }
+        m_measurements.emplace_back();
     }
     else
     {
-        return;
+        // Restart the in-progress (partial) active measurement in place.
+        m_measurements.back() = Measurement{};
+    }
+    return &m_measurements.back();
+}
+
+bool
+MeasurementController::AddEventPoint(double timestamp, double duration, uint64_t track_id,
+                                    uint32_t level, const std::string& name,
+                                    uint64_t event_uuid)
+{
+    if(m_measurement_state == MeasurementState::kWaitingForSecond &&
+       !m_measurements.empty())
+    {
+        m_measurements.back().points[1] =
+            { timestamp, duration, track_id, level, name, event_uuid, true, false };
+        m_measurement_state = MeasurementState::kComplete;
+        return true;
     }
 
-    m_points[slot]           = MeasurementPoint{};
-    m_points[slot].timestamp = timestamp;
-    m_points[slot].valid     = true;
-    m_points[slot].freehand  = true;
-    m_freehand_offsets[slot] = 0.0;
+    Measurement* measurement = BeginMeasurement();
+    if(measurement == nullptr)
+    {
+        return false;
+    }
+    measurement->points[0] =
+        { timestamp, duration, track_id, level, name, event_uuid, true, false };
+    m_measurement_state = MeasurementState::kWaitingForSecond;
+    return true;
+}
+
+bool
+MeasurementController::AddFreehandPoint(double timestamp)
+{
+    MeasurementPoint point;
+    point.timestamp = timestamp;
+    point.valid     = true;
+    point.freehand  = true;
+
+    if(m_measurement_state == MeasurementState::kWaitingForSecond &&
+       !m_measurements.empty())
+    {
+        m_measurements.back().points[1]           = point;
+        m_measurements.back().freehand_offsets[1] = 0.0;
+        m_measurement_state                       = MeasurementState::kComplete;
+        return true;
+    }
+
+    Measurement* measurement = BeginMeasurement();
+    if(measurement == nullptr)
+    {
+        return false;
+    }
+    measurement->points[0]           = point;
+    measurement->freehand_offsets[0] = 0.0;
+    m_measurement_state              = MeasurementState::kWaitingForSecond;
+    return true;
 }
 
 void
-MeasurementController::ClearMeasurement()
+MeasurementController::ClearActiveMeasurement()
 {
-    bool was_active       = m_measurement_state != MeasurementState::kInactive;
-    m_points[0]           = {};
-    m_points[1]           = {};
-    m_freehand_offsets[0] = 0.0;
-    m_freehand_offsets[1] = 0.0;
-    m_measurement_state   = was_active ? MeasurementState::kWaitingForFirst
-                                       : MeasurementState::kInactive;
+    // Drop the in-progress measurement (the last slot) when it is partial, leaving
+    // any completed measurements intact.
+    if(!m_measurements.empty() && !m_measurements.back().Complete())
+        m_measurements.pop_back();
+
+    if(m_measurement_state != MeasurementState::kInactive)
+        m_measurement_state = m_measurements.empty() || m_measurements.back().Complete()
+                                  ? MeasurementState::kWaitingForFirst
+                                  : MeasurementState::kWaitingForSecond;
+}
+
+void
+MeasurementController::ClearAll()
+{
+    bool was_active = m_measurement_state != MeasurementState::kInactive;
+    m_measurements.clear();
+    m_measurement_state =
+        was_active ? MeasurementState::kWaitingForFirst : MeasurementState::kInactive;
 }
 
 const MeasurementPoint&
 MeasurementController::GetPoint(int index) const
 {
-    return m_points[index & 1];
+    static const MeasurementPoint empty{};
+    if(m_measurements.empty()) return empty;
+    return m_measurements.back().points[index & 1];
 }
 
 MeasureEdge
 MeasurementController::GetEdge(int index) const
 {
-    return m_edges[index & 1];
+    if(m_measurements.empty()) return MeasureEdge::kStart;
+    return m_measurements.back().edges[index & 1];
 }
 
 void
 MeasurementController::SetEdge(int index, MeasureEdge edge)
 {
-    m_edges[index & 1]            = edge;
-    m_freehand_offsets[index & 1] = 0.0;
+    if(m_measurements.empty()) return;
+    m_measurements.back().edges[index & 1]            = edge;
+    m_measurements.back().freehand_offsets[index & 1] = 0.0;
 }
 
 double
 MeasurementController::GetEffectiveTimestamp(int index) const
 {
-    int i = index & 1;
-    if(!m_points[i].valid) return 0.0;
-    if(m_points[i].freehand)
-        return m_points[i].timestamp + m_freehand_offsets[i];
-
-    double base = (m_edges[i] == MeasureEdge::kStart)
-                      ? m_points[i].timestamp
-                      : m_points[i].timestamp + m_points[i].duration;
-    return base + m_freehand_offsets[i];
-}
-
-void   MeasurementController::SetFreehandMode(bool enabled) { m_freehand_mode = enabled; }
-bool   MeasurementController::IsFreehandMode() const        { return m_freehand_mode; }
-
-void
-MeasurementController::SetFreehandOffset(int index, double offset)
-{
-    m_freehand_offsets[index & 1] = offset;
+    if(m_measurements.empty()) return 0.0;
+    return EffectiveTimestamp(m_measurements.back(), index);
 }
 
 double
 MeasurementController::GetFreehandOffset(int index) const
 {
-    return m_freehand_offsets[index & 1];
+    if(m_measurements.empty()) return 0.0;
+    return m_measurements.back().freehand_offsets[index & 1];
+}
+
+void
+MeasurementController::SetFreehandOffset(int index, double offset)
+{
+    if(m_measurements.empty()) return;
+    m_measurements.back().freehand_offsets[index & 1] = offset;
+}
+
+void   MeasurementController::SetFreehandMode(bool enabled) { m_freehand_mode = enabled; }
+bool   MeasurementController::IsFreehandMode() const        { return m_freehand_mode; }
+
+int
+MeasurementController::GetMeasurementCount() const
+{
+    return static_cast<int>(m_measurements.size());
+}
+
+const Measurement&
+MeasurementController::GetMeasurement(int index) const
+{
+    static const Measurement empty{};
+    if(index < 0 || index >= static_cast<int>(m_measurements.size())) return empty;
+    return m_measurements[index];
+}
+
+const std::vector<Measurement>&
+MeasurementController::Measurements() const
+{
+    return m_measurements;
+}
+
+void
+MeasurementController::AddRestoredMeasurement(const Measurement& measurement)
+{
+    if(static_cast<int>(m_measurements.size()) >= MAX_MEASUREMENTS) return;
+    if(!measurement.Complete()) return;
+    m_measurements.push_back(measurement);
+}
+
+double
+MeasurementController::EffectiveTimestamp(const Measurement& measurement, int index)
+{
+    int                     i  = index & 1;
+    const MeasurementPoint& pt = measurement.points[i];
+    if(!pt.valid) return 0.0;
+    if(pt.freehand) return pt.timestamp + measurement.freehand_offsets[i];
+
+    double base = (measurement.edges[i] == MeasureEdge::kStart)
+                      ? pt.timestamp
+                      : pt.timestamp + pt.duration;
+    return base + measurement.freehand_offsets[i];
 }
 
 }  // namespace View

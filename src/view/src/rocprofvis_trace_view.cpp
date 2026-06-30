@@ -243,6 +243,17 @@ TraceView::Update()
         {
             m_bookmarks = std::move(m_project_settings->Bookmarks());
         }
+        if(m_project_settings && m_measurement)
+        {
+            for(const Measurement& measurement : m_project_settings->Measurements())
+            {
+                m_measurement->AddRestoredMeasurement(measurement);
+            }
+            if(m_timeline_view)
+            {
+                m_timeline_view->ResyncMeasurementHighlights();
+            }
+        }
     }
 
     if(m_timeline_view)
@@ -1158,6 +1169,39 @@ SystemTraceProjectSettings::ToJson()
 
         i++;
     }
+
+    // Persist completed measurements so they reload with the project.
+    if(m_view.m_measurement)
+    {
+        int mi = 0;
+        for(const Measurement& measurement : m_view.m_measurement->Measurements())
+        {
+            if(!measurement.Complete())
+            {
+                continue;
+            }
+            jt::Json& json_measurement =
+                m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_MEASUREMENTS][mi];
+            for(int p = 0; p < 2; ++p)
+            {
+                const MeasurementPoint& pt = measurement.points[p];
+                jt::Json&               json_point =
+                    json_measurement[JSON_KEY_MEASUREMENT_POINTS][p];
+                json_point[JSON_KEY_MEASUREMENT_PT_TIMESTAMP]  = pt.timestamp;
+                json_point[JSON_KEY_MEASUREMENT_PT_DURATION]   = pt.duration;
+                json_point[JSON_KEY_MEASUREMENT_PT_TRACK_ID]   = pt.track_id;
+                json_point[JSON_KEY_MEASUREMENT_PT_LEVEL]      = pt.level;
+                json_point[JSON_KEY_MEASUREMENT_PT_EVENT_UUID] = pt.event_uuid;
+                json_point[JSON_KEY_MEASUREMENT_PT_NAME]       = pt.name;
+                json_point[JSON_KEY_MEASUREMENT_PT_FREEHAND]   = pt.freehand;
+                json_point[JSON_KEY_MEASUREMENT_PT_EDGE] =
+                    (measurement.edges[p] == MeasureEdge::kEnd) ? 1 : 0;
+                json_point[JSON_KEY_MEASUREMENT_PT_OFFSET] =
+                    measurement.freehand_offsets[p];
+            }
+            mi++;
+        }
+    }
 }
 
 bool
@@ -1210,6 +1254,94 @@ SystemTraceProjectSettings::Bookmarks()
     return bookmarks;
 }
 
+std::vector<Measurement>
+SystemTraceProjectSettings::Measurements()
+{
+    std::vector<Measurement> measurements;
+    jt::Json& json_array = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_MEASUREMENTS];
+    if(!json_array.isArray())
+    {
+        return measurements;
+    }
+
+    for(jt::Json& json_measurement : json_array.getArray())
+    {
+        if(!json_measurement[JSON_KEY_MEASUREMENT_POINTS].isArray())
+        {
+            continue;
+        }
+
+        Measurement measurement;
+        int         point_index = 0;
+        bool        valid       = true;
+        for(jt::Json& json_point :
+            json_measurement[JSON_KEY_MEASUREMENT_POINTS].getArray())
+        {
+            if(point_index >= 2)
+            {
+                break;
+            }
+            if(!json_point[JSON_KEY_MEASUREMENT_PT_TIMESTAMP].isNumber())
+            {
+                valid = false;
+                break;
+            }
+
+            MeasurementPoint pt;
+            pt.timestamp = json_point[JSON_KEY_MEASUREMENT_PT_TIMESTAMP].getNumber();
+            pt.duration  = json_point[JSON_KEY_MEASUREMENT_PT_DURATION].isNumber()
+                               ? json_point[JSON_KEY_MEASUREMENT_PT_DURATION].getNumber()
+                               : 0.0;
+            pt.track_id  = json_point[JSON_KEY_MEASUREMENT_PT_TRACK_ID].isLong()
+                               ? static_cast<uint64_t>(
+                                     json_point[JSON_KEY_MEASUREMENT_PT_TRACK_ID].getLong())
+                               : 0;
+            pt.level     = json_point[JSON_KEY_MEASUREMENT_PT_LEVEL].isLong()
+                               ? static_cast<uint32_t>(
+                                     json_point[JSON_KEY_MEASUREMENT_PT_LEVEL].getLong())
+                               : 0;
+            pt.event_uuid =
+                json_point[JSON_KEY_MEASUREMENT_PT_EVENT_UUID].isLong()
+                    ? static_cast<uint64_t>(
+                          json_point[JSON_KEY_MEASUREMENT_PT_EVENT_UUID].getLong())
+                    : 0;
+            pt.name     = json_point[JSON_KEY_MEASUREMENT_PT_NAME].isString()
+                              ? json_point[JSON_KEY_MEASUREMENT_PT_NAME].getString()
+                              : "";
+            pt.freehand = json_point[JSON_KEY_MEASUREMENT_PT_FREEHAND].isBool() &&
+                          json_point[JSON_KEY_MEASUREMENT_PT_FREEHAND].getBool();
+            pt.valid    = true;
+
+            // An event-anchored ruler is meaningless without its track + event ids.
+            if(!pt.freehand &&
+               (!json_point[JSON_KEY_MEASUREMENT_PT_TRACK_ID].isLong() ||
+                !json_point[JSON_KEY_MEASUREMENT_PT_EVENT_UUID].isLong()))
+            {
+                valid = false;
+                break;
+            }
+
+            measurement.points[point_index] = pt;
+            measurement.edges[point_index] =
+                (json_point[JSON_KEY_MEASUREMENT_PT_EDGE].isLong() &&
+                 json_point[JSON_KEY_MEASUREMENT_PT_EDGE].getLong() == 1)
+                    ? MeasureEdge::kEnd
+                    : MeasureEdge::kStart;
+            measurement.freehand_offsets[point_index] =
+                json_point[JSON_KEY_MEASUREMENT_PT_OFFSET].isNumber()
+                    ? json_point[JSON_KEY_MEASUREMENT_PT_OFFSET].getNumber()
+                    : 0.0;
+            ++point_index;
+        }
+
+        if(valid && measurement.Complete())
+        {
+            measurements.push_back(measurement);
+        }
+    }
+    return measurements;
+}
+
 void
 TraceView::RenderMeasurementControls()
 {
@@ -1221,9 +1353,7 @@ TraceView::RenderMeasurementControls()
     bool has_end   = fm.GetPoint(1).valid;
 
     ImVec4 transparent = ImVec4(0, 0, 0, 0);
-    ImVec4 measure_col = ImGui::ColorConvertU32ToFloat4(
-        m_settings_manager.GetColor(Colors::kMeasurementColor));
-    ImVec4 text_dim = ImGui::ColorConvertU32ToFloat4(
+    ImVec4 text_dim    = ImGui::ColorConvertU32ToFloat4(
         m_settings_manager.GetColor(Colors::kTextDim));
 
     // Inactive: small entry button to start measuring.
@@ -1263,8 +1393,11 @@ TraceView::RenderMeasurementControls()
     {
         if(exit_clears)
         {
-            fm.ClearMeasurement();
-            m_timeline_selection->UnhighlightPersistentEvents();
+            fm.ClearActiveMeasurement();
+            if(m_timeline_view)
+            {
+                m_timeline_view->ResyncMeasurementHighlights();
+            }
         }
         else
         {
@@ -1277,6 +1410,7 @@ TraceView::RenderMeasurementControls()
     // Mode toggle
     ImGui::PushID("measure_mode");
     ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+    ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Mode");
     ImGui::PopStyleColor();
     ImGui::SameLine(0.0f, m_settings_manager.GetDefaultStyle().ItemSpacing.x);
@@ -1301,22 +1435,10 @@ TraceView::RenderMeasurementControls()
                              : "Currently snapping to event edges. Click to place anywhere");
     }
     ImGui::PopID();
-    VerticalSeparator(&m_settings_manager);
 
-    // Status / Result
-    if(has_start && has_end)
-    {
-        const TimeFormat& time_format =
-            m_settings_manager.GetUserSettings().unit_settings.time_format;
-        double delta =
-            std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
-        std::string delta_str =
-            std::string("Duration: ") + nanosecond_to_formatted_str(delta, time_format, true);
-        ImGui::PushStyleColor(ImGuiCol_Text, measure_col);
-        ImGui::TextUnformatted(delta_str.c_str());
-        ImGui::PopStyleColor();
-    }
-    else
+    // Guidance prompt while a measurement is in progress. The completed duration is
+    // shown on the timeline itself, not in the toolbar.
+    if(!(has_start && has_end))
     {
         const char* status = freehand ? "Click the timeline to drop the start ruler"
                                       : "Click an event to set the start";
@@ -1325,21 +1447,56 @@ TraceView::RenderMeasurementControls()
             status = freehand ? "Start placed. Click the timeline to set the end"
                               : "Start selected. Click another event to set the end";
         }
+        VerticalSeparator(&m_settings_manager);
         ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+        ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted(status);
         ImGui::PopStyleColor();
     }
 
-    // Trailing actions: edge options (events mode) and clear (when any points exist).
-    bool show_options = !freehand;
-    bool show_clear   = has_start || has_end;
-    if(show_options || show_clear)
+    // Trailing actions: measurement count, edge options (events mode), and clear.
+    // Clear acts on every measurement; options edit the active one. Per-measurement
+    // copy lives in the timeline right-click menu.
+    int  measurement_count = fm.GetMeasurementCount();
+    bool show_options      = !freehand;
+    bool show_count        = measurement_count > 0;
+    bool show_clear        = measurement_count > 0;
+
+    if(show_options || show_count || show_clear)
     {
         VerticalSeparator(&m_settings_manager);
     }
 
+    // The vertical separator leaves the cursor on the same line; subsequent trailing
+    // items need an explicit SameLine.
+    bool first_trailing = true;
+    auto same_line      = [&]() {
+        if(!first_trailing)
+        {
+            ImGui::SameLine();
+        }
+        first_trailing = false;
+    };
+
+    if(show_count)
+    {
+        same_line();
+        std::string count_label =
+            "Measurements: " + std::to_string(measurement_count) + "/" +
+            std::to_string(MeasurementController::MAX_MEASUREMENTS);
+        ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(count_label.c_str());
+        ImGui::PopStyleColor();
+        if(ImGui::IsItemHovered())
+        {
+            SetTooltipStyled("Measurements are saved with the project (.rpv)");
+        }
+    }
+
     if(show_options)
     {
+        same_line();
         if(ImGui::Button("Options"))
         {
             ImGui::OpenPopup("MeasurementEdgePopup");
@@ -1375,15 +1532,20 @@ TraceView::RenderMeasurementControls()
 
     if(show_clear)
     {
-        if(show_options) ImGui::SameLine();
-        if(ImGui::Button("Clear"))
+        same_line();
+        const char* clear_label = measurement_count > 1 ? "Clear All" : "Clear";
+        if(ImGui::Button(clear_label))
         {
-            fm.ClearMeasurement();
-            m_timeline_selection->UnhighlightPersistentEvents();
+            fm.ClearAll();
+            if(m_timeline_view)
+            {
+                m_timeline_view->ResyncMeasurementHighlights();
+            }
         }
         if(ImGui::IsItemHovered())
         {
-            SetTooltipStyled("Clear current measurement");
+            SetTooltipStyled(measurement_count > 1 ? "Clear all measurements"
+                                                   : "Clear current measurement");
         }
     }
 }

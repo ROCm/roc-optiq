@@ -36,8 +36,24 @@ rocprofvis_db_type_t rocprofvis_db_identify_type(rocprofvis_db_filename_t filena
  * 
  ***************************************************************************************************/
 rocprofvis_dm_database_t rocprofvis_db_open_database(
-                                    rocprofvis_db_filename_t, 
+                                    rocprofvis_db_filename_t,
                                     rocprofvis_db_type_t);
+
+/****************************************************************************************************
+ * @brief Opens several trace files as a single combined (multinode) database.
+ *
+ * Loads the supplied files into one database without requiring a multinode manifest on
+ * disk. Each file becomes a database instance whose instance index (0, 1, ...) matches
+ * its position in the array. Used by the Compare feature.
+ *
+ * @param filenames array of database file paths
+ * @param count number of entries in filenames
+ * @return handler to database object
+ *
+ ***************************************************************************************************/
+rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
+                                    rocprofvis_db_filename_t const*,
+                                    rocprofvis_dm_size_t);
 
 /****************************************************************************************************
  * @brief Calculates size of memory used by database object

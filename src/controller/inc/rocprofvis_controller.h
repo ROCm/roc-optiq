@@ -20,6 +20,17 @@ extern "C"
 rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename);
 
 /*
+* Create a system controller that loads several trace files as one combined trace.
+* Used by the Compare feature so two (or more) traces overlay on a single timeline; each
+* file's tracks are tagged with its source instance index (see kRPVControllerTrackInstanceId).
+* @param filenames Array of trace file paths.
+* @param count Number of entries in filenames.
+* @returns A valid controller, initialized to load the traces or nullptr on error.
+*/
+rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames,
+                                                             uint64_t           count);
+
+/*
 * Loads the file into the controller or returns an error.
 * @param controller The controller to load into.
 * @param future The object that tells you when the file has been loaded.

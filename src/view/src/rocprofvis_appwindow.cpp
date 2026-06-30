@@ -47,6 +47,7 @@ constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
 const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml" };
 const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
 const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
+const std::vector<std::string> COMPARE_EXTENSIONS = { "db" };
 
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
 constexpr const char* CLOSING_MESSAGE = "Closing...";
@@ -96,6 +97,11 @@ AppWindow::AppWindow()
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
       SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit))
 , m_message_dialog(std::make_unique<MessageDialog>())
+, m_compare_files_dialog(std::make_unique<CompareFilesDialog>(
+      [this](CompareFilesDialog::FileSlot slot) { HandleCompareFileBrowse(slot); },
+      [this](const std::string& first, const std::string& second) {
+          OpenCompare(first, second);
+      }))
 , m_tool_bar_index(0)
 , m_is_fullscreen(false)
 , m_file_dialog_preference(kRocProfVisViewFileDialog_Auto)
@@ -695,6 +701,7 @@ AppWindow::Render()
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
+    m_compare_files_dialog->Render();
     m_settings_panel->Render();
 
     ImGui::End();
@@ -803,6 +810,14 @@ AppWindow::RenderFileDialog()
 void
 AppWindow::OpenFile(std::string file_path)
 {
+    // While the Compare dialog is up, dropped/opened files fill its slots rather than
+    // opening standalone trace tabs behind the modal.
+    if(m_compare_files_dialog->IsOpen())
+    {
+        m_compare_files_dialog->AddDroppedFile(file_path);
+        return;
+    }
+
     spdlog::info("Opening file: {}", file_path);
 
     std::unique_ptr<Project> project = std::make_unique<Project>();
@@ -834,6 +849,46 @@ AppWindow::OpenFile(std::string file_path)
             SettingsManager::GetInstance().RemoveRecentFile(file_path);
             break;
         }
+    }
+}
+
+std::string
+AppWindow::MakeCompareId(const std::vector<std::string>& files)
+{
+    std::string id = "compare://";
+    for(size_t i = 0; i < files.size(); i++)
+    {
+        if(i > 0)
+        {
+            id += "|";
+        }
+        id += files[i];
+    }
+    return id;
+}
+
+void
+AppWindow::OpenCompare(const std::string& first_file, const std::string& second_file)
+{
+    spdlog::info("Opening compare: {} vs {}", first_file, second_file);
+
+    // Synthetic, deterministic project id so the compare tab has a stable identity
+    // without a file on disk (the two traces are loaded directly by the controller).
+    const std::string compare_id = MakeCompareId({ first_file, second_file });
+    if(GetProject(compare_id))
+    {
+        m_tab_container->SetActiveTab(compare_id);
+        return;
+    }
+
+    std::unique_ptr<Project> project = std::make_unique<Project>();
+    if(project->OpenCompare(compare_id, { first_file, second_file }) ==
+       Project::OpenResult::Success)
+    {
+        TabItem tab =
+            TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
+        m_tab_container->AddTab(std::move(tab));
+        m_projects[project->GetID()] = std::move(project);
     }
 }
 
@@ -897,6 +952,10 @@ AppWindow::RenderFileMenu(Project* project)
         if(ImGui::MenuItem("Open", nullptr, false, !is_open_file_dialog_open))
         {
             HandleOpenFile();
+        }
+        if(ImGui::MenuItem("Compare", nullptr, false, !is_open_file_dialog_open))
+        {
+            HandleCompareFiles();
         }
         if(ImGui::MenuItem("Save", nullptr, false,
                            !is_open_file_dialog_open && (project && project->IsProject())))
@@ -1113,6 +1172,29 @@ AppWindow::HandleOpenFile()
     ShowOpenFileDialog(
         "Choose File", file_filters, "",
         [this](std::string file_path) -> void { this->OpenFile(file_path); });
+}
+
+void
+AppWindow::HandleCompareFiles()
+{
+    m_compare_files_dialog->Show();
+}
+
+void
+AppWindow::HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot)
+{
+    std::vector<FileFilter> file_filters;
+
+    FileFilter trace_filter;
+    trace_filter.m_name       = "Trace Files";
+    trace_filter.m_extensions = COMPARE_EXTENSIONS;
+    file_filters.push_back(trace_filter);
+
+    ShowOpenFileDialog(
+        "Choose Trace", file_filters, "",
+        [this, slot](std::string file_path) -> void {
+            m_compare_files_dialog->SetFilePath(slot, file_path);
+        });
 }
 
 void

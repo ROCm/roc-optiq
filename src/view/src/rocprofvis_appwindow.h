@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
+#include "rocprofvis_compare_files_dialog.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
@@ -74,6 +75,13 @@ public:
 
     void OpenFile(std::string file_path);
 
+    // Opens two trace files as a single compare project (combined timeline, A/B tags).
+    void OpenCompare(const std::string& first_file, const std::string& second_file);
+
+    // Stable, file-derived project id/key for a compare of the given source files.
+    // Used as the tab id and the m_projects key for both fresh and reopened compares.
+    static std::string MakeCompareId(const std::vector<std::string>& files);
+
     void ShowCloseConfirm();
     
     void SetFullscreenState(bool is_fullscreen);
@@ -115,6 +123,8 @@ private:
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleFontChanged();
     void HandleOpenFile();
+    void HandleCompareFiles();
+    void HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot);
     void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
     void ConfigureFileDialogBackend();
@@ -181,6 +191,7 @@ private:
     std::function<void(std::string)>    m_file_dialog_callback;
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
+    std::unique_ptr<CompareFilesDialog> m_compare_files_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
     std::unique_ptr<WelcomePage>        m_welcome_page;
 

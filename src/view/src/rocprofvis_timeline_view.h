@@ -130,6 +130,25 @@ private:
         kEnd
     };
 
+    // Which measurement label the right-click context menu should offer a copy
+    // action for. Resolved from the cursor position when the menu opens.
+    enum class MeasurementCopyTarget
+    {
+        kNone,
+        kStart,
+        kEnd,
+        kDuration
+    };
+
+    // Screen-space rectangle of a measurement label, captured during
+    // RenderMeasurement so the context menu can hit-test the right-click.
+    struct MeasurementLabelRect
+    {
+        ImVec2 min   = ImVec2(0.0f, 0.0f);
+        ImVec2 max   = ImVec2(0.0f, 0.0f);
+        bool   valid = false;
+    };
+
     // Per-type track counts shown in the histogram header strip. The label
     // strings are built once when the trace is loaded (CalculateTrackCounts),
     // not rebuilt every frame in RenderTrackStats.
@@ -222,6 +241,10 @@ private:
     bool m_dragging_selection_end;
     bool m_is_selecting_region;
     MeasurementRulerDragTarget m_dragging_measurement_ruler;
+    MeasurementLabelRect       m_measure_label_start;
+    MeasurementLabelRect       m_measure_label_end;
+    MeasurementLabelRect       m_measure_label_duration;
+    MeasurementCopyTarget      m_measure_copy_target;
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;

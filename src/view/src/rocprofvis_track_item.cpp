@@ -740,14 +740,8 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 
     std::string meta_lines;
     meta_lines += "Track ID: " + std::to_string(track_info->id) + "\n";
-    if(show_node_id)
-    {
-        meta_lines += "Node ID: " + node_id_str + "\n";
-    }
-    if(show_process_id)
-    {
-        meta_lines += "Process ID: " + process_id_str + "\n";
-    }
+    meta_lines += "Node ID: " + node_id_str + "\n";
+    meta_lines += "Process ID: " + process_id_str + "\n";
     meta_lines += std::string(count_label) + ": ";
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     meta_lines += std::to_string(track_info->num_entries);

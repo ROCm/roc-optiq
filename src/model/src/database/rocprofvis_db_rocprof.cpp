@@ -1208,7 +1208,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             load_id++;
         }
 
-        // Crerate track rankings based on load_id abd bd instance
+        // Create track rankings based on load_id and db instance
         CreateTracksOrderRanking();
 
           

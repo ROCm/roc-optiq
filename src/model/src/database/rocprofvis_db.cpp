@@ -554,7 +554,7 @@ void Database::CreateTracksOrderRanking() {
         partitions[t->load_id].push_back(t);
     }
 
-    uint32_t partition_id = 0;
+    uint32_t order_base = 0;
 
     for (auto& [load_set, partition_tracks] : partitions) {
 
@@ -585,13 +585,17 @@ void Database::CreateTracksOrderRanking() {
         for (size_t i = 0; i < max_len; ++i) {
             for (auto& [db, vec] : groups) {
                 if (i < vec.size()) {
-                    vec[i]->order_id = partition_id * 100 + local_order;
+                    vec[i]->order_id = order_base + local_order;
                     ++local_order;
                 }
             }
         }
 
-        ++partition_id;
+        // Advance the base past every track assigned in this partition so
+        // order_ids stay globally unique regardless of how many tracks a
+        // partition holds (a fixed stride per partition would collide once a
+        // partition exceeds that stride).
+        order_base += local_order;
     }
 
 }

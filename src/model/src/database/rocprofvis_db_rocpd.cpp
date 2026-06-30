@@ -301,7 +301,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             },
                         &CallBackAddTrack, &CallBackLoadTrack)) break;
 
-        // Crerate track rankings based on load_id and db instance
+        // Create track rankings based on load_id and db instance
         CreateTracksOrderRanking();
 
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );
